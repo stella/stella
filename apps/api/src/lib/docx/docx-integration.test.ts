@@ -435,10 +435,10 @@ describe("header and footer placeholders", () => {
   test("inline directives render in headers and footers without body directives", async () => {
     const body = WRAP(P("Body only"));
     const header = HEADER_WRAP(
-      P("Header {{#if show_header}}for {{name}}{{/if}}"),
+      P("Header {% if show_header %}for {{name}}{% endif %}"),
     );
     const footer = FOOTER_WRAP(
-      P("Tags: {{#each tags}}{{tags.value}}; {{/each}}"),
+      P("Tags: {% for tag in tags %}{{ tag.value }}; {% endfor %}"),
     );
     const buf = await makeDocxWithHeaderFooter(body, header, footer);
 
@@ -460,24 +460,24 @@ describe("header and footer placeholders", () => {
     expect(headerXml).toContain("Alice");
     expect(footerXml).toContain("urgent");
     expect(footerXml).toContain("signed");
-    expect(`${headerXml}${footerXml}`).not.toContain("{{#");
+    expect(`${headerXml}${footerXml}`).not.toContain("{%");
     expect(result.structureErrors).toEqual([]);
   });
 
   test("loop-local numbering keys stay unique across document parts", async () => {
     const body = WRAP(
       [
-        P("{{#each body_items}}"),
-        P("Body {{@num:clause}}"),
-        P("{{/each}}"),
+        P("{% for body_item in body_items %}"),
+        P("Body {{ num('clause') }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const header = HEADER_WRAP(P("Header"));
     const footer = FOOTER_WRAP(
       [
-        P("{{#each footer_items}}"),
-        P("Footer {{@num:clause}}"),
-        P("{{/each}}"),
+        P("{% for footer_item in footer_items %}"),
+        P("Footer {{ num('clause') }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const buf = await makeDocxWithHeaderFooter(body, header, footer);

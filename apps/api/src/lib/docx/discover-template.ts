@@ -18,7 +18,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { parseCondition, type ConditionNode } from "@stll/template-conditions";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
-import { PLACEHOLDER_RE } from "./discover-placeholders";
+import { scanPlaceholders } from "./discover-placeholders";
 import { parseInlineConditions } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
@@ -94,21 +94,25 @@ type ConditionFieldOptions = {
   /** Every path the expression reads, accumulated across containers. */
   conditionPaths: Set<string>;
   condition: string;
-  rowPaths?: readonly string[];
+  rowScopes?: readonly RowScope[];
 };
 
 const registerConditionFields = ({
   condition,
   conditionPaths,
   fields,
-  rowPaths = [],
+  rowScopes = [],
 }: ConditionFieldOptions): void => {
   const root = parseCondition(condition);
   if (!root) {
     return;
   }
+  const rowPaths = rowScopePaths(rowScopes);
 
-  const registerPath = (path: string, kind: "boolean" | "string"): void => {
+  const registerPath = (rawPath: string, kind: "boolean" | "string"): void => {
+    // A condition inside a loop reads the item through the loop alias; the
+    // manifest speaks the array path, so resolve the alias before registering.
+    const path = qualifyRowScopedPlaceholder(rawPath, rowScopes);
     registerField(fields, path, kind);
     conditionPaths.add(path);
 
@@ -176,6 +180,8 @@ const qualifyRowScopedPath = (
 };
 
 type RowScope = {
+  /** The loop variable the body addresses items through. */
+  alias: string;
   declaredPath: string;
   scopedPath: string;
 };
@@ -195,17 +201,36 @@ const qualifyRowScopedPlaceholder = (
   ) {
     return path;
   }
-  for (const { declaredPath, scopedPath } of rowScopes.toReversed()) {
-    if (path === declaredPath) {
-      return scopedPath;
-    }
-    const declaredPrefix = `${declaredPath}.`;
-    if (path.startsWith(declaredPrefix)) {
-      return `${scopedPath}.${path.slice(declaredPrefix.length)}`;
+  for (const { alias, declaredPath, scopedPath } of rowScopes.toReversed()) {
+    // The alias is the authored form; the declared path still resolves so a
+    // template that reaches for the loop's own path is discovered the same way
+    // it fills (`unaliased_item_path` names it as a warning).
+    for (const head of [alias, declaredPath]) {
+      if (path === head) {
+        return scopedPath;
+      }
+      if (path.startsWith(`${head}.`)) {
+        return `${scopedPath}.${path.slice(head.length + 1)}`;
+      }
     }
   }
   return path;
 };
+
+/**
+ * The manifest path of a loop declared inside other loops. A nested loop names
+ * its array through the enclosing alias (`{% for i in group.items %}`), so the
+ * alias resolves first; a loop that names a bare path inherits the innermost
+ * row scope, as it always has.
+ */
+const qualifyLoopPath = (
+  declaredPath: string,
+  rowScopes: readonly RowScope[],
+): string =>
+  qualifyRowScopedPath(
+    qualifyRowScopedPlaceholder(declaredPath, rowScopes),
+    rowScopePaths(rowScopes),
+  );
 
 const requireRowScopes = (
   arrayScopes: ReadonlyMap<number, readonly RowScope[]>,
@@ -223,24 +248,27 @@ const requireRowScopes = (
 /**
  * Negate a condition expression.
  *
- * - Simple: `isUK` → `!isUK`
- * - Already negated: `!isUK` → `isUK`
- * - Compound: `isUK and hasLicense` → `!(isUK and hasLicense)`
+ * - Simple: `isUK` → `not isUK`
+ * - Already negated: `not isUK` → `isUK`
+ * - Compound: `isUK and hasLicense` → `not (isUK and hasLicense)`
  *
  * Uses parentheses for compound expressions so that
  * `evaluateCondition` treats the negation as applying
  * to the entire sub-expression (De Morgan via grouping).
  */
+const NEGATED_ATOM_RE = /^not\s+(?<atom>[\p{L}\p{N}_.-]+)$/u;
+
 const negateExpr = (expr: string): string => {
   const trimmed = expr.trim();
-  if (trimmed.startsWith("!") && !trimmed.includes(" ")) {
-    return trimmed.slice(1);
+  const negated = NEGATED_ATOM_RE.exec(trimmed);
+  if (negated) {
+    return negated.groups?.["atom"] ?? trimmed;
   }
   // Compound expression: wrap in parens to negate as a unit
   if (trimmed.includes(" ")) {
-    return `!(${trimmed})`;
+    return `not (${trimmed})`;
   }
-  return `!${trimmed}`;
+  return `not ${trimmed}`;
 };
 
 const wrapConjunctionPart = (expr: string): string =>
@@ -284,7 +312,7 @@ const recordFieldCondition = (
 /**
  * Build a paragraph-index-to-condition map by walking
  * the flat directive list with a stack. Handles
- * arbitrary nesting and elseif/else compound negation.
+ * arbitrary nesting and elif/else compound negation.
  *
  * Each directive marks a boundary; paragraphs between
  * boundaries inherit the current stack's combined
@@ -343,12 +371,12 @@ const buildConditionMapFromRanges = (
         paragraphIndex: d.paragraphIndex + 1,
         condition: currentFullCondition(),
       });
-    } else if (d.kind === "elseif") {
+    } else if (d.kind === "elif") {
       const frame = stack.at(-1);
       if (!frame) {
         continue;
       }
-      // Wrap the elseif expression in parens if it
+      // Wrap the elif expression in parens if it
       // contains `or` to preserve precedence when joined
 
       const exprPart = d.expression.includes(" or ")
@@ -382,7 +410,7 @@ const buildConditionMapFromRanges = (
         condition: currentFullCondition(),
       });
     }
-    // each/endeach: no condition change
+    // for/endfor: no condition change
   }
 
   boundaries.sort((a, b) => a.paragraphIndex - b.paragraphIndex);
@@ -456,24 +484,22 @@ const collectContainerStructure = ({
   );
   for (let i = 0; i < paragraphs.length; i++) {
     const directive = directiveByParagraph.get(i);
-    if (directive?.kind === "endeach") {
+    if (directive?.kind === "endfor") {
       activeArrays.pop();
     }
-    if (directive?.kind === "if" || directive?.kind === "elseif") {
+    if (directive?.kind === "if" || directive?.kind === "elif") {
       registerConditionFields({
         condition: directive.expression,
         conditionPaths,
         fields,
-        rowPaths: rowScopePaths(activeArrays),
+        rowScopes: [...activeArrays],
       });
     }
-    if (directive?.kind === "each") {
-      const scopedPath = qualifyRowScopedPath(
-        directive.expression,
-        rowScopePaths(activeArrays),
-      );
+    if (directive?.kind === "for") {
+      const scopedPath = qualifyLoopPath(directive.expression, activeArrays);
       registerField(fields, scopedPath, "array");
       activeArrays.push({
+        alias: directive.alias ?? directive.expression,
         declaredPath: directive.expression,
         scopedPath,
       });
@@ -516,7 +542,7 @@ const collectLoopItemFields = ({
   fields: FieldAccumulator;
 }): void => {
   for (const block of blocks) {
-    if (block.kind !== "each") {
+    if (block.kind !== "for") {
       continue;
     }
     const blockScope = requireRowScopes(arrayScopes, block.contentStart - 1).at(
@@ -538,11 +564,12 @@ const collectLoopItemFields = ({
         continue;
       }
 
-      const text = paragraphText(para);
-      const prefix = `${block.arrayPath}.`;
-      for (const match of text.matchAll(PLACEHOLDER_RE)) {
-        const name = match.groups?.["name"];
-        if (name?.startsWith(prefix)) {
+      const prefixes = [...new Set([block.alias, block.arrayPath])].map(
+        (head) => `${head}.`,
+      );
+      for (const { name } of scanPlaceholders(paragraphText(para))) {
+        const prefix = prefixes.find((candidate) => name.startsWith(candidate));
+        if (prefix !== undefined) {
           entry?.itemPaths.add(name.slice(prefix.length));
         }
       }
@@ -579,6 +606,7 @@ const collectParagraphPlaceholders = ({
       start: number;
     }[] = [];
     const inlineLoopScopes: {
+      alias: string;
       declaredPath: string;
       end: number;
       scopedPath: string;
@@ -594,13 +622,14 @@ const collectParagraphPlaceholders = ({
       });
     } else {
       for (const group of inline.groups) {
-        if (group.kind === "each") {
-          const scopedPath = qualifyRowScopedPath(
+        if (group.kind === "for") {
+          const scopedPath = qualifyLoopPath(
             group.arrayPath,
-            rowScopePaths(requireRowScopes(arrayScopes, i)),
+            requireRowScopes(arrayScopes, i),
           );
           registerField(fields, scopedPath, "array");
           inlineLoopScopes.push({
+            alias: group.alias,
             declaredPath: group.arrayPath,
             end: group.contentEnd,
             scopedPath,
@@ -608,10 +637,14 @@ const collectParagraphPlaceholders = ({
           });
           const entry = fields.get(scopedPath);
           const content = text.slice(group.contentStart, group.contentEnd);
-          const prefix = `${group.arrayPath}.`;
-          for (const match of content.matchAll(PLACEHOLDER_RE)) {
-            const name = match.groups?.["name"];
-            if (name?.startsWith(prefix)) {
+          const prefixes = [...new Set([group.alias, group.arrayPath])].map(
+            (head) => `${head}.`,
+          );
+          for (const { name } of scanPlaceholders(content)) {
+            const prefix = prefixes.find((candidate) =>
+              name.startsWith(candidate),
+            );
+            if (prefix !== undefined) {
               entry?.itemPaths.add(name.slice(prefix.length));
             }
           }
@@ -624,7 +657,16 @@ const collectParagraphPlaceholders = ({
             condition: branch.condition,
             conditionPaths,
             fields,
-            rowPaths: rowScopePaths(requireRowScopes(arrayScopes, i)),
+            rowScopes: [
+              ...requireRowScopes(arrayScopes, i),
+              ...inlineLoopScopes.map(
+                ({ alias, declaredPath, scopedPath }) => ({
+                  alias,
+                  declaredPath,
+                  scopedPath,
+                }),
+              ),
+            ],
           });
           const branchCondition =
             branch.condition === ""
@@ -648,22 +690,19 @@ const collectParagraphPlaceholders = ({
       }
     }
 
-    for (const match of text.matchAll(PLACEHOLDER_RE)) {
-      const declaredName = match.groups?.["name"];
-      if (!declaredName) {
-        continue;
-      }
-      // @-prefixed markers (@clause:, @num:, @ref:) are resolved at fill time,
-      // not user-entered fields — keep them out of the discovered schema.
-      if (declaredName.startsWith("@")) {
-        continue;
-      }
+    for (const { name: declaredName, start: markerStart } of scanPlaceholders(
+      text,
+    )) {
       const loopScope = inlineLoopScopes.find(
-        ({ end, start }) => start <= match.index && match.index < end,
+        ({ end, start }) => start <= markerStart && markerStart < end,
       );
-      const declaredLoopPrefix = `${loopScope?.declaredPath ?? ""}.`;
+      const declaredLoopPrefix = loopScope
+        ? [loopScope.alias, loopScope.declaredPath]
+            .map((head) => `${head}.`)
+            .find((candidate) => declaredName.startsWith(candidate))
+        : undefined;
       const inlineScopedName =
-        loopScope !== undefined && declaredName.startsWith(declaredLoopPrefix)
+        loopScope !== undefined && declaredLoopPrefix !== undefined
           ? `${loopScope.scopedPath}.${declaredName.slice(declaredLoopPrefix.length)}`
           : declaredName;
       const scopedArrayPaths = requireRowScopes(arrayScopes, i);
@@ -674,7 +713,7 @@ const collectParagraphPlaceholders = ({
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
       const inlineCondition = inlineBranchConditions.find(
-        ({ end, start }) => start <= match.index && match.index < end,
+        ({ end, start }) => start <= markerStart && markerStart < end,
       )?.condition;
       recordFieldCondition(
         fieldConditions,

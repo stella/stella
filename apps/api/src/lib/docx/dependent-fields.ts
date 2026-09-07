@@ -3,7 +3,7 @@
  *
  * A manifest field with `optionsFrom` takes its allowed values from another
  * field's submitted value at fill time: the user first enters a list (an
- * `{{#each}}` array, or a single value) and the dependent field must hold one
+ * `{% for %}` array, or a single value) and the dependent field must hold one
  * of those entries. Static `options` act as a fallback while the source field
  * is empty; with neither, the value is accepted as-is.
  *
@@ -119,7 +119,7 @@ const checkDependentValue = ({
  * required/unmatched diagnostics; non-string values belong to other machinery
  * (composite assembly, `#each` arrays) and are skipped likewise.
  *
- * A dependent select inside an `{{#each}}` group keeps a flat manifest path
+ * A dependent select inside an `{% for %}` group keeps a flat manifest path
  * (`people.lead`) while the fill form submits the loop as an array of rows
  * (`people: [{ name, lead }]`). A direct `resolvePath` walk into that array
  * returns `undefined` and would skip the field, so the repeatable case maps

@@ -209,7 +209,7 @@ const assembleCompositeValue = ({
  * A plain string value passes through unchanged (backward compatible);
  * an absent value is left for the fill's unmatched diagnostics.
  *
- * A composite field inside an `{{#each}}` loop keeps a dotted path
+ * A composite field inside an `{% for %}` loop keeps a dotted path
  * (`parties.signer`) while the value is an array of rows
  * (`parties: [{ signer: { title, name } }]`); the direct `resolvePath` then
  * returns undefined, so each row's sub-path object is assembled in place

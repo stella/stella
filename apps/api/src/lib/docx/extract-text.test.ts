@@ -126,16 +126,16 @@ describe("extractText", () => {
 
   test("annotates #if open and /if close directives", async () => {
     const xml = WRAP(
-      `<w:p><w:r><w:t>{{#if active}}</w:t></w:r></w:p>
+      `<w:p><w:r><w:t>{% if active %}</w:t></w:r></w:p>
        <w:p><w:r><w:t>Content</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{/if}}</w:t></w:r></w:p>`,
+       <w:p><w:r><w:t>{% endif %}</w:t></w:r></w:p>`,
     );
     const buf = await makeDocx(xml);
     const result = await extractText(buf);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
-      text: "{{#if active}}",
+      text: "{% if active %}",
       source: "body",
       isDirective: true,
       directiveKind: "if",
@@ -148,7 +148,7 @@ describe("extractText", () => {
     });
     expect(result.paragraphs[2]).toEqual({
       index: 2,
-      text: "{{/if}}",
+      text: "{% endif %}",
       source: "body",
       isDirective: true,
       directiveKind: "endif",
@@ -156,29 +156,29 @@ describe("extractText", () => {
     });
   });
 
-  test("annotates #each directive", async () => {
+  test("annotates a {% for %} directive", async () => {
     const xml = WRAP(
-      `<w:p><w:r><w:t>{{#each items}}</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{items.name}}</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>`,
+      `<w:p><w:r><w:t>{% for item in items %}</w:t></w:r></w:p>
+       <w:p><w:r><w:t>{{ item.name }}</w:t></w:r></w:p>
+       <w:p><w:r><w:t>{% endfor %}</w:t></w:r></w:p>`,
     );
     const buf = await makeDocx(xml);
     const result = await extractText(buf);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
-      text: "{{#each items}}",
+      text: "{% for item in items %}",
       source: "body",
       isDirective: true,
-      directiveKind: "each",
-      directiveExpression: "items",
+      directiveKind: "for",
+      directiveExpression: "item in items",
     });
     expect(result.paragraphs[2]).toEqual({
       index: 2,
-      text: "{{/each}}",
+      text: "{% endfor %}",
       source: "body",
       isDirective: true,
-      directiveKind: "endeach",
+      directiveKind: "endfor",
       directiveExpression: "",
     });
   });
@@ -186,7 +186,7 @@ describe("extractText", () => {
   test("annotates a block directive stored in a table cell", async () => {
     const xml = WRAP(
       `<w:tbl><w:tr><w:tc>
-        <w:p><w:r><w:t>{{#each fields}}</w:t></w:r></w:p>
+        <w:p><w:r><w:t>{% for field in fields %}</w:t></w:r></w:p>
       </w:tc></w:tr></w:tbl>`,
     );
     const buf = await makeDocx(xml);
@@ -194,16 +194,16 @@ describe("extractText", () => {
 
     expect(result.paragraphs[2]).toEqual({
       index: 2,
-      text: "| {{#each fields}} |",
+      text: "| {% for field in fields %} |",
       source: "body",
       tableRow: {
         table: 0,
         kind: "cells",
-        cells: [{ paragraphs: [{ text: "{{#each fields}}" }] }],
+        cells: [{ paragraphs: [{ text: "{% for field in fields %}" }] }],
       },
       isDirective: true,
-      directiveKind: "each",
-      directiveExpression: "fields",
+      directiveKind: "for",
+      directiveExpression: "field in fields",
     });
   });
 
@@ -211,12 +211,12 @@ describe("extractText", () => {
     const xml = WRAP(
       `<w:tbl><w:tr>
         <w:tc>
-          <w:p><w:r><w:t>{{#each fields}}</w:t></w:r></w:p>
-          <w:p><w:r><w:t>{{fields.label}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{% for field in fields %}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{ field.label }}</w:t></w:r></w:p>
         </w:tc>
         <w:tc>
-          <w:p><w:r><w:t>{{fields.value}}</w:t></w:r></w:p>
-          <w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{ field.value }}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{% endfor %}</w:t></w:r></w:p>
         </w:tc>
       </w:tr></w:tbl>`,
     );
@@ -226,25 +226,26 @@ describe("extractText", () => {
     expect(result.paragraphs).toEqual([
       {
         index: 0,
-        text: "{{#each fields}}",
+        text: "{% for field in fields %}",
         source: "body",
         isDirective: true,
-        directiveKind: "each",
-        directiveExpression: "fields",
+        directiveKind: "for",
+        directiveExpression: "field in fields",
       },
-      { index: 1, text: "{{fields.label}}", source: "body" },
-      { index: 2, text: "{{fields.value}}", source: "body" },
+      { index: 1, text: "{{ field.label }}", source: "body" },
+      { index: 2, text: "{{ field.value }}", source: "body" },
       {
         index: 3,
-        text: "{{/each}}",
+        text: "{% endfor %}",
         source: "body",
         isDirective: true,
-        directiveKind: "endeach",
+        directiveKind: "endfor",
         directiveExpression: "",
       },
     ]);
     expect(result.charCount).toBe(
-      "{{#each fields}}{{fields.label}}{{fields.value}}{{/each}}".length,
+      "{% for field in fields %}{{ field.label }}{{ field.value }}{% endfor %}"
+        .length,
     );
   });
 
@@ -279,30 +280,30 @@ describe("extractText", () => {
     ]);
   });
 
-  test("annotates #elseif and #else directives", async () => {
+  test("annotates {% elif %} and {% else %} directives", async () => {
     const xml = WRAP(
-      `<w:p><w:r><w:t>{{#if a}}</w:t></w:r></w:p>
+      `<w:p><w:r><w:t>{% if a %}</w:t></w:r></w:p>
        <w:p><w:r><w:t>A</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{#elseif b}}</w:t></w:r></w:p>
+       <w:p><w:r><w:t>{% elif b %}</w:t></w:r></w:p>
        <w:p><w:r><w:t>B</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{#else}}</w:t></w:r></w:p>
+       <w:p><w:r><w:t>{% else %}</w:t></w:r></w:p>
        <w:p><w:r><w:t>C</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{/if}}</w:t></w:r></w:p>`,
+       <w:p><w:r><w:t>{% endif %}</w:t></w:r></w:p>`,
     );
     const buf = await makeDocx(xml);
     const result = await extractText(buf);
 
     expect(result.paragraphs[2]).toEqual({
       index: 2,
-      text: "{{#elseif b}}",
+      text: "{% elif b %}",
       source: "body",
       isDirective: true,
-      directiveKind: "elseif",
+      directiveKind: "elif",
       directiveExpression: "b",
     });
     expect(result.paragraphs[4]).toEqual({
       index: 4,
-      text: "{{#else}}",
+      text: "{% else %}",
       source: "body",
       isDirective: true,
       directiveKind: "else",
@@ -312,15 +313,15 @@ describe("extractText", () => {
 
   test("preserves complex directive expressions", async () => {
     const xml = WRAP(
-      `<w:p><w:r><w:t>{{#if status == "active" and count > 0}}</w:t></w:r></w:p>
-       <w:p><w:r><w:t>{{/if}}</w:t></w:r></w:p>`,
+      `<w:p><w:r><w:t>{% if status == "active" and count > 0 %}</w:t></w:r></w:p>
+       <w:p><w:r><w:t>{% endif %}</w:t></w:r></w:p>`,
     );
     const buf = await makeDocx(xml);
     const result = await extractText(buf);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
-      text: '{{#if status == "active" and count > 0}}',
+      text: '{% if status == "active" and count > 0 %}',
       source: "body",
       isDirective: true,
       directiveKind: "if",
@@ -352,7 +353,7 @@ describe("extractText", () => {
     const xml = WRAP(
       `<w:p>
         <w:pPr><w:pStyle w:val="Normal"/></w:pPr>
-        <w:r><w:t>{{#if show}}</w:t></w:r>
+        <w:r><w:t>{% if show %}</w:t></w:r>
       </w:p>`,
     );
     const buf = await makeDocx(xml);
@@ -360,7 +361,7 @@ describe("extractText", () => {
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
-      text: "{{#if show}}",
+      text: "{% if show %}",
       source: "body",
       style: "Normal",
       isDirective: true,

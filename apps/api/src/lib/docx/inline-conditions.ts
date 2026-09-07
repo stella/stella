@@ -1,9 +1,9 @@
 /**
  * Inline conditional spans:
- * `{{#if expr}} … {{#elseif expr}} … {{#else}} … {{/if}}` WITHIN one
+ * `{% if expr %} … {% elif expr %} … {% else %} … {% endif %}` WITHIN one
  * paragraph's text. Block-level processing only recognizes directives that
  * own a whole paragraph; legal drafting also needs conditional phrases:
- * "the Buyer{{#if hasSpouse}} and their spouse{{/if}} hereby…".
+ * "the Buyer{% if hasSpouse %} and their spouse{% endif %} hereby…".
  *
  * Runs after {@link processBlockDirectives} (whole-paragraph directives and
  * loop expansion are settled, so every surviving paragraph is final) and
@@ -12,25 +12,25 @@
  * patch-template.ts for the full ordering rationale.
  *
  * V1 rules (deliberate; violations surface as TemplateStructureError):
- * - Inline ifs and inline eachs do not nest: a second `{{#if}}`/`{{#each}}`
+ * - Inline ifs and inline loops do not nest: a second `{% if %}`/`{% for %}`
  *   while an inline span is already open in the same paragraph is a structure
- *   error. In particular an inline-each body may contain `{{path.field}}`
+ *   error. In particular an inline-loop body may contain `{{ alias.field }}`
  *   placeholders but not inline conditionals (and vice versa).
- * - Inline `{{#each path}} … {{/each}}` wraps a mid-paragraph span: the array
+ * - Inline `{% for alias in path %} … {% endfor %}` wraps a mid-paragraph span: the array
  *   at `path` is read from the top-level data and the content span is repeated
- *   once per item, with each item's `{{path.field}}` references resolved to
+ *   once per item, with each item's `{{ alias.field }}` references resolved to
  *   that item's values (the same synthetic-key rewrite the block loop uses,
  *   shared via rewriteEachPlaceholdersInText/registerItemPatchValues). The
  *   span's run sequence is deep-cloned per item, so run-level formatting
  *   authored inside the body (bold/italic/etc.) is preserved in every expanded
  *   copy. Author separators written inside the span (", " etc.) are part of the
  *   runs and repeat with it; an empty array removes the whole
- *   `{{#each}}…{{/each}}` span.
- * - An inline if/each must open and close within the same paragraph: an opener
- *   without a closer, or a closer/`{{#elseif}}`/`{{#else}}` without an
+ *   `{% for %}…{% endfor %}` span.
+ * - An inline if/loop must open and close within the same paragraph: an opener
+ *   without a closer, or a closer/`{% elif %}`/`{% else %}` without an
  *   opener, is a structure error naming the paragraph (index + excerpt).
- * - `{{#elseif}}` and `{{#else}}` follow block semantics: the first branch
- *   whose condition holds wins; `{{#else}}` always wins when reached.
+ * - `{% elif %}` and `{% else %}` follow block semantics: the first branch
+ *   whose condition holds wins; `{% else %}` always wins when reached.
  * - A paragraph with a structure error is left untouched (its markers stay
  *   in the output) and only the first error per paragraph is reported.
  * - Conditions and array paths evaluate against the top-level template data
@@ -98,9 +98,10 @@ type InlineIfGroup = {
   branches: InlineBranch[];
 };
 
-/** A mid-paragraph `{{#each path}} … {{/each}}` span. */
+/** A mid-paragraph `{% for alias in path %} … {% endfor %}` span. */
 type InlineEachGroup = {
-  kind: "each";
+  kind: "for";
+  alias: string;
   arrayPath: string;
   /** Offset of the opener's `{{`. */
   start: number;
@@ -146,6 +147,7 @@ export const parseInlineConditions = (text: string): InlineParse => {
     contentStart: number;
   } | null = null;
   let openEach: {
+    alias: string;
     raw: string;
     start: number;
     arrayPath: string;
@@ -165,12 +167,11 @@ export const parseInlineConditions = (text: string): InlineParse => {
       case "clause":
       case "num":
       case "ref":
-      case "index":
-      case "count":
+      case "loop":
         break;
       case "if":
         if (openIf || openEach) {
-          return fail("Nested inline {{#if}} is not supported", marker.raw);
+          return fail("Nested inline {% if %} is not supported", marker.raw);
         }
         openIf = {
           raw: marker.raw,
@@ -180,22 +181,23 @@ export const parseInlineConditions = (text: string): InlineParse => {
           contentStart: marker.end,
         };
         break;
-      case "each":
+      case "for":
         if (openIf || openEach) {
-          return fail("Nested inline {{#each}} is not supported", marker.raw);
+          return fail("Nested inline {% for %} is not supported", marker.raw);
         }
         openEach = {
           raw: marker.raw,
           start: marker.start,
-          arrayPath: meta.expr,
+          alias: meta.alias,
+          arrayPath: meta.path,
           contentStart: marker.end,
         };
         break;
-      case "elseif":
+      case "elif":
       case "else":
         if (!openIf) {
           return fail(
-            `Orphaned inline ${marker.raw} without an open {{#if}}`,
+            `Orphaned inline ${marker.raw} without an open {% if %}`,
             marker.raw,
           );
         }
@@ -204,13 +206,13 @@ export const parseInlineConditions = (text: string): InlineParse => {
           contentStart: openIf.contentStart,
           contentEnd: marker.start,
         });
-        openIf.condition = meta.kind === "elseif" ? meta.expr : "";
+        openIf.condition = meta.kind === "elif" ? meta.expr : "";
         openIf.contentStart = marker.end;
         break;
       case "endif":
         if (!openIf) {
           return fail(
-            "Orphaned inline {{/if}} without an open {{#if}}",
+            "Orphaned inline {% endif %} without an open {% if %}",
             marker.raw,
           );
         }
@@ -227,15 +229,16 @@ export const parseInlineConditions = (text: string): InlineParse => {
         });
         openIf = null;
         break;
-      case "endeach":
+      case "endfor":
         if (!openEach) {
           return fail(
-            "Orphaned inline {{/each}} without an open {{#each}}",
+            "Orphaned inline {% endfor %} without an open {% for %}",
             marker.raw,
           );
         }
         groups.push({
-          kind: "each",
+          kind: "for",
+          alias: openEach.alias,
           arrayPath: openEach.arrayPath,
           start: openEach.start,
           end: marker.end,
@@ -251,13 +254,13 @@ export const parseInlineConditions = (text: string): InlineParse => {
 
   if (openIf) {
     return fail(
-      "Unclosed inline {{#if}} — the {{/if}} must be in the same paragraph",
+      "Unclosed inline {% if %} — the {% endif %} must be in the same paragraph",
       openIf.raw,
     );
   }
   if (openEach) {
     return fail(
-      "Unclosed inline {{#each}} — the {{/each}} must be in the same paragraph",
+      "Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph",
       openEach.raw,
     );
   }
@@ -267,9 +270,9 @@ export const parseInlineConditions = (text: string): InlineParse => {
 
 /**
  * Resolve inline conditional spans in every paragraph of `body` (including
- * table cells). Mutates the DOM: the winning `{{#if}}` branch's content stays
+ * table cells). Mutates the DOM: the winning `{% if %}` branch's content stays
  * with its original runs/formatting, the markers and losing branches are cut
- * across split runs; an `{{#each}}` span's body run sequence is deep-cloned per
+ * across split runs; a `{% for %}` span's body run sequence is deep-cloned per
  * item (preserving run formatting) and spliced in over the marker span. Returns
  * structural errors; erroring paragraphs are left untouched.
  */
@@ -317,7 +320,7 @@ export const processInlineConditions = (
     const paragraphData =
       processingContext.inlineDataByParagraph.get(paragraph) ?? data;
     for (const group of ordered) {
-      if (group.kind === "each") {
+      if (group.kind === "for") {
         applyInlineEach(
           paragraph,
           group,
@@ -346,31 +349,31 @@ export const processInlineConditions = (
 };
 
 /**
- * Expand an inline `{{#each}}` span at the run level, preserving run formatting
+ * Expand an inline `{% for %}` span at the run level, preserving run formatting
  * authored inside the body. Deep-clones the body's run sequence once per array
  * item (via {@link expandInlineEachRuns}) and applies the SAME per-item text
  * substitution the block expander uses to each cloned run's text, keeping its
- * `rPr`. The concatenated per-item clones replace the whole `{{#each}}…{{/each}}`
+ * `rPr`. The concatenated per-item clones replace the whole `{% for %}…{% endfor %}`
  * marker span; an empty/non-array array removes the span entirely.
  *
  * Reuses the block loop's item substitution rather than re-deriving it: each
- * iteration rewrites `{{arrayPath.field}}` → the synthetic `__each_*` key
+ * iteration rewrites `{{ alias.field }}` → the synthetic `__each_*` key
  * (rewriteEachPlaceholdersInText), registers that item's values under the same
  * keys (registerItemPatchValues), then fills them (replacePlaceholdersInText).
  * String/number/object items resolve exactly as in the block expander.
  *
- * Iteration tokens (`{{@index}}` 1-based, `{{@count}}`) and loop-local
- * numbering markers (`{{@num:Key}}`/`{{@ref:Key}}`) are handled per item the
+ * Iteration tokens (`{{ loop.index }}` 1-based, `{{ loop.length }}`) and loop-local
+ * numbering markers (`{{ num("Key") }}`/`{{ ref("Key") }}`) are handled per item the
  * same way the block expander handles them: tokens resolve to the iteration's
- * position/count, and each iteration's local `@num`/`@ref` keys get a
+ * position/count, and each iteration's local `num()`/`ref()` keys get a
  * per-(expansion, index) suffix so the later numbering pass numbers each copy
  * sequentially. `expansionId` distinguishes sibling inline loops.
  *
  * The substitution runs per cloned run's text fragment. Markers and `{{path}}`
  * placeholders authored inside the body must not straddle a run boundary (same
- * constraint the raw-XML numbering and discovery passes carry); the inline-each
+ * constraint the raw-XML numbering and discovery passes carry); the inline-loop
  * body is authored as plain runs, so a placeholder lives in one run. Inline
- * conditionals inside the body are not expanded (flat-each only; see the V1
+ * conditionals inside the body are not expanded (flat loops only; see the V1
  * nesting rule); a stray `{{path}}` left unresolved stays as literal text.
  */
 const applyInlineEach = (
@@ -382,8 +385,8 @@ const applyInlineEach = (
   const arrayData = resolvePath(group.arrayPath, data);
   const items: unknown[] = Array.isArray(arrayData) ? arrayData : [];
 
-  // `@num` keys defined in the span are loop-local; scope only those so a
-  // `@ref` to a shared clause outside the loop still resolves (block parity).
+  // `num()` keys defined in the span are loop-local; scope only those so a
+  // `ref()` to a shared clause outside the loop still resolves (block parity).
   const spanText = paragraphSpanText(paragraph).slice(
     group.contentStart,
     group.contentEnd,
@@ -399,6 +402,7 @@ const applyInlineEach = (
       text,
       group.arrayPath,
       itemIdx,
+      group.alias,
     );
     iteration = rewriteIterationTokensInText(iteration, itemIdx, items.length);
     if (localNumKeys.size > 0) {

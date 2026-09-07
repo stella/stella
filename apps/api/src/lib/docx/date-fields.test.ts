@@ -97,7 +97,7 @@ describe("resolveDateFields", () => {
     expect(values["contract"]).toEqual({ date: "13. Juni 2028" });
   });
 
-  test("formats a date field inside an {{#each}} loop per row", () => {
+  test("formats a date field inside an {% for %} loop per row", () => {
     // The loop value arrives as an array of rows under the container path while
     // the manifest keeps the dotted path `people.dob`; each row's dob must be
     // localized in place so the loop expander substitutes the display text, not
@@ -116,7 +116,7 @@ describe("resolveDateFields", () => {
     ]);
   });
 
-  test("formats a nested sub-path inside an {{#each}} row", () => {
+  test("formats a nested sub-path inside an {% for %} row", () => {
     const values: Record<string, unknown> = {
       events: [{ when: { date: "2028-06-13" } }],
     };
@@ -128,7 +128,7 @@ describe("resolveDateFields", () => {
     expect(values["events"]).toEqual([{ when: { date: "13. Juni 2028" } }]);
   });
 
-  test("rejects an invalid date inside an {{#each}} row naming the field", () => {
+  test("rejects an invalid date inside an {% for %} row naming the field", () => {
     const values: Record<string, unknown> = {
       people: [{ dob: "2028-06-13" }, { dob: "2028-02-30" }],
     };

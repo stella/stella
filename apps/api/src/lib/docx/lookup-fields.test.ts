@@ -338,12 +338,12 @@ describe("resolveLookupFields", () => {
   });
 
   test("resolves a lookup field inside a repeatable each row", async () => {
-    // Inside `{{#each companies}}` the value arrives as an array of row
+    // Inside `{% for company in companies %}` the value arrives as an array of row
     // objects, so the field path `companies.krs` resolves to undefined at the
     // top level; each row's sub-path number must be resolved and rendered in
     // place. Every format is written as a flat dotted key on the row, and the
     // first one additionally replaces the submitted number at the row path,
-    // which is what the bare `{{companies.krs}}` marker renders.
+    // which is what the bare `{{ company.krs }}` marker renders.
     const result = await resolveLookupFields({
       values: {
         companies: [{ krs: "0000592109" }, { krs: "0000592109" }],
@@ -819,7 +819,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
 // format. A document references the bare `{{company}}` (default rendering) and
 // the keyed `{{company.full}}` (the named rendering of the SAME hit). Both must
 // fill from one submitted registry number, in plain paragraphs, inside an
-// `{{#each}}` loop, and inside a table — the flat dotted `company.full` key the
+// `{% for %}` loop, and inside a table — the flat dotted `company.full` key the
 // resolver writes has to survive flattenTemplateData and block expansion so the
 // keyed marker is never left unmatched or surfaced as a separate field.
 describe("named-format lookup — end-to-end fill", () => {
@@ -906,9 +906,9 @@ describe("named-format lookup — end-to-end fill", () => {
     const docx = await makeDocx(
       WRAP(
         [
-          P("{{#each items}}"),
-          P("{{items.label}}: {{company}} / {{company.full}}"),
-          P("{{/each}}"),
+          P("{% for item in items %}"),
+          P("{{ item.label }}: {{company}} / {{company.full}}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );

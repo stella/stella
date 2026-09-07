@@ -212,6 +212,7 @@ export {
   BLOCK_DIRECTIVE_TOKENS,
   blockDirectiveLinePattern,
   classifyMarker,
+  clauseSlotKey,
   classifyMarkerDefect,
   clauseSlotPattern,
   DIRECTIVE_KINDS,
@@ -236,6 +237,7 @@ export {
   replaceOutputMarkers,
   scanInvalidMarkers,
   scanMarkers,
+  substitutionKey,
   translateLegacyExpression,
 } from "./markers.js";
 export type {

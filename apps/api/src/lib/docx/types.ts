@@ -108,7 +108,7 @@ export type ExtractedParagraph = Omit<ExtractedDocxParagraph, "source"> & {
   isDirective?: boolean | undefined;
   /** Which directive this paragraph represents. */
   directiveKind?: BlockDirectiveKind | undefined;
-  /** The expression inside the directive (empty for `#else`). */
+  /** The expression inside the directive (empty for `{% else %}`). */
   directiveExpression?: string | undefined;
 };
 
@@ -142,7 +142,11 @@ export type TemplateData = Record<string, TemplateDataValue>;
 
 export type BlockDirective = {
   kind: BlockDirectiveKind;
+  /** The condition of an `{% if %}`/`{% elif %}`, or the array path of a
+   *  `{% for alias in path %}`. Empty for a closer. */
   expression: string;
+  /** The loop variable of a `{% for %}`; absent on every other directive. */
+  alias?: string;
   paragraphIndex: number;
 };
 
@@ -158,15 +162,17 @@ export type IfBlock = {
   directiveParagraphs: number[];
 };
 
-export type EachBlock = {
-  kind: "each";
+export type LoopBlock = {
+  kind: "for";
+  /** The loop variable the body addresses items through. */
+  alias: string;
   arrayPath: string;
   contentStart: number;
   contentEnd: number;
   directiveParagraphs: number[];
 };
 
-export type Block = IfBlock | EachBlock;
+export type Block = IfBlock | LoopBlock;
 
 export type TemplateFieldKind = "string" | "boolean" | "array" | "object";
 
@@ -197,7 +203,7 @@ export type DiscoveredTemplate = {
    *  meant. Never blocks a save; reported so it is fixed before the first
    *  fill. */
   warnings: TemplateWarning[];
-  /** Paths a `{{#if}}` / `{{#elseif}}` expression reads, sorted. Distinguishes
+  /** Paths a `{% if %}` / `{% elif %}` expression reads, sorted. Distinguishes
    *  a condition driver from a value marker, which the field list alone
    *  cannot: a path can be both. */
   conditionPaths: string[];
@@ -495,7 +501,7 @@ const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
  * reference resource — see `mcp/template-field-reference.ts`.
  */
 const fieldMetaObjectSchema = v.strictObject({
-  path: fieldPathSchema("Field path; must match a {{marker}}"),
+  path: fieldPathSchema("Field path; must match a {{ marker }}"),
   label: v.optional(describedString("Field label")),
   hint: v.optional(describedString("Fill hint for the person filling")),
   inputType: v.optional(
@@ -532,7 +538,7 @@ const fieldMetaObjectSchema = v.strictObject({
     v.pipe(fieldSourceSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
   formula: v.optional(describedString("Arithmetic over other fields")),
-  condition: v.optional(describedString("Boolean rule for an {{#if}} marker")),
+  condition: v.optional(describedString("Boolean rule for an {% if %} tag")),
   conditionAst: v.optional(
     v.pipe(
       conditionNodeSchema,

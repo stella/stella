@@ -9,7 +9,11 @@
 
 import * as slimdom from "slimdom";
 
-import { placeholderPattern } from "@stll/template-conditions";
+import {
+  placeholderPattern,
+  scanMarkers,
+  substitutionKey,
+} from "@stll/template-conditions";
 
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
@@ -17,6 +21,18 @@ import type { RichPatchValue } from "./types";
 // Canonical pattern from @stll/template-conditions (markers.ts) — the single
 // source of truth shared with discover-placeholders, folio, and the web preview.
 export const PLACEHOLDER_RE = placeholderPattern();
+
+/** One substitutable marker in a paragraph's text: where it sits and which
+ *  values-map key it fills from. Reading substitution targets through the
+ *  grammar's scanner is what lets `{{ clause("X") }}` and `{{ path | number }}`
+ *  patch through the same path as a bare `{{ path }}`. */
+type SubstitutionTarget = { start: number; end: number; key: string };
+
+const substitutionTargets = (text: string): SubstitutionTarget[] =>
+  scanMarkers(text).flatMap(({ end, meta, start }) => {
+    const key = substitutionKey(meta);
+    return key === null ? [] : [{ start, end, key }];
+  });
 
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 
@@ -34,15 +50,17 @@ const isStandalonePlaceholder = (
   text: string,
   values: Record<string, RichPatchValue>,
 ): { key: string; value: RichPatchValue } | null => {
-  const matches = [...text.matchAll(PLACEHOLDER_RE)];
-  const match = matches.at(0);
-  const key = match?.groups?.["name"];
-  if (!match || matches.length > 1 || match[0] !== text || key === undefined) {
+  const targets = substitutionTargets(text);
+  const target = targets.at(0);
+  if (!target || targets.length > 1) {
+    return null;
+  }
+  if (target.start !== 0 || target.end !== text.length) {
     return null;
   }
 
-  const value = values[key];
-  return value === undefined ? null : { key, value };
+  const value = values[target.key];
+  return value === undefined ? null : { key: target.key, value };
 };
 
 export const replacePlaceholdersInText = (
@@ -50,18 +68,19 @@ export const replacePlaceholdersInText = (
   values: Record<string, RichPatchValue>,
 ): { text: string; changed: boolean } => {
   let changed = false;
-  PLACEHOLDER_RE.lastIndex = 0;
-  const nextText = text.replaceAll(PLACEHOLDER_RE, (placeholder, key) => {
-    const value = values[String(key)];
+  let out = "";
+  let cursor = 0;
+  for (const { end, key, start } of substitutionTargets(text)) {
+    const value = values[key];
     if (value === undefined) {
-      return placeholder;
+      continue;
     }
-
+    out += text.slice(cursor, start) + valueText(value);
+    cursor = end;
     changed = true;
-    return valueText(value);
-  });
+  }
 
-  return { text: nextText, changed };
+  return { text: out + text.slice(cursor), changed };
 };
 
 const cloneRunProps = (run: slimdom.Element): slimdom.Element | null => {
@@ -322,21 +341,12 @@ const findPlaceholderMatches = (
   values: Record<string, RichPatchValue>,
 ): PlaceholderMatch[] => {
   const matches: PlaceholderMatch[] = [];
-  PLACEHOLDER_RE.lastIndex = 0;
-  for (const match of text.matchAll(PLACEHOLDER_RE)) {
-    const key = match.groups?.["name"];
-    if (!key) {
-      continue;
-    }
+  for (const { end, key, start } of substitutionTargets(text)) {
     const value = values[key];
     if (value === undefined) {
       continue;
     }
-    matches.push({
-      start: match.index,
-      end: match.index + match[0].length,
-      value,
-    });
+    matches.push({ start, end, value });
   }
   return matches;
 };
@@ -560,7 +570,7 @@ const cloneRunSequence = (
 };
 
 /**
- * Render an inline `{{#each}}` span at the run level, preserving run formatting
+ * Render an inline `{% for %}` span at the run level, preserving run formatting
  * authored inside the body. For each item, the body run sequence
  * (`[contentStart, contentEnd)` of the paragraph span text) is deep-cloned and
  * each cloned run's text is rewritten by `rewriteItem(text, itemIndex)`; the
@@ -622,7 +632,7 @@ export const expandInlineEachRuns = (
 
 /**
  * Inline injection of a multi-paragraph value (e.g. a multi-paragraph library
- * clause filling a mid-paragraph `{{@clause:Name}}` slot). The host paragraph
+ * clause filling a mid-paragraph `{{ clause("Name") }}` slot). The host paragraph
  * is split: text before the first multi-paragraph marker stays in a leading
  * paragraph, each clause paragraph becomes its own `w:p`, and text after the
  * marker trails into a final paragraph. Every produced paragraph clones the

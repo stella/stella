@@ -1,5 +1,5 @@
 /**
- * Array-aware resolution for dotted field paths inside `{{#each}}` loops.
+ * Array-aware resolution for dotted field paths inside `{% for %}` loops.
  *
  * A field placed inside a repeatable group keeps a flat manifest path like
  * `people.dob` (the date sub-field) or `parties.signer` (a composite), while
@@ -46,7 +46,7 @@ export type RepeatableContainer = {
 /**
  * Find the array container a dotted path resolves against in `values`: the
  * shortest dotted prefix of `path` that resolves to an array (so a loop over
- * a nested array — `{{#each deal.parties}}` for the field path
+ * a nested array — `{% for party in deal.parties %}` for the field path
  * `deal.parties.dob` — finds the `deal.parties` array, not the `deal`
  * object; `resolvePath` cannot index into an array, so at most one prefix
  * resolves to one). Returns `null` when `path` has no dot, or no prefix

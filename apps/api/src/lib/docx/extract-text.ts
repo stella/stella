@@ -8,29 +8,17 @@ import {
   extractDocxText,
   type ExtractedDocxParagraph,
 } from "@stll/folio-core/server";
-import type { BlockDirectiveKind } from "@stll/template-conditions";
+import {
+  blockDirectiveLinePattern,
+  isBlockDirectiveKind,
+} from "@stll/template-conditions";
 
 import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 
 // ── Directive detection ─────────────────────────────────
 
-/**
- * Matches a block directive as the sole paragraph content.
- * Intentionally duplicated from block-directives.ts: the two
- * modules serve different purposes and should not depend on
- * each other.
- */
-const DIRECTIVE_RE =
-  /^\s*\{\{(?<tag>#if|#elseif|#else|#each|\/if|\/each)(?<expr>[^{}]*)\}\}\s*$/u;
-
-const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
-  "#if": "if",
-  "#elseif": "elseif",
-  "#else": "else",
-  "#each": "each",
-  "/if": "endif",
-  "/each": "endeach",
-};
+/** Matches a block tag as the sole paragraph content. */
+const DIRECTIVE_RE = blockDirectiveLinePattern();
 
 const directiveCandidate = ({
   tableRow,
@@ -64,8 +52,8 @@ const annotateDirective = (
   paragraph.isDirective = true;
   const tag = directiveMatch.groups?.["tag"];
   const expression = directiveMatch.groups?.["expr"];
-  if (tag !== undefined) {
-    paragraph.directiveKind = DIRECTIVE_KIND_MAP[tag];
+  if (isBlockDirectiveKind(tag)) {
+    paragraph.directiveKind = tag;
   }
   if (expression !== undefined) {
     paragraph.directiveExpression = expression.trim();

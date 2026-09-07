@@ -98,7 +98,7 @@ const formatDateValue = (
  * for the fill's unmatched diagnostics; a malformed one is an error naming
  * the field.
  *
- * A date field inside an `{{#each}}` loop keeps a dotted path (`people.dob`)
+ * A date field inside an `{% for %}` loop keeps a dotted path (`people.dob`)
  * while the value arrives as an array of rows (`people: [{ dob }]`); the direct
  * `resolvePath` then returns undefined, so each row's sub-path value is
  * formatted in place instead (see {@link mapRepeatablePath}).

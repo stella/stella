@@ -1,17 +1,17 @@
 /**
  * Cross-reference numbering for templates.
  *
- * `{{@num:Key}}` marks a numbered item (a clause or term). At fill time —
+ * `{{ num("Key") }}` marks a numbered item (a clause or term). At fill time —
  * *after* conditional removal — each surviving `@num` marker is assigned a
  * sequential number in document order and replaced with that number.
- * `{{@ref:Key}}` then resolves to the number assigned to `Key`.
+ * `{{ ref("Key") }}` then resolves to the number assigned to `Key`.
  *
- * This lets prose like "as set out in Clause {{@ref:rent}}" track a clause
- * that may be conditionally included or excluded: if the `{{@num:rent}}`
- * clause is dropped by a `{{#if}}`, the reference is left unresolved rather
+ * This lets prose like "as set out in Clause {{ ref('rent') }}" track a clause
+ * that may be conditionally included or excluded: if the `{{ num("rent") }}`
+ * clause is dropped by a `{% if %}`, the reference is left unresolved rather
  * than pointing at a stale number.
  *
- * Keys inside an `{{#each}}` body are rewritten by loop expansion (see
+ * Keys inside an `{% for %}` body are rewritten by loop expansion (see
  * block-directives.ts) to per-iteration synthetic keys, so each expanded copy
  * is numbered as its own item and `@ref`s within the same iteration resolve
  * to that copy's number. A `@ref` that crosses a loop boundary inward (a bare
@@ -46,6 +46,18 @@ import { isElement, W_NS } from "./ooxml";
 import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 
 // Canonical patterns from @stll/template-conditions (markers.ts).
+/** The `key` group of a numbering match, read from the trailing named-groups
+ *  argument `String.replace` passes so the capture order stays the pattern's
+ *  business, not the caller's. */
+const markerKey = (args: readonly unknown[]): string => {
+  const groups = args.at(-1);
+  if (typeof groups !== "object" || groups === null || !("key" in groups)) {
+    return "";
+  }
+  const { key } = groups;
+  return typeof key === "string" ? key : "";
+};
+
 const NUM_RE = numPattern();
 const REF_RE = refPattern();
 const ANY_MARKER_RE = hasNumberingPattern();
@@ -57,16 +69,17 @@ export const hasNumberingMarkers = (xml: string): boolean =>
 /**
  * Split-safe pre-filter for the DOM pass: whether a part *might* hold a
  * numbering marker once runs are joined. A marker can be split at any character
- * boundary, so no multi-character substring (`@num:`, even `{{`) is guaranteed
- * contiguous in the raw XML — but every `{{@num:}}`/`{{@ref:}}` contains the
- * single `@` character, which cannot itself be split. A part with no `@` has no
- * marker; a stray `@` only costs one needless parse that mutates nothing.
+ * boundary, so no multi-character substring (`num(`, even `{{`) is guaranteed
+ * contiguous in the raw XML — but every `{{ num("k") }}`/`{{ ref("k") }}`
+ * contains the single `(` character, which cannot itself be split. A part with
+ * no `(` has no marker; a stray `(` only costs one needless parse that mutates
+ * nothing.
  */
 export const mightContainNumberingMarkers = (xml: string): boolean =>
-  xml.includes("@");
+  xml.includes("(");
 
 /**
- * Replace each `{{@num:Key}}` with a sequential number (1-based, in document
+ * Replace each `{{ num("Key") }}` with a sequential number (1-based, in document
  * order) and return the key→number map. Markers appearing earlier in the XML
  * get lower numbers; conditionally-removed markers are already gone, so the
  * numbering reflects the assembled document.
@@ -82,7 +95,8 @@ export const assignNumbers = (
   xml: string,
   numbers: Map<string, number> = new Map<string, number>(),
 ): { xml: string; numbers: Map<string, number> } => {
-  const rewritten = xml.replace(NUM_RE, (_match, key: string) => {
+  const rewritten = xml.replace(NUM_RE, (...args: unknown[]) => {
+    const key = markerKey(args);
     // A key may be marked once; a repeated @num reuses its first number.
     const existing = numbers.get(key);
     if (existing !== undefined) {
@@ -96,7 +110,7 @@ export const assignNumbers = (
 };
 
 /**
- * Replace `{{@ref:Key}}` with the number assigned to `Key`. Unresolved
+ * Replace `{{ ref("Key") }}` with the number assigned to `Key`. Unresolved
  * references (the target `@num` was conditionally excluded, or never existed)
  * are left intact so they surface as unmatched-placeholder diagnostics rather
  * than silently vanishing or emitting a wrong number.
@@ -105,8 +119,9 @@ export const resolveRefs = (
   xml: string,
   numbers: ReadonlyMap<string, number>,
 ): string =>
-  xml.replace(REF_RE, (match, key: string) => {
-    const assigned = numbers.get(key);
+  xml.replace(REF_RE, (...args: unknown[]) => {
+    const match = String(args.at(0));
+    const assigned = numbers.get(markerKey(args));
     return assigned === undefined ? match : String(assigned);
   });
 
@@ -216,7 +231,7 @@ const rewriteNumberingRanges = (
 };
 
 /**
- * Assign sequential numbers to every `{{@num:Key}}` in `doc`, threading the
+ * Assign sequential numbers to every `{{ num("Key") }}` in `doc`, threading the
  * shared `numbers` map so the count continues across paragraphs and (when the
  * caller reuses the map) across parts. Paragraphs are visited in document
  * order; within a paragraph, markers are numbered left to right (ascending)
@@ -232,7 +247,7 @@ export const assignNumbersInDoc = (
     const text = paragraphSpanText(paragraph);
     const ranges: NumberingRange[] = [];
     for (const match of text.matchAll(NUM_RE)) {
-      const key = match[1];
+      const key = match.groups?.["key"];
       if (key === undefined) {
         continue;
       }
@@ -256,7 +271,7 @@ export const assignNumbersInDoc = (
 };
 
 /**
- * Resolve every `{{@ref:Key}}` in `doc` against `numbers`. An unresolved
+ * Resolve every `{{ ref("Key") }}` in `doc` against `numbers`. An unresolved
  * reference (its `@num` was conditionally excluded, never existed, or lives in
  * another iteration) is left intact so it surfaces as an unmatched-placeholder
  * diagnostic rather than a wrong number. Returns whether any ref was resolved.
@@ -270,7 +285,7 @@ export const resolveRefsInDoc = (
     const text = paragraphSpanText(paragraph);
     const ranges: NumberingRange[] = [];
     for (const match of text.matchAll(REF_RE)) {
-      const key = match[1];
+      const key = match.groups?.["key"];
       if (key === undefined) {
         continue;
       }

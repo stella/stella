@@ -49,11 +49,11 @@ const docTextOf = async (buffer: Buffer): Promise<string> => {
 };
 
 const lease = [
-  "Clause {{@num:rent}}. Rent is {{rent}}.",
-  "{{#if has_guarantee}}",
-  "Clause {{@num:guarantee}}. Guarantee provided.",
-  "{{/if}}",
-  "See Clause {{@ref:rent}}. Per Clause {{@ref:guarantee}}.",
+  "Clause {{ num('rent') }}. Rent is {{rent}}.",
+  "{% if has_guarantee %}",
+  "Clause {{ num('guarantee') }}. Guarantee provided.",
+  "{% endif %}",
+  "See Clause {{ ref('rent') }}. Per Clause {{ ref('guarantee') }}.",
 ];
 
 describe("fillTemplate — cross-reference numbering", () => {
@@ -83,18 +83,18 @@ describe("fillTemplate — cross-reference numbering", () => {
     expect(text).not.toContain("Guarantee provided.");
     // rent is still clause 1; the dropped guarantee reference is left visible
     expect(text).toContain("See Clause 1.");
-    expect(text).toContain("{{@ref:guarantee}}");
+    expect(text).toContain("{{ ref('guarantee') }}");
   });
 });
 
-describe("fillTemplate — @num/@ref through {{#each}} expansion", () => {
+describe("fillTemplate — @num/@ref through {% for %} expansion", () => {
   test("each iteration is numbered sequentially; refs resolve per iteration", async () => {
     const docx = await buildDocxBuffer([
-      "Clause {{@num:intro}}. Introduction.",
-      "{{#each parties}}",
-      "Clause {{@num:party}}. {{parties.name}} is a party (see Clause {{@ref:party}}, cf. Clause {{@ref:intro}}).",
-      "{{/each}}",
-      "Closing per Clause {{@ref:intro}}.",
+      "Clause {{ num('intro') }}. Introduction.",
+      "{% for party in parties %}",
+      "Clause {{ num('party') }}. {{ party.name }} is a party (see Clause {{ ref('party') }}, cf. Clause {{ ref('intro') }}).",
+      "{% endfor %}",
+      "Closing per Clause {{ ref('intro') }}.",
     ]);
     const { buffer } = await fillTemplate(docx, {
       parties: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
@@ -116,10 +116,10 @@ describe("fillTemplate — @num/@ref through {{#each}} expansion", () => {
 
   test("a ref from outside the loop to a loop-local key stays unresolved", async () => {
     const docx = await buildDocxBuffer([
-      "{{#each items}}",
-      "Clause {{@num:item}}. {{items.name}}.",
-      "{{/each}}",
-      "See Clause {{@ref:item}}.",
+      "{% for item in items %}",
+      "Clause {{ num('item') }}. {{ item.name }}.",
+      "{% endfor %}",
+      "See Clause {{ ref('item') }}.",
     ]);
     const { buffer } = await fillTemplate(docx, {
       items: [{ name: "A" }, { name: "B" }],
@@ -129,16 +129,16 @@ describe("fillTemplate — @num/@ref through {{#each}} expansion", () => {
     expect(text).toContain("Clause 1. A.");
     expect(text).toContain("Clause 2. B.");
     // Ambiguous target (one per iteration) — left visible as a diagnostic
-    expect(text).toContain("See Clause {{@ref:item}}.");
+    expect(text).toContain("See Clause {{ ref('item') }}.");
   });
 
-  test("iterations excluded by a nested {{#if}} do not consume numbers", async () => {
+  test("iterations excluded by a nested {% if %} do not consume numbers", async () => {
     const docx = await buildDocxBuffer([
-      "{{#each items}}",
-      "{{#if items.include}}",
-      "Clause {{@num:item}}. {{items.name}}.",
-      "{{/if}}",
-      "{{/each}}",
+      "{% for item in items %}",
+      "{% if item.include %}",
+      "Clause {{ num('item') }}. {{ item.name }}.",
+      "{% endif %}",
+      "{% endfor %}",
     ]);
     const { buffer } = await fillTemplate(docx, {
       items: [
@@ -156,11 +156,11 @@ describe("fillTemplate — @num/@ref through {{#each}} expansion", () => {
 
   test("nested loops number every inner occurrence sequentially", async () => {
     const docx = await buildDocxBuffer([
-      "{{#each groups}}",
-      "{{#each subitems}}",
-      "Item {{@num:sub}}.",
-      "{{/each}}",
-      "{{/each}}",
+      "{% for group in groups %}",
+      "{% for subitem in subitems %}",
+      "Item {{ num('sub') }}.",
+      "{% endfor %}",
+      "{% endfor %}",
     ]);
     const { buffer } = await fillTemplate(docx, {
       groups: [{ subitems: ["a", "b"] }, { subitems: ["c"] }],
@@ -174,12 +174,12 @@ describe("fillTemplate — @num/@ref through {{#each}} expansion", () => {
   });
 });
 
-describe("fillTemplate — {{@index}}/{{@count}} through {{#each}} expansion", () => {
+describe("fillTemplate — {{ loop.index }}/{{ loop.length }} through {% for %} expansion", () => {
   test("block loop resolves index/count and composes with item fields", async () => {
     const docx = await buildDocxBuffer([
-      "{{#each parties}}",
-      "{{@index}}/{{@count}}: {{parties.name}}.",
-      "{{/each}}",
+      "{% for party in parties %}",
+      "{{ loop.index }}/{{ loop.length }}: {{ party.name }}.",
+      "{% endfor %}",
     ]);
     const { buffer } = await fillTemplate(docx, {
       parties: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
@@ -193,12 +193,12 @@ describe("fillTemplate — {{@index}}/{{@count}} through {{#each}} expansion", (
 
   test("nested loops bind @index/@count to the innermost loop", async () => {
     const docx = await buildDocxBuffer([
-      "{{#each groups}}",
-      "G{{@index}}/{{@count}}.",
-      "{{#each groups.items}}",
-      "I{{@index}}/{{@count}}.",
-      "{{/each}}",
-      "{{/each}}",
+      "{% for group in groups %}",
+      "G{{ loop.index }}/{{ loop.length }}.",
+      "{% for item in group.items %}",
+      "I{{ loop.index }}/{{ loop.length }}.",
+      "{% endfor %}",
+      "{% endfor %}",
     ]);
     const { buffer } = await fillTemplate(docx, {
       groups: [{ items: ["a", "b"] }, { items: ["c"] }],
@@ -230,10 +230,14 @@ const numIdsOf = async (buffer: Buffer): Promise<string[]> => {
   );
 };
 
-describe("fillTemplate — w:numPr through {{#each}} expansion", () => {
+describe("fillTemplate — w:numPr through {% for %} expansion", () => {
   test("cloned list paragraphs keep the template numId (one continuous Word sequence) and numbering.xml is untouched", async () => {
     const docx = await buildDocxBuffer(
-      ["{{#each items}}", { text: "{{items.name}}", numId: 1 }, "{{/each}}"],
+      [
+        "{% for item in items %}",
+        { text: "{{ item.name }}", numId: 1 },
+        "{% endfor %}",
+      ],
       { numberingXml: NUMBERING_XML },
     );
     const { buffer } = await fillTemplate(docx, {
@@ -254,9 +258,9 @@ describe("fillTemplate — w:numPr through {{#each}} expansion", () => {
   test("a cloned numPr whose numId does not resolve is pruned", async () => {
     const docx = await buildDocxBuffer(
       [
-        "{{#each items}}",
-        { text: "{{items.name}}", numId: 2 },
-        "{{/each}}",
+        "{% for item in items %}",
+        { text: "{{ item.name }}", numId: 2 },
+        "{% endfor %}",
         { text: "Outside loop", numId: 7 },
       ],
       { numberingXml: NUMBERING_XML },
@@ -273,9 +277,9 @@ describe("fillTemplate — w:numPr through {{#each}} expansion", () => {
 
   test("without word/numbering.xml every numPr is pruned from the expanded document", async () => {
     const docx = await buildDocxBuffer([
-      "{{#each items}}",
-      { text: "{{items.name}}", numId: 1 },
-      "{{/each}}",
+      "{% for item in items %}",
+      { text: "{{ item.name }}", numId: 1 },
+      "{% endfor %}",
     ]);
     const { buffer } = await fillTemplate(docx, {
       items: [{ name: "A" }],

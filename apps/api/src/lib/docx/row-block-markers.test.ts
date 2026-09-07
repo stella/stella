@@ -61,15 +61,15 @@ const EACH_ROW_FORM = WRAP(
   TBL(
     HEADER_ROW,
     TR(
-      TC(P("{{#each deliverables}}{{deliverables.item}}")),
-      TC(P("{{deliverables.fee}}{{/each}}")),
+      TC(P("{% for deliverable in deliverables %}{{ deliverable.item }}")),
+      TC(P("{{ deliverable.fee }}{% endfor %}")),
     ),
   ),
 );
 
-// ── Row-form {{#each}} ───────────────────────────────────
+// ── Row-form {% for %} ───────────────────────────────────
 
-describe("row-form {{#each}} markers", () => {
+describe("row-form {% for %} markers", () => {
   test("repeats the row per item and strips the markers", () => {
     const { blockErrors, inlineErrors, patchValues, rowCount, texts } = render(
       EACH_ROW_FORM,
@@ -112,9 +112,9 @@ describe("row-form {{#each}} markers", () => {
         TBL(
           TR(
             TC(
-              `<w:p><w:r><w:t>{{#each deliverables}}</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>{{deliverables.item}}</w:t></w:r></w:p>`,
+              `<w:p><w:r><w:t>{% for deliverable in deliverables %}</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>{{ deliverable.item }}</w:t></w:r></w:p>`,
             ),
-            TC(P("{{deliverables.fee}}{{/each}}")),
+            TC(P("{{ deliverable.fee }}{% endfor %}")),
           ),
         ),
       ),
@@ -134,7 +134,9 @@ describe("row-form {{#each}} markers", () => {
       WRAP(
         TBL(
           TR(
-            TC(P("{{#each deliverables}}{{deliverables.item}}")),
+            TC(
+              P("{% for deliverable in deliverables %}{{ deliverable.item }}"),
+            ),
             TC(P("Fee")),
           ),
         ),
@@ -146,25 +148,25 @@ describe("row-form {{#each}} markers", () => {
     expect(inlineErrors).toEqual([
       {
         message:
-          'Unclosed inline {{#each}} — the {{/each}} must be in the same paragraph in paragraph "{{#each deliverables}}{{deliverables.item}}"',
+          'Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph in paragraph "{% for deliverable in deliverables %}{{ deliverable.item }}"',
         paragraphIndex: 0,
-        directive: "{{#each deliverables}}",
+        directive: "{% for deliverable in deliverables %}",
       },
     ]);
   });
 
   test("a closer with no opener in the row keeps today's error", () => {
     const { inlineErrors } = render(
-      WRAP(TBL(TR(TC(P("Item")), TC(P("{{deliverables.fee}}{{/each}}"))))),
+      WRAP(TBL(TR(TC(P("Item")), TC(P("{{ deliverable.fee }}{% endfor %}"))))),
       { deliverables: [{ fee: "1" }] },
     );
 
     expect(inlineErrors).toEqual([
       {
         message:
-          'Orphaned inline {{/each}} without an open {{#each}} in paragraph "{{deliverables.fee}}{{/each}}"',
+          'Orphaned inline {% endfor %} without an open {% for %} in paragraph "{{ deliverable.fee }}{% endfor %}"',
         paragraphIndex: 1,
-        directive: "{{/each}}",
+        directive: "{% endfor %}",
       },
     ]);
   });
@@ -174,8 +176,12 @@ describe("row-form {{#each}} markers", () => {
       WRAP(
         TBL(
           TR(
-            TC(P("Item: {{#each deliverables}}{{deliverables.item}}")),
-            TC(P("{{deliverables.fee}}{{/each}}")),
+            TC(
+              P(
+                "Item: {% for deliverable in deliverables %}{{ deliverable.item }}",
+              ),
+            ),
+            TC(P("{{ deliverable.fee }}{% endfor %}")),
           ),
         ),
       ),
@@ -184,11 +190,11 @@ describe("row-form {{#each}} markers", () => {
 
     expect(rowCount).toBe(1);
     expect(inlineErrors.map(({ directive }) => directive)).toEqual([
-      "{{#each deliverables}}",
-      "{{/each}}",
+      "{% for deliverable in deliverables %}",
+      "{% endfor %}",
     ]);
     expect(inlineErrors[0]?.message).toStartWith(
-      "Unclosed inline {{#each}} — the {{/each}} must be in the same paragraph",
+      "Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph",
     );
   });
 
@@ -197,10 +203,12 @@ describe("row-form {{#each}} markers", () => {
       WRAP(
         TBL(
           TR(
-            TC(P("{{#each deliverables}}{{deliverables.item}}")),
-            TC(P("{{#if paid}}paid")),
-            TC(P("yes{{/if}}")),
-            TC(P("{{deliverables.fee}}{{/each}}")),
+            TC(
+              P("{% for deliverable in deliverables %}{{ deliverable.item }}"),
+            ),
+            TC(P("{% if paid %}paid")),
+            TC(P("yes{% endif %}")),
+            TC(P("{{ deliverable.fee }}{% endfor %}")),
           ),
         ),
       ),
@@ -209,10 +217,10 @@ describe("row-form {{#each}} markers", () => {
 
     expect(rowCount).toBe(1);
     expect(inlineErrors.map(({ directive }) => directive)).toEqual([
-      "{{#each deliverables}}",
-      "{{#if paid}}",
-      "{{/if}}",
-      "{{/each}}",
+      "{% for deliverable in deliverables %}",
+      "{% if paid %}",
+      "{% endif %}",
+      "{% endfor %}",
     ]);
   });
 
@@ -220,8 +228,12 @@ describe("row-form {{#each}} markers", () => {
     const { blockErrors, inlineErrors } = render(
       WRAP(
         TBL(
-          TR(TC(P("{{#each deliverables}}{{deliverables.item}}"))),
-          TR(TC(P("{{deliverables.fee}}{{/each}}"))),
+          TR(
+            TC(
+              P("{% for deliverable in deliverables %}{{ deliverable.item }}"),
+            ),
+          ),
+          TR(TC(P("{{ deliverable.fee }}{% endfor %}"))),
         ),
       ),
       { deliverables: [{ item: "a", fee: "1" }] },
@@ -229,19 +241,22 @@ describe("row-form {{#each}} markers", () => {
 
     expect(blockErrors).toEqual([]);
     expect(inlineErrors.map(({ directive }) => directive)).toEqual([
-      "{{#each deliverables}}",
-      "{{/each}}",
+      "{% for deliverable in deliverables %}",
+      "{% endfor %}",
     ]);
   });
 });
 
-// ── Row-form {{#if}} ─────────────────────────────────────
+// ── Row-form {% if %} ─────────────────────────────────────
 
-describe("row-form {{#if}} markers", () => {
+describe("row-form {% if %} markers", () => {
   const ifRowForm = WRAP(
     TBL(
       TR(TC(P("Clause")), TC(P("Amount"))),
-      TR(TC(P("{{#if penalty}}Late fee")), TC(P("{{penalty_amount}}{{/if}}"))),
+      TR(
+        TC(P("{% if penalty %}Late fee")),
+        TC(P("{{penalty_amount}}{% endif %}")),
+      ),
     ),
   );
 
@@ -280,8 +295,8 @@ describe("row-form {{#if}} markers", () => {
         WRAP(
           TBL(
             TR(
-              TC(P("{{#if paid}}Paid{{#else}}Unpaid")),
-              TC(P("Amount{{/if}}")),
+              TC(P("{% if paid %}Paid{% else %}Unpaid")),
+              TC(P("Amount{% endif %}")),
             ),
           ),
         ),
@@ -290,26 +305,26 @@ describe("row-form {{#if}} markers", () => {
 
       expect(rowCount).toBe(1);
       expect(texts).toEqual([
-        "{{#if paid}}Paid{{#else}}Unpaid",
-        "Amount{{/if}}",
+        "{% if paid %}Paid{% else %}Unpaid",
+        "Amount{% endif %}",
       ]);
       expect(inlineErrors.map(({ directive }) => directive)).toEqual([
-        "{{#if paid}}",
-        "{{/if}}",
+        "{% if paid %}",
+        "{% endif %}",
       ]);
     }
   });
 
   test("a pair wrapping one cell's paragraphs is not a row block", () => {
     const { inlineErrors, rowCount } = render(
-      WRAP(TBL(TR(TC(P("{{#if penalty}}Late fee"), P("500{{/if}}"))))),
+      WRAP(TBL(TR(TC(P("{% if penalty %}Late fee"), P("500{% endif %}"))))),
       { penalty: false },
     );
 
     expect(rowCount).toBe(1);
     expect(inlineErrors.map(({ directive }) => directive)).toEqual([
-      "{{#if penalty}}",
-      "{{/if}}",
+      "{% if penalty %}",
+      "{% endif %}",
     ]);
   });
 });
@@ -317,13 +332,13 @@ describe("row-form {{#if}} markers", () => {
 // ── Reported paragraph positions ─────────────────────────
 
 describe("diagnostics name the authored paragraph", () => {
-  /** A table row plus a later paragraph whose inline `{{#if}}` never closes.
+  /** A table row plus a later paragraph whose inline `{% if %}` never closes.
    *  The malformed paragraph is the third the author typed: two table cells,
    *  then it. */
   const withRow = (firstCell: string, secondCell: string) =>
     WRAP(
       TBL(TR(TC(P(firstCell)), TC(P(secondCell)))) +
-        P("Buyer {{#if has_spouse}} and spouse"),
+        P("Buyer {% if has_spouse %} and spouse"),
     );
 
   const AUTHORED_INDEX = 2;
@@ -332,8 +347,8 @@ describe("diagnostics name the authored paragraph", () => {
     const rowForm = await discoverTemplate(
       await makeDocx(
         withRow(
-          "{{#each deliverables}}{{deliverables.item}}",
-          "{{deliverables.fee}}{{/each}}",
+          "{% for deliverable in deliverables %}{{ deliverable.item }}",
+          "{{ deliverable.fee }}{% endfor %}",
         ),
       ),
     );
@@ -358,8 +373,12 @@ describe("diagnostics name the authored paragraph", () => {
         WRAP(
           TBL(
             TR(
-              TC(P("{{#each deliverables}}{{deliverables.item}}")),
-              TC(P("{{deliverables.fee}}{{/each}}")),
+              TC(
+                P(
+                  "{% for deliverable in deliverables %}{{ deliverable.item }}",
+                ),
+              ),
+              TC(P("{{ deliverable.fee }}{% endfor %}")),
             ),
           ) + P("Total {{amount"),
         ),
@@ -380,8 +399,8 @@ describe("row form and own-paragraph form agree", () => {
     TBL(
       HEADER_ROW,
       TR(
-        TC(P("{{#each deliverables}}{{deliverables.item}}")),
-        TC(P("{{deliverables.fee}}{{/each}}")),
+        TC(P("{% for deliverable in deliverables %}{{ deliverable.item }}")),
+        TC(P("{{ deliverable.fee }}{% endfor %}")),
       ),
     ),
   );
@@ -389,23 +408,29 @@ describe("row form and own-paragraph form agree", () => {
     TBL(
       HEADER_ROW,
       TR(
-        TC(P("{{#each deliverables}}"), P("{{deliverables.item}}")),
-        TC(P("{{deliverables.fee}}"), P("{{/each}}")),
+        TC(
+          P("{% for deliverable in deliverables %}"),
+          P("{{ deliverable.item }}"),
+        ),
+        TC(P("{{ deliverable.fee }}"), P("{% endfor %}")),
       ),
     ),
   );
   const ifRowXml = WRAP(
     TBL(
       HEADER_ROW,
-      TR(TC(P("{{#if penalty}}Late fee")), TC(P("{{penalty_amount}}{{/if}}"))),
+      TR(
+        TC(P("{% if penalty %}Late fee")),
+        TC(P("{{penalty_amount}}{% endif %}")),
+      ),
     ),
   );
   const ifParagraphXml = WRAP(
     TBL(
       HEADER_ROW,
       TR(
-        TC(P("{{#if penalty}}"), P("Late fee")),
-        TC(P("{{penalty_amount}}"), P("{{/if}}")),
+        TC(P("{% if penalty %}"), P("Late fee")),
+        TC(P("{{penalty_amount}}"), P("{% endif %}")),
       ),
     ),
   );

@@ -151,9 +151,9 @@ describe("fillTemplate — block directives e2e", () => {
     const xml = WRAP(
       [
         P("Contract for {{buyer_name}}"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor: {{guarantor_name}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("End of contract"),
       ].join(""),
     );
@@ -171,17 +171,17 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).toContain("Jan Novák");
     expect(joined).toContain("End of contract");
     // Directive paragraphs should be gone
-    expect(joined).not.toContain("{{#if");
-    expect(joined).not.toContain("{{/if");
+    expect(joined).not.toContain("{% if");
+    expect(joined).not.toContain("{% endif");
   });
 
   test("conditional false removes content", async () => {
     const xml = WRAP(
       [
         P("Before"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor: {{guarantor_name}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("After"),
       ].join(""),
     );
@@ -200,9 +200,9 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).not.toContain("Should not appear");
   });
 
-  test("date {{#if}} compares raw ISO while substituting the formatted date", async () => {
+  test("date {% if %} compares raw ISO while substituting the formatted date", async () => {
     // The finding: applyManifestFillSteps rewrites a date field to localized
-    // display text, then the SAME map is used to evaluate a {{#if}} on that
+    // display text, then the SAME map is used to evaluate a {% if %} on that
     // field. Without the raw-value overlay, `signing_date > "2028-01-01"` would
     // compare "13. června 2028" (not an ISO date) and wrongly drop the clause.
     // The boolean `notify` keeps a non-string value in the map so fillTemplate
@@ -211,12 +211,12 @@ describe("fillTemplate — block directives e2e", () => {
     const xml = WRAP(
       [
         P("Signed on {{signing_date}}."),
-        P('{{#if signing_date > "2028-01-01"}}'),
+        P('{% if signing_date > "2028-01-01" %}'),
         P("This is a future-dated agreement."),
-        P("{{/if}}"),
-        P("{{#if notify}}"),
+        P("{% endif %}"),
+        P("{% if notify %}"),
         P("Counterparty will be notified."),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const docx = await makeDocx(xml);
@@ -247,15 +247,15 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).toContain("Counterparty will be notified.");
   });
 
-  test("date {{#if}} drops the clause when the raw ISO fails the comparison", async () => {
+  test("date {% if %} drops the clause when the raw ISO fails the comparison", async () => {
     const xml = WRAP(
       [
-        P('{{#if signing_date > "2028-01-01"}}'),
+        P('{% if signing_date > "2028-01-01" %}'),
         P("Future clause."),
-        P("{{/if}}"),
-        P("{{#if notify}}"),
+        P("{% endif %}"),
+        P("{% if notify %}"),
         P("Tail."),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const docx = await makeDocx(xml);
@@ -285,9 +285,9 @@ describe("fillTemplate — block directives e2e", () => {
     const xml = WRAP(
       [
         P("Sellers:"),
-        P("{{#each sellers}}"),
-        P("Name: {{sellers.name}}, ID: {{sellers.id}}"),
-        P("{{/each}}"),
+        P("{% for seller in sellers %}"),
+        P("Name: {{ seller.name }}, ID: {{ seller.id }}"),
+        P("{% endfor %}"),
         P("End"),
       ].join(""),
     );
@@ -307,18 +307,18 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).toContain("Bob");
     expect(joined).toContain("B2");
     expect(joined).toContain("End");
-    expect(joined).not.toContain("{{#each");
+    expect(joined).not.toContain("{% for");
   });
 
   test("nested primitive loop shorthand renders each outer row's values", async () => {
     const docx = await makeDocx(
       WRAP(
         [
-          P("{{#each groups}}"),
-          P("{{#each subitems}}"),
-          P("{{subitems.value}}"),
-          P("{{/each}}"),
-          P("{{/each}}"),
+          P("{% for group in groups %}"),
+          P("{% for subitem in subitems %}"),
+          P("{{ subitem.value }}"),
+          P("{% endfor %}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );
@@ -335,13 +335,13 @@ describe("fillTemplate — block directives e2e", () => {
     const docx = await makeDocx(
       WRAP(
         [
-          P("{{#each groups}}"),
-          P("{{#each items}}"),
-          P("{{#each items.subitems}}"),
-          P("{{items.subitems.value}}"),
-          P("{{/each}}"),
-          P("{{/each}}"),
-          P("{{/each}}"),
+          P("{% for group in groups %}"),
+          P("{% for item in items %}"),
+          P("{% for subitem in item.subitems %}"),
+          P("{{ subitem.value }}"),
+          P("{% endfor %}"),
+          P("{% endfor %}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );
@@ -413,10 +413,10 @@ describe("fillTemplate — block directives e2e", () => {
 
 /**
  * Representative template exercising every DOM-mutating fill stage at once:
- * a two-column table with markers split across runs, an inline {{#if}} span
- * whose markers straddle run boundaries, an {{#each}} loop over numbered
+ * a two-column table with markers split across runs, an inline {% if %} span
+ * whose markers straddle run boundaries, an {% for %} loop over numbered
  * list paragraphs (one valid numId, one dangling), and a whole-paragraph
- * {{#if}} block. The assertion is the invariant that matters for Word
+ * {% if %} block. The assertion is the invariant that matters for Word
  * compatibility, not an example: every XML part of the output must parse as
  * well-formed XML and no part may disappear from the package.
  */
@@ -443,18 +443,18 @@ const makeStructuralFixture = async (): Promise<Buffer> => {
   const xml = WRAP(
     [
       SPLIT(
-        "The Buyer{{#if has",
-        "Spouse}} and their spouse{",
-        "{/if}} agrees.",
+        "The Buyer{% if has",
+        "Spouse %} and their spouse{",
+        "% endif %} agrees.",
       ),
       table,
-      P("{{#if showClause}}"),
+      P("{% if showClause %}"),
       P("Optional clause for {{client}}"),
-      P("{{/if}}"),
-      P("{{#each items}}"),
-      NUMBERED(1, "Item {{items.label}} (kept numbering)"),
-      NUMBERED(99, "Item {{items.label}} (dangling numbering)"),
-      P("{{/each}}"),
+      P("{% endif %}"),
+      P("{% for item in items %}"),
+      NUMBERED(1, "Item {{ item.label }} (kept numbering)"),
+      NUMBERED(99, "Item {{ item.label }} (dangling numbering)"),
+      P("{% endfor %}"),
       P("Done."),
     ].join(""),
   );
@@ -516,16 +516,16 @@ describe("fillTemplate — output stays well-formed in every part", () => {
   });
 });
 
-// ── Boolean condition-field as a {{#if}} target ──────────
+// ── Boolean condition-field as a {% if %} target ──────────
 
-describe("fillTemplate — {{#if field_path}} resolves a condition-field rule", () => {
+describe("fillTemplate — {% if field_path %} resolves a condition-field rule", () => {
   const makeConditionDocx = async (): Promise<Buffer> => {
     const xml = WRAP(
       [
         P("Before"),
-        P("{{#if is_company}}"),
+        P("{% if is_company %}"),
         P("Company clause for {{client.name}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("After"),
       ].join(""),
     );
@@ -551,7 +551,7 @@ describe("fillTemplate — {{#if field_path}} resolves a condition-field rule", 
     expect(joined).toContain("Company clause for");
     expect(joined).toContain("ACME");
     expect(joined).toContain("After");
-    expect(joined).not.toContain("{{#if");
+    expect(joined).not.toContain("{% if");
   });
 
   test("excludes the block when the field's rule is false", async () => {

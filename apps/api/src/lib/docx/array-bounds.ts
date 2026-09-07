@@ -10,7 +10,7 @@
  * as length 0, so a positive `minItems` rejects an omitted required loop —
  * except when the container field carries a boolean rule `condition`, since
  * such a loop may be legitimately suppressed and this check runs before block
- * expansion (it cannot see the document's `{{#if}}` structure). `maxItems` only
+ * expansion (it cannot see the document's `{% if %}` structure). `maxItems` only
  * constrains a value that is actually an array.
  *
  * Pure: no IO, no model/provider dependency. Wired into the shared
@@ -52,9 +52,9 @@ export const checkArrayBounds = (
     // not render zero items). Exception: a loop gated by a boolean rule
     // `condition` on its own container field may be legitimately suppressed, so
     // its array being absent is not a violation — checkArrayBounds runs before
-    // block expansion and cannot see the document's `{{#if}}` structure, so it
+    // block expansion and cannot see the document's `{% if %}` structure, so it
     // would otherwise over-reject. (It still cannot detect a loop gated by a
-    // SEPARATE `{{#if}}` field; that residual case is unenforced.)
+    // SEPARATE `{% if %}` field; that residual case is unenforced.)
     if (min > 0 && length < min && field.condition === undefined) {
       return `Field "${label}": needs at least ${min} item(s), got ${length}.`;
     }

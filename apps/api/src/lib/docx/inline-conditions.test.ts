@@ -89,7 +89,8 @@ const documentBody = async (buffer: Buffer): Promise<slimdom.Element> => {
 
 describe("parseInlineConditions", () => {
   test("parses a single span with offsets covering the markers", () => {
-    const text = "the Buyer{{#if hasSpouse}} and their spouse{{/if}} hereby";
+    const text =
+      "the Buyer{% if hasSpouse %} and their spouse{% endif %} hereby";
     const parsed = parseInlineConditions(text);
     if (!parsed.ok) {
       throw new Error(parsed.message);
@@ -97,7 +98,7 @@ describe("parseInlineConditions", () => {
     expect(parsed.groups).toHaveLength(1);
     const group = parsed.groups[0];
     expect(text.slice(group?.start, group?.end)).toBe(
-      "{{#if hasSpouse}} and their spouse{{/if}}",
+      "{% if hasSpouse %} and their spouse{% endif %}",
     );
     if (group?.kind !== "if") {
       throw new Error("expected an inline if group");
@@ -111,75 +112,78 @@ describe("parseInlineConditions", () => {
 
   test("rejects nested inline ifs", () => {
     const parsed = parseInlineConditions(
-      "a {{#if x}}b {{#if y}}c{{/if}}{{/if}}",
+      "a {% if x %}b {% if y %}c{% endif %}{% endif %}",
     );
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Nested inline {{#if}}");
+      expect(parsed.message).toContain("Nested inline {% if %}");
     }
   });
 
   test("parses an inline each with content-span offsets covering the body", () => {
-    const text = "Parties: {{#each parties}}{{parties.name}}, {{/each}}end";
+    const text =
+      "Parties: {% for party in parties %}{{ party.name }}, {% endfor %}end";
     const parsed = parseInlineConditions(text);
     if (!parsed.ok) {
       throw new Error(parsed.message);
     }
     expect(parsed.groups).toHaveLength(1);
     const group = parsed.groups[0];
-    if (group?.kind !== "each") {
-      throw new Error("expected an each group");
+    if (group?.kind !== "for") {
+      throw new Error("expected a for group");
     }
     expect(group.arrayPath).toBe("parties");
     expect(text.slice(group.start, group.end)).toBe(
-      "{{#each parties}}{{parties.name}}, {{/each}}",
+      "{% for party in parties %}{{ party.name }}, {% endfor %}",
     );
     expect(text.slice(group.contentStart, group.contentEnd)).toBe(
-      "{{parties.name}}, ",
+      "{{ party.name }}, ",
     );
   });
 
   test("rejects an inline each nested inside an inline if", () => {
     const parsed = parseInlineConditions(
-      "x {{#if a}}{{#each items}}y{{/each}}{{/if}}",
+      "x {% if a %}{% for item in items %}y{% endfor %}{% endif %}",
     );
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Nested inline {{#each}}");
+      expect(parsed.message).toContain("Nested inline {% for %}");
     }
   });
 
   test("rejects an unclosed inline each, naming the paragraph", () => {
-    const parsed = parseInlineConditions("list: {{#each items}} never closed");
+    const parsed = parseInlineConditions(
+      "list: {% for item in items %} never closed",
+    );
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Unclosed inline {{#each}}");
-      expect(parsed.directive).toBe("{{#each items}}");
+      expect(parsed.message).toContain("Unclosed inline {% for %}");
+      expect(parsed.directive).toBe("{% for item in items %}");
     }
   });
 
   test("rejects an orphaned inline each closer", () => {
-    const parsed = parseInlineConditions("text {{/each}} more");
+    const parsed = parseInlineConditions("text {% endfor %} more");
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Orphaned inline {{/each}}");
+      expect(parsed.message).toContain("Orphaned inline {% endfor %}");
     }
   });
 
   test("rejects an unclosed inline if, naming the paragraph", () => {
-    const parsed = parseInlineConditions("start {{#if a}} never closed");
+    const parsed = parseInlineConditions("start {% if a %} never closed");
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Unclosed inline {{#if}}");
-      expect(parsed.message).toContain("start {{#if a}} never closed");
-      expect(parsed.directive).toBe("{{#if a}}");
+      expect(parsed.message).toContain("Unclosed inline {% if %}");
+      expect(parsed.message).toContain("start {% if a %} never closed");
+      expect(parsed.directive).toBe("{% if a %}");
     }
   });
 
   test("rejects orphaned closers and branch separators", () => {
-    expect(parseInlineConditions("text {{/if}} more").ok).toBe(false);
-    expect(parseInlineConditions("text {{#else}} more").ok).toBe(false);
-    expect(parseInlineConditions("text {{#elseif b}} more").ok).toBe(false);
+    expect(parseInlineConditions("text {% endif %} more").ok).toBe(false);
+    expect(parseInlineConditions("text {% else %} more").ok).toBe(false);
+    expect(parseInlineConditions("text {% elif b %} more").ok).toBe(false);
   });
 });
 
@@ -188,7 +192,9 @@ describe("parseInlineConditions", () => {
 describe("processInlineConditions", () => {
   test("keeps the span content (without markers) when the condition holds", () => {
     const body = parseBody(
-      WRAP(P("the Buyer{{#if hasSpouse}} and their spouse{{/if}} hereby.")),
+      WRAP(
+        P("the Buyer{% if hasSpouse %} and their spouse{% endif %} hereby."),
+      ),
     );
     const errors = processInlineConditions(body, { hasSpouse: true });
     expect(errors).toEqual([]);
@@ -197,7 +203,9 @@ describe("processInlineConditions", () => {
 
   test("cuts the whole span when the condition fails", () => {
     const body = parseBody(
-      WRAP(P("the Buyer{{#if hasSpouse}} and their spouse{{/if}} hereby.")),
+      WRAP(
+        P("the Buyer{% if hasSpouse %} and their spouse{% endif %} hereby."),
+      ),
     );
     const errors = processInlineConditions(body, { hasSpouse: false });
     expect(errors).toEqual([]);
@@ -207,7 +215,7 @@ describe("processInlineConditions", () => {
   test("else branch wins when the condition fails", () => {
     const xml = WRAP(
       P(
-        "Payment is due{{#if hasDeadline}} by the deadline{{#else}} on demand{{/if}}.",
+        "Payment is due{% if hasDeadline %} by the deadline{% else %} on demand{% endif %}.",
       ),
     );
 
@@ -223,7 +231,7 @@ describe("processInlineConditions", () => {
   test("elseif picks the first matching branch", () => {
     const xml = WRAP(
       P(
-        "Notice goes{{#if byEmail}} by email{{#elseif byPost}} by post{{#else}} in person{{/if}}.",
+        "Notice goes{% if byEmail %} by email{% elif byPost %} by post{% else %} in person{% endif %}.",
       ),
     );
 
@@ -240,7 +248,7 @@ describe("processInlineConditions", () => {
     const body = parseBody(
       WRAP(
         P(
-          "Seller{{#if a}} A{{/if}} sells to Buyer{{#if b}} B{{/if}} the asset.",
+          "Seller{% if a %} A{% endif %} sells to Buyer{% if b %} B{% endif %} the asset.",
         ),
       ),
     );
@@ -252,10 +260,10 @@ describe("processInlineConditions", () => {
   test("handles markers split across runs and keeps run formatting", () => {
     const xml = WRAP(
       `<w:p>` +
-        `<w:r><w:t xml:space="preserve">the Buyer{{#if has</w:t></w:r>` +
-        `<w:r><w:t xml:space="preserve">Spouse}} and </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">the Buyer{% if has</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Spouse %} and </w:t></w:r>` +
         `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">their spouse</w:t></w:r>` +
-        `<w:r><w:t xml:space="preserve">{{/if}} hereby.</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">{% endif %} hereby.</w:t></w:r>` +
         `</w:p>`,
     );
 
@@ -275,7 +283,7 @@ describe("processInlineConditions", () => {
 
   test("evaluates manifest named conditions", () => {
     const body = parseBody(
-      WRAP(P("Signed{{#if isCorp}} per its directors{{/if}}.")),
+      WRAP(P("Signed{% if isCorp %} per its directors{% endif %}.")),
     );
     const errors = processInlineConditions(
       body,
@@ -287,29 +295,33 @@ describe("processInlineConditions", () => {
   });
 
   test("reports an unclosed inline if and leaves the paragraph untouched", () => {
-    const original = "the Buyer{{#if hasSpouse}} and their spouse hereby.";
+    const original = "the Buyer{% if hasSpouse %} and their spouse hereby.";
     const body = parseBody(WRAP(P("Intro.") + P(original)));
     const errors = processInlineConditions(body, { hasSpouse: true });
     expect(errors).toHaveLength(1);
-    expect(errors[0]?.message).toContain("Unclosed inline {{#if}}");
+    expect(errors[0]?.message).toContain("Unclosed inline {% if %}");
     expect(errors[0]?.paragraphIndex).toBe(1);
-    expect(errors[0]?.directive).toBe("{{#if hasSpouse}}");
+    expect(errors[0]?.directive).toBe("{% if hasSpouse %}");
     expect(bodyTexts(body)).toEqual(["Intro.", original]);
   });
 
   test("reports nested inline ifs as structure errors", () => {
-    const nested = "a {{#if x}}b {{#if y}}c{{/if}}{{/if}}";
+    const nested = "a {% if x %}b {% if y %}c{% endif %}{% endif %}";
     const body = parseBody(WRAP(P(nested)));
     const errors = processInlineConditions(body, { x: true });
     expect(errors.map((e) => e.paragraphIndex)).toEqual([0]);
-    expect(errors[0]?.message).toContain("Nested inline {{#if}}");
+    expect(errors[0]?.message).toContain("Nested inline {% if %}");
     // The paragraph stays untouched.
     expect(bodyTexts(body)).toEqual([nested]);
   });
 
   test("expands an inline each over a record array, repeating separators", () => {
     const body = parseBody(
-      WRAP(P("Parties: {{#each parties}}{{parties.name}}, {{/each}}signed.")),
+      WRAP(
+        P(
+          "Parties: {% for party in parties %}{{ party.name }}, {% endfor %}signed.",
+        ),
+      ),
     );
     const errors = processInlineConditions(body, {
       parties: [{ name: "Alice" }, { name: "Bob" }, { name: "Carol" }],
@@ -322,7 +334,7 @@ describe("processInlineConditions", () => {
     const body = parseBody(
       WRAP(
         P(
-          "Roster: {{#each people}}{{people.name}} ({{people.role}}); {{/each}}done.",
+          "Roster: {% for item in people %}{{ item.name }} ({{ item.role }}); {% endfor %}done.",
         ),
       ),
     );
@@ -340,7 +352,11 @@ describe("processInlineConditions", () => {
 
   test("renders an empty array as an empty span", () => {
     const body = parseBody(
-      WRAP(P("Parties: {{#each parties}}{{parties.name}}, {{/each}}none.")),
+      WRAP(
+        P(
+          "Parties: {% for party in parties %}{{ party.name }}, {% endfor %}none.",
+        ),
+      ),
     );
     const errors = processInlineConditions(body, { parties: [] });
     expect(errors).toEqual([]);
@@ -349,7 +365,7 @@ describe("processInlineConditions", () => {
 
   test("expands an inline each over a primitive array via .value", () => {
     const body = parseBody(
-      WRAP(P("Tags: {{#each tags}}{{tags.value}} {{/each}}end.")),
+      WRAP(P("Tags: {% for tag in tags %}{{ tag.value }} {% endfor %}end.")),
     );
     const errors = processInlineConditions(body, {
       tags: ["alpha", "beta"],
@@ -360,7 +376,7 @@ describe("processInlineConditions", () => {
 
   test("treats a non-array each path as an empty span", () => {
     const body = parseBody(
-      WRAP(P("X: {{#each missing}}{{missing.name}}, {{/each}}Y.")),
+      WRAP(P("X: {% for item in missing %}{{ item.name }}, {% endfor %}Y.")),
     );
     const errors = processInlineConditions(body, {});
     expect(errors).toEqual([]);
@@ -371,7 +387,7 @@ describe("processInlineConditions", () => {
     const body = parseBody(
       WRAP(
         P(
-          "Sellers: {{#each sellers}}{{sellers.name}}, {{/each}}{{#if notarised}}(notarised){{/if}}.",
+          "Sellers: {% for seller in sellers %}{{ seller.name }}, {% endfor %}{% if notarised %}(notarised){% endif %}.",
         ),
       ),
     );
@@ -384,26 +400,31 @@ describe("processInlineConditions", () => {
   });
 
   test("reports an unclosed inline each and leaves the paragraph untouched", () => {
-    const original = "list: {{#each items}}{{items.name}}, never closed.";
+    const original =
+      "list: {% for item in items %}{{ item.name }}, never closed.";
     const body = parseBody(WRAP(P("Intro.") + P(original)));
     const errors = processInlineConditions(body, { items: [{ name: "A" }] });
     expect(errors).toHaveLength(1);
-    expect(errors[0]?.message).toContain("Unclosed inline {{#each}}");
+    expect(errors[0]?.message).toContain("Unclosed inline {% for %}");
     expect(errors[0]?.paragraphIndex).toBe(1);
     expect(bodyTexts(body)).toEqual(["Intro.", original]);
   });
 
   test("skips whole-paragraph directive lines (block engine territory)", () => {
-    // An orphaned whole-line {{/if}} is parseBlockTree's error, not ours.
-    const body = parseBody(WRAP(P("{{/if}}") + P("Plain text.")));
+    // An orphaned whole-line {% endif %} is parseBlockTree's error, not ours.
+    const body = parseBody(WRAP(P("{% endif %}") + P("Plain text.")));
     const errors = processInlineConditions(body, {});
     expect(errors).toEqual([]);
-    expect(bodyTexts(body)).toEqual(["{{/if}}", "Plain text."]);
+    expect(bodyTexts(body)).toEqual(["{% endif %}", "Plain text."]);
   });
 
-  test("resolves {{@index}} (1-based) and {{@count}} inside an inline each", () => {
+  test("resolves {{ loop.index }} (1-based) and {{ loop.length }} inside an inline each", () => {
     const body = parseBody(
-      WRAP(P("Rows: {{#each rows}}{{@index}}/{{@count}} {{/each}}done.")),
+      WRAP(
+        P(
+          "Rows: {% for row in rows %}{{ loop.index }}/{{ loop.length }} {% endfor %}done.",
+        ),
+      ),
     );
     const errors = processInlineConditions(body, { rows: [{}, {}, {}] });
     expect(errors).toEqual([]);
@@ -412,7 +433,7 @@ describe("processInlineConditions", () => {
 
   test("renders an empty array span with no iteration tokens", () => {
     const body = parseBody(
-      WRAP(P("Rows: {{#each rows}}{{@index}} {{/each}}none.")),
+      WRAP(P("Rows: {% for row in rows %}{{ loop.index }} {% endfor %}none.")),
     );
     const errors = processInlineConditions(body, { rows: [] });
     expect(errors).toEqual([]);
@@ -423,9 +444,9 @@ describe("processInlineConditions", () => {
     // Body: bold "{{p.name}}" run + plain "; " run, repeated per item.
     const xml = WRAP(
       `<w:p>` +
-        `<w:r><w:t xml:space="preserve">Parties: {{#each p}}</w:t></w:r>` +
-        `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{p.name}}</w:t></w:r>` +
-        `<w:r><w:t xml:space="preserve">; {{/each}}done.</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">Parties: {% for item in p %}</w:t></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{ item.name }}</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">; {% endfor %}done.</w:t></w:r>` +
         `</w:p>`,
     );
     const body = parseBody(xml);
@@ -444,9 +465,9 @@ describe("processInlineConditions", () => {
     // Body: bold "{{p.name}}" + plain ", " — both repeat with formatting intact.
     const xml = WRAP(
       `<w:p>` +
-        `<w:r><w:t xml:space="preserve">{{#each p}}</w:t></w:r>` +
-        `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{p.name}}</w:t></w:r>` +
-        `<w:r><w:t xml:space="preserve">, {{/each}}end.</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">{% for item in p %}</w:t></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{ item.name }}</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">, {% endfor %}end.</w:t></w:r>` +
         `</w:p>`,
     );
     const body = parseBody(xml);
@@ -458,13 +479,13 @@ describe("processInlineConditions", () => {
     expect(boldRunTexts(body)).toEqual(["Alice", "Bob", "Carol"]);
   });
 
-  test("preserves formatting alongside {{@index}} and an inline {{@num}}", async () => {
+  test("preserves formatting alongside {{ loop.index }} and an inline num()", async () => {
     const docx = await makeDocx(
       WRAP(
         `<w:p>` +
-          `<w:r><w:t xml:space="preserve">List: {{#each p}}{{@index}}. {{@num:c}} </w:t></w:r>` +
-          `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{p.name}}</w:t></w:r>` +
-          `<w:r><w:t xml:space="preserve">; {{/each}}end.</w:t></w:r>` +
+          `<w:r><w:t xml:space="preserve">List: {% for item in p %}{{ loop.index }}. {{ num("c") }} </w:t></w:r>` +
+          `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{ item.name }}</w:t></w:r>` +
+          `<w:r><w:t xml:space="preserve">; {% endfor %}end.</w:t></w:r>` +
           `</w:p>`,
       ),
     );
@@ -480,9 +501,13 @@ describe("processInlineConditions", () => {
     expect(boldRunTexts(filledBody)).toEqual(["Alice", "Bob"]);
   });
 
-  test("{{@index}} composes with an item field in an inline each", () => {
+  test("{{ loop.index }} composes with an item field in an inline each", () => {
     const body = parseBody(
-      WRAP(P("List: {{#each p}}{{@index}}. {{p.name}}; {{/each}}end.")),
+      WRAP(
+        P(
+          "List: {% for item in p %}{{ loop.index }}. {{ item.name }}; {% endfor %}end.",
+        ),
+      ),
     );
     const errors = processInlineConditions(body, {
       p: [{ name: "Alice" }, { name: "Bob" }],
@@ -499,7 +524,7 @@ describe("fillTemplate with inline conditions", () => {
     const docx = await makeDocx(
       WRAP(
         P(
-          "the Buyer {{buyer_name}}{{#if has_spouse}} and their spouse {{spouse_name}}{{/if}} hereby agree.",
+          "the Buyer {{buyer_name}}{% if has_spouse %} and their spouse {{spouse_name}}{% endif %} hereby agree.",
         ),
       ),
     );
@@ -528,11 +553,11 @@ describe("fillTemplate with inline conditions", () => {
     expect(cut.unusedValues).toContain("spouse_name");
   });
 
-  test("inline each numbers loop-local {{@num}} sequentially per item", async () => {
+  test("an inline loop numbers loop-local num() sequentially per item", async () => {
     const docx = await makeDocx(
       WRAP(
         P(
-          "Items: {{#each items}}Clause {{@num:item}} ({{items.name}}); {{/each}}end.",
+          "Items: {% for item in items %}Clause {{ num('item') }} ({{ item.name }}); {% endfor %}end.",
         ),
       ),
     );
@@ -545,13 +570,13 @@ describe("fillTemplate with inline conditions", () => {
     );
   });
 
-  test("inline each resolves {{@index}}/{{@count}} through fillTemplate", async () => {
+  test("inline each resolves {{ loop.index }}/{{ loop.length }} through fillTemplate", async () => {
     // Leading text keeps the paragraph off the block engine's
     // whole-line-directive path, so the each stays inline.
     const docx = await makeDocx(
       WRAP(
         P(
-          "List: {{#each items}}{{@index}}/{{@count}}: {{items.name}}. {{/each}}",
+          "List: {% for item in items %}{{ loop.index }}/{{ loop.length }}: {{ item.name }}. {% endfor %}",
         ),
       ),
     );
@@ -568,7 +593,7 @@ describe("fillTemplate with inline conditions", () => {
     const docx = await makeDocx(
       WRAP(
         P(
-          "Signed by {{#each signers}}{{signers.name}} ({{signers.title}}), {{/each}}this day.",
+          "Signed by {% for signer in signers %}{{ signer.name }} ({{ signer.title }}), {% endfor %}this day.",
         ),
       ),
     );
@@ -588,9 +613,11 @@ describe("fillTemplate with inline conditions", () => {
   test("composes with block directives in the same document", async () => {
     const docx = await makeDocx(
       WRAP(
-        P("{{#if include_clause}}") +
-          P("The Seller{{#if has_agent}} via their agent{{/if}} warrants.") +
-          P("{{/if}}") +
+        P("{% if include_clause %}") +
+          P(
+            "The Seller{% if has_agent %} via their agent{% endif %} warrants.",
+          ) +
+          P("{% endif %}") +
           P("Closing."),
       ),
     );
@@ -608,9 +635,9 @@ describe("fillTemplate with inline conditions", () => {
   test("inline conditions inside block loops retain each row context", async () => {
     const docx = await makeDocx(
       WRAP(
-        P("{{#each sellers}}") +
-          P("{{sellers.name}}{{#if sellers.is_company}} Ltd{{/if}}.") +
-          P("{{/each}}"),
+        P("{% for seller in sellers %}") +
+          P("{{ seller.name }}{% if seller.is_company %} Ltd{% endif %}.") +
+          P("{% endfor %}"),
       ),
     );
 
@@ -628,9 +655,9 @@ describe("fillTemplate with inline conditions", () => {
   test("inline loops inside block rows use each row's nested array", async () => {
     const docx = await makeDocx(
       WRAP(
-        P("{{#each groups}}") +
-          P("Items: {{#each items}}{{items.name}}, {{/each}}") +
-          P("{{/each}}"),
+        P("{% for group in groups %}") +
+          P("Items: {% for item in items %}{{ item.name }}, {% endfor %}") +
+          P("{% endfor %}"),
       ),
     );
 
@@ -649,11 +676,11 @@ describe("fillTemplate with inline conditions", () => {
 
   test("surfaces inline structure errors through fillTemplate", async () => {
     const docx = await makeDocx(
-      WRAP(P("Broken{{#if oops}} span without closer.")),
+      WRAP(P("Broken{% if oops %} span without closer.")),
     );
     const { structureErrors } = await fillTemplate(docx, { oops: true });
     expect(structureErrors).toHaveLength(1);
-    expect(structureErrors[0]?.message).toContain("Unclosed inline {{#if}}");
+    expect(structureErrors[0]?.message).toContain("Unclosed inline {% if %}");
   });
 
   test("aiAdapt per-occurrence renderings inside a cut branch are removed with it", async () => {
@@ -664,7 +691,9 @@ describe("fillTemplate with inline conditions", () => {
     const docx = await makeDocx(
       WRAP(
         P("Governed by {{law}}.") +
-          P("Spousal property{{#if has_spouse}} follows {{law}} rules{{/if}}."),
+          P(
+            "Spousal property{% if has_spouse %} follows {{law}} rules{% endif %}.",
+          ),
       ),
     );
 
@@ -687,7 +716,7 @@ describe("fillTemplate with inline conditions", () => {
     expect(text).not.toContain("RENDERING-2");
   });
 
-  test("inline {{#if dateField > ...}} compares the raw ISO, not the formatted date", async () => {
+  test("inline {% if dateField > ... %} compares the raw ISO, not the formatted date", async () => {
     // End-to-end through the boundary recipe: the fill steps format the date in
     // place AND stash its raw ISO (CONDITION_RAW_VALUES); fillTemplate reads the
     // overlay so the inline ordering test runs on the ISO value while the
@@ -698,11 +727,11 @@ describe("fillTemplate with inline conditions", () => {
     const docx = await makeDocx(
       WRAP(
         P(
-          'Signed {{signing_date}}{{#if signing_date > "2028-01-01"}} (after cutoff){{#else}} (before cutoff){{/if}}.',
+          'Signed {{signing_date}}{% if signing_date > "2028-01-01" %} (after cutoff){% else %} (before cutoff){% endif %}.',
         ) +
-          P("{{#if notify}}") +
+          P("{% if notify %}") +
           P("Notice sent.") +
-          P("{{/if}}"),
+          P("{% endif %}"),
       ),
     );
     const dateField: FieldMeta = {

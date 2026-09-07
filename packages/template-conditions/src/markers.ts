@@ -228,17 +228,21 @@ export const markerPattern = (): RegExp =>
 export const placeholderPattern = (): RegExp =>
   /\{\{\s*(?<name>[\p{L}\p{N}_.-]+)\s*(?<filters>\|(?:[^{}]*)?)?\}\}/gu;
 
+// A function argument may be written with either quote — Word autocorrects one
+// into the other, and a marker embedded in a source string uses whichever the
+// carrier is not — so every literal pattern accepts both through a
+// backreference, which keeps one capture group per value.
 /** `{{ clause("Name") }}` / `{{ clause("Name", "v3") }}`. */
 export const clauseSlotPattern = (): RegExp =>
-  /\{\{\s*clause\(\s*"(?<name>[^"]*)"\s*(?:,\s*"(?<modifier>[^"]*)"\s*)?\)\s*\}\}/gu;
+  /\{\{\s*clause\(\s*(?<nameQuote>["'])(?<name>[^"']*)\k<nameQuote>\s*(?:,\s*(?<modifierQuote>["'])(?<modifier>[^"']*)\k<modifierQuote>\s*)?\)\s*\}\}/gu;
 
 /** `{{ num("key") }}` — the `key` group. */
 export const numPattern = (): RegExp =>
-  /\{\{\s*num\(\s*"(?<key>[\p{L}\p{N}_.-]+)"\s*\)\s*\}\}/gu;
+  /\{\{\s*num\(\s*(?<quote>["'])(?<key>[\p{L}\p{N}_.-]+)\k<quote>\s*\)\s*\}\}/gu;
 
 /** `{{ ref("key") }}` — the `key` group. */
 export const refPattern = (): RegExp =>
-  /\{\{\s*ref\(\s*"(?<key>[\p{L}\p{N}_.-]+)"\s*\)\s*\}\}/gu;
+  /\{\{\s*ref\(\s*(?<quote>["'])(?<key>[\p{L}\p{N}_.-]+)\k<quote>\s*\)\s*\}\}/gu;
 
 /** `{{ loop.index }}` and its siblings — the `property` group. */
 export const loopPattern = (): RegExp =>
@@ -698,6 +702,48 @@ export const replaceOutputMarkers = (
   }
   return out + text.slice(cursor);
 };
+
+/**
+ * The values-map key one marker substitutes from, or `null` when the marker is
+ * not a substitution target (a tag, or a `loop.*` token the loop expander
+ * resolves first). One function so the key discovery writes is the key the
+ * patcher reads.
+ */
+export const substitutionKey = (meta: MarkerMeta): string | null => {
+  switch (meta.kind) {
+    case "placeholder":
+      return meta.expr;
+    case "clause":
+      return meta.version === undefined
+        ? `${CLAUSE_KEY_PREFIX}${meta.name}`
+        : `${CLAUSE_KEY_PREFIX}${meta.name}:${meta.version}`;
+    case "num":
+    case "ref":
+    case "loop":
+    case "if":
+    case "elif":
+    case "else":
+    case "endif":
+    case "for":
+    case "endfor":
+      return null;
+    default:
+      return assertNever(meta);
+  }
+};
+
+/** Namespace of the synthetic clause-slot key, kept out of the field-path
+ *  charset so it can never collide with an author's path. */
+const CLAUSE_KEY_PREFIX = "@clause:";
+
+/** The values-map key for one clause slot. */
+export const clauseSlotKey = (
+  name: string,
+  version?: string | undefined,
+): string =>
+  version === undefined
+    ? `${CLAUSE_KEY_PREFIX}${name}`
+    : `${CLAUSE_KEY_PREFIX}${name}:${version}`;
 
 /** A marker-shaped span that classifies to nothing. */
 export type InvalidMarker = {

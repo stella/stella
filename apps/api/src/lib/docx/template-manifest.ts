@@ -1069,7 +1069,7 @@ export const mergeManifestWithDiscovery = (
         continue;
       }
       // Loop-item metadata (e.g. "lawyers.name" under a discovered
-      // {{#each lawyers}}) merges into the array's itemFields above; adding
+      // {% for lawyer in lawyers %}) merges into the array's itemFields above; adding
       // it as a flat field would shadow the array root in the prefix filter
       // below and break the array rendering.
       const root = f.path.split(".").at(0);

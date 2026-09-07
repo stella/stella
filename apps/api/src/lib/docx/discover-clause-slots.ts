@@ -1,16 +1,16 @@
 /**
- * Scan a DOCX template for `{{@clause:SlotName}}` markers.
+ * Scan a DOCX template for `{{ clause("SlotName") }}` markers.
  *
  * Clause slot markers follow the pattern:
- *   `{{@clause:Name}}`         — use pinned version
- *   `{{@clause:Name:latest}}`  — always use latest
- *   `{{@clause:Name:v3}}`      — use version 3
+ *   `{{ clause("Name") }}`            — use pinned version
+ *   `{{ clause("Name", "latest") }}`  — always use latest
+ *   `{{ clause("Name", "v3") }}`      — use version 3
  */
 
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { clauseSlotPattern } from "@stll/template-conditions";
+import { clauseSlotKey, clauseSlotPattern } from "@stll/template-conditions";
 
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 
@@ -19,16 +19,16 @@ import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 export type ClauseSlot = {
   name: string;
   versionModifier?: string | undefined;
-  /** The full marker text (e.g., "@clause:NonCompete") used
-   *  as the patch key for `fillTemplate`. */
+  /** The values-map key the marker substitutes from (e.g.
+   *  "@clause:NonCompete"), shared with the patcher via `clauseSlotKey`. */
   patchKey: string;
 };
 
 // ── Regex ────────────────────────────────────────────
 
-// Canonical pattern from @stll/template-conditions (markers.ts). The name and
-// modifier captures exclude whitespace so the rebuilt patch key matches what
-// rich-patch's PLACEHOLDER_RE captures during replacement (they must agree).
+// Canonical pattern from @stll/template-conditions (markers.ts); the patch key
+// is built with `clauseSlotKey`, the same helper the patcher derives a clause
+// marker's substitution key from, so the two cannot disagree.
 const CLAUSE_SLOT_RE = clauseSlotPattern();
 
 // ── Scanning ─────────────────────────────────────────
@@ -47,9 +47,7 @@ const scanParagraphs = (
         continue;
       }
       const modifier = match.groups?.["modifier"] || undefined;
-      const patchKey = modifier
-        ? `@clause:${name}:${modifier}`
-        : `@clause:${name}`;
+      const patchKey = clauseSlotKey(name, modifier);
 
       if (!slots.has(patchKey)) {
         slots.set(patchKey, {
@@ -65,7 +63,7 @@ const scanParagraphs = (
 // ── Public API ───────────────────────────────────────
 
 /**
- * Discover all `{{@clause:...}}` markers in a DOCX
+ * Discover all `{{ clause(...) }}` markers in a DOCX
  * template. Scans body, headers, and footers.
  */
 export const discoverClauseSlots = async (

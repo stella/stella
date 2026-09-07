@@ -238,7 +238,7 @@ describe("readManifest", () => {
     expect(migrated?.condition).toBe('client_type == "company"');
     expect(migrated?.label).toBe("Is a company");
 
-    // It surfaces as a named condition `{{#if is_company}}` resolves against.
+    // It surfaces as a named condition `{% if is_company %}` resolves against.
     expect(manifestNamedConditions(result!)).toContainEqual({
       name: "is_company",
       expression: 'client_type == "company"',
@@ -749,7 +749,7 @@ describe("mergeManifestWithDiscovery", () => {
   });
 
   test("keeps a loop item's configuration as its own manifest field", () => {
-    // `{{#each attorneys}}{{attorneys.name}}{{/each}}` resolves to ONE field,
+    // `{% for attorney in attorneys %}{{ attorney.name }}{% endfor %}` resolves to ONE field,
     // the array root, with `name` folded into its itemFields. The item's own
     // configuration is a manifest field all the same — the fill form asks it
     // once per row — so building the manifest from the resolved list alone
@@ -1150,10 +1150,10 @@ describe("named conditions in fillTemplate", () => {
     ];
 
     const data = { contractType: "NDA" };
-    expect(evaluateCondition("!HasNDA", data, conditions)).toBe(false);
+    expect(evaluateCondition("not HasNDA", data, conditions)).toBe(false);
 
     const data2 = { contractType: "SLA" };
-    expect(evaluateCondition("!HasNDA", data2, conditions)).toBe(true);
+    expect(evaluateCondition("not HasNDA", data2, conditions)).toBe(true);
   });
 
   test("named conditions resolve in compound expressions", async () => {

@@ -428,7 +428,7 @@ export const resolveLookupFields = async ({
     }
     const incoming = resolvePath(field.path, resolved);
     if (incoming === undefined) {
-      // A lookup field inside an `{{#each}}` loop keeps a dotted path
+      // A lookup field inside an `{% for %}` loop keeps a dotted path
       // (`companies.krs`) while the value arrives as an array of rows
       // (`companies: [{ krs }]`); the direct `resolvePath` then returns
       // undefined, so each row's sub-path registry number is resolved and the

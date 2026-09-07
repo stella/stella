@@ -37,7 +37,7 @@ const refuseAll = (): RegistryAvailabilityLoader & { calls: () => number } => {
 };
 
 describe("field overlay warnings", () => {
-  // `is_signed` drives {{#if is_signed}} AND prints as {{is_signed}}.
+  // `is_signed` drives {% if is_signed %} AND prints as {{is_signed}}.
   const bothRoles = {
     conditionPaths: ["is_signed"],
     placeholderPaths: ["is_signed", "client.name"],
@@ -61,7 +61,7 @@ describe("field overlay warnings", () => {
     ]);
   });
 
-  test("a condition on a path used only by {{#if}} is the intended use", async () => {
+  test("a condition on a path used only by {% if %} is the intended use", async () => {
     expect(
       await fieldOverlayWarnings({
         conditionPaths: ["is_signed"],
@@ -238,15 +238,18 @@ describe("warning code census", () => {
   test("every declared code is produced by a template that triggers it", async () => {
     const xml = WRAP(
       [
-        P("{{#if is_signed}}"),
+        P("{% if is_signed %}"),
         P("Signed by {{is_signed}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("{{company}} of {{company.seat}}"),
-        P("{{#each attorneys}}"),
+        P("{% for attorney in attorneys %}"),
         P("{{name}}"),
-        P("{{this.name}}"),
         P("{{attorneys[0].name}}"),
-        P("{{#endeach}}"),
+        P("{{ rent * 12 }}"),
+        P("{{ rent | upper }}"),
+        P("{{#each attorneys}}"),
+        P("{% set x = 1 %}"),
+        P("{% endfor %}"),
         P("Name: {{unclosed"),
       ].join(""),
     );

@@ -17,7 +17,7 @@ export const isElement = (node: slimdom.Node): node is slimdom.Element =>
 
 /**
  * Nearest ancestor (or self) that is a `w:<localName>` element, or `null`.
- * Used by loop expansion to decide whether an `{{#each}}`/`{{/each}}` marker
+ * Used by loop expansion to decide whether an `{% for %}`/`{% endfor %}` marker
  * sits inside a table row (`w:tr`) or cell (`w:tc`).
  */
 export const ancestorByLocalName = (

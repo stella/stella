@@ -2,13 +2,13 @@
  * Rewrite a table row's lenient block markers into the canonical
  * own-paragraph form, before discovery or the block engine looks at the row.
  *
- * A `{{#each}}` / `{{#if}}` opener that prefixes a cell's text, closed by a
- * `{{/each}}` / `{{/if}}` that suffixes a later cell's text in the same
+ * A `{% for %}` / `{% if %}` opener that prefixes a cell's text, closed by a
+ * `{% endfor %}` / `{% endif %}` that suffixes a later cell's text in the same
  * `w:tr`, means what the own-paragraph placement means: the row is the unit.
  * Authoring agents write it constantly for a "one row per item" table, so it
  * is accepted rather than reported as an unclosed inline block.
  *
- *     | {{#each deliverables}}{{deliverables.item}} | {{deliverables.fee}}{{/each}} |
+ *     | {% for deliverable in deliverables %}{{ deliverable.item }} | {{ deliverable.fee }}{% endfor %} |
  *
  * Normalizing (rather than teaching the engine a second placement) is what
  * keeps the two forms from drifting: the row-repeat, the row condition, the

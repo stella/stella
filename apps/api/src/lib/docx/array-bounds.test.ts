@@ -62,7 +62,7 @@ describe("checkArrayBounds", () => {
     // A loop whose own container field carries a boolean rule condition may be
     // legitimately suppressed, so its array being absent is allowed even with a
     // positive minItems (checkArrayBounds runs before block expansion and
-    // cannot see the document's {{#if}} structure).
+    // cannot see the document's {% if %} structure).
     const m = manifest([
       {
         path: "lawyers",

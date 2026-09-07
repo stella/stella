@@ -1,8 +1,8 @@
 /**
  * DOCX block-directive pre-processor.
  *
- * Scans OOXML body paragraphs for block directives
- * ({{#if}}, {{#each}}, etc.), evaluates conditions, expands
+ * Scans OOXML body paragraphs for block tags
+ * ({% if %}, {% for %}, etc.), evaluates conditions, expands
  * loops, and strips directive paragraphs — all before
  * value substitution.
  *
@@ -10,14 +10,14 @@
  * (fast-path check via regex on raw XML).
  *
  * Placement decides what a block directive acts on. Both families
- * ({{#if}} and {{#each}}) read a table row as one unit:
- *   - ROW REPEAT: when the opener `{{#each}}` and its matching
- *     `{{/each}}` are paragraphs confined to the SAME table row
+ * ({% if %} and {% for %}) read a table row as one unit:
+ *   - ROW REPEAT: when the opener `{% for %}` and its matching
+ *     `{% endfor %}` are paragraphs confined to the SAME table row
  *     (`w:tr`), the whole row is cloned once per item and the two
  *     marker paragraphs are stripped from the output rows. Zero
  *     items removes the row.
- *   - ROW CONDITION: when an `{{#if}}` block's directive paragraphs
- *     (including its `{{#elseif}}`/`{{#else}}` branches) are
+ *   - ROW CONDITION: when an `{% if %}` block's directive paragraphs
+ *     (including its `{% elif %}`/`{% else %}` branches) are
  *     confined to one `w:tr`, the row is the unit: no winning
  *     branch removes the whole row, and a winning branch keeps the
  *     row with the directive and losing-branch paragraphs removed.
@@ -40,12 +40,12 @@
  * reports the file as corrupt.
  *
  * Nested loops resolve through per-item recursion: an inner
- * `{{#each outer.sub}}` keeps its path and is expanded against the
- * outer item's context (so `outer.sub` resolves to that item's
+ * `{% for f in outer.sub %}` keeps its path and is expanded against
+ * the outer item's context (so `outer.sub` resolves to that item's
  * array), while the outer pass defers rewriting placeholders that
- * belong to the inner loop (`{{outer.sub.field}}`). This is what
- * lets a body-level `{{#each contracts}}` wrap a table whose single
- * template row repeats over `{{#each contracts.fields}}`.
+ * belong to the inner loop (`{{ f.field }}`). This is what lets a
+ * body-level `{% for c in contracts %}` wrap a table whose single
+ * template row repeats over `{% for f in c.fields %}`.
  *
  * Word list numbering (`w:numPr`) survives loop expansion
  * untouched: every cloned paragraph keeps its original
@@ -59,22 +59,21 @@
  * see {@link collectValidNumIds} / {@link pruneDanglingNumPr}.
  */
 
+import { panic } from "better-result";
 import * as slimdom from "slimdom";
 
 import {
   blockDirectiveLinePattern,
-  countPattern,
+  classifyMarker,
   evaluateCondition,
   hasBlockDirectivePattern,
-  indexPattern,
+  isBlockDirectiveKind,
+  loopPattern,
   numPattern,
   refPattern,
   resolvePath,
 } from "@stll/template-conditions";
-import type {
-  BlockDirectiveKind,
-  NamedCondition,
-} from "@stll/template-conditions";
+import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
 
 import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
 import {
@@ -84,9 +83,9 @@ import {
 import type {
   Block,
   BlockDirective,
-  EachBlock,
   IfBlock,
   IfBranch,
+  LoopBlock,
   RichPatchValue,
   TemplateData,
   TemplateStructureError,
@@ -97,7 +96,7 @@ export { evaluateCondition, resolvePath };
 /**
  * Symbol key under which the fill pipeline stashes the *raw* (pre-format)
  * values of fields that a later step rewrites to a display string, so that
- * `{{#if}}` conditions evaluate against the original value. Today this carries
+ * `{% if %}` conditions evaluate against the original value. Today this carries
  * date fields: a `date` input is submitted as an ISO `YYYY-MM-DD` string, then
  * `applyDateFields` rewrites it in place to localized display text (e.g.
  * "13. června 2028") for substitution. The condition engine's ordering
@@ -132,7 +131,7 @@ const isStringRecord = (v: unknown): v is Record<string, string> =>
 
 /**
  * Overlay one loop row's raw (pre-format) values onto its iteration context, so
- * an inner-loop `{{#if dob > "2028-01-01"}}` compares the original ISO date
+ * an inner-loop `{% if dob > "2028-01-01" %}` compares the original ISO date
  * rather than the localized display text the date step wrote into the row for
  * substitution. Raw values are stashed by field path under
  * `<valuePath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
@@ -200,15 +199,6 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] =>
 
 // ── Directive scanning ───────────────────────────────────
 
-const KIND_MAP: Record<string, BlockDirectiveKind> = {
-  "#if": "if",
-  "#elseif": "elseif",
-  "#else": "else",
-  "#each": "each",
-  "/if": "endif",
-  "/each": "endeach",
-};
-
 /** A body's paragraphs, in document order, as a stable snapshot. */
 const bodyParagraphs = (body: slimdom.Element): slimdom.Element[] => [
   ...body.getElementsByTagNameNS(W_NS, "p"),
@@ -244,16 +234,27 @@ const scanDirectivesInParagraphs = (
     if (!tag || rawExpr === undefined) {
       continue;
     }
-    const expr = rawExpr.trim();
-
-    const kind = KIND_MAP[tag];
-    if (kind) {
-      directives.push({
-        kind,
-        expression: expr,
-        paragraphIndex: i,
-      });
+    // One parser for the tag body: the line pattern only proves the paragraph
+    // is a tag, the grammar package decides what it says.
+    const meta = classifyMarker(`${tag} ${rawExpr}`, "statement");
+    if (!meta || !isBlockDirectiveKind(meta.kind)) {
+      continue;
     }
+    directives.push(
+      meta.kind === "for"
+        ? {
+            kind: meta.kind,
+            expression: meta.path,
+            alias: meta.alias,
+            paragraphIndex: i,
+          }
+        : {
+            kind: meta.kind,
+            expression:
+              meta.kind === "if" || meta.kind === "elif" ? meta.expr : "",
+            paragraphIndex: i,
+          },
+    );
   }
 
   return directives;
@@ -292,8 +293,8 @@ export const parseBlockTree = (
         if (ifBlock) {
           result.push(ifBlock);
         }
-      } else if (d.kind === "each") {
-        const eachBlock = parseEachBlock();
+      } else if (d.kind === "for") {
+        const eachBlock = parseLoopBlock();
         if (eachBlock) {
           result.push(eachBlock);
         }
@@ -326,16 +327,16 @@ export const parseBlockTree = (
         break;
       }
 
-      if (d.kind === "if" || d.kind === "each") {
+      if (d.kind === "if" || d.kind === "for") {
         // Nested block — skip over it by recursively parsing
-        const nested = d.kind === "if" ? parseIfBlock() : parseEachBlock();
+        const nested = d.kind === "if" ? parseIfBlock() : parseLoopBlock();
         if (!nested) {
           break;
         }
         continue;
       }
 
-      if (d.kind === "elseif") {
+      if (d.kind === "elif") {
         branches.push({
           condition: branchCondition,
           contentStart: branchStart,
@@ -373,31 +374,31 @@ export const parseBlockTree = (
       }
 
       errors.push({
-        message: "Unexpected {{/each}} inside {{#if}} block",
+        message: "Unexpected {% endfor %} inside {% if %} block",
         paragraphIndex: d.paragraphIndex,
-        directive: "{{/each}}",
+        directive: "{% endfor %}",
       });
       i++;
       break;
     }
 
-    // Unclosed #if
+    // Unclosed {% if %}
     errors.push({
-      message: "Unclosed {{#if}} block",
+      message: "Unclosed {% if %} block",
       paragraphIndex: opening.paragraphIndex,
-      directive: `{{#if ${opening.expression}}}`,
+      directive: `{% if ${opening.expression} %}`,
     });
     return null;
   };
 
-  const parseEachBlock = (): EachBlock | null => {
+  const parseLoopBlock = (): LoopBlock | null => {
     const opening = directives[i];
     if (!opening) {
       return null;
     }
     const directiveParagraphs = [opening.paragraphIndex];
 
-    i++; // skip #each
+    i++; // skip {% for %}
 
     const contentStart = opening.paragraphIndex + 1;
 
@@ -407,20 +408,21 @@ export const parseBlockTree = (
         break;
       }
 
-      if (d.kind === "if" || d.kind === "each") {
+      if (d.kind === "if" || d.kind === "for") {
         // Nested block — skip over it
-        const nested = d.kind === "if" ? parseIfBlock() : parseEachBlock();
+        const nested = d.kind === "if" ? parseIfBlock() : parseLoopBlock();
         if (!nested) {
           break;
         }
         continue;
       }
 
-      if (d.kind === "endeach") {
+      if (d.kind === "endfor") {
         directiveParagraphs.push(d.paragraphIndex);
         i++;
         return {
-          kind: "each",
+          kind: "for",
+          alias: opening.alias ?? opening.expression,
           arrayPath: opening.expression,
           contentStart,
           contentEnd: d.paragraphIndex,
@@ -430,28 +432,28 @@ export const parseBlockTree = (
 
       if (d.kind === "endif") {
         errors.push({
-          message: "Unexpected {{/if}} inside {{#each}} block",
+          message: "Unexpected {% endif %} inside {% for %} block",
           paragraphIndex: d.paragraphIndex,
-          directive: "{{/if}}",
+          directive: "{% endif %}",
         });
         i++;
         break;
       }
 
       errors.push({
-        message: `Unexpected {{#${d.kind}}} inside {{#each}} block`,
+        message: `Unexpected {% ${d.kind} %} inside {% for %} block`,
         paragraphIndex: d.paragraphIndex,
-        directive: `{{#${d.kind}}}`,
+        directive: `{% ${d.kind} %}`,
       });
       i++;
       continue;
     }
 
-    // Unclosed #each
+    // Unclosed {% for %}
     errors.push({
-      message: "Unclosed {{#each}} block",
+      message: "Unclosed {% for %} block",
       paragraphIndex: opening.paragraphIndex,
-      directive: `{{#each ${opening.expression}}}`,
+      directive: `{% for ${opening.alias ?? "item"} in ${opening.expression} %}`,
     });
     return null;
   };
@@ -467,16 +469,11 @@ export const parseBlockTree = (
     }
     if (
       d.kind === "endif" ||
-      d.kind === "endeach" ||
-      d.kind === "elseif" ||
+      d.kind === "endfor" ||
+      d.kind === "elif" ||
       d.kind === "else"
     ) {
-      let tag = `{{#${d.kind}}}`;
-      if (d.kind === "endif") {
-        tag = "{{/if}}";
-      } else if (d.kind === "endeach") {
-        tag = "{{/each}}";
-      }
+      const tag = `{% ${d.kind} %}`;
       errors.push({
         message: `Orphaned ${tag} without matching opening directive`,
         paragraphIndex: d.paragraphIndex,
@@ -513,7 +510,7 @@ export const flattenTemplateData = (
     } else if (typeof value === "boolean") {
       result[fullKey] = String(value);
     } else if (Array.isArray(value)) {
-      // Arrays are not flattened — handled by #each
+      // Arrays are not flattened — handled by {% for %}
     } else if (typeof value === "object") {
       Object.assign(result, flattenTemplateData(value, fullKey));
     }
@@ -598,10 +595,10 @@ const removeBlockUnit = (unit: slimdom.Node): void => {
 };
 
 /**
- * Prune an `{{#if}}` block by block-level UNIT (paragraphs AND whole tables),
+ * Prune an `{% if %}` block by block-level UNIT (paragraphs AND whole tables),
  * keeping only the winning branch's content units. Applies only when the block's
  * opener/closer (and the winning branch's delimiters) are block-level siblings
- * of one parent — the common case for a body-level or loop-body `{{#if}}`. The
+ * of one parent — the common case for a body-level or loop-body `{% if %}`. The
  * unit walk removes every sibling in the opener…closer range that is not part of
  * the winning branch, so a losing branch's `w:tbl` is removed with it (a
  * paragraph-only removal would leave the table shell). Returns `false` without
@@ -667,7 +664,7 @@ type PruneIfRowOptions = {
 };
 
 /**
- * Prune an `{{#if}}` block whose directive paragraphs are confined to one
+ * Prune an `{% if %}` block whose directive paragraphs are confined to one
  * `w:tr`, mirroring the each row-repeat: the ROW is the unit. With no winning
  * branch the whole row goes, including cells the markers do not span — an
  * author who conditions a row conditions the row, not a fragment of it, which
@@ -768,7 +765,7 @@ export const processBlockDirectives = (
   // (pre-format) values of any field a fill step rewrote to a display string
   // (today: date fields, see CONDITION_RAW_VALUES). Overlay keys are exact
   // dotted field paths, which `resolvePath` prefers over the nested walk, so
-  // `{{#if signing_date > "2028-01-01"}}` compares the ISO value while
+  // `{% if signing_date > "2028-01-01" %}` compares the ISO value while
   // substitution still uses the localized text in `data`/`patchValues`. Plain
   // `data` when there is no overlay keeps the prior behavior untouched.
   const conditionData: Record<string, unknown> =
@@ -788,7 +785,7 @@ export const processBlockDirectives = (
       // One snapshot per pass, shared by the scan and every block parsed from
       // it. Re-fetching per block would resolve a block's indices against a
       // list a SIBLING block already mutated: a row-confined block removes a
-      // whole row (a false `{{#if}}`, a zero-item row repeat), which deletes
+      // whole row (a false `{% if %}`, a zero-item row repeat), which deletes
       // paragraphs the pass had already indexed and shifts every later
       // position, so the next block's stale indices would land on unrelated
       // content after the table. Element references survive that: a sibling
@@ -829,7 +826,7 @@ export const processBlockDirectives = (
         if (block.kind === "if") {
           processIfBlock(paragraphs, block, contextData, namedConditions);
         } else {
-          processEachBlock(bodyEl, paragraphs, block, contextData);
+          processLoopBlock(bodyEl, paragraphs, block, contextData);
         }
       }
     }
@@ -915,9 +912,9 @@ export const processBlockDirectives = (
       // each family does.
       if (openerRow || closerRow) {
         reportAmbiguousPlacement({
-          directive: `{{#if ${block.branches[0]?.condition ?? ""}}}`,
+          directive: `{% if ${block.branches[0]?.condition ?? ""} %}`,
           markerParagraphs,
-          markers: "{{#if}} and {{/if}}",
+          markers: "{% if %} and {% endif %}",
           paragraphs,
           paragraphIndex: firstDirective,
         });
@@ -928,7 +925,7 @@ export const processBlockDirectives = (
       // block-level siblings (share one parent), prune by block-level UNIT so a
       // losing branch's whole tables (`w:tbl`) are removed too, not just its
       // paragraphs. This mirrors the each-loop's block-unit treatment (see
-      // expandBlock); without it a two-table `{{#if}}/{{#else}}` variant would
+      // expandBlock); without it a two-table `{% if %}/{% else %}` variant would
       // leave the losing branch's empty table shell behind. Falls through to the
       // paragraph-index removal below for a degenerate placement where the
       // directive paragraphs do not share a block-level parent.
@@ -972,8 +969,9 @@ export const processBlockDirectives = (
   };
 
   // Build a loop iteration's evaluation context: `contextData` overlaid with
-  // the item's own fields, the item under its array name (so `{{#each
-  // arrayPath.sub}}` resolves), and the row's raw (pre-format) date overlay.
+  // the item's own fields, the item under its array name and under the loop
+  // alias (so `{% for f in alias.sub %}` resolves), and the row's raw
+  // (pre-format) date overlay.
   type LoopScope = {
     declaredPath: string;
     identity: string;
@@ -986,9 +984,11 @@ export const processBlockDirectives = (
   >();
 
   type BuildItemContextOptions = {
+    alias: string;
     arrayPath: string;
     contextData: Record<string, unknown>;
     item: unknown;
+    itemCount: number;
     itemIdx: number;
     scope: LoopScope;
   };
@@ -1059,14 +1059,20 @@ export const processBlockDirectives = (
   };
 
   const buildItemContext = ({
+    alias,
     arrayPath,
     contextData,
     item,
+    itemCount,
     itemIdx,
     scope,
   }: BuildItemContextOptions): Record<string, unknown> => {
     const itemContext: Record<string, unknown> = { ...contextData };
     const nestedLoopScopes = new Map<string, LoopScope>();
+    // `loop` is the innermost loop's counters, the same values the
+    // `{{ loop.* }}` output markers resolve to, so a condition and a printed
+    // value inside one iteration cannot disagree.
+    itemContext["loop"] = loopContext(itemIdx, itemCount);
     if (isRecord(item)) {
       Object.assign(itemContext, item);
       itemContext[arrayPath] = item;
@@ -1075,7 +1081,12 @@ export const processBlockDirectives = (
         path: scope.declaredPath,
         value: item,
       });
-      // A nested `{{#each arrayPath.sub}}` was rewritten to its per-item key
+      registerContextAliases({
+        context: itemContext,
+        path: alias,
+        value: item,
+      });
+      // A nested `{% for x in arrayPath.sub %}` was rewritten to its per-item key
       // (see rewriteNestedEachExpr); expose the item's arrays under that key so
       // the inner loop resolves them in the recursion. Each scope keeps its
       // generated identity separate from the author-declared path and the
@@ -1089,7 +1100,7 @@ export const processBlockDirectives = (
         scope,
       });
       applyRowRawOverlay({
-        aliasPaths: [arrayPath, scope.declaredPath],
+        aliasPaths: [alias, arrayPath, scope.declaredPath],
         index: itemIdx,
         itemContext,
         rawValues: conditionValues,
@@ -1101,6 +1112,10 @@ export const processBlockDirectives = (
       typeof item === "boolean"
     ) {
       itemContext["value"] = item;
+      // A primitive row has one field, `value`; the alias addresses it the same
+      // way the array path does, so `{% if tag.value == "keep" %}` resolves.
+      itemContext[alias] = { value: item };
+      itemContext[`${alias}.value`] = item;
       itemContext[arrayPath] = { value: item };
       itemContext[`${arrayPath}.value`] = item;
       itemContext[scope.declaredPath] = { value: item };
@@ -1112,8 +1127,8 @@ export const processBlockDirectives = (
     return itemContext;
   };
 
-  // Resolve `{{@index}}`/`{{@count}}` (innermost-loop only, via `tokenMask`)
-  // and loop-scoped `{{@num:Key}}`/`{{@ref:Key}}` on a copy's content
+  // Resolve `{{ loop.* }}` (innermost-loop only, via `tokenMask`)
+  // and loop-scoped `{{ num("key") }}`/`{{ ref("key") }}` on a copy's content
   // paragraphs. Placeholder rewriting is done separately over whole units.
   const rewriteContentParagraphs = (
     contentParas: readonly slimdom.Element[],
@@ -1144,7 +1159,7 @@ export const processBlockDirectives = (
     directive: string;
     /** Every marker paragraph of the block, including inner branches. */
     markerParagraphs: readonly slimdom.Element[];
-    /** The marker pair named in the message, e.g. `{{#if}} and {{/if}}`. */
+    /** The marker pair named in the message, e.g. `{% if %} and `{% endif %}`. */
     markers: string;
     /** The pass's paragraph snapshot `paragraphIndex` addresses. */
     paragraphs: readonly slimdom.Element[];
@@ -1174,7 +1189,7 @@ export const processBlockDirectives = (
   // Row-repeat: the opener/closer confined to one `w:tr`. Clone the row per
   // item, strip the marker paragraphs, and rewrite per item.
   type ExpandRowOptions = {
-    block: EachBlock;
+    block: LoopBlock;
     closerP: slimdom.Element;
     contextData: Record<string, unknown>;
     doc: slimdom.Document;
@@ -1230,11 +1245,13 @@ export const processBlockDirectives = (
       }
 
       rewriteEachPlaceholders(clonedRow, {
+        alias: block.alias,
         arrayPath: block.arrayPath,
         index: itemIdx,
         loopIdentity,
       });
       rewriteNestedEachExpr(clonedRow, {
+        alias: block.alias,
         arrayPath: block.arrayPath,
         index: itemIdx,
         loopIdentity,
@@ -1250,9 +1267,11 @@ export const processBlockDirectives = (
       registerLoopItemPatchValues(patchValues, item, loopIdentity, itemIdx);
 
       const itemContext = buildItemContext({
+        alias: block.alias,
         arrayPath: block.arrayPath,
         contextData,
         item,
+        itemCount: items.length,
         itemIdx,
         scope,
       });
@@ -1331,11 +1350,13 @@ export const processBlockDirectives = (
 
       for (const clone of clones) {
         rewriteEachPlaceholders(clone, {
+          alias: block.alias,
           arrayPath: block.arrayPath,
           index: itemIdx,
           loopIdentity,
         });
         rewriteNestedEachExpr(clone, {
+          alias: block.alias,
           arrayPath: block.arrayPath,
           index: itemIdx,
           loopIdentity,
@@ -1351,9 +1372,11 @@ export const processBlockDirectives = (
       registerLoopItemPatchValues(patchValues, item, loopIdentity, itemIdx);
 
       const itemContext = buildItemContext({
+        alias: block.alias,
         arrayPath: block.arrayPath,
         contextData,
         item,
+        itemCount: items.length,
         itemIdx,
         scope,
       });
@@ -1403,10 +1426,10 @@ export const processBlockDirectives = (
     }
   };
 
-  const processEachBlock = (
+  const processLoopBlock = (
     bodyEl: slimdom.Element,
     paragraphs: readonly slimdom.Element[],
-    block: EachBlock,
+    block: LoopBlock,
     contextData: Record<string, unknown>,
   ): void => {
     const arrayData = resolvePath(block.arrayPath, contextData);
@@ -1456,9 +1479,9 @@ export const processBlockDirectives = (
     // emit corrupt XML.
     if (openerRow || closerRow || openerP.parentNode !== closerP.parentNode) {
       reportAmbiguousPlacement({
-        directive: `{{#each ${block.arrayPath}}}`,
+        directive: `{% for ${block.alias} in ${block.arrayPath} %}`,
         markerParagraphs: [openerP, closerP],
-        markers: "{{#each}} and {{/each}}",
+        markers: "{% for %} and {% endfor %}",
         paragraphs,
         paragraphIndex: openingIdx,
       });
@@ -1482,9 +1505,22 @@ export const processBlockDirectives = (
   return { patchValues, errors: allErrors };
 };
 
-// ── Each-expansion helpers ───────────────────────────────
+// ── Loop-expansion helpers ───────────────────────────────
 
-/** Generate the synthetic patch key for an each-expanded field. */
+/** The `loop` object one iteration exposes to conditions, mirroring the
+ *  `{{ loop.* }}` output markers. */
+const loopContext = (
+  index: number,
+  count: number,
+): Record<LoopProperty, number | boolean> => ({
+  index: index + 1,
+  index0: index,
+  first: index === 0,
+  last: index === count - 1,
+  length: count,
+});
+
+/** Generate the synthetic patch key for a loop-expanded field. */
 export const eachKey = (
   arrayPath: string,
   index: number,
@@ -1577,22 +1613,27 @@ const rewriteTextNodes = (
 };
 
 /**
- * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
- * in a plain text string. Shared with the inline-each expander so
- * both passes rewrite item field references identically.
+ * Rewrite `{{ alias.field }}` (and the array path it aliases) →
+ * `{{__each_arrayPath_N_field}}` in a plain text string. Shared with the
+ * inline-loop expander so both passes rewrite item field references
+ * identically.
  */
 export const rewriteEachPlaceholdersInText = (
   text: string,
   arrayPath: string,
   index: number,
+  alias: string = arrayPath,
 ): string =>
   rewriteEachPlaceholdersWithIdentity(text, {
+    alias,
     arrayPath,
     index,
     loopIdentity: arrayPath,
   });
 
 type RewriteEachPlaceholdersOptions = {
+  /** The loop variable the author wrote in `{% for alias in path %}`. */
+  alias: string;
   arrayPath: string;
   index: number;
   loopIdentity: string;
@@ -1600,10 +1641,14 @@ type RewriteEachPlaceholdersOptions = {
 
 const rewriteEachPlaceholdersWithIdentity = (
   text: string,
-  { arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
+  { alias, arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
 ): string => {
+  // The alias is what an author writes; the declared array path still resolves
+  // so a template that reaches for the loop's own path keeps rendering (the
+  // `unaliased_item_path` warning names it at save time).
+  const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
   const re = new RegExp(
-    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)\\}\\}`,
+    `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|[^{}]*)?\\}\\}`,
     "gu",
   );
   return text.replace(
@@ -1613,7 +1658,7 @@ const rewriteEachPlaceholdersWithIdentity = (
 };
 
 /**
- * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
+ * Rewrite `{{ alias.field }}` → `{{__each_arrayPath_N_field}}`
  * in all `w:t` nodes of a paragraph (or any element subtree).
  */
 const rewriteEachPlaceholders = (
@@ -1626,19 +1671,20 @@ const rewriteEachPlaceholders = (
 };
 
 /**
- * Rewrite a nested loop opener `{{#each arrayPath.sub}}` → `{{#each
- * __each_arrayPath_N_sub}}` so the inner loop, expanded in a later per-item
+ * Rewrite a nested loop opener `{% for f in alias.sub %}` → `{% for f in
+ * __each_arrayPath_N_sub %}` so the inner loop, expanded in a later per-item
  * recursion, resolves against the outer item's array (registered under the same
  * key in the iteration context) and its synthetic keys stay unique per outer
- * item. Unprefixed nested loops (`{{#each other}}`) are left untouched and
+ * item. Unprefixed nested loops (`{% for x in other %}`) are left untouched and
  * resolve through the item context by name.
  */
 const rewriteNestedEachExpr = (
   root: slimdom.Element,
-  { arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
+  { alias, arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
 ): void => {
+  const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
   const re = new RegExp(
-    `(\\{\\{\\s*#each\\s+)${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)(\\s*\\}\\})`,
+    `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)(\\s*%\\})`,
     "gu",
   );
   rewriteTextNodes(root, (text) =>
@@ -1651,8 +1697,8 @@ const rewriteNestedEachExpr = (
 };
 
 /**
- * Resolve `{{@index}}`/`{{@count}}` in all `w:t` nodes of a paragraph for the
- * iteration at `index` of a loop with `count` items.
+ * Resolve `{{ loop.* }}` in all `w:t` nodes of a paragraph for the iteration at
+ * `index` of a loop with `count` items.
  */
 const rewriteIterationTokens = (
   paragraph: slimdom.Element,
@@ -1666,10 +1712,10 @@ const rewriteIterationTokens = (
 
 /**
  * For each content paragraph of a loop, whether it belongs *directly* to that
- * loop's body (each-nesting depth 0) rather than to a nested `{{#each}}`. A
- * nested `{{#each}}` opener line and its inner paragraphs are depth > 0; the
- * matching `{{/each}}` line closes back to the enclosing depth. Drives which
- * paragraphs get their `{{@index}}`/`{{@count}}` tokens resolved by this loop.
+ * loop's body (loop-nesting depth 0) rather than to a nested `{% for %}`. A
+ * nested `{% for %}` opener line and its inner paragraphs are depth > 0; the
+ * matching `{% endfor %}` line closes back to the enclosing depth. Drives which
+ * paragraphs get their `{{ loop.* }}` tokens resolved by this loop.
  */
 const directEachBodyMask = (
   paragraphs: readonly slimdom.Element[],
@@ -1677,13 +1723,12 @@ const directEachBodyMask = (
   const mask: boolean[] = [];
   let depth = 0;
   for (const p of paragraphs) {
-    const match = DIRECTIVE_RE.exec(paragraphText(p));
-    const tag = match?.[1];
-    if (tag === "/each") {
+    const tag = DIRECTIVE_RE.exec(paragraphText(p))?.groups?.["tag"];
+    if (tag === "endfor") {
       depth -= 1;
     }
     mask.push(depth === 0);
-    if (tag === "#each") {
+    if (tag === "for") {
       depth += 1;
     }
   }
@@ -1691,36 +1736,50 @@ const directEachBodyMask = (
 };
 
 /**
- * Resolve the per-iteration tokens `{{@index}}` and `{{@count}}` in a plain
- * text string: `{{@index}}` → the 1-based position (`index + 1`), `{{@count}}`
- * → the loop's item count. Shared by the block and inline each expanders so
- * both resolve iteration tokens identically.
+ * Resolve the per-iteration `{{ loop.* }}` tokens in a plain text string
+ * against the iteration at `index` of a loop with `count` items. Shared by the
+ * block and inline loop expanders so both resolve iteration tokens identically.
  *
  * Composition: the caller applies this only to text that belongs to the
  * *innermost* enclosing loop (the block expander skips paragraphs nested in an
- * inner `{{#each}}`, the inline expander has no nested loops by grammar). An
+ * inner `{% for %}`, the inline expander has no nested loops by grammar). An
  * outer loop therefore leaves a nested loop's tokens untouched, and they are
- * resolved when that inner loop expands — so `{{@index}}`/`{{@count}}` always
- * bind to the closest loop. It also composes with field substitution: tokens
- * and `{{path.field}}` placeholders are disjoint, so the order of the two
- * rewrites does not matter.
+ * resolved when that inner loop expands — so `loop.*` always binds to the
+ * closest loop. It also composes with field substitution: `loop.*` and
+ * `{{path.field}}` placeholders are disjoint, so the order of the two rewrites
+ * does not matter.
  */
 export const rewriteIterationTokensInText = (
   text: string,
   index: number,
   count: number,
 ): string =>
-  text
-    .replace(indexPattern(), () => String(index + 1))
-    .replace(countPattern(), () => String(count));
+  text.replace(loopPattern(), (_match, property: string) =>
+    String(loopContext(index, count)[toLoopProperty(property)]),
+  );
+
+/** The scanner only matches the five loop properties, so a miss here is a
+ *  pattern/grammar drift rather than an author's typo. */
+const toLoopProperty = (value: string): LoopProperty => {
+  if (
+    value === "index" ||
+    value === "index0" ||
+    value === "first" ||
+    value === "last" ||
+    value === "length"
+  ) {
+    return value;
+  }
+  return panic(`Unknown loop property: ${value}`);
+};
 
 // ── Loop-scoped clause numbering ─────────────────────────
 
-/** Collect `{{@num:Key}}` keys appearing in a plain text string. */
+/** Collect `{{ num("key") }}` keys appearing in a plain text string. */
 export const collectNumKeysInText = (text: string): Set<string> => {
   const keys = new Set<string>();
   for (const match of text.matchAll(numPattern())) {
-    const key = match[1];
+    const key = match.groups?.["key"];
     if (key !== undefined) {
       keys.add(key);
     }
@@ -1728,7 +1787,7 @@ export const collectNumKeysInText = (text: string): Set<string> => {
   return keys;
 };
 
-/** Collect `{{@num:Key}}` keys appearing in the given paragraphs. */
+/** Collect `{{ num("key") }}` keys appearing in the given paragraphs. */
 const collectNumKeys = (
   paragraphs: readonly slimdom.Element[],
 ): Set<string> => {
@@ -1767,11 +1826,11 @@ type ScopeNumberingOptions = {
 };
 
 /**
- * Rewrite loop-local `{{@num:Key}}` / `{{@ref:Key}}` markers in a plain text
- * string to per-iteration keys so numbering.ts assigns each expanded copy its
- * own number and intra-iteration refs follow it. Only keys present in
- * `localKeys` (those *defined* by a `{{@num:Key}}` in the loop body) are
- * scoped, so a `@ref` to a shared clause outside the loop still resolves.
+ * Rewrite loop-local `{{ num("Key") }}` / `{{ ref("Key") }}` markers in a plain
+ * text string to per-iteration keys so numbering.ts assigns each expanded copy
+ * its own number and intra-iteration refs follow it. Only keys present in
+ * `localKeys` (those *defined* by a `{{ num("Key") }}` in the loop body) are
+ * scoped, so a `ref()` to a shared clause outside the loop still resolves.
  * Shared by the block expander (per `w:t` node) and the inline expander (per
  * rendered span).
  */
@@ -1779,12 +1838,18 @@ export const scopeIterationNumberingInText = (
   text: string,
   { localKeys, expansionId, index, scope = "each" }: ScopeNumberingOptions,
 ): string => {
-  const rewriteSigil = (input: string, sigil: "num" | "ref", re: RegExp) =>
-    input.replace(re, (match, key: string) =>
-      localKeys.has(key)
-        ? `{{@${sigil}:${iterationNumKey(key, scope, expansionId, index)}}}`
-        : match,
-    );
+  const rewriteSigil = (input: string, fn: "num" | "ref", re: RegExp): string =>
+    input.replace(re, (...args: unknown[]) => {
+      const match = String(args.at(0));
+      const groups = args.at(-1);
+      const key =
+        typeof groups === "object" && groups !== null && "key" in groups
+          ? String(groups.key)
+          : "";
+      return localKeys.has(key)
+        ? `{{ ${fn}("${iterationNumKey(key, scope, expansionId, index)}") }}`
+        : match;
+    });
   return rewriteSigil(
     rewriteSigil(text, "num", numPattern()),
     "ref",

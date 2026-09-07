@@ -146,7 +146,7 @@ describe("resolveCompositeFields", () => {
     }
   });
 
-  test("assembles a composite field inside an {{#each}} loop per row", () => {
+  test("assembles a composite field inside an {% for %} loop per row", () => {
     // The loop value arrives as an array of rows under the container path while
     // the manifest keeps the dotted composite path `parties.signer`; each row's
     // signer object must be rendered in place so the loop expander flattens the
@@ -179,7 +179,7 @@ describe("resolveCompositeFields", () => {
     }
   });
 
-  test("rejects an invalid part inside an {{#each}} row", () => {
+  test("rejects an invalid part inside an {% for %} row", () => {
     const field: FieldMeta = {
       path: "parties.signer",
       parts: [

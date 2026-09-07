@@ -17,11 +17,13 @@
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import {
   assertNever,
-  classifyMarker,
   classifyMarkerDefect,
   MARKER_DEFECT_KINDS,
   markerPattern,
+  scanInvalidMarkers,
+  scanMarkers,
 } from "@stll/template-conditions";
+import type { MarkerDefect } from "@stll/template-conditions";
 
 /**
  * Closed set of authoring mistakes reported at save time. The marker-shape
@@ -29,8 +31,7 @@ import {
  * lands here without a second list to update.
  */
 export const TEMPLATE_WARNING_CODES = [
-  "unprefixed_item_path",
-  "this_prefix",
+  "unaliased_item_path",
   "split_marker",
   "condition_removes_input",
   "registry_configuration_required",
@@ -55,46 +56,64 @@ export type TemplateWarning = {
  *  unbounded payload to an agent that must read all of it. */
 const MAX_TEMPLATE_WARNINGS = 50;
 
-/** `{{this}}` / `{{this.name}}`: a valid field path, but there is no `this`
- *  scope in the grammar, so it resolves to a top-level field called `this`. */
-const THIS_PREFIX = "this.";
-
 const isItemScoped = (path: string, loopPath: string): boolean =>
   path === loopPath || path.startsWith(`${loopPath}.`);
 
 const markerDefectWarning = (
   raw: string,
-  inner: string,
-): TemplateWarning | null => {
-  const defect = classifyMarkerDefect(inner);
-  if (defect === null) {
-    return null;
-  }
-  switch (defect) {
-    case "unknown_directive":
+  defect: MarkerDefect,
+): TemplateWarning => {
+  const { construct, kind } = defect;
+  switch (kind) {
+    case "legacy_marker":
       return {
-        code: defect,
+        code: kind,
         path: raw,
-        message: `${raw} is not a directive in the marker grammar, so it opens and closes nothing and prints literally.`,
-        hint: "Close a loop with {{/each}} and a condition with {{/if}}; the openers are {{#each path}}, {{#if expr}}, {{#elseif expr}} and {{#else}}.",
+        message: `${raw} is the old marker dialect, which the grammar no longer reads, so it prints literally.`,
+        hint:
+          defect.replacement === undefined
+            ? 'Write the Jinja form: {% if expr %}, {% for item in items %}, {{ clause("Name") }}, {{ num("key") }}, {{ ref("key") }}.'
+            : `Write ${defect.replacement} instead.`,
+      };
+    case "unsupported_tag":
+      return {
+        code: kind,
+        path: raw,
+        message: `${raw} uses the {% ${construct} %} tag, which this dialect does not run, so it prints literally.`,
+        hint: "The tags are {% if %}, {% elif %}, {% else %}, {% endif %}, {% for alias in path %} and {% endfor %}.",
+      };
+    case "unknown_filter":
+      return {
+        code: kind,
+        path: raw,
+        message: `${raw} pipes through "${construct}", which is not a field-configuration filter, so the marker is left unfilled.`,
+        hint: "Use a filter from the template-markers reference, or drop the pipe to keep a plain text field.",
+      };
+    case "python_expression":
+      return {
+        code: kind,
+        path: raw,
+        message: `${raw} computes "${construct}" inside the marker; the dialect prints values, it does not evaluate expressions.`,
+        hint: 'Move the arithmetic into a formula filter — {{ total | formula("rent * 12") }} — or fill the value from the input.',
       };
     case "bracket_index":
       return {
-        code: defect,
+        code: kind,
         path: raw,
         message: `${raw} indexes with brackets, which the marker grammar does not support, so it prints literally.`,
-        hint: "Repeat the item instead: {{#each items}} ... {{items.name}} ... {{/each}}.",
+        hint: "Repeat the item instead: {% for item in items %} ... {{ item.name }} ... {% endfor %}.",
       };
     default:
-      return assertNever(defect);
+      return assertNever(kind);
   }
 };
 
-/** One enclosing `{{#each}}`: the path as the author wrote it, plus the path
- *  discovery qualified it to inside an outer loop (they differ only for a
- *  nested loop whose declared path omits the outer prefix). A placeholder
- *  matching either form is item-scoped. */
+/** One enclosing `{% for %}`: the loop variable, the path as the author wrote
+ *  it, plus the path discovery qualified it to inside an outer loop (the last
+ *  two differ only for a nested loop whose declared path omits the outer
+ *  prefix). A placeholder matching any of the three is item-scoped. */
 type WarningLoopScope = {
+  alias: string;
   declaredPath: string;
   scopedPath: string;
 };
@@ -103,16 +122,16 @@ type ParagraphWarningOptions = {
   /** Concatenated text of one paragraph (`paragraphText` has already joined
    *  the runs Word split the markers across). */
   text: string;
-  /** The `{{#each}}` loops this paragraph sits inside, outermost first. Inline
+  /** The `{% for %}` loops this paragraph sits inside, outermost first. Inline
    *  loops opened within the paragraph are tracked by the scan itself. */
   loops: readonly WarningLoopScope[];
   paragraphIndex: number;
 };
 
 /**
- * Warnings for one paragraph's markers. Walks the `{{...}}` spans in document
- * order so an inline `{{#each x}} ... {{/each}}` scopes the placeholders
- * between its own markers, exactly as the fill pipeline does.
+ * Warnings for one paragraph's markers. Walks the marker spans in document
+ * order so an inline `{% for i in x %} ... {% endfor %}` scopes the
+ * placeholders between its own markers, exactly as the fill pipeline does.
  */
 export const collectParagraphWarnings = ({
   loops,
@@ -122,24 +141,23 @@ export const collectParagraphWarnings = ({
   const warnings: TemplateWarning[] = [];
   const inlineLoops: WarningLoopScope[] = [];
 
-  for (const match of text.matchAll(markerPattern())) {
-    const raw = match[0];
-    const inner = (match.groups?.["inner"] ?? "").trim();
-    const meta = classifyMarker(inner);
+  for (const { form, inner, raw } of scanInvalidMarkers(text)) {
+    const defect = classifyMarkerDefect(inner, form);
+    if (defect !== null) {
+      warnings.push(markerDefectWarning(raw, defect));
+    }
+  }
 
-    if (meta === null) {
-      const defectWarning = markerDefectWarning(raw, inner);
-      if (defectWarning) {
-        warnings.push(defectWarning);
-      }
+  for (const { meta, raw } of scanMarkers(text)) {
+    if (meta.kind === "for") {
+      inlineLoops.push({
+        alias: meta.alias,
+        declaredPath: meta.path,
+        scopedPath: meta.path,
+      });
       continue;
     }
-
-    if (meta.kind === "each") {
-      inlineLoops.push({ declaredPath: meta.expr, scopedPath: meta.expr });
-      continue;
-    }
-    if (meta.kind === "endeach") {
+    if (meta.kind === "endfor") {
       inlineLoops.pop();
       continue;
     }
@@ -148,35 +166,26 @@ export const collectParagraphWarnings = ({
     }
 
     const path = meta.expr;
-    if (path === "this" || path.startsWith(THIS_PREFIX)) {
-      const suffix = path.slice(THIS_PREFIX.length);
-      warnings.push({
-        code: "this_prefix",
-        path,
-        message: `${raw} uses "this", which is not a scope in the marker grammar: it fills from a top-level field literally named "${path}".`,
-        hint: `Inside {{#each items}} write the loop path: {{items.${suffix === "" ? "name" : suffix}}}.`,
-      });
-      continue;
-    }
-
     const enclosingLoops = [...loops, ...inlineLoops];
     const innermostLoop = enclosingLoops.at(-1);
     if (
       innermostLoop === undefined ||
       enclosingLoops.some(
-        ({ declaredPath, scopedPath }) =>
-          isItemScoped(path, declaredPath) || isItemScoped(path, scopedPath),
+        ({ alias, declaredPath, scopedPath }) =>
+          isItemScoped(path, alias) ||
+          isItemScoped(path, declaredPath) ||
+          isItemScoped(path, scopedPath),
       )
     ) {
       continue;
     }
 
-    const loopPath = innermostLoop.declaredPath;
+    const { alias, declaredPath } = innermostLoop;
     warnings.push({
-      code: "unprefixed_item_path",
+      code: "unaliased_item_path",
       path,
-      message: `${raw} inside {{#each ${loopPath}}} is not an item field: it fills from a top-level "${path}", so every repeated row renders the same value (blank when no such field is filled).`,
-      hint: `Write {{${loopPath}.${path}}} to fill it from each ${loopPath} item.`,
+      message: `${raw} inside {% for ${alias} in ${declaredPath} %} is not an item field: it fills from a top-level "${path}", so every repeated row renders the same value (blank when no such field is filled).`,
+      hint: `Write {{ ${alias}.${path} }} to fill it from each ${declaredPath} item.`,
     });
   }
 
@@ -220,7 +229,7 @@ export type RegistryAvailabilityLoader = () => Promise<
 >;
 
 type FieldOverlayWarningOptions = {
-  /** Paths referenced by a `{{#if}}` / `{{#elseif}}` expression. */
+  /** Paths referenced by a `{% if %}` / `{% elif %}` expression. */
   conditionPaths: readonly string[];
   /** Paths that appear as a value marker `{{path}}` in the document. */
   placeholderPaths: readonly string[];
@@ -232,14 +241,14 @@ type FieldOverlayWarningOptions = {
 /**
  * A `condition` turns its field into a rule evaluated at fill time, so the
  * fill form and the MCP field list stop asking for it. That is what an author
- * wants for a path used only by `{{#if path}}`; it silently removes the input
+ * wants for a path used only by `{% if path %}`; it silently removes the input
  * when the same path is also a value marker.
  */
 const conditionWarning = (path: string): TemplateWarning => ({
   code: "condition_removes_input",
   path,
   message: `"${path}" has a condition, so it is derived at fill time and nobody is asked for it, yet {{${path}}} also prints its value in the document.`,
-  hint: `Drop the condition to keep "${path}" as a yes/no input, or give the {{#if}} rule its own path.`,
+  hint: `Drop the condition to keep "${path}" as a yes/no input, or give the {% if %} rule its own path.`,
 });
 
 /**
