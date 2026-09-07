@@ -810,7 +810,6 @@ describe("a child restating the parent's lookup", () => {
 
   test("a child that names a real input type folds without it", async () => {
     const discovered = await discoverTemplate(await companyDocx());
-    const [parent] = shapeOnlyOverlay();
 
     const { applied, issues } = partitionFieldOverlay({
       configured: [],
@@ -822,7 +821,9 @@ describe("a child restating the parent's lookup", () => {
     });
 
     expect(issues.map(({ path }) => path)).toEqual(["fields.1.input_type"]);
-    expect(applyFieldOverlay(null, applied).fields).toEqual([parent]);
+    expect(applyFieldOverlay(null, applied).fields).toEqual(
+      shapeOnlyOverlay().slice(0, 1),
+    );
   });
 
   test("a second configure of the shape-only overlay changes nothing", async () => {
