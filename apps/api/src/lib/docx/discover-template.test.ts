@@ -170,6 +170,44 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("an inline loop nested in another is an array of its own", async () => {
+    const xml = WRAP(
+      P(
+        "{% for group in groups %}{{ group.title }}: " +
+          "{% for item in group.items %}{{ item.name }}, {% endfor %}" +
+          "{% endfor %}",
+      ),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.fields.find((field) => field.path === "groups")).toEqual({
+      path: "groups",
+      kind: "array",
+      count: 1,
+      itemFields: [
+        { path: "items.name", kind: "string", count: 1 },
+        { path: "title", kind: "string", count: 1 },
+      ],
+    });
+    expect(
+      result.fields.find((field) => field.path === "groups.items"),
+    ).toEqual({
+      path: "groups.items",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "name", kind: "string", count: 1 }],
+    });
+    // The inner item is not a field of its own: the loop alias names the
+    // array's items, and the manifest speaks the array path.
+    expect(
+      result.fields.find((field) => field.path === "item"),
+    ).toBeUndefined();
+    expect(result.placeholders).toContainEqual({
+      name: "groups.items.name",
+      count: 1,
+    });
+  });
+
   test("inline loops inside block rows inherit the enclosing row path", async () => {
     const xml = WRAP(
       [

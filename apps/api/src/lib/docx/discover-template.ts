@@ -32,6 +32,7 @@ import {
   foldItemCountConstraints,
 } from "./field-filters";
 import { parseInlineConditions } from "./inline-conditions";
+import type { InlineGroup } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
   paragraphText,
@@ -731,82 +732,114 @@ const collectParagraphPlaceholders = ({
         directive: inline.directive,
       });
     } else {
-      for (const group of inline.groups) {
-        if (group.kind === "for") {
-          const scopedPath = qualifyLoopPath(
-            group.arrayPath,
-            requireRowScopes(arrayScopes, i),
-          );
-          registerField(fields, scopedPath, "array");
-          recordLoopAlias(loopAliases, group.alias, scopedPath);
-          recordFieldDeclaration({
-            declarations: documentFilters,
-            errors,
-            filters: group.filters,
-            paragraphIndex: authoredIndices[i] ?? i,
-            path: scopedPath,
-            scope: "array",
-          });
-          inlineLoopScopes.push({
-            alias: group.alias,
-            declaredPath: group.arrayPath,
-            end: group.contentEnd,
-            scopedPath,
-            start: group.contentStart,
-          });
-          const entry = fields.get(scopedPath);
-          const content = text.slice(group.contentStart, group.contentEnd);
-          const prefixes = [...new Set([group.alias, group.arrayPath])].map(
-            (head) => `${head}.`,
-          );
-          for (const { name } of scanPlaceholders(content)) {
-            const prefix = prefixes.find((candidate) =>
-              name.startsWith(candidate),
+      // Inline blocks nest, and the parser hands back one level at a time:
+      // applying an outer group leaves its inner markers in the text, where
+      // the next pass reads them as top-level. Discovery descends the same
+      // way, or a nested loop's array is never registered and the items its
+      // body writes look like fields of their own.
+      const visitInlineGroups = (
+        groups: readonly InlineGroup[],
+        span: string,
+        offset: number,
+      ): void => {
+        for (const group of groups) {
+          if (group.kind === "for") {
+            const scopedPath = qualifyLoopPath(group.arrayPath, [
+              ...requireRowScopes(arrayScopes, i),
+              ...inlineLoopScopes,
+            ]);
+            registerField(fields, scopedPath, "array");
+            recordLoopAlias(loopAliases, group.alias, scopedPath);
+            recordFieldDeclaration({
+              declarations: documentFilters,
+              errors,
+              filters: group.filters,
+              paragraphIndex: authoredIndices[i] ?? i,
+              path: scopedPath,
+              scope: "array",
+            });
+            inlineLoopScopes.push({
+              alias: group.alias,
+              declaredPath: group.arrayPath,
+              end: offset + group.contentEnd,
+              scopedPath,
+              start: offset + group.contentStart,
+            });
+            const entry = fields.get(scopedPath);
+            const content = span.slice(group.contentStart, group.contentEnd);
+            const prefixes = [...new Set([group.alias, group.arrayPath])].map(
+              (head) => `${head}.`,
             );
-            if (prefix !== undefined) {
-              entry?.itemPaths.add(name.slice(prefix.length));
+            for (const { name } of scanPlaceholders(content)) {
+              const prefix = prefixes.find((candidate) =>
+                name.startsWith(candidate),
+              );
+              if (prefix !== undefined) {
+                entry?.itemPaths.add(name.slice(prefix.length));
+              }
+            }
+            const nested = parseInlineConditions(content);
+            // The span is balanced by construction: the outer parse already
+            // reported anything that was not.
+            if (nested.ok) {
+              visitInlineGroups(
+                nested.groups,
+                content,
+                offset + group.contentStart,
+              );
+            }
+            continue;
+          }
+
+          const priorConditions: string[] = [];
+          for (const branch of group.branches) {
+            registerConditionFields({
+              condition: branch.condition,
+              conditionPaths,
+              fields,
+              rowScopes: [
+                ...requireRowScopes(arrayScopes, i),
+                ...inlineLoopScopes.map(
+                  ({ alias, declaredPath, scopedPath }) => ({
+                    alias,
+                    declaredPath,
+                    scopedPath,
+                  }),
+                ),
+              ],
+            });
+            const branchCondition =
+              branch.condition === ""
+                ? priorConditions.map(negateExpr).join(" and ")
+                : [
+                    ...priorConditions.map(negateExpr),
+                    wrapConjunctionPart(branch.condition),
+                  ].join(" and ");
+            inlineBranchConditions.push({
+              condition: combineConditions(
+                paraCondition,
+                branchCondition || undefined,
+              ),
+              end: offset + branch.contentEnd,
+              start: offset + branch.contentStart,
+            });
+            if (branch.condition !== "") {
+              priorConditions.push(branch.condition);
+            }
+            const nested = parseInlineConditions(
+              span.slice(branch.contentStart, branch.contentEnd),
+            );
+            if (nested.ok) {
+              visitInlineGroups(
+                nested.groups,
+                span.slice(branch.contentStart, branch.contentEnd),
+                offset + branch.contentStart,
+              );
             }
           }
-          continue;
         }
-
-        const priorConditions: string[] = [];
-        for (const branch of group.branches) {
-          registerConditionFields({
-            condition: branch.condition,
-            conditionPaths,
-            fields,
-            rowScopes: [
-              ...requireRowScopes(arrayScopes, i),
-              ...inlineLoopScopes.map(
-                ({ alias, declaredPath, scopedPath }) => ({
-                  alias,
-                  declaredPath,
-                  scopedPath,
-                }),
-              ),
-            ],
-          });
-          const branchCondition =
-            branch.condition === ""
-              ? priorConditions.map(negateExpr).join(" and ")
-              : [
-                  ...priorConditions.map(negateExpr),
-                  wrapConjunctionPart(branch.condition),
-                ].join(" and ");
-          inlineBranchConditions.push({
-            condition: combineConditions(
-              paraCondition,
-              branchCondition || undefined,
-            ),
-            end: branch.contentEnd,
-            start: branch.contentStart,
-          });
-          if (branch.condition !== "") {
-            priorConditions.push(branch.condition);
-          }
-        }
-      }
+      };
+      visitInlineGroups(inline.groups, text, 0);
     }
 
     for (const {
@@ -814,18 +847,16 @@ const collectParagraphPlaceholders = ({
       name: declaredName,
       start: markerStart,
     } of scanPlaceholders(text)) {
-      const loopScope = inlineLoopScopes.find(
+      // Every inline loop whose body holds this marker, outermost first, so
+      // the innermost alias resolves the name and each enclosing array still
+      // learns the item path it repeats.
+      const enclosingLoops = inlineLoopScopes.filter(
         ({ end, start }) => start <= markerStart && markerStart < end,
       );
-      const declaredLoopPrefix = loopScope
-        ? [loopScope.alias, loopScope.declaredPath]
-            .map((head) => `${head}.`)
-            .find((candidate) => declaredName.startsWith(candidate))
-        : undefined;
-      const inlineScopedName =
-        loopScope !== undefined && declaredLoopPrefix !== undefined
-          ? `${loopScope.scopedPath}.${declaredName.slice(declaredLoopPrefix.length)}`
-          : declaredName;
+      const inlineScopedName = qualifyRowScopedPlaceholder(
+        declaredName,
+        enclosingLoops,
+      );
       const scopedArrayPaths = requireRowScopes(arrayScopes, i);
       const name = qualifyRowScopedPlaceholder(
         inlineScopedName,
@@ -867,12 +898,13 @@ const collectParagraphPlaceholders = ({
       // Register the full path as string
       registerField(fields, name, "string");
 
-      if (scopedArrayPaths.length > 0) {
-        for (const { scopedPath: arrayPath } of scopedArrayPaths) {
-          const prefix = `${arrayPath}.`;
-          if (name.startsWith(prefix)) {
-            fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));
-          }
+      for (const { scopedPath: arrayPath } of [
+        ...scopedArrayPaths,
+        ...enclosingLoops,
+      ]) {
+        const prefix = `${arrayPath}.`;
+        if (name.startsWith(prefix)) {
+          fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));
         }
       }
     }

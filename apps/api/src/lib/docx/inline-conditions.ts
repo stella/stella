@@ -124,7 +124,7 @@ type InlineEachGroup = {
   contentEnd: number;
 };
 
-type InlineGroup = InlineIfGroup | InlineEachGroup;
+export type InlineGroup = InlineIfGroup | InlineEachGroup;
 
 type InlineParse =
   | { ok: true; groups: InlineGroup[] }
