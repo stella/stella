@@ -240,19 +240,21 @@ test.describe("find in table", () => {
       exact: true,
       name: "Columns to find in",
     });
+    // Matched by prefix: the row appends a check mark while its scope is the
+    // selected one, so its accessible name is "All columns ✓" here. An exact
+    // match would bind to nothing, and the absence assertion below would then
+    // pass whatever the picker did.
+    const allColumnsRow = page.getByRole("button", { name: /^All columns/u });
+
     await columnsToggle.click();
     await expect(columnsToggle).toHaveAttribute("aria-expanded", "true");
-    await expect(
-      page.getByRole("button", { exact: true, name: "All columns" }),
-    ).toBeVisible();
+    await expect(allColumnsRow).toBeVisible();
 
     await page.goBack({ waitUntil: "commit" });
     await page.keyboard.press("ControlOrMeta+f");
     await expect(page.getByRole("searchbox")).toBeFocused();
     await expect(columnsToggle).toHaveAttribute("aria-expanded", "false");
-    await expect(
-      page.getByRole("button", { exact: true, name: "All columns" }),
-    ).toBeHidden();
+    await expect(allColumnsRow).toBeHidden();
   });
 
   // Finding 1 of the find browser test: Folio's find/replace dialog binds
