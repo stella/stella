@@ -1,8 +1,8 @@
 {
   "tray": {
-    "activeEdits": "{count, plural, one {1 modification active} other {{count} modifications actives}}",
+    "activeEdits": "{count, plural, one {{count} modification active} other {{count} modifications actives}}",
     "clipboard": "Historique du presse-papiers",
-    "documentsSyncing": "{count, plural, one {1 document en synchronisation} other {{count} documents en synchronisation}}",
+    "documentsSyncing": "{count, plural, one {{count} document en synchronisation} other {{count} documents en synchronisation}}",
     "needsAttention": "Nécessite une attention",
     "noActiveEdits": "Aucune modification active",
     "updateReady": "Mise à jour prête",
@@ -156,7 +156,7 @@
     "groupColor": "Couleur du groupe",
     "groupName": "Nom du groupe",
     "groups": "Groupes",
-    "itemCount": "{count, plural, one {1 élément} other {{count} éléments}}",
+    "itemCount": "{count, plural, one {{count} élément} other {{count} éléments}}",
     "keyboardNavigate": "← → naviguer",
     "link": "Lien",
     "local": "Local",

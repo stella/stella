@@ -1,8 +1,8 @@
 {
   "tray": {
-    "activeEdits": "{count, plural, one {1 aktyvus redagavimas} few {{count} aktyvūs redagavimai} other {{count} aktyvių redagavimų}}",
+    "activeEdits": "{count, plural, one {{count} aktyvus redagavimas} few {{count} aktyvūs redagavimai} other {{count} aktyvių redagavimų}}",
     "clipboard": "Iškarpinės istorija",
-    "documentsSyncing": "{count, plural, one {1 dokumentas sinchronizuojamas} few {{count} dokumentai sinchronizuojami} other {{count} dokumentų sinchronizuojama}}",
+    "documentsSyncing": "{count, plural, one {{count} dokumentas sinchronizuojamas} few {{count} dokumentai sinchronizuojami} other {{count} dokumentų sinchronizuojama}}",
     "needsAttention": "Reikia dėmesio",
     "noActiveEdits": "Nėra aktyvių redagavimų",
     "updateReady": "Naujinimas paruoštas",
@@ -156,7 +156,7 @@
     "groupColor": "Grupės spalva",
     "groupName": "Grupės pavadinimas",
     "groups": "Grupės",
-    "itemCount": "{count, plural, one {1 elementas} few {{count} elementai} other {{count} elementų}}",
+    "itemCount": "{count, plural, one {{count} elementas} few {{count} elementai} other {{count} elementų}}",
     "keyboardNavigate": "← → naršyti",
     "link": "Nuoroda",
     "local": "Vietinė",

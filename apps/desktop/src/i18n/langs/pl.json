@@ -1,8 +1,8 @@
 {
   "tray": {
-    "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} other {{count} aktywnych edycji}}",
+    "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} many {{count} aktywnych edycji} other {{count} aktywnych edycji}}",
     "clipboard": "Historia schowka",
-    "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} other {{count} dokumentów synchronizowanych}}",
+    "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} many {{count} dokumentów synchronizowanych} other {{count} dokumentów synchronizowanych}}",
     "needsAttention": "Wymaga uwagi",
     "noActiveEdits": "Brak aktywnych edycji",
     "updateReady": "Aktualizacja gotowa",
@@ -156,7 +156,7 @@
     "groupColor": "Kolor grupy",
     "groupName": "Nazwa grupy",
     "groups": "Grupy",
-    "itemCount": "{count, plural, one {1 element} few {{count} elementy} other {{count} elementów}}",
+    "itemCount": "{count, plural, one {1 element} few {{count} elementy} many {{count} elementów} other {{count} elementów}}",
     "keyboardNavigate": "← → nawigacja",
     "link": "Link",
     "local": "Lokalnie",

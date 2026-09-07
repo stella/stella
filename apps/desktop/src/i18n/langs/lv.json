@@ -1,8 +1,8 @@
 {
   "tray": {
-    "activeEdits": "{count, plural, one {1 aktīvs labojums} other {{count} aktīvi labojumi}}",
+    "activeEdits": "{count, plural, zero {{count} aktīvu labojumu} one {{count} aktīvs labojums} other {{count} aktīvi labojumi}}",
     "clipboard": "Starpliktuves vēsture",
-    "documentsSyncing": "{count, plural, one {1 dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",
+    "documentsSyncing": "{count, plural, zero {{count} dokumentu tiek sinhronizēts} one {{count} dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",
     "needsAttention": "Nepieciešama uzmanība",
     "noActiveEdits": "Nav aktīvu labojumu",
     "updateReady": "Atjauninājums gatavs",
@@ -156,7 +156,7 @@
     "groupColor": "Grupas krāsa",
     "groupName": "Grupas nosaukums",
     "groups": "Grupas",
-    "itemCount": "{count, plural, one {1 vienums} other {{count} vienumi}}",
+    "itemCount": "{count, plural, zero {{count} vienumu} one {{count} vienums} other {{count} vienumi}}",
     "keyboardNavigate": "← → pārvietoties",
     "link": "Saite",
     "local": "Lokāli",

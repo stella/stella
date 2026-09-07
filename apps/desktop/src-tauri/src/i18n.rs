@@ -340,7 +340,7 @@ pub fn t_plural(key: &str, count: usize) -> String {
   let template = t(key);
 
   // Parse ICU plural: {count, plural, one {…} few {…} other {…}}
-  if let Some(start) = template.find("{count, plural,") {
+  if let Some(start) = template.find(PLURAL_PREFIX) {
     let rest = &template[start..];
     let form = select_plural_form(count);
 
@@ -359,37 +359,189 @@ pub fn t_plural(key: &str, count: usize) -> String {
 
 /// CLDR plural category for Arabic, whose six categories the branch probe
 /// below cannot express: it knows only one/few/other.
-fn arabic_plural_form(count: usize) -> &'static str {
-  match count {
-    0 => "zero",
-    1 => "one",
-    2 => "two",
-    _ => match count % 100 {
-      3..=10 => "few",
-      11..=99 => "many",
-      _ => "other",
-    },
+/// CLDR plural rules, for whole numbers. The tray formats counts, never
+/// fractions, so the categories a fraction can select (`many` in Czech, in
+/// Lithuanian) are outside every rule here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PluralRule {
+  /// One for exactly 1: en, de, es, et, hu.
+  One,
+  /// One for 0 and 1 as well: fr, pt.
+  OneWithZero,
+  /// One for 1, few for 2 to 4: cs, sk.
+  OneFew,
+  Polish,
+  Lithuanian,
+  Latvian,
+  Arabic,
+}
+
+/// A rule per shipped locale. A test asserts this covers `LOCALES` exactly, so
+/// a locale cannot arrive without someone answering how it counts.
+const PLURAL_RULES: &[(&str, PluralRule)] = &[
+  ("en", PluralRule::One),
+  ("ar", PluralRule::Arabic),
+  ("cs", PluralRule::OneFew),
+  ("de", PluralRule::One),
+  ("es", PluralRule::One),
+  ("et", PluralRule::One),
+  ("fr", PluralRule::OneWithZero),
+  ("hu", PluralRule::One),
+  ("lt", PluralRule::Lithuanian),
+  ("lv", PluralRule::Latvian),
+  ("pl", PluralRule::Polish),
+  ("pt-BR", PluralRule::OneWithZero),
+  ("sk", PluralRule::OneFew),
+];
+
+fn plural_rule(locale: &str) -> Option<PluralRule> {
+  PLURAL_RULES
+    .iter()
+    .find(|(l, _)| *l == locale)
+    .map(|(_, rule)| *rule)
+}
+
+impl PluralRule {
+  fn category(self, count: usize) -> &'static str {
+    let by_ten = count % 10;
+    let by_hundred = count % 100;
+    match self {
+      Self::One => {
+        if count == 1 {
+          "one"
+        } else {
+          "other"
+        }
+      }
+      Self::OneWithZero => {
+        if count <= 1 {
+          "one"
+        } else {
+          "other"
+        }
+      }
+      Self::OneFew => match count {
+        1 => "one",
+        2..=4 => "few",
+        _ => "other",
+      },
+      // Polish leaves nothing for `other`: every whole number is one, few or
+      // many. `other` stays in the catalogues because ICU requires it.
+      Self::Polish => {
+        if count == 1 {
+          "one"
+        } else if (2..=4).contains(&by_ten) && !(12..=14).contains(&by_hundred) {
+          "few"
+        } else {
+          "many"
+        }
+      }
+      Self::Lithuanian => {
+        if (11..=19).contains(&by_hundred) {
+          "other"
+        } else if by_ten == 1 {
+          "one"
+        } else if (2..=9).contains(&by_ten) {
+          "few"
+        } else {
+          "other"
+        }
+      }
+      Self::Latvian => {
+        if by_ten == 0 || (11..=19).contains(&by_hundred) {
+          "zero"
+        } else if by_ten == 1 {
+          "one"
+        } else {
+          "other"
+        }
+      }
+      Self::Arabic => match count {
+        0 => "zero",
+        1 => "one",
+        2 => "two",
+        _ => match by_hundred {
+          3..=10 => "few",
+          11..=99 => "many",
+          _ => "other",
+        },
+      },
+    }
+  }
+
+  /// The branches a catalogue must spell out: every category the rule selects,
+  /// plus `other`, which ICU requires even where nothing selects it. This is
+  /// what the catalogues are checked against; nothing reads it at run time.
+  #[cfg(test)]
+  fn categories(self) -> &'static [&'static str] {
+    match self {
+      Self::One | Self::OneWithZero => &["one", "other"],
+      Self::OneFew => &["one", "few", "other"],
+      Self::Polish => &["one", "few", "many", "other"],
+      Self::Lithuanian => &["one", "few", "other"],
+      Self::Latvian => &["zero", "one", "other"],
+      Self::Arabic => &["zero", "one", "two", "few", "many", "other"],
+    }
   }
 }
 
-/// Select the ICU plural form based on the active locale and count.
-/// Covers CLDR plural rules for supported languages.
 fn select_plural_form(count: usize) -> &'static str {
-  let tr = active();
-  if tr.locale == "ar" {
-    return arabic_plural_form(count);
-  }
+  plural_rule(active().locale).map_or("other", |rule| rule.category(count))
+}
 
-  // Check if this locale has a "few" branch by testing a known key
-  let has_few = tr.messages.values().any(|v| v.contains("few {"));
+const PLURAL_PREFIX: &str = "{count, plural,";
 
-  if count == 1 {
-    "one"
-  } else if has_few && (2..=4).contains(&count) {
-    "few"
-  } else {
-    "other"
+/// Length of the `{…}` group `s` starts with, braces balanced.
+fn balanced_group_len(s: &str) -> Option<usize> {
+  let mut depth = 0usize;
+  for (index, character) in s.char_indices() {
+    match character {
+      '{' => depth += 1,
+      '}' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(index + character.len_utf8());
+        }
+      }
+      _ => {}
+    }
   }
+  None
+}
+
+/// The branch names an ICU plural message spells out, in order. Empty for a
+/// message that is not a plural. Only the catalogue guard reads this: at run
+/// time a branch is looked up by name, never enumerated.
+#[cfg(test)]
+fn plural_branch_names(icu: &str) -> Vec<String> {
+  let Some(start) = icu.find(PLURAL_PREFIX) else {
+    return Vec::new();
+  };
+
+  let mut rest = &icu[start + PLURAL_PREFIX.len()..];
+  let mut names = Vec::new();
+  loop {
+    let trimmed = rest.trim_start();
+    let Some(brace) = trimmed.find('{') else {
+      break;
+    };
+    let name = trimmed[..brace].trim();
+    // Anything else is the text after the plural argument, not a branch.
+    if name.is_empty()
+      || !name
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '=')
+    {
+      break;
+    }
+    let body = &trimmed[brace..];
+    let Some(length) = balanced_group_len(body) else {
+      break;
+    };
+    names.push(name.to_string());
+    rest = &body[length..];
+  }
+  names
 }
 
 /// Extract a branch from an ICU plural pattern.
@@ -398,36 +550,17 @@ fn select_plural_form(count: usize) -> &'static str {
 fn extract_plural_branch(icu: &str, form: &str) -> Option<String> {
   let needle = format!("{form} {{");
   let branch_start = icu.find(&needle)?;
-  let content_start = branch_start + needle.len();
-  let rest = &icu[content_start..];
-
-  // Find the matching closing brace (handle nested `{count}`)
-  let mut depth = 1;
-  let mut end = 0;
-  for (i, ch) in rest.char_indices() {
-    match ch {
-      '{' => depth += 1,
-      '}' => {
-        depth -= 1;
-        if depth == 0 {
-          end = i;
-          break;
-        }
-      }
-      _ => {}
-    }
-  }
-
-  if end > 0 {
-    Some(rest[..end].to_string())
-  } else {
-    None
-  }
+  // Start at the branch's opening brace so the nested `{count}` is balanced
+  // rather than read as the end of the branch.
+  let body = &icu[branch_start + needle.len() - 1..];
+  let length = balanced_group_len(body)?;
+  Some(body[1..length - 1].to_string())
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::collections::BTreeSet;
 
   fn ensure_init() {
     init_en();
@@ -606,20 +739,173 @@ mod tests {
     assert_eq!(resolve_locale("ja-JP"), None);
   }
 
-  // -- arabic_plural_form --
+  // -- plural rules --
+
+  /// The counts each rule family is checked at: a singular, a small plural,
+  /// the teens Slavic and Baltic rules treat apart, and the same shapes again
+  /// past 100, where a rule that reads the whole number instead of its last
+  /// two digits gives itself away.
+  const PLURAL_COUNTS: [usize; 11] = [0, 1, 2, 5, 11, 21, 22, 25, 101, 111, 112];
+
+  fn categories_at(rule: PluralRule) -> Vec<&'static str> {
+    PLURAL_COUNTS
+      .iter()
+      .map(|count| rule.category(*count))
+      .collect()
+  }
 
   #[test]
-  fn test_arabic_plural_form_covers_every_category() {
-    assert_eq!(arabic_plural_form(0), "zero");
-    assert_eq!(arabic_plural_form(1), "one");
-    assert_eq!(arabic_plural_form(2), "two");
-    assert_eq!(arabic_plural_form(3), "few");
-    assert_eq!(arabic_plural_form(10), "few");
-    assert_eq!(arabic_plural_form(11), "many");
-    assert_eq!(arabic_plural_form(99), "many");
-    assert_eq!(arabic_plural_form(100), "other");
-    assert_eq!(arabic_plural_form(102), "other");
-    assert_eq!(arabic_plural_form(103), "few");
+  fn one_other_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::One),
+      [
+        "other", "one", "other", "other", "other", "other", "other", "other", "other",
+        "other", "other"
+      ]
+    );
+  }
+
+  #[test]
+  fn one_with_zero_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::OneWithZero),
+      [
+        "one", "one", "other", "other", "other", "other", "other", "other", "other",
+        "other", "other"
+      ]
+    );
+  }
+
+  #[test]
+  fn one_few_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::OneFew),
+      [
+        "other", "one", "few", "other", "other", "other", "other", "other", "other",
+        "other", "other"
+      ]
+    );
+  }
+
+  #[test]
+  fn polish_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::Polish),
+      [
+        "many", "one", "few", "many", "many", "many", "few", "many", "many", "many",
+        "many"
+      ]
+    );
+  }
+
+  #[test]
+  fn lithuanian_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::Lithuanian),
+      [
+        "other", "one", "few", "few", "other", "one", "few", "few", "one", "other",
+        "other"
+      ]
+    );
+  }
+
+  #[test]
+  fn latvian_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::Latvian),
+      [
+        "zero", "one", "other", "other", "zero", "one", "other", "other", "one",
+        "zero", "zero"
+      ]
+    );
+  }
+
+  #[test]
+  fn arabic_rule_matches_cldr() {
+    assert_eq!(
+      categories_at(PluralRule::Arabic),
+      [
+        "zero", "one", "two", "few", "many", "many", "many", "many", "other", "many",
+        "many"
+      ]
+    );
+  }
+
+  #[test]
+  fn every_shipped_locale_has_a_plural_rule() {
+    let mut declared: Vec<&str> = LOCALES.iter().map(|(l, _)| *l).collect();
+    declared.sort_unstable();
+    let mut ruled: Vec<&str> = PLURAL_RULES.iter().map(|(l, _)| *l).collect();
+    ruled.sort_unstable();
+    assert_eq!(ruled, declared);
+  }
+
+  #[test]
+  fn a_rule_only_selects_categories_it_declares() {
+    for (_, rule) in PLURAL_RULES {
+      let declared: BTreeSet<&str> = rule.categories().iter().copied().collect();
+      let mut selected: BTreeSet<&str> = BTreeSet::new();
+      for count in 0..=1200usize {
+        let category = rule.category(count);
+        assert!(declared.contains(category), "{rule:?} selected {category}");
+        selected.insert(category);
+      }
+      // Everything but ICU's mandatory `other` has to be reachable, otherwise
+      // the catalogues are asked for a branch nothing renders.
+      for category in declared.iter().filter(|category| **category != "other") {
+        assert!(
+          selected.contains(category),
+          "{rule:?} never selects {category}"
+        );
+      }
+    }
+  }
+
+  // -- plural_branch_names --
+
+  #[test]
+  fn plural_branch_names_reads_every_branch() {
+    let icu = "{count, plural, zero {none} one {1 item} other {{count} items}}";
+    assert_eq!(plural_branch_names(icu), ["zero", "one", "other"]);
+  }
+
+  #[test]
+  fn plural_branch_names_stops_at_the_end_of_the_argument() {
+    let icu = "{count, plural, one {1 item} other {{count} items}} in {folder}";
+    assert_eq!(plural_branch_names(icu), ["one", "other"]);
+  }
+
+  #[test]
+  fn plural_branch_names_is_empty_for_a_plain_message() {
+    assert_eq!(plural_branch_names("Open file").len(), 0);
+  }
+
+  /// Every plural message spells out exactly the categories its locale's rule
+  /// can select, so a count never falls through to a branch written for
+  /// another number. Fails on a new plural message, a new locale, or a rule
+  /// that gains a category.
+  #[test]
+  fn every_plural_message_names_its_locale_s_categories() {
+    for (locale, source) in LOCALES {
+      let rule = plural_rule(locale).expect("plural rule for a shipped locale");
+      let expected: BTreeSet<String> = rule
+        .categories()
+        .iter()
+        .map(|category| (*category).to_string())
+        .collect();
+
+      let mut checked = 0usize;
+      for (key, message) in parse_locale(source) {
+        if !message.contains(PLURAL_PREFIX) {
+          continue;
+        }
+        let named: BTreeSet<String> =
+          plural_branch_names(&message).into_iter().collect();
+        assert_eq!(named, expected, "{locale} {key}");
+        checked += 1;
+      }
+      assert!(checked > 0, "{locale} has no plural messages to check");
+    }
   }
 
   // -- flatten_json --
