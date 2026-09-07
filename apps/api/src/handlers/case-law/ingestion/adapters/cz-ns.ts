@@ -144,6 +144,13 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
     /Kategorie rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   legalSentence:
     /Právní věta:<\/font><\/b><\/td><td[^>]*>(?<value>[\s\S]*?)<\/td>/iu,
+  /**
+   * The court's own case annotation, which it prints under `Anotace:` beside
+   * the headnote for part of its collection. Unlike every other row on this
+   * page the cell holds a `<details>` disclosure rather than a `<font>` run,
+   * so the value runs to the cell's close.
+   */
+  abstract: /Anotace:<\/font><\/b><\/td><td[^>]*>(?<value>[\s\S]*?)<\/td>/iu,
 };
 
 /**
@@ -405,6 +412,7 @@ export const buildCzNsDecision = async (
         ...sourceMetadata,
         judge,
         legalSentence: meta["legalSentence"],
+        abstract: meta["abstract"],
         keywords: meta["keywords"]?.split("\n").flatMap((s) => {
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];

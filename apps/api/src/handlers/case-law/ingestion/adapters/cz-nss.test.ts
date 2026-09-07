@@ -37,6 +37,7 @@ import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -168,11 +169,38 @@ const DOCUMENT_HTML = `<html><body>
   řízení o kasační stížnosti.</p>
 </body></html>`;
 
-const detailPage = (ecli: string): string => `<html><body>
-  <div id="ecli"><span class="det-textitle">ECLI:</span><span class="det-textval" title="${ecli}">${ecli}</span></div>
-  <div id="druhdokumentuavyrokrozhodnuti"><span class="det-textval">Rozsudek</span></div>
-  <div id="datumvydanirozhodnuti"><span class="det-textval">10.06.2026</span></div>
-</body></html>`;
+/**
+ * One field of the detail page, in the portal's own markup: a `data-field-id`
+ * div whose label and value are two spans told apart by their class, and
+ * whose value the portal repeats in a `title` attribute.
+ */
+const detailField = (fieldId: string, value: string): string =>
+  `<div class="col-md-12 col-lg-12 col-xl-12 detcard mt-1 d-flex justify-content-between" data-nss="nssview" data-field-id="${fieldId}">` +
+  `<span class="det-textitle" data-toggle="tooltip" title="${fieldId}">${fieldId} :</span>` +
+  `<span class="det-textval" data-toggle="tooltip" title="${value}"> ${value}</span></div>`;
+
+type DetailPageOptions = {
+  ecli: string;
+  /**
+   * The court's headnote, which the portal prints only for the decisions it
+   * selects for its collection. `pravnivetaanv` states ano/ne for every
+   * decision either way, so the fixture always carries both.
+   */
+  legalSentence?: string | undefined;
+};
+
+const detailPage = ({ ecli, legalSentence }: DetailPageOptions): string => {
+  const fields = [
+    detailField("ecli", ecli),
+    detailField("druhdokumentuavyrokrozhodnuti", "Rozsudek"),
+    detailField("datumvydanirozhodnuti", "10.06.2026"),
+    ...(legalSentence === undefined
+      ? []
+      : [detailField("pravnivetaupravena", legalSentence)]),
+    detailField("pravnivetaanv", legalSentence === undefined ? "ne" : "ano"),
+  ].join("");
+  return `<html><body>${fields}</body></html>`;
+};
 
 // ── Fetch stub ───────────────────────────────────────────
 
@@ -187,6 +215,8 @@ type StubOptions = {
   documentStatus?: number;
   /** Status for the detail page alone; defaults to `documentStatus`. */
   detailStatus?: number;
+  /** The headnote the detail page states, if the court wrote one. */
+  legalSentence?: string | undefined;
 };
 
 const htmlResponse = (body: string, status = 200): Response =>
@@ -199,6 +229,7 @@ const installStub = ({
   continuation = [],
   documentStatus = 200,
   detailStatus = documentStatus,
+  legalSentence,
   search = [],
 }: StubOptions): { requests: RecordedRequest[] } => {
   const requests: RecordedRequest[] = [];
@@ -230,7 +261,12 @@ const installStub = ({
         }
         if (url.pathname.startsWith("/DokumentDetail/Index/")) {
           return detailStatus === 200
-            ? htmlResponse(detailPage("ECLI:CZ:MSPH:2026:1.Az.4.2026.79"))
+            ? htmlResponse(
+                detailPage({
+                  ecli: "ECLI:CZ:MSPH:2026:1.Az.4.2026.79",
+                  legalSentence,
+                }),
+              )
             : htmlResponse("", detailStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Html/")) {
@@ -1245,6 +1281,101 @@ describe("cz-nss buildDecision", () => {
     // buys this row no sheet.
     expect(outcome.result.sheetNumber).toBeUndefined();
     expect(outcome.result.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026");
+  });
+
+  /** The court's own words, as it writes them under `Právní věta (text)`. */
+  const HEADNOTE =
+    "Rozhodnutí v místním referendu, která jsou ze zákona neplatná " +
+    "(§ 48 odst. 1 zákona č. 22/2004 Sb., o místním referendu), správní soudy " +
+    "z hlediska dalších vad způsobujících neplatnost rozhodnutí nepřezkoumávají.";
+
+  /** Crawl one decision the portal states this headnote for, or none. */
+  const crawledWithHeadnote = async (legalSentence?: string) => {
+    installStub({
+      legalSentence,
+      search: [
+        htmlResponse(searchPage({ statedCount: 1, rows: [MUNICIPAL_ROW] })),
+      ],
+    });
+    const listed = await reconciliation.listSlicePage({
+      slice: SLICE,
+      page: 0,
+    });
+    installStub({ legalSentence, search: [] });
+    const built = await reconciliation.buildDecision(
+      throughJsonb(listed.items.at(0)?.payload),
+    );
+    if (built.type !== "built") {
+      throw new TypeError("Expected the fixture decision to build");
+    }
+    return built.decision;
+  };
+
+  test("the court's headnote reaches the row's publisher summary", async () => {
+    const decision = await crawledWithHeadnote(HEADNOTE);
+
+    expect(decision.metadata["legalSentence"]).toBe(HEADNOTE);
+    // The key is worth writing only where the summary reader looks, so the
+    // reader answers here rather than the spelling being trusted on its own.
+    expect(
+      publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
+    ).toBe(HEADNOTE);
+  });
+
+  test("the ano/ne flag beside the headnote is not the headnote", async () => {
+    const withHeadnote = await crawledWithHeadnote(HEADNOTE);
+    const without = await crawledWithHeadnote();
+
+    // `pravnivetaanv` states ano/ne for every decision and sits beside
+    // `pravnivetaupravena`; a reader keyed on the shared prefix would store
+    // "ne" as the sentence for the whole corpus.
+    expect(withHeadnote.metadata["legalSentence"]).toBe(HEADNOTE);
+    expect(without.metadata["legalSentence"]).toBeUndefined();
+    expect(
+      publisherSummaryOf({ documentAst: null, metadata: without.metadata }),
+    ).not.toBe("ne");
+  });
+
+  test("a replay carries the headnote the crawl read, and cannot add one", async () => {
+    const decision = await crawledWithHeadnote(HEADNOTE);
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+
+    const replayed = async (metadata: Record<string, unknown>) =>
+      await reparse({
+        raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+        contentType: decision.sourceRawContentType ?? null,
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+        metadata,
+      } satisfies StoredRawReparseInput);
+
+    const carried = await replayed(decision.metadata);
+    // The stored payload is the decision document; the headnote is a field of
+    // the detail page. A replay therefore keeps what the crawl wrote and
+    // cannot recover the sentence for a row stored without it.
+    const { legalSentence: _dropped, ...withoutHeadnote } = decision.metadata;
+    const bare = await replayed(withoutHeadnote);
+
+    expect(carried.type).toBe("parsed");
+    expect(bare.type).toBe("parsed");
+    if (carried.type !== "parsed" || bare.type !== "parsed") {
+      return;
+    }
+    expect(carried.result.metadata["legalSentence"]).toBe(HEADNOTE);
+    expect(bare.result.metadata["legalSentence"]).toBeUndefined();
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {

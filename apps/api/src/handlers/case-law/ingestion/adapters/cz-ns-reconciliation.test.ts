@@ -23,6 +23,7 @@ import {
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(czNsAdapter);
@@ -100,14 +101,47 @@ const DECISION_BODY =
   "takto: Dovolání se odmítá. Odůvodnění: Soud prvního stupně rozsudkem zamítl žalobu. " +
   "JUDr. Pavel Horák, Ph.D.\npředseda senátu";
 
-const detailPageHtml = (docket: string): string => {
+/**
+ * The headnote row, which the page carries for every decision: a spacer image
+ * where the court wrote none, and its own words where it did. Unlike the rows
+ * above, the value is not a `<font>` run, so it runs to the cell's close.
+ */
+const legalSentenceRowHtml = (value: string | undefined): string => {
+  const cell =
+    value === undefined
+      ? `<img width="1" height="1" src="/icons/ecblank.gif" border="0" alt="">`
+      : `<b>${value}</b>`;
+  return (
+    `<tr valign="top"><td class="left-part" width="17%"><b><font face="Times New Roman">Právní věta:</font></b></td>` +
+    `<td class="right-part" style="text-align: justify;" width="83%">${cell}</td></tr>`
+  );
+};
+
+/** The annotation row, printed only where the court wrote one. */
+const abstractRowHtml = (value: string): string =>
+  `<tr valign="top"><td class="left-part" width="17%"><b><font face="Times New Roman">Anotace:</font></b></td>` +
+  `<td class="right-part" width="83%"><details><summary></summary><p>${value}</p></details></td></tr>`;
+
+type DetailPageOptions = {
+  /** The court's headnote, for a decision it selected for its collection. */
+  legalSentence?: string | undefined;
+  /** The court's case annotation, printed beside the headnote. */
+  abstract?: string | undefined;
+};
+
+const detailPageHtml = (
+  docket: string,
+  { abstract, legalSentence }: DetailPageOptions = {},
+): string => {
   const rows = [
+    legalSentenceRowHtml(legalSentence),
     detailRowHtml("Datum rozhodnutí", "28. 5. 2026"),
     detailRowHtml("Spisová značka", docket),
     detailRowHtml("ECLI", "ECLI:CZ:NS:2026:30.CDO.3000.2025.1"),
     detailRowHtml("Typ rozhodnutí", "ROZSUDEK"),
     detailRowHtml("Heslo", "Dovolání"),
     detailRowHtml("Kategorie rozhodnutí", "E"),
+    ...(abstract === undefined ? [] : [abstractRowHtml(abstract)]),
   ].join("");
   return `<!DOCTYPE HTML><html><body><table>${rows}</table><font face="Times New Roman">${DECISION_BODY}</font></body></html>`;
 };
@@ -120,11 +154,18 @@ type MockOptions = {
   listing?: { body: string; status?: number | undefined } | undefined;
   detailStatus?: number | undefined;
   printStatus?: number | undefined;
+  /** What the detail page's headnote and annotation rows state. */
+  summary?: DetailPageOptions | undefined;
 };
 
 const requestedUrls: string[] = [];
 
-const mockFetch = ({ detailStatus, listing, printStatus }: MockOptions) => {
+const mockFetch = ({
+  detailStatus,
+  listing,
+  printStatus,
+  summary,
+}: MockOptions) => {
   globalThis.fetch = asFetchMock((input: string | URL | Request) => {
     const url = input instanceof Request ? input.url : String(input);
     requestedUrls.push(url);
@@ -146,7 +187,7 @@ const mockFetch = ({ detailStatus, listing, printStatus }: MockOptions) => {
     }
     if (url.includes("/WebSearch/")) {
       return Promise.resolve(
-        new Response(detailPageHtml(DOCKET.FIRST), {
+        new Response(detailPageHtml(DOCKET.FIRST, summary), {
           status: detailStatus ?? 200,
           headers: { "Content-Type": "text/html" },
         }),
@@ -588,6 +629,63 @@ describe("cz-ns buildDecision", () => {
     expect(built.decision.legacySourceUrls).toEqual([
       built.decision.sourceUrl ?? "",
     ]);
+  });
+
+  /** The court's own words, as it writes them under `Právní věta:`. */
+  const HEADNOTE =
+    "Uloží-li soud rodičům povinnost účastnit se mimosoudního smírčího nebo " +
+    "mediačního jednání, jde o rozhodnutí, jímž se upravuje řízení, a proti " +
+    "takovému rozhodnutí není odvolání přípustné.";
+
+  /** The court's own annotation, as it writes it under `Anotace:`. */
+  const ANNOTATION =
+    "Okresní soud uložil rodičům povinnost účastnit se mediačního jednání. " +
+    "Krajský soud odvolání matky odmítl jako nepřípustné.";
+
+  /** Crawl one decision whose detail page states these summary rows. */
+  const crawledWithSummary = async (summary: DetailPageOptions) => {
+    mockFetch({ printStatus: 404, summary });
+    const built = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: DOCKET.FIRST,
+    });
+    if (built.type !== "built") {
+      throw new TypeError("Expected the fixture decision to build");
+    }
+    return built.decision;
+  };
+
+  test("the court's headnote and annotation reach the row's publisher summary", async () => {
+    const decision = await crawledWithSummary({
+      abstract: ANNOTATION,
+      legalSentence: HEADNOTE,
+    });
+
+    expect(decision.metadata["legalSentence"]).toBe(HEADNOTE);
+    expect(decision.metadata["abstract"]).toBe(ANNOTATION);
+    // The keys are worth writing only where the summary reader looks, and the
+    // headnote is the more specific of the two, so it is what a reader gets.
+    expect(
+      publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
+    ).toBe(HEADNOTE);
+  });
+
+  test("an annotation the court wrote no headnote for is still a summary", async () => {
+    const decision = await crawledWithSummary({ abstract: ANNOTATION });
+
+    expect(decision.metadata["legalSentence"]).toBeUndefined();
+    expect(
+      publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
+    ).toBe(ANNOTATION);
+  });
+
+  test("the spacer the court prints for a decision it wrote neither for is not a summary", async () => {
+    const decision = await crawledWithSummary({});
+
+    // The headnote row is on every page; where the court wrote nothing it
+    // holds a one-pixel spacer image, which must not be stored as a sentence.
+    expect(decision.metadata["legalSentence"]).toBeUndefined();
+    expect(decision.metadata["abstract"]).toBeUndefined();
   });
 
   test("a detail page that does not come back is reported, never written", async () => {

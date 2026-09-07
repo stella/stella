@@ -705,6 +705,7 @@ type DetailMetadata = {
   caseStatus: string | undefined;
   administrativeAuthority: string | undefined;
   citation: string | undefined;
+  legalSentence: string | undefined;
 };
 
 /** Extract a div's value text by its ID, skipping the label span. */
@@ -752,6 +753,7 @@ const EMPTY_DETAIL: DetailMetadata = {
   caseStatus: undefined,
   administrativeAuthority: undefined,
   citation: undefined,
+  legalSentence: undefined,
 };
 
 /**
@@ -809,6 +811,12 @@ const fetchDetailMetadata = async (
         caseStatus: extractDivText(html, "stavrizeni"),
         administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
         citation: extractDivText(html, "citace"),
+        // The headnote the court writes for a decision it selects into its
+        // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
+        // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
+        // and the field is on the detail page alone: neither document
+        // endpoint carries it.
+        legalSentence: extractDivText(html, "pravnivetaupravena"),
       },
     };
   } catch {
@@ -893,6 +901,7 @@ const rowToResult = (
       caseStatus: detail.caseStatus,
       administrativeAuthority: detail.administrativeAuthority,
       citation: detail.citation,
+      legalSentence: detail.legalSentence,
     },
     // Fulltext is parser output, not publisher identity. Keeping it out makes
     // crawl and replay converge on the same source hash after parser changes.
