@@ -51,7 +51,29 @@
       "minimumSystemVersion": "10.15"
     },
     "windows": {
-      "signCommand": "trusted-signing-cli -e %AZURE_ENDPOINT% -a %AZURE_CODE_SIGNING_ACCOUNT% -c %AZURE_CERT_PROFILE% -d \"Stella desktop\" %1"
+      "signCommand": "trusted-signing-cli -e %AZURE_ENDPOINT% -a %AZURE_CODE_SIGNING_ACCOUNT% -c %AZURE_CERT_PROFILE% -d \"Stella desktop\" %1",
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "../nsis/header.bmp",
+        "sidebarImage": "../nsis/sidebar.bmp",
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": [
+          "English",
+          "Arabic",
+          "Czech",
+          "German",
+          "Spanish",
+          "Estonian",
+          "French",
+          "Hungarian",
+          "Lithuanian",
+          "Latvian",
+          "Polish",
+          "PortugueseBR",
+          "Slovak"
+        ]
+      }
     }
   },
   "plugins": {
