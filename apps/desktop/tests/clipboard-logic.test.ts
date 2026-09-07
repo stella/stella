@@ -5,6 +5,7 @@ import {
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardItemLink,
   clipboardPointerMoved,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
@@ -658,5 +659,63 @@ test("formatClipboardAge uses stable low-noise buckets", () => {
     type: "elapsed",
     unit: "day",
     value: 3,
+  });
+});
+
+describe("clipboardItemLink", () => {
+  const linkOf = (plainText: string) =>
+    clipboardItemLink({ ...TEXT_ITEM, plainText });
+
+  test("reads https, http and www clips", () => {
+    expect(linkOf("https://example.com/deal")).toEqual({
+      host: "example.com",
+      url: "https://example.com/deal",
+    });
+    expect(linkOf("http://docs.example.co.uk/a?b=1")?.host).toBe(
+      "docs.example.co.uk",
+    );
+    expect(linkOf("www.example.com/deal")).toEqual({
+      host: "example.com",
+      url: "https://www.example.com/deal",
+    });
+  });
+
+  test("reads a mailto clip as its address", () => {
+    expect(linkOf("mailto:counsel@example.com")).toEqual({
+      host: "counsel@example.com",
+      url: "mailto:counsel@example.com",
+    });
+  });
+
+  test("ignores scheme case and surrounding whitespace", () => {
+    expect(linkOf("  HTTPS://Example.com  ")).toEqual({
+      host: "example.com",
+      url: "https://example.com/",
+    });
+  });
+
+  test("keeps text that merely contains a link as text", () => {
+    expect(linkOf("See https://example.com for the filing")).toBeNull();
+    expect(linkOf("https://example.com\nhttps://example.org")).toBeNull();
+  });
+
+  test("rejects a clip longer than the link cap", () => {
+    expect(linkOf(`https://example.com/${"a".repeat(2048)}`)).toBeNull();
+  });
+
+  test("rejects a clip that is not a link", () => {
+    expect(linkOf("Share purchase agreement")).toBeNull();
+    expect(linkOf("example.com")).toBeNull();
+    expect(linkOf("ftp://example.com/filing.zip")).toBeNull();
+    expect(clipboardItemLink(IMAGE_ITEM)).toBeNull();
+  });
+
+  test("reads a formatted clip whose plain text is a link", () => {
+    expect(
+      clipboardItemLink({
+        ...FORMATTED_ITEM,
+        plainText: "https://example.com/exhibit",
+      })?.host,
+    ).toBe("example.com");
   });
 });

@@ -142,6 +142,7 @@
     "groups": "Skupiny",
     "itemCount": "{count, plural, one {1 položka} few {{count} položky} other {{count} položiek}}",
     "keyboardNavigate": "← → prechádzať",
+    "link": "Odkaz",
     "local": "Miestne",
     "memoryOnly": "Šifrované úložisko nie je dostupné. História zostane len do ukončenia stella desktop.",
     "moreOptions": "Ďalšie možnosti",

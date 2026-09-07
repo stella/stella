@@ -144,6 +144,7 @@
     "groups": "Groups",
     "itemCount": "{count, plural, one {1 item} other {{count} items}}",
     "keyboardNavigate": "← → navigate",
+    "link": "Link",
     "local": "Local",
     "memoryOnly": "Encrypted storage is unavailable. History will be kept only until stella desktop quits.",
     "moreOptions": "More options",

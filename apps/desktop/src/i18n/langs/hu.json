@@ -142,6 +142,7 @@
     "groups": "Csoportok",
     "itemCount": "{count, plural, one {1 elem} other {{count} elem}}",
     "keyboardNavigate": "← → navigálás",
+    "link": "Hivatkozás",
     "local": "Helyi",
     "memoryOnly": "A titkosított tárhely nem érhető el. Az előzmények csak a stella desktop bezárásáig maradnak meg.",
     "moreOptions": "További lehetőségek",

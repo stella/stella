@@ -34,6 +34,7 @@ import {
   FolderPlusIcon,
   ImageIcon,
   KeyboardIcon,
+  LinkIcon,
   LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
@@ -97,6 +98,7 @@ import {
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardItemLink,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -334,7 +336,9 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
-  const fallbackName = item.type === "image" ? t("image") : t("unnamedClip");
+  const link = clipboardItemLink(item);
+  const fallbackName =
+    item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
   // An unnamed browser copy is named after the page it came from.
   const untitledName =
     item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
@@ -412,6 +416,11 @@ const ClipboardCard = ({
       <ImageIcon aria-hidden="true" className="text-muted-foreground size-6" />
     );
   }
+  if (link) {
+    metadataIcon = (
+      <LinkIcon aria-hidden="true" className="text-muted-foreground size-6" />
+    );
+  }
   if (groupName) {
     metadataIcon = (
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
@@ -437,6 +446,9 @@ const ClipboardCard = ({
   }
   if (item.type === "image") {
     metadataTitle = t("image");
+  }
+  if (link) {
+    metadataTitle = t("link");
   }
 
   const beginNameEdit = () => {
