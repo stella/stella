@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -95,7 +97,10 @@ const dateValueToIsoDateTime = (
     return value;
   }
 
-  return new Date(`${value}T00:00:00.000Z`).toISOString();
+  return Temporal.PlainDate.from(value)
+    .toZonedDateTime("UTC")
+    .toInstant()
+    .toString({ fractionalSecondDigits: 3 });
 };
 
 const requiredDateValueToIsoDateTime = (value: Date | string): string => {
@@ -107,7 +112,10 @@ const requiredDateValueToIsoDateTime = (value: Date | string): string => {
     return value;
   }
 
-  return new Date(`${value}T00:00:00.000Z`).toISOString();
+  return Temporal.PlainDate.from(value)
+    .toZonedDateTime("UTC")
+    .toInstant()
+    .toString({ fractionalSecondDigits: 3 });
 };
 
 const dateExprForProperty = (propertyId: string) => {

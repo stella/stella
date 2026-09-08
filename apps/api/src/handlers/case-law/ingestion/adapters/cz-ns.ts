@@ -1,5 +1,7 @@
 import { Result, panic } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -747,10 +749,10 @@ const czNsDaySlices = createCalendarDaySliceWalk({
 
 /** The publisher's own date literal for a slice: `DD.MM.YYYY`. */
 const czNsSliceDate = (slice: string): string => {
-  const start = czNsDaySlices.dayStart(slice);
-  const day = String(start.getUTCDate()).padStart(2, "0");
-  const month = String(start.getUTCMonth() + 1).padStart(2, "0");
-  return `${day}.${month}.${String(start.getUTCFullYear()).padStart(4, "0")}`;
+  const start = Temporal.PlainDate.from(slice);
+  const day = String(start.day).padStart(2, "0");
+  const month = String(start.month).padStart(2, "0");
+  return `${day}.${month}.${String(start.year).padStart(4, "0")}`;
 };
 
 /**

@@ -31,6 +31,8 @@ import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { detached } from "@/api/lib/detached";
@@ -152,7 +154,7 @@ const buildAwsS3Client = async (): Promise<CachedClient> => {
         }
       : {}),
   });
-  return { client, createdAt: Date.now() };
+  return { client, createdAt: Temporal.Now.instant().epochMilliseconds };
 };
 
 const buildStsClient = async (): Promise<CachedStsClient> => {
@@ -169,7 +171,7 @@ const buildStsClient = async (): Promise<CachedStsClient> => {
         }
       : {}),
   });
-  return { client, createdAt: Date.now() };
+  return { client, createdAt: Temporal.Now.instant().epochMilliseconds };
 };
 
 /**
@@ -187,7 +189,10 @@ const buildStsClient = async (): Promise<CachedStsClient> => {
 const getAwsS3Client = async (): Promise<AwsS3Client> => {
   if (_clientPromise) {
     const cached = await _clientPromise;
-    if (Date.now() - cached.createdAt < CLIENT_MAX_AGE_MS) {
+    if (
+      Temporal.Now.instant().epochMilliseconds - cached.createdAt <
+      CLIENT_MAX_AGE_MS
+    ) {
       return cached.client;
     }
   }
@@ -205,7 +210,10 @@ const getAwsS3Client = async (): Promise<AwsS3Client> => {
 const getStsClient = async (): Promise<STSClient> => {
   if (_stsClientPromise) {
     const cached = await _stsClientPromise;
-    if (Date.now() - cached.createdAt < CLIENT_MAX_AGE_MS) {
+    if (
+      Temporal.Now.instant().epochMilliseconds - cached.createdAt <
+      CLIENT_MAX_AGE_MS
+    ) {
       return cached.client;
     }
   }
@@ -301,7 +309,7 @@ const scopedClientCacheKey = (
 export const hasScopedSessionTimeForPresign = ({
   expiresAt,
   expiresIn,
-  now = Date.now(),
+  now = Temporal.Now.instant().epochMilliseconds,
 }: {
   expiresAt: number;
   expiresIn: number;
@@ -356,7 +364,7 @@ const buildScopedAwsS3Client = async (
     client,
     expiresAt:
       credentials.Expiration?.getTime() ??
-      Date.now() + SCOPED_SESSION_SECONDS * 1000,
+      Temporal.Now.instant().epochMilliseconds + SCOPED_SESSION_SECONDS * 1000,
   };
 };
 

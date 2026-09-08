@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { StoreApi } from "zustand";
 
 import { isTaskStatus } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import {
@@ -126,7 +127,7 @@ const getNextInspectorBroadcastClock = (
   previousClock: InspectorBroadcastClock | null,
   senderId: string,
 ): InspectorBroadcastClock => {
-  const now = Date.now();
+  const now = Temporal.Now.instant().epochMilliseconds;
   if (previousClock === null) {
     return { senderId, updatedAt: now };
   }

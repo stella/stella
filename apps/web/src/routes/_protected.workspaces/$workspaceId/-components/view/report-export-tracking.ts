@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -52,7 +53,10 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
       },
       track: (reportExport) => {
         set((state) => {
-          const trackedAt = nextTrackedAt(state.exports, Date.now());
+          const trackedAt = nextTrackedAt(
+            state.exports,
+            Temporal.Now.instant().epochMilliseconds,
+          );
           const exports = retainNewestTrackedExports([
             ...Object.values(state.exports),
             { ...reportExport, trackedAt },

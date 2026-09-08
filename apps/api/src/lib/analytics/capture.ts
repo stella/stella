@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { getAnalytics } from "@/api/lib/analytics/client";
 import type { ExceptionProperties } from "@/api/lib/analytics/types";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
@@ -183,7 +185,10 @@ const captureErrorWithOptions = (
   // reproducing a tight failure loop needs every occurrence.
   logDevError(error, properties);
 
-  const suppressed = admitCapture(captureWindowKey(properties), Date.now());
+  const suppressed = admitCapture(
+    captureWindowKey(properties),
+    Temporal.Now.instant().epochMilliseconds,
+  );
   if (suppressed === null) {
     return;
   }

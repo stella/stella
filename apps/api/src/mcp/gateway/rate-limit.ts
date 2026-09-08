@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -43,7 +45,7 @@ export const createMcpGatewayRateLimiter = ({
       connectionTimeout: commandTimeoutMs,
       enableOfflineQueue: false,
     }),
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
   onRedisError = (error) => {
     logger.warn("mcp.gateway.rate_limit.redis_failed", {
       "error.type": errorTag(error),

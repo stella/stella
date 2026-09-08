@@ -4,6 +4,7 @@ import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter
 import { PlusIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { CalendarCell } from "@stll/ui/calendar";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -59,10 +60,13 @@ export const CalendarDayCell = ({
   const displayEntries = expanded ? entries : visible;
 
   const dayNum = Number.parseInt(day.date.slice(8), 10);
-  const announcementDate = format.dateTime(new Date(`${day.date}T00:00:00Z`), {
-    dateStyle: "long",
-    timeZone: "UTC",
-  });
+  const announcementDate = format.dateTime(
+    Temporal.PlainDate.from(day.date).toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds,
+    { dateStyle: "long", timeZone: "UTC" },
+  );
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);

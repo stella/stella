@@ -2,10 +2,11 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   PreviewCard,
@@ -215,7 +216,12 @@ export const MatterCard = ({
 
 /** Color-code recency: today = foreground, this week = muted, older = faded. */
 const getRecencyClass = (date: Date | string): string => {
-  const age = Date.now() - new Date(date).getTime();
+  const timestamp =
+    date instanceof Date
+      ? Temporal.Instant.fromEpochMilliseconds(date.getTime())
+      : Temporal.Instant.from(date);
+  const age =
+    Temporal.Now.instant().epochMilliseconds - timestamp.epochMilliseconds;
   if (age < DAY_IN_MS) {
     return "text-foreground text-xs";
   }
@@ -238,13 +244,25 @@ const getDeadlineInfo = (deadline: string | null): DeadlineInfo | null => {
     return null;
   }
 
-  const dueDate = new Date(`${deadline}T23:59:59`);
-  if (Number.isNaN(dueDate.getTime())) {
+  const dueDate = Result.try(() =>
+    Temporal.PlainDate.from(deadline).toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("23:59:59"),
+      timeZone: Temporal.Now.timeZoneId(),
+    }),
+  ).unwrapOr(null);
+  if (dueDate === null) {
     return null;
   }
-  const now = Date.now();
-  const diff = dueDate.getTime() - now;
-  const label = formatRelativeTime(new Date(`${deadline}T00:00:00`));
+  const now = Temporal.Now.instant().epochMilliseconds;
+  const diff = dueDate.toInstant().epochMilliseconds - now;
+  const label = formatRelativeTime(
+    Temporal.PlainDate.from(deadline)
+      .toZonedDateTime({
+        plainTime: Temporal.PlainTime.from("00:00"),
+        timeZone: Temporal.Now.timeZoneId(),
+      })
+      .toInstant(),
+  );
 
   if (diff < 0) {
     return {

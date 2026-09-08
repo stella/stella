@@ -1,5 +1,7 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -204,7 +206,7 @@ for (const row of withCelex) {
 }
 
 const report = {
-  generatedAt: new Date().toISOString(),
+  generatedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
   counts: {
     rows: rows.length,
     distinctCelex: distinctCelex.length,

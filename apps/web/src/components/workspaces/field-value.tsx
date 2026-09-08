@@ -3,6 +3,7 @@ import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { formatMoneyCents } from "@stll/money";
+import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -409,8 +410,8 @@ const DateFieldValue = ({
 }) => {
   const format = useFormatter();
 
-  const date = content.value ? new Date(content.value) : null;
-  if (!date || Number.isNaN(date.getTime())) {
+  const date = content.value ? parsePlainDate(content.value) : null;
+  if (date === null) {
     if (variant === "table") {
       return (
         <SelectFieldValue
@@ -424,12 +425,18 @@ const DateFieldValue = ({
     return <EmptyFieldValue variant={variant} />;
   }
 
-  const formatted = format.dateTime(date, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  const formatted = format.dateTime(
+    date.toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds,
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    },
+  );
 
   if (variant === "kanban") {
     return (

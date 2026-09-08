@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 // The per-origin XDG registry cache (spec 051 S5.3). One file per server origin
 // under `$XDG_CACHE_HOME/stella/registry/<origin-hash>.json` (`~/.cache/...`
 // fallback). The cache lets a `tools/list` fetched once (at `auth login` or on a
@@ -7,11 +8,10 @@
 // This module is I/O-bounded (reads/writes the cache file); pure helpers
 // (`computeDelta`, `isCacheStale`, `isDeltaEmpty`) are exported for the runtime
 // path and its tests. It stores no secrets: only public tool listings.
-
-import { Result } from "better-result";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 
 import {
   type StableStringifyInput,
@@ -84,11 +84,11 @@ export const isCacheStale = (
   file: RegistryCacheFile,
   nowMs: number,
 ): boolean => {
-  const fetchedAtMs = Date.parse(file.fetchedAt);
-  if (Number.isNaN(fetchedAtMs)) {
+  const fetchedAt = Result.try(() => Temporal.Instant.from(file.fetchedAt));
+  if (fetchedAt.isErr()) {
     return true;
   }
-  return nowMs - fetchedAtMs > file.ttlSeconds * 1000;
+  return nowMs - fetchedAt.value.epochMilliseconds > file.ttlSeconds * 1000;
 };
 
 /** True when a delta has no additions, removals, or changes. */

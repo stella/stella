@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -53,7 +53,7 @@ type DesktopEditSessionAuthorizationResult =
 export const SESSION_TOKEN_TTL_MS = DAY_IN_MS;
 
 export const computeTokenExpiresAt = () =>
-  new Date(Date.now() + SESSION_TOKEN_TTL_MS);
+  new Date(Temporal.Now.instant().epochMilliseconds + SESSION_TOKEN_TTL_MS);
 
 const SESSION_TOKEN_PART_LENGTH = 32;
 
@@ -98,7 +98,9 @@ export const refreshDesktopEditSessionLiveness = async ({
 export const DESKTOP_EDIT_HANDOFF_TTL_MS = 2 * 60 * 1000;
 
 export const computeDesktopEditHandoffExpiresAt = () =>
-  new Date(Date.now() + DESKTOP_EDIT_HANDOFF_TTL_MS);
+  new Date(
+    Temporal.Now.instant().epochMilliseconds + DESKTOP_EDIT_HANDOFF_TTL_MS,
+  );
 
 export const createDesktopEditHandoffToken = createDesktopEditSessionToken;
 

@@ -2,6 +2,8 @@ import { Result, TaggedError } from "better-result";
 import type { PreContext } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
+import { Temporal } from "@stll/time";
+
 import { env } from "@/api/env";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
@@ -114,7 +116,7 @@ export const createSecurityCanaryAlertDeduplicator = ({
       connectionTimeout: commandTimeoutMs,
       enableOfflineQueue: false,
     }),
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
 }: SecurityCanaryAlertDeduplicatorOptions = {}) => {
   let redis: RedisLike | null = null;
   let redisConnection: Promise<void> | null = null;

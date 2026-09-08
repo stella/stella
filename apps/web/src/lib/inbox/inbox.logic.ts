@@ -1,14 +1,17 @@
+import { Result } from "better-result";
+
 import { SIGNAL_SEVERITIES } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
+import { Temporal } from "@stll/time";
 
 /** Local-calendar day key; items created on the same day group together. */
-export const inboxDayKey = (createdAt: string): string => {
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) {
-    return createdAt;
-  }
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-};
+export const inboxDayKey = (createdAt: string): string =>
+  Result.try(() =>
+    Temporal.Instant.from(createdAt)
+      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+      .toPlainDate()
+      .toString(),
+  ).unwrapOr(createdAt);
 
 /** Higher severity sorts first; ties keep feed order (newest first). */
 export const severityRank = (severity: SignalSeverity): number =>
@@ -51,15 +54,27 @@ export const groupInboxDays = <T extends DayGroupable>(
 /** Snooze presets: tomorrow 09:00 local, or next Monday 09:00 local. */
 export const snoozeUntil = (
   preset: "tomorrow" | "next-week",
-  now: Date = new Date(),
+  now: Date | Temporal.Instant = Temporal.Now.instant(),
 ): Date => {
-  const target = new Date(now);
-  target.setHours(9, 0, 0, 0);
+  const target = (
+    now instanceof Date
+      ? Temporal.Instant.fromEpochMilliseconds(now.getTime())
+      : now
+  )
+    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+    .with({
+      hour: 9,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+      microsecond: 0,
+      nanosecond: 0,
+    });
   if (preset === "tomorrow") {
-    target.setDate(target.getDate() + 1);
-    return target;
+    return new Date(target.add({ days: 1 }).toInstant().epochMilliseconds);
   }
-  const daysUntilMonday = (8 - target.getDay()) % 7 || 7;
-  target.setDate(target.getDate() + daysUntilMonday);
-  return target;
+  const daysUntilMonday = (8 - target.dayOfWeek) % 7 || 7;
+  return new Date(
+    target.add({ days: daysUntilMonday }).toInstant().epochMilliseconds,
+  );
 };

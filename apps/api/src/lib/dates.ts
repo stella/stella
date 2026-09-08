@@ -3,7 +3,7 @@
 // The grammar and calendar checks these build on live in `@stll/time`, which
 // both apps share.
 
-import { isoDateParts, type IsoDateParts } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 
 /** Length of the `YYYY-MM-DD` prefix a decision date is canonicalized to. */
 const ISO_DATE_LENGTH = 10;
@@ -52,21 +52,9 @@ const isoDatePrefix = (raw: string): string | null => {
   return raw.slice(0, ISO_DATE_LENGTH);
 };
 
-/**
- * True when the parts name a day that exists on the Gregorian calendar.
- *
- * Checked with UTC fields: a local-time `Date` also rejects a day the host's
- * timezone skipped (Pacific/Apia has no 2011-12-30, having crossed the date
- * line), which would make the same record acceptable or not depending on
- * where the code runs. UTC skips no days.
- */
-const isUtcCalendarDay = ({ year, month, day }: IsoDateParts): boolean => {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
+const plainCalendarDay = (raw: string): Temporal.PlainDate | null => {
+  const candidate = isoDatePrefix(raw);
+  return candidate === null ? null : parsePlainDate(candidate);
 };
 
 /**
@@ -79,15 +67,8 @@ const isUtcCalendarDay = ({ year, month, day }: IsoDateParts): boolean => {
  * carry no decision semantics.
  */
 export const isoCalendarDay = (raw: string): string | null => {
-  const candidate = isoDatePrefix(raw);
-  if (candidate === null) {
-    return null;
-  }
-  const parts = isoDateParts(candidate);
-  if (parts === null || !isUtcCalendarDay(parts)) {
-    return null;
-  }
-  return candidate;
+  const candidate = plainCalendarDay(raw);
+  return candidate?.toString() ?? null;
 };
 
 /**
@@ -101,30 +82,33 @@ export const isoCalendarDay = (raw: string): string | null => {
  * front of the write.
  */
 export const canonicalDecisionDate = (raw: string): string | null => {
-  const candidate = isoCalendarDay(raw);
+  const candidate = plainCalendarDay(raw);
   if (candidate === null) {
     return null;
   }
-  const year = Number(candidate.slice(0, 4));
-  if (year < DECISION_DATE_BOUNDS.minYear) {
+  if (candidate.year < DECISION_DATE_BOUNDS.minYear) {
     return null;
   }
-  // ISO dates compare correctly as text, and the ceiling is a UTC day so the
-  // host's time zone cannot move it.
-  const ceiling = toUtcDateString(
-    addUtcDays(new Date(), DECISION_DATE_BOUNDS.daysAhead),
-  );
-  if (candidate > ceiling) {
+  const ceiling = Temporal.Now.plainDateISO("UTC").add({
+    days: DECISION_DATE_BOUNDS.daysAhead,
+  });
+  if (Temporal.PlainDate.compare(candidate, ceiling) > 0) {
     return null;
   }
-  return candidate;
+  return candidate.toString();
 };
+
+const utcPlainDate = (date: Date): Temporal.PlainDate =>
+  Temporal.Instant.fromEpochMilliseconds(date.getTime())
+    .toZonedDateTimeISO("UTC")
+    .toPlainDate();
 
 /** Add calendar days using UTC fields, for UTC-backed date cursors. */
 export const addUtcDays = (date: Date, n: number): Date => {
-  const result = new Date(date);
-  result.setUTCDate(result.getUTCDate() + n);
-  return result;
+  const zonedDate = Temporal.Instant.fromEpochMilliseconds(
+    date.getTime(),
+  ).toZonedDateTimeISO("UTC");
+  return new Date(zonedDate.add({ days: n }).epochMilliseconds);
 };
 
 /**
@@ -135,4 +119,4 @@ export const addUtcDays = (date: Date, n: number): Date => {
  * local-calendar rendering of the same instant does not.
  */
 export const toUtcDateString = (date: Date): string =>
-  date.toISOString().slice(0, ISO_DATE_LENGTH);
+  utcPlainDate(date).toString();

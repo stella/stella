@@ -12,6 +12,8 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { Temporal } from "@stll/time";
+
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
@@ -650,10 +652,13 @@ const waitForSharedDockerServices = async ({
   infraPorts: InfraPorts;
   rootDir: string;
 }) => {
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   let lastFailure = "service status has not been read yet";
 
-  while (Date.now() - startedAt < DOCKER_SERVICES_READY_TIMEOUT_MS) {
+  while (
+    Temporal.Now.instant().epochMilliseconds - startedAt <
+    DOCKER_SERVICES_READY_TIMEOUT_MS
+  ) {
     const statuses = readSharedDockerServiceStatuses({
       infraOffset,
       infraPorts,
@@ -1192,10 +1197,10 @@ const waitForHttpReadiness = async ({
   validate,
 }: HttpReadinessWaitOptions) => {
   const pollUntilReady = async () => {
-    const startedAt = Date.now();
+    const startedAt = Temporal.Now.instant().epochMilliseconds;
     let lastFailure = "service did not respond yet";
 
-    while (Date.now() - startedAt < timeoutMs) {
+    while (Temporal.Now.instant().epochMilliseconds - startedAt < timeoutMs) {
       try {
         // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- readiness poll: each probe observes the service after the previous backoff
         const response = await fetch(url, {

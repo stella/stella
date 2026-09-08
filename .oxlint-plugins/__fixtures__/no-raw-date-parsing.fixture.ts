@@ -12,7 +12,6 @@ declare const year: string;
 declare const month: string;
 declare const day: string;
 declare const isoTimestamp: string;
-declare const rawInput: string;
 declare const lookbackDays: number;
 
 // --- Flagged: date-only string/template arguments (UTC-midnight shift) ---
@@ -24,10 +23,6 @@ const _dateOnlyTemplate = new Date(`${year}-${month}-${day}`);
 const _dateOnlyGrouped = new Date("2024-01-01");
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
 const _dateOnlyTyped = new Date("2024-01-01" satisfies string);
-
-// --- Flagged: Date.parse (engine-dependent for non-ISO input) ---
-// oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
-const _parsed = Date.parse(rawInput);
 
 // --- Flagged: raw day-length ms arithmetic (DST-unsafe as calendar math) ---
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
@@ -58,7 +53,6 @@ export const noRawDateParsingFixture = [
   _dateOnlyTemplate,
   _dateOnlyGrouped,
   _dateOnlyTyped,
-  _parsed,
   _dayChain,
   _dayChainWithFactor,
   _dayChainReordered,

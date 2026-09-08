@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -72,7 +74,7 @@ const defaultDependencies = (
   let localNextRequestAt = 0;
   const localRedis: PublisherGateClient = {
     send: () => {
-      const now = Date.now();
+      const now = Temporal.Now.instant().epochMilliseconds;
       const slot = Math.max(now, localNextRequestAt);
       localNextRequestAt = slot + intervalMs;
       return slot - now;

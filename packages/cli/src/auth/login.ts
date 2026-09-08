@@ -1,11 +1,11 @@
+import { Result } from "better-result";
 // Orchestrates `stella auth login`: PKCE authorization-code flow against
 // stella's own oauthProvider, with a loopback listener as the primary
 // transport and a manual URL/code paste as the fallback for headless
 // environments (see module comments in `loopback-listener.ts` and
 // `manual-callback.ts`).
-
-import { Result } from "better-result";
 import { createInterface } from "node:readline/promises";
+import { Temporal } from "temporal-polyfill/full";
 
 import { openInBrowser } from "./browser-open.js";
 import {
@@ -347,7 +347,7 @@ export const login = async (
       ? decodeIdTokenClaims(token.id_token)
       : undefined;
 
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     const credential: StoredCredential = {
       accessToken: token.access_token,
       clientId,

@@ -19,7 +19,7 @@
 
 import { panic } from "better-result";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
@@ -428,7 +428,10 @@ const inFlightCycles = new Set<string>();
 const cyclesSinceWatchdogTick = new Set<string>();
 
 const writeHeartbeat = () => {
-  void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
+  void Bun.write(
+    HEARTBEAT_PATH,
+    Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+  ).catch(() => {
     // Non-fatal; health check will notice staleness
   });
 };
@@ -698,14 +701,8 @@ const ensureSource = async (
   return created;
 };
 
-const daysAgoCursor = (n: number): string => {
-  const d = new Date(Date.now() - n * DAY_IN_MS);
-  const date = d.toISOString().split("T")[0];
-  if (!date) {
-    panic("Invalid date format");
-  }
-  return date;
-};
+const daysAgoCursor = (days: number): string =>
+  Temporal.Now.plainDateISO("UTC").subtract({ days }).toString();
 
 /**
  * Run a single ingestion cycle for one adapter.
@@ -1335,7 +1332,7 @@ export const runCaseLawIngest = async (
         ),
       errorTag,
       isDraining,
-      now: Date.now,
+      now: () => Temporal.Now.instant().epochMilliseconds,
       report: (summary) => {
         // Work waiting and nothing examined is the one outcome a log of
         // successes cannot express, so it leaves a structured record of its
@@ -1609,7 +1606,7 @@ export const runCaseLawIngest = async (
             }),
         ),
       isDraining,
-      now: Date.now,
+      now: () => Temporal.Now.instant().epochMilliseconds,
       report: (summary) => {
         logInfo(
           `[sk-documents] case_law.sk_documents.swept ` +
@@ -1707,7 +1704,7 @@ export const runCaseLawIngest = async (
     await runCaseLawReconciliationLoop({
       sources: reconcilable,
       isDraining,
-      now: Date.now,
+      now: () => Temporal.Now.instant().epochMilliseconds,
       report: (summary) => {
         logInfo(
           `[reconciliation] case_law.reconciliation.swept ` +
@@ -1762,7 +1759,7 @@ export const runCaseLawIngest = async (
     await runSourceTotalPoll({
       adapters: pollableAdapters,
       isDraining,
-      now: Date.now,
+      now: () => Temporal.Now.instant().epochMilliseconds,
       readTotals: async () => await readSourceReportedTotals(ingestionDb),
       recordTotal: async ({ adapterKey, asOf, total }) =>
         await setSourceReportedTotal({

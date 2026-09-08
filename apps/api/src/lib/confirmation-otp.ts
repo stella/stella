@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { randomInt } from "node:crypto";
 
+import { Temporal } from "@stll/time";
+
 import { user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -69,7 +71,10 @@ export const createConfirmationOtp = async ({
           id,
           identifier,
           value: otp,
-          expiresAt: new Date(Date.now() + CONFIRMATION_OTP_EXPIRY_MS),
+          expiresAt: new Date(
+            Temporal.Now.instant().epochMilliseconds +
+              CONFIRMATION_OTP_EXPIRY_MS,
+          ),
         });
       });
 
@@ -149,7 +154,9 @@ export const consumeConfirmationOtp = async (
         });
       }
 
-      if (consumed.expiresAt.getTime() < Date.now()) {
+      if (
+        consumed.expiresAt.getTime() < Temporal.Now.instant().epochMilliseconds
+      ) {
         throw new HandlerError({
           ...(errorCode ? { code: errorCode.expired } : {}),
           status: 400,

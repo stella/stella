@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
@@ -942,7 +943,9 @@ const raiseReviewTask = async ({
           ? {
               ...(actorIsMember ? { ownerUserId: actorUserId } : {}),
               // A gate is due the moment the run reaches it.
-              workingTargetDate: new Date().toISOString().slice(0, 10),
+              workingTargetDate: Temporal.Now.instant()
+                .toString({ fractionalSecondDigits: 3 })
+                .slice(0, 10),
             }
           : {}),
       },

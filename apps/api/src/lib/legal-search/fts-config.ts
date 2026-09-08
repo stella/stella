@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * FTS configuration resolver for case law decisions.
  *
@@ -34,7 +35,7 @@ let cached: {
 
 /** Load FTS configs from the database, caching for 60 s. */
 const loadFtsConfigs = async (): Promise<Map<string, FtsConfig>> => {
-  if (cached && Date.now() < cached.expiresAt) {
+  if (cached && Temporal.Now.instant().epochMilliseconds < cached.expiresAt) {
     return cached.map;
   }
 
@@ -48,7 +49,10 @@ const loadFtsConfigs = async (): Promise<Map<string, FtsConfig>> => {
     });
   }
 
-  cached = { map, expiresAt: Date.now() + CACHE_TTL_MS };
+  cached = {
+    map,
+    expiresAt: Temporal.Now.instant().epochMilliseconds + CACHE_TTL_MS,
+  };
   return map;
 };
 

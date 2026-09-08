@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Read-only memory retrieval for the chat system prompt.
  *
@@ -7,9 +8,9 @@
  * UNTRUSTED suffix so it crosses the anonymizer before reaching a
  * third-party model.
  */
-
-import { Result } from "better-result";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+
+import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { aiMemories } from "@/api/db/schema";
@@ -133,7 +134,9 @@ export const buildMemoryPromptParts = async ({
       // Keep injected memories out of the curator's stale/archive sweep.
       // The interval guard usually matches zero rows, so the write cost
       // on the per-message chat path stays negligible.
-      const stampCutoff = new Date(Date.now() - STAMP_MIN_INTERVAL_MS);
+      const stampCutoff = new Date(
+        Temporal.Now.instant().epochMilliseconds - STAMP_MIN_INTERVAL_MS,
+      );
       const stampResult = await safeDb(async (tx) => {
         // audit: skip — usage-recency bookkeeping (lastUsedAt); no
         // content or governance change.

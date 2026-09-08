@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
@@ -165,7 +167,9 @@ const lockCellOnManualEdit = async ({
       ? existing.lockProvenance
       : {
           lockedBy: userId,
-          lockedAt: new Date().toISOString(),
+          lockedAt: Temporal.Now.instant().toString({
+            fractionalSecondDigits: 3,
+          }),
           reason: "manual-edit" as const,
         };
 

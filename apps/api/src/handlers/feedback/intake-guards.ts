@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * Abuse guards for the public, unauthenticated feedback intake
  * (`POST /public/feedback`). This is an unauthenticated write endpoint, so it
@@ -100,7 +101,7 @@ export const createFeedbackIntakeGuards = ({
       connectionTimeout: commandTimeoutMs,
       enableOfflineQueue: false,
     }),
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
   onRedisError = (error) => {
     logger.warn("feedback.intake.redis_failed", {
       "error.type": errorTag(error),

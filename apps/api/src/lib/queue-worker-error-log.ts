@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { connectionErrorFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -59,7 +61,7 @@ export const createQueueWorkerErrorLogger = (
     }
     suppressedSinceLastLog += 1;
     lastSuppressedError = error;
-    const nowMs = Date.now();
+    const nowMs = Temporal.Now.instant().epochMilliseconds;
     const sinceLastLog = nowMs - lastLoggedAtMs;
     // The first transient of an episode reports immediately: `lastLoggedAtMs`
     // starts at 0, so the interval has always elapsed. Without that the onset
@@ -85,7 +87,7 @@ export const createQueueWorkerErrorLogger = (
       if (suppressedSinceLastLog === 0) {
         return;
       }
-      report(lastSuppressedError, Date.now());
+      report(lastSuppressedError, Temporal.Now.instant().epochMilliseconds);
     }, TRANSIENT_LOG_INTERVAL_MS - sinceLastLog);
     pendingFlush.unref();
   };

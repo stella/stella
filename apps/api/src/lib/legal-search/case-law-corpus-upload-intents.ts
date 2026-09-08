@@ -1,7 +1,7 @@
 import { Result, TaggedError, panic } from "better-result";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -114,7 +114,9 @@ export const reserveCaseLawCorpusUploadIntent = async ({
     }
 
     const intentId = createSafeId<"caseLawCorpusUploadIntent">();
-    const leaseExpiresAt = new Date(Date.now() + CORPUS_UPLOAD_INTENT_LEASE_MS);
+    const leaseExpiresAt = new Date(
+      Temporal.Now.instant().epochMilliseconds + CORPUS_UPLOAD_INTENT_LEASE_MS,
+    );
     const reserved = (
       await tx
         .insert(caseLawCorpusUploadIntents)
@@ -159,7 +161,10 @@ export const reserveCaseLawCorpusUploadIntent = async ({
         .for("update")
         .limit(1)
     ).at(0);
-    if (!active || active.leaseExpiresAt.getTime() > Date.now()) {
+    if (
+      !active ||
+      active.leaseExpiresAt.getTime() > Temporal.Now.instant().epochMilliseconds
+    ) {
       return { type: "busy" };
     }
 

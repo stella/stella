@@ -11,6 +11,8 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationCorpusIndexDeleteWatermarks,
@@ -475,7 +477,9 @@ export const reconcileNextLegislationCorpusIndexDelete = async (
         pendingDocuments,
         stale:
           oldestPendingAt !== null &&
-          Date.now() - oldestPendingAt.getTime() >= DELETE_SETTLEMENT_STALE_MS,
+          Temporal.Now.instant().epochMilliseconds -
+            oldestPendingAt.getTime() >=
+            DELETE_SETTLEMENT_STALE_MS,
         settled: pendingDocuments === 0,
       };
     },

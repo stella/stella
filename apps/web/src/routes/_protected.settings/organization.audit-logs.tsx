@@ -26,7 +26,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -382,6 +382,7 @@ function AuditLogsTableBody({
   data,
 }: AuditLogsTableBodyProps) {
   const t = useTranslations();
+  const format = useFormatter();
   if (isLoading) {
     return (
       <TableRow>
@@ -426,7 +427,14 @@ function AuditLogsTableBody({
       {data.items.map((log) => (
         <TableRow key={log.id}>
           <TableCell className="text-xs whitespace-nowrap">
-            {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
+            {format.dateTime(new Date(log.createdAt).getTime(), {
+              year: "numeric",
+              month: "numeric",
+              day: "numeric",
+              hour: "numeric",
+              minute: "numeric",
+              second: "numeric",
+            })}
           </TableCell>
           <TableCell className="font-mono text-xs">
             <bdi>{log.actor}</bdi>

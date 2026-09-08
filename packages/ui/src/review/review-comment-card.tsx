@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { CheckIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { Temporal } from "temporal-polyfill/full";
 
 import { BidiText } from "../components/bidi-text";
 import { Button } from "../components/button";
@@ -131,5 +132,7 @@ const toIsoInstant = (timestamp: string | Date): string | undefined => {
   }
   return Number.isNaN(timestamp.getTime())
     ? undefined
-    : timestamp.toISOString();
+    : Temporal.Instant.fromEpochMilliseconds(timestamp.getTime()).toString({
+        fractionalSecondDigits: 3,
+      });
 };

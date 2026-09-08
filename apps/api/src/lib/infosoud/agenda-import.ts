@@ -6,6 +6,7 @@ import {
   parseInfoSoudDateTime,
 } from "@stll/infosoud";
 import type { CaseEvent, CaseSearchResult, HearingEvent } from "@stll/infosoud";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
@@ -280,7 +281,9 @@ const getStatus = (
   if (date === null) {
     return TASK_STATUS.DONE;
   }
-  return date.getTime() <= Date.now() ? TASK_STATUS.DONE : TASK_STATUS.OPEN;
+  return date.getTime() <= Temporal.Now.instant().epochMilliseconds
+    ? TASK_STATUS.DONE
+    : TASK_STATUS.OPEN;
 };
 
 const buildEventAgendaItem = (

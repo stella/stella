@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import {
   buildRecapTranscript,
   type RecapMessage,
@@ -38,7 +40,8 @@ Write in the same language as the conversation. Be specific: name the actual top
 
 /** Whether the latest message is old enough to count as a revisit. */
 export const isThreadStaleForRecap = (lastMessageCreatedAt: Date): boolean =>
-  Date.now() - lastMessageCreatedAt.getTime() > RECAP_STALENESS_THRESHOLD_MS;
+  Temporal.Now.instant().epochMilliseconds - lastMessageCreatedAt.getTime() >
+  RECAP_STALENESS_THRESHOLD_MS;
 
 const stripRecapPrefix = (value: string): string => {
   const prefix = "recap:";

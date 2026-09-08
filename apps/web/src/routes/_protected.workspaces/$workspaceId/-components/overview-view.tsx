@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { compareCodeUnit } from "@stll/collation";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Menu,
@@ -62,7 +64,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
-import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
+import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -112,13 +114,29 @@ type UpcomingMenuState = {
 
 // ── Helpers ───────────────────────────────────────────────
 
-const getLocaleDayLabel = (
-  dayIndex: number,
-  locale: string,
-  firstWeekday: number,
-) => {
-  const date = new Date(2026, 0, 4 + firstWeekday + dayIndex);
-  return date.toLocaleDateString(locale, WEEKDAY_INITIAL_FORMAT).toUpperCase();
+const getLocaleDayLabel = (dayIndex: number, firstWeekday: number) => {
+  const date = Temporal.PlainDate.from("2026-01-04").add({
+    days: firstWeekday + dayIndex,
+  });
+  return getFormatter()
+    .dateTime(
+      date.toZonedDateTime({
+        plainTime: Temporal.PlainTime.from("00:00"),
+        timeZone: "UTC",
+      }).epochMilliseconds,
+      { ...WEEKDAY_INITIAL_FORMAT, timeZone: "UTC" },
+    )
+    .toUpperCase();
+};
+
+const toDateTimeEpoch = (value: string): number => {
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return Temporal.PlainDate.from(value).toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds;
+  }
+  return Temporal.Instant.from(value).epochMilliseconds;
 };
 
 // Round to one decimal and render the locale's translated `hour` unit, so the
@@ -280,11 +298,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   // Re-compute the current date when the user returns to the
   // tab so the heatmap refreshes across day/week boundaries.
-  const [today, setToday] = useState(() => toISODate(new Date()));
+  const [today, setToday] = useState(() =>
+    Temporal.Now.instant()
+      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+      .toPlainDate()
+      .toString(),
+  );
   useMountEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        setToday(toISODate(new Date()));
+        setToday(
+          Temporal.Now.instant()
+            .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+            .toPlainDate()
+            .toString(),
+        );
       }
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -294,14 +322,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
   const weekStart = useMemo(
-    () => getWeekStart(locale, new Date(`${today}T12:00:00`)),
+    () => getWeekStart(locale, Temporal.PlainDate.from(today)),
     [today, locale],
   );
-  const weekEnd = useMemo(() => {
-    const end = new Date(weekStart);
-    end.setDate(end.getDate() + 6);
-    return end;
-  }, [weekStart]);
+  const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
   const { data: timeSummary } = useQuery({
     ...routeQueryOptions(
@@ -326,16 +350,14 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   });
 
   // Previous week for trend comparison
-  const prevWeekStart = useMemo(() => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() - 7);
-    return d;
-  }, [weekStart]);
-  const prevWeekEnd = useMemo(() => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() - 1);
-    return d;
-  }, [weekStart]);
+  const prevWeekStart = useMemo(
+    () => weekStart.subtract({ days: 7 }),
+    [weekStart],
+  );
+  const prevWeekEnd = useMemo(
+    () => weekStart.subtract({ days: 1 }),
+    [weekStart],
+  );
 
   const { data: previousTimeSummary } = useQuery({
     ...routeQueryOptions(
@@ -362,12 +384,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return teamTimeSummary.members.map((member) => {
       const daily = Array.from({ length: 7 }, () => 0);
       for (const entry of member.daily) {
-        const parts = entry.dateWorked.split("-").map(Number);
-        const year = parts[0] ?? 0;
-        const month = parts[1] ?? 1;
-        const day = parts[2] ?? 1;
-        const entryDate = new Date(year, month - 1, day);
-        const dayIdx = (entryDate.getDay() - firstWeekday + 7) % 7;
+        const entryDate = Temporal.PlainDate.from(entry.dateWorked);
+        const dayIdx = ((entryDate.dayOfWeek % 7) - firstWeekday + 7) % 7;
         daily[dayIdx] = (daily[dayIdx] ?? 0) + entry.totalMinutes / 60;
       }
 
@@ -391,11 +409,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             task.status !== "done" &&
             task.status !== "cancelled",
         )
-        .toSorted(
-          (a, b) =>
-            new Date(a.dueDate ?? 0).getTime() -
-            new Date(b.dueDate ?? 0).getTime(),
-        ),
+        .toSorted((a, b) => compareCodeUnit(a.dueDate ?? "", b.dueDate ?? "")),
     [tasks],
   );
 
@@ -456,10 +470,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             if (!date) {
               return "—";
             }
-            return new Date(date).toLocaleDateString(
-              getFormattingLocale(),
-              DAY_AND_MONTH_FORMAT,
-            );
+            return getFormatter().dateTime(toDateTimeEpoch(date), {
+              ...DAY_AND_MONTH_FORMAT,
+              timeZone: "UTC",
+            });
           })()}
         />
         {timeBillingEnabled && (
@@ -588,9 +602,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                             {task.dueDate && (
                               <>
                                 {task.assignedTo ? " · " : ""}
-                                {new Date(task.dueDate).toLocaleDateString(
-                                  getFormattingLocale(),
-                                  DAY_AND_MONTH_FORMAT,
+                                {getFormatter().dateTime(
+                                  toDateTimeEpoch(task.dueDate),
+                                  { ...DAY_AND_MONTH_FORMAT, timeZone: "UTC" },
                                 )}
                               </>
                             )}
@@ -748,7 +762,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     className="text-muted-foreground text-center text-[0.625rem]"
                     key={i}
                   >
-                    {getLocaleDayLabel(i, locale, firstWeekday)}
+                    {getLocaleDayLabel(i, firstWeekday)}
                   </span>
                 ))}
                 <span className="hidden sm:block" />
@@ -782,7 +796,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         {member.daily.map((hours, dayIdx) => {
                           const dayLabel = getLocaleDayLabel(
                             dayIdx,
-                            locale,
                             firstWeekday,
                           );
                           const opacity = maxDaily > 0 ? hours / maxDaily : 0;

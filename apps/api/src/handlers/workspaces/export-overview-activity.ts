@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+import { Temporal } from "@stll/time";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -137,7 +138,9 @@ const exportOverviewActivity = createSafeHandler(
 
     return Result.ok(
       matterActivityExportResponse({
-        exportedAt: new Date().toISOString(),
+        exportedAt: Temporal.Now.instant().toString({
+          fractionalSecondDigits: 3,
+        }),
         filters,
         format: query.format,
         items: page.items,

@@ -1,8 +1,8 @@
-// `stella auth login|logout|whoami|switch` (spec 051 Phase 2).
-
 import { buildCommand, buildRouteMap } from "@stricli/core";
+// `stella auth login|logout|whoami|switch` (spec 051 Phase 2).
 import type { RouteMap } from "@stricli/core";
 import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import {
   CLI_DEFAULT_RESOURCE_SCOPES,
@@ -28,7 +28,10 @@ const stringFlag = (brief: string) =>
 const requiredStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", parse: parseString }) as const;
 
-const formatDate = (epochMs: number): string => new Date(epochMs).toISOString();
+const formatDate = (epochMs: number): string =>
+  Temporal.Instant.fromEpochMilliseconds(epochMs).toString({
+    fractionalSecondDigits: 3,
+  });
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -205,7 +208,7 @@ export const runWhoami = async ({
     ...(account ? [`Account: ${account}`] : []),
     `Organization: ${info.orgLabel ? `${info.orgLabel} (${info.orgId})` : info.orgId}`,
     `Scopes: ${info.scope}`,
-    `Expires: ${formatDate(info.expiresAt)} (${describeExpiry(info.expiresAt, Date.now())})`,
+    `Expires: ${formatDate(info.expiresAt)} (${describeExpiry(info.expiresAt, Temporal.Now.instant().epochMilliseconds)})`,
     `Refresh token: ${info.hasRefreshToken ? "yes" : "no"}`,
   ];
   if (info.claims?.sub) {

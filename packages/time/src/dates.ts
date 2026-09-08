@@ -1,76 +1,46 @@
-// Guards against the two most common date footguns: UTC/local-midnight drift
-// when parsing a bare calendar-date string, and DST-unsafe day arithmetic via
-// millisecond math. Both apps parsed and stepped calendar dates with their own
-// copy of this; the copies agreed, which is exactly why one of them could have
-// drifted unnoticed.
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
-const ISO_DATE_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 /**
- * True when `value` has the `YYYY-MM-DD` shape `parseIsoDateLocal` accepts.
- * Does not check that the date exists on the calendar (e.g. "2024-02-30"
- * passes this guard but `parseIsoDateLocal` still rejects it).
+ * True when `value` has the `YYYY-MM-DD` shape. This guard does not check
+ * whether the date exists; use `parsePlainDate` for calendar validation.
  */
 export const isIsoDateString = (value: string): boolean =>
   ISO_DATE_PATTERN.test(value);
 
-/**
- * Parse a `YYYY-MM-DD` calendar-date string as LOCAL midnight.
- *
- * `new Date("2024-01-01")` parses as UTC midnight per the ECMAScript spec;
- * rendering it in any timezone west of UTC (e.g. US, most of the Americas)
- * shows the previous day. This builds the `Date` from the individual parts
- * instead, so it always lands on the intended calendar day in the local
- * timezone.
- *
- * Returns `null` for a malformed string or a day/month that does not exist
- * on the calendar, instead of silently rolling over (e.g. "2024-02-30").
- */
-export type IsoDateParts = {
-  year: number;
-  month: number;
-  day: number;
-};
-
-/**
- * Numeric parts of a `YYYY-MM-DD` string, or `null` when it does not have
- * that shape. Says nothing about whether the parts name a real calendar day;
- * the two callers below check that in the calendar each of them means.
- */
-export const isoDateParts = (value: string): IsoDateParts | null => {
-  const groups = ISO_DATE_PATTERN.exec(value)?.groups;
-  const yearStr = groups?.["year"];
-  const monthStr = groups?.["month"];
-  const dayStr = groups?.["day"];
-  if (!yearStr || !monthStr || !dayStr) {
+/** A real ISO calendar day, independent of the host timezone. */
+export const parsePlainDate = (value: string): Temporal.PlainDate | null => {
+  if (!isIsoDateString(value)) {
     return null;
   }
-  return {
-    year: Number(yearStr),
-    month: Number(monthStr),
-    day: Number(dayStr),
-  };
+  return Result.try(() => Temporal.PlainDate.from(value)).unwrapOr(null);
 };
 
+/**
+ * Parse a `YYYY-MM-DD` calendar date at local midnight.
+ *
+ * A date-only `Date` string is UTC, which renders as the previous day west of
+ * UTC. This resolves the day through Temporal in the runtime's timezone, then
+ * adapts the resulting instant to `Date`. Malformed, nonexistent, and locally
+ * skipped calendar days return `null`.
+ */
 export const parseIsoDateLocal = (value: string): Date | null => {
-  const parts = isoDateParts(value);
-  if (parts === null) {
+  const plainDate = parsePlainDate(value);
+  if (plainDate === null) {
     return null;
   }
 
-  const { year, month, day } = parts;
-  const date = new Date(year, month - 1, day);
+  const zonedDate = plainDate.toZonedDateTime(Temporal.Now.timeZoneId());
 
-  // `Date` rolls over out-of-range parts (e.g. Feb 30 -> Mar 2) instead of
-  // throwing; reject anything that didn't round-trip to the input date.
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
+  // A local `Date` cannot represent a calendar day a timezone skipped, such
+  // as 2011-12-30 in Pacific/Apia. Keep this adapter's nullable contract while
+  // `parsePlainDate` remains valid for calendar-only work in every timezone.
+  if (!zonedDate.toPlainDate().equals(plainDate)) {
     return null;
   }
-  return date;
+  return new Date(zonedDate.epochMilliseconds);
 };
 
 /**
@@ -78,12 +48,12 @@ export const parseIsoDateLocal = (value: string): Date | null => {
  *
  * Adding `n * 24 * 60 * 60 * 1000` milliseconds breaks across a DST
  * transition: the transition day is 23 or 25 hours, so a fixed 24h step
- * over- or under-shoots the intended calendar day. This adds to the
- * day-of-month part instead and lets `Date` resolve the wall-clock time,
- * so the result always lands on the correct calendar date `n` days later.
+ * over- or under-shoots the intended calendar day. Temporal adds calendar
+ * days in the runtime's timezone while preserving local wall-clock time.
  */
 export const addDays = (date: Date, n: number): Date => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + n);
-  return result;
+  const zonedDate = Temporal.Instant.fromEpochMilliseconds(
+    date.getTime(),
+  ).toZonedDateTimeISO(Temporal.Now.timeZoneId());
+  return new Date(zonedDate.add({ days: n }).epochMilliseconds);
 };

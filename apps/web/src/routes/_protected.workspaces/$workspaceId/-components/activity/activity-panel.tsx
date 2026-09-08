@@ -22,6 +22,7 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -1050,22 +1051,24 @@ const HorizontalMilestoneFrame = ({
   dateAt: string | undefined;
 }) => {
   const format = useFormatter();
-  const date = new Date(activityAt);
+  const timestamp = Temporal.Instant.from(activityAt).epochMilliseconds;
   return (
     <article className="animate-in fade-in-0 slide-in-from-right-1 rtl:slide-in-from-left-1 w-64 shrink-0 snap-start duration-300 motion-reduce:animate-none">
       <div className="text-muted-foreground h-5 pe-8 text-[13px] font-medium tabular-nums">
         {dateAt
-          ? format.dateTime(new Date(dateAt), { dateStyle: "long" })
+          ? format.dateTime(Temporal.Instant.from(dateAt).epochMilliseconds, {
+              dateStyle: "long",
+            })
           : null}
       </div>
       <Tooltip
-        content={format.dateTime(date, FULL_DATE_LONG_TIME_FORMAT)}
+        content={format.dateTime(timestamp, FULL_DATE_LONG_TIME_FORMAT)}
         render={
           <time
             className="text-muted-foreground mt-1 block h-4 pe-8 text-[11px] tabular-nums"
             dateTime={activityAt}
           >
-            {format.dateTime(date, { timeStyle: "short" })}
+            {format.dateTime(timestamp, { timeStyle: "short" })}
           </time>
         }
       />
@@ -1151,6 +1154,7 @@ const ActivityRunRow = ({
 
 const TimelineDateMarker = ({ activityAt }: { activityAt: string }) => {
   const format = useFormatter();
+  const timestamp = Temporal.Instant.from(activityAt).epochMilliseconds;
   return (
     <div className="grid min-h-11 grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]">
       <span aria-hidden="true" />
@@ -1168,7 +1172,7 @@ const TimelineDateMarker = ({ activityAt }: { activityAt: string }) => {
         className="text-muted-foreground flex items-center ps-3 pe-4 text-xs font-medium tabular-nums"
         dateTime={activityAt}
       >
-        {format.dateTime(new Date(activityAt), { dateStyle: "long" })}
+        {format.dateTime(timestamp, { dateStyle: "long" })}
       </time>
     </div>
   );
@@ -1184,17 +1188,17 @@ const TimelineEntry = ({
   marker: ReactElement;
 }) => {
   const format = useFormatter();
-  const date = new Date(activityAt);
+  const timestamp = Temporal.Instant.from(activityAt).epochMilliseconds;
   return (
     <div className="group grid grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]">
       <Tooltip
-        content={format.dateTime(date, FULL_DATE_LONG_TIME_FORMAT)}
+        content={format.dateTime(timestamp, FULL_DATE_LONG_TIME_FORMAT)}
         render={
           <time
             className="text-muted-foreground flex items-start justify-end pe-1 pt-3 text-[11px] tabular-nums"
             dateTime={activityAt}
           >
-            {format.dateTime(date, { timeStyle: "short" })}
+            {format.dateTime(timestamp, { timeStyle: "short" })}
           </time>
         }
       />
@@ -1304,7 +1308,7 @@ const ActivityList = ({
                     dateTime={item.activityAt}
                   >
                     {format.dateTime(
-                      new Date(item.activityAt),
+                      Temporal.Instant.from(item.activityAt).epochMilliseconds,
                       MEDIUM_DATE_SHORT_TIME_FORMAT,
                     )}
                   </time>
@@ -1373,7 +1377,7 @@ const ActivityDetailsSheet = ({
       value: (
         <time dateTime={item.activityAt}>
           {format.dateTime(
-            new Date(item.activityAt),
+            Temporal.Instant.from(item.activityAt).epochMilliseconds,
             FULL_DATE_LONG_TIME_FORMAT,
           )}
         </time>
@@ -1399,7 +1403,8 @@ const ActivityDetailsSheet = ({
                         <span className="text-muted-foreground mt-0.5 block text-xs leading-4 tabular-nums">
                           <time dateTime={batchItem.activityAt}>
                             {format.dateTime(
-                              new Date(batchItem.activityAt),
+                              Temporal.Instant.from(batchItem.activityAt)
+                                .epochMilliseconds,
                               MEDIUM_DATE_SHORT_TIME_FORMAT,
                             )}
                           </time>

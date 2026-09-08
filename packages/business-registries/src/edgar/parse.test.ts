@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Temporal } from "temporal-polyfill/full";
 
 import appleFixture from "./__fixtures__/cik-apple.json" with { type: "json" };
 import { parseAddress, parseSubmission } from "./parse.js";
@@ -6,7 +7,9 @@ import type { EdgarRawSubmission } from "./types.js";
 
 // Pin "now" relative to the fixture so the derived status test stays
 // deterministic regardless of when the suite runs.
-const APPLE_FIXTURE_NOW = Date.parse("2026-06-01T00:00:00Z");
+const APPLE_FIXTURE_NOW = Temporal.Instant.from(
+  "2026-06-01T00:00:00Z",
+).epochMilliseconds;
 
 // SAFETY: the captured EDGAR fixture is a real `data.sec.gov`
 // response trimmed to 5 filings; its shape matches `EdgarRawSubmission`
@@ -143,12 +146,32 @@ describe("parseSubmission (Apple fixture)", () => {
 
   test("derives stale status when the most recent filing is old", () => {
     const stale = parseSubmission(apple, {
-      now: Date.parse("2030-01-01T00:00:00Z"),
+      now: Temporal.Instant.from("2030-01-01T00:00:00Z").epochMilliseconds,
     });
     expect(stale.status).toEqual({
       type: "stale",
       lastFilingDate: "2026-05-29",
     });
+  });
+
+  test("does not derive active status from a nonexistent filing day", () => {
+    const out = parseSubmission(
+      {
+        cik: "0000000123",
+        name: "Invalid Filing Date Inc.",
+        entityType: "operating",
+        filings: {
+          recent: {
+            accessionNumber: ["invalid-date"],
+            filingDate: ["2026-02-30"],
+            form: ["8-K"],
+          },
+        },
+      },
+      { now: APPLE_FIXTURE_NOW },
+    );
+
+    expect(out.status).toEqual({ type: "unknown" });
   });
 
   test("treats missing filings as unknown even when entityType is operating", () => {

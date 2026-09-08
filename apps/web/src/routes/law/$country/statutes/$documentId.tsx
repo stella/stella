@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { parsePlainDate } from "@stll/time";
 import { OutlineRail } from "@stll/ui/outline-rail";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -52,15 +53,12 @@ import {
   toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-
 /**
  * A calendar day, not merely a date-shaped string: `2026-02-30` matches the
  * pattern and is not a day, and the reader must not ask the corpus for it.
  */
 const isCalendarDate = (value: string): boolean =>
-  ISO_DATE_PATTERN.test(value) &&
-  new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);
+  parsePlainDate(value) !== null;
 
 /**
  * `asOf` names the day whose law the reader wants. Anything else is dropped

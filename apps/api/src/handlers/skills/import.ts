@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -128,7 +130,8 @@ const importSkillsFromUrls = createSafeRootHandler(
     const failed = [...deduplicated.failed];
     const { items } = deduplicated;
     const fetchContext = createSkillPackageFetchContext({
-      deadlineAt: Date.now() + SKILL_IMPORT_TIMEOUT_MS,
+      deadlineAt:
+        Temporal.Now.instant().epochMilliseconds + SKILL_IMPORT_TIMEOUT_MS,
       maxRequests: SKILL_IMPORT_MAX_REQUESTS,
     });
     const importAt = async (index: number): Promise<void> => {

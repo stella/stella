@@ -23,6 +23,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { localISODate } from "@/lib/local-iso-date";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import {
@@ -87,13 +88,7 @@ export const TimeEntryForm = ({
     billingCodesOptions(workspaceId, "activity"),
   );
 
-  const today = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  })();
+  const today = localISODate();
 
   const form = useForm({
     defaultValues: {

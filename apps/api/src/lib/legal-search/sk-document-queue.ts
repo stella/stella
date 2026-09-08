@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * The order the deferred court documents are fetched in.
  *
@@ -80,7 +81,7 @@ export type PendingDocumentQueueOptions = {
  */
 export const createPendingDocumentQueue = ({
   loaders,
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
   pageSize,
   requestedPollIntervalMs,
 }: PendingDocumentQueueOptions): PendingDocumentQueue => {

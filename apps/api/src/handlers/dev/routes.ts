@@ -5,6 +5,7 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import {
   contacts,
@@ -92,7 +93,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     const orgId = ctx.session.activeOrganizationId;
     const userId = ctx.user.id;
     if (!seedInFlight) {
-      const startedAt = new Date().toISOString();
+      const startedAt = Temporal.Now.instant().toString({
+        fractionalSecondDigits: 3,
+      });
       seedStatus = { status: "running", startedAt };
       seedInFlight = (async () => {
         try {
@@ -101,13 +104,17 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           seedStatus = {
             status: "succeeded",
             startedAt,
-            finishedAt: new Date().toISOString(),
+            finishedAt: Temporal.Now.instant().toString({
+              fractionalSecondDigits: 3,
+            }),
           };
         } catch (error: unknown) {
           seedStatus = {
             status: "failed",
             startedAt,
-            finishedAt: new Date().toISOString(),
+            finishedAt: Temporal.Now.instant().toString({
+              fractionalSecondDigits: 3,
+            }),
             message: getErrorMessage(error),
           };
         } finally {
@@ -228,7 +235,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
         return getFirmKnowledgeJobResponse(job);
       }
 
-      const startedAt = new Date().toISOString();
+      const startedAt = Temporal.Now.instant().toString({
+        fractionalSecondDigits: 3,
+      });
       const job = firmKnowledgeJobs.create({
         organizationId,
         parameters,
@@ -256,13 +265,17 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           firmKnowledgeJobs.update(job.id, {
             status: "succeeded",
             startedAt,
-            finishedAt: new Date().toISOString(),
+            finishedAt: Temporal.Now.instant().toString({
+              fractionalSecondDigits: 3,
+            }),
           } satisfies FirmKnowledgeSeedStatus);
         } catch (error: unknown) {
           firmKnowledgeJobs.update(job.id, {
             status: "failed",
             startedAt,
-            finishedAt: new Date().toISOString(),
+            finishedAt: Temporal.Now.instant().toString({
+              fractionalSecondDigits: 3,
+            }),
             message: getErrorMessage(error),
           } satisfies FirmKnowledgeSeedStatus);
         } finally {

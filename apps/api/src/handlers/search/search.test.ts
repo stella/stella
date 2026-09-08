@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -7,8 +7,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 const searchMock = mock();
-
-const realDateNow = Date.now;
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
@@ -80,10 +78,6 @@ describe("search handler workspace scoping", () => {
       nextCursor: null,
       totalCount: 0,
     });
-  });
-
-  afterEach(() => {
-    Date.now = realDateNow;
   });
 
   test("passes the caller's accessible workspace allowlist for global searches", async () => {

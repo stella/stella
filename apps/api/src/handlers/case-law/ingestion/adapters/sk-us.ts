@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -32,7 +33,7 @@
  * at the bottom of this file.
  */
 
-import { Result, panic } from "better-result";
+import { Temporal } from "@stll/time";
 
 import {
   ADAPTER_KEYS,
@@ -633,13 +634,19 @@ const parseSlice = (slice: string): SliceMonth => {
 const formatSlice = ({ month, year }: SliceMonth): string =>
   `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
 
-const skUsSliceOf = (now: Date): string =>
-  formatSlice({ year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 });
+const skUsSliceOf = (now: Date): string => {
+  const day = Temporal.Instant.fromEpochMilliseconds(
+    now.getTime(),
+  ).toZonedDateTimeISO("UTC");
+  return formatSlice({ year: day.year, month: day.month });
+};
 
 /** Step a slice by whole months, normalizing the year through UTC. */
 const stepSlice = (slice: string, months: number): string => {
   const { month, year } = parseSlice(slice);
-  return skUsSliceOf(new Date(Date.UTC(year, month - 1 + months, 1)));
+  return Temporal.PlainYearMonth.from({ year, month })
+    .add({ months })
+    .toString();
 };
 
 const skUsNextSlice = (slice: string): string | null => {
@@ -655,8 +662,7 @@ const skUsPreviousSlice = (slice: string): string | null => {
 /** The publisher's own filter bounds for a slice: the month, end to end. */
 const sliceDateRange = (slice: string): SearchDateRange => {
   const { month, year } = parseSlice(slice);
-  // Day 0 of the next month is the last day of this one.
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const lastDay = Temporal.PlainYearMonth.from({ year, month }).daysInMonth;
   return { from: `${slice}-01`, to: `${slice}-${String(lastDay)}` };
 };
 
@@ -992,7 +998,7 @@ export const skUsAdapter = defineSourceAdapter({
     return await Result.tryPromise({
       try: async () => {
         const { year, offset } = parseCursor(cursor);
-        const currentYear = new Date().getFullYear();
+        const currentYear = Temporal.Now.plainDateISO().year;
 
         const searchResult = await executeSearchWithRetry({
           cursor,

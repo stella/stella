@@ -2,6 +2,8 @@ import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
 import { create } from "zustand";
 
+import { Temporal } from "@stll/time";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { isEditableEventTarget } from "@/lib/hotkeys";
@@ -30,7 +32,7 @@ export const useShortcutEchoStore = create<ShortcutEchoStore>((set) => ({
     if (clearTimer !== null) {
       clearTimeout(clearTimer);
     }
-    set({ echo: { shortcutId, at: Date.now() } });
+    set({ echo: { shortcutId, at: Temporal.Now.instant().epochMilliseconds } });
     clearTimer = setTimeout(() => {
       clearTimer = null;
       set({ echo: null });

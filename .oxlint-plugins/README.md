@@ -148,6 +148,7 @@ runtime validation, or integration tests.
 - [`no-physical-properties`](./no-physical-properties.ts) (`no-physical-properties`): rejects physical CSS and Tailwind directions where logical RTL-aware properties exist.
 - [`no-raw-date-input`](./no-raw-date-input.ts) (`no-raw-date-input`): requires the owned date-input primitive so locale, timezone, and validation behavior remain consistent.
 - [`no-raw-date-parsing`](./no-raw-date-parsing.ts) (`no-raw-date-parsing`): rejects ambiguous date-only parsing and raw day-length arithmetic that fails across timezones or DST.
+- [`prefer-temporal`](./prefer-temporal.ts) (`prefer-temporal`): reserves legacy `Date` construction and serialization for concrete database, protocol, and third-party boundaries; global clock APIs, calendar constructors, and provable Date calendar mutation use explicitly imported Temporal.
 - [`no-raw-foreground-opacity`](./no-raw-foreground-opacity.ts) (`no-raw-foreground-opacity`): requires named foreground attenuation tokens instead of unexplained opacity fractions.
 - [`no-raw-locale-format`](./no-raw-locale-format.ts) (`no-raw-locale-format`): requires locale-aware shared number and date formatters instead of ambient-locale calls.
 - [`no-raw-public-law-seo`](./no-raw-public-law-seo.ts) (`no-raw-public-law-seo`): centralizes public-law metadata and canonical URL formatting.
@@ -184,7 +185,7 @@ runtime validation, or integration tests.
 - [`docs-source-policy`](./docs-source-policy.ts) (`docs-source-policy`): requires every direct external dependency to be covered by one exact llms.txt source or an explained no-source quarantine that expires within 31 days.
 - [`forbid-dev-runner-config-reads`](./forbid-dev-runner-config-reads.ts) (`forbid-dev-runner-config-reads`): prevents application code from importing or reading development-runner configuration.
 - [`forbid-process-env-outside-env-ts`](./forbid-process-env-outside-env-ts.ts) (`forbid-process-env-outside-env-ts`): confines unvalidated environment reads to explicit env, config, test, and script boundaries.
-- [`no-ambient-nondeterminism`](./no-ambient-nondeterminism.ts) (`no-ambient-nondeterminism`): rejects ambient time and randomness in deterministic backend policy, normalization, codec, and classification modules; callers must provide owned inputs.
+- [`no-ambient-nondeterminism`](./no-ambient-nondeterminism.ts) (`no-ambient-nondeterminism`): rejects ambient time from `Date` and `Temporal.Now`, plus randomness, in deterministic backend policy, normalization, codec, and classification modules; callers must provide owned inputs.
 - [`no-awaited-builder-union`](./no-awaited-builder-union.ts) (`no-awaited-builder-union`): avoids awaiting a union of two generic builder states, which causes disproportionate type-instantiation cost.
 - [`no-bare-chrome-query`](./no-bare-chrome-query.ts) (`no-bare-chrome-query`): requires Chrome extension messaging and query operations to use the owned adapter.
 - [`no-coerced-optional-union-enum`](./no-coerced-optional-union-enum.ts) (`no-coerced-optional-union-enum`): rejects coercion around optional union enums that widens or changes missing-value semantics.

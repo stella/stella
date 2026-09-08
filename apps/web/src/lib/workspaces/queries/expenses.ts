@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import type { ExpenseCategory, TimeEntryStatus } from "@stll/api-contract";
+import type { Temporal } from "@stll/time";
 
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
@@ -73,23 +74,9 @@ export const expensesOptions = (
     },
   });
 
-/** Format a Date as `YYYY-MM-DD` in local time (not UTC). */
-const formatDateISO = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-
-export const addDays = (d: Date, n: number): Date => {
-  const result = new Date(d);
-  result.setDate(result.getDate() + n);
-  return result;
-};
-
 export type ExpensesWeekRange = {
-  monday: Date;
-  sunday: Date;
+  monday: Temporal.PlainDate;
+  sunday: Temporal.PlainDate;
   dateFrom: string;
   dateTo: string;
 };
@@ -100,21 +87,21 @@ export type ExpensesWeekRange = {
  * `expensesOptions` for the current week) and the page component's date
  * range state, so both derive an identical `expensesOptions` cache key on a
  * cold navigation instead of the component's mount-time fetch racing an
- * unprimed cache. The loader's `new Date()` and the component's
- * `useState(() => new Date())` resolve to the same calendar day unless a
- * midnight boundary falls between the two calls, in which case the
- * component's key simply differs and refetches once.
+ * unprimed cache. The loader and component derive their reference day from
+ * the same local calendar clock unless a midnight boundary falls between the
+ * two calls, in which case the component's key simply differs and refetches
+ * once.
  */
 export const getExpensesWeekRange = (
-  referenceDate: Date,
+  referenceDate: Date | Temporal.PlainDate,
   locale: string,
 ): ExpensesWeekRange => {
   const monday = startOfWeek(referenceDate, locale);
-  const sunday = addDays(monday, 6);
+  const sunday = monday.add({ days: 6 });
   return {
     monday,
     sunday,
-    dateFrom: formatDateISO(monday),
-    dateTo: formatDateISO(sunday),
+    dateFrom: monday.toString(),
+    dateTo: sunday.toString(),
   };
 };

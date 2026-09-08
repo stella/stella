@@ -2,15 +2,15 @@ import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { toISODate } from "@/components/workspaces/entity-utils";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
-import { useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
 import { roleOptions } from "@/lib/auth-queries";
 import {
@@ -52,7 +52,10 @@ export const Route = createFileRoute(
     }
   },
   loader: async ({ context, params }) => {
-    const today = toISODate(new Date());
+    const today = Temporal.Now.instant()
+      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+      .toPlainDate()
+      .toString();
     await Promise.all([
       ensureRouteInfiniteQueryData(
         context.queryClient,
@@ -87,21 +90,21 @@ const TimesheetSkeleton = () => (
 function TimesheetsPage() {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
-  const locale = useLocale();
+  const format = useFormatter();
   const workspaceId = Route.useParams({
     select: (params) => params.workspaceId,
   });
-  const [date, setDate] = useState(() => new Date());
+  const [date, setDate] = useState(() =>
+    Temporal.Now.instant()
+      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+      .toPlainDate(),
+  );
   const dateValue = toISODate(date);
   const dateBounds = getTimeEntryDateBounds();
   const canLogTime = isTimeEntryDateAllowed(dateValue, dateBounds);
 
   const moveDay = (days: number) => {
-    setDate((current) => {
-      const next = new Date(current);
-      next.setDate(next.getDate() + days);
-      return next;
-    });
+    setDate((current) => current.add({ days }));
   };
 
   return (
@@ -110,7 +113,13 @@ function TimesheetsPage() {
         <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            onClick={() => setDate(new Date())}
+            onClick={() =>
+              setDate(
+                Temporal.Now.instant()
+                  .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+                  .toPlainDate(),
+              )
+            }
             size="sm"
             variant="outline"
           >
@@ -126,12 +135,25 @@ function TimesheetsPage() {
             <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
           </Button>
           <span className="min-w-36 text-center text-sm">
-            {date.toLocaleDateString(locale, MEDIUM_DATE_FORMAT)}
+            {format.dateTime(
+              date.toZonedDateTime({
+                plainTime: Temporal.PlainTime.from("00:00"),
+                timeZone: "UTC",
+              }).epochMilliseconds,
+              { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
+            )}
           </span>
           <Button
             aria-label={tCommon("next")}
             className="size-11"
-            disabled={dateValue >= toISODate(new Date())}
+            disabled={
+              dateValue >=
+              toISODate(
+                Temporal.Now.instant()
+                  .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+                  .toPlainDate(),
+              )
+            }
             onClick={() => moveDay(1)}
             size="icon"
             variant="ghost"

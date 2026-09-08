@@ -1,3 +1,5 @@
+import { Temporal } from "temporal-polyfill/full";
+
 import {
   DEFAULT_BASE_URL,
   DEFAULT_CASE_CACHE_TTL_MS,
@@ -954,7 +956,8 @@ export class InfoSoudClient {
     const run = this.#throttleChain.then(async () => {
       signal?.throwIfAborted();
 
-      const elapsed = Date.now() - this.#lastRequestFinishedAt;
+      const elapsed =
+        Temporal.Now.instant().epochMilliseconds - this.#lastRequestFinishedAt;
       await delay(this.#delayMs - elapsed, signal);
 
       signal?.throwIfAborted();
@@ -962,7 +965,7 @@ export class InfoSoudClient {
       try {
         return await task();
       } finally {
-        this.#lastRequestFinishedAt = Date.now();
+        this.#lastRequestFinishedAt = Temporal.Now.instant().epochMilliseconds;
       }
     });
 
@@ -1023,7 +1026,7 @@ export class InfoSoudClient {
       return null;
     }
 
-    if (cachedValue.expiresAt <= Date.now()) {
+    if (cachedValue.expiresAt <= Temporal.Now.instant().epochMilliseconds) {
       this.#cache.delete(cacheKey);
       return null;
     }
@@ -1046,7 +1049,7 @@ export class InfoSoudClient {
     }
 
     this.#cache.set(cacheKey, {
-      expiresAt: Date.now() + cacheTtlMs,
+      expiresAt: Temporal.Now.instant().epochMilliseconds + cacheTtlMs,
       value: cloneData(value),
     });
   }

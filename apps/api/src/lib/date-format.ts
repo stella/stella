@@ -1,3 +1,5 @@
+import { parsePlainDate } from "@stll/time";
+
 type FormatDateTimeInTimeZoneProps = {
   date?: Date | undefined;
   timezone: string;
@@ -75,10 +77,11 @@ type FormatIsoDateForDisplayProps = {
 export const formatIsoDateForDisplay = ({
   isoDate,
 }: FormatIsoDateForDisplayProps) => {
-  const [year, month, day] = isoDate.split("-");
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-
-  return date.toLocaleDateString("en-GB", {
+  const date = parsePlainDate(isoDate);
+  if (date === null) {
+    return "Invalid Date";
+  }
+  return date.toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",

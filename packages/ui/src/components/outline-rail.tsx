@@ -26,6 +26,8 @@ import {
   useState,
 } from "react";
 
+import { Temporal } from "temporal-polyfill/full";
+
 import { cn } from "../lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
@@ -302,7 +304,10 @@ export const OutlineRail = ({
     }
     let raf = 0;
     const compute = () => {
-      if (Date.now() < manualLockUntil.current || container.scrollHeight <= 0) {
+      if (
+        Temporal.Now.instant().epochMilliseconds < manualLockUntil.current ||
+        container.scrollHeight <= 0
+      ) {
         return;
       }
       const centrePct =
@@ -363,7 +368,8 @@ export const OutlineRail = ({
       }
       if (activeId === undefined) {
         setDerivedActive(id);
-        manualLockUntil.current = Date.now() + 900;
+        manualLockUntil.current =
+          Temporal.Now.instant().epochMilliseconds + 900;
       }
       onJumpRef.current(id, container);
     },

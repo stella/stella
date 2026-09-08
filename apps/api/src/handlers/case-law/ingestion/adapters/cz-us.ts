@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { Temporal } from "@stll/time";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -572,14 +574,13 @@ class SearchPageDriftError extends TypeError {
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
 
-const isoDay = (date: Date): string => date.toISOString().slice(0, 10);
-
 /** Latest complete NALUS publication day; today's result set is still live. */
-const latestClosedAvailabilityDay = (now: Date): string => {
-  const date = new Date(now);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return isoDay(date);
-};
+const latestClosedAvailabilityDay = (now: Date): string =>
+  Temporal.Instant.fromEpochMilliseconds(now.getTime())
+    .toZonedDateTimeISO("UTC")
+    .toPlainDate()
+    .subtract({ days: 1 })
+    .toString();
 
 const historicalStart = (now: Date): HistoricalCursor => ({
   phase: SWEEP_PHASE.HISTORICAL,
@@ -590,16 +591,19 @@ const historicalStart = (now: Date): HistoricalCursor => ({
   digest: DIGEST_SEED,
 });
 
-const czechDate = (date: Date): string =>
-  `${date.getUTCDate()}.${date.getUTCMonth() + 1}.${date.getUTCFullYear()}`;
+const czechDate = (value: string): string => {
+  const date = Temporal.PlainDate.from(value);
+  return `${date.day}.${date.month}.${date.year}`;
+};
 
 const recentStart = (now: Date): RecentCursor => {
   const latest = latestClosedAvailabilityDay(now);
-  const from = new Date(`${latest}T00:00:00Z`);
-  from.setUTCDate(from.getUTCDate() - RECENT_WINDOW_DAYS + 1);
+  const from = Temporal.PlainDate.from(latest).subtract({
+    days: RECENT_WINDOW_DAYS - 1,
+  });
   return {
     phase: SWEEP_PHASE.RECENT,
-    availableFrom: isoDay(from),
+    availableFrom: from.toString(),
     availableTo: latest,
     pass: CRAWL_PASS.COLLECT,
     page: 0,
@@ -607,11 +611,8 @@ const recentStart = (now: Date): RecentCursor => {
   };
 };
 
-const addUtcDays = (day: string, days: number): string => {
-  const date = new Date(`${day}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return isoDay(date);
-};
+const addUtcDays = (day: string, days: number): string =>
+  Temporal.PlainDate.from(day).add({ days }).toString();
 
 const parseNonNegativeInteger = (
   value: string | undefined,
@@ -719,7 +720,10 @@ const makeCursor = (state: CursorState): string => {
 const nextSlice = (state: CursorState, now: Date): CursorState => {
   switch (state.phase) {
     case SWEEP_PHASE.HISTORICAL:
-      return state.year < now.getUTCFullYear()
+      return state.year <
+        Temporal.Instant.fromEpochMilliseconds(
+          now.getTime(),
+        ).toZonedDateTimeISO("UTC").year
         ? {
             phase: state.phase,
             availableTo: state.availableTo,
@@ -826,19 +830,13 @@ const searchFields = (state: CursorState): Record<string, string> => {
         ctl00$MainContent$decidedFrom: `1.1.${state.year}`,
         ctl00$MainContent$decidedTo: `31.12.${state.year}`,
         ctl00$MainContent$availableFrom: "1.1.1900",
-        ctl00$MainContent$availableTo: czechDate(
-          new Date(`${state.availableTo}T00:00:00Z`),
-        ),
+        ctl00$MainContent$availableTo: czechDate(state.availableTo),
         ctl00$MainContent$razeni: "20",
       };
     case SWEEP_PHASE.RECENT:
       return {
-        ctl00$MainContent$availableFrom: czechDate(
-          new Date(`${state.availableFrom}T00:00:00Z`),
-        ),
-        ctl00$MainContent$availableTo: czechDate(
-          new Date(`${state.availableTo}T00:00:00Z`),
-        ),
+        ctl00$MainContent$availableFrom: czechDate(state.availableFrom),
+        ctl00$MainContent$availableTo: czechDate(state.availableTo),
         ctl00$MainContent$razeni: "20",
       };
     default: {
@@ -1360,11 +1358,16 @@ const parseSlice = (slice: string): number => {
   return Number.parseInt(slice, 10);
 };
 
-const czUsSliceOf = (now: Date): string => String(now.getUTCFullYear());
+const czUsSliceOf = (now: Date): string =>
+  String(
+    Temporal.Instant.fromEpochMilliseconds(now.getTime()).toZonedDateTimeISO(
+      "UTC",
+    ).year,
+  );
 
 const czUsNextSlice = (slice: string): string | null => {
   const next = parseSlice(slice) + 1;
-  return next > new Date().getUTCFullYear() ? null : String(next);
+  return next > Temporal.Now.plainDateISO("UTC").year ? null : String(next);
 };
 
 const czUsPreviousSlice = (slice: string): string | null => {
@@ -1563,7 +1566,7 @@ export const czUsAdapter = defineSourceAdapter({
         ctl00$MainContent$usneseni: "on",
         ctl00$MainContent$stanoviska_plena: "on",
         ctl00$MainContent$decidedFrom: "1.1.1900",
-        ctl00$MainContent$decidedTo: `31.12.${new Date().getFullYear() + 1}`,
+        ctl00$MainContent$decidedTo: `31.12.${Temporal.Now.plainDateISO().year + 1}`,
         ctl00$MainContent$but_search: "Vyhledat",
       });
       const submit = await fetchWithTimeout(searchUrl, {

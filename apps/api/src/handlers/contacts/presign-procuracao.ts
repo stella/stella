@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -52,7 +54,10 @@ const presignProcuracao = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       uploadId,
     });
-    const expiresAt = new Date(Date.now() + PRESIGN_URL_EXPIRY_SECONDS * 1000);
+    const expiresAt = new Date(
+      Temporal.Now.instant().epochMilliseconds +
+        PRESIGN_URL_EXPIRY_SECONDS * 1000,
+    );
     const presign = await presignUploadUrl({
       key,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,

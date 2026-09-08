@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
+import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
   ADAPTER_KEYS,
@@ -536,14 +537,18 @@ const normalizeDecisionDate = (
   raw: string | null | undefined,
   content: string | null | undefined,
 ): string | undefined => {
-  if (raw && /^\d{4}-\d{2}-\d{2}$/u.test(raw)) {
-    const year = Number.parseInt(raw.slice(0, 4), 10);
-    if (year >= 1900 && year <= new Date().getFullYear() + 1) {
-      return raw;
-    }
+  const rawDate = raw ? parsePlainDate(raw) : null;
+  if (
+    rawDate !== null &&
+    rawDate.year >= 1900 &&
+    rawDate.year <= Temporal.Now.plainDateISO().year + 1
+  ) {
+    return rawDate.toString();
   }
 
-  return parseDecisionDateFromContent(content) ?? toOptionalValue(raw);
+  const contentDate = parseDecisionDateFromContent(content);
+  const parsedContentDate = contentDate ? parsePlainDate(contentDate) : null;
+  return parsedContentDate?.toString() ?? rawDate?.toString();
 };
 
 const fetchDetail = async (

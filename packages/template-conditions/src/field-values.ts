@@ -18,6 +18,9 @@
  * their own field objects, which structurally satisfy these.
  */
 
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
+
 import { evaluateNumericExpression } from "./compute.js";
 import { resolvePath } from "./path.js";
 
@@ -73,19 +76,13 @@ const getDateFormatter = (
 
 /**
  * Parse a strict YYYY-MM-DD calendar date; null when malformed or not a real
- * date. UTC-anchored so the rendered day never shifts with the timezone.
- * `Date` rolls out-of-range components over (2028-02-30 → March 1), so the
- * round-trip comparison catches non-existent dates.
+ * date.
  */
-const parseIsoDate = (value: string): Date | null => {
+const parseIsoDate = (value: string): Temporal.PlainDate | null => {
   if (!ISO_DATE_PATTERN.test(value)) {
     return null;
   }
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime()) || !date.toISOString().startsWith(value)) {
-    return null;
-  }
-  return date;
+  return Result.try(() => Temporal.PlainDate.from(value)).unwrapOr(null);
 };
 
 /**
@@ -106,7 +103,13 @@ export const formatDate = (
   if (dateFormat.style === "iso") {
     return value;
   }
-  return getDateFormatter(dateFormat.locale, dateFormat.style).format(date);
+  const epochMilliseconds = date.toZonedDateTime({
+    plainTime: Temporal.PlainTime.from("00:00"),
+    timeZone: "UTC",
+  }).epochMilliseconds;
+  return getDateFormatter(dateFormat.locale, dateFormat.style).format(
+    epochMilliseconds,
+  );
 };
 
 // ── Dispatcher ────────────────────────────────────────────

@@ -1,4 +1,6 @@
-import { addDays, parseIsoDateLocal } from "@stll/time";
+import { Result } from "better-result";
+
+import { Temporal } from "@stll/time";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { MatterActivityItem } from "@/lib/workspaces/queries";
@@ -51,6 +53,21 @@ const ACTIVITY_FOLD_WINDOW_MS = 60_000;
  */
 const REVIEW_DECISION_FOLD_WINDOW_MS = 30 * 60_000;
 
+const localDateAtStart = (value: string): Temporal.Instant | null =>
+  Result.try(() =>
+    Temporal.PlainDate.from(value)
+      .toZonedDateTime({
+        plainTime: Temporal.PlainTime.from("00:00"),
+        timeZone: Temporal.Now.timeZoneId(),
+      })
+      .toInstant(),
+  ).unwrapOr(null);
+
+const epochMilliseconds = (value: string): number | null =>
+  Result.try(() => Temporal.Instant.from(value).epochMilliseconds).unwrapOr(
+    null,
+  );
+
 export const toMatterActivityDateRange = ({
   from,
   to,
@@ -58,20 +75,26 @@ export const toMatterActivityDateRange = ({
   from: string | null;
   to: string | null;
 }): { from: string | null; toExclusive: string | null } => {
-  const fromDate = from === null ? null : parseIsoDateLocal(from);
-  const toDate = to === null ? null : parseIsoDateLocal(to);
+  const fromDate = from === null ? null : localDateAtStart(from);
+  const toDate = to === null ? null : localDateAtStart(to);
   return {
-    from: fromDate?.toISOString() ?? null,
-    toExclusive: toDate ? addDays(toDate, 1).toISOString() : null,
+    from: fromDate?.toString({ fractionalSecondDigits: 3 }) ?? null,
+    toExclusive:
+      toDate === null
+        ? null
+        : toDate
+            .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+            .add({ days: 1 })
+            .toInstant()
+            .toString({ fractionalSecondDigits: 3 }),
   };
 };
 
-const formatLocalDate = (date: Date): string =>
-  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-    .map((part, index) =>
-      index === 0 ? String(part) : String(part).padStart(2, "0"),
-    )
-    .join("-");
+const formatLocalDate = (value: string): string =>
+  Temporal.Instant.from(value)
+    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+    .toPlainDate()
+    .toString();
 
 export const toMatterActivityDatePickerValues = ({
   from,
@@ -80,11 +103,15 @@ export const toMatterActivityDatePickerValues = ({
   from: string | null;
   toExclusive: string | null;
 }): { from: string | null; to: string | null } => ({
-  from: from === null ? null : formatLocalDate(new Date(from)),
+  from: from === null ? null : formatLocalDate(from),
   to:
     toExclusive === null
       ? null
-      : formatLocalDate(addDays(new Date(toExclusive), -1)),
+      : Temporal.Instant.from(toExclusive)
+          .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+          .toPlainDate()
+          .subtract({ days: 1 })
+          .toString(),
 });
 
 type ActivityTriggerType = MatterActivityItem["trigger"]["type"];
@@ -107,12 +134,13 @@ export const resolveVisibleActivityTriggerType = (
   type: ActivityTriggerType,
 ): VisibleActivityTriggerType | null => VISIBLE_ACTIVITY_TRIGGER_TYPES[type];
 
-export const activityDayKey = (activityAt: string): string => {
-  const date = new Date(activityAt);
-  return Number.isNaN(date.getTime())
-    ? activityAt
-    : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-};
+export const activityDayKey = (activityAt: string): string =>
+  Result.try(() =>
+    Temporal.Instant.from(activityAt)
+      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+      .toPlainDate()
+      .toString(),
+  ).unwrapOr(activityAt);
 
 export type ActivityGroup =
   | {
@@ -156,11 +184,11 @@ const isWithinActivityFoldWindow = (
   anchor: MatterActivityItem,
   candidate: MatterActivityItem,
 ) => {
-  const anchorTime = new Date(anchor.activityAt).getTime();
-  const candidateTime = new Date(candidate.activityAt).getTime();
+  const anchorTime = epochMilliseconds(anchor.activityAt);
+  const candidateTime = epochMilliseconds(candidate.activityAt);
   return (
-    Number.isFinite(anchorTime) &&
-    Number.isFinite(candidateTime) &&
+    anchorTime !== null &&
+    candidateTime !== null &&
     Math.abs(anchorTime - candidateTime) <= ACTIVITY_FOLD_WINDOW_MS
   );
 };
@@ -204,11 +232,11 @@ const isWithinReviewDecisionWindow = (
   previous: MatterActivityItem,
   candidate: MatterActivityItem,
 ) => {
-  const previousTime = new Date(previous.activityAt).getTime();
-  const candidateTime = new Date(candidate.activityAt).getTime();
+  const previousTime = epochMilliseconds(previous.activityAt);
+  const candidateTime = epochMilliseconds(candidate.activityAt);
   return (
-    Number.isFinite(previousTime) &&
-    Number.isFinite(candidateTime) &&
+    previousTime !== null &&
+    candidateTime !== null &&
     Math.abs(previousTime - candidateTime) <= REVIEW_DECISION_FOLD_WINDOW_MS
   );
 };

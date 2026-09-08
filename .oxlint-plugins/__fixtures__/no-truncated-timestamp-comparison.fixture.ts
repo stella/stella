@@ -8,6 +8,8 @@
 
 import { and, eq, gt, gte, lt, lte, ne, or, sql } from "drizzle-orm";
 
+import { Temporal, Temporal as Time } from "@stll/time";
+
 // Stand-ins for the schema objects and the values that reach a comparison.
 // Only the shapes matter: the rule reads `<object>.<columnName>` and the
 // operand's syntax, never their types.
@@ -138,6 +140,35 @@ const _legacyColumnCall = lte(allocations.periodStart, checkpoint.snapshotAt);
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
 const _parsedDate = gt(decisions.createdAt, new Date(casToken));
 
+// A Temporal Instant reconstructed from a database Date is still truncated to
+// milliseconds; the `.epochMilliseconds` property alone is not a clock proof.
+const _databaseInstantEpoch = gt(
+  decisions.createdAt,
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+  new Date(
+    Temporal.Instant.from(cursor.createdAt.toISOString()).epochMilliseconds,
+  ),
+);
+
+const temporalLookalike = {
+  Now: { instant: () => ({ epochMilliseconds: 1_789_000_000_000 }) },
+};
+// A matching property chain on a local object cannot impersonate the imported
+// Temporal namespace.
+const _temporalLookalike = lt(
+  decisions.updatedAt,
+  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+  new Date(temporalLookalike.Now.instant().epochMilliseconds - 60_000),
+);
+
+// oxlint-disable-next-line no-shadow -- fixture: a local binding must not inherit the imported Temporal provenance
+const shadowedTemporalComparison = (Temporal: typeof temporalLookalike) =>
+  lt(
+    decisions.updatedAt,
+    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+    new Date(Temporal.Now.instant().epochMilliseconds - 60_000),
+  );
+
 // A `let` can be reassigned after the clock read, so it is not provably one.
 let mutableNow = new Date();
 if (cursor.id === boundaryId) {
@@ -213,11 +244,24 @@ const _clockNow = lte(decisions.updatedAt, new Date());
 const _clockDerived = lt(decisions.updatedAt, new Date(Date.now() - 60_000));
 const _clockArithmetic = lt(decisions.updatedAt, new Date(Date.now()));
 
+const _temporalClockDerived = lt(
+  decisions.updatedAt,
+  new Date(Temporal.Now.instant().epochMilliseconds - 60_000),
+);
+const _temporalClockAliasedImport = lte(
+  decisions.updatedAt,
+  new Date(Time.Now.instant().epochMilliseconds + 60_000),
+);
+
 // ...including through one `const` hop within the file.
 const staleBefore = new Date(Date.now() - 60_000);
 const _clockBinding = lt(decisions.updatedAt, staleBefore);
 const nowInstant = new Date();
 const _clockBindingPlain = lte(decisions.updatedAt, nowInstant);
+const temporalStaleBefore = new Date(
+  Temporal.Now.instant().epochMilliseconds - 60_000,
+);
+const _temporalClockBinding = lt(decisions.updatedAt, temporalStaleBefore);
 
 // A SET list assigns the column; it never reads it back.
 const _setAssignment = sql`UPDATE t SET indexed_at = ${checkpoint.snapshotAt} WHERE id = ${boundaryId}`;
@@ -253,6 +297,9 @@ export const __noTruncatedTimestampComparisonFixture = {
   _reversedArguments,
   _legacyColumnCall,
   _parsedDate,
+  _databaseInstantEpoch,
+  _temporalLookalike,
+  shadowedTemporalComparison,
   _mutableBinding,
   _columnToColumn,
   _sameOwnerColumnToColumn,
@@ -275,8 +322,11 @@ export const __noTruncatedTimestampComparisonFixture = {
   _clockNow,
   _clockDerived,
   _clockArithmetic,
+  _temporalClockDerived,
+  _temporalClockAliasedImport,
   _clockBinding,
   _clockBindingPlain,
+  _temporalClockBinding,
   _setAssignment,
   _idCasGuard,
   _idComparison,

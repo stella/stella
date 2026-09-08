@@ -47,11 +47,13 @@ describe("quoteOccursInText", () => {
 });
 
 describe("filterDeadlines", () => {
-  test("drops low confidence, stale dates, and unverifiable quotes", () => {
+  test("drops low confidence, invalid or stale dates, and unverifiable quotes", () => {
     const kept = filterDeadlines(
       [
         deadline({}),
         deadline({ label: "Nejistý", confidence: 0.4 }),
+        deadline({ label: "Nonexistent day", dueDate: "2026-09-31" }),
+        deadline({ label: "Malformed day", dueDate: "not-a-date" }),
         deadline({
           label: "Podpis",
           dueDate: "2026-08-01",

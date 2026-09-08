@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * Court weight loader with in-memory cache: the seeded per-jurisdiction rank
  * table, compiled once a minute.
@@ -101,7 +102,7 @@ const boundedRead = async (
 export const loadCourtWeights = async ({
   onRead = untimedRead,
 }: LoadCourtWeightsOptions = {}): Promise<CourtWeightMap> => {
-  if (cached && Date.now() < cached.expiresAt) {
+  if (cached && Temporal.Now.instant().epochMilliseconds < cached.expiresAt) {
     return cached.map;
   }
 
@@ -134,7 +135,10 @@ export const loadCourtWeights = async ({
     entries.sort(compareCourtWeightPrecedence);
   }
 
-  cached = { map, expiresAt: Date.now() + CACHE_TTL_MS };
+  cached = {
+    map,
+    expiresAt: Temporal.Now.instant().epochMilliseconds + CACHE_TTL_MS,
+  };
   return map;
 };
 

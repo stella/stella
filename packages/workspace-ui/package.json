@@ -69,6 +69,7 @@
     "@stll/ui": "workspace:^",
     "better-result": "catalog:",
     "lucide-react": "catalog:",
+    "temporal-polyfill": "catalog:",
     "use-intl": "catalog:"
   },
   "devDependencies": {

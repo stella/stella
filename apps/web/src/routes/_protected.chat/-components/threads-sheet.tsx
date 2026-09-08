@@ -46,7 +46,7 @@ import {
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
 import type { ChatHistoryItem } from "@/features/chat/queries";
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -371,6 +371,7 @@ const ThreadRow = ({
   onOpenChange,
   thread,
 }: ThreadRowProps) => {
+  const format = useFormatter();
   const threadRef: ChatThreadRef =
     thread.scope === "workspace"
       ? {
@@ -435,9 +436,7 @@ const ThreadRow = ({
                     {" · "}
                   </>
                 ) : null}
-                {new Date(thread.updatedAt).toLocaleDateString(
-                  getFormattingLocale(),
-                )}
+                {format.dateTime(new Date(thread.updatedAt).getTime())}
               </span>
             </Link>
             <ChatTitleSuggestButton

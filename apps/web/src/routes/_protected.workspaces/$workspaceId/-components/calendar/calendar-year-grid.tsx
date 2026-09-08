@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 import { cn } from "@stll/ui/utils";
 
 import { useLocale } from "@/i18n/formatting-context";
@@ -49,8 +50,8 @@ export const CalendarYearGrid = ({
     appendToMapArray(dotsByDate, dot.date, dot);
   }
 
-  const now = new Date();
-  const currentMonth = now.getUTCFullYear() === year ? now.getUTCMonth() : -1;
+  const now = Temporal.Now.instant().toZonedDateTimeISO("UTC");
+  const currentMonth = now.year === year ? now.month - 1 : -1;
 
   return (
     <div className="flex flex-1 items-start justify-center overflow-y-auto p-6">

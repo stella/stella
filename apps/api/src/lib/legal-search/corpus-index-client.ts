@@ -1,5 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { envBase } from "@/api/env-base";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -813,9 +815,10 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
               "corpus index delete settlement received an invalid opstamp",
           });
         }
-        const deadline = Date.now() + SETTLEMENT_SCAN_TIMEOUT_MS;
+        const deadline =
+          Temporal.Now.instant().epochMilliseconds + SETTLEMENT_SCAN_TIMEOUT_MS;
         const remainingBudget = (): number => {
-          const remaining = deadline - Date.now();
+          const remaining = deadline - Temporal.Now.instant().epochMilliseconds;
           if (remaining <= 0) {
             throw new CorpusIndexError({
               message: `corpus index delete settlement exceeded its ${SETTLEMENT_SCAN_TIMEOUT_MS}ms budget`,

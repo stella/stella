@@ -1,6 +1,8 @@
 import type { JSONContent } from "@tiptap/react";
 import { create } from "zustand";
 
+import { Temporal } from "@stll/time";
+
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
@@ -85,7 +87,7 @@ export const createChatDraftState = (
 ): ChatDraftState => ({
   attachments: normalizeOptionalArray(overrides?.attachments),
   doc: overrides?.doc ?? createEmptyChatDraftDoc(),
-  updatedAt: overrides?.updatedAt ?? Date.now(),
+  updatedAt: overrides?.updatedAt ?? Temporal.Now.instant().epochMilliseconds,
 });
 
 export const areDraftDocsEqual = (
@@ -181,7 +183,7 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
           [threadKey]: {
             ...currentDraft,
             doc: appendMentionToDraftDoc(currentDraft.doc, mention),
-            updatedAt: Date.now(),
+            updatedAt: Temporal.Now.instant().epochMilliseconds,
           },
         },
       };

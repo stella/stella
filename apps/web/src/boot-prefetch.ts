@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
  *
@@ -75,7 +76,10 @@ export const takeBootPrefetch = async (
     return null;
   }
   slots.delete(path);
-  if (Date.now() - slot.startedAt > BOOT_PREFETCH_TTL_MS) {
+  if (
+    Temporal.Now.instant().epochMilliseconds - slot.startedAt >
+    BOOT_PREFETCH_TTL_MS
+  ) {
     return null;
   }
   const response = await slot.response;
@@ -134,7 +138,7 @@ type StartBootPrefetchOptions = {
  *  in the browser (guard below). */
 export const startBootPrefetch = ({
   fetchImpl = fetch,
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
   reportError = reportPrefetchError,
 }: StartBootPrefetchOptions = {}): void => {
   // A second boot attempt supersedes, cancels, and invalidates every response

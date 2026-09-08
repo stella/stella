@@ -21,6 +21,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
+import { Temporal } from "@stll/time";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -46,7 +47,6 @@ import { cn } from "@stll/ui/utils";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -361,8 +361,8 @@ const InvoiceDetail = ({
         {invoice.paidAt && (
           <InfoCell
             label={t("billing.invoices.paidAt")}
-            value={new Date(invoice.paidAt).toLocaleDateString(
-              getFormattingLocale(),
+            value={format.dateTime(
+              Temporal.Instant.from(invoice.paidAt).epochMilliseconds,
             )}
           />
         )}

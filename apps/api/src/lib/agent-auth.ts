@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import {
   AGENT_AUTH_ANONYMOUS_SCOPES,
   AGENT_AUTH_CEREMONY_TTL_SECONDS,
@@ -322,7 +324,9 @@ export const startServiceAuthRegistration = async (
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
-  const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS);
+  const expiresAt = new Date(
+    Temporal.Now.instant().epochMilliseconds + REGISTRATION_TTL_MS,
+  );
 
   await rootDb.insert(agentRegistration).values({
     id: registrationId,
@@ -369,7 +373,9 @@ export const startAnonymousRegistration = async (): Promise<
     return Result.err(tokenResult.error);
   }
 
-  const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS);
+  const expiresAt = new Date(
+    Temporal.Now.instant().epochMilliseconds + REGISTRATION_TTL_MS,
+  );
   await rootDb.insert(agentRegistration).values({
     id: registrationId,
     registrationType: "anonymous",
@@ -858,7 +864,9 @@ export const startAnonymousUpgrade = async ({
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
-  const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS);
+  const expiresAt = new Date(
+    Temporal.Now.instant().epochMilliseconds + REGISTRATION_TTL_MS,
+  );
 
   // Upgrade conditionally on the still-pending anonymous row carrying the
   // ORIGINAL claim token: if two claims race the same token, only the first

@@ -1,11 +1,11 @@
+import { Result } from "better-result";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 /**
  * What a stored decision analysis is worth for the document as it reads
  * now, and how a new generation run takes the row. Pure over the row's
  * `analysis` value and the current input fingerprint; the store in
  * `generate.ts` applies these against Postgres or memory.
  */
-
-import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import type {
   AnalysisGenerating,
@@ -16,6 +16,7 @@ import {
   CURRENT_ANALYSIS_VERSION,
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
+import { Temporal } from "@stll/time";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -64,8 +65,9 @@ export const storedAnalysisState = ({
   if (!("status" in analysis)) {
     return { kind: "done", analysis };
   }
-  const startedAt = new Date(analysis.startedAt).getTime();
-  return now.getTime() - startedAt < SENTINEL_STALE_MS
+  const startedAt = Result.try(() => Temporal.Instant.from(analysis.startedAt));
+  return startedAt.isOk() &&
+    now.getTime() - startedAt.value.epochMilliseconds < SENTINEL_STALE_MS
     ? { kind: "generating" }
     : { kind: "none" };
 };

@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
+import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
@@ -465,9 +466,17 @@ const buildSearchFilterFragments = ({
   const restrictToEntities = hasEditorFilter || hasMimeTypeFilter;
   const tsQuery = buildSearchTsQuery(query);
   const normalizedUpdatedFrom =
-    updatedFrom === undefined ? undefined : new Date(updatedFrom).toISOString();
+    updatedFrom === undefined
+      ? undefined
+      : Temporal.Instant.from(updatedFrom).toString({
+          fractionalSecondDigits: 3,
+        });
   const normalizedUpdatedTo =
-    updatedTo === undefined ? undefined : new Date(updatedTo).toISOString();
+    updatedTo === undefined
+      ? undefined
+      : Temporal.Instant.from(updatedTo).toString({
+          fractionalSecondDigits: 3,
+        });
 
   const entityTypes = [...selected].filter(isEntityKind);
   const entityEditorFilter = sqlWhen(

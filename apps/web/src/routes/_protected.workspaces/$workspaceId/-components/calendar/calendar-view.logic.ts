@@ -1,4 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+
+import { Temporal } from "@stll/time";
 
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import type { CalendarEntry } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell";
@@ -9,46 +11,35 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 
 export const toDayStartDateTime = (date: string): string =>
-  new Date(`${date}T00:00:00.000Z`).toISOString();
+  Temporal.PlainDate.from(date)
+    .toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    })
+    .toInstant()
+    .toString({ fractionalSecondDigits: 3 });
 
-const padDatePart = (value: number): string => String(value).padStart(2, "0");
+const toUTCDateKey = (date: Temporal.PlainDate): string => date.toString();
 
-const toUTCDateKey = (date: Date): string => {
-  const year = date.getUTCFullYear();
-  const month = padDatePart(date.getUTCMonth() + 1);
-  const day = padDatePart(date.getUTCDate());
-
-  return `${year}-${month}-${day}`;
-};
-
-const utcDateFromKey = (dateKey: string): Date | null => {
-  const [yearPart, monthPart, dayPart] = dateKey.split("-");
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const day = Number(dayPart);
-
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day)
-  ) {
-    return null;
-  }
-
-  return new Date(Date.UTC(year, month - 1, day));
-};
+const utcDateFromKey = (dateKey: string): Temporal.PlainDate | null =>
+  Result.try(() => Temporal.PlainDate.from(dateKey)).unwrapOr(null);
 
 const toCalendarDayKey = (value: string | null | undefined): string | null => {
   if (value === null || value === undefined) {
     return null;
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return Result.try(() => Temporal.PlainDate.from(value).toString()).unwrapOr(
+      null,
+    );
   }
-
-  return toUTCDateKey(date);
+  return Result.try(() =>
+    Temporal.Instant.from(value)
+      .toZonedDateTimeISO("UTC")
+      .toPlainDate()
+      .toString(),
+  ).unwrapOr(null);
 };
 
 export const getCalendarTaskDate = (
@@ -89,7 +80,7 @@ type CalendarQueryRangeInput =
     }
   | {
       type: "week";
-      viewDate: Date;
+      viewDate: Temporal.PlainDate;
       firstWeekday: number;
       weekend: ReadonlySet<number>;
     }
@@ -173,7 +164,7 @@ export const groupCalendarTasksByDate = ({
           continue;
         }
 
-        while (current <= end) {
+        while (Temporal.PlainDate.compare(current, end) <= 0) {
           appendToMapArray(map, toUTCDateKey(current), {
             entity,
             propertyId: propId,
@@ -199,8 +190,7 @@ const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   map.set(key, [value]);
 };
 
-const addUTCDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-};
+const addUTCDays = (
+  date: Temporal.PlainDate,
+  days: number,
+): Temporal.PlainDate => date.add({ days });

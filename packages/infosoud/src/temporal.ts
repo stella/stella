@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
+
 import type { ParsedInfoSoudDate, ParsedInfoSoudDateTime } from "./types.js";
 
 const ISO_DATE_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
@@ -8,16 +11,6 @@ const CZECH_DATE_PATTERN =
 const CZECH_DATE_TIME_PATTERN =
   /^(?<day>\d{1,2})\.(?<month>\d{1,2})\.(?<year>\d{4})\s+(?<hour>\d{1,2}):(?<minute>\d{2})(?::(?<second>\d{2}))?$/u;
 const PRAGUE_TIME_ZONE = "Europe/Prague";
-const PRAGUE_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  hour: "2-digit",
-  hourCycle: "h23",
-  minute: "2-digit",
-  month: "2-digit",
-  second: "2-digit",
-  timeZone: PRAGUE_TIME_ZONE,
-  year: "numeric",
-});
 
 type DateParts = {
   readonly day: number;
@@ -31,8 +24,6 @@ type DateTimeParts = DateParts & {
   readonly second: number;
 };
 
-const pad = (value: number): string => String(value).padStart(2, "0");
-
 const parseInteger = (value: string | undefined): number | null => {
   if (!value) {
     return null;
@@ -42,147 +33,33 @@ const parseInteger = (value: string | undefined): number | null => {
   return Number.isInteger(parsed) ? parsed : null;
 };
 
-const buildUtcUnixMs = ({
-  day,
-  hour = 0,
-  minute = 0,
-  month,
-  second = 0,
-  year,
-}: DateTimeParts | (DateParts & Partial<DateTimeParts>)): number | null => {
-  const candidate = new Date(
-    Date.UTC(year, month - 1, day, hour, minute, second),
-  );
+const buildPlainDate = (parts: DateParts): Temporal.PlainDate | null =>
+  Result.try(() =>
+    Temporal.PlainDate.from(parts, { overflow: "reject" }),
+  ).unwrapOr(null);
 
-  if (
-    candidate.getUTCFullYear() !== year ||
-    candidate.getUTCMonth() !== month - 1 ||
-    candidate.getUTCDate() !== day ||
-    candidate.getUTCHours() !== hour ||
-    candidate.getUTCMinutes() !== minute ||
-    candidate.getUTCSeconds() !== second
-  ) {
-    return null;
-  }
+const buildPlainDateTime = (
+  parts: DateTimeParts,
+): Temporal.PlainDateTime | null =>
+  Result.try(() =>
+    Temporal.PlainDateTime.from(parts, { overflow: "reject" }),
+  ).unwrapOr(null);
 
-  return candidate.getTime();
-};
-
-const getFormatPart = (
-  parts: readonly Intl.DateTimeFormatPart[],
-  type: Intl.DateTimeFormatPartTypes,
+const buildPragueLocalUnixMs = (
+  plainDateTime: Temporal.PlainDateTime,
 ): number | null => {
-  const value = parts.find((part) => part.type === type)?.value;
-  if (!value) {
+  // The source supplies a Czech wall time without an offset. Preserve the
+  // established policy for the repeated autumn hour by choosing its later
+  // occurrence. The same policy shifts a nonexistent spring time forward, so
+  // require an exact wall-time round trip to reject that gap.
+  const zonedDateTime = plainDateTime.toZonedDateTime(PRAGUE_TIME_ZONE, {
+    disambiguation: "later",
+  });
+  if (!zonedDateTime.toPlainDateTime().equals(plainDateTime)) {
     return null;
   }
-
-  return parseInteger(value);
+  return zonedDateTime.epochMilliseconds;
 };
-
-const getPragueDateTimeParts = (unixMs: number): DateTimeParts | null => {
-  const parts = PRAGUE_DATE_TIME_FORMATTER.formatToParts(new Date(unixMs));
-  const year = getFormatPart(parts, "year");
-  const month = getFormatPart(parts, "month");
-  const day = getFormatPart(parts, "day");
-  const hour = getFormatPart(parts, "hour");
-  const minute = getFormatPart(parts, "minute");
-  const second = getFormatPart(parts, "second");
-
-  if (
-    year === null ||
-    month === null ||
-    day === null ||
-    hour === null ||
-    minute === null ||
-    second === null
-  ) {
-    return null;
-  }
-
-  return {
-    day,
-    hour,
-    minute,
-    month,
-    second,
-    year,
-  };
-};
-
-const getPragueTimeZoneOffsetMs = (unixMs: number): number | null => {
-  const parts = getPragueDateTimeParts(unixMs);
-  if (!parts) {
-    return null;
-  }
-
-  const zonedUnixMs = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second,
-  );
-
-  return zonedUnixMs - unixMs;
-};
-
-const areDateTimePartsEqual = (
-  left: DateTimeParts,
-  right: DateTimeParts,
-): boolean =>
-  left.day === right.day &&
-  left.hour === right.hour &&
-  left.minute === right.minute &&
-  left.month === right.month &&
-  left.second === right.second &&
-  left.year === right.year;
-
-const buildPragueLocalUnixMs = (parts: DateTimeParts): number | null => {
-  const naiveUnixMs = buildUtcUnixMs(parts);
-  if (naiveUnixMs === null) {
-    return null;
-  }
-
-  let candidateUnixMs = naiveUnixMs;
-
-  // InfoSoud datetimes are Czech local wall times; convert them to a real UTC
-  // instant, including DST shifts, before comparing against Date.now().
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const offsetMs = getPragueTimeZoneOffsetMs(candidateUnixMs);
-    if (offsetMs === null) {
-      return null;
-    }
-
-    const nextCandidateUnixMs = naiveUnixMs - offsetMs;
-    if (nextCandidateUnixMs === candidateUnixMs) {
-      break;
-    }
-
-    candidateUnixMs = nextCandidateUnixMs;
-  }
-
-  const resolvedParts = getPragueDateTimeParts(candidateUnixMs);
-  if (!resolvedParts || !areDateTimePartsEqual(parts, resolvedParts)) {
-    return null;
-  }
-
-  return candidateUnixMs;
-};
-
-const toIsoDate = ({ day, month, year }: DateParts): string =>
-  `${year}-${pad(month)}-${pad(day)}`;
-
-const toIsoDateTime = ({
-  day,
-  hour,
-  minute,
-  month,
-  second,
-  year,
-}: DateTimeParts): string =>
-  `${toIsoDate({ day, month, year })}T${pad(hour)}:${pad(minute)}:${pad(second)}`;
 
 const toNormalizedRaw = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
@@ -264,19 +141,15 @@ export const parseInfoSoudDate = (
   }
 
   const parts = parseDateParts(raw);
-  if (!parts) {
-    return { isoDate: null, raw, unixMs: null };
-  }
-
-  const unixMs = buildUtcUnixMs(parts);
-  if (unixMs === null) {
+  const plainDate = parts === null ? null : buildPlainDate(parts);
+  if (plainDate === null) {
     return { isoDate: null, raw, unixMs: null };
   }
 
   return {
-    isoDate: toIsoDate(parts),
+    isoDate: plainDate.toString(),
     raw,
-    unixMs,
+    unixMs: plainDate.toZonedDateTime("UTC").epochMilliseconds,
   };
 };
 
@@ -289,17 +162,18 @@ export const parseInfoSoudDateTime = (
   }
 
   const parts = parseDateTimeParts(raw);
-  if (!parts) {
+  const plainDateTime = parts === null ? null : buildPlainDateTime(parts);
+  if (plainDateTime === null) {
     return { isoDateTime: null, raw, unixMs: null };
   }
 
-  const unixMs = buildPragueLocalUnixMs(parts);
+  const unixMs = buildPragueLocalUnixMs(plainDateTime);
   if (unixMs === null) {
     return { isoDateTime: null, raw, unixMs: null };
   }
 
   return {
-    isoDateTime: toIsoDateTime(parts),
+    isoDateTime: plainDateTime.toString({ smallestUnit: "second" }),
     raw,
     unixMs,
   };

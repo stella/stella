@@ -1,3 +1,4 @@
+import { Result, TaggedError, panic } from "better-result";
 /**
  * Count what the search engine actually holds against what Postgres says
  * it holds, one physical index at a time.
@@ -31,8 +32,6 @@
  * constant-time PostgreSQL lookup, and a caller that decides how often to run
  * it.
  */
-
-import { Result, TaggedError, panic } from "better-result";
 import {
   and,
   asc,
@@ -46,6 +45,8 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+
+import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -413,7 +414,8 @@ const readDeleteSettlement = async (
     oldestPendingAt,
     stale:
       oldestPendingAt !== null &&
-      Date.now() - oldestPendingAt.getTime() >= DELETE_SETTLEMENT_STALE_MS,
+      Temporal.Now.instant().epochMilliseconds - oldestPendingAt.getTime() >=
+        DELETE_SETTLEMENT_STALE_MS,
     settled: pendingDocuments === 0,
   });
 };

@@ -9,7 +9,12 @@ import {
 
 import { parseIsoDateLocal } from "@stll/time";
 
-import { addUtcDays, canonicalDecisionDate, toUtcDateString } from "./dates";
+import {
+  addUtcDays,
+  canonicalDecisionDate,
+  isoCalendarDay,
+  toUtcDateString,
+} from "./dates";
 
 // Date's local-time methods read `process.env.TZ` on every call in Bun (and
 // Node), so flipping it around a test reproduces the exact footgun in a
@@ -114,6 +119,20 @@ describe("canonicalDecisionDate", () => {
   });
 });
 
+describe("isoCalendarDay", () => {
+  test("accepts real calendar years below Date's special 1900 offset", () => {
+    expect(isoCalendarDay("0001-01-01")).toBe("0001-01-01");
+  });
+
+  test("applies Gregorian leap-year rules independent of the host timezone", () => {
+    process.env.TZ = "Pacific/Apia";
+
+    expect(isoCalendarDay("1900-02-29")).toBeNull();
+    expect(isoCalendarDay("2000-02-29T23:59:59Z")).toBe("2000-02-29");
+    expect(isoCalendarDay("2011-12-30")).toBe("2011-12-30");
+  });
+});
+
 describe("addUtcDays", () => {
   test("preserves the UTC time while crossing a month boundary", () => {
     const start = new Date("2026-03-31T23:30:00.000Z");
@@ -121,5 +140,25 @@ describe("addUtcDays", () => {
     expect(addUtcDays(start, -30).toISOString()).toBe(
       "2026-03-01T23:30:00.000Z",
     );
+  });
+
+  test("walks leap days while preserving the UTC clock and input instant", () => {
+    const start = new Date("2024-02-28T06:07:08.009Z");
+
+    expect(addUtcDays(start, 1).toISOString()).toBe("2024-02-29T06:07:08.009Z");
+    expect(addUtcDays(start, 2).toISOString()).toBe("2024-03-01T06:07:08.009Z");
+    expect(start.toISOString()).toBe("2024-02-28T06:07:08.009Z");
+  });
+
+  test("preserves early ISO years when adapting back to Date", () => {
+    const start = new Date("0001-12-31T23:59:58.007Z");
+
+    const next = addUtcDays(start, 1);
+    expect(toUtcDateString(start)).toBe("0001-12-31");
+    expect(toUtcDateString(next)).toBe("0002-01-01");
+    expect(next.getUTCHours()).toBe(23);
+    expect(next.getUTCMinutes()).toBe(59);
+    expect(next.getUTCSeconds()).toBe(58);
+    expect(next.getUTCMilliseconds()).toBe(7);
   });
 });

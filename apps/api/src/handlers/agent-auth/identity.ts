@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import {
   AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_ID_JAG_ASSERTION_TYPE,
@@ -111,7 +113,8 @@ const mapIdJagOutcome = (
       identity_assertion: result.identityAssertion,
       // Spec shape: an absolute expiry timestamp, not the relative TTL.
       assertion_expires: new Date(
-        Date.now() + result.assertionExpiresIn * 1000,
+        Temporal.Now.instant().epochMilliseconds +
+          result.assertionExpiresIn * 1000,
       ).toISOString(),
       scopes: [...result.scopes],
     });
@@ -136,7 +139,8 @@ const mapIdJagOutcome = (
           claim_url: getAgentAuthUrl(AGENT_AUTH_CLAIM_PATH),
           claim_token: ceremony.claimToken,
           claim_token_expires: new Date(
-            Date.now() + ceremony.expiresIn * 1000,
+            Temporal.Now.instant().epochMilliseconds +
+              ceremony.expiresIn * 1000,
           ).toISOString(),
           post_claim_scopes: [...AGENT_AUTH_SERVICE_SCOPES],
         },
@@ -222,7 +226,7 @@ const agentIdentityHandler = createSafePublicHandler(
       claim_url: getAgentAuthUrl(AGENT_AUTH_CLAIM_PATH),
       claim_token: ceremony.claimToken,
       claim_token_expires: new Date(
-        Date.now() + ceremony.expiresIn * 1000,
+        Temporal.Now.instant().epochMilliseconds + ceremony.expiresIn * 1000,
       ).toISOString(),
       post_claim_scopes: [...AGENT_AUTH_SERVICE_SCOPES],
       claim: {

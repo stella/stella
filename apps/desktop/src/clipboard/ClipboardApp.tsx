@@ -51,6 +51,7 @@ import {
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ColorPickerContent } from "@stll/ui/color-picker";
@@ -329,10 +330,13 @@ const ClipboardCard = ({
   }).format(age.value);
   const relativeTime =
     age.type === "lessThan" ? `<${formattedAge}` : formattedAge;
-  const copiedAtLabel = format.dateTime(new Date(item.copiedAt), {
-    dateStyle: "full",
-    timeStyle: "medium",
-  });
+  const copiedAtLabel = format.dateTime(
+    Temporal.Instant.from(item.copiedAt).epochMilliseconds,
+    {
+      dateStyle: "full",
+      timeStyle: "medium",
+    },
+  );
   const sourceLabel = item.sourceApp
     ? clipboardSourceLabel(item.sourceApp)
     : null;
@@ -1353,7 +1357,9 @@ const ClipboardApp = () => {
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
   const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
-  const [ageReferenceTime, setAgeReferenceTime] = useState(() => Date.now());
+  const [ageReferenceTime, setAgeReferenceTime] = useState(
+    () => Temporal.Now.instant().epochMilliseconds,
+  );
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -1556,7 +1562,7 @@ const ClipboardApp = () => {
       timelineRef.current?.focus();
     };
     const handleWindowFocus = () => {
-      setAgeReferenceTime(Date.now());
+      setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
       // The pointer may have moved while the window was hidden; the next
       // pointer move only seeds the position.
       railPointerRef.current = null;

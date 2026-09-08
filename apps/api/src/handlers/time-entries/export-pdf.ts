@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import { Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
@@ -114,7 +115,7 @@ export const exportPdfHandler = async ({
     "TIMESHEET REPORT",
     "",
     `Period: ${dateRange}`,
-    `Generated: ${new Date().toISOString().split("T")[0]}`,
+    `Generated: ${Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }).split("T")[0]}`,
     `Entries: ${rows.length}`,
     "",
     "-".repeat(80),

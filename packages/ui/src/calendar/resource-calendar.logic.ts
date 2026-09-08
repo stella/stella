@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
+
 export type CalendarDateRange = {
   endDateExclusive: string;
   startDate: string;
@@ -19,25 +22,23 @@ export type ResourceCalendarLaneLayout = {
 };
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-const DAY_IN_MS = 86_400_000;
 
-const toUTCDate = (value: string): Date | null => {
+const toPlainDate = (value: string): Temporal.PlainDate | null => {
   if (!ISO_DATE_PATTERN.test(value)) {
     return null;
   }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return date.toISOString().slice(0, 10) === value ? date : null;
+  return Result.try(() => Temporal.PlainDate.from(value)).unwrapOr(null);
 };
 
 const differenceInCalendarDays = (later: string, earlier: string): number => {
-  const laterDate = toUTCDate(later);
-  const earlierDate = toUTCDate(earlier);
+  const laterDate = toPlainDate(later);
+  const earlierDate = toPlainDate(earlier);
   if (laterDate === null || earlierDate === null) {
     throw new RangeError(
       "Calendar dates must use normalized YYYY-MM-DD values",
     );
   }
-  return (laterDate.getTime() - earlierDate.getTime()) / DAY_IN_MS;
+  return laterDate.since(earlierDate, { largestUnit: "days" }).days;
 };
 
 export const getResourceCalendarPlacement = ({
@@ -91,7 +92,7 @@ export const assertConsecutiveCalendarDates = (
   }
 
   const first = dates.at(0);
-  if (first === undefined || toUTCDate(first) === null) {
+  if (first === undefined || toPlainDate(first) === null) {
     throw new RangeError(
       "Resource calendar date columns must be consecutive normalized dates",
     );
@@ -113,15 +114,14 @@ export const assertConsecutiveCalendarDates = (
 };
 
 export const nextCalendarDate = (value: string): string => {
-  const date = toUTCDate(value);
+  const date = toPlainDate(value);
   if (date === null) {
     throw new RangeError(
       "Calendar dates must use normalized YYYY-MM-DD values",
     );
   }
-  date.setUTCDate(date.getUTCDate() + 1);
-  const nextDate = date.toISOString().slice(0, 10);
-  if (toUTCDate(nextDate) === null) {
+  const nextDate = date.add({ days: 1 }).toString();
+  if (toPlainDate(nextDate) === null) {
     throw new RangeError(
       "Calendar dates must have a following normalized YYYY-MM-DD value",
     );

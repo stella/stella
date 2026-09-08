@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 // The single choke point that turns a stored credential into a live bearer
 // token for server requests. Everything that authenticates against `serverUrl`
 // (the startup registry refresh and every generated command via the shell
@@ -10,8 +11,7 @@
 // discovery, no token round-trip). Only an expired / near-expiry credential
 // discovers the token endpoint and refreshes, and the rotated credential is
 // persisted so the next command is fast again.
-
-import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import { STELLA_API_KEY } from "../env.js";
 import {
@@ -59,7 +59,7 @@ export type ResolveAccessTokenResult =
 export const resolveAccessToken = async ({
   configDir,
   serverUrl,
-  now = Date.now(),
+  now = Temporal.Now.instant().epochMilliseconds,
   env = { STELLA_API_KEY },
 }: ResolveAccessTokenOptions): Promise<ResolveAccessTokenResult> => {
   // Precedence: `STELLA_API_KEY` beats any stored credential, and when it is set

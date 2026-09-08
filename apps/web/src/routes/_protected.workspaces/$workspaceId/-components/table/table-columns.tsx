@@ -14,6 +14,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
+
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type {
@@ -202,7 +204,12 @@ const useColumnDefFactory = (
                   return null;
                 }
                 return format.dateTime(
-                  new Date(`${row.original.dueDate}T00:00:00Z`),
+                  Temporal.PlainDate.from(row.original.dueDate).toZonedDateTime(
+                    {
+                      plainTime: Temporal.PlainTime.from("00:00"),
+                      timeZone: "UTC",
+                    },
+                  ).epochMilliseconds,
                   {
                     year: "numeric",
                     month: "short",

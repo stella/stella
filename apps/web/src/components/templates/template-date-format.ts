@@ -14,6 +14,7 @@ import {
   formatDate,
   type FieldDateFormat,
 } from "@stll/template-conditions";
+import { Temporal } from "@stll/time";
 
 export { DATE_FORMAT_EXAMPLE_ISO, DATE_FORMAT_STYLES };
 
@@ -33,22 +34,17 @@ export const formatDateValue = formatDate;
 // ── Quick-pick dates for the fill form ────────────────────
 
 /** Local calendar date as YYYY-MM-DD (the date input's value format). */
-const isoFromLocalDate = (date: Date): string => {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${String(date.getFullYear())}-${month}-${day}`;
-};
+const isoFromLocalDate = (date: Temporal.PlainDate): string => date.toString();
 
-export const todayIso = (): string => isoFromLocalDate(new Date());
+const today = (): Temporal.PlainDate =>
+  Temporal.Now.instant()
+    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+    .toPlainDate();
 
-export const firstOfNextMonthIso = (): string => {
-  const now = new Date();
-  return isoFromLocalDate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
-};
+export const todayIso = (): string => isoFromLocalDate(today());
 
-export const inDaysIso = (days: number): string => {
-  const now = new Date();
-  return isoFromLocalDate(
-    new Date(now.getFullYear(), now.getMonth(), now.getDate() + days),
-  );
-};
+export const firstOfNextMonthIso = (): string =>
+  isoFromLocalDate(today().with({ day: 1 }).add({ months: 1 }));
+
+export const inDaysIso = (days: number): string =>
+  isoFromLocalDate(today().add({ days }));

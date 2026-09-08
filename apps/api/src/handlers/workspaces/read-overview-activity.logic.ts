@@ -1,7 +1,8 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { createHash } from "node:crypto";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+import { Temporal } from "@stll/time";
 
 import {
   type AuditAction,
@@ -40,16 +41,15 @@ export const matterActivityFilterKey = ({
     .digest("base64url");
 
 export const timestampMicroseconds = (value: string): bigint | null => {
-  const milliseconds = new Date(value).getTime();
-  if (!Number.isFinite(milliseconds)) {
+  const instant = Result.try(() => Temporal.Instant.from(value));
+  if (instant.isErr()) {
     return null;
   }
   const fraction = /\.(\d+)(?=Z|[+-]\d\d:\d\d$)/iu.exec(value)?.[1] ?? "";
   if (fraction.length > 6) {
     return null;
   }
-  const microseconds = BigInt(fraction.padEnd(6, "0") || "0");
-  return BigInt(Math.floor(milliseconds / 1000)) * 1_000_000n + microseconds;
+  return instant.value.epochNanoseconds / 1000n;
 };
 
 export const bindActivityCursorToFilters = <Id>({

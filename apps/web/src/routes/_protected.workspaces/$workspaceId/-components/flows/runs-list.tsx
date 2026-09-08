@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 
 import {
@@ -66,7 +67,7 @@ const RunRow = ({
             <FlowTriggerBadge triggerType={run.triggerType} />
             <span className="tabular-nums">
               {format.dateTime(
-                new Date(timestamp),
+                Temporal.Instant.from(timestamp).epochMilliseconds,
                 MEDIUM_DATE_SHORT_TIME_FORMAT,
               )}
             </span>

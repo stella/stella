@@ -1,10 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
-import { addDays } from "@stll/time";
+import { Temporal } from "@stll/time";
 import { cn } from "@stll/ui/utils";
 
-import { getFormattingLocale } from "@/i18n/i18n-store";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
@@ -25,6 +24,7 @@ export const TimesheetWeekView = ({
   onDayClick,
 }: TimesheetWeekViewProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   const { data: entries } = useSuspenseQuery(
     timeEntriesOptions(workspaceId, {
@@ -87,13 +87,10 @@ export const TimesheetWeekView = ({
     return { minutes };
   })();
 
-  const today = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  })();
+  const today = Temporal.Now.instant()
+    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+    .toPlainDate()
+    .toString();
 
   return (
     <div className="overflow-x-auto">
@@ -104,7 +101,11 @@ export const TimesheetWeekView = ({
               {t("common.matter")}
             </th>
             {days.map((day) => {
-              const d = new Date(`${day}T00:00:00`);
+              const d = Temporal.PlainDate.from(day);
+              const epochMilliseconds = d.toZonedDateTime({
+                plainTime: Temporal.PlainTime.from("00:00"),
+                timeZone: "UTC",
+              }).epochMilliseconds;
               return (
                 <th
                   className={cn(
@@ -119,11 +120,12 @@ export const TimesheetWeekView = ({
                     type="button"
                   >
                     <div className="text-muted-foreground text-xs">
-                      {d.toLocaleDateString(getFormattingLocale(), {
+                      {format.dateTime(epochMilliseconds, {
+                        timeZone: "UTC",
                         weekday: "short",
                       })}
                     </div>
-                    <div>{d.getDate()}</div>
+                    <div>{d.day}</div>
                   </button>
                 </th>
               );
@@ -250,14 +252,11 @@ type TimesheetWeekViewProps = {
 
 const getDaysInRange = (start: string, end: string): string[] => {
   const days: string[] = [];
-  let current = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  while (current <= endDate) {
-    const y = current.getFullYear();
-    const m = String(current.getMonth() + 1).padStart(2, "0");
-    const day = String(current.getDate()).padStart(2, "0");
-    days.push(`${y}-${m}-${day}`);
-    current = addDays(current, 1);
+  let current = Temporal.PlainDate.from(start);
+  const endDate = Temporal.PlainDate.from(end);
+  while (Temporal.PlainDate.compare(current, endDate) <= 0) {
+    days.push(current.toString());
+    current = current.add({ days: 1 });
   }
   return days;
 };

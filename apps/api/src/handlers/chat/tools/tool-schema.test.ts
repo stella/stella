@@ -63,6 +63,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
   providerSafeJsonSchemaOptionsForTanStackProvider,
@@ -523,6 +524,104 @@ describe("chat tool schemas", () => {
         scopedDb: unusedScopedDb,
       }),
     ).not.toThrow();
+  });
+
+  test("validates date property values before any entity mutation", async () => {
+    const propertyId = toSafeId<"property">(
+      "77777777-7777-4777-8777-777777777777",
+    );
+    const refRegistry = createChatRefRegistry();
+    const matterRef = refRegistry.toMatterRef(workspaceId);
+    const entityRef = refRegistry.toEntityRef({ entityId, workspaceId });
+    const propertyRef = refRegistry.toPropertyRef(propertyId);
+    let entityLookups = 0;
+    const scopedDb = asTestRaw<ScopedDb>(
+      async (run: (tx: unknown) => Promise<unknown>) =>
+        await run({
+          query: {
+            entities: {
+              findFirst: async () => {
+                entityLookups += 1;
+                return {
+                  currentVersionId: "88888888-8888-4888-8888-888888888888",
+                  id: entityId,
+                  readOnly: true,
+                };
+              },
+            },
+            properties: {
+              findFirst: async () => ({
+                content: { type: "date", version: 1 },
+                id: propertyId,
+              }),
+            },
+          },
+        }),
+    );
+    const tool = createWorkspaceTools({
+      allowedWorkspaceIds: [workspaceId],
+      refRegistry,
+      scopedDb,
+    })["update-entity-fields"];
+    const execute = tool?.execute;
+    if (!execute) {
+      throw new Error("Expected update-entity-fields to be executable");
+    }
+    const executionContext = { emitCustomEvent: () => undefined };
+
+    for (const value of [
+      "not-a-date",
+      "2025-02-29",
+      "2024-2-9",
+      "2024-01-01T00:00:00Z",
+    ]) {
+      entityLookups = 0;
+      const rejection: unknown = await Promise.resolve()
+        .then(
+          async () =>
+            await execute(
+              { entityRef, matterRef, propertyRef, value },
+              executionContext,
+            ),
+        )
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      if (!ChatToolError.is(rejection)) {
+        throw new Error("Expected invalid date input to throw ChatToolError");
+      }
+      expect(rejection).toMatchObject({ kind: "invalid-input" });
+      expect(rejection.message).toBe(
+        'Property is "date"; pass an ISO date string (YYYY-MM-DD) or null.',
+      );
+      expect(entityLookups).toBe(0);
+    }
+
+    // The read-only result is a downstream sentinel: reaching it proves these
+    // valid values passed date validation without allowing a mutation.
+    for (const value of ["2024-02-29", null]) {
+      entityLookups = 0;
+      const rejection: unknown = await Promise.resolve()
+        .then(
+          async () =>
+            await execute(
+              { entityRef, matterRef, propertyRef, value },
+              executionContext,
+            ),
+        )
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      if (!ChatToolError.is(rejection)) {
+        throw new Error("Expected the read-only entity guard to reject");
+      }
+      expect(rejection.message).toBe(`Entity "${entityRef}" is read-only.`);
+      expect(entityLookups).toBe(1);
+    }
   });
 
   test("workspace tool schemas enumerate matter refs, never workspace UUIDs", () => {

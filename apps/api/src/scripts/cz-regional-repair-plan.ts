@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { DAY_IN_MS } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
@@ -34,24 +34,11 @@ export {
 /** Retained under the local name this script's callers already use. */
 export type CzRegionalListingIdentity = ListingIdentity;
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
-
-/** Midnight UTC on a `YYYY-MM-DD` day, as epoch milliseconds. */
-const utcDayStart = (date: string): number =>
-  new Date(`${date}T00:00:00.000Z`).getTime();
-
 /**
- * Whether a string names a real UTC calendar day. The round-trip rejects
- * what the shape alone admits (`2026-02-31`, `2026-13-01`), which would
- * otherwise silently walk a different day than the operator asked for.
+ * Whether a string names a real UTC calendar day.
  */
-export const isUtcDateString = (value: string): boolean => {
-  if (!ISO_DATE.test(value)) {
-    return false;
-  }
-  const parsed = utcDayStart(value);
-  return !Number.isNaN(parsed) && toUtcDateString(new Date(parsed)) === value;
-};
+export const isUtcDateString = (value: string): boolean =>
+  parsePlainDate(value) !== null;
 
 type UtcDayRange = {
   from: string;
@@ -60,15 +47,21 @@ type UtcDayRange = {
 
 /**
  * Every UTC day in `[from, to]`, both bounds included. Empty when the range
- * runs backwards. Every UTC day is exactly 24 hours, so the fixed step cannot
- * drift the way a local-calendar walk does across a DST boundary; the
- * publisher's day endpoint is addressed in UTC too.
+ * runs backwards. The bounds have already passed {@link checkRepairRange}; an
+ * invalid bound here is an internal caller error. Plain-date arithmetic keeps
+ * the walk independent of runtime timezone and DST.
  */
 export const enumerateUtcDays = ({ from, to }: UtcDayRange): string[] => {
-  const end = utcDayStart(to);
+  const start =
+    parsePlainDate(from) ?? panic(`Invalid UTC day range start: ${from}`);
+  const end = parsePlainDate(to) ?? panic(`Invalid UTC day range end: ${to}`);
   const days: string[] = [];
-  for (let cursor = utcDayStart(from); cursor <= end; cursor += DAY_IN_MS) {
-    days.push(toUtcDateString(new Date(cursor)));
+  for (
+    let cursor = start;
+    Temporal.PlainDate.compare(cursor, end) <= 0;
+    cursor = cursor.add({ days: 1 })
+  ) {
+    days.push(cursor.toString());
   }
   return days;
 };

@@ -2,6 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -194,7 +196,7 @@ export const callGatewayExternalMcpTool = async ({
     });
   }
 
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   try {
     const result = await dependencies.proxyMcpToolCall({
       args,
@@ -206,7 +208,7 @@ export const callGatewayExternalMcpTool = async ({
     });
     await recordGatewayToolAudit({
       context,
-      durationMs: Date.now() - startedAt,
+      durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
       outcome: result.isError ? "error" : "success",
       resolved,
       toolKind: "external_mcp",
@@ -220,7 +222,7 @@ export const callGatewayExternalMcpTool = async ({
     });
     await recordGatewayToolAudit({
       context,
-      durationMs: Date.now() - startedAt,
+      durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
       outcome: "error",
       resolved,
       toolKind: "external_mcp",

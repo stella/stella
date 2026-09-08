@@ -169,6 +169,7 @@
         "@hocuspocus/server": "^4.6.0",
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
+        "@stll/time": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "better-result": "catalog:",
         "crossws": "^0.4.12",
@@ -190,6 +191,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "@tauri-apps/api": "^2.11.1",
         "better-result": "catalog:",
@@ -225,6 +227,7 @@
         "@stll/clipboard": "workspace:*",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
+        "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "@stll/workspace-ui": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -470,6 +473,7 @@
       "dependencies": {
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -530,6 +534,7 @@
       "dependencies": {
         "@stll/anonymize-chat": "workspace:*",
         "@stll/template-conditions": "workspace:*",
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -567,6 +572,7 @@
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
         "better-result": "catalog:",
+        "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -647,6 +653,7 @@
         "@stricli/core": "^1.3.0",
         "better-result": "catalog:",
         "re2-wasm": "^1.0.2",
+        "temporal-polyfill": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
@@ -746,6 +753,7 @@
       },
       "dependencies": {
         "better-result": "catalog:",
+        "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -835,6 +843,7 @@
         "@formatjs/icu-messageformat-parser": "^3.5.17",
         "@stll/ai-catalog": "workspace:*",
         "@stll/locales": "workspace:*",
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "typescript": "catalog:",
       },
@@ -906,6 +915,7 @@
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",
+        "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -940,6 +950,10 @@
     "packages/time": {
       "name": "@stll/time",
       "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+        "temporal-polyfill": "catalog:",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
@@ -974,6 +988,7 @@
         "input-otp": "^1.5.0",
         "lucide-react": "catalog:",
         "tailwind-merge": "^3.6.0",
+        "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
@@ -1037,6 +1052,7 @@
         "@stll/ui": "workspace:^",
         "better-result": "catalog:",
         "lucide-react": "catalog:",
+        "temporal-polyfill": "catalog:",
         "use-intl": "catalog:",
       },
       "devDependencies": {
@@ -1159,6 +1175,7 @@
     "sherif": "1.13.0",
     "ssf": "0.11.2",
     "tailwindcss": "4.3.3",
+    "temporal-polyfill": "1.0.4",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
     "ultracite": "7.10.7",
@@ -5038,6 +5055,12 @@
     "tailwindcss": ["tailwindcss@4.3.3", "", {}, "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="],
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
+
+    "temporal-polyfill": ["temporal-polyfill@1.0.4", "", { "dependencies": { "temporal-spec": "1.0.1", "temporal-utils": "1.0.2" } }, "sha512-MLEU0qOD2uXlz24oINNtdLZQl8RgmMxSnRtKEGZGGetTJjlRwQJjk+VsJ4EREaUoiaTb8NJOcUiKtoAiWn9EBg=="],
+
+    "temporal-spec": ["temporal-spec@1.0.1", "", {}, "sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg=="],
+
+    "temporal-utils": ["temporal-utils@1.0.2", "", {}, "sha512-1B8Dl4KzrOvsNUlpoWGno2VLQlxroLjDgc5NBjVC9ax9ymdo+ezfyvhyjEMx+IVfhINr6CIG2gcnlP95iRrybQ=="],
 
     "terminal-link": ["terminal-link@2.1.1", "", { "dependencies": { "ansi-escapes": "^4.2.1", "supports-hyperlinks": "^2.0.0" } }, "sha512-un0FmiRUQNr5PJqy9kP7c40F5BOfpGlYTrxonDChEZB7pzZxRNp/bt+ymiy9/npwXya9KH99nJ/GXFIiUkYGFQ=="],
 

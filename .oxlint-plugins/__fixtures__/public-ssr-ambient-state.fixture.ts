@@ -1,11 +1,15 @@
 // Passive regression fixture for the native public SSR ambient-state rules.
 
+import { Temporal } from "@stll/time";
+
 // oxlint-disable-next-line no-restricted-globals -- fixture: browser globals need a hydration-safe adapter
 export const browserLocale = navigator.language;
 // oxlint-disable-next-line no-restricted-globals -- fixture: global-object access is covered too
 export const persistedTheme = globalThis.localStorage.getItem("theme");
 // oxlint-disable-next-line no-restricted-properties -- fixture: render-time clocks are ambient
 export const openedAt = Date.now();
+// oxlint-disable-next-line no-restricted-properties -- fixture: Temporal clocks are ambient during SSR too
+export const temporalOpenedAt = Temporal.Now.instant();
 // oxlint-disable-next-line no-restricted-properties -- fixture: date parsing belongs behind an owned deterministic parser
 export const parsedAt = Date.parse("2026-08-13");
 // oxlint-disable-next-line no-restricted-properties -- fixture: random render state is ambient

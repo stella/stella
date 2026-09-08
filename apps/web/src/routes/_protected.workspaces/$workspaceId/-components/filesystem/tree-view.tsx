@@ -24,6 +24,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
@@ -1785,7 +1786,19 @@ const formatDateValue = (
   if (value === undefined || value === null) {
     return "";
   }
-  return new Date(value).toLocaleDateString(locale, UTC_CALENDAR_DATE_FORMAT);
+  const formatter = new Intl.DateTimeFormat(locale, UTC_CALENDAR_DATE_FORMAT);
+  if (value instanceof Date) {
+    return formatter.format(value);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return formatter.format(
+      Temporal.PlainDate.from(value).toZonedDateTime({
+        plainTime: Temporal.PlainTime.from("00:00"),
+        timeZone: "UTC",
+      }).epochMilliseconds,
+    );
+  }
+  return formatter.format(Temporal.Instant.from(value).epochMilliseconds);
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {

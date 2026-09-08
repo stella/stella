@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 // Token storage.
 //
 // The XDG file is the only backend; an OS keychain backend would add real
@@ -6,8 +7,6 @@
 //
 // One credential per (serverUrl, orgId) pair, mode 0600, analogous to the
 // `aws`/`gh` multi-profile credential file pattern.
-
-import { Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   chmod,
@@ -18,6 +17,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 const CREDENTIALS_FILE_MODE = 0o600;
@@ -197,7 +197,7 @@ export const writeCredentialFile = async (
   // the same process land in the same millisecond and would race on the same
   // temp path. `randomUUID` makes each call's temp path unique regardless of
   // timing.
-  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+  const tempPath = `${filePath}.${process.pid}.${Temporal.Now.instant().epochMilliseconds}.${randomUUID()}.tmp`;
   const written = await Result.tryPromise(async () => {
     await fsOps.writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, {
       mode: CREDENTIALS_FILE_MODE,

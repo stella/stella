@@ -4,7 +4,7 @@ import type {
   Document as HocuspocusDocument,
   WebSocketLike,
 } from "@hocuspocus/server";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import RedisClient from "ioredis";
@@ -20,6 +20,7 @@ import {
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import { Temporal } from "@stll/time";
 
 import { isSecureCollabRedisUrl, isSecureStellaApiUrl } from "./env-schema";
 import { logCollabEvent } from "./log";
@@ -159,16 +160,17 @@ const readPresenceUserId = (state: unknown) => {
 };
 
 const parseTokenExpiresAt = (value: string) => {
-  const expiresAtMs = Date.parse(value);
-  if (Number.isNaN(expiresAtMs)) {
+  const expiresAt = Result.try(() => Temporal.Instant.from(value));
+  if (expiresAt.isErr()) {
     throw new TypeError("Stella API returned an invalid token expiry.");
   }
 
-  return expiresAtMs;
+  return expiresAt.value.epochMilliseconds;
 };
 
 const tokenRefreshDelayMs = (tokenExpiresAtMs: number) => {
-  const msUntilExpiry = tokenExpiresAtMs - Date.now();
+  const msUntilExpiry =
+    tokenExpiresAtMs - Temporal.Now.instant().epochMilliseconds;
   if (msUntilExpiry <= 0) {
     return 0;
   }
@@ -563,7 +565,10 @@ export const createCollabServer = async (
   };
 
   const getFreshRoomToken = async (state: CollabRoomTokenState) => {
-    if (state.tokenExpiresAtMs - Date.now() > TOKEN_REFRESH_LEEWAY_MS) {
+    if (
+      state.tokenExpiresAtMs - Temporal.Now.instant().epochMilliseconds >
+      TOKEN_REFRESH_LEEWAY_MS
+    ) {
       return state.token;
     }
 

@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
+
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -50,7 +52,7 @@ export const ChatThreadRecap = ({
   // re-capture per thread.
   const [openedAt, setOpenedAt] = useState<number | null>(null);
   useMountEffect(() => {
-    setOpenedAt(Date.now());
+    setOpenedAt(Temporal.Now.instant().epochMilliseconds);
   });
   const [openedOnMessageId] = useState(() => lastMessageId);
   const isStale =

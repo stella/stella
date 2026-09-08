@@ -1,5 +1,7 @@
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
@@ -23,7 +25,9 @@ type AcquireCaseLawSourceIngestionLeaseOptions = {
 };
 
 const nextLeaseExpiry = (): Date =>
-  new Date(Date.now() + SOURCE_INGESTION_LEASE_MS);
+  new Date(
+    Temporal.Now.instant().epochMilliseconds + SOURCE_INGESTION_LEASE_MS,
+  );
 
 /**
  * Claim the single fetch/checkpoint writer for one source without holding a

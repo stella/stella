@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type {
   CzRegionalApiItem,
@@ -648,7 +650,7 @@ try {
 
 if (suppliedItems === null) {
   const report: CzRegionalRepairReport = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     from,
     to,
     days: reportDays,

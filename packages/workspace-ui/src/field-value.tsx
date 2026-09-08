@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
+import { Temporal } from "temporal-polyfill/full";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { formatMoneyCents } from "@stll/money";
@@ -372,8 +373,12 @@ const DateFieldValue = ({
 }) => {
   const format = useFormatter();
 
-  const date = content.value ? new Date(content.value) : null;
-  if (!date || Number.isNaN(date.getTime())) {
+  const value = content.value;
+  const date =
+    value !== null && /^\d{4}-\d{2}-\d{2}$/u.test(value)
+      ? Result.try(() => Temporal.PlainDate.from(value)).unwrapOr(null)
+      : null;
+  if (date === null) {
     if (variant === "table") {
       return (
         <SelectFieldValue property={property} value={null} variant={variant} />
@@ -382,12 +387,18 @@ const DateFieldValue = ({
     return <EmptyFieldValue variant={variant} />;
   }
 
-  const formatted = format.dateTime(date, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  const formatted = format.dateTime(
+    date.toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds,
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    },
+  );
 
   if (variant === "kanban") {
     return (

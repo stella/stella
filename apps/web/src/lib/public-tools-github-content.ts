@@ -8,6 +8,7 @@ import {
   loadCatalogue,
 } from "@stll/catalogue";
 import { readCappedBytes } from "@stll/skills/streaming";
+import { Temporal } from "@stll/time";
 
 import { fetchWithTimeout } from "@/lib/fetch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
@@ -185,7 +186,7 @@ export const resolveGithubSkillContent = async (
   {
     isEnabled = isPublicToolsRouteEnabled,
     fetchRawSkill = loadRawSkill,
-    now = Date.now,
+    now = () => Temporal.Now.instant().epochMilliseconds,
     cache = getSkillCache(),
   }: ResolveGithubSkillContentOptions = {},
 ): Promise<GithubSkillContentResult> => {

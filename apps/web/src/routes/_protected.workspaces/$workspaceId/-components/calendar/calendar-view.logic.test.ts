@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import { toSafeId } from "@/lib/safe-id";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 
@@ -52,7 +54,7 @@ describe("calendar view logic", () => {
   test("uses the focused week range for week mode", () => {
     const range = getCalendarQueryRange({
       type: "week",
-      viewDate: new Date(Date.UTC(2026, 4, 6)),
+      viewDate: Temporal.PlainDate.from("2026-05-06"),
       firstWeekday: 1,
       weekend: new Set([0, 6]),
     });

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Delegated Microsoft Graph OAuth for the SharePoint / OneDrive connection.
  *
@@ -13,9 +14,9 @@
  * mirrors a permission model. The read-only property is enforced at compile
  * time (see `readOnlyScope`), not by discipline.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -249,5 +250,7 @@ export const tokenExpiresAt = (token: GraphTokenResponse): Date | null => {
   if (token.expires_in === undefined || token.expires_in <= 0) {
     return null;
   }
-  return new Date(Date.now() + token.expires_in * 1000);
+  return new Date(
+    Temporal.Now.instant().epochMilliseconds + token.expires_in * 1000,
+  );
 };

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
+import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -286,10 +287,14 @@ const GeneralPane = ({
               label={t("lastVerified")}
               value={
                 linkedAccount.verifiedAt
-                  ? format.dateTime(new Date(linkedAccount.verifiedAt), {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
+                  ? format.dateTime(
+                      Temporal.Instant.from(linkedAccount.verifiedAt)
+                        .epochMilliseconds,
+                      {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      },
+                    )
                   : t("notAvailableYet")
               }
             />

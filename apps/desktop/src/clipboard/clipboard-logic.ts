@@ -7,6 +7,7 @@ import {
   foldSearchMatchTextWithOffsets,
 } from "@stll/text-normalize";
 import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
+import { Temporal } from "@stll/time";
 
 import type { ClipboardItem, ClipboardSourceApp } from "./clipboard-types";
 
@@ -562,10 +563,15 @@ export const quickCopyIndex = (code: string, itemCount: number) => {
   return index < itemCount ? index : null;
 };
 
-export const formatClipboardAge = (copiedAt: string, now = Date.now()) => {
+export const formatClipboardAge = (
+  copiedAt: string,
+  now = Temporal.Now.instant().epochMilliseconds,
+) => {
   const elapsedSeconds = Math.max(
     0,
-    Math.floor((now - new Date(copiedAt).getTime()) / 1000),
+    Math.floor(
+      (now - Temporal.Instant.from(copiedAt).epochMilliseconds) / 1000,
+    ),
   );
   if (elapsedSeconds < 60) {
     return { type: "lessThan", unit: "minute", value: 1 } as const;

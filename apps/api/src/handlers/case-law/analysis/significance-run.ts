@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Filling the significance layer, lazily, when a reader opens a decision.
  *
@@ -9,13 +10,12 @@
  * significance, and one nobody cites anew is analysed once.
  */
 
-import { Result } from "better-result";
-
 import type {
   DecisionAnalysis,
   DecisionAnalysisV3,
 } from "@stll/legal-ast/analysis";
 import { isSignificanceCurrent } from "@stll/legal-ast/analysis";
+import { Temporal } from "@stll/time";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -169,7 +169,9 @@ export const refreshSignificance = async ({
           text: result.significance,
           language,
           graphFingerprint,
-          generatedAt: new Date().toISOString(),
+          generatedAt: Temporal.Now.instant().toString({
+            fractionalSecondDigits: 3,
+          }),
           model: modelId,
           promptVersion: SIGNIFICANCE_PROMPT_VERSION,
         },

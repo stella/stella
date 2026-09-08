@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 // The runtime-fetch call site (spec 051 S5.2 runtime + S5.3 + S5.5). Startup
 // always uses the baked-in tree (instant, offline); this module keeps the
 // per-origin cache current and, when a validated fetch diverges from the
@@ -14,9 +15,8 @@
 // Both share the ONE pure `generateRouteMap` and the ONE baked-in Annotation
 // Table, so unknown fetched tools get the same S1 heuristic defaults as the
 // build-time path.
-
-import { Result } from "better-result";
 import { access, readFile } from "node:fs/promises";
+import { Temporal } from "temporal-polyfill/full";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
@@ -266,7 +266,7 @@ export const refreshRegistryCache = async ({
   serverOrigin,
   token,
   env,
-  now = Date.now(),
+  now = Temporal.Now.instant().epochMilliseconds,
   force = false,
   ttlSeconds = DEFAULT_TTL_SECONDS,
   currentVersion = CLI_VERSION,
@@ -354,7 +354,9 @@ export const refreshRegistryCache = async ({
   const file: RegistryCacheFile = {
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
-    fetchedAt: new Date(now).toISOString(),
+    fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
+      fractionalSecondDigits: 3,
+    }),
     ttlSeconds,
     toolsListHash: trust.toolsListHash,
     listings: trust.listings,

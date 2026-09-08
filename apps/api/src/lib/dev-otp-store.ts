@@ -1,10 +1,12 @@
+import { Temporal } from "@stll/time";
+
 type Entry = { otp: string; ts: number };
 
 const store = new Map<string, Entry>();
 const TTL_MS = 5 * 60_000;
 
 export const stashDevOtp = (email: string, otp: string): void => {
-  const entry = { otp, ts: Date.now() };
+  const entry = { otp, ts: Temporal.Now.instant().epochMilliseconds };
   store.set(email, entry);
 
   const expiryTimer = setTimeout(() => {
@@ -20,7 +22,7 @@ export const readDevOtp = (email: string): string | null => {
   if (!entry) {
     return null;
   }
-  if (Date.now() - entry.ts >= TTL_MS) {
+  if (Temporal.Now.instant().epochMilliseconds - entry.ts >= TTL_MS) {
     store.delete(email);
     return null;
   }

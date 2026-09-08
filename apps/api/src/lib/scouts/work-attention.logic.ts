@@ -9,7 +9,7 @@ import type {
   SignalSeverity,
 } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { NewSignal } from "@/api/lib/signals/emit";
@@ -51,12 +51,11 @@ export type WorkAttentionObligation = {
 export const workAttentionToday = (now: Date): string =>
   now.toISOString().slice(0, 10);
 
-const dateOnlyMs = (date: string): number =>
-  new Date(`${date}T00:00:00.000Z`).getTime();
-
 /** Whole days between two civil dates; negative once `date` is in the past. */
 export const daysUntilDate = (date: string, now: Date): number =>
-  (dateOnlyMs(date) - dateOnlyMs(workAttentionToday(now))) / DAY_IN_MS;
+  Temporal.PlainDate.from(workAttentionToday(now)).until(
+    Temporal.PlainDate.from(date),
+  ).days;
 
 /** Whole days an assignment has gone unanswered; partial days do not count. */
 export const daysWaitingSince = (assignedAt: Date, now: Date): number =>

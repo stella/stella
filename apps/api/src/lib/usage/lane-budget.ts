@@ -11,7 +11,7 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { usageLaneCounters } from "@/api/db/schema";
@@ -21,16 +21,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 /** UTC midnight of the day containing `asOf`. */
 export const utcDayStart = (asOf: Date): Date =>
   new Date(
-    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()),
+    Temporal.Instant.fromEpochMilliseconds(asOf.getTime())
+      .toZonedDateTimeISO("UTC")
+      .startOfDay().epochMilliseconds,
   );
 
 /** UTC midnight of the Monday starting the ISO week containing `asOf`. */
 export const utcIsoWeekStart = (asOf: Date): Date => {
-  const day = utcDayStart(asOf);
-  // Both endpoints are UTC midnights, so a plain 24h duration is exact
-  // (UTC has no DST).
-  const daysSinceMonday = (day.getUTCDay() + 6) % 7;
-  return new Date(day.getTime() - daysSinceMonday * DAY_IN_MS);
+  const day = Temporal.Instant.fromEpochMilliseconds(asOf.getTime())
+    .toZonedDateTimeISO("UTC")
+    .startOfDay();
+  return new Date(day.subtract({ days: day.dayOfWeek - 1 }).epochMilliseconds);
 };
 
 export const laneCounterBucketStart = (

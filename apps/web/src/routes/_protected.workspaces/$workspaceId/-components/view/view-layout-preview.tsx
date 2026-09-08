@@ -328,7 +328,7 @@ const TimelinePreview = () => (
   </div>
 );
 
-// Fixed timestamp: previews are static mock data, and Date.now() would make
+// Fixed timestamp: previews are static mock data, and the ambient clock would make
 // the rendered output differ between sessions for no reason.
 const PREVIEW_CREATED_AT = "2026-01-15T09:00:00.000Z";
 

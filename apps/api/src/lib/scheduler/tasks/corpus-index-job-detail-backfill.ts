@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Moves a withdrawal's reason out of `error_message` and into `detail` on the
  * index-job trail.
@@ -9,9 +10,9 @@
  * the cursor so a lost run resumes where it stopped. It retires itself once
  * both tables are walked.
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
@@ -420,7 +421,11 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
 
   if (page.value.status === "progress") {
     if (!signal.aborted) {
-      scheduleContinuation(new Date(Date.now() + CONTINUATION_DELAY_MS));
+      scheduleContinuation(
+        new Date(
+          Temporal.Now.instant().epochMilliseconds + CONTINUATION_DELAY_MS,
+        ),
+      );
     }
     return;
   }

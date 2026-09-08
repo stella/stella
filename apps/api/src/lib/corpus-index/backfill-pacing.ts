@@ -4,6 +4,8 @@ import {
 } from "@aws-sdk/client-cloudwatch";
 import { panic, Result, TaggedError } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -223,7 +225,7 @@ export const createBackfillPacer = ({
   generation,
   heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
   log = logger,
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
   sleep = async (ms) => {
     await Bun.sleep(ms);
   },

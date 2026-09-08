@@ -28,6 +28,7 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
@@ -1741,7 +1742,7 @@ export const processServerChatStream = async function* ({
       type: EventType.RUN_ERROR,
       message: kind,
       code: kind,
-      timestamp: Date.now(),
+      timestamp: Temporal.Now.instant().epochMilliseconds,
     };
   } finally {
     // Client-disconnect teardown: Bun's `ReadableStream.cancel()` fires when the
@@ -1988,7 +1989,7 @@ const createOutgoingChunkTransformer = ({
         type: EventType.CUSTOM,
         name: STELLA_ANON_RESTORATIONS_EVENT,
         value: { pairs: newPairs },
-        timestamp: Date.now(),
+        timestamp: Temporal.Now.instant().epochMilliseconds,
       },
     ];
   };
@@ -2020,7 +2021,7 @@ const createOutgoingChunkTransformer = ({
         type: EventType.TEXT_MESSAGE_CONTENT,
         messageId,
         delta: transformText(text),
-        timestamp: Date.now(),
+        timestamp: Temporal.Now.instant().epochMilliseconds,
       },
     ];
   };
@@ -2042,7 +2043,7 @@ const createOutgoingChunkTransformer = ({
         type: EventType.REASONING_MESSAGE_CONTENT,
         messageId,
         delta: transformText(text),
-        timestamp: Date.now(),
+        timestamp: Temporal.Now.instant().epochMilliseconds,
       },
     ];
   };
@@ -2069,7 +2070,7 @@ const createOutgoingChunkTransformer = ({
           boundary.type === "anonymized"
             ? deanonymizeToolInputText(boundary, text)
             : text,
-        timestamp: Date.now(),
+        timestamp: Temporal.Now.instant().epochMilliseconds,
       },
     ];
   };

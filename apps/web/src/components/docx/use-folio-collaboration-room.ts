@@ -16,6 +16,7 @@ import {
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
+import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -336,7 +337,8 @@ export const useFolioCollaborationRoom = ({
         const refreshTokenIfNeeded = async () => {
           if (
             Number.isFinite(tokenExpiresAtMs) &&
-            Date.now() < tokenExpiresAtMs - FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS
+            Temporal.Now.instant().epochMilliseconds <
+              tokenExpiresAtMs - FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS
           ) {
             return token;
           }

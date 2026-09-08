@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Background queue for durable document reviews.
  *
@@ -15,12 +16,10 @@
  * claimable, and findings upsert on `(runId, positionId)`. A re-delivered job
  * is therefore either a no-op or writes exactly the rows it wrote before.
  */
-
-import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -222,9 +221,15 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
   // `now`: a moving staleness boundary does not care about sub-millisecond
   // drift, and a literal clock read is what makes these comparisons provably
   // free of a database round-trip instead of asserting it in a comment.
-  const runningCutoff = new Date(Date.now() - STUCK_RUNNING_MS);
-  const tableRunningCutoff = new Date(Date.now() - STUCK_TABLE_RUNNING_MS);
-  const queuedCutoff = new Date(Date.now() - STUCK_QUEUED_MS);
+  const runningCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
+  );
+  const tableRunningCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_TABLE_RUNNING_MS,
+  );
+  const queuedCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS,
+  );
   // audit: skip — janitor bookkeeping on already-audited run rows; flips
   // abandoned runs to failed so the read endpoint surfaces them instead of
   // polling a stuck row forever.

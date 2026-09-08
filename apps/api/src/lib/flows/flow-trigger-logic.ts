@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import type { SchedulerDailySchedule } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -116,11 +118,14 @@ export const shouldRunScheduledFlowNow = (
   if (frequency === "daily") {
     return true;
   }
+  const day = Temporal.Instant.fromEpochMilliseconds(
+    now.getTime(),
+  ).toZonedDateTimeISO("UTC");
   if (frequency === "weekly") {
     if (schedule.dayOfWeek === undefined) {
       return false;
     }
-    const weekday = now.getUTCDay();
+    const weekday = day.dayOfWeek % 7;
     if (
       schedule.dayOfWeek < UTC_WEEKDAY_MIN ||
       schedule.dayOfWeek > UTC_WEEKDAY_MAX
@@ -132,5 +137,5 @@ export const shouldRunScheduledFlowNow = (
   if (schedule.dayOfMonth === undefined) {
     return false;
   }
-  return now.getUTCDate() === schedule.dayOfMonth;
+  return day.day === schedule.dayOfMonth;
 };

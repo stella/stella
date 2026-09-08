@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import { streamWithConcurrency } from "@stll/concurrency";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { PayloadBudgetError } from "@/api/lib/compression";
@@ -85,9 +86,9 @@ const measured = async <Value>(
   operation: () => Promise<Value>,
   record: (elapsedMs: number) => void,
 ): Promise<Value> => {
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   const value = await operation();
-  record(Date.now() - startedAt);
+  record(Temporal.Now.instant().epochMilliseconds - startedAt);
   return value;
 };
 
@@ -575,9 +576,9 @@ const buildPreparedEntry = async ({
   }
   // The build is synchronous, so one span covers all of it and the spans of
   // concurrent revisions cannot overlap.
-  const buildStartedAt = Date.now();
+  const buildStartedAt = Temporal.Now.instant().epochMilliseconds;
   const prepared = prepareProjectionEntry(material, payload.value);
-  recordBuildMs(Date.now() - buildStartedAt);
+  recordBuildMs(Temporal.Now.instant().epochMilliseconds - buildStartedAt);
   return prepared;
 };
 
@@ -848,11 +849,12 @@ const processPreparedStream = async ({
     }),
   });
 
-  let waitingSince = Date.now();
+  let waitingSince = Temporal.Now.instant().epochMilliseconds;
   /** The margin-led flush to append once the pool is closed, if one came. */
   let marginFlush: ProjectionAppendTail<PreparedProjectionEntry>[] | undefined;
   for await (const { material, prepared } of payloads) {
-    result.timing.payloadLoadMs += Date.now() - waitingSince;
+    result.timing.payloadLoadMs +=
+      Temporal.Now.instant().epochMilliseconds - waitingSince;
     consumed += 1;
     const entries: PreparedProjectionEntry[] = [];
     if (prepared.isOk()) {
@@ -895,7 +897,7 @@ const processPreparedStream = async ({
       tails,
       entries,
       mode: "buffer",
-      nowMs: Date.now(),
+      nowMs: Temporal.Now.instant().epochMilliseconds,
     });
     tails = advanced.tails;
     if (advanced.leaseMarginReached) {
@@ -926,7 +928,7 @@ const processPreparedStream = async ({
         return requestStatus;
       }
     }
-    waitingSince = Date.now();
+    waitingSince = Temporal.Now.instant().epochMilliseconds;
   }
 
   if (marginFlush !== undefined) {
@@ -947,13 +949,14 @@ const processPreparedStream = async ({
     });
   }
 
-  result.timing.payloadLoadMs += Date.now() - waitingSince;
+  result.timing.payloadLoadMs +=
+    Temporal.Now.instant().epochMilliseconds - waitingSince;
   await classifyPendingFailures();
   const final = advanceCorpusProjectionAppendTails({
     tails,
     entries: [],
     mode: "flush-all",
-    nowMs: Date.now(),
+    nowMs: Temporal.Now.instant().epochMilliseconds,
   });
   return await processPreparedRequests({
     runInTransaction,

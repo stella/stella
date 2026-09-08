@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -14,7 +15,7 @@ import {
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { env } from "@/env";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { localISODate } from "@/lib/local-iso-date";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -44,7 +45,7 @@ type TaskBadgesProps = {
 };
 
 export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
-  const locale = useLocale();
+  const format = useFormatter();
   const t = useTranslations();
 
   if (entity.kind !== "task") {
@@ -91,8 +92,11 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
         >
           <CalendarIcon className="size-3" />
           <span>
-            {new Date(entity.dueDate).toLocaleDateString(
-              locale,
+            {format.dateTime(
+              Temporal.PlainDate.from(entity.dueDate).toZonedDateTime({
+                plainTime: Temporal.PlainTime.from("00:00"),
+                timeZone: "UTC",
+              }).epochMilliseconds,
               UTC_CALENDAR_DATE_FORMAT,
             )}
           </span>

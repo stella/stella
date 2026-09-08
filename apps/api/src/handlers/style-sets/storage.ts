@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -230,7 +232,7 @@ export const replaceStoredStyleSet = async ({
                 0,
                 existing.updatedAt.getTime() +
                   STYLE_SET_DOWNLOAD_TTL_SECONDS * 1000 -
-                  Date.now(),
+                  Temporal.Now.instant().epochMilliseconds,
               ),
             }),
           catch: (cause) =>

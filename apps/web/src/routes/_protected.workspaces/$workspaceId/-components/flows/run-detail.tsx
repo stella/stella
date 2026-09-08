@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -263,9 +264,10 @@ const StepRunCard = ({
         <div className="flex items-center gap-2">
           {stepRun.finishedAt && (
             <span className="text-muted-foreground text-xs tabular-nums">
-              {format.dateTime(new Date(stepRun.finishedAt), {
-                timeStyle: "short",
-              })}
+              {format.dateTime(
+                Temporal.Instant.from(stepRun.finishedAt).epochMilliseconds,
+                { timeStyle: "short" },
+              )}
             </span>
           )}
           <FlowStepStatusBadge status={stepRun.status} />

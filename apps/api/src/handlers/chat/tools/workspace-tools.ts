@@ -3,6 +3,8 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { parsePlainDate } from "@stll/time";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -12,6 +14,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
+import { formatIsoDateForDisplay } from "@/api/lib/date-format";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueEntitySearchRepairs,
@@ -44,13 +47,7 @@ const formatFieldValue = (content: FieldContent): string => {
         return "";
       }
 
-      const [y, m, d] = content.value.split("-");
-      const date = new Date(Number(y), Number(m) - 1, Number(d));
-      return date.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
+      return formatIsoDateForDisplay({ isoDate: content.value });
     }
     case "int":
       return content.currency
@@ -320,7 +317,10 @@ export const createWorkspaceTools = ({
           break;
         }
         case "date": {
-          if (value !== null && typeof value !== "string") {
+          if (
+            value !== null &&
+            (typeof value !== "string" || parsePlainDate(value) === null)
+          ) {
             throw new ChatToolError({
               kind: "invalid-input",
               message:

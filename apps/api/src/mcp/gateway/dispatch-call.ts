@@ -1,5 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 
+import { Temporal } from "@stll/time";
+
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -66,7 +68,7 @@ export const dispatchGatewayToolCall = async ({
     return null;
   }
 
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   let skill: ResolvedSkillTool | null;
   try {
     skill = await dependencies.resolveSkillTool({ context, toolName });
@@ -92,7 +94,7 @@ export const dispatchGatewayToolCall = async ({
 
   await dependencies.recordSkillGatewayToolAudit({
     context,
-    durationMs: Date.now() - startedAt,
+    durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
     outcome: "success",
     skillId: skill.id,
     toolName,

@@ -1,7 +1,7 @@
+import { Result } from "better-result";
 // `stella auth whoami` / `logout` / `switch`: read-mostly operations against
 // the credential store, resolved for whichever server is currently active.
-
-import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import {
   findCredentialByOrgHint,
@@ -82,7 +82,7 @@ export const whoami = async (
     expiresAt: credential.expiresAt,
     name: credential.name,
     hasRefreshToken: Boolean(credential.refreshToken),
-    isExpired: credential.expiresAt <= Date.now(),
+    isExpired: credential.expiresAt <= Temporal.Now.instant().epochMilliseconds,
     orgId: credential.orgId,
     orgLabel: credential.orgLabel,
     scope: credential.scope,

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
@@ -429,37 +430,23 @@ const mergeCookies = (existing: string, incoming: string): string => {
   return [...map.values()].join("; ");
 };
 
-/** Format a Date as DD.MM.YYYY for the NSS search form. */
-const formatCzDate = (date: Date): string => {
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const year = date.getUTCFullYear();
-  return `${day}.${month}.${year}`;
+/** Format a calendar date for the NSS search form. */
+const formatCzDate = (date: Temporal.PlainDate): string => {
+  const day = String(date.day).padStart(2, "0");
+  const month = String(date.month).padStart(2, "0");
+  return `${day}.${month}.${date.year}`;
 };
 
-/** Parse YYYY-MM-DD cursor date to a Date. */
-const parseCursorDate = (dateStr: string): Date => {
-  const parts = dateStr.split("-").map(Number);
-  const year = parts[0] ?? 0;
-  const month = parts[1] ?? 1;
-  const day = parts[2] ?? 1;
-  return new Date(Date.UTC(year, month - 1, day));
-};
+const parseCursorDate = (date: string) => Temporal.PlainDate.from(date);
 
-/** Advance to next day as YYYY-MM-DD. */
-const nextDay = (dateStr: string): string => {
-  const date = parseCursorDate(dateStr);
-  date.setUTCDate(date.getUTCDate() + 1);
-  const iso = date.toISOString().split("T")[0];
-  if (!iso) {
-    panic(`Failed to format date from ${dateStr}`);
-  }
-  return iso;
-};
+const nextDay = (date: string): string =>
+  parseCursorDate(date).add({ days: 1 }).toString();
 
 /** Today's date as YYYY-MM-DD. */
 const todayIso = (): string => {
-  const iso = new Date().toISOString().split("T")[0];
+  const iso = Temporal.Now.instant()
+    .toString({ fractionalSecondDigits: 3 })
+    .split("T")[0];
   return iso ?? "1970-01-01";
 };
 
@@ -1750,12 +1737,19 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
  * is still within TTL, otherwise creates a fresh one.
  */
 const getSession = async (signal: AbortSignal): Promise<SessionState> => {
-  if (cachedSession && Date.now() - cachedSession.createdAt < SESSION_TTL_MS) {
+  if (
+    cachedSession &&
+    Temporal.Now.instant().epochMilliseconds - cachedSession.createdAt <
+      SESSION_TTL_MS
+  ) {
     return cachedSession.state;
   }
 
   const state = await initSession(signal);
-  cachedSession = { state, createdAt: Date.now() };
+  cachedSession = {
+    state,
+    createdAt: Temporal.Now.instant().epochMilliseconds,
+  };
   return state;
 };
 
@@ -2348,7 +2342,7 @@ export const czNssAdapter = defineSourceAdapter({
       );
       formData.set(
         "vyhledavaciSekce[1].vyhledavaciPodminka[0].vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo",
-        `31.12.${new Date().getFullYear() + 1}`,
+        `31.12.${Temporal.Now.plainDateISO().year + 1}`,
       );
 
       const response = await fetchWithTimeout(`${BASE_URL}/Home/Index`, {

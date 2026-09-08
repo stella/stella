@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { api } from "@/lib/api";
 import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
@@ -26,7 +26,9 @@ const TIME_PRESET_DURATIONS_MS = {
  * for the duration of a `useInfiniteQuery` session.
  */
 export const presetUpdatedFrom = (preset: TimePreset): string =>
-  new Date(Date.now() - TIME_PRESET_DURATIONS_MS[preset]).toISOString();
+  Temporal.Now.instant()
+    .subtract({ milliseconds: TIME_PRESET_DURATIONS_MS[preset] })
+    .toString({ fractionalSecondDigits: 3 });
 
 export type SearchableFacet = "editor" | "workspace" | "mimeType";
 

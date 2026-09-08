@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -76,7 +78,7 @@ export const runSchedulerOnce = async ({
   limit = DEFAULT_JOB_LIMIT,
   maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
   maxSweepDurationMs = DEFAULT_SWEEP_DURATION_MS,
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
   registry = createSchedulerTaskRegistry(),
   runnerId = defaultRunnerId(),
   signal,
@@ -344,7 +346,9 @@ const startLeaseHeartbeat = ({
     await db
       .update(schedulerJobs)
       .set({
-        lockedUntil: new Date(Date.now() + leaseMs),
+        lockedUntil: new Date(
+          Temporal.Now.instant().epochMilliseconds + leaseMs,
+        ),
       })
       .where(
         and(

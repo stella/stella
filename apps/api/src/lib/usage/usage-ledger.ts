@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Usage ledger API.
  *
@@ -27,10 +28,10 @@
  * will go slightly negative at worst, which surfaces as an
  * over-cap warning rather than a silent loss.
  */
-
-import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -475,13 +476,11 @@ const resolvePeriod = async (
     // System-initiated calls (background enrichment) may have no
     // entitlement; bucket their consumption into a synthetic
     // "month containing now" period so balance math is well-defined.
-    const now = new Date();
-    const start = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-    );
-    const end = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
-    );
+    const month = Temporal.Now.zonedDateTimeISO("UTC")
+      .with({ day: 1 })
+      .startOfDay();
+    const start = new Date(month.epochMilliseconds);
+    const end = new Date(month.add({ months: 1 }).epochMilliseconds);
     return { start, end };
   }
   return {

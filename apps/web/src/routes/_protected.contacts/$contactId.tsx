@@ -20,7 +20,7 @@ import { cn } from "@stll/ui/utils";
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { usePermissions } from "@/hooks/use-permissions";
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
@@ -101,6 +101,7 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 function ContactDetailPage() {
   const t = useTranslations();
+  const format = useFormatter();
   const contactId = Route.useParams({ select: (p) => p.contactId });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -447,8 +448,8 @@ function ContactDetailPage() {
                     </BidiText>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
-                        date: new Date(matter.createdAt).toLocaleDateString(
-                          getFormattingLocale(),
+                        date: format.dateTime(
+                          new Date(matter.createdAt).getTime(),
                         ),
                       })}
                     </span>

@@ -2,6 +2,7 @@ import {
   GLOBAL_SEARCH_RESULT_TYPES,
   type GlobalSearchResultType,
 } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import type {
   SearchFilters,
@@ -89,10 +90,22 @@ export const formatMimeTypeLabel = (mimeType: string): string => {
 export const isoToDateInputValue = (iso: string): string => iso.slice(0, 10);
 
 export const dateInputToIsoStart = (value: string): string =>
-  new Date(`${value}T00:00:00.000Z`).toISOString();
+  Temporal.PlainDate.from(value)
+    .toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    })
+    .toInstant()
+    .toString({ fractionalSecondDigits: 3 });
 
 export const dateInputToIsoEnd = (value: string): string =>
-  new Date(`${value}T23:59:59.999Z`).toISOString();
+  Temporal.PlainDate.from(value)
+    .toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("23:59:59.999"),
+      timeZone: "UTC",
+    })
+    .toInstant()
+    .toString({ fractionalSecondDigits: 3 });
 
 export const mergeSelectedBuckets = (
   buckets: FacetBucket[],

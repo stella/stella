@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -676,12 +677,17 @@ const HOURS_OF_DAY = Array.from({ length: 24 }, (_, hour) => hour);
 const DAYS_OF_WEEK = Array.from({ length: 7 }, (_, day) => day);
 const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, index) => index + 1);
 
-// A fixed reference week (2024-01-01 is a Monday → index 1) used only to render
-// localized weekday names; day index maps 0=Sun … 6=Sat.
+// A fixed reference week (2023-01-01 is a Sunday → index 0) used only to
+// render localized weekday names; day index maps 0=Sun … 6=Sat.
 const weekdayLabel = (dayIndex: number): string =>
-  new Date(Date.UTC(2023, 0, 1 + dayIndex)).toLocaleDateString(
-    getFormattingLocale(),
-    WEEKDAY_NAME_FORMAT,
+  new Intl.DateTimeFormat(getFormattingLocale(), WEEKDAY_NAME_FORMAT).format(
+    Temporal.PlainDate.from("2023-01-01")
+      .add({ days: dayIndex })
+      .toZonedDateTime({
+        plainTime: Temporal.PlainTime.from("00:00"),
+        timeZone: "UTC",
+      })
+      .toInstant().epochMilliseconds,
   );
 
 const ScheduleConfig = ({

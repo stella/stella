@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
+
 import { trimToNull } from "../shared/strings.js";
 import type {
   GcisCompany,
@@ -14,7 +17,7 @@ import type {
 // expires.
 const GCIS_LOOKUP_DATASET = "5F64D864-61CB-4D0D-8AD9-492047CC1EA6";
 const GCIS_API_BASE = "https://data.gcis.nat.gov.tw/od/data/api";
-const TAIWAN_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+const TAIWAN_TIME_ZONE = "Asia/Taipei";
 
 // 公司狀況 codes the GCIS name-search endpoint surfaces. Lookup-only
 // responses (5F64D864-…) omit the numeric code; we then fall back to
@@ -61,10 +64,14 @@ const parseStatus = (
   // currently active.
   const susStart = raw.Sus_Beg_Date?.trim();
   const susEnd = raw.Sus_End_Date?.trim();
-  const startsOn = parseRocDate(susStart);
-  const endsOn = parseRocDate(susEnd);
+  const startsOn = parseRocPlainDate(susStart);
+  const endsOn = parseRocPlainDate(susEnd);
   const today = getTaiwanCalendarDate(now);
-  if (startsOn && startsOn <= today && (!endsOn || today <= endsOn)) {
+  if (
+    startsOn !== null &&
+    Temporal.PlainDate.compare(startsOn, today) <= 0 &&
+    (endsOn === null || Temporal.PlainDate.compare(today, endsOn) <= 0)
+  ) {
     return { type: "suspended" };
   }
   const statusCode = raw.Company_Status?.trim();
@@ -84,8 +91,10 @@ const parseStatus = (
   return { type: "unknown" };
 };
 
-const getTaiwanCalendarDate = (date: Date): string =>
-  new Date(date.getTime() + TAIWAN_UTC_OFFSET_MS).toISOString().slice(0, 10);
+const getTaiwanCalendarDate = (date: Date): Temporal.PlainDate =>
+  Temporal.Instant.fromEpochMilliseconds(date.getTime())
+    .toZonedDateTimeISO(TAIWAN_TIME_ZONE)
+    .toPlainDate();
 
 // ROC-era (民國) date → Gregorian ISO date.
 //
@@ -97,7 +106,9 @@ const getTaiwanCalendarDate = (date: Date): string =>
 // Returns null when the input is empty, malformed, or describes an
 // out-of-range month/day. We do not throw — bad upstream dates should
 // degrade the field, not the whole lookup.
-const parseRocDate = (input: string | undefined): string | null => {
+const parseRocPlainDate = (
+  input: string | undefined,
+): Temporal.PlainDate | null => {
   if (!input) {
     return null;
   }
@@ -112,22 +123,23 @@ const parseRocDate = (input: string | undefined): string | null => {
     return null;
   }
   const rocYear = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
-  if (rocYear < 1 || month < 1 || month > 12 || day < 1 || day > 31) {
+  if (rocYear < 1) {
     return null;
   }
-  const gregorianYear = rocYear + 1911;
-  const parsed = new Date(Date.UTC(gregorianYear, month - 1, day));
-  if (
-    parsed.getUTCFullYear() !== gregorianYear ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
-    return null;
-  }
-  return `${String(gregorianYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return Result.try(() =>
+    Temporal.PlainDate.from(
+      {
+        day: Number(dayStr),
+        month: Number(monthStr),
+        year: rocYear + 1911,
+      },
+      { overflow: "reject" },
+    ),
+  ).unwrapOr(null);
 };
+
+const parseRocDate = (input: string | undefined): string | null =>
+  parseRocPlainDate(input)?.toString() ?? null;
 
 const numberOrNull = (input: number | undefined): number | null =>
   typeof input === "number" && Number.isFinite(input) ? input : null;

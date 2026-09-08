@@ -22,6 +22,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
+import { localISODate } from "@/lib/local-iso-date";
 import { majorUnitInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
@@ -60,13 +61,7 @@ export const ExpenseForm = ({
       : "",
   );
 
-  const today = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  })();
+  const today = localISODate();
 
   const form = useForm({
     defaultValues: {

@@ -20,8 +20,21 @@ import nodeCryptoDefault, {
 } from "node:crypto";
 import * as nodeCryptoNamespace from "node:crypto";
 
+import { Temporal } from "@stll/time";
+
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient epoch time must be injected
 export const epoch = Date.now();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Temporal ambient time must be injected too
+export const temporalInstant = Temporal.Now.instant();
+
+const TemporalAlias = Temporal;
+const { instant: temporalNowAlias } = TemporalAlias.Now;
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable Temporal.Now aliases retain ambient provenance
+export const aliasedTemporalInstant = temporalNowAlias();
+
+const localTemporal = { Now: { instant: () => 0 } };
+export const localTemporalInstant = localTemporal.Now.instant();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, unicorn/new-for-builtins -- fixture: direct Date calls are part of the rejected API surface
 export const dateString = Date();

@@ -62,6 +62,11 @@ const publicSsrDateNowRestriction = {
 };
 const publicSsrAmbientProperties = [
   {
+    object: "Temporal",
+    property: "Now",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  {
     object: "Date",
     property: "parse",
     message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
@@ -170,6 +175,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-physical-properties.fixture.ts", [
     "no-physical-properties/no-physical-properties",
+  ]),
+  fixtureRuleOverride("prefer-temporal.fixture.ts", [
+    "prefer-temporal/prefer-temporal",
   ]),
   fixtureRuleOverride("no-raw-api-url.fixture.ts", [
     "no-raw-api-url/no-direct-api-env",
@@ -979,6 +987,7 @@ export default defineConfig({
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
+    "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
     "./.oxlint-plugins/no-input-dir-auto.ts",
     "./.oxlint-plugins/require-dir-on-rendered-name.ts",
@@ -2138,10 +2147,29 @@ export default defineConfig({
       },
     },
     {
+      // Temporal owns application clock and calendar logic. Legacy Date stays
+      // available as a single-value adapter for database, protocol, and vendor
+      // APIs; the syntax rule cannot prove arbitrary object properties are
+      // Dates, so it follows only globals, stable aliases, typed parameters,
+      // local constructor aliases, and immediately constructed Dates.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/prefer-temporal.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "apps/api/src/tests/**",
+      ],
+      rules: {
+        "prefer-temporal/prefer-temporal": "error",
+      },
+    },
+    {
       // Date/timezone footguns: date-only `new Date("...")` (UTC-midnight
-      // shift), `Date.parse` (engine-dependent), and raw day-length ms
-      // arithmetic (DST-unsafe). Use parseIsoDateLocal/addDays and DAY_IN_MS
-      // from `@stll/time`.
+      // shift) and raw day-length ms arithmetic (DST-unsafe). Use
+      // parsePlainDate/addDays and DAY_IN_MS from `@stll/time`.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",

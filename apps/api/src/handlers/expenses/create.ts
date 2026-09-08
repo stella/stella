@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -56,10 +58,10 @@ const createExpense = createSafeHandler(
     const todayStr = yield* formatTodayInTimeZone({
       timezoneId: body.timezoneId,
     });
-    const dateIncurred = new Date(`${body.dateIncurred}T00:00:00`);
-    const today = new Date(`${todayStr}T00:00:00`);
+    const dateIncurred = Temporal.PlainDate.from(body.dateIncurred);
+    const today = Temporal.PlainDate.from(todayStr);
 
-    if (dateIncurred > today) {
+    if (Temporal.PlainDate.compare(dateIncurred, today) > 0) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -68,9 +70,8 @@ const createExpense = createSafeHandler(
       );
     }
 
-    const maxAgeCutoff = new Date(today);
-    maxAgeCutoff.setDate(maxAgeCutoff.getDate() - LIMITS.timeEntryMaxAgeDays);
-    if (dateIncurred < maxAgeCutoff) {
+    const maxAgeCutoff = today.subtract({ days: LIMITS.timeEntryMaxAgeDays });
+    if (Temporal.PlainDate.compare(dateIncurred, maxAgeCutoff) < 0) {
       return Result.err(
         new HandlerError({
           status: 400,

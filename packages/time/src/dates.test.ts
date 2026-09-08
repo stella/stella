@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { addDays, isIsoDateString, parseIsoDateLocal } from "./dates";
+import {
+  addDays,
+  isIsoDateString,
+  parseIsoDateLocal,
+  parsePlainDate,
+} from "./dates";
 
 // Date's local-time methods read `process.env.TZ` on every call in Bun (and
 // Node), so flipping it around a test reproduces the exact footgun in a
@@ -34,6 +39,33 @@ describe("isIsoDateString", () => {
   });
 });
 
+describe("parsePlainDate", () => {
+  test("accepts real ISO days across the supported four-digit calendar", () => {
+    for (const value of ["0001-01-01", "2000-02-29", "2011-12-30"]) {
+      expect(parsePlainDate(value)?.toString()).toBe(value);
+    }
+  });
+
+  test("rejects invalid calendar days and non-date ISO values", () => {
+    for (const value of [
+      "1900-02-29",
+      "2024-02-30",
+      "2024-13-01",
+      "2024-01-01T00:00:00Z",
+      "2024-1-1",
+    ]) {
+      expect(parsePlainDate(value)).toBeNull();
+    }
+  });
+
+  test("represents a real calendar day even when the host timezone skipped it", () => {
+    process.env.TZ = "Pacific/Apia";
+
+    expect(parsePlainDate("2011-12-30")?.toString()).toBe("2011-12-30");
+    expect(parseIsoDateLocal("2011-12-30")).toBeNull();
+  });
+});
+
 describe("parseIsoDateLocal", () => {
   test("does not shift a day west of UTC (the new Date(string) bug)", () => {
     process.env.TZ = "Pacific/Honolulu"; // UTC-10, west of UTC
@@ -56,6 +88,15 @@ describe("parseIsoDateLocal", () => {
     expect(parsed?.getFullYear()).toBe(2024);
     expect(parsed?.getMonth()).toBe(5);
     expect(parsed?.getDate()).toBe(15);
+  });
+
+  test("adapts years below 100 without Date's 1900 offset", () => {
+    process.env.TZ = "UTC";
+
+    const parsed = parseIsoDateLocal("0001-01-01");
+    expect(parsed?.getFullYear()).toBe(1);
+    expect(parsed?.getMonth()).toBe(0);
+    expect(parsed?.getDate()).toBe(1);
   });
 
   test("rejects a calendar date that does not exist", () => {
@@ -116,5 +157,27 @@ describe("addDays", () => {
     expect(prev.getFullYear()).toBe(2023);
     expect(prev.getMonth()).toBe(11);
     expect(prev.getDate()).toBe(31);
+  });
+
+  test("preserves the local clock while applying Gregorian leap-day arithmetic", () => {
+    process.env.TZ = "America/New_York";
+    const start = new Date(2024, 1, 28, 16, 27, 38, 491);
+
+    const leapDay = addDays(start, 1);
+    const march = addDays(leapDay, 1);
+
+    expect([
+      leapDay.getFullYear(),
+      leapDay.getMonth(),
+      leapDay.getDate(),
+      leapDay.getHours(),
+      leapDay.getMinutes(),
+      leapDay.getSeconds(),
+      leapDay.getMilliseconds(),
+    ]).toEqual([2024, 1, 29, 16, 27, 38, 491]);
+    expect([march.getFullYear(), march.getMonth(), march.getDate()]).toEqual([
+      2024, 2, 1,
+    ]);
+    expect(start.getDate()).toBe(28);
   });
 });

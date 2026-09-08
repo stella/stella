@@ -9,6 +9,8 @@ import type {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { isMockAI } from "@/api/consts";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
@@ -153,7 +155,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
     const messageId = "mock-message";
-    const timestamp = Date.now();
+    const timestamp = Temporal.Now.instant().epochMilliseconds;
     const latestUserText = getLatestUserText(messages);
     const slowStream = latestUserText.includes(E2E_SLOW_STREAM_MARKER);
     // The continuation after the client posted the draft result ends with a

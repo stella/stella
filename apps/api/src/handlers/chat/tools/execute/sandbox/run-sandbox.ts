@@ -6,6 +6,8 @@ import type {
 } from "quickjs-emscripten-core";
 import { Scope } from "quickjs-emscripten-core";
 
+import { Temporal } from "@stll/time";
+
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
@@ -174,7 +176,7 @@ const raceHostWorkAgainstDeadline = async (
   hostWork: readonly Promise<void>[],
   deadline: number,
 ): Promise<void> => {
-  const remainingMs = deadline - Date.now();
+  const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
     return;
   }
@@ -248,7 +250,7 @@ export const trackSandboxHostWorkForTest = (work: Promise<void>): void => {
 export const awaitSandboxAdmissionIdle = async ({
   timeoutMs = SANDBOX_ADMISSION_IDLE_TIMEOUT_MS,
 }: AwaitSandboxAdmissionIdleOptions = {}): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Temporal.Now.instant().epochMilliseconds + timeoutMs;
 
   while (
     // oxlint-disable-next-line no-unmodified-loop-condition -- released by admission callbacks that settle during the awaited work below, not in this loop body
@@ -256,7 +258,7 @@ export const awaitSandboxAdmissionIdle = async ({
     sandboxAdmissionQueue.length > 0 ||
     sandboxHostWorkInFlight.size > 0
   ) {
-    if (Date.now() >= deadline) {
+    if (Temporal.Now.instant().epochMilliseconds >= deadline) {
       const snapshot = snapshotSandboxAdmission();
       // Drop the stranded host-work tail so the next test starts clean; keep
       // the admission counters intact so a real accounting bug still surfaces.
@@ -281,7 +283,8 @@ export const awaitSandboxAdmissionIdle = async ({
 const buildSandboxScript = (transpiledBody: string): string =>
   `${buildHostBridgePrelude()}\n${transpiledBody}`;
 
-const hasDeadlinePassed = (deadline: number): boolean => Date.now() >= deadline;
+const hasDeadlinePassed = (deadline: number): boolean =>
+  Temporal.Now.instant().epochMilliseconds >= deadline;
 
 const errorMessageFromUnknown = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -583,7 +586,7 @@ export const runSandbox = async ({
   const releaseSandboxAdmission = await acquireSandboxAdmission(concurrencyKey);
 
   try {
-    const startedAt = Date.now();
+    const startedAt = Temporal.Now.instant().epochMilliseconds;
     const limits: SandboxLimits = {
       ...DEFAULT_SANDBOX_LIMITS,
       ...partialLimits,
@@ -604,7 +607,7 @@ export const runSandbox = async ({
       return Result.ok({
         value: execution.value,
         hostCalls: execution.hostCalls,
-        durationMs: Date.now() - startedAt,
+        durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
         logs: execution.logs,
       });
     });
@@ -1179,7 +1182,7 @@ const waitForHostProgress = async ({
   pendingHostWork,
   deadline,
 }: WaitForHostProgressProps): Promise<HostProgress> => {
-  const remainingMs = deadline - Date.now();
+  const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
     return "timeout";
   }

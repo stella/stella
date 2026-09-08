@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
@@ -142,7 +144,9 @@ const runResearchAnswersHandler = createSafeRootHandler(
         const existingByKey = new Map(
           existing.map((row) => [`${row.columnId}:${row.decisionId}`, row]),
         );
-        const staleBefore = Date.now() - LIMITS.caseLawResearchPendingStaleMs;
+        const staleBefore =
+          Temporal.Now.instant().epochMilliseconds -
+          LIMITS.caseLawResearchPendingStaleMs;
         const now = new Date();
         const toQueue: (typeof caseLawResearchAnswers.$inferInsert)[] = [];
         for (const column of columns) {

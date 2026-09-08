@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
+import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { stella, stellaIngestion } from "@/api/db/rls";
@@ -1352,7 +1353,9 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
 
   // A reservation expires five minutes after creation; seeding it in the
   // future keeps the row in the state the finalize path actually reads.
-  const pendingUploadExpiry = new Date(Date.now() + 5 * 60 * 1000);
+  const pendingUploadExpiry = new Date(
+    Temporal.Now.instant().epochMilliseconds + 5 * 60 * 1000,
+  );
   const docxMime =
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 

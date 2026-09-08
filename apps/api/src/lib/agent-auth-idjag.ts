@@ -9,6 +9,8 @@ import {
 } from "jose";
 import type { JWK } from "jose";
 
+import { Temporal } from "@stll/time";
+
 import {
   AGENT_AUTH_ASSERTION_TTL_SECONDS,
   AGENT_AUTH_CEREMONY_TTL_SECONDS,
@@ -296,7 +298,8 @@ const issueRegistrationForPrincipal = async (
   }
 
   const expiresAt = new Date(
-    Date.now() + AGENT_AUTH_CEREMONY_TTL_SECONDS * 1000,
+    Temporal.Now.instant().epochMilliseconds +
+      AGENT_AUTH_CEREMONY_TTL_SECONDS * 1000,
   );
   await rootDb.insert(agentRegistration).values({
     id: registrationId,

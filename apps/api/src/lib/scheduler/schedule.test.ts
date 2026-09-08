@@ -12,6 +12,20 @@ describe("computeNextRunAt", () => {
     expect(nextRunAt.toISOString()).toBe("2026-04-29T10:05:00.000Z");
   });
 
+  test.each([0, -120_001, 1_800_000_000_000])(
+    "preserves millisecond clipping for fractional intervals from %s",
+    (epochMilliseconds) => {
+      const interval = 60_000.5;
+      const next = computeNextRunAt(
+        { type: "interval", everyMs: interval },
+        new Date(epochMilliseconds),
+      );
+      expect(next.getTime()).toBe(
+        new Date(epochMilliseconds + interval).getTime(),
+      );
+    },
+  );
+
   test("uses today's daily occurrence when it is still in the future", () => {
     const nextRunAt = computeNextRunAt(
       { type: "daily", hour: 2, minute: 30, timeZone: "UTC" },
@@ -61,4 +75,21 @@ describe("computeNextRunAt", () => {
 
     expect(nextRunAt.toISOString()).toBe("2026-10-25T00:30:00.000Z");
   });
+
+  test.each([
+    ["2026-03-29T02:00:00.000Z", "2026-03-30T00:30:00.000Z"],
+    ["2026-10-25T00:45:00.000Z", "2026-10-26T01:30:00.000Z"],
+    ["2026-04-29T00:30:00.000Z", "2026-04-30T00:30:00.000Z"],
+  ])(
+    "daily schedules advance past an occurrence at %s without running it twice",
+    (from, expected) => {
+      const input = new Date(from);
+      const result = computeNextRunAt(
+        { type: "daily", hour: 2, minute: 30, timeZone: "Europe/Prague" },
+        input,
+      );
+      expect(result.toISOString()).toBe(expected);
+      expect(input.toISOString()).toBe(from);
+    },
+  );
 });

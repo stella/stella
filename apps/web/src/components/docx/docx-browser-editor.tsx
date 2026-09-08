@@ -1,8 +1,3 @@
-/**
- * DocxBrowserEditor — wrapper that manages the edit session lifecycle
- * and renders the Folio DocxEditor.
- */
-
 import {
   useCallback,
   useImperativeHandle,
@@ -11,6 +6,10 @@ import {
   useRef,
   useState,
 } from "react";
+/**
+ * DocxBrowserEditor — wrapper that manages the edit session lifecycle
+ * and renders the Folio DocxEditor.
+ */
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import {
@@ -44,6 +43,7 @@ import type {
   DocxEditorRef,
   EditorMode,
 } from "@stll/folio-react";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Select as StSelect,
@@ -364,7 +364,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       // tick while a worker request is still pending. The decision
       // helper repeats this guard for its own correctness, but the
       // expensive read has to stay behind it.
-      const now = Date.now();
+      const now = Temporal.Now.instant().epochMilliseconds;
       if (now < inFlightUntil) {
         return;
       }
@@ -398,7 +398,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         // started state (we're not running anything).
         return;
       }
-      inFlightUntil = Date.now() + IN_FLIGHT_TIMEOUT_MS;
+      inFlightUntil =
+        Temporal.Now.instant().epochMilliseconds + IN_FLIGHT_TIMEOUT_MS;
       // (Re-)mark started: handles reruns triggered by
       // edits or allowlist changes after the first run
       // already called `markAnonymizationPipelineRan`.

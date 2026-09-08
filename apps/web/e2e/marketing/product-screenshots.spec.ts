@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 
+import { setFixedBrowserTime } from "../helpers/clock";
+
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 // Seeded Supplier Agreement redline in the "Meridian supply agreement"
@@ -209,7 +211,8 @@ test("capture landing product screenshots", async ({
           page.request,
           capture.versionAnchor,
         );
-        await page.clock.setFixedTime(
+        await setFixedBrowserTime(
+          page,
           versionCreatedAt.getTime() + VERSION_CAPTION_OFFSET_MS,
         );
         clockPinned = true;

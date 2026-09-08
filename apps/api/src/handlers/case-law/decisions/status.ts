@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import { inArray, notInArray, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -94,7 +96,7 @@ export const readCaseLawCorpusStatusHandler = async (
     return EMPTY_STATUS;
   }
   const key = excludedSourceIds.value.toSorted().join(",");
-  const now = Date.now();
+  const now = Temporal.Now.instant().epochMilliseconds;
   if (cached?.key === key && now - cached.readAt < STATUS_CACHE_TTL_MS) {
     return cached.value;
   }

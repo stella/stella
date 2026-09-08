@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, count, desc, gte, inArray, lte, max, sql } from "drizzle-orm";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -341,8 +341,12 @@ const readSourceAggregates = async ({
 export const getIngestionStatus = async (
   scopedDb: ScopedDb,
 ): Promise<IngestionStatus> => {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const oneDayAgo = new Date(Date.now() - DAY_IN_MS);
+  const oneHourAgo = new Date(
+    Temporal.Now.instant().epochMilliseconds - 60 * 60 * 1000,
+  );
+  const oneDayAgo = new Date(
+    Temporal.Now.instant().epochMilliseconds - DAY_IN_MS,
+  );
 
   return await scopedDb(async (db) => {
     const sources = await boundedAll({

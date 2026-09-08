@@ -19,6 +19,7 @@
     "@hocuspocus/server": "^4.6.0",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
+    "@stll/time": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
     "crossws": "^0.4.12",

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -59,7 +61,8 @@ type RepairState = {
 };
 
 const validTimestampString = (value: unknown): value is string =>
-  typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+  typeof value === "string" &&
+  Result.try(() => Temporal.Instant.from(value)).isOk();
 
 const repairState = (payload: SchedulerPayload | null): RepairState => {
   const cursor = payload?.["cursor"];
@@ -182,8 +185,9 @@ export const repairSearchSemanticTimestamps = async ({
     const quietSince = state.quietSince ?? nowIso;
     const passStartedAfterQuiet =
       state.passStartedAt !== null &&
-      new Date(state.passStartedAt).getTime() >=
-        new Date(quietSince).getTime() + VERIFICATION_QUIET_PERIOD_MS;
+      Temporal.Instant.from(state.passStartedAt).epochMilliseconds >=
+        Temporal.Instant.from(quietSince).epochMilliseconds +
+          VERIFICATION_QUIET_PERIOD_MS;
     const cleanPasses =
       state.dirty || !passStartedAfterQuiet
         ? 0

@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { Elysia, type Context } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
@@ -104,7 +106,7 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 
   increment(key: string, duration?: number, requestTime?: number) {
     const effectiveDuration = duration ?? this.durationMs;
-    const now = requestTime ?? Date.now();
+    const now = requestTime ?? Temporal.Now.instant().epochMilliseconds;
     const entry = this.store.get(key);
 
     if (entry && entry.expiresAt > now) {
@@ -126,7 +128,7 @@ export class InMemoryRateLimitContext implements RateLimitContext {
   }
 
   decrement(key: string) {
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     const entry = this.store.get(key);
     if (entry && entry.expiresAt > now && entry.count > 0) {
       entry.count -= 1;
@@ -147,7 +149,7 @@ export class InMemoryRateLimitContext implements RateLimitContext {
   }
 
   private evictExpired() {
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     for (const [key, entry] of this.store) {
       if (entry.expiresAt <= now) {
         this.store.delete(key);
@@ -249,12 +251,14 @@ export const rateLimit = ({
     const { count, nextReset } = await context.increment(
       key,
       duration,
-      Date.now(),
+      Temporal.Now.instant().epochMilliseconds,
     );
     const remaining = Math.max(max - count, 0);
     const reset = Math.max(
       0,
-      Math.ceil((nextReset.getTime() - Date.now()) / 1000),
+      Math.ceil(
+        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
+      ),
     );
     const exceeded = count > max;
 

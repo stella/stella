@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { isSafeIdValue } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { getStorageKey } from "@/consts";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
@@ -121,7 +122,12 @@ export const recordRecentSearch = (
   }
 
   const next = [
-    { query: trimmed, searchedAt: new Date().toISOString() },
+    {
+      query: trimmed,
+      searchedAt: Temporal.Now.instant().toString({
+        fractionalSecondDigits: 3,
+      }),
+    },
     ...readRecentSearches(scope, storage).filter(
       (item) => item.query !== trimmed,
     ),
@@ -152,7 +158,11 @@ export const recordRecentFile = (
   }
 
   const next = [
-    { ...file, title, openedAt: new Date().toISOString() },
+    {
+      ...file,
+      title,
+      openedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+    },
     ...readRecentFiles(scope, storage).filter(
       (item) => item.entityId !== file.entityId,
     ),
