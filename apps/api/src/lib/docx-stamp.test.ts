@@ -229,84 +229,6 @@ describe("injectStamp", () => {
   });
 });
 
-describe("placeholder replacement", () => {
-  const stamp = "2026/001/015.v3";
-  const code = "kx8mq2n4p3";
-  const baseUrl = "https://stella.legal";
-
-  test("replaces {{STELLA_ID}} with stamp + code", async () => {
-    const docx = await makeDocx({
-      documentXml: [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-        "<w:body>",
-        "<w:p><w:r><w:t>Ref: {{STELLA_ID}}</w:t></w:r></w:p>",
-        "<w:sectPr></w:sectPr>",
-        "</w:body>",
-        "</w:document>",
-      ].join("\n"),
-    });
-
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-    const docXml = await readZipFile(stamped, "word/document.xml");
-    expect(docXml).toContain(stamp);
-    expect(docXml).toContain(`stl:${code}`);
-    expect(docXml).not.toContain("{{STELLA_ID}}");
-  });
-
-  test("replaces {{STELLA_REF}} and {{STELLA_CODE}} separately", async () => {
-    const docx = await makeDocx({
-      documentXml: [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-        "<w:body>",
-        "<w:p><w:r><w:t>Doc: {{STELLA_REF}}</w:t></w:r></w:p>",
-        "<w:p><w:r><w:t>Code: {{STELLA_CODE}}</w:t></w:r></w:p>",
-        "<w:sectPr></w:sectPr>",
-        "</w:body>",
-        "</w:document>",
-      ].join("\n"),
-    });
-
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-    const docXml = await readZipFile(stamped, "word/document.xml");
-    expect(docXml).toContain(`Doc: ${stamp}`);
-    expect(docXml).toContain(`Code: stl:${code}`);
-  });
-
-  test("skips auto-footer when placeholders are present", async () => {
-    const docx = await makeDocx({
-      documentXml: [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-        "<w:body>",
-        "<w:p><w:r><w:t>{{STELLA_ID}}</w:t></w:r></w:p>",
-        "<w:sectPr></w:sectPr>",
-        "</w:body>",
-        "</w:document>",
-      ].join("\n"),
-    });
-
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-
-    // No auto-generated footer file
-    const footer = await readZipFile(stamped, "word/footer1.xml");
-    expect(footer).toBeNull();
-
-    // But custom properties are still injected
-    const customXml = await readZipFile(stamped, "docProps/custom.xml");
-    expect(customXml).toContain("stella-ref");
-  });
-
-  test("injects footer when no placeholders found", async () => {
-    const docx = await makeDocx();
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-    const footer = await readZipFile(stamped, "word/footer1.xml");
-    expect(footer).not.toBeNull();
-    expect(footer).toContain("stella_dms_ref");
-  });
-});
-
 describe("special replacement patterns in dynamic values", () => {
   // Workspace `reference` (the source of `stamp`) is free-form user text
   // (see apps/api/src/handlers/workspaces/update-by-id.ts), so it can contain
@@ -315,8 +237,7 @@ describe("special replacement patterns in dynamic values", () => {
   // etc. A naive `.replace(needle, dynamicString)` call would silently splice
   // in matched/surrounding XML instead of the literal stamp text. These
   // cases exercise every dynamic-value splice site (custom property upsert,
-  // footer paragraph creation and update, and placeholder substitution) with
-  // both patterns.
+  // footer paragraph creation and update) with both patterns.
   const baseUrl = "https://stella.legal";
   const specialPatterns = ["$&", "$'"];
 
@@ -362,27 +283,6 @@ describe("special replacement patterns in dynamic values", () => {
       const footer = await readZipFile(second, "word/footer1.xml");
       expect(footer).toContain(expectedEscape(stamp));
       expect(footer?.match(/<\/w:ftr>/gu)).toHaveLength(1);
-    });
-
-    test(`stamp containing "${pattern}" survives {{STELLA_REF}} placeholder replacement`, async () => {
-      const stamp = `2026/003/007${pattern}.v2`;
-      const code = "mnpqrstuvw";
-      const docx = await makeDocx({
-        documentXml: [
-          '<?xml version="1.0" encoding="UTF-8"?>',
-          `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-          "<w:body>",
-          "<w:p><w:r><w:t>Doc: {{STELLA_REF}}</w:t></w:r></w:p>",
-          "<w:sectPr></w:sectPr>",
-          "</w:body>",
-          "</w:document>",
-        ].join("\n"),
-      });
-
-      const stamped = await injectStamp(docx, stamp, code, baseUrl);
-      const docXml = await readZipFile(stamped, "word/document.xml");
-      expect(docXml).toContain(`Doc: ${expectedEscape(stamp)}`);
-      expect(docXml?.match(/<\/w:body>/gu)).toHaveLength(1);
     });
   }
 });
