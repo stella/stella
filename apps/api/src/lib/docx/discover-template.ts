@@ -34,6 +34,12 @@ import {
 import { parseInlineConditions } from "./inline-conditions";
 import type { InlineGroup } from "./inline-conditions";
 import {
+  qualifyLoopPath,
+  qualifyRowScopedPlaceholder,
+  rowScopePaths,
+  type RowScope,
+} from "./loop-scope";
+import {
   MAIN_DOCUMENT_PART_PATH,
   paragraphText,
   templateContentPartPaths,
@@ -179,74 +185,6 @@ const registerConditionFields = ({
 
   visit(root);
 };
-
-const qualifyRowScopedPath = (
-  path: string,
-  rowPaths: readonly string[] = [],
-): string => {
-  if (
-    rowPaths.some(
-      (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
-    )
-  ) {
-    return path;
-  }
-  const innermostRowPath = rowPaths.at(-1);
-  return innermostRowPath === undefined ? path : `${innermostRowPath}.${path}`;
-};
-
-type RowScope = {
-  /** The loop variable the body addresses items through. */
-  alias: string;
-  declaredPath: string;
-  scopedPath: string;
-};
-
-const rowScopePaths = (rowScopes: readonly RowScope[]): string[] =>
-  rowScopes.map(({ scopedPath }) => scopedPath);
-
-const qualifyRowScopedPlaceholder = (
-  path: string,
-  rowScopes: readonly RowScope[],
-): string => {
-  if (
-    rowScopes.some(
-      ({ scopedPath }) =>
-        path === scopedPath || path.startsWith(`${scopedPath}.`),
-    )
-  ) {
-    return path;
-  }
-  for (const { alias, declaredPath, scopedPath } of rowScopes.toReversed()) {
-    // The alias is the authored form; the declared path still resolves so a
-    // template that reaches for the loop's own path is discovered the same way
-    // it fills (`unaliased_item_path` names it as a warning).
-    for (const head of [alias, declaredPath]) {
-      if (path === head) {
-        return scopedPath;
-      }
-      if (path.startsWith(`${head}.`)) {
-        return `${scopedPath}.${path.slice(head.length + 1)}`;
-      }
-    }
-  }
-  return path;
-};
-
-/**
- * The manifest path of a loop declared inside other loops. A nested loop names
- * its array through the enclosing alias (`{% for i in group.items %}`), so the
- * alias resolves first; a loop that names a bare path inherits the innermost
- * row scope, as it always has.
- */
-const qualifyLoopPath = (
-  declaredPath: string,
-  rowScopes: readonly RowScope[],
-): string =>
-  qualifyRowScopedPath(
-    qualifyRowScopedPlaceholder(declaredPath, rowScopes),
-    rowScopePaths(rowScopes),
-  );
 
 const requireRowScopes = (
   arrayScopes: ReadonlyMap<number, readonly RowScope[]>,
