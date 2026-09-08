@@ -38,6 +38,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
   FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
@@ -294,6 +295,18 @@ const publishFolioCollabVersion = createSafeHandler(
       );
     }
 
+    // The room's checkpoint can hold whatever a collaborator pasted in,
+    // including a stamped download of this document. The published version
+    // stores, and records, bytes without a reference.
+    const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes({
+      buffer: checkpointBytes,
+      mimeType: DOCX_MIME_TYPE,
+    });
+    const storedSha256Hex =
+      strippedArchive === null
+        ? expectedSha256Hex
+        : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+
     const sourceFileId = allocateFileObject();
     const sourceKey = createFileKey({
       fileId: sourceFileId,
@@ -339,7 +352,7 @@ const publishFolioCollabVersion = createSafeHandler(
       try: async () =>
         await writeS3ObjectWithRetry({
           contentType: DOCX_MIME_TYPE,
-          data: checkpointBytes,
+          data: storedBytes,
           key: sourceKey,
         }),
       catch: (cause) => cause,
@@ -555,8 +568,8 @@ const publishFolioCollabVersion = createSafeHandler(
         organizationId: session.activeOrganizationId,
         recordAuditEvent,
         scanWarnings: preliminary.room.checkpointScanWarnings ?? undefined,
-        sha256Hex: expectedSha256Hex,
-        sizeBytes: checkpointBytes.byteLength,
+        sha256Hex: storedSha256Hex,
+        sizeBytes: storedBytes.byteLength,
         source: COLLABORATION_DOCUMENT_SOURCE,
         tx,
         userId: user.id,

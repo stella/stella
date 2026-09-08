@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import JSZip from "jszip";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -9,6 +10,7 @@ import { bufferObjectCleanupIntents, workspaces } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
@@ -41,6 +43,40 @@ const OBJECT_KEY = "org_1/ws_1/file_1.docx";
 const STORED_OBJECT_ID = `${envBase.S3_BUCKET}/${OBJECT_KEY}`;
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/** A DOCX carrying a document reference, as a stamped download hands it back. */
+const stampedDocxBytes = async (): Promise<Uint8Array> => {
+  const wordNs = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const relNs =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+      '  <Default Extension="xml" ContentType="application/xml"/>',
+      "</Types>",
+    ].join("\n"),
+  );
+  zip.file(
+    "word/document.xml",
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<w:document xmlns:w="${wordNs}" xmlns:r="${relNs}">`,
+      "<w:body><w:p><w:r><w:t>Smlouva</w:t></w:r></w:p><w:sectPr></w:sectPr></w:body>",
+      "</w:document>",
+    ].join("\n"),
+  );
+
+  const stamped = await injectStamp(
+    await zip.generateAsync({ type: "arraybuffer" }),
+    "2026/001/015.v3",
+    "kx8mq2n4p3",
+    "https://stella.legal",
+  );
+  return new Uint8Array(stamped);
+};
 
 let fake: FakeS3;
 
@@ -287,6 +323,42 @@ describe("createEntityVersionFromBuffer", () => {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.ENTITY, id: "entity_1" },
     });
+  });
+
+  test("stores a stamped DOCX without its document reference", async () => {
+    writeFileVersionMock.mockImplementation(async (input) => {
+      const result = {
+        status: "ok" as const,
+        entityVersionId: input.entityVersionId,
+        fieldId: input.fieldId,
+        filePropertyId: toSafeId<"property">("property_1"),
+        versionNumber: 2,
+      };
+      await input.afterWrite(result);
+      return result;
+    });
+    const submitted = await stampedDocxBytes();
+
+    const result = await createEntityVersionFromBuffer({
+      ...baseInput,
+      buffer: submitted,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    const stored =
+      fake.objects.get(STORED_OBJECT_ID)?.bytes ?? new Uint8Array();
+    // Nothing left to strip: the object holds no reference of the version it
+    // was downloaded from.
+    expect(await stripStamp(stored)).toBeNull();
+    expect(stored).not.toEqual(submitted);
+    // Size and hash recorded for the version describe the stored bytes, not
+    // the ones the caller handed over.
+    expect(writeFileVersionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sizeBytes: stored.byteLength,
+        sha256Hex: new Bun.CryptoHasher("sha256").update(stored).digest("hex"),
+      }),
+    );
   });
 
   test("deletes the object when the target rejects under the lock", async () => {
