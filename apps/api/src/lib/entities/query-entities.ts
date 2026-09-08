@@ -114,6 +114,13 @@ export type QueryEntityResult = {
   createdByImage: string | null;
   createdByDeletedAt: string | null;
   version: number;
+  /**
+   * The document reference frozen onto the current version, or null when that
+   * version predates the matter's reference. Per version, not per matter: a
+   * matter can hold a reference while an older version carries none, and only
+   * a version that carries one can be served as a reference copy.
+   */
+  currentVersionReference: string | null;
   updatedAt: string | null;
   status: string | null;
   priority: string | null;
@@ -798,6 +805,7 @@ const queryEntitiesGenerator = async function* ({
           name: entities.name,
           parentId: entities.parentId,
           currentVersionId: entities.currentVersionId,
+          currentVersionReference: entityVersions.stamp,
           createdAt: entities.createdAt,
           updatedAt: entities.updatedAt,
           // Author display falls back to email when the user hasn't set
@@ -838,6 +846,16 @@ const queryEntitiesGenerator = async function* ({
           sortOrder: entities.sortOrder,
         })
         .from(entities)
+        // The current version's reference rides the row the page already
+        // reads: one join on the entity's own version pointer, never a query
+        // per row.
+        .leftJoin(
+          entityVersions,
+          and(
+            eq(entityVersions.id, entities.currentVersionId),
+            eq(entityVersions.workspaceId, workspaceId),
+          ),
+        )
         .leftJoin(
           createdByMembers,
           eq(entities.createdBy, createdByMembers.userId),
@@ -1081,6 +1099,7 @@ const queryEntitiesGenerator = async function* ({
       createdByImage: entity.createdByImage ?? null,
       createdByDeletedAt: entity.createdByDeletedAt?.toISOString() ?? null,
       version: versionCountMap.get(entity.id) ?? 0,
+      currentVersionReference: entity.currentVersionReference,
       updatedAt: entity.updatedAt?.toISOString() ?? null,
       status: entity.status,
       priority: entity.priority,

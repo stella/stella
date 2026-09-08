@@ -112,7 +112,6 @@ import {
   useCreateEntities,
   useDeleteEntities,
 } from "@/lib/workspaces/mutations/entities";
-import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -358,7 +357,6 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
-  const { data: matter } = useQuery(workspaceOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -486,17 +484,16 @@ export const RowActions = ({
   // Only formats whose embedded metadata the API can actually strip; offering
   // the action on a file it would refuse is worse than not offering it.
   const canScrub = !isBulk && file !== null && canDownloadScrubbed(file);
-  // Reading the matter here is a cache hit: its route loader primes the query.
   const {
     hasVariants: hasDownloadVariants,
     primaryVariant: primaryDownloadVariant,
   } = getRowDownloadMenu({
     canScrub,
+    currentVersionReference: entity.currentVersionReference,
     exportableOcrSourceCount: exportableOcrSources.length,
     file,
     hasPdfConversion,
     isBulk,
-    matter,
   });
 
   const msg: Msg = {

@@ -16,9 +16,14 @@ type PrimaryDownloadInput = {
    * as a download that fails at the click.
    */
   encrypted: boolean | undefined;
-  /** Whether the version being downloaded carries a document reference. */
-  hasReference: boolean;
   mimeType: string | undefined;
+  /**
+   * The document reference frozen onto the version being downloaded, or null
+   * when it carries none. Per version: the matter's reference is not a proxy
+   * for it, because a version created before the matter got one is stamped
+   * null and the reference copy the server builds from it does not exist.
+   */
+  reference: string | null | undefined;
 };
 
 /**
@@ -29,9 +34,9 @@ type PrimaryDownloadInput = {
  */
 export const resolvePrimaryDownloadVariant = ({
   encrypted,
-  hasReference,
   mimeType,
+  reference,
 }: PrimaryDownloadInput): PrimaryDownloadVariant =>
-  hasReference && encrypted === false && mimeType === DOCX_MIME
+  Boolean(reference) && encrypted === false && mimeType === DOCX_MIME
     ? "reference"
     : "original";

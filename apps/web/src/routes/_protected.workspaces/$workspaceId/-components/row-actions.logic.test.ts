@@ -174,27 +174,29 @@ describe("row download menu", () => {
   };
   const plainMenu = {
     canScrub: false,
+    currentVersionReference: null,
     exportableOcrSourceCount: 0,
     hasPdfConversion: false,
     isBulk: false,
   };
 
-  test("leads with the reference copy in a matter that has a reference", () => {
+  test("leads with the reference copy when the current version is referenced", () => {
     expect(
       getRowDownloadMenu({
         ...plainMenu,
+        currentVersionReference: "2026/001/015.v3",
         file: docx,
-        matter: { reference: "2026/001" },
       }),
     ).toEqual({ hasVariants: true, primaryVariant: "reference" });
   });
 
-  test("offers no variants for a document whose matter has no reference", () => {
+  // The row's matter can hold a reference while this version predates it;
+  // the version's own stamp is the only signal the download can act on.
+  test("offers no variants for a version stamped before the matter got a reference", () => {
     expect(
       getRowDownloadMenu({
         ...plainMenu,
         file: docx,
-        matter: { reference: "" },
       }),
     ).toEqual({ hasVariants: false, primaryVariant: "original" });
   });
@@ -203,9 +205,9 @@ describe("row download menu", () => {
     expect(
       getRowDownloadMenu({
         ...plainMenu,
+        currentVersionReference: "2026/001/015.v3",
         file: docx,
         isBulk: true,
-        matter: { reference: "2026/001" },
       }),
     ).toEqual({ hasVariants: false, primaryVariant: "original" });
   });
@@ -214,9 +216,9 @@ describe("row download menu", () => {
     expect(
       getRowDownloadMenu({
         ...plainMenu,
+        currentVersionReference: "2026/001/015.v3",
         file: { encrypted: false, mimeType: "image/png" },
         hasPdfConversion: true,
-        matter: { reference: "2026/001" },
       }),
     ).toEqual({ hasVariants: true, primaryVariant: "original" });
   });

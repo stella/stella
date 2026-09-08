@@ -32,6 +32,7 @@ const entity = (
     createdByDeletedAt: null,
     updatedAt: null,
     version: 1,
+    currentVersionReference: null,
     status: null,
     priority: null,
     listItemType: kind === "task" ? "task" : null,
