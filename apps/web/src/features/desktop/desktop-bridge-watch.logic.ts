@@ -1,4 +1,5 @@
 import { Temporal } from "@stll/time";
+
 /** Gap between two reachability probes while the user installs the app. */
 const DESKTOP_BRIDGE_WATCH_INTERVAL_MS = 3000;
 /** Budget for the whole watch, long enough to cover a download and install. */

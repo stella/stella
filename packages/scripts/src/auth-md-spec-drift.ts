@@ -1,4 +1,5 @@
 import { Temporal } from "@stll/time";
+
 /**
  * Spec-drift sentinel: the auth.md protocol we implement must not move
  * out from under us without someone noticing.
