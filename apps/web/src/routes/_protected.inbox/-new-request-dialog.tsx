@@ -42,11 +42,10 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { schemaFormOptions } from "@/lib/form-options";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   getRequestWorkspacePolicy,

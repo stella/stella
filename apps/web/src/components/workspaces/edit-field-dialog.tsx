@@ -23,8 +23,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { FieldValueSelect } from "@/components/workspaces/field-value-select";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { detached } from "@/lib/detached";
-import { schemaFormOptions } from "@/lib/form-options";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
   WorkspaceField,

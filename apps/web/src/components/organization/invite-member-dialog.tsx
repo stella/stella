@@ -36,14 +36,13 @@ import { stellaToast } from "@stll/ui/toast";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { schemaFormOptions } from "@/lib/form-options";
 import {
   managementRoles,
   rolePriority,
   roleTranslationKeys,
 } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
-import { emailSchema, toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;

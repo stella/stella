@@ -2,8 +2,7 @@ import { FieldApi, FormApi } from "@tanstack/react-form";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import * as v from "valibot";
 
-import { schemaFormOptions } from "@/lib/form-options";
-import { emailSchema } from "@/lib/schema";
+import { emailSchema, schemaFormOptions } from "@/lib/schema";
 
 const INVALID_EMAIL = "not an email";
 const VALID_EMAIL = "  User@Example.COM  ";

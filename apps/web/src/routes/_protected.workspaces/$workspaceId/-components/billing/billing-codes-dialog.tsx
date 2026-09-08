@@ -20,10 +20,13 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { schemaFormOptions } from "@/lib/form-options";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
-import { requiredTrimmedStringSchema, toFormErrors } from "@/lib/schema";
+import {
+  schemaFormOptions,
+  requiredTrimmedStringSchema,
+  toFormErrors,
+} from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 
 type BillingCodesDialogProps = {
@@ -156,8 +159,8 @@ export const BillingCodesDialog = ({
           </div>
 
           <Tabs
-            onValueChange={(v: typeof activeTab) => {
-              setActiveTab(v);
+            onValueChange={(value: typeof activeTab) => {
+              setActiveTab(value);
               setShowForm(false);
             }}
             value={activeTab}

@@ -13,9 +13,8 @@ import { cn } from "@stll/ui/utils";
 
 import { usePulse } from "@/hooks/use-pulse";
 import { detached } from "@/lib/detached";
-import { schemaFormOptions } from "@/lib/form-options";
 import { createSlug } from "@/lib/organization/utils";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 type OrganizationStepProps = {
   defaultName: string;

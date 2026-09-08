@@ -22,9 +22,8 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
-import { schemaFormOptions } from "@/lib/form-options";
 import { localISODate } from "@/lib/local-iso-date";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { majorUnitInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
@@ -159,7 +158,7 @@ export const ExpenseForm = ({
           <form.Field name="dateIncurred">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}
@@ -171,9 +170,9 @@ export const ExpenseForm = ({
           <form.Field name="category">
             {(field) => (
               <Select
-                onValueChange={(v) => {
-                  if (v) {
-                    field.handleChange(v);
+                onValueChange={(value) => {
+                  if (value) {
+                    field.handleChange(value);
                   }
                 }}
                 value={field.state.value}

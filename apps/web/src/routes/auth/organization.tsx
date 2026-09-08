@@ -43,7 +43,6 @@ import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { schemaFormOptions } from "@/lib/form-options";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -55,7 +54,7 @@ import {
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
 } from "@/lib/redirect";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const searchSchema = v.object({
   devQuickStart: v.optional(v.boolean()),

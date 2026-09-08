@@ -50,10 +50,10 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { schemaFormOptions } from "@/lib/form-options";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
+  schemaFormOptions,
   requiredTrimmedStringSchema,
   toFormErrors,
   trimmedStringSchema,

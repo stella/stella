@@ -87,7 +87,7 @@ const importedBinding = (node, context, seen = new Set<unknown>()) => {
 };
 
 const isHelperSource = (source: string, context): boolean => {
-  if (source === "@/lib/form-options") {
+  if (source === "@/lib/schema") {
     return true;
   }
   if (!source.startsWith(".")) {
@@ -97,7 +97,7 @@ const isHelperSource = (source: string, context): boolean => {
     path.dirname(filenameForContext(context)),
     source,
   );
-  return /\/apps\/web\/src\/lib\/form-options(?:\.[jt]s)?$/u.test(resolved);
+  return /\/apps\/web\/src\/lib\/schema(?:\.[jt]s)?$/u.test(resolved);
 };
 
 export default eslintCompatPlugin({

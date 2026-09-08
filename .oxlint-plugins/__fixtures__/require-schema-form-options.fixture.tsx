@@ -11,8 +11,8 @@ import { schemaFormOptions as unrelatedOptions } from "unrelated-module";
 import {
   schemaFormOptions,
   schemaFormOptions as configure,
-} from "@/lib/form-options";
-import * as formOwner from "@/lib/form-options";
+} from "@/lib/schema";
+import * as formOwner from "@/lib/schema";
 
 declare const config: unknown;
 declare const opaqueOptions: unknown;

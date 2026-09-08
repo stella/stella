@@ -85,12 +85,11 @@ import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { schemaFormOptions } from "@/lib/form-options";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { downloadFile } from "@/lib/utils";
 import {
   ProcuracaoDropZone,

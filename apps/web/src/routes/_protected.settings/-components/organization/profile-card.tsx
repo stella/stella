@@ -20,13 +20,12 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { schemaFormOptions } from "@/lib/form-options";
 import {
   organizationKeys,
   organizationOptions,
 } from "@/lib/organization/queries";
 import { getOrganizationSchema } from "@/lib/organization/utils";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const getNameOnlySchema = () => v.pick(getOrganizationSchema(), ["name"]);
 

@@ -31,10 +31,9 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { schemaFormOptions } from "@/lib/form-options";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { emailSchema, toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 import { resolveSignInOptions } from "./sign-in-panel.logic";

@@ -126,7 +126,7 @@
 ## Form Validation
 
 - Construct TanStack forms with `useForm(schemaFormOptions(...))` from
-  `@/lib/form-options`. Supply `schema`, `defaultValues`, `submitValues`, and
+  `@/lib/schema`. Supply `schema`, `defaultValues`, `submitValues`, and
   `onSubmit`. The helper validates on the first submit, then revalidates on change.
 - Choose `submitValues: "schema-output"` to submit Valibot's parsed output or
   `"raw"` to deliberately preserve validated input. There is no default. Define

@@ -15,7 +15,7 @@ const formSchema = v.object({ name: nameSchema });
 const asyncNameSchema = v.pipeAsync(
   v.string(),
   v.trim(),
-  v.checkAsync((name) => Promise.resolve(name.length > 0), REQUIRED_MESSAGE),
+  v.checkAsync(async (name) => name.length > 0, REQUIRED_MESSAGE),
 );
 const asyncFormSchema = v.objectAsync({ name: asyncNameSchema });
 
@@ -33,7 +33,7 @@ const createHarness = (
   validator: ValidatorCase,
   validationLogic: ValidationLogic,
 ) => {
-  const submittedValues: Array<{ name: string }> = [];
+  const submittedValues: { name: string }[] = [];
   const form = new FormApi({
     defaultValues: { name: INVALID_NAME },
     onSubmit: ({ value }) => {
@@ -65,7 +65,7 @@ const createHarness = (
     }
 
     await new Promise<void>((resolve) => {
-      const subscriptions: Array<{ unsubscribe: () => void }> = [];
+      const subscriptions: { unsubscribe: () => void }[] = [];
       const resolveWhenSettled = () => {
         if (form.state.isFormValidating || field.state.meta.isValidating) {
           return;
@@ -91,7 +91,9 @@ const createHarness = (
     },
     fieldErrors: () => field.state.meta.errors,
     formErrors: () => form.state.errors,
-    submit: () => form.handleSubmit(),
+    submit: async () => {
+      await form.handleSubmit();
+    },
     submittedValues,
   };
 };

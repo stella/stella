@@ -32,12 +32,15 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { schemaFormOptions } from "@/lib/form-options";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { requiredTrimmedStringSchema, toFormErrors } from "@/lib/schema";
+import {
+  schemaFormOptions,
+  requiredTrimmedStringSchema,
+  toFormErrors,
+} from "@/lib/schema";
 import {
   rateEntriesOptions,
   rateTablesOptions,
@@ -794,7 +797,7 @@ const CreateRateEntryForm = ({
           <form.Field name="effectiveFrom">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}
@@ -805,7 +808,7 @@ const CreateRateEntryForm = ({
           <form.Field name="effectiveTo">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}

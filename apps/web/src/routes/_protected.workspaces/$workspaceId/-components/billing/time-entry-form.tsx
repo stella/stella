@@ -25,9 +25,8 @@ import { Textarea } from "@stll/ui/textarea";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
-import { schemaFormOptions } from "@/lib/form-options";
 import { localISODate } from "@/lib/local-iso-date";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import {
@@ -198,7 +197,7 @@ export const TimeEntryForm = ({
           <form.Field name="dateWorked">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}
@@ -314,7 +313,7 @@ export const TimeEntryForm = ({
           <form.Field name="taskCode">
             {(field) => (
               <Select
-                onValueChange={(v) => field.handleChange(v ?? "")}
+                onValueChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value || null}
               >
                 <SelectTrigger size="sm">
@@ -339,7 +338,7 @@ export const TimeEntryForm = ({
           <form.Field name="activityCode">
             {(field) => (
               <Select
-                onValueChange={(v) => field.handleChange(v ?? "")}
+                onValueChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value || null}
               >
                 <SelectTrigger size="sm">
