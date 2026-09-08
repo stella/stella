@@ -636,7 +636,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -901,7 +901,7 @@
     },
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",

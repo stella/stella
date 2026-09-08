@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.1
+
+### Patch Changes
+
+- [#3101](https://github.com/stella/stella/pull/3101) [`c69d0a1`](https://github.com/stella/stella/commit/c69d0a11b544ac75c7362483428c5a2009676c81) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The template marker grammar is the docxtpl dialect of Jinja: `{{ path | filter(…) }}` value markers whose filter chain carries the field configuration, `{% if %}` / `{% elif %}` / `{% else %}` / `{% endif %}`, `{% for alias in path %}` … `{% endfor %}` with `loop.*` counters, `{%p %}` and `{%tr %}` placement, and `clause()` / `num()` / `ref()` functions. The old `{{#each}}` / `{{#if}}` / `{{@…}}` forms are rejected as `legacy_marker` with the exact replacement named. The CLI catalog follows the tool schemas: composites (`parts`, `format`) leave the agent wire and a maximum constraint is at least 1.
+
 ## 1.2.0
 
 ### Minor Changes
