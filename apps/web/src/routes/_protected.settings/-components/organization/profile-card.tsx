@@ -20,6 +20,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { schemaFormOptions } from "@/lib/form-options";
 import {
   organizationKeys,
   organizationOptions,
@@ -37,21 +38,20 @@ export const OrganizationProfileCard = () => {
   const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
   const [pendingName, setPendingName] = useState<string | null>(null);
 
-  const form = useForm({
-    defaultValues: {
-      name: data.name,
-    },
-    validators: { onDynamic: getNameOnlySchema() },
-    onSubmit: ({ value }) => {
-      const parseResult = v.safeParse(getNameOnlySchema(), value);
-      if (!parseResult.success) {
-        return;
-      }
-      // Defer the mutation to the type-to-confirm dialog so renames
-      // can't fire from a stray click.
-      setPendingName(parseResult.output.name);
-    },
-  });
+  const form = useForm(
+    schemaFormOptions({
+      schema: getNameOnlySchema(),
+      defaultValues: {
+        name: data.name,
+      },
+      submitValues: "schema-output",
+      onSubmit: ({ value }) => {
+        // Defer the mutation to the type-to-confirm dialog so renames
+        // can't fire from a stray click.
+        setPendingName(value.name);
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 

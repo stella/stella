@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { revalidateLogic, useForm } from "@tanstack/react-form";
+import { useForm } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -23,6 +23,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { FieldValueSelect } from "@/components/workspaces/field-value-select";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { detached } from "@/lib/detached";
+import { schemaFormOptions } from "@/lib/form-options";
 import { toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
@@ -159,43 +160,43 @@ export const EditFieldDialog = ({
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const upsertField = useUpsertField();
   const startWorkflow = useStartWorkflow(workspaceId);
-  const form = useForm({
-    defaultValues: getDefaultValues(fieldContent),
-    validationLogic: revalidateLogic(),
-    validators: {
-      onDynamic: fieldFormSchema,
-    },
-    onSubmit: ({ value }) => {
-      upsertField.mutate(
-        {
-          workspaceId,
-          propertyId,
-          entityId,
-          content: { version: 1, ...value },
-        },
-        {
-          onSuccess: () => {
-            // Auto-run workflow for this entity so dependent
-            // AI columns get processed after manual input.
-            // Folders can't have AI-derived metadata.
-            if (entityKind === "folder") {
-              return;
-            }
+  const form = useForm(
+    schemaFormOptions({
+      schema: fieldFormSchema,
+      defaultValues: getDefaultValues(fieldContent),
+      submitValues: "raw",
+      onSubmit: ({ value }) => {
+        upsertField.mutate(
+          {
+            workspaceId,
+            propertyId,
+            entityId,
+            content: { version: 1, ...value },
+          },
+          {
+            onSuccess: () => {
+              // Auto-run workflow for this entity so dependent
+              // AI columns get processed after manual input.
+              // Folders can't have AI-derived metadata.
+              if (entityKind === "folder") {
+                return;
+              }
 
-            detached(
-              startWorkflow({
-                entityIds: [entityId],
-              }),
-              "edit-field-dialog.start-workflow",
-            );
+              detached(
+                startWorkflow({
+                  entityIds: [entityId],
+                }),
+                "edit-field-dialog.start-workflow",
+              );
+            },
+            onSettled: () => {
+              setIsOpen(false);
+            },
           },
-          onSettled: () => {
-            setIsOpen(false);
-          },
-        },
-      );
-    },
-  });
+        );
+      },
+    }),
+  );
 
   return (
     <Dialog

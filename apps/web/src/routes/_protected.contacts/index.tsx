@@ -85,6 +85,7 @@ import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { schemaFormOptions } from "@/lib/form-options";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
@@ -841,57 +842,51 @@ const CreateContactDialog = ({
     mcpCatalog?.nativeTools.find((tool) => tool.slug === ARES_NATIVE_TOOL_SLUG)
       ?.enabled ?? false;
 
-  const form = useForm({
-    defaultValues: CREATE_CONTACT_DEFAULT_VALUES,
-    validators: { onDynamic: schema },
-    onSubmit: async ({ value }) => {
-      const result = v.safeParse(schema, value);
-      if (!result.success) {
-        return;
-      }
-      const parsedValue = result.output;
-      const firstName =
-        parsedValue.type === "person"
-          ? parsedValue.firstName || undefined
-          : undefined;
-      const lastName =
-        parsedValue.type === "person"
-          ? parsedValue.lastName || undefined
-          : undefined;
-      const organizationName =
-        parsedValue.type === "organization"
-          ? parsedValue.organizationName || undefined
-          : undefined;
-      const registrationNumber =
-        parsedValue.type === "organization"
-          ? parsedValue.registrationNumber || undefined
-          : undefined;
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      defaultValues: CREATE_CONTACT_DEFAULT_VALUES,
+      submitValues: "schema-output",
+      onSubmit: async ({ value, formApi }) => {
+        const firstName =
+          value.type === "person" ? value.firstName || undefined : undefined;
+        const lastName =
+          value.type === "person" ? value.lastName || undefined : undefined;
+        const organizationName =
+          value.type === "organization"
+            ? value.organizationName || undefined
+            : undefined;
+        const registrationNumber =
+          value.type === "organization"
+            ? value.registrationNumber || undefined
+            : undefined;
 
-      await createContact.mutateAsync({
-        id: toSafeId<"contact">(crypto.randomUUID()),
-        type: parsedValue.type,
-        displayName: parsedValue.displayName,
-        ...(firstName && { firstName }),
-        ...(lastName && { lastName }),
-        ...(organizationName && { organizationName }),
-        ...(registrationNumber && { registrationNumber }),
-        ...(parsedValue.type === "organization" &&
-          aresBillingAddress && { billingAddress: aresBillingAddress }),
-      });
+        await createContact.mutateAsync({
+          id: toSafeId<"contact">(crypto.randomUUID()),
+          type: value.type,
+          displayName: value.displayName,
+          ...(firstName && { firstName }),
+          ...(lastName && { lastName }),
+          ...(organizationName && { organizationName }),
+          ...(registrationNumber && { registrationNumber }),
+          ...(value.type === "organization" &&
+            aresBillingAddress && { billingAddress: aresBillingAddress }),
+        });
 
-      await queryClient.invalidateQueries({
-        queryKey: contactsKeys.all,
-      });
-      stellaToast.add({
-        title: t("success.contactCreated"),
-        type: "success",
-      });
-      onOpenChange(false);
-      form.reset();
-      setAresBillingAddress(null);
-      setIsAresLoading(false);
-    },
-  });
+        await queryClient.invalidateQueries({
+          queryKey: contactsKeys.all,
+        });
+        stellaToast.add({
+          title: t("success.contactCreated"),
+          type: "success",
+        });
+        onOpenChange(false);
+        formApi.reset();
+        setAresBillingAddress(null);
+        setIsAresLoading(false);
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 

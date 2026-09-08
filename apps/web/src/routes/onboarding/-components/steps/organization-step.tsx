@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/utils";
 
 import { usePulse } from "@/hooks/use-pulse";
 import { detached } from "@/lib/detached";
+import { schemaFormOptions } from "@/lib/form-options";
 import { createSlug } from "@/lib/organization/utils";
 import { toFormErrors } from "@/lib/schema";
 
@@ -36,18 +37,17 @@ export const OrganizationStep = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const schema = makeSchema(t("common.required"));
 
-  const form = useForm({
-    defaultValues: { name: defaultName },
-    validators: { onDynamic: schema },
-    onSubmit: ({ value }) => {
-      const result = v.safeParse(schema, value);
-      if (!result.success) {
-        return;
-      }
-      const slug = createSlug(result.output.name);
-      onNext({ name: result.output.name, slug });
-    },
-  });
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      defaultValues: { name: defaultName },
+      submitValues: "schema-output",
+      onSubmit: ({ value }) => {
+        const slug = createSlug(value.name);
+        onNext({ name: value.name, slug });
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
   const currentName = useSelector(form.store, (s) => s.values.name);
