@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { DEFAULT_CLIPBOARD_GROUP_COLOR } from "../../src/clipboard/clipboard-style";
 import { isClipboardSnapshot } from "../../src/clipboard/clipboard-types";
 import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
+import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
+import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
 const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => ({
   copiedAt: "2026-09-08T05:00:00.000Z",
@@ -153,6 +155,31 @@ const openClipboard = async (page: Page, language: "ar" | "en") => {
   return cards;
 };
 
+const readPickerOverflow = async (picker: Locator) =>
+  picker.evaluate((controls) => {
+    const viewport = controls.closest('[data-slot="scroll-area-viewport"]');
+    if (!viewport) {
+      return null;
+    }
+    const viewportBounds = viewport.getBoundingClientRect();
+    return {
+      horizontal: viewport.scrollWidth > viewport.clientWidth,
+      vertical: viewport.scrollHeight > viewport.clientHeight,
+      clipped: Array.from(controls.querySelectorAll("button")).flatMap(
+        (swatch) => {
+          const bounds = swatch.getBoundingClientRect();
+          const ring = 4;
+          return bounds.top - ring < viewportBounds.top ||
+            bounds.bottom + ring > viewportBounds.bottom ||
+            bounds.left - ring < viewportBounds.left ||
+            bounds.right + ring > viewportBounds.right
+            ? [swatch.getAttribute("aria-label")]
+            : [];
+        },
+      ),
+    };
+  });
+
 const readCardEmphasis = async (page: Page, id: string) =>
   page.locator(`[data-clipboard-id="${id}"]`).evaluate((card) => {
     const cardStyle = getComputedStyle(card);
@@ -203,6 +230,29 @@ const DIRECTIONS = [
 for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
   test.describe(`${language} clipboard direction`, () => {
     test.use({ locale: language });
+
+    test("color swatches and selection rings fit without scrollbars", async ({
+      page,
+    }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
+      await openClipboard(page, language);
+      await page
+        .getByRole("button", {
+          name: messages.clipboard.createGroup,
+          exact: true,
+        })
+        .click();
+      const dialog = page.getByRole("dialog", {
+        name: messages.clipboard.createGroup,
+      });
+      await expect(dialog).toBeVisible();
+      const picker = dialog.locator('[data-slot="color-picker"]');
+      await expect(picker.getByRole("button")).toHaveCount(7);
+      await picker.getByRole("button", { name: "#FB7185" }).click();
+      await expect
+        .poll(async () => readPickerOverflow(picker))
+        .toEqual({ clipped: [], horizontal: false, vertical: false });
+    });
 
     test("keeps card emphasis hidden while focus traverses the footer", async ({
       page,
@@ -479,6 +529,12 @@ test("creates a group from a clip with inline preset and custom colors", async (
   const preset = picker.getByRole("button", { name: "#60A5FA" });
   await preset.click();
   await expect(preset).toHaveAttribute("aria-pressed", "true");
+  const pickerOverflow = await readPickerOverflow(picker);
+  expect(pickerOverflow).toEqual({
+    clipped: [],
+    horizontal: false,
+    vertical: false,
+  });
   await expect(
     page.locator('[data-slot="color-picker-custom-popup"]'),
   ).toHaveCount(0);

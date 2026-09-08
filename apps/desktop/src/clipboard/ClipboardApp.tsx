@@ -655,7 +655,7 @@ const DialogShell = ({
         bottomStickOnMobile={false}
         className="bg-popover/92 max-w-sm rounded-[26px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
-        viewportClassName="grid-rows-[1fr_auto_1fr] p-5"
+        viewportClassName="grid-rows-[1fr_auto_1fr] px-5 py-3"
       >
         <form
           className="flex min-h-0 flex-col"
@@ -726,7 +726,7 @@ const ClipboardGroupFields = ({
         <legend className="text-muted-foreground text-sm">
           {t("groupColor")}
         </legend>
-        <div className="mt-2 overflow-visible px-0.5">
+        <div className="mt-2 overflow-visible px-0.5 py-1">
           <ColorPickerContent
             moreLabel={t("customColor")}
             onSelect={(value) => {
