@@ -44,7 +44,7 @@ const arrayFieldFilters = (field: StudioField): FilterCall[] =>
 /** One marker's text replaced by the same marker carrying its field's
  *  configuration. Positions are the directive's own, so a caller applies them
  *  highest-first within a single transaction. */
-export type MarkerConfigRewrite = { from: number; to: number; text: string };
+type MarkerConfigRewrite = { from: number; to: number; text: string };
 
 /** One field the document cannot carry, and why. `unplaced` is a configuration
  *  with no marker to live in; `unwritable` is one whose value the marker
