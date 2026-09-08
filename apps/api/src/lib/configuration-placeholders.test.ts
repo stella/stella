@@ -9,7 +9,7 @@ import {
   isConfigurationPlaceholder,
   resolveConfigurationPlaceholders,
 } from "@/api/lib/configuration-placeholders";
-import { credentialsFromEnvValues } from "@/api/lib/s3-credentials";
+import { credentialsFromEnvValues } from "@/api/lib/s3/credentials";
 
 const schema = {
   REQUIRED_VALUE: v.string(),

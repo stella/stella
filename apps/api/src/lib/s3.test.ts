@@ -13,7 +13,7 @@ import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
-import { credentialsFromEnvValues } from "@/api/lib/s3-credentials";
+import { credentialsFromEnvValues } from "@/api/lib/s3/credentials";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });

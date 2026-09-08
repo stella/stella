@@ -69,7 +69,7 @@ const deleteThumbnailBestEffort = async (thumbnailKey: string) => {
       // through a helper in `@/api/lib/s3`, and a full backfill outlives the
       // task role's credentials.
       await refreshStaleS3();
-      return await getS3().delete(thumbnailKey);
+      await getS3().delete(thumbnailKey);
     },
     catch: (cause) => cause,
   });

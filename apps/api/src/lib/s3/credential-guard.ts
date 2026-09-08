@@ -60,10 +60,7 @@ export const isExpiredCredentialsError = (error: unknown): boolean => {
     return true;
   }
   const message = errorStringField(error, "message");
-  return (
-    message !== null &&
-    message.toLowerCase().includes(EXPIRED_CREDENTIAL_MESSAGE)
-  );
+  return message?.toLowerCase().includes(EXPIRED_CREDENTIAL_MESSAGE) === true;
 };
 
 export type S3CredentialLifecycle = {
@@ -111,21 +108,26 @@ export const createS3CredentialGuard = ({
 
   const run = async <T>(operation: () => Promise<T>): Promise<T> => {
     await refreshStale();
-    const attempt = await Result.tryPromise({
-      try: operation,
+    const attempted = operation();
+    const outcome = await Result.tryPromise({
+      try: async () => await attempted,
       catch: (cause) => cause,
     });
-    if (Result.isOk(attempt)) {
-      return attempt.value;
+    if (Result.isOk(outcome)) {
+      return outcome.value;
     }
-    if (!isExpiredCredentialsError(attempt.error)) {
-      throw attempt.error;
+    if (isExpiredCredentialsError(outcome.error)) {
+      logger.warn("s3.credentials_expired_retry", {
+        "error.type": errorTag(outcome.error),
+      });
+      await refresh();
+      return await operation();
     }
-    logger.warn("s3.credentials_expired_retry", {
-      "error.type": errorTag(attempt.error),
-    });
-    await refresh();
-    return await operation();
+    // The failure is the store's, and this module has nothing to add to it:
+    // callers match on the SDK's own error name. Awaiting the settled
+    // rejection re-raises that exact error rather than rethrowing a copy of
+    // it, so the guard never manufactures a failure of its own.
+    return await attempted;
   };
 
   return { refreshStale, run };

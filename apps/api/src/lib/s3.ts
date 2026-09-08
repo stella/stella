@@ -17,11 +17,11 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   createS3CredentialGuard,
   type S3CredentialGuard,
-} from "@/api/lib/s3-credential-guard";
+} from "@/api/lib/s3/credential-guard";
 import {
   credentialsFromEnvValues,
   type OptionalS3Credentials,
-} from "@/api/lib/s3-credentials";
+} from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 

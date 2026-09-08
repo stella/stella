@@ -22,7 +22,7 @@ import {
 } from "@/api/lib/corpus-storage-mode";
 import { parseCorpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
-import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
+import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   isLoopbackHostname,
   isTlsOrLoopbackUrl,

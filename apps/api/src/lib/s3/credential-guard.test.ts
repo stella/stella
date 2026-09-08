@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createS3CredentialGuard,
   isExpiredCredentialsError,
-} from "@/api/lib/s3-credential-guard";
+} from "@/api/lib/s3/credential-guard";
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 const CREDENTIAL_LIFETIME_MS = 6 * 60 * 60 * 1000;
@@ -88,13 +88,16 @@ describe("createS3CredentialGuard", () => {
   test("a second expired-token failure reaches the caller", async () => {
     const source = createFakeCredentialSource();
     const guard = createS3CredentialGuard(source.lifecycle);
+    const failures: Error[] = [];
     let attempts = 0;
 
     const rejection = await guard
       .run(async () => {
         attempts += 1;
         await Promise.resolve();
-        throw expiredTokenError();
+        const failure = expiredTokenError();
+        failures.push(failure);
+        throw failure;
       })
       .then(
         () => null,
@@ -102,8 +105,8 @@ describe("createS3CredentialGuard", () => {
       );
 
     // Retrying past this would spin against a credential source that is not
-    // the problem; the caller has to hear about it.
-    expect(rejection).toBeInstanceOf(Error);
+    // the problem; the caller has to hear about the replay's own failure.
+    expect(rejection).toBe(failures.at(1));
     expect(attempts).toBe(2);
     expect(source.builds).toBe(2);
   });
@@ -111,22 +114,25 @@ describe("createS3CredentialGuard", () => {
   test("a failure that is not a credential expiry is not retried", async () => {
     const source = createFakeCredentialSource();
     const guard = createS3CredentialGuard(source.lifecycle);
+    const refused = Object.assign(new Error("Access Denied"), {
+      name: "AccessDenied",
+    });
     let attempts = 0;
 
     const rejection = await guard
       .run(async () => {
         attempts += 1;
         await Promise.resolve();
-        throw Object.assign(new Error("Access Denied"), {
-          name: "AccessDenied",
-        });
+        throw refused;
       })
       .then(
         () => null,
         (error: unknown) => error,
       );
 
-    expect(rejection).toMatchObject({ name: "AccessDenied" });
+    // The store's own error object, not a copy of it: callers downstream match
+    // on the SDK's error name to tell an absent object from an unreachable one.
+    expect(rejection).toBe(refused);
     expect(attempts).toBe(1);
     expect(source.builds).toBe(1);
   });
