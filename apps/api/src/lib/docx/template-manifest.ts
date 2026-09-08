@@ -40,13 +40,26 @@ export const lookupFormatMarkerPaths = (
   return markers;
 };
 
+/**
+ * The input control a field asks with, when its marker did not name one.
+ *
+ * A path an `{% if %}` reads is a yes/no question, and the document says so by
+ * reading it as a condition. There is no value marker to write `checkbox` on,
+ * so the structure is where that answer comes from; every other kind asks with
+ * the plain text input a marker's absent `inputType` already means.
+ */
+const inputTypeFromKind = (
+  field: ResolvedField,
+): FieldMeta["inputType"] | undefined =>
+  field.inputType ?? (field.kind === "boolean" ? "boolean" : undefined);
+
 /** The manifest properties a resolved field carries back. Named so the
  *  projection below stays one list, not one per caller. */
 const toFieldMeta = (field: ResolvedField): FieldMeta => ({
   path: field.path,
   label: field.label,
   hint: field.hint,
-  inputType: field.inputType,
+  inputType: inputTypeFromKind(field),
   options: field.options,
   validation: field.validation,
   required: field.required,

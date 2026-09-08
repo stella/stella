@@ -12,9 +12,10 @@
  * A trap is a placement or a spelling the ENGINE refuses, so the detectors
  * ask the engine's own parsers (`scanMarkers`, `classifyMarkerDefect`,
  * `detectRowBlockPair`, `parseInlineConditions`) and, for a configuration
- * trap, the refusals `partitionFieldOverlay` actually returned, rather than
- * re-deriving the rules: a placement the engine learns to run, or an overlay
- * shape it learns to fold, stops being a trap here on the same day.
+ * trap, the refusals `partitionFieldConfiguration` actually returned, rather
+ * than re-deriving the rules: a placement the engine learns to run, or a
+ * configuration shape it learns to fold, stops being a trap here on the same
+ * day.
  */
 
 import {
@@ -29,7 +30,7 @@ import {
 } from "@stll/template-conditions";
 
 import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
-import { conditionReferencesOnlySelf } from "@/api/lib/templates/field-overlay";
+import { conditionReferencesOnlySelf } from "@/api/lib/templates/configure-field-input";
 
 /**
  * One block of the document the model authored. A table cell holds a
@@ -431,8 +432,8 @@ const hasRoundTripDefect = (roundTrip: RoundTripDefects): boolean =>
 /**
  * An overlay issue's `path` names either the entry it refuses (`fields.3`) or
  * the single property it dropped out of an entry that otherwise applied
- * (`fields.3.parts`). Only the first means the entry did not land, so the two
- * are told apart here, once, rather than at every reader.
+ * (`fields.3.input_type`). Only the first means the entry did not land, so the
+ * two are told apart here, once, rather than at every reader.
  */
 const ENTRY_ISSUE_PATH = /^fields\.\d+$/u;
 

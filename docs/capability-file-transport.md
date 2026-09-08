@@ -56,28 +56,28 @@ On the catalog as of this writing: **20 of 313** entries are suppressed, and one
 `IN` = file input, `OUT` = file response. "Alternative" is the entry's declared
 alternative transport.
 
-| Capability                     | IN         | OUT | Alternative                                                        |
-| ------------------------------ | ---------- | --- | ------------------------------------------------------------------ |
-| `entities.upload`              | x          |     | complete: `uploads.create` + `uploads.update` (`entity_create`)     |
-| `entities.upload-version`      | x          |     | complete: `uploads.create` + `uploads.update` (`entity_version`)    |
-| `skills.upload`                | x          |     | complete: `uploads.create` + `uploads.update` (`agent_skill`)       |
-| `templates.fill-by-id`         |            | x   | complete: `templates.fill-to-matter`                             |
-| `clauses.import`               | x          |     | partial: `clauses.create` (one clause per call, no CSV bulk)        |
-| `clauses.export`               |            | x   | partial: `clauses.list` + `clauses.get` (no single export file)     |
-| `skills.resources.upload`      | x          |     | partial: `skills.resources.create` (text only, no binary resource)  |
-| `style-sets.create`            | x          |     | partial: `style-sets.create-from-editor` (settings, not a DOCX)     |
-| `style-sets.replace`           | x          |     | partial: `style-sets.update-from-editor` (settings, not a DOCX)     |
-| `templates.create-from-styles` | x          |     | partial: style set from editor, then `create-from-style-set`        |
-| `templates.fill`               | x          | x   | partial: `templates.fill-to-matter` (stored template, to matter) |
-| `time-entries.export-pdf`      |            | x   | partial: `export-csv` / `export-ledes` (no rendered PDF)            |
-| `entities.check-stamp`         | x          |     | none                                                                |
-| `entities.download-zip`        |            | x   | none                                                                |
-| `templates.create`             | x          |     | none                                                                |
-| `templates.discover`           | x          |     | none                                                                |
-| `templates.prepare`            | x          |     | none                                                                |
-| `templates.save-document`      | x          |     | none                                                                |
-| `views.table-export`           |            | x   | none                                                                |
-| `templates.prefill`            | x (opt.)   |     | none (exposed: fileless mode)                                       |
+| Capability                     | IN       | OUT | Alternative                                                        |
+| ------------------------------ | -------- | --- | ------------------------------------------------------------------ |
+| `entities.upload`              | x        |     | complete: `uploads.create` + `uploads.update` (`entity_create`)    |
+| `entities.upload-version`      | x        |     | complete: `uploads.create` + `uploads.update` (`entity_version`)   |
+| `skills.upload`                | x        |     | complete: `uploads.create` + `uploads.update` (`agent_skill`)      |
+| `templates.fill-by-id`         |          | x   | complete: `templates.fill-to-matter`                               |
+| `clauses.import`               | x        |     | partial: `clauses.create` (one clause per call, no CSV bulk)       |
+| `clauses.export`               |          | x   | partial: `clauses.list` + `clauses.get` (no single export file)    |
+| `skills.resources.upload`      | x        |     | partial: `skills.resources.create` (text only, no binary resource) |
+| `style-sets.create`            | x        |     | partial: `style-sets.create-from-editor` (settings, not a DOCX)    |
+| `style-sets.replace`           | x        |     | partial: `style-sets.update-from-editor` (settings, not a DOCX)    |
+| `templates.create-from-styles` | x        |     | partial: style set from editor, then `create-from-style-set`       |
+| `templates.fill`               | x        | x   | partial: `templates.fill-to-matter` (stored template, to matter)   |
+| `time-entries.export-pdf`      |          | x   | partial: `export-csv` / `export-ledes` (no rendered PDF)           |
+| `entities.check-stamp`         | x        |     | none                                                               |
+| `entities.download-zip`        |          | x   | none                                                               |
+| `templates.create`             | x        |     | none                                                               |
+| `templates.discover`           | x        |     | none                                                               |
+| `templates.prepare`            | x        |     | none                                                               |
+| `templates.save-document`      | x        |     | none                                                               |
+| `views.table-export`           |          | x   | none                                                               |
+| `templates.prefill`            | x (opt.) |     | none (exposed: fileless mode)                                      |
 
 Four complete alternatives, eight partial alternatives, and eight entries with
 no alternative.

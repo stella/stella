@@ -21,6 +21,8 @@
  * block, and AI-drafted `{{execSummary}}` / `{{ contract.summary }}` fields.
  */
 
+import { panic } from "better-result";
+
 import {
   filtersFromFieldConfig,
   renderValueMarker,
@@ -60,10 +62,9 @@ const AI_FIELDS = [
  *  renderer the configure boundary uses, so the asset and a configured
  *  template say the same thing the same way. */
 const aiMarker = (path: (typeof AI_FIELDS)[number]["path"]): string => {
-  const field = AI_FIELDS.find((candidate) => candidate.path === path);
-  if (!field) {
-    throw new Error(`no AI field ${path}`);
-  }
+  const field =
+    AI_FIELDS.find((candidate) => candidate.path === path) ??
+    panic(`no AI field ${path}`);
   return renderValueMarker(path, filtersFromFieldConfig(field));
 };
 
