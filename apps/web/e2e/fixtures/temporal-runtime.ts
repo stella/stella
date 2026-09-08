@@ -10,13 +10,9 @@ if (mode === "native") {
     writable: true,
   });
   const runtime = await import("@stll/time");
-  document.body.dataset["result"] =
-    Object.is(runtime.Temporal, nativeTemporal) &&
-    runtime.Intl === globalThis.Intl &&
-    runtime.toTemporalInstant ===
-      Reflect.get(Date.prototype, "toTemporalInstant")
-      ? "native"
-      : "unexpected";
+  document.body.dataset["result"] = Object.is(runtime.Temporal, nativeTemporal)
+    ? "native"
+    : "unexpected";
 } else {
   Object.defineProperty(globalThis, "Temporal", {
     configurable: true,

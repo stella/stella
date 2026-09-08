@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+
+import { Temporal } from "@stll/time";
 
 import { isFileFacet } from "@/components/inspector/inspector-broadcast";
 import {
@@ -12,16 +14,14 @@ import { registerInspectorView } from "@/components/inspector/view-registry";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
-let previousDateNow: (() => number) | undefined;
+let restoreTemporalNow: (() => void) | undefined;
 let previousWindowDescriptor: PropertyDescriptor | undefined;
 
 afterEach(() => {
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
-  if (previousDateNow !== undefined) {
-    Date.now = previousDateNow;
-    previousDateNow = undefined;
-  }
+  restoreTemporalNow?.();
+  restoreTemporalNow = undefined;
   FakeBroadcastChannel.reset();
   if (previousWindowDescriptor) {
     Object.defineProperty(globalThis, "window", previousWindowDescriptor);
@@ -127,9 +127,10 @@ const installFakeBroadcastChannel = () => {
   });
 };
 
-const freezeDateNow = (updatedAt: number) => {
-  previousDateNow = Date.now;
-  Date.now = () => updatedAt;
+const freezeTemporalNow = (updatedAt: number) => {
+  const instant = Temporal.Instant.fromEpochMilliseconds(updatedAt);
+  const instantSpy = spyOn(Temporal.Now, "instant").mockReturnValue(instant);
+  restoreTemporalNow = () => instantSpy.mockRestore();
 };
 
 describe("optimistic task creation", () => {
@@ -1183,7 +1184,7 @@ describe("Inspector tab broadcast", () => {
   });
 
   test("uses sender id as deterministic tie-breaker for same-ms updates", () => {
-    freezeDateNow(100);
+    freezeTemporalNow(100);
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };
     const peer = new FakeBroadcastChannel(

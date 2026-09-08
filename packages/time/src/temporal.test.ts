@@ -37,7 +37,7 @@ describe("Temporal runtime", () => {
   }
 
   test("selects native Temporal constructors when the runtime provides them", () => {
-    if (globalThis.Temporal !== undefined) {
+    if (Object.hasOwn(globalThis, "Temporal")) {
       expect(Temporal.Instant).toBe(globalThis.Temporal.Instant);
       expect(Temporal.ZonedDateTime).toBe(globalThis.Temporal.ZonedDateTime);
     }
