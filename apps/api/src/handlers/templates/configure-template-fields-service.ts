@@ -1,14 +1,15 @@
 /**
- * Apply a field configuration to an EXISTING template's manifest and
- * re-embed it in the stored DOCX. The document bytes' {{markers}} are never
- * touched: only the manifest field metadata (input type, options, who-fills,
- * date format, lookup, composite parts, dependent select, formula, hint,
- * required) is overlaid by path.
+ * Apply a field configuration to an EXISTING template.
  *
- * Backs the MCP `configure_template_fields` tool. Mirrors save-document's
- * restore-by-path discipline (overlay merged onto the source manifest fields by
- * path) but stays on the same version: it re-embeds the manifest in the
- * current document bytes and republishes that version under a new key.
+ * The DOCX is the template, so this writes the configuration into the stored
+ * document's markers and republishes those bytes; the manifest it records is
+ * read back from them. Storage only: the reading, merging and rewriting live
+ * in `lib/templates/configure-template-document.ts`, which the authoring eval
+ * drives without a database.
+ *
+ * Backs the MCP `configure_template_fields` tool. Stays on the current version
+ * (a configuration is not a new draft of the body) and republishes it under a
+ * new key.
  */
 
 import { Result } from "better-result";
@@ -17,39 +18,29 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  lookupFormatMarkerPaths,
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
-import {
-  applyFieldOverlay,
-  partitionFieldOverlay,
-} from "@/api/lib/templates/field-overlay";
+import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
+import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 
 type ConfigureTemplateFieldsOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
-  /** FieldMeta overlay, keyed by path; merged onto the matching manifest field. */
+  /** One entry per field path, in the order the caller sent them. */
   fields: FieldMeta[];
   recordAuditEvent: AuditRecorder;
 };
 
-/** The manifest after the overlay is applied, so the caller can echo the
+/** The manifest the rewritten document declares, so the caller can echo the
  *  updated field list back to the agent without a second read, plus the
  *  entries that could not be applied. The call succeeds with a non-empty
  *  `issues` list: only a template-level failure (not found, permission, an
- *  unreadable manifest) fails the whole request. */
+ *  unreadable body) fails the whole request. */
 export type ConfiguredTemplate = {
   manifest: TemplateManifest;
-  issues: FieldOverlayIssue[];
+  issues: FieldConfigurationIssue[];
 };
 
 export const configureTemplateFields = async function* ({
@@ -59,7 +50,7 @@ export const configureTemplateFields = async function* ({
   fields,
   recordAuditEvent,
 }: ConfigureTemplateFieldsOptions): SafeHandlerGenerator<ConfiguredTemplate> {
-  let rejected: FieldOverlayIssue[] = [];
+  let rejected: FieldConfigurationIssue[] = [];
   const written = yield* Result.await(
     Result.gen(() =>
       writeStoredTemplate({
@@ -68,42 +59,18 @@ export const configureTemplateFields = async function* ({
         templateId,
         mode: { type: "current-version" },
         recordAuditEvent,
-        async prepare({ s3Key, manifest: currentManifest }) {
-          const buffer = Buffer.from(await readS3ArrayBuffer(s3Key));
-          const embedded = await readManifest(buffer);
-          const discovered = await discoverTemplate(buffer);
-          const baseManifest =
-            embedded ??
-            currentManifest ??
-            ({
-              version: 1,
-              fields: mergeManifestWithDiscovery(null, discovered).map(
-                (field) => ({
-                  path: field.path,
-                }),
-              ),
-            } satisfies TemplateManifest);
-          // Best effort: an entry the document cannot carry is reported on
-          // its own rather than sinking the entries beside it.
-          const partitioned = partitionFieldOverlay({
-            configured: baseManifest.fields,
-            discovered,
-            overlay: fields,
+        async prepare({ s3Key }) {
+          const configured = await configureTemplateDocument({
+            buffer: Buffer.from(await readS3ArrayBuffer(s3Key)),
+            entries: fields,
           });
           // `prepare` re-runs when a concurrent write moves the template's
           // pointer, so the issue list is replaced, never appended to.
-          rejected = partitioned.issues;
-
-          const overlaid = applyFieldOverlay(baseManifest, partitioned.applied);
-          const formatMarkers = lookupFormatMarkerPaths(overlaid.fields);
-          const manifest: TemplateManifest = {
-            version: overlaid.version,
-            fields: overlaid.fields.filter(
-              (field) => !formatMarkers.has(field.path),
-            ),
-          };
-          const updatedDocx = await writeManifest(buffer, manifest);
-          return Result.ok({ manifest, bytes: new Uint8Array(updatedDocx) });
+          rejected = configured.issues;
+          return Result.ok({
+            manifest: configured.manifest,
+            bytes: new Uint8Array(configured.buffer),
+          });
         },
       }),
     ),

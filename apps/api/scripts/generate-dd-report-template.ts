@@ -4,8 +4,9 @@
  * Bun-runnable: `bun apps/api/scripts/generate-dd-report-template.ts`.
  * Hand-builds the OOXML with JSZip (literal `{{...}}` / `{% for %}` / `{% if %}`
  * markers placed verbatim in paragraphs, which a structured document builder
- * would fight), then embeds the report manifest via `writeManifest` and writes
- * the committed asset the runtime loads.
+ * would fight) and writes the committed asset the runtime loads. The two
+ * AI-drafted fields carry their configuration in their own markers' filter
+ * chains, like every other template: the DOCX is the template.
  *
  * The layout is a conservative law-firm due-diligence memo: a serif body, a
  * navy title/heading hierarchy backed by a real `styles.xml`, a page-1 cover
@@ -20,8 +21,49 @@
  * block, and AI-drafted `{{execSummary}}` / `{{ contract.summary }}` fields.
  */
 
-import { DD_REPORT_MANIFEST } from "@/api/handlers/reports/builtin-templates";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
+import { renderValueMarker } from "@stll/template-conditions";
+
+import { filtersFromFieldMeta } from "@/api/lib/docx/field-filters";
+import type { FieldMeta } from "@/api/lib/docx/types";
+
+/** The report's two AI-drafted fields. The generator receives the whole report
+ *  data object as JSON context, so neither needs the rendered document text. */
+const AI_FIELDS = [
+  {
+    path: "execSummary",
+    label: "Executive summary",
+    inputType: "text",
+    aiSeesDocument: false,
+    aiPrompt:
+      "Write a concise executive summary (3-5 sentences) of this " +
+      "due-diligence review for a partner. Ground it strictly in the provided " +
+      "report data: the number of contracts reviewed, the count and severity " +
+      "of red flags, and the most material recurring issues. Do not invent " +
+      "facts not present in the data.",
+  },
+  {
+    path: "contract.summary",
+    label: "Contract summary",
+    inputType: "text",
+    aiSeesDocument: false,
+    aiPrompt:
+      "Write a 2-3 sentence summary of this single contract for the report, " +
+      "using only its provided fields and risks: its document type, its " +
+      "overall risk level, and its most significant findings (if any). Do not " +
+      "invent facts.",
+  },
+] as const satisfies readonly FieldMeta[];
+
+/** The marker for one AI field, filters and all. Written through the same
+ *  renderer the configure boundary uses, so the asset and a configured
+ *  template say the same thing the same way. */
+const aiMarker = (path: (typeof AI_FIELDS)[number]["path"]): string => {
+  const field = AI_FIELDS.find((candidate) => candidate.path === path);
+  if (!field) {
+    throw new Error(`no AI field ${path}`);
+  }
+  return renderValueMarker(path, filtersFromFieldMeta(field));
+};
 
 const escXml = (value: string): string =>
   value
@@ -182,7 +224,7 @@ const execSummarySection =
   // The narrative paragraph is AI-drafted; gate only it on {% if aiNarrative %}
   // so a deterministic export keeps the heading and the stats below.
   P("{% if aiNarrative %}") +
-  styledP("{{execSummary}}", "BodyText") +
+  styledP(aiMarker("execSummary"), "BodyText") +
   P("{% endif %}") +
   statsBlock;
 
@@ -288,7 +330,7 @@ const contractSection =
   // {% if aiNarrative %} so a deterministic export leaves nothing behind.
   P("{% if aiNarrative %}") +
   styledP("Summary", "Heading3") +
-  styledP("{{ contract.summary }}", "BodyText") +
+  styledP(aiMarker("contract.summary"), "BodyText") +
   P("{% endif %}") +
   P("{% endfor %}");
 
@@ -540,13 +582,11 @@ const createDocx = async (): Promise<Buffer> => {
 };
 
 const main = async (): Promise<void> => {
-  const bare = await createDocx();
-  const withManifest = await writeManifest(bare, DD_REPORT_MANIFEST);
   const outUrl = new URL(
     "../src/handlers/reports/assets/dd-report.docx",
     import.meta.url,
   );
-  await Bun.write(outUrl, withManifest);
+  await Bun.write(outUrl, await createDocx());
   console.info(`[generate-dd-report-template] wrote ${outUrl.pathname}`);
 };
 

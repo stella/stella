@@ -16,7 +16,7 @@
  * unmatched-placeholder diagnostics rather than rendering `NaN`).
  *
  * Pure: no IO, no model/provider dependency. The fill boundary calls
- * {@link applyFormulaFields} after lookup resolution and composite assembly
+ * {@link applyFormulaFields} after lookup resolution
  * (so a formula can reference their results) and before the dependent-field
  * check and any AI step.
  */

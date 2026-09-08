@@ -2,7 +2,7 @@
  * Seed templates & clauses (Knowledge section).
  *
  * Creates clause categories (5), clauses (25) with variants (6),
- * template categories (4), templates (9 DOCX files with manifests),
+ * template categories (4), templates (9 DOCX files with configured markers),
  * and template-clause links (12).
  *
  * Deterministic IDs via `seedId()` so re-running is idempotent
@@ -34,8 +34,10 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
+import { filtersFromFieldMeta } from "@/api/lib/docx/field-filters";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";
@@ -2457,17 +2459,17 @@ export async function seedTemplates(
       conditionFields.push(field);
     }
 
-    // Build manifest
-    const manifest: TemplateManifest = {
-      version: 1,
-      fields: [...t.fields, ...conditionFields],
-    };
-
-    // Generate DOCX with body content
-    let docxBuffer = await createTemplateDocx(t.name, t.bodyXml);
-
-    // Embed manifest into DOCX
-    docxBuffer = await writeManifest(docxBuffer, manifest);
+    // Generate DOCX with body content, then write each field's configuration
+    // into the marker that declares it: the document is the template.
+    const bare = await createTemplateDocx(t.name, t.bodyXml);
+    const { buffer: docxBuffer } = await writeFieldFilters(
+      bare,
+      [...t.fields, ...conditionFields].map((field) => ({
+        path: field.path,
+        filters: filtersFromFieldMeta(field),
+      })),
+    );
+    const manifest = await deriveManifestFromDocx(docxBuffer);
 
     const sizeBytes = docxBuffer.length;
 

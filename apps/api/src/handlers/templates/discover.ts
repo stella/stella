@@ -4,12 +4,10 @@ import { t } from "elysia";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-} from "@/api/lib/docx/template-manifest";
+import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -35,16 +33,12 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const [discovered, manifest] = await Promise.all([
-    discoverTemplate(buffer),
-    readManifest(buffer),
-  ]);
-
-  const fields = mergeManifestWithDiscovery(manifest, discovered);
+  const discovered = await discoverTemplate(buffer);
+  const manifest = deriveManifest(discovered);
 
   return {
-    fields,
-    conditions: manifest ? manifestNamedConditions(manifest) : [],
+    fields: mergeManifestWithDiscovery(manifest, discovered),
+    conditions: manifestNamedConditions(manifest),
     structureErrors: discovered.structureErrors,
   };
 };
@@ -52,7 +46,7 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
 const config = {
   description:
     "Inspect an uploaded DOCX and report the fillable fields it carries: the " +
-    "markers found in the document merged with any manifest already embedded " +
+    "markers found in the document, each configured by the filters written " +
     "in it, the named conditions from that manifest, and any structural " +
     "marker errors. Reads the supplied bytes and stores nothing; use " +
     "templates.get for a template that is already in the library.",

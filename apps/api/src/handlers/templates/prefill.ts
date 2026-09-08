@@ -21,11 +21,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-} from "@/api/lib/docx/template-manifest";
+import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -369,12 +367,9 @@ const prefillTemplate = createSafeRootHandler(
       Result.tryPromise({
         try: async () => {
           const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
-          const [discovered, manifest] = await Promise.all([
-            discoverTemplate(buffer),
-            readManifest(buffer),
-          ]);
+          const discovered = await discoverTemplate(buffer);
           return buildPrefillTargets(
-            mergeManifestWithDiscovery(manifest, discovered),
+            mergeManifestWithDiscovery(deriveManifest(discovered), discovered),
           );
         },
         catch: (cause) =>

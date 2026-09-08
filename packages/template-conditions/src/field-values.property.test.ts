@@ -6,7 +6,6 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   DATE_FORMAT_STYLES,
   formatDate,
-  renderComposite,
 } from "./field-values";
 
 const LOCALES = ["cs", "de", "pl", "en", "ar"] as const;
@@ -88,37 +87,3 @@ describe("formatDate (properties)", () => {
   });
 });
 
-describe("renderComposite (properties)", () => {
-  const partKey = fc.constantFrom("a", "b", "name", "date", "amount");
-  const braceFree = fc
-    .string()
-    .filter((text) => !text.includes("{") && !text.includes("}"));
-
-  test("substitutes a declared marker with its value", () => {
-    fc.assert(
-      fc.property(
-        partKey,
-        braceFree,
-        braceFree,
-        braceFree,
-        (key, value, left, right) => {
-          const format = `${left}{{${key}}}${right}`;
-          expect(renderComposite([{ key }], format, { [key]: value })).toBe(
-            `${left}${value}${right}`,
-          );
-        },
-      ),
-      propertyConfig({ numRuns: 300 }),
-    );
-  });
-
-  test("leaves a marker for an undeclared part untouched", () => {
-    fc.assert(
-      fc.property(partKey, braceFree, (key, value) => {
-        const format = `x {{${key}}} y`;
-        expect(renderComposite([], format, { [key]: value })).toBe(format);
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
-});

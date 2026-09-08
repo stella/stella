@@ -42,7 +42,7 @@ import {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 
-import { replaceResolvedValue } from "./composite-fields";
+import { replaceResolvedValue } from "./resolved-values";
 import {
   mapRepeatablePath,
   readRowSubPath,

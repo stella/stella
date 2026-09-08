@@ -8,7 +8,7 @@
  * is empty; with neither, the value is accepted as-is.
  *
  * Pure: no IO, no model/provider dependency. The fill boundary calls
- * {@link checkDependentFields} on the incoming values (after composite
+ * {@link checkDependentFields} on the incoming values (after lookup
  * assembly) and rejects the request when a dependent value is outside its
  * source.
  */
@@ -81,7 +81,7 @@ export const collectSourceValues = (
  * Append a dependent-field error when `value` is a non-empty string outside
  * `allowed`. Absent, empty, and non-string values are left for the fill's
  * required/unmatched diagnostics (non-strings belong to other machinery:
- * composite assembly, `#each` arrays). An empty `allowed` accepts any value
+ * a repeat's rows). An empty `allowed` accepts any value
  * (the source supplied nothing and there are no static options to fall back
  * to).
  */
@@ -117,7 +117,7 @@ const checkDependentValue = ({
  * Validate every dependent (optionsFrom) field's value against the source
  * field's submitted values. An absent or empty value is left for the fill's
  * required/unmatched diagnostics; non-string values belong to other machinery
- * (composite assembly, `#each` arrays) and are skipped likewise.
+ * (a repeat's rows) and are skipped likewise.
  *
  * A dependent select inside an `{% for %}` group keeps a flat manifest path
  * (`people.lead`) while the fill form submits the loop as an array of rows

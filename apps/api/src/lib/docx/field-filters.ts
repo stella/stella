@@ -292,19 +292,8 @@ export const FIELD_META_FILTERS = {
         ? NO_FILTERS
         : [filterCall("condition", positionalArg(condition))],
   },
-  parts: {
-    excluded:
-      "a composite is written as document text around its part markers, so the format needs no filter",
-  },
-  format: {
-    excluded: "the document text between the part markers is the format",
-  },
   conditionAst: {
     excluded: "the canonical AST is derived from `condition` when it is saved",
-  },
-  sourceLayer: {
-    excluded:
-      "the record that a configure call decided the source, which is what a filter is not",
   },
 } as const satisfies Record<keyof FieldMeta, FilterDisposition>;
 

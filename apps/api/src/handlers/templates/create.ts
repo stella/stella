@@ -14,48 +14,20 @@ import {
   tSafeId,
   withDescription,
 } from "@/api/lib/custom-schema";
-import { isFieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
-  type ClientTemplateManifest,
   type CreatedTemplate,
   createStoredTemplate,
 } from "@/api/lib/templates/create-template";
-import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   name: withDescription(tDefaultVarchar, "Template display name"),
   categoryId: t.Optional(tSafeId("templateCategory")),
-  // A JSON string over the multipart HTTP body, an object when an MCP
-  // invocation calls the handler directly. Accept any and validate in the
-  // handler.
-  manifest: t.Optional(t.Any()),
 });
-
-/** Accept the JSON string an HTTP client sends or the object an MCP
- *  invocation passes straight through. */
-const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
-  let parsed: unknown = value;
-  if (typeof value === "string") {
-    const parseResult = Result.try((): unknown => JSON.parse(value));
-    if (Result.isError(parseResult)) {
-      return null;
-    }
-    parsed = parseResult.value;
-  }
-  if (!isRecord(parsed)) {
-    return null;
-  }
-  const fields = parsed["fields"];
-  if (!Array.isArray(fields) || !fields.every(isFieldMeta)) {
-    return null;
-  }
-  return { fields };
-};
 
 type CreateTemplateProps = {
   safeDb: SafeDb;
@@ -65,7 +37,6 @@ type CreateTemplateProps = {
     file: File;
     name: string;
     categoryId?: SafeId<"templateCategory">;
-    manifest?: unknown;
   };
   recordAuditEvent: AuditRecorder;
 };
@@ -74,7 +45,7 @@ const createTemplateHandler = async function* ({
   safeDb,
   organizationId,
   userId,
-  body: { file, name, categoryId, manifest: manifestJson },
+  body: { file, name, categoryId },
   recordAuditEvent,
 }: CreateTemplateProps): SafeHandlerGenerator<CreatedTemplate> {
   if (file.type !== DOCX_MIME_TYPE) {
@@ -86,24 +57,6 @@ const createTemplateHandler = async function* ({
     );
   }
 
-  // A manifest is optional, but a *supplied* one that is malformed JSON or
-  // fails field validation must fail fast: the wizard sends the field config
-  // (labels, required flags, formulas, input types) here, so silently treating
-  // an invalid manifest as "none" would drop those settings. `null` therefore
-  // only means "omitted".
-  let clientManifest: ClientTemplateManifest | null = null;
-  if (manifestJson !== null && manifestJson !== undefined) {
-    clientManifest = parseClientManifest(manifestJson);
-    if (clientManifest === null) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Invalid template field configuration.",
-        }),
-      );
-    }
-  }
-
   return yield* createStoredTemplate({
     safeDb,
     organizationId,
@@ -112,7 +65,6 @@ const createTemplateHandler = async function* ({
     name,
     fileName: sanitizeFilename(file.name),
     categoryId,
-    clientManifest,
     recordAuditEvent,
   });
 };

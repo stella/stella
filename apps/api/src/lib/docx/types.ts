@@ -236,11 +236,6 @@ export const INPUT_TYPES = [
 
 export type InputType = (typeof INPUT_TYPES)[number];
 
-export type PartInputType = "text" | "select";
-
-/** Canonical parsed part of a composite field value. */
-export type FieldPart = v.InferOutput<typeof fieldPartSchema>;
-
 /** Registries a lookup field can resolve against. Single-sourced from the
  *  dispatch table's slug set, so every registry the fill boundary can resolve
  *  (`BUSINESS_REGISTRY_DISPATCH`) is offered as a lookup target. */
@@ -314,22 +309,6 @@ const fieldPathSchema = (description: string) =>
     v.description(description),
   );
 
-const fieldPartSchema = v.strictObject({
-  key: fieldPathSchema("Part key used in format"),
-  label: v.optional(describedString("Part label")),
-  inputType: v.pipe(
-    v.picklist(["text", "select"]),
-    v.description("Part input control"),
-  ),
-  options: v.optional(
-    v.pipe(
-      v.array(v.string()),
-      v.description("Allowed values for a select part"),
-    ),
-  ),
-  pattern: v.optional(nonEmptyString("Regex for the whole part value")),
-});
-
 export const fieldLookupFormatSchema = v.strictObject({
   key: v.pipe(
     v.string(),
@@ -387,9 +366,6 @@ export const fieldDateFormatSchema = v.pipe(
 /** Shared with the snake_case MCP mirror in `mcp/template-field-input.ts`, so
  *  both surfaces advertise the same line. */
 export const FIELD_VALIDATION_DESCRIPTION = "Field-level value constraints";
-
-/** Composites are engine-side: no agent-facing surface advertises them. */
-const FIELD_PARTS_DESCRIPTION = "Composite field parts";
 
 /**
  * A maximum of 0 admits nothing, so no author means it: it is what a client
@@ -453,7 +429,6 @@ export const DERIVED_SOURCE_PROPERTIES = {
   condition: "condition",
   formula: "formula",
   lookup: "lookup",
-  parts: "parts",
   source: "source",
 } as const satisfies Record<DerivedSourceMode, string>;
 
@@ -463,11 +438,10 @@ type DerivedSourceMode =
   | "condition"
   | "formula"
   | "lookup"
-  | "parts"
   | "source";
 
-/** `lookup`, `parts` and `source` are only presence-checked, so the parts shape
- *  stays open: the snake_case MCP mirror passes its own part objects. */
+/** `lookup` and `source` are only presence-checked, so the snake_case MCP
+ *  mirror can pass its own shape of each. */
 type DerivedSourceFields = {
   aiAdapt?: boolean | undefined;
   aiPrompt?: string | undefined;
@@ -475,7 +449,6 @@ type DerivedSourceFields = {
   conditionAst?: ConditionNode | undefined;
   formula?: string | undefined;
   lookup?: FieldLookup | undefined;
-  parts?: readonly unknown[] | undefined;
   source?: FieldSource | undefined;
 };
 
@@ -486,7 +459,6 @@ const activeDerivedSourceModes = ({
   conditionAst,
   formula,
   lookup,
-  parts,
   source,
 }: DerivedSourceFields): DerivedSourceMode[] => {
   const modes: DerivedSourceMode[] = [];
@@ -504,9 +476,6 @@ const activeDerivedSourceModes = ({
   }
   if (lookup !== undefined) {
     modes.push("lookup");
-  }
-  if (parts !== undefined) {
-    modes.push("parts");
   }
   if (source !== undefined) {
     modes.push("source");
@@ -599,14 +568,6 @@ const fieldMetaObjectSchema = v.strictObject({
   aiSeesDocument: v.optional(
     v.pipe(v.boolean(), v.description("AI field also sees the document")),
   ),
-  parts: v.optional(
-    v.pipe(
-      v.array(fieldPartSchema),
-      v.minLength(1),
-      v.description(FIELD_PARTS_DESCRIPTION),
-    ),
-  ),
-  format: v.optional(nonEmptyString("Join template over the part keys")),
   optionsFrom: v.optional(
     fieldPathSchema("Dependent select: source field path"),
   ),
@@ -623,31 +584,10 @@ const fieldMetaObjectSchema = v.strictObject({
     ),
   ),
   dateFormat: v.optional(fieldDateFormatSchema),
-  sourceLayer: v.optional(
-    v.pipe(
-      v.picklist(["configuration"]),
-      v.description(
-        "Set when a configure call decided who fills this field, so a marker filter cannot reinstate the source it replaced",
-      ),
-    ),
-  ),
 });
-
-const hasCompleteCompositeField = ({
-  format,
-  parts,
-}: {
-  format?: string | undefined;
-  parts?: readonly unknown[] | undefined;
-}): boolean => (parts === undefined) === (format === undefined);
 
 export const fieldMetaSchema = v.pipe(
   fieldMetaObjectSchema,
-  v.check(
-    (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
-      hasCompleteCompositeField(field),
-    "parts and format must be provided together",
-  ),
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
       hasCompatibleDerivedSources(field),
@@ -655,20 +595,12 @@ export const fieldMetaSchema = v.pipe(
   ),
 );
 
-/** Model-facing subset: conditionAst is the persisted canonical form, not an
- * authoring input, a composite field's `parts`/`format` are assembled by
- * the engine — the document text around the markers is the format an author
- * writes — and `sourceLayer` is a record of who decided the source, which the
- * boundary stamps rather than the caller. This schema derives its public
- * fields from the persisted object schema and applies the same named invariant
- * predicates. */
+/** Model-facing subset: `conditionAst` is the persisted canonical form the
+ * engine derives from `condition`, not an authoring input. This schema derives
+ * its public fields from the persisted object schema and applies the same
+ * named invariant predicates. */
 export const fieldMetaToolInputObjectSchema = v.strictObject({
-  ...v.omit(fieldMetaObjectSchema, [
-    "conditionAst",
-    "parts",
-    "format",
-    "sourceLayer",
-  ]).entries,
+  ...v.omit(fieldMetaObjectSchema, ["conditionAst"]).entries,
   source: v.optional(
     v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
@@ -714,9 +646,6 @@ export const FIELD_WIRE_PROPERTY = {
   keyof v.InferOutput<typeof fieldMetaToolInputObjectSchema>,
   string
 >;
-
-export const isFieldPart = (value: unknown): value is FieldPart =>
-  v.is(fieldPartSchema, value);
 
 export const isFieldDateFormat = (value: unknown): value is FieldDateFormat =>
   v.is(fieldDateFormatSchema, value);
@@ -810,10 +739,6 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.aiSeesDocument}: opts an AI-drafted field into
    *  receiving the document text in its generator prompt. */
   aiSeesDocument?: boolean | undefined;
-  /** Mirrors {@link FieldMeta.parts}: the fill form renders one input per part. */
-  parts?: FieldPart[] | undefined;
-  /** Mirrors {@link FieldMeta.format}. */
-  format?: string | undefined;
   /** Mirrors {@link FieldMeta.optionsFrom}: the fill form derives the select's
    *  options live from the referenced field's current value(s). */
   optionsFrom?: string | undefined;
@@ -836,9 +761,6 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;
-  /** Mirrors {@link FieldMeta.sourceLayer}: carried through the merge so the
-   *  manifest a save writes still says the configuration owns the source. */
-  sourceLayer?: "configuration" | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */

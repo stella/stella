@@ -5,7 +5,7 @@
  * The built-in report layouts ship with the deployment and are only visible in
  * the export picker; there is no org row to open or edit. "Customize" copies the
  * built-in's DOCX into a stored `report`-kind template via the shared
- * `createStoredTemplate` recipe, passing the registry manifest verbatim so the
+ * `createStoredTemplate` recipe; the built-in's own markers carry its field
  * clone's manifest is byte-faithful to the built-in's — including per-item AI
  * fields under array paths (`contracts.summary`) that a discovery merge would
  * fold into the array root and drop. The clone therefore fills identically to
@@ -101,9 +101,6 @@ export const createCloneBuiltinReportTemplate = (
         buffer,
         name,
         fileName: `${name}.docx`,
-        // Verbatim: the registry manifest is the fill contract; re-discovering it
-        // from the DOCX would drop the per-item `contracts.summary` AI field.
-        manifest: builtin.manifest,
         kind: "report",
         recordAuditEvent,
       });

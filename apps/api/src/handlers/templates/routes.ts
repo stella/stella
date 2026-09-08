@@ -30,7 +30,6 @@ import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/defa
 import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
 import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
 import lookupPreview from "@/api/handlers/templates/lookup-preview";
-import manifestTemplate from "@/api/handlers/templates/manifest";
 import prefillTemplate from "@/api/handlers/templates/prefill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
 import previewTemplate from "@/api/handlers/templates/preview";
@@ -85,10 +84,6 @@ export const templatesRoute = new Elysia({
   .post("/lookup-preview", lookupPreview.handler, {
     body: lookupPreview.config.body,
     permissions: lookupPreview.config.permissions,
-  })
-  .post("/manifest", manifestTemplate.handler, {
-    body: manifestTemplate.config.body,
-    permissions: manifestTemplate.config.permissions,
   })
   .post("/prepare", prepareTemplate.handler, {
     body: prepareTemplate.config.body,

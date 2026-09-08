@@ -1,11 +1,15 @@
 /**
- * Which paths a `fields` overlay may configure, and what the manifest looks
- * like once it is applied. Shared by template creation (`create-template.ts`)
- * and the configure-an-existing-template service so both accept exactly the
- * same overlay and reject the same one with the same issues.
+ * Which paths a configure call may name, and what each entry means once it is
+ * read against the document.
  *
- * The rule both callers used to contradict: a dotted path is not automatically
- * a leaf. `{{company.name}}` and `{{company.krs}}` make `company` a namespace
+ * The DOCX carries the configuration, so this is an input boundary and nothing
+ * else: it says the entry a caller sent in the vocabulary the document speaks
+ * (a loop alias resolved, an item count moved onto the repeat it counts, a
+ * rendering of a registry hit folded into the lookup that owns it) and names
+ * every entry it cannot place. What survives is written into the markers.
+ *
+ * The rule callers keep contradicting: a dotted path is not automatically a
+ * leaf. `{{company.name}}` and `{{company.krs}}` make `company` a namespace
  * parent — structural, not fillable — UNLESS the configuration declares a
  * registry lookup on it. Then `company` is the one real input (a registry
  * number) and the dotted markers are named renderings of the single resolved
@@ -22,10 +26,6 @@ import {
 import { arrayOrEmpty } from "@/api/lib/array";
 import { foldItemCountConstraints } from "@/api/lib/docx/field-filters";
 import {
-  manifestFieldsFromMerge,
-  mergeManifestWithDiscovery,
-} from "@/api/lib/docx/template-manifest";
-import {
   CLEARED_FIELD_SOURCE,
   FIELD_SOURCE_KEYS,
   FIELD_WIRE_PROPERTY,
@@ -36,17 +36,16 @@ import {
   type FieldLookup,
   type FieldLookupFormat,
   type FieldMeta,
-  type TemplateManifest,
 } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-/** One rejected overlay entry. `path` is the dot path of the offending entry in
+/** One rejected entry. `path` is the dot path of the offending entry in
  *  the tool input (`fields.2`), matching the schema-derived issue paths, so an
  *  agent can fix the entry it sent instead of parsing prose; `index` is the
  *  same position as a number, so a caller can address the entry it sent
  *  without parsing the path. `message` says what is wrong with the entry and
  *  `hint` says what to do about it. */
-export type FieldOverlayIssue = {
+export type FieldConfigurationIssue = {
   path: string;
   index: number;
   message: string;
@@ -104,16 +103,8 @@ const declaredPaths = (discovered: DiscoveredTemplate): DeclaredPaths => {
 const childMarkers = (path: string, declared: ReadonlySet<string>): string[] =>
   [...declared].filter((candidate) => candidate.startsWith(`${path}.`));
 
-/** True when the entry says anything beyond naming a path: a bare `{ path }`
- *  entry is a marker discovery recorded in the manifest, not a decision an
- *  author made, so it never becomes a field of its own. */
-const carriesConfiguration = (field: FieldMeta): boolean =>
-  Object.entries(field).some(
-    ([key, value]) => key !== "path" && value !== undefined,
-  );
-
 /**
- * The path an overlay entry means, in the vocabulary the manifest speaks.
+ * The path an entry means, in the vocabulary the manifest speaks.
  *
  * A loop names its item — `{% for attorney in attorneys %}` — and the body
  * writes `{{ attorney.name }}`, so that is the path a model reaches for when
@@ -126,7 +117,7 @@ const carriesConfiguration = (field: FieldMeta): boolean =>
  * not collide with a real path: a field genuinely called `attorney.name`
  * always wins over the alias reading.
  */
-const canonicalizeOverlayPath = (
+const canonicalizeEntryPath = (
   path: string,
   discovered: DiscoveredTemplate,
   declared: ReadonlySet<string>,
@@ -183,9 +174,9 @@ const withoutSelfCondition = (field: FieldMeta): FieldMeta => {
   return rest;
 };
 
-/** One overlay entry, with the position it was sent at: an issue names the
+/** One entry, with the position it was sent at: an issue names the
  *  entry the caller wrote, never the position it ended up in. */
-type OverlayEntry = {
+export type ConfigurationEntry = {
   field: FieldMeta;
   index: number;
 };
@@ -193,7 +184,7 @@ type OverlayEntry = {
 /** The dot path an issue carries: the entry the caller sent, or the one
  *  property of it the issue is about. A path with a property tail says the
  *  entry itself was applied. */
-export const fieldOverlayIssuePath = (
+export const fieldConfigurationIssuePath = (
   index: number,
   property?: string,
 ): string =>
@@ -214,8 +205,8 @@ const droppedPropertyIssue = ({
   index: number;
   message: string;
   property: string;
-}): FieldOverlayIssue => ({
-  path: fieldOverlayIssuePath(index, property),
+}): FieldConfigurationIssue => ({
+  path: fieldConfigurationIssuePath(index, property),
   index,
   message,
   hint,
@@ -248,12 +239,12 @@ const groupLeaves = (
  * of the document, and the entries beside it are unaffected.
  */
 const expandGroupEntry = (
-  { field, index }: OverlayEntry,
+  { field, index }: ConfigurationEntry,
   leaves: readonly string[],
-): { required: boolean; issues: FieldOverlayIssue[] } => {
-  // A persisted-only key (the derived AST, a composite's parts) has no wire
-  // property to name and no caller sets one on a group, so it goes with the
-  // entry rather than being reported.
+): { required: boolean; issues: FieldConfigurationIssue[] } => {
+  // A persisted-only key (the derived AST) has no wire property to name and no
+  // caller sets one on a group, so it goes with the entry rather than being
+  // reported.
   const wireProperty: Readonly<Record<string, string>> = FIELD_WIRE_PROPERTY;
   const configured = new Set(
     Object.entries(field).flatMap(([key, value]) => {
@@ -285,18 +276,18 @@ const expandGroupEntry = (
 };
 
 /**
- * The overlay with every group entry expanded into what its children can
+ * The entries with every group entry expanded into what its children can
  * carry. A group holding a lookup is not a group but the lookup's one input,
  * with the markers under it as its renderings, so it stays as it is.
  */
 const expandGroups = (
-  entries: readonly OverlayEntry[],
+  entries: readonly ConfigurationEntry[],
   declared: DeclaredPaths,
   lookupOwners: ReadonlySet<string>,
-): { entries: OverlayEntry[]; issues: FieldOverlayIssue[] } => {
-  const kept: OverlayEntry[] = [];
-  const issues: FieldOverlayIssue[] = [];
-  const required: OverlayEntry[] = [];
+): { entries: ConfigurationEntry[]; issues: FieldConfigurationIssue[] } => {
+  const kept: ConfigurationEntry[] = [];
+  const issues: FieldConfigurationIssue[] = [];
+  const required: ConfigurationEntry[] = [];
   for (const entry of entries) {
     const { field } = entry;
     const leaves =
@@ -327,7 +318,7 @@ const expandGroups = (
       .filter((entry) => !keptPaths.has(entry.field.path))
       .map((entry) => [entry.field.path, entry] as const),
   );
-  const applied: OverlayEntry[] = [];
+  const applied: ConfigurationEntry[] = [];
   for (const entry of kept) {
     const inherits =
       requiredPaths.has(entry.field.path) && entry.field.required === undefined;
@@ -341,11 +332,11 @@ const expandGroups = (
   return { entries: applied, issues };
 };
 
-/** The lookup each path carries once the overlay is applied: the entry the
+/** The lookup each path carries once the entries are applied: the entry the
  *  call sends wins over the one the template already stored. */
 const effectiveLookups = (
   configured: readonly FieldMeta[],
-  entries: readonly OverlayEntry[],
+  entries: readonly ConfigurationEntry[],
 ): Map<string, FieldLookup> => {
   const lookups = new Map<string, FieldLookup>();
   for (const field of [...configured, ...entries.map((entry) => entry.field)]) {
@@ -383,7 +374,7 @@ const formatDropIssue = ({
   parent: FieldLookup;
   parentPath: string;
   path: string;
-}): FieldOverlayIssue => {
+}): FieldConfigurationIssue => {
   const { property } = drop;
   const renders = `"${path}" renders the "${key}" format of "${parentPath}"'s lookup`;
   const filledByTheParent =
@@ -426,7 +417,7 @@ const formatDropIssue = ({
 };
 
 /**
- * The overlay with every entry a parent's lookup already renders reduced to
+ * The entries with every entry a parent's lookup already renders reduced to
  * that rendering.
  *
  * `{{company.address}}` is the "address" format of the lookup on `company`,
@@ -436,10 +427,17 @@ const formatDropIssue = ({
  * marker of the document — and the parent's lookup stands.
  */
 const foldLookupFormatChildren = (
-  entries: readonly OverlayEntry[],
+  entries: readonly ConfigurationEntry[],
   lookups: ReadonlyMap<string, FieldLookup>,
-): { entries: OverlayEntry[]; issues: FieldOverlayIssue[] } => {
-  const issues: FieldOverlayIssue[] = [];
+): {
+  entries: ConfigurationEntry[];
+  issues: FieldConfigurationIssue[];
+  /** The parents whose formats a child's template changed, so the entry that
+   *  reaches the document carries the rendering the caller described. */
+  formats: Map<string, FieldLookupFormat[]>;
+} => {
+  const issues: FieldConfigurationIssue[] = [];
+  const formats = new Map<string, FieldLookupFormat[]>();
   const folded = entries.map((entry) => {
     const { field, index } = entry;
     const cut = field.path.lastIndexOf(".");
@@ -449,10 +447,15 @@ const foldLookupFormatChildren = (
       return entry;
     }
     const key = field.path.slice(cut + 1);
-    const fold = foldFieldIntoFormat(field, parent, key);
+    const fold = foldFieldIntoFormat(
+      field,
+      { ...parent, formats: formats.get(parentPath) ?? parent.formats },
+      key,
+    );
     if (fold === null) {
       return entry;
     }
+    formats.set(parentPath, fold.formats);
     issues.push(
       ...fold.drops.map((drop) =>
         formatDropIssue({
@@ -467,11 +470,59 @@ const foldLookupFormatChildren = (
     );
     return { field: fold.field, index };
   });
-  return { entries: folded, issues };
+  return { entries: folded, issues, formats };
 };
 
 /**
- * The overlay in the vocabulary the manifest speaks: loop aliases resolved,
+ * The entries with each lookup parent carrying the renderings its children
+ * described. A parent the call did not name gets an entry of its own: the
+ * child named a real marker, and the format it declared reaches the document
+ * only through the lookup that owns it.
+ */
+const withFoldedFormats = (
+  entries: readonly ConfigurationEntry[],
+  formats: ReadonlyMap<string, FieldLookupFormat[]>,
+  lookups: ReadonlyMap<string, FieldLookup>,
+): ConfigurationEntry[] => {
+  if (formats.size === 0) {
+    return [...entries];
+  }
+  const applied = new Set<string>();
+  const withParents = entries.map((entry) => {
+    const updated = formats.get(entry.field.path);
+    const lookup = lookups.get(entry.field.path);
+    if (updated === undefined || lookup === undefined) {
+      return entry;
+    }
+    applied.add(entry.field.path);
+    return {
+      field: { ...entry.field, lookup: { ...lookup, formats: updated } },
+      index: entry.index,
+    };
+  });
+  for (const [path, updated] of formats) {
+    const lookup = lookups.get(path);
+    if (applied.has(path) || lookup === undefined) {
+      continue;
+    }
+    // The child that declared the rendering answers for the parent entry it
+    // creates, so an issue still names a position the caller sent.
+    const index = entries.find((entry) =>
+      entry.field.path.startsWith(`${path}.`),
+    )?.index;
+    if (index === undefined) {
+      continue;
+    }
+    withParents.push({
+      field: { path, lookup: { ...lookup, formats: updated } },
+      index,
+    });
+  }
+  return withParents;
+};
+
+/**
+ * The entries in the vocabulary the manifest speaks: loop aliases resolved,
  * item counts on the repeat they count, and a condition that answers itself
  * read as the absent condition it is.
  *
@@ -480,19 +531,19 @@ const foldLookupFormatChildren = (
  * belongs to the array — an item field never holds a list — so it moves, and
  * the array entry the fold creates answers for the entry that sent it.
  */
-const canonicalizeOverlay = ({
+const canonicalizeEntries = ({
   configured,
   declared: declaredPathsOfDocument,
   discovered,
-  overlay,
-}: ValidateFieldOverlayOptions & {
+  entries,
+}: ReadFieldConfigurationOptions & {
   declared: DeclaredPaths;
-}): { entries: OverlayEntry[]; issues: FieldOverlayIssue[] } => {
+}): { entries: ConfigurationEntry[]; issues: FieldConfigurationIssue[] } => {
   const { arrays, declared } = declaredPathsOfDocument;
-  const canonical = overlay.map((field, index) => ({
+  const canonical = entries.map((field, index) => ({
     field: withoutSelfCondition({
       ...field,
-      path: canonicalizeOverlayPath(field.path, discovered, declared),
+      path: canonicalizeEntryPath(field.path, discovered, declared),
     }),
     index,
   }));
@@ -503,13 +554,13 @@ const canonicalizeOverlay = ({
     new Set(lookups.keys()),
   );
   const children = foldLookupFormatChildren(grouped.entries, lookups);
-  const entries = children.entries;
+  const placed = withFoldedFormats(children.entries, children.formats, lookups);
   const { fields, moves } = foldItemCountConstraints(
-    entries.map((entry) => entry.field),
+    placed.map((entry) => entry.field),
     arrays,
   );
   const indexByPath = new Map(
-    entries.map((entry) => [entry.field.path, entry.index] as const),
+    placed.map((entry) => [entry.field.path, entry.index] as const),
   );
   const movedFrom = new Map(moves.map(({ from, to }) => [to, from] as const));
   const positionOf = (path: string): number | undefined => {
@@ -529,40 +580,77 @@ const canonicalizeOverlay = ({
   };
 };
 
-type ValidateFieldOverlayOptions = {
+/** True when the entry decides who fills the field. Every wire source branch
+ *  writes the whole cluster, clearing the keys its own branch does not use, so
+ *  an own key is the signal: reading the values alone cannot tell a cleared
+ *  property from an absent one. */
+export const decidesSource = (field: FieldMeta): boolean =>
+  FIELD_SOURCE_KEYS.some((key) => Object.hasOwn(field, key));
+
+/**
+ * One field's configuration after an entry is read against what its marker
+ * already says.
+ *
+ * A property the entry names replaces the marker's; a property it does not
+ * name keeps it, which is what lets a caller set a label without resending the
+ * validation beside it. Naming ANY source replaces the whole cluster: a field
+ * that was a registry lookup and is now AI-drafted must not keep both, because
+ * the marker can only carry one answer to who fills it.
+ */
+export const mergeFieldConfiguration = (
+  declared: FieldMeta | undefined,
+  entry: FieldMeta,
+): FieldMeta => {
+  if (declared === undefined) {
+    return entry;
+  }
+  return decidesSource(entry)
+    ? { ...declared, ...CLEARED_FIELD_SOURCE, ...entry }
+    : { ...declared, ...entry };
+};
+
+/** The configuration each named path ends up with, entries merged onto what
+ *  the document already declares. */
+export const effectiveConfiguration = (
+  declared: readonly FieldMeta[],
+  entries: readonly FieldMeta[],
+): Map<string, FieldMeta> => {
+  const byPath = new Map(declared.map((field) => [field.path, field]));
+  for (const entry of entries) {
+    byPath.set(entry.path, mergeFieldConfiguration(byPath.get(entry.path), entry));
+  }
+  return byPath;
+};
+
+type ReadFieldConfigurationOptions = {
   /** Fields already configured on the template (its current manifest). */
   configured: readonly FieldMeta[];
   /** What the DOCX markers declare. */
   discovered: DiscoveredTemplate;
-  /** The incoming overlay, in the order the caller sent it. */
-  overlay: readonly FieldMeta[];
+  /** The incoming entries, in the order the caller sent it. */
+  entries: readonly FieldMeta[];
 };
 
 /**
- * Validate an overlay against the template's markers. An empty result accepts
- * the overlay; otherwise every offending entry is named, so one round trip
+ * Validate the entries against the template's markers. An empty result accepts
+ * them; otherwise every offending entry is named, so one round trip
  * reports every problem rather than the first.
  */
-export const validateFieldOverlay = ({
+export const validateFieldConfiguration = ({
   configured,
   discovered,
-  overlay,
-}: ValidateFieldOverlayOptions): FieldOverlayIssue[] => {
+  entries,
+}: ReadFieldConfigurationOptions): FieldConfigurationIssue[] => {
   const { declared, roots } = declaredPaths(discovered);
-  const issues: FieldOverlayIssue[] = [];
+  const issues: FieldConfigurationIssue[] = [];
   // The configuration the entries make together: a path is a namespace parent
-  // or the one input of a lookup by what the whole overlay says, not by what
+  // or the one input of a lookup by what the whole call says, not by what
   // the entry naming it says on its own.
-  const effectiveByPath = new Map(
-    applyFieldOverlay(
-      { version: 1, fields: [...configured] },
-      overlay,
-    ).fields.map((field) => [field.path, field]),
-  );
+  const effectiveByPath = effectiveConfiguration(configured, entries);
   const seenPaths = new Set<string>();
 
-  for (const [index, field] of overlay.entries()) {
-    const issuePath = fieldOverlayIssuePath(index);
+  for (const [index, field] of entries.entries()) {
+    const issuePath = fieldConfigurationIssuePath(index);
     if (seenPaths.has(field.path)) {
       issues.push({
         path: issuePath,
@@ -610,16 +698,18 @@ export const validateFieldOverlay = ({
   return issues;
 };
 
-type PartitionFieldOverlayResult = {
-  /** The entries that apply together, in the order they were sent. */
-  applied: FieldMeta[];
+type PartitionFieldConfigurationResult = {
+  /** The entries that apply together, in the order they were sent, each with
+   *  the position the caller wrote it at so a later refusal still names the
+   *  entry rather than a place among the survivors. */
+  applied: ConfigurationEntry[];
   /** One issue per entry that does not, addressed by its position in the
    *  input the caller sent, not by its position among the survivors. */
-  issues: FieldOverlayIssue[];
+  issues: FieldConfigurationIssue[];
 };
 
 /**
- * Split an overlay into the entries that apply and the ones that do not. A
+ * Split the entries into the ones that apply and the ones that do not. A
  * call carrying seven usable entries and one bad path configures the seven:
  * an agent that gets one property wrong should not have to resend the other
  * seven to find out whether they were fine.
@@ -628,30 +718,30 @@ type PartitionFieldOverlayResult = {
  * configuration the surviving entries make together, so dropping one can
  * settle another. Dropping only ever removes constraints, and every round
  * removes at least one entry, so the loop terminates in at most
- * `overlay.length` rounds.
+ * `entries.length` rounds.
  */
-export const partitionFieldOverlay = ({
+export const partitionFieldConfiguration = ({
   configured,
   discovered,
-  overlay,
-}: ValidateFieldOverlayOptions): PartitionFieldOverlayResult => {
-  const issuesByIndex = new Map<number, FieldOverlayIssue>();
-  const canonical = canonicalizeOverlay({
+  entries,
+}: ReadFieldConfigurationOptions): PartitionFieldConfigurationResult => {
+  const issuesByIndex = new Map<number, FieldConfigurationIssue>();
+  const canonical = canonicalizeEntries({
     configured,
     declared: declaredPaths(discovered),
     discovered,
-    overlay,
+    entries,
   });
   let survivors = canonical.entries;
   for (;;) {
-    const issues = validateFieldOverlay({
+    const issues = validateFieldConfiguration({
       configured,
       discovered,
-      overlay: survivors.map((entry) => entry.field),
+      entries: survivors.map((entry) => entry.field),
     });
     if (issues.length === 0) {
       return {
-        applied: survivors.map((entry) => entry.field),
+        applied: survivors,
         // A property one entry could not carry sorts beside the entries that
         // were refused whole, in the order the caller sent them.
         issues: [...canonical.issues, ...issuesByIndex.values()].toSorted(
@@ -663,14 +753,14 @@ export const partitionFieldOverlay = ({
     for (const issue of issues) {
       const entry =
         survivors[issue.index] ??
-        panic(`overlay issue names position ${String(issue.index)}`);
+        panic(`configuration issue names position ${String(issue.index)}`);
       rejected.add(entry.index);
       // The first reason an entry is rejected describes the entry itself; a
       // later round can only report a consequence of dropping another.
       if (!issuesByIndex.has(entry.index)) {
         issuesByIndex.set(entry.index, {
           ...issue,
-          path: fieldOverlayIssuePath(entry.index),
+          path: fieldConfigurationIssuePath(entry.index),
           index: entry.index,
         });
       }
@@ -713,16 +803,11 @@ const FORMAT_FOLD = {
   aiPrompt: "dropped",
   aiAdapt: "dropped",
   aiSeesDocument: "dropped",
-  parts: "dropped",
-  format: "dropped",
   source: "dropped",
   formula: "dropped",
   condition: "dropped",
   conditionAst: "dropped",
   dateFormat: "dropped",
-  // Not a property a caller sends: it records that a configure call decided
-  // the source, so folding a child into a format has nothing to report.
-  sourceLayer: "silent",
 } as const satisfies Record<
   keyof FieldMeta,
   "identity" | "template" | "silent" | "dropped" | "default"
@@ -864,8 +949,8 @@ const foldFieldIntoFormat = (
       disposition === "silent" ||
       disposition === "template" ||
       declared[property] === undefined ||
-      // A persisted-only key (the derived AST, a composite's parts) has no
-      // wire property to name, so its drop goes with the entry.
+      // A persisted-only key (the derived AST) has no wire property to name,
+      // so its drop goes with the entry.
       wire === undefined ||
       (disposition === "default" && atDefault[property]?.(field) === true)
     ) {
@@ -886,177 +971,14 @@ const foldFieldIntoFormat = (
 };
 
 /**
- * The manifest with every marker a lookup renders folded into that lookup.
- *
- * This is the same ownership rule the overlay boundary applies, run over the
- * merged manifest so creation, configuration and read-back agree on which
- * fields exist. The drops are silent here because this merge has no issue
- * channel — the manifest is its whole result — while the boundary that a
- * caller reaches through reports them per property, against the entry the
- * caller sent.
- */
-const foldLookupFormatFields = (fields: readonly FieldMeta[]): FieldMeta[] => {
-  const byPath = new Map(fields.map((field) => [field.path, field]));
-  const folded = new Set<string>();
-  for (const field of fields) {
-    const cut = field.path.lastIndexOf(".");
-    const parent =
-      cut === -1 ? undefined : byPath.get(field.path.slice(0, cut));
-    if (parent?.lookup === undefined || folded.has(parent.path)) {
-      continue;
-    }
-    const fold = foldFieldIntoFormat(
-      field,
-      parent.lookup,
-      field.path.slice(cut + 1),
-    );
-    if (fold === null) {
-      continue;
-    }
-    byPath.set(parent.path, {
-      ...parent,
-      lookup: { ...parent.lookup, formats: fold.formats },
-    });
-    folded.add(field.path);
-  }
-  return fields
-    .filter((field) => !folded.has(field.path))
-    .map((field) => byPath.get(field.path) ?? field);
-};
-
-/**
- * The manifest a validated overlay produces: entries merge by path onto the
- * existing configuration, and a path the manifest does not carry yet (a lookup
- * root the marker scan only saw as a namespace parent) is appended.
- *
- * The merge is where a field that restates its parent's lookup becomes that
- * parent's format, so creation, configuration and read-back fold identically.
- */
-export const applyFieldOverlay = (
-  manifest: TemplateManifest | null,
-  overlay: readonly FieldMeta[],
-): TemplateManifest => {
-  const overlayByPath = new Map(overlay.map((field) => [field.path, field]));
-  const existing = arrayOrEmpty(manifest?.fields);
-  const merged: FieldMeta[] = existing.map((field) => {
-    const override = overlayByPath.get(field.path);
-    if (override === undefined) {
-      return field;
-    }
-    // A configuration that decided who fills the field replaces the whole
-    // source cluster, so the layer under it — a marker's `ai(…)` filter, or a
-    // lookup the template used to carry — cannot survive beside the new one.
-    return override.sourceLayer === "configuration"
-      ? { ...field, ...CLEARED_FIELD_SOURCE, ...override }
-      : { ...field, ...override };
-  });
-  const existingPaths = new Set(existing.map((field) => field.path));
-  for (const field of overlayByPath.values()) {
-    // A bare `{ path }` entry decides nothing: it is the skeleton read back
-    // unchanged. Appending it would record a loop's item path as a field of
-    // its own and grow the manifest on every no-op configure, so only an
-    // entry that carries a decision creates a new manifest field.
-    if (!existingPaths.has(field.path) && carriesConfiguration(field)) {
-      merged.push(field);
-    }
-  }
-  return {
-    version: manifest?.version ?? 1,
-    fields: foldLookupFormatFields(merged),
-  };
-};
-
-type ResolveTemplateFieldOverlayOptions = {
-  discovered: DiscoveredTemplate;
-  manifest: TemplateManifest | null;
-  overlay: readonly FieldMeta[] | undefined;
-};
-
-/**
- * The document layer under the stored one. A marker's filters are what the
- * DOCX itself says the field is, so they are the base; the stored manifest and
- * the call's overlay refine it, in that order. When the overlay layer is
- * deleted and the manifest becomes a derived cache, the two later layers go
- * and this becomes the whole resolution.
- */
-const documentLayer = (
-  discovered: DiscoveredTemplate,
-  manifest: TemplateManifest | null,
-): TemplateManifest | null =>
-  discovered.documentFields.length === 0
-    ? manifest
-    : applyFieldOverlay(
-        { version: manifest?.version ?? 1, fields: discovered.documentFields },
-        arrayOrEmpty(manifest?.fields),
-      );
-
-/** The cluster's values, spelled so two fields can be compared by what they
- *  say about who fills the field rather than by identity. */
-const sourceSignature = (field: FieldMeta | undefined): string =>
-  JSON.stringify(FIELD_SOURCE_KEYS.map((key) => field?.[key] ?? null));
-
-/** True when the entry decides who fills the field: every wire source branch
- *  writes the whole cluster, clearing the keys its own branch does not use, so
- *  an own key is the signal — reading the values alone cannot tell a cleared
- *  property from an absent one. */
-const decidesSource = (field: FieldMeta): boolean =>
-  FIELD_SOURCE_KEYS.some((key) => Object.hasOwn(field, key));
-
-/**
- * The overlay, with the record of a source the caller moved.
- *
- * A cleared property is absent, and the manifest serializes absence as
- * silence, so a configuration that took a field off the `ai(…)` its marker
- * declares would be undone the next time the document layer is read. The entry
- * therefore carries `sourceLayer` — but only when it actually departs from
- * what the document declares: the skeleton a create hands back names a person
- * source on every path, and sending it unchanged must still change nothing.
- */
-const withSourceLayer = (
-  overlay: readonly FieldMeta[],
-  documentFields: readonly FieldMeta[],
-): FieldMeta[] => {
-  const declared = new Map(documentFields.map((field) => [field.path, field]));
-  const stamped: FieldMeta[] = [];
-  for (const field of overlay) {
-    const departs =
-      decidesSource(field) &&
-      sourceSignature(field) !== sourceSignature(declared.get(field.path));
-    stamped.push(departs ? { ...field, sourceLayer: "configuration" } : field);
-  }
-  return stamped;
-};
-
-/** Creation and its diagnostics must classify paths from the same final configuration. */
-export const resolveTemplateFieldOverlay = ({
-  discovered,
-  manifest,
-  overlay,
-}: ResolveTemplateFieldOverlayOptions): TemplateManifest => {
-  const stored = documentLayer(discovered, manifest);
-  const baseManifest =
-    overlay === undefined
-      ? stored
-      : applyFieldOverlay(
-          stored,
-          withSourceLayer(overlay, discovered.documentFields),
-        );
-  const fields = mergeManifestWithDiscovery(baseManifest, discovered);
-  return {
-    version: baseManifest?.version ?? 1,
-    fields: manifestFieldsFromMerge(fields, baseManifest),
-  };
-};
-
-/**
- * The 400 both overlay boundaries return. The summary message stays readable
+ * The 400 the configure boundary returns. The summary message stays readable
  * for a plain HTTP client while `issues` carries every offending entry by its
  * input path, which is what the structured MCP envelope surfaces.
  */
-export const fieldOverlayError = (
-  issues: readonly FieldOverlayIssue[],
+export const fieldConfigurationError = (
+  issues: readonly FieldConfigurationIssue[],
 ): HandlerError<400> => {
-  const first = issues.at(0) ?? panic("field overlay rejected with no issue");
+  const first = issues.at(0) ?? panic("field configuration rejected with no issue");
   const others = issues.length - 1;
   const summary = `${first.message} ${first.hint}`;
   return new HandlerError({

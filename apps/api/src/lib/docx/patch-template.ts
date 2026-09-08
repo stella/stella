@@ -23,7 +23,9 @@ import {
   pruneDanglingNumPr,
   readConditionRawValues,
 } from "./block-directives";
+import { deriveManifest } from "./derived-manifest";
 import { discoverPlaceholders } from "./discover-placeholders";
+import { discoverTemplate } from "./discover-template";
 import { processInlineConditions } from "./inline-conditions";
 import { manifestNamedConditions } from "./manifest-conditions";
 import {
@@ -37,7 +39,7 @@ import {
   W_NS,
 } from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
-import { readManifestFromZip, stripManifest } from "./template-manifest";
+import { stripManifest } from "./strip-custom-xml-manifest";
 import type {
   FillTemplateResult,
   ParagraphSource,
@@ -217,11 +219,13 @@ export const fillTemplate = async (
   // Open ZIP once for manifest + block-directive checks
   const zip = await JSZip.loadAsync(data);
 
-  const manifest = await readManifestFromZip(zip);
   // A boolean condition-field IS a named condition (addressed by its path), so
   // synthesize both shapes into one list the evaluator resolves bare names
-  // against — `{% if field_path %}` then resolves the field's rule.
-  const synthesized = manifest ? manifestNamedConditions(manifest) : [];
+  // against — `{% if field_path %}` then resolves the field's rule. The
+  // conditions come from the markers, like every other field configuration.
+  const synthesized = manifestNamedConditions(
+    deriveManifest(await discoverTemplate(data)),
+  );
   const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
   let effectiveValues: PatchValues;
@@ -325,13 +329,12 @@ export const fillTemplate = async (
       isPatchableValue(values[name]),
   );
 
-  let buffer = await fillTemplateWithValues(data, effectiveValues);
-
-  // Strip manifest from output (prevent metadata leaking
-  // into filled documents)
-  if (manifest) {
-    buffer = await stripManifest(buffer);
-  }
+  // A template authored before the configuration moved into the markers can
+  // still carry the old custom XML manifest; a filled document must not take
+  // template metadata out of the workspace with it.
+  const buffer = await stripManifest(
+    await fillTemplateWithValues(data, effectiveValues),
+  );
 
   return {
     buffer,

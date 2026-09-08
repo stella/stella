@@ -989,9 +989,6 @@ export const CAPABILITY_DISPATCH = {
   "templates.lookup-preview": {
     load: async () => await import("@/api/handlers/templates/lookup-preview"),
   },
-  "templates.manifest": {
-    load: async () => await import("@/api/handlers/templates/manifest"),
-  },
   "templates.prefill": {
     load: async () => await import("@/api/handlers/templates/prefill"),
   },

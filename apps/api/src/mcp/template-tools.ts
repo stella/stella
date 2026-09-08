@@ -26,10 +26,10 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
+
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
+
 import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -50,12 +50,12 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
-import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
+import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
 import {
   conditionReferencesOnlySelf,
-  fieldOverlayIssuePath,
-  resolveTemplateFieldOverlay,
-} from "@/api/lib/templates/field-overlay";
+  fieldConfigurationIssuePath,
+} from "@/api/lib/templates/configure-field-input";
 import {
   recordTemplateFill,
   recordTemplateUse,
@@ -2088,10 +2088,7 @@ const upsertStoredTemplate = async ({
       : { fieldCount: renamed.value.fieldCount };
   }
 
-  const [discovered, embeddedManifest] = await Promise.all([
-    discoverTemplate(buffer),
-    readManifest(buffer),
-  ]);
+  const manifest = await deriveManifestFromDocx(buffer);
   const written = await Result.gen(() =>
     (context.testDependencies?.writeStoredTemplate ?? writeStoredTemplate)({
       safeDb: context.safeDb,
@@ -2100,17 +2097,10 @@ const upsertStoredTemplate = async ({
       mode: { type: "new-version", userId: context.userId },
       ...(name === undefined ? {} : { metadata: { name } }),
       recordAuditEvent: context.recordAuditEvent,
-      async prepare({ manifest: currentManifest }) {
-        // The new document decides which paths exist; the configuration that
-        // survives is the one whose path the new bytes still carry.
-        const manifest = resolveTemplateFieldOverlay({
-          discovered,
-          manifest: embeddedManifest ?? currentManifest,
-          overlay: undefined,
-        });
-        const updatedDocx = await writeManifest(buffer, manifest);
-        return Result.ok({ manifest, bytes: new Uint8Array(updatedDocx) });
-      },
+      // The new document decides everything: the fields it carries are the
+      // ones its markers declare.
+      prepare: async () =>
+        Result.ok({ manifest, bytes: new Uint8Array(buffer) }),
     }),
   );
   return Result.isError(written)
@@ -2445,7 +2435,7 @@ export type ConfigureEntries =
       applied: number[];
       /** Indices, into the `fields` array the caller sent, of the entries the
        *  schema refused, with what to do about each. */
-      issues: FieldOverlayIssue[];
+      issues: FieldConfigurationIssue[];
     };
 
 /**
@@ -2470,7 +2460,7 @@ export const parseConfigureEntries = (
   const sent: unknown[] | null = isUnknownArray(sentFields)
     ? [...sentFields]
     : null;
-  const issues: FieldOverlayIssue[] = [];
+  const issues: FieldConfigurationIssue[] = [];
   for (const [position, entry] of sent === null ? [] : sent.entries()) {
     const dropped = withoutCircularCondition(entry);
     if (dropped === null || sent === null) {
@@ -2478,7 +2468,7 @@ export const parseConfigureEntries = (
     }
     sent[position] = dropped;
     issues.push({
-      path: fieldOverlayIssuePath(position, "source"),
+      path: fieldConfigurationIssuePath(position, "source"),
       index: position,
       message:
         "`source` was dropped: a condition that reads only the field's own " +
@@ -2527,7 +2517,7 @@ export const parseConfigureEntries = (
         repaired.add(position);
         sent[position] = without;
         issues.push({
-          path: fieldOverlayIssuePath(position, repair.path.join(".")),
+          path: fieldConfigurationIssuePath(position, repair.path.join(".")),
           index: position,
           message: repair.message,
           hint: `The rest of the entry was applied. Check that property against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again if the field needs it.`,
@@ -2536,7 +2526,7 @@ export const parseConfigureEntries = (
       }
       rejected.add(position);
       issues.push({
-        path: fieldOverlayIssuePath(position),
+        path: fieldConfigurationIssuePath(position),
         index: position,
         message: issue.message,
         hint: `Fix this entry against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again; the other entries were applied.`,
@@ -2586,7 +2576,7 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
       parsed.applied.at(issue.index) ??
       panic(`configure issue names applied entry ${String(issue.index)}`);
     return {
-      path: fieldOverlayIssuePath(index, issue.property),
+      path: fieldConfigurationIssuePath(index, issue.property),
       index,
       message: issue.message,
       hint: issue.hint,
