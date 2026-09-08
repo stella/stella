@@ -360,6 +360,94 @@ const requestUrl = (input: string | URL | Request): string => {
   return input instanceof URL ? input.href : input.url;
 };
 
+const mockFailingEndpoint = (
+  status: number,
+): { restore: () => void; requestedPages: number[] } => {
+  const originalFetch = globalThis.fetch;
+  const requestedPages: number[] = [];
+
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request): Promise<Response> => {
+      const url = new URL(requestUrl(input));
+      requestedPages.push(
+        Number.parseInt(url.searchParams.get("page") ?? "", 10),
+      );
+      return await Promise.resolve(new Response("", { status }));
+    },
+    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  );
+
+  return {
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+    requestedPages,
+  };
+};
+
+/**
+ * Cursor movement is what a refused page costs, and it is only affordable when
+ * the refusal is about that page. These pin which refusals are which, because
+ * the two look identical in a single call and differ only over a run of them.
+ */
+describe("a page the origin never answered does not move the cursor", () => {
+  let restore: (() => void) | undefined;
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  /**
+   * Drive the walk the way the pipeline does: a failed page leaves the cursor
+   * where it was, so only a successful page supplies the next one.
+   */
+  const walk = async (
+    fetchPage: ReturnType<typeof createTestFetch>,
+    from: string,
+    cycles: number,
+  ): Promise<string | null> => {
+    let cursor: string | null = from;
+    for (let cycle = 0; cycle < cycles; cycle++) {
+      const result = await fetchPage(cursor, {});
+      if (result.isOk()) {
+        cursor = result.unwrap().nextCursor;
+      }
+    }
+    return cursor;
+  };
+
+  test("a gateway outage holds the cursor instead of consuming the collection", async () => {
+    // Every page answers alike while the publisher's gateway is down, so a
+    // skip that advanced would walk the whole collection one page per refusal
+    // and end far past the tip. The cursor stays, and the same page is asked
+    // for again.
+    const endpoint = mockFailingEndpoint(502);
+    restore = endpoint.restore;
+
+    const fetchPage = createTestFetch({ firstPage: 0 });
+    const cursor = await walk(fetchPage, "offset:30", 2);
+
+    expect(cursor).toBe("offset:30");
+    expect(new Set(endpoint.requestedPages)).toEqual(new Set([10]));
+    // Each refused page exhausts its retry budget before answering, so the
+    // walk costs real backoff.
+  }, 30_000);
+
+  test("a server error the origin produced still skips its own page", async () => {
+    // The origin ran this request and failed on it, which is a fact about the
+    // page. Skipping it is what keeps one poison page from stalling a source.
+    const endpoint = mockFailingEndpoint(500);
+    restore = endpoint.restore;
+
+    const fetchPage = createTestFetch({ firstPage: 0 });
+    const cursor = await walk(fetchPage, "offset:30", 2);
+
+    expect(cursor).toBe("offset:36");
+    expect(endpoint.requestedPages).toContain(11);
+  }, 30_000);
+});
+
 /**
  * A publisher that numbers pages from one usually clamps below it — asking for
  * page zero answers page one rather than an error — so a walk configured with

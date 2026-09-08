@@ -170,6 +170,27 @@ type PagePaginationOptions<TResponse> = {
  */
 /** Max retries for transient 5xx / timeout errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
+
+/**
+ * Statuses a gateway answers when it never reached the origin.
+ *
+ * The page-skip below rests on a 5xx being a fact about the page: the
+ * publisher ran the request and failed on it, so losing that one page is
+ * better than letting it stall the source. A gateway status carries no such
+ * fact. The origin was never asked, so the page's items are unknown rather
+ * than terminal, and advancing over them checkpoints past pages nobody read.
+ *
+ * The difference only shows at scale. A publisher-wide outage answers every
+ * page this way, so a skip that advances one page per failure walks the whole
+ * collection at the speed of the failures and leaves the cursor far past the
+ * tip, where it sees nothing new again. Holding is also what the crawl already
+ * does when the same outage arrives as a 429 or as an unparseable maintenance
+ * page: the cursor stays, and the next cycle asks again.
+ */
+const ORIGIN_UNREACHABLE_STATUSES = [502, 503, 504] as const;
+
+const isOriginUnreachableStatus = (status: number): boolean =>
+  ORIGIN_UNREACHABLE_STATUSES.some((candidate) => candidate === status);
 const OFFSET_CURSOR_PREFIX = "offset:";
 const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
@@ -432,11 +453,17 @@ export const createPagePaginatedFetch = <TResponse>(
         }
 
         if (!response.ok) {
-          // 5xx after all retries: skip this page and advance.
+          // A 5xx the origin itself produced, after all retries: skip this
+          // page and advance.
           // 429 is NOT skipped — it's transient throttling, not
           // a page error. The cursor stays put so the page is
-          // retried in the next cycle.
-          if (response.status >= 500) {
+          // retried in the next cycle. A gateway status is the same case for
+          // the same reason (see ORIGIN_UNREACHABLE_STATUSES): nothing was
+          // read, so there is nothing to advance past.
+          if (
+            response.status >= 500 &&
+            !isOriginUnreachableStatus(response.status)
+          ) {
             // Same rule as the timeout skip above: a publisher-side 5xx
             // is operational, logged per page, and aggregated by the
             // coverage ledger rather than captured per attempt.
