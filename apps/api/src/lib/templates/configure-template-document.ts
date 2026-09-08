@@ -14,12 +14,14 @@ import {
   assertNever,
   filtersFromFieldConfig,
   unwritableFilterValues,
+  type FilterCall,
   type UnwritableReason,
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { filterChainSignature } from "@/api/lib/docx/field-filters";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
@@ -154,24 +156,30 @@ export const configureTemplateDocument = async ({
     declared.fields.map((field) => [field.path, field]),
   );
   const arrays = arrayPaths(discovered);
+  const chainFor = (field: FieldMeta): FilterCall[] =>
+    arrays.has(field.path)
+      ? arrayFiltersFromFieldConfig(field)
+      : filtersFromFieldConfig(field);
 
   // Each candidate keeps the position the caller sent it at, so an issue this
   // step raises names the entry the caller wrote rather than a place in a list
   // it never saw.
-  const candidates: (FieldFilterRewrite & { index: number })[] =
-    partitioned.applied.map(({ field, index }) => {
-      const merged = mergeFieldConfiguration(
-        declaredByPath.get(field.path),
-        field,
-      );
-      return {
-        index,
-        path: field.path,
-        filters: arrays.has(field.path)
-          ? arrayFiltersFromFieldConfig(merged)
-          : filtersFromFieldConfig(merged),
-      };
-    });
+  //
+  // An entry that asks for what the document already says is not a candidate
+  // at all: the `configure` skeleton names every configurable path, so sending
+  // it back unchanged has to be a no-op rather than a document rewrite, and a
+  // path whose only configuration is what discovery derived (a boolean an
+  // `{% if %}` reads) must not be refused for having no marker to restate it
+  // in.
+  const candidates = partitioned.applied.flatMap(({ field, index }) => {
+    const declaredField = declaredByPath.get(field.path);
+    const filters = chainFor(mergeFieldConfiguration(declaredField, field));
+    const unchanged =
+      declaredField !== undefined &&
+      filterChainSignature(filters) ===
+        filterChainSignature(chainFor(declaredField));
+    return unchanged ? [] : [{ index, path: field.path, filters }];
+  }) satisfies (FieldFilterRewrite & { index: number })[];
 
   const refused = new Set<string>();
   for (const candidate of candidates) {

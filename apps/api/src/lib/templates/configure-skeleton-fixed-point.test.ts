@@ -14,6 +14,7 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
+import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import { toFieldMetaToolInput } from "@/api/mcp/template-field-input";
 
 const escapeXml = (text: string): string =>
@@ -96,6 +97,44 @@ describe("the configure skeleton is a fixed point", () => {
     for (const { field } of applied) {
       expect(field).toEqual({ path: field.path });
     }
+  });
+
+  test("sending it back publishes no document and reports no issue", async () => {
+    const document = await buildDocx(SOURCE_PARAGRAPHS);
+    const discovered = await discoverTemplate(document);
+    const created = deriveManifest(discovered);
+    const skeleton = skeletonFor([
+      ...created.fields.map((field) => field.path),
+      ...discovered.fields.flatMap((field) =>
+        (field.itemFields ?? []).map((item) => `${field.path}.${item.path}`),
+      ),
+    ]);
+
+    const configured = await configureTemplateDocument({
+      buffer: document,
+      entries: skeleton,
+    });
+
+    // `expenses_reimbursed` is a boolean because an `{% if %}` reads it, and it
+    // has no marker to restate that in: an entry that asks for what the
+    // document already says must not be refused for having nowhere to write it.
+    expect(configured.issues).toEqual([]);
+    expect(configured.buffer).toBe(document);
+    expect(configured.manifest).toEqual(created);
+  });
+
+  test("a configuration a path has no marker for is refused by name", async () => {
+    const document = await buildDocx(SOURCE_PARAGRAPHS);
+
+    const configured = await configureTemplateDocument({
+      buffer: document,
+      entries: [{ path: "expenses_reimbursed", label: "Reimbursed?" }],
+    });
+
+    expect(configured.buffer).toBe(document);
+    expect(configured.issues.map(({ message }) => message)).toEqual([
+      '"expenses_reimbursed" has no {{ marker }} in the document to carry its configuration.',
+    ]);
   });
 
   test("the skeleton names the loop item paths, which the manifest does not", async () => {
