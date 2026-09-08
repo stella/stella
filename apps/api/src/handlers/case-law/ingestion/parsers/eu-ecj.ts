@@ -996,12 +996,12 @@ type CellContext =
  * Cellar's inline vocabulary inside a cell. Anything outside it opens a
  * block of its own, so each `<p class="coj-normal">` of a quoted passage
  * stays a separate paragraph and an unrecognised element keeps the
- * paragraph it used to get.
+ * paragraph it used to get. `<br>` is inline too, but it is empty and
+ * is handled before this set: see `visitCell`.
  */
 const INLINE_TAGS = new Set([
   "a",
   "b",
-  "br",
   "em",
   "i",
   "img",
@@ -1012,6 +1012,22 @@ const INLINE_TAGS = new Set([
   "sup",
   "u",
 ]);
+
+/**
+ * Drop the breaks at a run's edges. A break separates two lines, so one
+ * with nothing on the far side of it opens or closes the paragraph on an
+ * empty line — the whitespace `collapseWhitespace` trims, written as a
+ * tag. Nothing readable is lost: the break carries no text.
+ */
+const trimEdgeBreaks = (inlines: Inline[]): Inline[] => {
+  while (inlines[0]?.type === "line-break") {
+    inlines.shift();
+  }
+  while (inlines.at(-1)?.type === "line-break") {
+    inlines.pop();
+  }
+  return inlines;
+};
 
 const visitCell = (
   $: cheerio.CheerioAPI,
@@ -1030,7 +1046,7 @@ const visitCell = (
   // the loose run instead and close it whenever a block child starts.
   let run: Inline[] = [];
   const flushRun = (): void => {
-    const inlines = collapseWhitespace(run);
+    const inlines = trimEdgeBreaks(collapseWhitespace(run));
     run = [];
     const plainText = inlinesToPlainText(inlines).trim();
     if (!plainText) {
@@ -1065,6 +1081,16 @@ const visitCell = (
     if (tag === "div") {
       flushRun();
       visitCell($, builder, $child, undefined);
+      return;
+    }
+
+    // `walkInlines` reads a node's contents, and an empty element
+    // carries its meaning in the tag instead, so handing it a `<br>`
+    // yields nothing and welds the lines around the break together.
+    // Emit the break the walker emits for a `<br>` nested in a span,
+    // which keeps `A<br>B` two lines wherever the break sits.
+    if (tag === "br") {
+      run.push({ type: "line-break" });
       return;
     }
 

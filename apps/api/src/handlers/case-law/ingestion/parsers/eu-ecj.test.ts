@@ -661,6 +661,8 @@ describe("parseEcjDecisionHtml", () => {
       "text around a paragraph": `${loose("before")} <p class="coj-normal">block</p> ${loose("after")}`,
       "text around a nested table": `${loose("before")} <table><tr><td><p>nested</p></td></tr></table> ${loose("after")}`,
       "text around an unknown element": `${loose("before")} <section>other</section> ${loose("after")}`,
+      "text across a break": `${loose("above")}<br>${loose("below")}`,
+      "spans across a break": `<span class="coj-italic">${loose("above")}</span><br><span class="coj-italic">${loose("below")}</span>`,
     };
 
     const rows = Object.values(arrangements)
@@ -676,7 +678,7 @@ describe("parseEcjDecisionHtml", () => {
       "</div></body></html>",
     ].join("");
 
-    const { fulltext, validationIssues } = parseEcjDecisionHtml({
+    const { documentAst, fulltext, validationIssues } = parseEcjDecisionHtml({
       caseNumber: "C-1/00",
       ecli: undefined,
       court: "Court of Justice",
@@ -696,6 +698,20 @@ describe("parseEcjDecisionHtml", () => {
     expect(dropped.map(([name]) => name)).toEqual([]);
     expect(validationIssues).not.toContain("CONTENT_LOSS");
     expect(validationIssues).not.toContain("MISSING_WORDS");
+
+    // `<br>` is the tag whose meaning is not in its contents, so a
+    // walker that reads contents sees nothing in it and the lines on
+    // either side weld into one word. Both arrangements keep the break:
+    // one paragraph per cell, the two lines still apart inside it.
+    const acrossABreak = documentAst.blocks.filter((block) =>
+      block.plainText.includes(loose("above")),
+    );
+    expect(acrossABreak).toHaveLength(2);
+    for (const block of acrossABreak) {
+      expect(block.plainText).toMatch(
+        /loose-above content\s*\n\s*loose-below content/u,
+      );
+    }
   });
 
   test("reads the keyword chain in a non-Latin script", async () => {
