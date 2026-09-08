@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
+import { TauriEvent } from "@tauri-apps/api/event";
 
 import { DEFAULT_CLIPBOARD_GROUP_COLOR } from "../../src/clipboard/clipboard-style";
 import { isClipboardSnapshot } from "../../src/clipboard/clipboard-types";
@@ -32,7 +33,7 @@ const SNAPSHOT = {
 const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
   expect(isClipboardSnapshot(SNAPSHOT)).toBe(true);
   await page.addInitScript(
-    ({ clipboardSnapshot, nativeLanguage }) => {
+    ({ clipboardSnapshot, nativeLanguage, nativeBlurEvent }) => {
       const callbacks = new Map<number, (data: unknown) => unknown>();
       const invocations: {
         args: Record<string, unknown>;
@@ -41,6 +42,19 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
       let nextCallbackId = 1;
 
       Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
+      Reflect.set(window, "__STELLA_TEST_NATIVE_BLUR__", () => {
+        const subscription = invocations.findLast(
+          ({ args, command }) =>
+            command === "plugin:event|listen" &&
+            args["event"] === nativeBlurEvent,
+        );
+        const id = subscription?.args["handler"];
+        if (typeof id !== "number") {
+          throw new TypeError("Native window blur listener is not installed");
+        }
+        callbacks.get(id)?.({ event: nativeBlurEvent, id, payload: null });
+        return subscription?.args["target"];
+      });
       Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
         unregisterListener: () => undefined,
       });
@@ -143,7 +157,11 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
         unregisterCallback: (id: number) => callbacks.delete(id),
       });
     },
-    { clipboardSnapshot: SNAPSHOT, nativeLanguage: language },
+    {
+      clipboardSnapshot: SNAPSHOT,
+      nativeLanguage: language,
+      nativeBlurEvent: TauriEvent.WINDOW_BLUR,
+    },
   );
 };
 
@@ -230,6 +248,63 @@ const DIRECTIONS = [
 for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
   test.describe(`${language} clipboard direction`, () => {
     test.use({ locale: language });
+
+    for (const dismissal of ["dom", "native"] as const) {
+      test(`prepares the first card before reopening after ${dismissal} dismissal`, async ({
+        page,
+      }) => {
+        await openClipboard(page, language);
+        for (let index = 0; index < 10; index += 1) {
+          await page.keyboard.press(nextCardKey);
+        }
+        await expect(
+          page.locator('[data-clipboard-id="clip-11"]'),
+        ).toHaveAttribute("aria-current", "true");
+
+        const parked = await page.evaluate((source) => {
+          let eventTarget: unknown;
+          if (source === "native") {
+            const emit: unknown = Reflect.get(
+              window,
+              "__STELLA_TEST_NATIVE_BLUR__",
+            );
+            if (typeof emit !== "function") {
+              throw new TypeError(
+                "Native window blur boundary is not installed",
+              );
+            }
+            eventTarget = emit();
+          } else {
+            window.dispatchEvent(new FocusEvent("blur"));
+          }
+          const selected = document.querySelector<HTMLElement>(
+            '[data-clipboard-id][aria-current="true"]',
+          );
+          const rail = selected?.closest('[role="list"]');
+          return {
+            selectedId: selected?.dataset["clipboardId"],
+            scrollLeft: rail?.scrollLeft,
+            eventTarget,
+          };
+        }, dismissal);
+        expect(parked).toEqual({
+          selectedId: "clip-1",
+          scrollLeft: 0,
+          eventTarget:
+            dismissal === "native"
+              ? { kind: "Window", label: "clipboard" }
+              : undefined,
+        });
+        await page.evaluate(() =>
+          window.dispatchEvent(new FocusEvent("focus")),
+        );
+        await expect(
+          page.locator(
+            '[data-clipboard-id="clip-1"] [data-clipboard-card-trigger]',
+          ),
+        ).toBeFocused();
+      });
+    }
 
     test("color swatches and selection rings fit without scrollbars", async ({
       page,

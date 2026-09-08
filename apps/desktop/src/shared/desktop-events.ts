@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import type { EventCallback, EventName } from "@tauri-apps/api/event";
+import type { EventCallback, EventName, Options } from "@tauri-apps/api/event";
 
 /**
  * Tauri types the unlisten function it resolves as `() => void`, although
@@ -11,6 +11,7 @@ type StopListening = () => void | Promise<void>;
 type SubscribeDesktopEventOptions<T> = {
   event: EventName;
   handler: EventCallback<T>;
+  options?: Options;
   /** Runs when the subscription or its teardown fails. */
   onError: () => void;
   /** Runs once the subscription is live, before any event reaches `handler`. */
@@ -31,6 +32,7 @@ type SubscribeDesktopEventOptions<T> = {
 export const subscribeDesktopEvent = <T>({
   event,
   handler,
+  options,
   onError,
   onSubscribed,
 }: SubscribeDesktopEventOptions<T>) => {
@@ -39,7 +41,7 @@ export const subscribeDesktopEvent = <T>({
   const unsubscribe = (stopListening: StopListening) => {
     Promise.resolve(stopListening()).catch(onError);
   };
-  listen<T>(event, handler)
+  listen<T>(event, handler, options)
     .then((stopListening) => {
       if (cancelled) {
         unsubscribe(stopListening);

@@ -21,6 +21,8 @@ import {
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { invoke } from "@tauri-apps/api/core";
+import { TauriEvent } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 import {
   ClipboardIcon,
@@ -1506,6 +1508,43 @@ const ClipboardApp = () => {
   };
 
   useEffect(() => {
+    const prepareNextOpen = () => {
+      if (welcomeOpen) {
+        return;
+      }
+      // The parked panel is painted before its next focus event. Prepare that
+      // frame now, and prevent WebKit from restoring focus to the old card.
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      railPointerRef.current = null;
+      flushSync(() => {
+        setQuery("");
+        setSelectedIndex(0);
+      });
+      timelineRailRef.current?.scrollTo({ behavior: "instant", left: 0 });
+    };
+    const stopListening = subscribeDesktopEvent({
+      event: TauriEvent.WINDOW_BLUR,
+      handler: prepareNextOpen,
+      options: { target: { kind: "Window", label: getCurrentWindow().label } },
+      onError: () => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setError({ message: t("errorUpdateHistory"), source: "operation" });
+      },
+    });
+    window.addEventListener("blur", prepareNextOpen);
+    return () => {
+      stopListening();
+      window.removeEventListener("blur", prepareNextOpen);
+    };
+  }, [t, welcomeOpen]);
+
+  useEffect(() => {
     const focusActiveCard = () => {
       if (activeItemId) {
         focusCard(timelineRailRef.current, activeItemId);
@@ -1513,9 +1552,6 @@ const ClipboardApp = () => {
       }
       timelineRef.current?.focus();
     };
-    // The window hides on blur, so a focus event is always an open, and every
-    // open starts on the newest clip. flushSync commits the reset first so the
-    // newest card is in the DOM (the rail is virtualized) before it is focused.
     const handleWindowFocus = () => {
       setAgeReferenceTime(Date.now());
       // The pointer may have moved while the window was hidden; the next
