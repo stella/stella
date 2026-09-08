@@ -18,8 +18,10 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import {
+  isFieldPath,
   qualifyLoopPath,
   qualifyRowScopedPlaceholder,
+  renderConditionTag,
   renderForOpener,
   renderValueMarker,
   scanMarkers,
@@ -34,9 +36,21 @@ import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 /** The chain to write at one path. A path is either a value marker's or a
  *  `{% for %}` opener's; which one it is, is what the document says. */
 export type FieldFilterRewrite = {
-  /** The manifest path, loop scoping already applied. */
+  /** The marker to rewrite, loop scoping already applied. */
   path: string;
   filters: readonly FilterCall[];
+  /** The manifest path this marker declares, when it is not its own: a
+   *  rendering of a registry hit (`company.name`) declares the field the
+   *  lookup fills (`company`), so that is the path `written` reports. */
+  declares?: string;
+};
+
+/** The rule to write into every `{% if %}` / `{% elif %}` tag that names this
+ *  path. A rule that decides whether a block shows has no value marker to live
+ *  in: the tag it gates is the document's only place for it. */
+export type ConditionRewrite = {
+  path: string;
+  expression: string;
 };
 
 export type WriteFieldFiltersResult = {
@@ -60,12 +74,21 @@ type TextRange = { start: number; end: number; value: string };
  * opens and closes within one. Both forms are the same tags in the same
  * document order, so one walk covers them.
  */
-const rewriteParagraph = (
-  markers: readonly ScannedMarker[],
-  scopes: RowScope[],
-  rewrites: ReadonlyMap<string, readonly FilterCall[]>,
-  written: Set<string>,
-): TextRange[] => {
+type ParagraphRewriteOptions = {
+  conditions: ReadonlyMap<string, string>;
+  markers: readonly ScannedMarker[];
+  rewrites: ReadonlyMap<string, FieldFilterRewrite>;
+  scopes: RowScope[];
+  written: Set<string>;
+};
+
+const rewriteParagraph = ({
+  conditions,
+  markers,
+  rewrites,
+  scopes,
+  written,
+}: ParagraphRewriteOptions): TextRange[] => {
   const ranges: TextRange[] = [];
   /** A marker whose text is already what the rewrite would write is left
    *  alone: a configure call that changes nothing must not republish the
@@ -81,17 +104,36 @@ const rewriteParagraph = (
       scopes.pop();
       continue;
     }
+    if (meta.kind === "if" || meta.kind === "elif") {
+      // Only a tag that names one path can carry a rule for it: an expression
+      // the author already wrote is theirs, not a reference to a named rule.
+      const expression = isFieldPath(meta.expr)
+        ? conditions.get(qualifyRowScopedPlaceholder(meta.expr, scopes))
+        : undefined;
+      if (expression !== undefined) {
+        written.add(qualifyRowScopedPlaceholder(meta.expr, scopes));
+        rewriteTo(
+          marker,
+          renderConditionTag({
+            kind: meta.kind,
+            expression,
+            prefix: marker.prefix,
+          }),
+        );
+      }
+      continue;
+    }
     if (meta.kind === "for") {
       const scopedPath = qualifyLoopPath(meta.path, scopes);
-      const filters = rewrites.get(scopedPath);
-      if (filters !== undefined) {
-        written.add(scopedPath);
+      const rewrite = rewrites.get(scopedPath);
+      if (rewrite !== undefined) {
+        written.add(rewrite.declares ?? scopedPath);
         rewriteTo(
           marker,
           renderForOpener({
             alias: meta.alias,
             path: meta.path,
-            filters,
+            filters: rewrite.filters,
             prefix: marker.prefix,
           }),
         );
@@ -107,34 +149,30 @@ const rewriteParagraph = (
       continue;
     }
     const scopedPath = qualifyRowScopedPlaceholder(meta.expr, scopes);
-    const filters = rewrites.get(scopedPath);
-    if (filters === undefined) {
+    const rewrite = rewrites.get(scopedPath);
+    if (rewrite === undefined) {
       continue;
     }
-    written.add(scopedPath);
+    written.add(rewrite.declares ?? scopedPath);
     // The marker keeps the spelling the author gave it: rewriting
     // `{{ attorney.name }}` to `{{ attorneys.name }}` would move the field out
     // of its loop.
-    rewriteTo(marker, renderValueMarker(meta.expr, filters));
+    rewriteTo(marker, renderValueMarker(meta.expr, rewrite.filters));
   }
   return ranges;
 };
 
 const rewritePart = (
   xml: string,
-  rewrites: ReadonlyMap<string, readonly FilterCall[]>,
-  scopes: RowScope[],
-  written: Set<string>,
+  options: Omit<ParagraphRewriteOptions, "markers">,
 ): { xml: string; changed: boolean } => {
   const doc = slimdom.parseXmlDocument(xml);
   let changed = false;
   for (const paragraph of doc.getElementsByTagNameNS(W_NS, "p")) {
-    const ranges = rewriteParagraph(
-      scanMarkers(paragraphSpanText(paragraph)),
-      scopes,
-      rewrites,
-      written,
-    );
+    const ranges = rewriteParagraph({
+      ...options,
+      markers: scanMarkers(paragraphSpanText(paragraph)),
+    });
     if (ranges.length === 0) {
       continue;
     }
@@ -158,12 +196,18 @@ const rewritePart = (
 export const writeFieldFilters = async (
   docxBuffer: Buffer,
   rewrites: readonly FieldFilterRewrite[],
+  conditionRewrites: readonly ConditionRewrite[] = [],
 ): Promise<WriteFieldFiltersResult> => {
   const written = new Set<string>();
-  if (rewrites.length === 0) {
+  if (rewrites.length === 0 && conditionRewrites.length === 0) {
     return { buffer: docxBuffer, written };
   }
-  const byPath = new Map(rewrites.map(({ filters, path }) => [path, filters]));
+  const byPath = new Map(
+    rewrites.map((rewrite) => [rewrite.path, rewrite] as const),
+  );
+  const conditions = new Map(
+    conditionRewrites.map(({ expression, path }) => [path, expression]),
+  );
   const zip = await JSZip.loadAsync(docxBuffer);
   let changed = false;
   // Headers and footers hold markers of their own, and a loop never spans two
@@ -173,12 +217,12 @@ export const writeFieldFilters = async (
     if (!entry) {
       continue;
     }
-    const rewritten = rewritePart(
-      await entry.async("string"),
-      byPath,
-      [],
+    const rewritten = rewritePart(await entry.async("string"), {
+      conditions,
+      rewrites: byPath,
+      scopes: [],
       written,
-    );
+    });
     if (rewritten.changed) {
       zip.file(path, rewritten.xml);
       changed = true;

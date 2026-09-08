@@ -4331,6 +4331,7 @@
       "repeatableNested": "Este campo já está dentro de um bloco repetível.",
       "repeats": "Repete: {item}",
       "repeatsUnlimited": "Ilimitado",
+      "ruleWithCalculation": "A regra de “{fieldPath}” usa um cálculo que um modelo não consegue armazenar. Compare um campo com um valor.",
       "saveAsRecipe": "Salvar como receita",
       "scopeClause": "Espaço de cláusula",
       "scopeCondition": "Condição",

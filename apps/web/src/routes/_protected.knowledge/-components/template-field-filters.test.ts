@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { filtersFromFieldConfig, scanMarkers } from "@stll/template-conditions";
 import type { DirectiveKind } from "@stll/template-conditions";
 
-import { markerConfigRewrites } from "@/routes/_protected.knowledge/-components/template-field-filters";
+import {
+  markerConfigRewrites,
+  refusesSave,
+} from "@/routes/_protected.knowledge/-components/template-field-filters";
 import { formatMarker } from "@/routes/_protected.knowledge/-components/template-markers";
 import { studioFieldToManifestField } from "@/routes/_protected.knowledge/-components/template-studio-model";
 import {
@@ -360,6 +363,107 @@ describe("writing the session into the document", () => {
 
     expect(rewrites.map(({ text }) => text)).toEqual([
       '{{ zip | text | pattern("^[0-9]{5}$") }}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+  test("a rule goes into the {% if %} tag that reads its path", () => {
+    const doc = documentWith([
+      "{% if is_company %}",
+      "{{ rent }}",
+      "{% elif is_company %}",
+      "{% endif %}",
+    ]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({
+          path: "is_company",
+          inputType: "boolean",
+          valueSource: { type: "condition", condition: 'kind == "company"' },
+        }),
+      ],
+    });
+
+    // Every tag that asks the question, because the rule is what the question
+    // now is: there is no value to print, so no marker to hold a chain.
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{% if kind == "company" %}',
+      '{% elif kind == "company" %}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("a field the document also prints keeps its rule in its own marker", () => {
+    const doc = documentWith(["{% if is_company %}", "{{ is_company }}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({
+          path: "is_company",
+          inputType: "boolean",
+          valueSource: { type: "condition", condition: 'kind == "company"' },
+        }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{{ is_company | checkbox | condition("kind == \\"company\\"") }}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("a rule over a calculation has no tag to live in, so the save is refused", () => {
+    const doc = documentWith(["{% if over_budget %}", "{% endif %}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({
+          path: "over_budget",
+          inputType: "boolean",
+          valueSource: {
+            type: "condition",
+            conditionAst: {
+              type: "compare",
+              op: "gt",
+              left: { type: "formula", expr: "rent * 12" },
+              right: { type: "literal", value: 1000 },
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(rewrites).toEqual([]);
+    expect(unplaced).toEqual([
+      { reason: "unspellable-rule", path: "over_budget" },
+    ]);
+    expect(unplaced.filter(refusesSave)).toHaveLength(1);
+  });
+
+  test("a lookup on a field the document never prints bare rides its renderings", () => {
+    const doc = documentWith(["{{ company.name }}", "{{ company.krs }}"]);
+    const lookup = {
+      registry: "krs" as const,
+      formats: [
+        { key: "name", template: "[name]" },
+        { key: "krs", template: "[krs]" },
+      ],
+    };
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({
+          path: "company",
+          label: "Buyer",
+          lookup,
+          valueSource: { type: "lookup", lookup },
+        }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{{ company.name | text | label("Buyer") | lookup("krs", name="[name]", krs="[krs]") }}',
+      '{{ company.krs | text | label("Buyer") | lookup("krs", name="[name]", krs="[krs]") }}',
     ]);
     expect(unplaced).toEqual([]);
   });

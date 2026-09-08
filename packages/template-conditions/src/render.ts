@@ -111,6 +111,29 @@ const PREFIX_TOKEN = {
   row: "tr",
 } as const satisfies Record<MarkerPrefix, string>;
 
+export type ConditionTagOptions = {
+  /** Which branch opener this is; `elif` keeps its place in the chain. */
+  kind: "if" | "elif";
+  /** The `{% if %}` expression, already serialized. */
+  expression: string;
+  /** The placement the tag already carried. */
+  prefix: MarkerPrefix;
+};
+
+/**
+ * One `{% if %}` / `{% elif %}` opener carrying its expression.
+ *
+ * A rule that decides whether a block shows belongs in the tag that shows it:
+ * the tag is the only place a document has for it, so a builder's rule is
+ * serialized here rather than stored beside the document under a name.
+ */
+export const renderConditionTag = ({
+  expression,
+  kind,
+  prefix,
+}: ConditionTagOptions): string =>
+  `{%${PREFIX_TOKEN[prefix]} ${kind} ${expression} %}`;
+
 export type ForOpenerOptions = {
   alias: string;
   path: string;

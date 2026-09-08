@@ -668,9 +668,10 @@ export const validateFieldConfiguration = ({
       : childMarkers(field.path, declared);
 
     if (children.length > 0) {
-      // A namespace parent is structural — unless a lookup makes it the one
+      // A namespace parent is structural, unless a lookup makes it the one
       // real input, with the markers under it as its named renderings.
-      if (effectiveByPath.get(field.path)?.lookup === undefined) {
+      const lookup = effectiveByPath.get(field.path)?.lookup;
+      if (lookup === undefined) {
         issues.push({
           path: issuePath,
           index,
@@ -679,10 +680,28 @@ export const validateFieldConfiguration = ({
             `groups ${children.map((child) => `{{${child}}}`).join(", ")} ` +
             "under it.",
           hint:
-            "Configure those paths instead. To fill them from one registry " +
-            `hit, put a {{ ${field.path} }} marker in the document too and ` +
-            "give it a lookup source whose format keys are those markers: " +
-            "the lookup lives on that marker's own filter chain.",
+            "Configure those paths instead, or give " +
+            `"${field.path}" a lookup source whose format keys are those ` +
+            "markers: the lookup then rides on the markers that render its hit.",
+        });
+        continue;
+      }
+      // The lookup rides on the renderings, so at least one of its format keys
+      // has to be a marker the DOCX carries: a lookup nothing renders has
+      // nowhere to be written.
+      if (
+        !lookup.formats.some(({ key }) => declared.has(`${field.path}.${key}`))
+      ) {
+        issues.push({
+          path: issuePath,
+          index,
+          message:
+            `"${field.path}" has no marker to carry its lookup: the DOCX ` +
+            `groups ${children.map((child) => `{{${child}}}`).join(", ")} ` +
+            `under it, and none of them is a format the lookup renders.`,
+          hint:
+            "Name a format key for each marker the lookup should render, or " +
+            `put a {{ ${field.path} }} marker in the document.`,
         });
         continue;
       }

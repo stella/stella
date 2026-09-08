@@ -4331,6 +4331,7 @@
       "repeatableNested": "هذا الحقل موجود بالفعل داخل كتلة متكررة.",
       "repeats": "التكرارات: {item}",
       "repeatsUnlimited": "غير محدود",
+      "ruleWithCalculation": "تستخدم قاعدة «{fieldPath}» عملية حسابية لا يمكن للقالب تخزينها. قارن حقلاً بقيمة بدلاً من ذلك.",
       "saveAsRecipe": "الحفظ كوصفة",
       "scopeClause": "خانة بند",
       "scopeCondition": "شرط",

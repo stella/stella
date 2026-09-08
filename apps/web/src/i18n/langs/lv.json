@@ -4331,6 +4331,7 @@
       "repeatableNested": "Šis lauks jau atrodas atkārtojamā blokā.",
       "repeats": "Atkārtojas: {item}",
       "repeatsUnlimited": "Neierobežots",
+      "ruleWithCalculation": "Lauka „{fieldPath}“ noteikums izmanto aprēķinu, ko šablons nevar saglabāt. Tā vietā salīdziniet lauku ar vērtību.",
       "saveAsRecipe": "Saglabāt kā recepti",
       "scopeClause": "Klauzulas vieta",
       "scopeCondition": "Nosacījums",

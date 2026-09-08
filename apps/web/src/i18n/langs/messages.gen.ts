@@ -4334,6 +4334,7 @@ type Messages = {
       "repeatableNested": "This field already sits inside a repeating block.";
       "repeats": "Repeats: {item}";
       "repeatsUnlimited": "Unlimited";
+      "ruleWithCalculation": "The rule on “{fieldPath}” uses a calculation, which a template cannot store. Compare a field with a value instead.";
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";

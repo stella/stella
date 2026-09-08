@@ -4331,6 +4331,7 @@
       "repeatableNested": "Ez a mező már egy ismétlődő blokkon belül van.",
       "repeats": "Ismétlődik: {item}",
       "repeatsUnlimited": "Korlátlan",
+      "ruleWithCalculation": "A(z) „{fieldPath}” szabálya számítást használ, amelyet a sablon nem tud tárolni. Hasonlítson inkább egy mezőt egy értékhez.",
       "saveAsRecipe": "Mentés receptként",
       "scopeClause": "Kikötéshely",
       "scopeCondition": "Feltétel",

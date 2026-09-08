@@ -569,9 +569,11 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Configure an existing template's fields: who fills each one, its input " +
     "control, options and validation. The configuration lives in the " +
-    "document, so this rewrites each named marker's filter chain, at every " +
-    "occurrence, and publishes the result. Pass template_id and one entry " +
-    "per field path; every path must already have a value marker, and a " +
+    "document, so this rewrites what carries each field (its markers at " +
+    "every occurrence, the {% if %} tags a rule replaces, the keyed markers " +
+    "that render a registry hit) and publishes the result. Pass " +
+    "template_id and one entry per field path; every path must be one the " +
+    "document already carries, and a " +
     "property you leave out keeps what the marker says. Read " +
     `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full ` +
     "field configuration afterwards, plus the entries that could not be " +

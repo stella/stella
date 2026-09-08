@@ -219,4 +219,86 @@ describe("writing a configuration into the document", () => {
     expect(xml).toContain('{{ deposit | number | label("New") }}');
     expect(xml).not.toContain("Old");
   });
+
+  test("a lookup on a field the document never prints rides its renderings", async () => {
+    const docx = await makeDocx([P("{{ company.name }} — {{ company.krs }}")]);
+    const lookup = {
+      registry: "krs" as const,
+      formats: [
+        { key: "name", template: "[name]" },
+        { key: "krs", template: "[krs]" },
+      ],
+    };
+
+    const { buffer, written } = await writeFieldFilters(docx, [
+      {
+        path: "company.name",
+        declares: "company",
+        filters: filtersFromFieldConfig({ path: "company", lookup }),
+      },
+      {
+        path: "company.krs",
+        declares: "company",
+        filters: filtersFromFieldConfig({ path: "company", lookup }),
+      },
+    ]);
+
+    // The rewrite is reported against the field it configures, not the marker
+    // that happens to carry it.
+    expect(written).toEqual(new Set(["company"]));
+    const discovered = await discoverTemplate(buffer);
+    expect(discovered.structureErrors).toEqual([]);
+    expect(discovered.documentFields).toEqual([{ path: "company", lookup }]);
+  });
+
+  test("two renderings that configure one field differently name both", async () => {
+    const docx = await makeDocx([
+      P('{{ company.name | lookup("krs", name="[name]") }}'),
+      P('{{ company.krs | lookup("krs", krs="[krs]") }}'),
+    ]);
+
+    const discovered = await discoverTemplate(docx);
+
+    expect(discovered.structureErrors).toHaveLength(1);
+    const [error] = discovered.structureErrors;
+    expect(error?.message).toContain("paragraph 1");
+    expect(error?.message).toContain("paragraph 2");
+    expect(error?.message).toContain("configured twice");
+  });
+
+  test("a rule is written into every tag that reads its path", async () => {
+    const docx = await makeDocx([
+      P("{% if is_company %}"),
+      P("A company clause."),
+      P("{% elif is_company %}"),
+      P("{% endif %}"),
+    ]);
+
+    const { buffer, written } = await writeFieldFilters(
+      docx,
+      [],
+      [{ path: "is_company", expression: "kind == 'company'" }],
+    );
+
+    expect(written).toEqual(new Set(["is_company"]));
+    const xml = await documentXml(buffer);
+    expect(xml).toContain("{% if kind == 'company' %}");
+    expect(xml).toContain("{% elif kind == 'company' %}");
+  });
+
+  test("a tag carrying an expression already is left alone", async () => {
+    const docx = await makeDocx([
+      P("{% if kind == 'company' %}"),
+      P("{% endif %}"),
+    ]);
+
+    const { buffer, written } = await writeFieldFilters(
+      docx,
+      [],
+      [{ path: "is_company", expression: "kind == 'person'" }],
+    );
+
+    expect(written).toEqual(new Set());
+    expect(buffer).toBe(docx);
+  });
 });

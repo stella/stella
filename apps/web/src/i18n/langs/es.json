@@ -4331,6 +4331,7 @@
       "repeatableNested": "Este campo ya está dentro de un bloque repetible.",
       "repeats": "Se repite: {item}",
       "repeatsUnlimited": "Sin límite",
+      "ruleWithCalculation": "La regla de «{fieldPath}» usa un cálculo que una plantilla no puede guardar. Compara un campo con un valor en su lugar.",
       "saveAsRecipe": "Guardar como receta",
       "scopeClause": "Espacio de cláusula",
       "scopeCondition": "Condición",

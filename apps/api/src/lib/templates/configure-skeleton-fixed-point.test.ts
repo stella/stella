@@ -62,6 +62,11 @@ const SOURCE_PARAGRAPHS = [
 
 /** What `create_template` hands back: one bare person entry per configurable
  *  path, loop item paths included. */
+const documentText = async (docx: Buffer): Promise<string> => {
+  const zip = await JSZip.loadAsync(docx);
+  return (await zip.file("word/document.xml")?.async("string")) ?? "";
+};
+
 const skeletonFor = (paths: readonly string[]): FieldMeta[] =>
   [...new Set(paths)].map((path) =>
     toFieldMetaToolInput({ path, source: { type: "person" } }),
@@ -123,7 +128,7 @@ describe("the configure skeleton is a fixed point", () => {
     expect(configured.manifest).toEqual(created);
   });
 
-  test("a configuration a path has no marker for is refused by name", async () => {
+  test("a configuration nothing in the document can carry is refused by name", async () => {
     const document = await buildDocx(SOURCE_PARAGRAPHS);
 
     const configured = await configureTemplateDocument({
@@ -133,10 +138,91 @@ describe("the configure skeleton is a fixed point", () => {
 
     expect(configured.buffer).toBe(document);
     expect(configured.issues.map(({ message }) => message)).toEqual([
-      '"expenses_reimbursed" has no {{ marker }} in the document to carry its configuration.',
+      '"expenses_reimbursed" has nothing in the document to carry its configuration.',
     ]);
   });
 
+  test("a rule goes into the {% if %} tag that reads the path", async () => {
+    const document = await buildDocx(SOURCE_PARAGRAPHS);
+
+    const configured = await configureTemplateDocument({
+      buffer: document,
+      entries: [
+        { path: "expenses_reimbursed", condition: 'client_name == "ACME"' },
+      ],
+    });
+
+    expect(configured.issues).toEqual([]);
+    expect(await documentText(configured.buffer)).toContain(
+      '{% if client_name == "ACME" %}',
+    );
+    // The rule is the tag's now, so the name it used to hang on is gone and
+    // the paths the expression reads are what gates the block.
+    const discovered = await discoverTemplate(configured.buffer);
+    expect(discovered.conditionPaths).toEqual(["client_name"]);
+    expect(configured.manifest.fields.map(({ path }) => path)).not.toContain(
+      "expenses_reimbursed",
+    );
+  });
+
+  test("a lookup on a field nothing prints bare rides its renderings", async () => {
+    const document = await buildDocx([
+      "Buyer: {{ company.name }}, KRS {{ company.krs }}",
+    ]);
+
+    const configured = await configureTemplateDocument({
+      buffer: document,
+      entries: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "name", template: "[name]" },
+              { key: "krs", template: "[krs]" },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(configured.issues).toEqual([]);
+    // Written onto both renderings, and read back as the one field the lookup
+    // fills: the dotted markers are how it prints, not fields of their own.
+    expect(await documentText(configured.buffer)).toContain(
+      'lookup("krs", name="[name]", krs="[krs]")',
+    );
+    const company = configured.manifest.fields.find(
+      ({ path }) => path === "company",
+    );
+    expect(company?.lookup?.registry).toBe("krs");
+    expect(configured.manifest.fields.map(({ path }) => path)).not.toContain(
+      "company.name",
+    );
+  });
+
+  test("a lookup whose formats render no marker is refused at the boundary", async () => {
+    const document = await buildDocx(["Buyer: {{ company.name }}"]);
+
+    const configured = await configureTemplateDocument({
+      buffer: document,
+      entries: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "street", template: "[street]" }],
+          },
+        },
+      ],
+    });
+
+    expect(configured.buffer).toBe(document);
+    expect(configured.issues.map(({ message }) => message)).toEqual([
+      '"company" has no marker to carry its lookup: the DOCX groups ' +
+        "{{company.name}} under it, and none of them is a format the lookup renders.",
+    ]);
+  });
   test("the skeleton names the loop item paths, which the manifest does not", async () => {
     const discovered = await discoverTemplate(
       await buildDocx(SOURCE_PARAGRAPHS),

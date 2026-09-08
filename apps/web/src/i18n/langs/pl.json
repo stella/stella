@@ -4331,6 +4331,7 @@
       "repeatableNested": "To pole znajduje się już w powtarzalnym bloku.",
       "repeats": "Powtarza się: {item}",
       "repeatsUnlimited": "Bez ograniczeń",
+      "ruleWithCalculation": "Reguła pola „{fieldPath}” używa obliczenia, którego szablon nie może zapisać. Porównaj zamiast tego pole z wartością.",
       "saveAsRecipe": "Zapisz jako przepis",
       "scopeClause": "Miejsce klauzuli",
       "scopeCondition": "Warunek",

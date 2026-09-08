@@ -4331,6 +4331,7 @@
       "repeatableNested": "Dieses Feld liegt bereits in einem Wiederholungsblock.",
       "repeats": "Wiederholt: {item}",
       "repeatsUnlimited": "Unbegrenzt",
+      "ruleWithCalculation": "Die Regel für „{fieldPath}“ verwendet eine Berechnung, die eine Vorlage nicht speichern kann. Vergleichen Sie stattdessen ein Feld mit einem Wert.",
       "saveAsRecipe": "Als Rezept speichern",
       "scopeClause": "Klausel-Slot",
       "scopeCondition": "Bedingung",

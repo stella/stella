@@ -4331,6 +4331,7 @@
       "repeatableNested": "See väli on juba korduva ploki sees.",
       "repeats": "Kordub: {item}",
       "repeatsUnlimited": "Piiramatu",
+      "ruleWithCalculation": "Välja „{fieldPath}“ reegel kasutab arvutust, mida mall ei saa salvestada. Võrdle selle asemel välja väärtusega.",
       "saveAsRecipe": "Salvesta retseptina",
       "scopeClause": "Klausli koht",
       "scopeCondition": "Tingimus",

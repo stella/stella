@@ -30,6 +30,7 @@ import type {
 } from "@/api/lib/docx/types";
 import {
   writeFieldFilters,
+  type ConditionRewrite,
   type FieldFilterRewrite,
 } from "@/api/lib/docx/write-field-filters";
 
@@ -50,6 +51,40 @@ export type ConfigureTemplateDocumentResult = {
    *  it at. A call with seven usable entries and one bad path configures the
    *  seven. */
   issues: FieldConfigurationIssue[];
+};
+
+/** Every path the document declares, so a configuration can be matched to the
+ *  markers and tags that could carry it. */
+const declaredPaths = (discovered: DiscoveredTemplate): Set<string> => {
+  const paths = new Set(discovered.placeholders.map(({ name }) => name));
+  const visit = (field: DiscoveredField, prefix: string): void => {
+    const path = prefix === "" ? field.path : `${prefix}.${field.path}`;
+    paths.add(path);
+    for (const item of arrayOrEmpty(field.itemFields)) {
+      visit(item, path);
+    }
+  };
+  for (const field of discovered.fields) {
+    visit(field, "");
+  }
+  return paths;
+};
+
+/**
+ * Where a field's chain goes: its own value marker, or — for a registry lookup
+ * on a field the document never prints bare — the markers that render its hit.
+ * Empty when the document has nowhere to put it.
+ */
+const carrierPaths = (
+  field: FieldMeta,
+  markers: ReadonlySet<string>,
+): string[] => {
+  if (markers.has(field.path)) {
+    return [field.path];
+  }
+  return arrayOrEmpty(field.lookup?.formats)
+    .map(({ key }) => `${field.path}.${key}`)
+    .filter((path) => markers.has(path));
 };
 
 /** The paths the document repeats over, which are the ones whose filters are
@@ -111,18 +146,20 @@ const unwritableValueIssue = ({
   hint: unwritableHint(reason),
 });
 
-/** The issue an entry gets when the document has no marker to carry it. The
- *  configuration lives in the markers, so a path with none has nowhere to go. */
-const noMarkerIssue = (
+/** The issue an entry gets when the document has nowhere to put it. The
+ *  configuration lives in the document, so a path with no marker to carry a
+ *  chain and no tag to carry a rule has nowhere to go. */
+const noCarrierIssue = (
   path: string,
   index: number,
 ): FieldConfigurationIssue => ({
   path: fieldConfigurationIssuePath(index),
   index,
-  message: `"${path}" has no {{ marker }} in the document to carry its configuration.`,
+  message: `"${path}" has nothing in the document to carry its configuration.`,
   hint:
     `Put {{ ${path} }} in the document and save the new version, then ` +
-    "configure it. A path a condition only reads is not a marker.",
+    "configure it. A registry lookup can instead ride on the markers that " +
+    "render its hit, and a condition on the {% if %} tag that reads it.",
 });
 
 export type ConfigureTemplateDocumentOptions = {
@@ -156,6 +193,8 @@ export const configureTemplateDocument = async ({
     declared.fields.map((field) => [field.path, field]),
   );
   const arrays = arrayPaths(discovered);
+  const markers = new Set(discovered.placeholders.map(({ name }) => name));
+  const declaredHere = declaredPaths(discovered);
   const chainFor = (field: FieldMeta): FilterCall[] =>
     arrays.has(field.path)
       ? arrayFiltersFromFieldConfig(field)
@@ -169,17 +208,44 @@ export const configureTemplateDocument = async ({
   // at all: the `configure` skeleton names every configurable path, so sending
   // it back unchanged has to be a no-op rather than a document rewrite, and a
   // path whose only configuration is what discovery derived (a boolean an
-  // `{% if %}` reads) must not be refused for having no marker to restate it
-  // in.
-  const candidates = partitioned.applied.flatMap(({ field, index }) => {
+  // `{% if %}` reads) must not be refused for having nowhere to restate it.
+  const configured = partitioned.applied.flatMap(({ field, index }) => {
     const declaredField = declaredByPath.get(field.path);
-    const filters = chainFor(mergeFieldConfiguration(declaredField, field));
+    const merged = mergeFieldConfiguration(declaredField, field);
+    const filters = chainFor(merged);
     const unchanged =
       declaredField !== undefined &&
       filterChainSignature(filters) ===
         filterChainSignature(chainFor(declaredField));
-    return unchanged ? [] : [{ index, path: field.path, filters }];
-  }) satisfies (FieldFilterRewrite & { index: number })[];
+    return unchanged ? [] : [{ field: merged, filters, index }];
+  });
+
+  // A rule that decides whether a block shows goes in the tag that shows it:
+  // there is no value to print, so there is no value marker to carry a chain.
+  const conditionRewrites: ConditionRewrite[] = [];
+  const candidates: (FieldFilterRewrite & { index: number })[] = [];
+  for (const { field, filters, index } of configured) {
+    const carriers = carrierPaths(field, markers);
+    if (carriers.length > 0) {
+      candidates.push(
+        ...carriers.map((path) => ({
+          index,
+          path,
+          filters,
+          declares: field.path,
+        })),
+      );
+      continue;
+    }
+    if (field.condition !== undefined && declaredHere.has(field.path)) {
+      conditionRewrites.push({
+        path: field.path,
+        expression: field.condition,
+      });
+      continue;
+    }
+    issues.push(noCarrierIssue(field.path, index));
+  }
 
   const refused = new Set<string>();
   for (const candidate of candidates) {
@@ -192,7 +258,7 @@ export const configureTemplateDocument = async ({
         unwritableValueIssue({
           filter,
           index: candidate.index,
-          path: candidate.path,
+          path: candidate.declares ?? candidate.path,
           reason,
           value: JSON.stringify(value),
         }),
@@ -204,10 +270,18 @@ export const configureTemplateDocument = async ({
   const { buffer: rewritten, written } = await writeFieldFilters(
     buffer,
     rewrites,
+    conditionRewrites,
   );
-  for (const { index, path } of rewrites) {
+  for (const { declares, index, path } of rewrites) {
+    if (!written.has(declares ?? path)) {
+      issues.push(noCarrierIssue(declares ?? path, index));
+    }
+  }
+  for (const { path } of conditionRewrites) {
     if (!written.has(path)) {
-      issues.push(noMarkerIssue(path, index));
+      const index =
+        configured.find(({ field }) => field.path === path)?.index ?? 0;
+      issues.push(noCarrierIssue(path, index));
     }
   }
 

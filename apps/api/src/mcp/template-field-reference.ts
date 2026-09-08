@@ -156,7 +156,7 @@ const SOURCE_BRANCH_DOCS = {
   },
   condition: {
     detail:
-      "A boolean rule for a field a `{% if field_path %}` tag references. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
+      "A rule that decides whether a block shows. The expression is written into every `{% if field_path %}` and `{% elif field_path %}` tag that reads the path, so the tag then asks the rule directly and the field stops being a question. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
     properties: ["`expression`: for example `amount > 1000`"],
   },
 } as const satisfies Record<TemplateFieldSourceType, SourceBranchDoc>;
@@ -189,8 +189,10 @@ export const buildFieldReference = (): string => {
       "chain for you: it rewrites the marker, at every occurrence, and " +
       "publishes the document.",
     "",
-    "Send one entry per field path. Every entry's `path` must match a value " +
-      "marker in the template, and unknown properties are rejected. A " +
+    "Send one entry per field path. Every entry's `path` must be something " +
+      "the template can carry — its own value marker, the `{% if %}` tag " +
+      "that reads it, or the keyed markers that render its registry hit — " +
+      "and unknown properties are rejected. A " +
       "property you send replaces what the marker says; one you leave out " +
       "keeps it, except that naming a `source` replaces the whole answer to " +
       "who fills the field. A path with no marker to carry it, and a value " +
@@ -210,8 +212,10 @@ export const buildFieldReference = (): string => {
       "hit through its own `[token]` template. Every entry is addressed by " +
       "`{{path.key}}` in the document; the first entry is additionally the " +
       "default a bare `{{path}}` marker renders. A template may therefore " +
-      "carry only keyed markers, and `path` is then configured as the lookup " +
-      "even though no `{{path}}` marker exists. At most " +
+      "carry only keyed markers: the lookup then rides on the markers that " +
+      "render its hit, and every one of them declares `path`. A lookup none " +
+      "of whose formats matches a marker in the document has nowhere to be " +
+      "written and is reported in `issues[]`. At most " +
       `${LOOKUP_FORMATS_MAX} formats per field, each template at most ` +
       `${LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH} characters.`,
     "",

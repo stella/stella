@@ -4331,6 +4331,7 @@
       "repeatableNested": "Šis laukas jau yra kartojamame bloke.",
       "repeats": "Kartojasi: {item}",
       "repeatsUnlimited": "Neribota",
+      "ruleWithCalculation": "Lauko „{fieldPath}“ taisyklė naudoja skaičiavimą, kurio šablonas negali įrašyti. Vietoj to palyginkite lauką su reikšme.",
       "saveAsRecipe": "Išsaugoti kaip receptą",
       "scopeClause": "Sąlygos vieta",
       "scopeCondition": "Sąlyga",

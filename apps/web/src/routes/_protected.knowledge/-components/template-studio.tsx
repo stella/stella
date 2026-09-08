@@ -52,7 +52,10 @@ import { forceReflow } from "@/lib/utils";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
 import { inputTypeValueKind } from "@/lib/value-types";
 import type { BlockGestureKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
-import { markerConfigRewrites } from "@/routes/_protected.knowledge/-components/template-field-filters";
+import {
+  markerConfigRewrites,
+  refusesSave,
+} from "@/routes/_protected.knowledge/-components/template-field-filters";
 import type { UnplacedField } from "@/routes/_protected.knowledge/-components/template-field-filters";
 import {
   clauseSlotMarker,
@@ -254,10 +257,12 @@ const enclosingDirectivePair = (
 };
 
 /** What writing the session's configuration into the document produced: the
- *  markers now carry it (with whatever the document could not hold), or there
- *  was no editable view to write into. */
+ *  markers now carry it (with whatever the document could not hold), a setting
+ *  the document has no spelling for stopped the save, or there was no editable
+ *  view to write into. */
 type MarkerProjectionResult =
   | { status: "written"; unplaced: readonly UnplacedField[] }
+  | { status: "refused"; refused: UnplacedField }
   | { status: "noEditor" };
 
 /**
@@ -1056,6 +1061,15 @@ export const TemplateStudioPage = ({
         fields,
         markerText: ({ from, to }) => view.state.doc.textBetween(from, to),
       });
+      // A setting the document has no spelling for stops the save before the
+      // document is touched. The MCP tool reports the same shapes as issues and
+      // still applies the rest, because its caller still holds what did not
+      // land; here the session is reseeded from the saved bytes, so saving
+      // around it would be the only copy of that setting going away.
+      const refused = unplaced.find(refusesSave);
+      if (refused !== undefined) {
+        return { status: "refused", refused };
+      }
       if (rewrites.length > 0) {
         const tr = view.state.tr;
         // Highest position first so the earlier ranges stay valid as the
@@ -1088,6 +1102,21 @@ export const TemplateStudioPage = ({
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
         return false;
       }
+      if (projected.status === "refused") {
+        stellaToast.add({
+          title: t("templates.saveFailed"),
+          description:
+            projected.refused.reason === "unwritable"
+              ? t("templates.studio.fieldSettingBrackets", {
+                  fieldPath: projected.refused.path,
+                })
+              : t("templates.studio.ruleWithCalculation", {
+                  fieldPath: projected.refused.path,
+                }),
+          type: "error",
+        });
+        return false;
+      }
       const bytes = await editor.save();
       if (!bytes) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -1115,21 +1144,16 @@ export const TemplateStudioPage = ({
 
       markSaved();
 
-      // The document is the only store, so a setting no marker can carry did
-      // not survive this save. The bytes were still worth storing; the author
-      // hears which field lost what rather than finding out at fill time.
+      // A field whose marker the author deleted has nothing left to configure,
+      // so it goes with the marker. The bytes were still worth storing; the
+      // author hears which field went rather than finding out at fill time.
       const unplaced = projected.unplaced.at(0);
       if (unplaced !== undefined) {
         stellaToast.add({
           title: t("templates.templateSaved"),
-          description:
-            unplaced.reason === "unwritable"
-              ? t("templates.studio.fieldSettingBrackets", {
-                  fieldPath: unplaced.path,
-                })
-              : t("templates.studio.fieldWithoutMarker", {
-                  fieldPath: unplaced.path,
-                }),
+          description: t("templates.studio.fieldWithoutMarker", {
+            fieldPath: unplaced.path,
+          }),
           type: "warning",
         });
       }

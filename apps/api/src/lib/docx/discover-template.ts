@@ -26,6 +26,7 @@ import {
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { isLookupFormatKey } from "@/api/lib/docx/types";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
@@ -1166,6 +1167,58 @@ type DocumentLayerOptions = {
 };
 
 /**
+ * The declarations, with every one a rendering carries moved onto the field it
+ * renders.
+ *
+ * A registry lookup fills ONE input and prints its hit through the dotted
+ * markers under it, so `{{ company.name | lookup("krs", name="[name]") }}`
+ * declares `company`: the `name` segment says which rendering this marker is,
+ * not that the rendering is a field of its own. That is the only home a lookup
+ * has when the document never prints the bare `{{ company }}`.
+ *
+ * Two renderings that declare the same field differently have no resolution an
+ * author would recognize, so both paragraphs are named and neither wins.
+ */
+const foldRenderedLookups = (
+  declarations: ReadonlyMap<string, DocumentFieldDeclaration>,
+  errors: TemplateStructureError[],
+): [string, DocumentFieldDeclaration][] => {
+  const folded = new Map<string, DocumentFieldDeclaration>();
+  for (const [path, declaration] of declarations) {
+    const cut = path.lastIndexOf(".");
+    const parent = path.slice(0, cut);
+    const declaresParent =
+      cut > 0 &&
+      declaration.scope === "value" &&
+      isLookupFormatKey(path.slice(cut + 1)) &&
+      declaration.filters.some((filter) => filter.name === "lookup");
+    if (!declaresParent) {
+      folded.set(path, declaration);
+      continue;
+    }
+    const existing = folded.get(parent);
+    if (existing === undefined) {
+      folded.set(parent, declaration);
+      continue;
+    }
+    if (existing.signature === declaration.signature) {
+      continue;
+    }
+    errors.push({
+      message:
+        `"${parent}" is configured twice by the markers that render it: ` +
+        `paragraph ${existing.paragraphIndex + 1} says ${existing.signature} ` +
+        `and paragraph ${declaration.paragraphIndex + 1} says ` +
+        `${declaration.signature}. Keep the lookup on one rendering and write ` +
+        "the others as plain markers.",
+      paragraphIndex: declaration.paragraphIndex,
+      directive: `{{ ${path} | lookup(…) }}`,
+    });
+  }
+  return [...folded].toSorted(([a], [b]) => compareCodeUnit(a, b));
+};
+
+/**
  * The manifest the markers themselves declare, in path order. A filter the
  * marker cannot act on becomes a structure error against the paragraph it was
  * written in, so the author is told what to change rather than getting a field
@@ -1177,9 +1230,10 @@ const documentLayerFields = ({
   errors,
 }: DocumentLayerOptions): FieldMeta[] => {
   const fields: FieldMeta[] = [];
-  for (const [path, { filters, paragraphIndex, scope }] of [
-    ...declarations,
-  ].toSorted(([a], [b]) => compareCodeUnit(a, b))) {
+  for (const [path, { filters, paragraphIndex, scope }] of foldRenderedLookups(
+    declarations,
+    errors,
+  )) {
     const { field, issues } =
       scope === "array"
         ? arrayFieldFromFilters(path, filters)

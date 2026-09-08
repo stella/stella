@@ -287,13 +287,18 @@ export type {
 // The writer half of the marker grammar: configuration reaches a document as
 // marker text, so the scanner and the renderer are one round trip.
 export {
+  renderConditionTag,
   renderFilterChain,
   renderForOpener,
   renderValueMarker,
   unwritableFilterValues,
   unwritableMarkerLiteral,
 } from "./render.js";
-export type { ForOpenerOptions, UnwritableReason } from "./render.js";
+export type {
+  ConditionTagOptions,
+  ForOpenerOptions,
+  UnwritableReason,
+} from "./render.js";
 
 // Row-form block placement — shared by the fill/discovery pipeline and the
 // authoring eval so both agree on what a table row declares.

@@ -4331,6 +4331,7 @@
       "repeatableNested": "Toto pole už je vnútri opakujúceho sa bloku.",
       "repeats": "Opakuje sa: {item}",
       "repeatsUnlimited": "Neobmedzene",
+      "ruleWithCalculation": "Pravidlo poľa „{fieldPath}“ používa výpočet, ktorý vzor nevie uložiť. Namiesto toho porovnajte pole s hodnotou.",
       "saveAsRecipe": "Uložiť ako recept",
       "scopeClause": "Vzorové ustanovenie",
       "scopeCondition": "Podmienka",

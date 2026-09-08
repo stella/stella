@@ -4331,6 +4331,7 @@
       "repeatableNested": "Ce champ se trouve déjà dans un bloc répétable.",
       "repeats": "Se répète : {item}",
       "repeatsUnlimited": "Illimité",
+      "ruleWithCalculation": "La règle de « {fieldPath} » utilise un calcul qu’un modèle ne peut pas enregistrer. Comparez plutôt un champ à une valeur.",
       "saveAsRecipe": "Enregistrer comme recette",
       "scopeClause": "Emplacement de clause",
       "scopeCondition": "Condition",

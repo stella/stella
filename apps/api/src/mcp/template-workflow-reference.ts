@@ -137,11 +137,15 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
       `configuration in the ${LIST_TEMPLATES} detail shape, plus ` +
       "`issues[]` (`path`, `index`, `message`, `hint`): one entry per " +
-      "configuration that could NOT be applied. The call rewrites each named " +
-      "marker in the document and publishes it, so a property you send " +
+      "configuration that could NOT be applied. The call rewrites whatever " +
+      "carries the field — its own markers, the `{% if %}` and `{% elif %}` " +
+      "tags a `condition` source's expression replaces, or the keyed markers " +
+      "that render a `lookup` source's hit — and publishes the document, so " +
+      "a property you send " +
       "replaces what the marker said and one you leave out keeps it; naming " +
       "a `source` replaces the whole answer to who fills the field. The call " +
-      "is best effort: an entry naming a path with no value marker, a value " +
+      "is best effort: an entry naming a path the document has nothing to " +
+      "carry it with, a value " +
       "the marker grammar cannot spell (a `{` or `}` in a label), or a " +
       "property the schema refuses is reported on its own and the entries " +
       "beside it are still applied, so read `issues[]` and resend only the " +
