@@ -686,7 +686,11 @@ const OutlineRow = ({
       return (
         <li className="group/row relative">
           <Tooltip
-            content={onlyChild.path}
+            content={
+              node.alias === undefined
+                ? onlyChild.path
+                : loopSource(node.expr, node.alias)
+            }
             render={
               <button
                 className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
@@ -744,8 +748,13 @@ const OutlineGroupRow = ({
   const friendly = humanizeConditionExpr(node.expr, fields, (key) => t(key));
   let groupLabel: string;
   if (node.kind === "for") {
+    // An alias only helps beside the path it binds: `attorney in attorneys` is
+    // what the author can type inside the loop, while `attorney in Attorneys`
+    // would pair the loop variable with a label no marker accepts. A loop that
+    // names no variable keeps the friendly reading of its array instead.
     groupLabel = t("templates.studio.repeats", {
-      item: loopSource(friendly, node.alias),
+      item:
+        node.alias === undefined ? friendly : loopSource(node.expr, node.alias),
     });
   } else if (node.kind === "else") {
     groupLabel = t("templates.studio.otherwise");
