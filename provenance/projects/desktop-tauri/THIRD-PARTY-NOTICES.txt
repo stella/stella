@@ -82,6 +82,7 @@ Project: desktop-tauri
 - clipboard-win 5.4.1 — BSL-1.0
 - cmake 0.1.58 — Apache-2.0 OR MIT
 - cmov 0.5.4 — Apache-2.0 OR MIT
+- color_quant 1.1.0 — MIT
 - combine 4.6.7 — MIT
 - concurrent-queue 2.5.0 — Apache-2.0 OR MIT
 - const-oid 0.10.2 — Apache-2.0 OR MIT
@@ -190,6 +191,7 @@ Project: desktop-tauri
 - getrandom 0.3.4 — Apache-2.0 OR MIT
 - getrandom 0.4.3 — Apache-2.0 OR MIT
 - ghash 0.6.0 — Apache-2.0 OR MIT
+- gif 0.14.2 — Apache-2.0 OR MIT
 - gio 0.18.4 — MIT
 - gio-sys 0.18.1 — MIT
 - glib 0.18.5 — MIT
@@ -239,6 +241,7 @@ Project: desktop-tauri
 - idna 1.1.0 — Apache-2.0 OR MIT
 - idna_adapter 1.2.2 — Apache-2.0 OR MIT
 - image 0.25.10 — Apache-2.0 OR MIT
+- image-webp 0.2.4 — Apache-2.0 OR MIT
 - indexmap 1.9.3 — Apache-2.0 OR MIT
 - indexmap 2.14.0 — Apache-2.0 OR MIT
 - infer 0.19.0 — MIT
