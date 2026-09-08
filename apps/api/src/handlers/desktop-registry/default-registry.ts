@@ -29,4 +29,3 @@ export const getDefaultDesktopRegistry = ({
   }
   return domesticRegistries.length === 1 ? domesticRegistries[0].id : null;
 };
-

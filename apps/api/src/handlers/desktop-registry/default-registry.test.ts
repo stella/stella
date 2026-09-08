@@ -82,4 +82,3 @@ test("absent or disabled domestic registry does not acquire a default", () => {
     }),
   ).toBeNull();
 });
-

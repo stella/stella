@@ -17,4 +17,3 @@ export const ARES_DEFAULT_FORMAT_PARTS = {
 export const ARES_DEFAULT_FORMAT = Object.values(
   ARES_DEFAULT_FORMAT_PARTS,
 ).join(", ");
-

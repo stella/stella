@@ -364,4 +364,3 @@ export const formatDesktopRegistry = async (
     ),
   });
 };
-

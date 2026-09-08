@@ -2,6 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -132,20 +133,27 @@ describe("desktop registry API-key configuration", () => {
       },
     });
 
-    await expect(
-      auth.api.createApiKey({
-        body: {
-          configId: DESKTOP_REGISTRY_KEY_CONFIG,
-          name: "Too long",
-          userId: signedUp.user.id,
-          expiresIn: DESKTOP_REGISTRY_KEY_SECONDS + 1,
-          metadata: {
-            purpose: DESKTOP_REGISTRY_KEY_CONFIG,
-            organizationId: "00000000-0000-4000-8000-000000000001",
+    const created = await Result.tryPromise(
+      async () =>
+        await auth.api.createApiKey({
+          body: {
+            configId: DESKTOP_REGISTRY_KEY_CONFIG,
+            name: "Too long",
+            userId: signedUp.user.id,
+            expiresIn: DESKTOP_REGISTRY_KEY_SECONDS + 1,
+            metadata: {
+              purpose: DESKTOP_REGISTRY_KEY_CONFIG,
+              organizationId: "00000000-0000-4000-8000-000000000001",
+            },
           },
-        },
-      }),
-    ).rejects.toMatchObject({ body: { code: "EXPIRES_IN_IS_TOO_LARGE" } });
+        }),
+    );
+    expect(created.isErr()).toBe(true);
+    if (created.isErr()) {
+      expect(created.error.cause).toMatchObject({
+        body: { code: "EXPIRES_IN_IS_TOO_LARGE" },
+      });
+    }
   });
 
   test("detects accidental API-key session enablement", async () => {
@@ -176,4 +184,3 @@ describe("desktop registry API-key configuration", () => {
     ).not.toBeNull();
   });
 });
-

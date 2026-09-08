@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import { rlsDb } from "@/api/db/root";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import {
@@ -53,7 +55,7 @@ export const authorizeDesktopRegistry = async (request: Request) => {
     !valid ||
     !key?.enabled ||
     !key.expiresAt ||
-    key.expiresAt.getTime() <= Date.now()
+    key.expiresAt.getTime() <= Temporal.Now.instant().epochMilliseconds
   ) {
     return Result.err(rejected());
   }
@@ -95,4 +97,3 @@ export const authorizeDesktopRegistry = async (request: Request) => {
     }),
   });
 };
-

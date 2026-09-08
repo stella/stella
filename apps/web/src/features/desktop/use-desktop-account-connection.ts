@@ -89,7 +89,7 @@ export const useDesktopAccountConnection = () => {
   useMountEffect(() => store.retain());
 
   return {
-    connect: () => store.connect(true),
+    connect: async () => await store.connect(true),
     startWatch: () => {
       detached(store.startWatch(), "desktop-account-connection.watch");
     },

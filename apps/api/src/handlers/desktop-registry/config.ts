@@ -1,10 +1,14 @@
 import * as v from "valibot";
 
+import type { PermissionInput } from "@stll/permissions";
+
 export const DESKTOP_REGISTRY_KEY_CONFIG = "desktop-registry";
 export const DESKTOP_REGISTRY_KEY_PREFIX = "stella_dr_";
 // The prototype requires a fresh, explicit connection after one hour.
 export const DESKTOP_REGISTRY_KEY_SECONDS = 60 * 60;
-export const DESKTOP_REGISTRY_PERMISSION = { workspace: ["read"] } as const;
+export const DESKTOP_REGISTRY_PERMISSION = {
+  workspace: ["read"],
+} satisfies PermissionInput;
 export const desktopRegistryMetadata = v.strictObject({
   purpose: v.literal(DESKTOP_REGISTRY_KEY_CONFIG),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
@@ -25,4 +29,3 @@ export const desktopRegistryKeyConfig = {
     maxExpiresIn: DESKTOP_REGISTRY_KEY_SECONDS / 86_400,
   },
 } as const;
-

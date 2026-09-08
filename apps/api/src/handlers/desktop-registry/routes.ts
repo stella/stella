@@ -13,4 +13,3 @@ export const desktopRegistryRoute = new Elysia({ prefix: "/desktop-registry" })
     body: grant.config.body,
     permissions: grant.config.permissions,
   });
-

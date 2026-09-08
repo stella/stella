@@ -81,4 +81,3 @@ export default createSafeRootHandler(
     });
   },
 );
-

@@ -13,4 +13,3 @@ test("registering desktop routes preserves the grant authorization contract", ()
     true,
   );
 });
-
