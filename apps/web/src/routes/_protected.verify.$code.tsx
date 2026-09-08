@@ -15,7 +15,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import { isVerificationCode } from "@/routes/-verification-code";
+import { isVerificationCode } from "@/lib/document-reference";
 
 /**
  * Where the verification code printed in a document leads. The API answers
