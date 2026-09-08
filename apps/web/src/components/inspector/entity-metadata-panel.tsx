@@ -12,9 +12,13 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { Sparkles } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
+import { BidiText } from "@stll/ui/bidi-text";
+import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
@@ -26,6 +30,7 @@ import { CreateProperty } from "@/components/workspaces/create-property";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -348,6 +353,9 @@ const EntityMetadataContent = ({
       })
     : null;
   const updatedAtIso = currentVersion?.createdAt ?? null;
+  // The frozen reference this version carries. Null until the matter has a
+  // reference number, and null for every version stamped before it got one.
+  const documentReference = currentVersion?.stamp ?? null;
 
   // A verdict is one fact with the value it grades, so it is never listed on
   // its own. `playbook-verdicts` owns that rule for every surface; this panel
@@ -511,6 +519,11 @@ const EntityMetadataContent = ({
                 ? undefined
                 : formatFullTimestamp(updatedAtIso)
             }
+            trailing={
+              documentReference === null ? null : (
+                <DocumentReferenceChip reference={documentReference} />
+              )
+            }
             value={
               versionLabel === null || updatedAtIso === null
                 ? versionLabel
@@ -594,21 +607,66 @@ type ReadOnlyRowProps = {
   label: string;
   value: string | null;
   title?: string | undefined;
+  /** Rendered beside the value, for chips that belong to the same fact. */
+  trailing?: ReactNode;
 };
 
-const ReadOnlyRow = ({ label, value, title }: ReadOnlyRowProps) => {
+const ReadOnlyRow = ({ label, value, title, trailing }: ReadOnlyRowProps) => {
   const content = value ?? <span className="text-muted-foreground">—</span>;
   return (
     <div className="flex flex-col gap-1 rounded-md px-2 py-2">
       <span className="text-muted-foreground text-xs font-medium">{label}</span>
-      {title === undefined ? (
-        <span className="text-foreground text-sm">{content}</span>
-      ) : (
-        <Tooltip
-          content={title}
-          render={<span className="text-foreground text-sm">{content}</span>}
-        />
-      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {title === undefined ? (
+          <span className="text-foreground text-sm">{content}</span>
+        ) : (
+          <Tooltip
+            content={title}
+            render={<span className="text-foreground text-sm">{content}</span>}
+          />
+        )}
+        {trailing}
+      </div>
     </div>
+  );
+};
+
+/**
+ * The document reference the current version was stamped with. Monospace
+ * because it is quoted verbatim into filings and correspondence, and copyable
+ * because that is the only thing anyone does with it.
+ */
+const DocumentReferenceChip = ({ reference }: { reference: string }) => {
+  const t = useTranslations();
+
+  const copy = async () => {
+    const copied = await copyToClipboard(reference);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
+  };
+
+  return (
+    <Tooltip
+      content={t("common.copyDocumentReference")}
+      render={
+        <button
+          aria-label={t("common.copyDocumentReference")}
+          // The `before` box widens the hit area without growing the chip;
+          // it stays narrower horizontally so it cannot swallow clicks meant
+          // for the row's other content.
+          className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono text-[11px] transition-colors outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
+          onClick={() => {
+            detached(copy(), "entity-metadata-panel.copy-document-reference");
+          }}
+          type="button"
+        />
+      }
+    >
+      <BidiText direction="ltr">{reference}</BidiText>
+    </Tooltip>
   );
 };
