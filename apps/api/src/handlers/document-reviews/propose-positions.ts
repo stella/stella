@@ -5,10 +5,10 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const TIMEOUT_MS = 120_000;
 
@@ -68,11 +68,13 @@ const proposePositions = createSafeHandler(
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (Result.isError(proposal)) {
+      // `WorkflowIntegrationError.cause` carries the provider's own failure —
+      // classify against that so an exhausted quota or a rejected key answers
+      // with the status that names it instead of an opaque 500.
       return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Internal server error",
-          cause: proposal.error,
+        aiHandlerError(proposal.error.cause, {
+          status: 502,
+          message: "Position proposal failed",
         }),
       );
     }

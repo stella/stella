@@ -16,6 +16,7 @@ import { t } from "elysia";
 import { documentReviewParties } from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/schemas";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -165,11 +166,13 @@ const reviewParties = createSafeHandler(
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (Result.isError(detected)) {
+      // `WorkflowIntegrationError.cause` carries the provider's own failure —
+      // classify against that so an exhausted quota or a rejected key answers
+      // with the status that names it instead of an opaque 500.
       return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Internal server error",
-          cause: detected.error,
+        aiHandlerError(detected.error.cause, {
+          status: 502,
+          message: "Party detection failed",
         }),
       );
     }
