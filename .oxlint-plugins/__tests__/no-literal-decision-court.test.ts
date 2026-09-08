@@ -21,10 +21,30 @@ afterEach(async () => {
   );
 });
 
-/** One oxlint diagnostic, in the shape `--format=json` reports it. */
-type Diagnostic = {
-  code: string;
-  labels?: readonly { span?: { line?: number } | undefined }[] | undefined;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+/**
+ * The line one diagnostic of this rule reports, or null for any other
+ * diagnostic. Narrowed rather than asserted: the report is another process's
+ * output, so its shape is a claim to check, not one to assume.
+ */
+const reportedLine = (diagnostic: unknown): number | null => {
+  if (!isRecord(diagnostic) || typeof diagnostic.code !== "string") {
+    return null;
+  }
+  if (!diagnostic.code.startsWith(`${RULE_NAME}(`)) {
+    return null;
+  }
+  const label = isUnknownArray(diagnostic.labels)
+    ? diagnostic.labels.at(0)
+    : undefined;
+  const span = isRecord(label) ? label.span : undefined;
+  const line = isRecord(span) ? span.line : undefined;
+  return typeof line === "number" ? line : null;
 };
 
 /**
@@ -70,12 +90,14 @@ const lint = async (source: string): Promise<number[]> => {
     new Response(spawned.stdout).text(),
     spawned.exited,
   ]);
-  const { diagnostics } = JSON.parse(stdout) as {
-    diagnostics: readonly Diagnostic[];
-  };
+  const report: unknown = JSON.parse(stdout);
+  const diagnostics = isRecord(report) ? report.diagnostics : undefined;
+  if (!isUnknownArray(diagnostics)) {
+    throw new Error(`oxlint reported no diagnostics array: ${stdout}`);
+  }
   return diagnostics
-    .filter(({ code }) => code.startsWith(`${RULE_NAME}(`))
-    .map(({ labels }) => labels?.at(0)?.span?.line ?? 0);
+    .map(reportedLine)
+    .filter((line): line is number => line !== null);
 };
 
 describe.serial("no-literal-decision-court", () => {
