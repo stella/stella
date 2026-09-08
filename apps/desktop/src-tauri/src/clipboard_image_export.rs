@@ -82,24 +82,26 @@ impl ClipboardImageExports {
     Ok(())
   }
 
-  pub(crate) fn clear_if_active(&mut self) -> Result<(), String> {
-    if self.active.is_none() {
-      return Ok(());
-    }
-    self.clear()
-  }
-
-  /// Also called on startup, after single-instance registration, to remove
-  /// files left by an interrupted process. No directory scan is necessary.
-  pub(crate) fn clear(&mut self) -> Result<(), String> {
+  /// The pasteboard outlives this process. Keep only its referenced fixed slot,
+  /// including across restarts; never adopt or remove a path outside our slots.
+  pub(crate) fn reconcile(
+    &mut self,
+    clipboard_file: Option<&Path>,
+  ) -> Result<(), String> {
     let Some(root) = &self.directory else {
       return Ok(());
     };
     if !private_directory_exists(root)? {
       return Ok(());
     }
+    self.active = EXPORT_SLOTS.iter().position(|slot| {
+      clipboard_file == Some(root.join(slot).join(EXPORT_FILENAME).as_path())
+    });
     let mut result = Ok(());
-    for slot in EXPORT_SLOTS {
+    for (index, slot) in EXPORT_SLOTS.iter().enumerate() {
+      if self.active == Some(index) {
+        continue;
+      }
       let directory = root.join(slot);
       let cleanup = private_directory_exists(&directory).and_then(|exists| {
         if exists {
@@ -110,9 +112,6 @@ impl ClipboardImageExports {
       if let Err(error) = cleanup {
         result = Err(error);
       }
-    }
-    if result.is_ok() {
-      self.active = None;
     }
     result
   }
@@ -379,7 +378,7 @@ mod tests {
     }
     let mut exports = exports_at(&root);
 
-    exports.clear().unwrap();
+    exports.reconcile(None).unwrap();
 
     assert!(existing_export_paths(&root).is_empty());
     assert_eq!(exports.active, None);
@@ -403,6 +402,61 @@ mod tests {
       assert_eq!(paths.len(), 1);
       assert_eq!(fs::read(&paths[0]).unwrap(), payload.as_bytes());
     }
+  }
+
+  #[test]
+  fn live_clipboard_file_survives_restarts_until_replacement() {
+    for live_slot in 0..EXPORT_SLOTS.len() {
+      let sandbox = TestDirectory::new();
+      let root = sandbox.export_root();
+      for (index, slot) in EXPORT_SLOTS.iter().enumerate() {
+        create_private_directory(&root.join(slot));
+        create_private_file(&export_path(&root, index), b"live");
+      }
+      let live_path = export_path(&root, live_slot);
+
+      for _ in 0..3 {
+        let mut restarted = exports_at(&root);
+        restarted.reconcile(Some(&live_path)).unwrap();
+        assert_eq!(restarted.active, Some(live_slot));
+        assert_eq!(existing_export_paths(&root), vec![live_path.clone()]);
+        assert_eq!(fs::read(&live_path).unwrap(), b"live");
+      }
+
+      let mut restarted = exports_at(&root);
+      restarted.reconcile(Some(&live_path)).unwrap();
+      assert_eq!(
+        restarted.publish(b"failed replacement", |_| Err("rejected".into())),
+        Err("rejected".to_string())
+      );
+      assert_eq!(fs::read(&live_path).unwrap(), b"live");
+      restarted
+        .publish(b"replacement", |url| {
+          assert_ne!(url.to_file_path().unwrap(), live_path);
+          assert_eq!(fs::read(&live_path).unwrap(), b"live");
+          Ok(())
+        })
+        .unwrap();
+      assert!(!live_path.exists());
+      restarted.reconcile(None).unwrap();
+      assert!(existing_export_paths(&root).is_empty());
+    }
+  }
+
+  #[test]
+  fn reconciliation_never_adopts_or_removes_an_external_clipboard_file() {
+    let sandbox = TestDirectory::new();
+    let root = sandbox.export_root();
+    let external = sandbox.path.join("external.png");
+    create_private_file(&external, b"external");
+    let mut exports = exports_at(&root);
+    exports.publish(b"previous", |_| Ok(())).unwrap();
+
+    exports.reconcile(Some(&external)).unwrap();
+
+    assert_eq!(exports.active, None);
+    assert!(existing_export_paths(&root).is_empty());
+    assert_eq!(fs::read(&external).unwrap(), b"external");
   }
 
   #[test]
@@ -473,12 +527,12 @@ mod tests {
     };
 
     assert_eq!(
-      exports.clear(),
+      exports.reconcile(None),
       Err("clipboard export directory is not private".to_string())
     );
 
     assert!(!active_path.exists());
     assert_eq!(fs::read(sentinel).unwrap(), b"external");
-    assert_eq!(exports.active, Some(1));
+    assert_eq!(exports.active, None);
   }
 }

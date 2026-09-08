@@ -109,8 +109,10 @@ pub fn run() {
     .setup(move |app| {
       let handle = app.handle().clone();
       #[cfg(target_os = "macos")]
-      if let Ok(mut clipboard) = clipboard_manager.lock() {
-        clipboard.clear_image_exports();
+      if let Ok(mut clipboard) = clipboard_manager.lock()
+        && let Err(error) = clipboard.reconcile_image_exports()
+      {
+        tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
       }
       let initial_deep_links = app.deep_link().get_current()?;
       let reveal_clipboard_on_launch =
@@ -412,8 +414,9 @@ pub fn run() {
         #[cfg(target_os = "macos")]
         if let Some(clipboard) = app.try_state::<ClipboardAppState>()
           && let Ok(mut clipboard) = clipboard.lock()
+          && let Err(error) = clipboard.reconcile_image_exports()
         {
-          clipboard.clear_image_exports();
+          tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
         }
         #[cfg(not(target_os = "macos"))]
         let _ = app;

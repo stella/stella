@@ -123,6 +123,11 @@ const isLightHex = (hex: string): boolean => {
   return (r * 299 + g * 587 + b * 114) / 1000 > 220;
 };
 
+const checkIconColorClassNames = {
+  dark: "text-(--color-white)",
+  light: "text-(--color-black)",
+} as const;
+
 /** Check if a value looks like a 6-char hex (no CSS vars, no named colors). */
 const looksLikeHex = (v: string) => /^[0-9A-Fa-f]{6}$/u.test(v);
 
@@ -174,12 +179,9 @@ const ColorSwatch = ({
             presentation === "inline"
               ? "bg-background/88 text-foreground size-5 rounded-full p-0.5 shadow-sm"
               : "size-3 sm:size-2.5",
+            presentation === "popover" &&
+              checkIconColorClassNames[isLight ? "light" : "dark"],
           )}
-          style={
-            presentation === "popover"
-              ? { color: isLight ? "#000" : "#fff" }
-              : undefined
-          }
         />
       )}
     </button>
@@ -371,11 +373,7 @@ const ColorPickerContent = ({
 
   if (presentation === "inline") {
     return (
-      <div
-        className="flex items-center gap-1"
-        data-slot="color-picker"
-        role="group"
-      >
+      <div className="flex items-center gap-1" data-slot="color-picker">
         {presets.map((preset) => (
           <ColorSwatch
             key={preset.value}

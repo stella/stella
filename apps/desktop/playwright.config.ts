@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const PORT = 4177;
+const BASE_URL = `http://127.0.0.1:${PORT}`;
+
 export default defineConfig({
   testDir: "./tests/browser",
   testMatch: "**/*.playwright.spec.ts",
@@ -9,12 +12,12 @@ export default defineConfig({
   use: {
     ...devices["Desktop Chrome"],
     browserName: "chromium",
-    baseURL: "http://127.0.0.1:4177",
+    baseURL: BASE_URL,
     viewport: { height: 326, width: 1100 },
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "vite --host 127.0.0.1 --port 4177",
-    port: 4177,
+    command: `vite --host 127.0.0.1 --port ${PORT}`,
+    url: BASE_URL,
   },
 });

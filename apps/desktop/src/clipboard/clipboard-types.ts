@@ -102,6 +102,7 @@ const isClipboardRetention = (value: unknown): value is ClipboardRetention =>
 
 export type ClipboardSnapshot = {
   captureStatus: ClipboardCaptureStatus;
+  groupLimit: number;
   groups: ClipboardGroup[];
   items: ClipboardItem[];
   persistence: ClipboardPersistence;
@@ -252,8 +253,12 @@ export const isClipboardSnapshot = (
     return false;
   }
   const captureStatus = value["captureStatus"];
+  const groupLimit = value["groupLimit"];
   return (
     (captureStatus === "active" || captureStatus === "paused") &&
+    typeof groupLimit === "number" &&
+    Number.isSafeInteger(groupLimit) &&
+    groupLimit > 0 &&
     Array.isArray(value["groups"]) &&
     value["groups"].every(isClipboardGroup) &&
     Array.isArray(value["items"]) &&

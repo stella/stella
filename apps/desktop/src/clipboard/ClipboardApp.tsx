@@ -157,7 +157,6 @@ import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
-const MAX_CLIPBOARD_GROUPS = 24;
 const MAX_ITEM_NAME_CHARACTERS = 80;
 const RETENTION_LABEL_KEYS = {
   week: "retentionWeek",
@@ -211,6 +210,8 @@ const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
+  // Native owns the limit; fail closed until the first runtime snapshot.
+  groupLimit: 0,
   groups: [],
   items: [],
   persistence: { status: "initializing" },
@@ -956,6 +957,7 @@ type ClipboardDragState =
     };
 
 type ClipboardContextMenuProps = {
+  groupLimit: number;
   groups: ClipboardGroup[];
   menu: Exclude<ClipboardContextMenuState, { type: "closed" }>;
   onClose: () => void;
@@ -967,6 +969,7 @@ type ClipboardContextMenuProps = {
 };
 
 const ClipboardContextMenu = ({
+  groupLimit,
   groups,
   menu,
   onClose,
@@ -1058,7 +1061,7 @@ const ClipboardContextMenu = ({
             <MenuSeparator />
             <MenuItem
               className="min-h-11 rounded-xl"
-              disabled={groups.length >= MAX_CLIPBOARD_GROUPS}
+              disabled={groups.length >= groupLimit}
               onClick={() => {
                 onClose();
                 onCreateGroup(menu.item.id);
@@ -2143,6 +2146,7 @@ const ClipboardApp = () => {
       {welcomeOpen ? <ClipboardWelcomeDialog onClose={closeWelcome} /> : null}
       {contextMenu.type === "closed" ? null : (
         <ClipboardContextMenu
+          groupLimit={snapshot.groupLimit}
           groups={snapshot.groups}
           menu={contextMenu}
           onClose={closeContextMenu}
@@ -2369,7 +2373,7 @@ const ClipboardApp = () => {
           <Button
             aria-label={t("createGroup")}
             className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
-            disabled={snapshot.groups.length >= MAX_CLIPBOARD_GROUPS}
+            disabled={snapshot.groups.length >= snapshot.groupLimit}
             onClick={() =>
               setDialog({
                 color: nextGroupColor,

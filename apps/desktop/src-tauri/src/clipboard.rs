@@ -114,6 +114,8 @@ const MACOS_PNG_FORMAT: &str = "public.png";
 #[cfg(target_os = "macos")]
 const MACOS_FILE_URL_FORMAT: &str = "public.file-url";
 #[cfg(target_os = "macos")]
+const MAX_CLIPBOARD_FILE_URL_BYTES: usize = 16 * 1024;
+#[cfg(target_os = "macos")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &[MACOS_PNG_FORMAT, "public.tiff"];
 #[cfg(target_os = "windows")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["PNG"];
@@ -865,6 +867,7 @@ pub enum ClipboardImageCleanupStatus {
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSnapshot {
   pub capture_status: ClipboardCaptureStatus,
+  pub group_limit: usize,
   pub groups: Vec<ClipboardGroup>,
   pub items: Vec<ClipboardItem>,
   pub persistence: ClipboardPersistenceStatus,
@@ -1322,6 +1325,7 @@ impl ClipboardManager {
     source_app_visuals.sort_by(|left, right| left.key.cmp(&right.key));
     ClipboardSnapshot {
       capture_status: self.capture_status,
+      group_limit: MAX_GROUPS,
       groups: self.groups.clone(),
       items: self
         .items
@@ -3305,21 +3309,21 @@ impl ClipboardHandler for HistoryClipboardHandler {
         return;
       }
     };
-    if formats
-      .iter()
-      .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
-    {
-      manager.clear_suppression();
-      return;
-    }
     #[cfg(target_os = "macos")]
-    if let Err(error) = manager.image_exports.clear_if_active() {
+    if let Err(error) = manager.reconcile_image_exports() {
       tracing::warn!(error = %error, "replaced clipboard image export cleanup will be retried");
       self.telemetry.capture(DesktopErrorReport {
         window: DesktopTelemetryWindow::Clipboard,
         operation: DesktopTelemetryOperation::ClipboardWatcherRead,
         code: DesktopTelemetryErrorCode::PersistenceFailed,
       });
+    }
+    if formats
+      .iter()
+      .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
+    {
+      manager.clear_suppression();
+      return;
     }
     drop(manager);
     if should_ignore_formats(&formats) {
@@ -3956,6 +3960,7 @@ impl ClipboardManager {
           .map_err(|error| format!("clipboard image is invalid: {error}"))?;
         #[cfg(target_os = "macos")]
         {
+          self.reconcile_image_exports()?;
           let png = encode_png_bounded(&image, MAX_ITEM_IMAGE_BYTES)?;
           return self.image_exports.publish(&png, |url| {
             // Both representations belong to one pasteboard item. Publishing
@@ -3984,16 +3989,48 @@ impl ClipboardManager {
     }
     set_clipboard_contents(&clipboard, contents)?;
     #[cfg(target_os = "macos")]
-    self.clear_image_exports();
+    if let Err(error) = self.reconcile_image_exports() {
+      tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
+    }
     Ok(())
   }
 
   #[cfg(target_os = "macos")]
-  pub fn clear_image_exports(&mut self) {
-    if let Err(error) = self.image_exports.clear() {
-      tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
-    }
+  pub fn reconcile_image_exports(&mut self) -> Result<(), String> {
+    let current_file = current_clipboard_export_file()?;
+    self.image_exports.reconcile(current_file.as_deref())
   }
+}
+
+#[cfg(target_os = "macos")]
+fn current_clipboard_export_file() -> Result<Option<PathBuf>, String> {
+  use objc2_app_kit::NSPasteboard;
+  use objc2_foundation::NSString;
+
+  let pasteboard = NSPasteboard::generalPasteboard();
+  let change_count = pasteboard.changeCount();
+  let file_url_type = NSString::from_str(MACOS_FILE_URL_FORMAT);
+  let has_file_url = pasteboard
+    .types()
+    .is_some_and(|types| types.containsObject(&file_url_type));
+  let path = if has_file_url {
+    let data = pasteboard
+      .dataForType(&file_url_type)
+      .ok_or_else(|| "clipboard file URL could not be read".to_string())?;
+    if data.length() > MAX_CLIPBOARD_FILE_URL_BYTES {
+      return Err("clipboard file URL exceeds the size limit".to_string());
+    }
+    String::from_utf8(data.to_vec())
+      .ok()
+      .and_then(|value| Url::parse(&value).ok())
+      .and_then(|url| url.to_file_path().ok())
+  } else {
+    None
+  };
+  if pasteboard.changeCount() != change_count {
+    return Err("clipboard changed while reading its file URL".to_string());
+  }
+  Ok(path)
 }
 
 fn set_clipboard_contents(
@@ -6358,6 +6395,22 @@ mod tests {
         .create_group("One too many", ClipboardGroupColor::default(), None)
         .is_err()
     );
+
+    let snapshot = manager.snapshot();
+    assert_eq!(snapshot.group_limit, MAX_GROUPS);
+    let snapshot_json = serde_json::to_value(snapshot).unwrap();
+    assert_eq!(snapshot_json["groupLimit"], MAX_GROUPS);
+
+    let persisted = PersistedClipboardState {
+      capture_status: manager.capture_status,
+      groups: manager.groups.clone(),
+      items: manager.items.clone(),
+      pending_image_blob_ids: manager.pending_image_blob_ids.clone(),
+      retention: manager.retention,
+      source_app_visuals: Vec::new(),
+    };
+    let persisted_json = serde_json::to_value(persisted).unwrap();
+    assert!(persisted_json.get("groupLimit").is_none());
 
     let mut manager = ready_manager();
     assert!(
