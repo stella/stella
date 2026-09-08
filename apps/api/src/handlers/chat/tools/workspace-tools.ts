@@ -12,6 +12,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
+import { formatIsoDateForDisplay } from "@/api/lib/date-format";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueEntitySearchRepairs,
@@ -44,13 +45,7 @@ const formatFieldValue = (content: FieldContent): string => {
         return "";
       }
 
-      const [y, m, d] = content.value.split("-");
-      const date = new Date(Number(y), Number(m) - 1, Number(d));
-      return date.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
+      return formatIsoDateForDisplay({ isoDate: content.value });
     }
     case "int":
       return content.currency

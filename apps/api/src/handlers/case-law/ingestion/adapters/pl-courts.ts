@@ -538,13 +538,12 @@ const normalizeDecisionDate = (
   content: string | null | undefined,
 ): string | undefined => {
   const rawDate = raw ? parsePlainDate(raw) : null;
-  if (rawDate !== null) {
-    if (
-      rawDate.year >= 1900 &&
-      rawDate.year <= Temporal.Now.plainDateISO().year + 1
-    ) {
-      return rawDate.toString();
-    }
+  if (
+    rawDate !== null &&
+    rawDate.year >= 1900 &&
+    rawDate.year <= Temporal.Now.plainDateISO().year + 1
+  ) {
+    return rawDate.toString();
   }
 
   const contentDate = parseDecisionDateFromContent(content);

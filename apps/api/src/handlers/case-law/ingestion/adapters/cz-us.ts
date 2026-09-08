@@ -575,13 +575,12 @@ const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
 
 /** Latest complete NALUS publication day; today's result set is still live. */
-const latestClosedAvailabilityDay = (now: Date): string => {
-  return Temporal.Instant.fromEpochMilliseconds(now.getTime())
+const latestClosedAvailabilityDay = (now: Date): string =>
+  Temporal.Instant.fromEpochMilliseconds(now.getTime())
     .toZonedDateTimeISO("UTC")
     .toPlainDate()
     .subtract({ days: 1 })
     .toString();
-};
 
 const historicalStart = (now: Date): HistoricalCursor => ({
   phase: SWEEP_PHASE.HISTORICAL,
