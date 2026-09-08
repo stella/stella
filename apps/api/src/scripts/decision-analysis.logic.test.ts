@@ -3,12 +3,14 @@
  *
  * The scripts run under an operator against the live corpus, so every
  * refusal is exercised here instead: a redacted row, a source whose terms
- * withhold derived AI use, a parse this database-only login cannot reach,
+ * withhold derived AI use, a decision with no parse anywhere,
  * and a submission carrying the graph-fenced layer it may not write.
  */
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -24,6 +26,7 @@ import {
   positiveInteger,
   readAnalysisDatabaseUrl,
   resolveRowAnalysisInput,
+  summariseOutcomes,
   type DecisionAnalysisRow,
 } from "./decision-analysis.logic";
 
@@ -56,6 +59,7 @@ const row = (
   country: "CZE",
   decisionType: "rozsudek",
   documentAst,
+  astS3Key: null,
   contentHash: "c".repeat(64),
   analysis: null,
   redactedAt: null,
@@ -98,8 +102,17 @@ const VALID_RECORD = {
 };
 
 describe("resolveRowAnalysisInput", () => {
+  /** The parse the corpus reader hands back for this row's own column. */
+  const resolveFromColumn = (overrides: Partial<DecisionAnalysisRow> = {}) => {
+    const subject = row(overrides);
+    return resolveRowAnalysisInput({
+      ast: parseUsableDocumentAst(subject.documentAst),
+      row: subject,
+    });
+  };
+
   test("resolves the same input the in-app run would compute", () => {
-    const resolved = resolveRowAnalysisInput(row());
+    const resolved = resolveFromColumn();
 
     expect(resolved.status).toBe("ok");
     if (resolved.status !== "ok") {
@@ -115,18 +128,16 @@ describe("resolveRowAnalysisInput", () => {
   });
 
   test("the fingerprint follows the text, so a re-parse invalidates it", () => {
-    const first = resolveRowAnalysisInput(row());
-    const renumbered = resolveRowAnalysisInput(
-      row({
-        documentAst: {
-          version: 1,
-          blocks: [
-            paragraph("b7", "Rozsudek"),
-            paragraph("b8", "Soud dovolání zamítl."),
-          ],
-        },
-      }),
-    );
+    const first = resolveFromColumn();
+    const renumbered = resolveFromColumn({
+      documentAst: {
+        version: 1,
+        blocks: [
+          paragraph("b7", "Rozsudek"),
+          paragraph("b8", "Soud dovolání zamítl."),
+        ],
+      },
+    });
 
     expect(first.status).toBe("ok");
     expect(renumbered.status).toBe("ok");
@@ -136,8 +147,23 @@ describe("resolveRowAnalysisInput", () => {
     expect(renumbered.input.fingerprint).not.toBe(first.input.fingerprint);
   });
 
+  // A trimmed row is the normal case under canonical corpus storage: the
+  // parse arrives from the object, and the decision is analysable.
+  test("takes the parse the corpus reader resolved, not the row's column", () => {
+    const resolved = resolveRowAnalysisInput({
+      ast: parseUsableDocumentAst(documentAst),
+      row: row({ documentAst: null, astS3Key: "cz/ns/abc.zst" }),
+    });
+
+    expect(resolved.status).toBe("ok");
+    if (resolved.status !== "ok") {
+      return;
+    }
+    expect(resolved.input.userMessage).toContain("[b1] Rozsudek");
+  });
+
   test("refuses a redacted decision: its text was erased on request", () => {
-    expect(resolveRowAnalysisInput(row({ redactedAt: new Date() }))).toEqual({
+    expect(resolveFromColumn({ redactedAt: new Date() })).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.redacted,
     });
@@ -145,18 +171,16 @@ describe("resolveRowAnalysisInput", () => {
 
   test("refuses a source whose terms withhold derived AI use", () => {
     expect(
-      resolveRowAnalysisInput(
-        row({
-          source: {
-            descriptor: {
-              license: "restricted",
-              attribution: null,
-              allowsRedistribution: false,
-              allowsDerivedAi: false,
-            },
+      resolveFromColumn({
+        source: {
+          descriptor: {
+            license: "restricted",
+            attribution: null,
+            allowsRedistribution: false,
+            allowsDerivedAi: false,
           },
-        }),
-      ),
+        },
+      }),
     ).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.derivedAiNotAllowed,
@@ -164,21 +188,23 @@ describe("resolveRowAnalysisInput", () => {
   });
 
   test("refuses a decision with no source row: unknown terms are not permissive", () => {
-    expect(resolveRowAnalysisInput(row({ source: null }))).toEqual({
+    expect(resolveFromColumn({ source: null })).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.derivedAiNotAllowed,
     });
   });
 
-  // Under canonical corpus storage the parse lives in object storage, which
-  // this database-only login cannot read. Said plainly, not as a crash.
-  test("refuses a row whose parse is not in the column", () => {
-    expect(resolveRowAnalysisInput(row({ documentAst: null }))).toEqual({
+  // No parse in the column and none in the object either: there is no text
+  // to analyse anywhere, which is what the reason says.
+  test("refuses a row with no parse anywhere", () => {
+    expect(
+      resolveRowAnalysisInput({ ast: null, row: row({ documentAst: null }) }),
+    ).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.astUnavailable,
     });
     expect(
-      resolveRowAnalysisInput(row({ documentAst: { version: 1, blocks: [] } })),
+      resolveFromColumn({ documentAst: { version: 1, blocks: [] } }),
     ).toEqual({
       status: "rejected",
       reason: ANALYSIS_REJECTION.astUnavailable,
@@ -291,6 +317,24 @@ describe("run reporting", () => {
     expect(describeUpdateOutcome({ kind: "derived-ai-refused" })).toBe(
       "rejected:derived-ai-not-allowed",
     );
+  });
+});
+
+describe("summariseOutcomes", () => {
+  test("counts each distinct outcome once, in a stable order", () => {
+    expect(
+      summariseOutcomes([
+        "saved",
+        "rejected:ast-unavailable",
+        "saved",
+        "unchanged",
+        "rejected:ast-unavailable",
+      ]),
+    ).toEqual(["rejected:ast-unavailable: 2", "saved: 2", "unchanged: 1"]);
+  });
+
+  test("says nothing about a run that produced nothing", () => {
+    expect(summariseOutcomes([])).toEqual([]);
   });
 });
 

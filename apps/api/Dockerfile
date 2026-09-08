@@ -114,6 +114,25 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
+# Decision-analysis operator pass. Like replay above, these need the API env
+# (corpus bucket, storage mode) and run inside the API task, but their
+# database login is overridden per task to the analysis writer role through
+# CASE_LAW_ANALYSIS_DATABASE_URL:
+#   ["bun", "/app/decision-analysis-candidates.js", "--country", "CZE"]
+#   ["bun", "/app/decision-analysis-input.js", "--ids-file", "/tmp/ids.txt"]
+#   ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
+RUN bun build \
+    --target bun \
+    --outfile /app/decision-analysis-candidates.js \
+    apps/api/src/scripts/decision-analysis-candidates.ts
+RUN bun build \
+    --target bun \
+    --outfile /app/decision-analysis-input.js \
+    apps/api/src/scripts/decision-analysis-input.ts
+RUN bun build \
+    --target bun \
+    --outfile /app/decision-analysis-save.js \
+    apps/api/src/scripts/decision-analysis-save.ts
 # Dedicated durable document-processing worker. Deploy the same image with
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
 # in-image through the isolated local ONNX worker.
@@ -226,6 +245,9 @@ COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/b
 COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-census.js
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
+COPY --chown=stella:stella --from=builder /app/decision-analysis-candidates.js /app/decision-analysis-candidates.js
+COPY --chown=stella:stella --from=builder /app/decision-analysis-input.js /app/decision-analysis-input.js
+COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/decision-analysis-save.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:

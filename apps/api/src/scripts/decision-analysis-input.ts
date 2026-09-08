@@ -16,7 +16,12 @@
  *     bun run src/scripts/decision-analysis-input.ts --ids-file candidates.txt \
  *     > inputs.json
  *
- * Reads only; connects as `stella_case_law_analysis_writer`.
+ * The decision's parse comes from wherever the corpus keeps it: most rows
+ * hold only a pointer, and the object is read with the task role. A run
+ * reports `ast-unavailable` only when there is no parse anywhere.
+ *
+ * Reads only. The database login is `stella_case_law_analysis_writer`; the
+ * corpus objects are read with the task role (see `decision-analysis.ast.ts`).
  */
 
 import { Result } from "better-result";
@@ -24,6 +29,7 @@ import { Result } from "better-result";
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
+import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
 import { openAnalysisDatabase, readDecisionRows } from "./decision-analysis.db";
 import {
   ANALYSIS_REJECTION,
@@ -31,6 +37,7 @@ import {
   parseIdsFile,
   readAnalysisDatabaseUrl,
   resolveRowAnalysisInput,
+  summariseOutcomes,
   type AnalysisRejection,
 } from "./decision-analysis.logic";
 
@@ -90,6 +97,8 @@ const rowsById = await readDecisionRows(
   ids.map((id) => brandPersistedCaseLawDecisionId(id)),
 );
 
+await prepareCorpusReads();
+
 const records: InputRecord[] = [];
 for (const id of ids) {
   const row = rowsById.get(id);
@@ -101,7 +110,11 @@ for (const id of ids) {
     });
     continue;
   }
-  const resolved = resolveRowAnalysisInput(row);
+  // Sequentially, one corpus object at a time: a batch is an operator's
+  // pass over the corpus, not a request, and the object store is shared
+  // with the serving path.
+  const ast = await readRowAst(row);
+  const resolved = resolveRowAnalysisInput({ ast, row });
   if (resolved.status === "rejected") {
     records.push({
       decisionId: id,
@@ -130,6 +143,16 @@ console.log(
     2,
   ),
 );
+
+// The tally goes to stderr, so stdout stays a single JSON document a
+// producer can pipe straight into its own tooling.
+for (const line of summariseOutcomes(
+  records.map((record) =>
+    record.status === "ok" ? "ok" : `rejected:${record.reason}`,
+  ),
+)) {
+  console.error(line);
+}
 
 const rejected = records.filter(
   (record) => record.status === "rejected",

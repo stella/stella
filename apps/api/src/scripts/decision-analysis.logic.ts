@@ -5,15 +5,15 @@
  * report. Pure, so the fences and the refusals are driven directly in
  * `decision-analysis.logic.test.ts` rather than through a live corpus.
  *
- * The scripts run under a restricted database login, so nothing here may
- * reach for the application's env or its connection.
+ * Nothing here reaches for a connection, an environment or an object store:
+ * the caller resolves the decision's parse and hands it in, which is what
+ * lets every refusal be exercised without a corpus.
  */
 
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { analysisOutputSchema } from "@/api/handlers/case-law/analysis/analysis-output";
 import type {
@@ -43,8 +43,9 @@ export const ANALYSIS_REJECTION = {
   /** The source's reuse terms withhold derived AI use of its text. */
   derivedAiNotAllowed: "derived-ai-not-allowed",
   /**
-   * No usable parse in the row. Under canonical corpus storage the parse
-   * lives in object storage, which this database-only login cannot read.
+   * No usable parse anywhere: not in the row, and not in object storage
+   * either. Rare, and a defect in the decision's ingest rather than in the
+   * run that met it.
    */
   astUnavailable: "ast-unavailable",
   /** The submitted output does not match the schema the input published. */
@@ -71,7 +72,10 @@ export type DecisionAnalysisRow = AnalysisSubject & {
   court: string;
   country: string;
   decisionType: string | null;
+  /** The row's own copy of the parse; trimmed where the object is canonical. */
   documentAst: unknown;
+  /** Where the canonical parse lives, when it is not in the row. */
+  astS3Key: string | null;
   redactedAt: Date | null;
 };
 
@@ -82,12 +86,20 @@ export type ResolvedDecisionInput =
 /**
  * The model input for one row, resolved exactly as the in-app run resolves
  * it: the same language-selected system prompt, the same anchored user
- * message, and therefore the same fingerprint. The parse comes from the
- * row's own column, which is what a database-only login can read.
+ * message, and therefore the same fingerprint.
+ *
+ * `ast` is resolved by the caller through the corpus reader, because under
+ * canonical corpus storage the parse is an object and the row's column is
+ * trimmed. A null `ast` therefore means no parse anywhere, not "not in this
+ * column": the run reports that as `ast-unavailable`, which should be rare.
  */
-export const resolveRowAnalysisInput = (
-  row: DecisionAnalysisRow,
-): ResolvedDecisionInput => {
+export const resolveRowAnalysisInput = ({
+  ast,
+  row,
+}: {
+  row: DecisionAnalysisRow;
+  ast: DocumentAst | null;
+}): ResolvedDecisionInput => {
   if (row.redactedAt !== null) {
     return { status: "rejected", reason: ANALYSIS_REJECTION.redacted };
   }
@@ -97,7 +109,6 @@ export const resolveRowAnalysisInput = (
       reason: ANALYSIS_REJECTION.derivedAiNotAllowed,
     };
   }
-  const ast = parseUsableDocumentAst(row.documentAst);
   if (ast === null) {
     return { status: "rejected", reason: ANALYSIS_REJECTION.astUnavailable };
   }
@@ -110,6 +121,21 @@ export const resolveRowAnalysisInput = (
       systemPrompt: getSystemPrompt(row.language),
     }),
   };
+};
+
+/**
+ * One line per distinct outcome at the end of a run, so an operator sees
+ * how a batch went without counting lines. Sorted, and silent when the run
+ * produced nothing.
+ */
+export const summariseOutcomes = (outcomes: readonly string[]): string[] => {
+  const counts = new Map<string, number>();
+  for (const outcome of outcomes) {
+    counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .toSorted(([a], [b]) => (a < b ? -1 : 1))
+    .map(([outcome, count]) => `${outcome}: ${String(count)}`);
 };
 
 /**

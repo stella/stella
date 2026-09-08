@@ -41,6 +41,7 @@ const decisionColumns = {
   country: caseLawDecisions.country,
   decisionType: caseLawDecisions.decisionType,
   documentAst: caseLawDecisions.documentAst,
+  astS3Key: caseLawDecisions.astS3Key,
   contentHash: caseLawDecisions.contentHash,
   analysis: caseLawDecisions.analysis,
   redactedAt: caseLawDecisions.redactedAt,
@@ -55,6 +56,7 @@ type DecisionSelection = {
   country: string;
   decisionType: string | null;
   documentAst: unknown;
+  astS3Key: string | null;
   contentHash: string | null;
   analysis: unknown;
   redactedAt: Date | null;
@@ -78,6 +80,7 @@ const toRow = (row: DecisionSelection): DecisionAnalysisRow => ({
   country: row.country,
   decisionType: row.decisionType,
   documentAst: row.documentAst,
+  astS3Key: row.astS3Key,
   contentHash: row.contentHash,
   analysis: row.analysis,
   redactedAt: row.redactedAt,
@@ -118,6 +121,7 @@ export type CandidateRow = {
   language: string;
   decisionType: string | null;
   documentAst: unknown;
+  astS3Key: string | null;
   contentHash: string | null;
   redactedAt: Date | null;
   source: DecisionAnalysisRow["source"];
@@ -181,6 +185,7 @@ export const listCandidateRows = async (
     language: row.language,
     decisionType: row.decisionType,
     documentAst: row.documentAst,
+    astS3Key: row.astS3Key,
     contentHash: row.contentHash,
     redactedAt: row.redactedAt,
     source: sourceOf(row),
@@ -194,6 +199,7 @@ export const candidateAsRow = (row: CandidateRow): DecisionAnalysisRow => ({
   country: row.country,
   decisionType: row.decisionType,
   documentAst: row.documentAst,
+  astS3Key: row.astS3Key,
   contentHash: row.contentHash,
   analysis: row.analysis,
   redactedAt: row.redactedAt,

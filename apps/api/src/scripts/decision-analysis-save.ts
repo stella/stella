@@ -35,6 +35,7 @@ import { createDbAnalysisStore } from "@/api/handlers/case-law/analysis/analysis
 import { applyAnalysisUpdate } from "@/api/handlers/case-law/analysis/analysis-update";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
+import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
 import { openAnalysisDatabase, readDecisionRows } from "./decision-analysis.db";
 import {
   ANALYSIS_REJECTION,
@@ -45,6 +46,7 @@ import {
   readAnalysisDatabaseUrl,
   rejectionLine,
   resolveRowAnalysisInput,
+  summariseOutcomes,
 } from "./decision-analysis.logic";
 
 const USAGE = `Usage: bun run src/scripts/decision-analysis-save.ts --input <path>
@@ -76,12 +78,11 @@ if (Result.isError(url)) {
 
 const db = openAnalysisDatabase(url.value);
 const store = createDbAnalysisStore(db);
+await prepareCorpusReads();
 
-let rejectedCount = 0;
+const outcomes: string[] = [];
 const report = (decisionId: string, outcome: string) => {
-  if (outcome.startsWith("rejected:")) {
-    rejectedCount += 1;
-  }
+  outcomes.push(outcome);
   console.log(`${decisionId} ${outcome}`);
 };
 
@@ -110,7 +111,8 @@ for (const parsed of parsedRecords) {
     report(record.decisionId, rejectionLine(ANALYSIS_REJECTION.notFound));
     continue;
   }
-  const resolved = resolveRowAnalysisInput(row);
+  const ast = await readRowAst(row);
+  const resolved = resolveRowAnalysisInput({ ast, row });
   if (resolved.status === "rejected") {
     report(record.decisionId, rejectionLine(resolved.reason));
     continue;
@@ -132,4 +134,10 @@ for (const parsed of parsedRecords) {
   report(record.decisionId, describeUpdateOutcome(outcome));
 }
 
-process.exit(rejectedCount === 0 ? 0 : 1);
+for (const line of summariseOutcomes(outcomes)) {
+  console.error(line);
+}
+
+process.exit(
+  outcomes.some((outcome) => outcome.startsWith("rejected:")) ? 1 : 0,
+);

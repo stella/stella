@@ -15,7 +15,7 @@
  * means version 3 over the fingerprint the row's own text digests to today,
  * so a re-parse since the analysis was written puts the decision back on the
  * list. So does a source that withholds derived AI use, a redacted row, and
- * a row whose parse this database-only login cannot reach.
+ * a decision with no parse at all, in the row or in object storage.
  *
  *   CASE_LAW_ANALYSIS_DATABASE_URL=postgres://... \
  *     bun run src/scripts/decision-analysis-candidates.ts --country CZE --limit 200
@@ -24,13 +24,15 @@
  *   CASE_LAW_ANALYSIS_DATABASE_URL=postgres://... \
  *     bun run src/scripts/decision-analysis-candidates.ts --ids-only > candidates.txt
  *
- * Reads only; connects as `stella_case_law_analysis_writer`.
+ * Reads only. The database login is `stella_case_law_analysis_writer`; the
+ * corpus objects are read with the task role (see `decision-analysis.ast.ts`).
  */
 
 import { Result } from "better-result";
 
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
+import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
 import {
   candidateAsRow,
   listCandidateRows,
@@ -43,6 +45,7 @@ import {
   positiveInteger,
   readAnalysisDatabaseUrl,
   resolveRowAnalysisInput,
+  summariseOutcomes,
 } from "./decision-analysis.logic";
 
 const DEFAULT_LIMIT = 100;
@@ -92,14 +95,19 @@ const rows = await listCandidateRows(db, {
   scan: limit * SCAN_FACTOR,
 });
 
+await prepareCorpusReads();
+
+const outcomes: string[] = [];
 let printed = 0;
 for (const candidate of rows) {
   if (printed === limit) {
     break;
   }
   const row = candidateAsRow(candidate);
-  const resolved = resolveRowAnalysisInput(row);
+  const ast = await readRowAst(row);
+  const resolved = resolveRowAnalysisInput({ ast, row });
   if (resolved.status === "rejected") {
+    outcomes.push(`skipped:${resolved.reason}`);
     continue;
   }
   const stored = parsePersistedDecisionAnalysis(candidate.analysis);
@@ -109,9 +117,11 @@ for (const candidate of rows) {
     stored.version === 3 &&
     stored.inputFingerprint === resolved.input.fingerprint;
   if (isCurrent) {
+    outcomes.push("skipped:already-current");
     continue;
   }
 
+  outcomes.push("candidate");
   printed += 1;
   if (idsOnly) {
     console.log(candidate.id);
@@ -127,6 +137,11 @@ for (const candidate of rows) {
       `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
     ].join("\t"),
   );
+}
+
+// The tally goes to stderr, so `--ids-only` output stays pipeable.
+for (const line of summariseOutcomes(outcomes)) {
+  console.error(line);
 }
 
 if (printed === 0) {
