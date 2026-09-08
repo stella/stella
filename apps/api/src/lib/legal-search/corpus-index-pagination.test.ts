@@ -47,6 +47,12 @@ let requestDelayMs: number;
  * physical copy of, say.
  */
 let snippetResponseBody: unknown;
+/**
+ * Status the fake engine answers the highlight round with. Anything but 200
+ * makes the client report the round as failed, which is how the page's
+ * snippets go missing without the scan itself faltering.
+ */
+let snippetResponseStatus: number;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
@@ -54,6 +60,7 @@ beforeEach(() => {
   requestBodies = [];
   requestDelayMs = 0;
   snippetResponseBody = null;
+  snippetResponseStatus = 200;
   const stub = async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -63,6 +70,11 @@ beforeEach(() => {
     requestBodies.push(body);
     if (requestDelayMs > 0) {
       await Bun.sleep(requestDelayMs);
+    }
+    if (body["snippet_fields"] !== undefined && snippetResponseStatus !== 200) {
+      return new Response("index unavailable", {
+        status: snippetResponseStatus,
+      });
     }
     if (snippetResponseBody !== null && body["snippet_fields"] !== undefined) {
       return new Response(JSON.stringify(snippetResponseBody), { status: 200 });
@@ -832,6 +844,33 @@ describe("only the passages a page emits are highlighted", () => {
     for (const hit of page.pageRanked) {
       expect(page.snippetById.get(hit.id)).toBeDefined();
     }
+  });
+});
+
+describe("a page outlives its highlighting", () => {
+  test("a failed highlight round costs the snippets, not the hits", async () => {
+    const hits = [
+      { document_id: "doc-b", anchor_id: "b-p7" },
+      { document_id: "doc-a", anchor_id: "a-p2" },
+    ];
+    responseBody = {
+      num_hits: hits.length,
+      hits,
+      snippets: hits.map((hit) => ({ text: [`passage ${hit.document_id}`] })),
+    };
+    snippetResponseStatus = 503;
+
+    const page = await readPage();
+
+    // Everything the scan established survives: the ranking, and the anchor
+    // each hit deep-links to. Only the decoration the failed round would have
+    // supplied is absent, and a hit already carries that as optional.
+    expect(page.pageRanked.map((hit) => hit.id)).toEqual(["doc-b", "doc-a"]);
+    expect(page.anchorIdById.get("doc-b")).toBe("b-p7");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-p2");
+    expect(page.snippetById.size).toBe(0);
+    // The reader waited through the round whether or not it answered.
+    expect(page.scan.highlightRounds).toBe(1);
   });
 });
 

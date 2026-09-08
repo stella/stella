@@ -1,9 +1,17 @@
+import { errorTag } from "@/api/lib/errors/error-tag";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
+
+/**
+ * Structured event; swept for, so spelled once. Corpus-neutral because the
+ * scan is: `indexId` names which corpus lost its snippets.
+ */
+const HIGHLIGHT_UNAVAILABLE = "corpus_index.search_highlight_unavailable";
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -103,6 +111,8 @@ export type CorpusIndexScanReport = {
    * Engine round trips spent highlighting the page: one, or none when the
    * page is empty. Separate from `rounds` because it reaches a page's worth
    * of passages rather than the scan's, and a reader waits through both.
+   * Counts the round, not the snippets: one that failed was still waited on,
+   * and `corpus_index.search_highlight_unavailable` is what names it.
    */
   highlightRounds: number;
 };
@@ -222,8 +232,20 @@ const readPageSnippets = async ({
     snippetFields,
   });
   const indexMs = performance.now() - startedAt;
+  // Highlighting decorates a page the scan has already ranked, and a hit
+  // carries its snippet as an optional field: a page with none is the state
+  // an empty clause list and the identity path both already return. So a
+  // failed highlight round costs the page its snippets, never the page. The
+  // round is still counted — its latency was spent either way.
   if (result.isErr()) {
-    throw result.error;
+    logger.warn(HIGHLIGHT_UNAVAILABLE, {
+      indexId,
+      passageClauses: clauses.length,
+      // Structural, never the message: the engine quotes the query it failed
+      // on, and that query is the reader's own text.
+      errorTag: errorTag(result.error),
+    });
+    return { indexMs, rounds: 1, snippetById };
   }
 
   // Best-first, so the first snippet a document gets is its best-scoring
