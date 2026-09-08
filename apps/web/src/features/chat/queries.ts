@@ -20,7 +20,7 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { emitDevCanaryError } from "@/lib/dev-canary";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
@@ -117,44 +117,39 @@ const fetchThreadMessages = async (
       },
     });
 
-  if (response.error) {
-    const error = toAPIError(response.error);
-
-    if (allowMissingThread && APIError.is(error) && error.status === 404) {
-      return {
-        forkProvenance: { type: "none" },
-        messages: [],
-        olderCursor: null,
-        contextMatterIds: [],
-        lastActivityAt: null,
-        threadRevision: null,
-        threadExists: false,
-        usedAnonymization: false,
-        webSearchAvailable: false,
-        webSearchEnabled: false,
-        model: null,
-        reasoningEffort: null,
-        context: null,
-      };
-    }
-
-    throw error;
+  if (response.error && allowMissingThread && response.error.status === 404) {
+    return {
+      forkProvenance: { type: "none" },
+      messages: [],
+      olderCursor: null,
+      contextMatterIds: [],
+      lastActivityAt: null,
+      threadRevision: null,
+      threadExists: false,
+      usedAnonymization: false,
+      webSearchAvailable: false,
+      webSearchEnabled: false,
+      model: null,
+      reasoningEffort: null,
+      context: null,
+    };
   }
 
+  const data = unwrapEden(response);
   return {
-    forkProvenance: response.data.forkProvenance,
-    messages: deserializeChatMessages(response.data.messages),
-    olderCursor: response.data.olderCursor,
-    contextMatterIds: response.data.contextMatterIds,
-    lastActivityAt: response.data.lastActivityAt,
-    threadRevision: response.data.threadRevision,
-    threadExists: response.data.threadExists,
-    usedAnonymization: response.data.usedAnonymization,
-    webSearchAvailable: response.data.webSearchAvailable,
-    webSearchEnabled: response.data.webSearchEnabled,
-    model: response.data.model,
-    reasoningEffort: response.data.reasoningEffort,
-    context: response.data.context,
+    forkProvenance: data.forkProvenance,
+    messages: deserializeChatMessages(data.messages),
+    olderCursor: data.olderCursor,
+    contextMatterIds: data.contextMatterIds,
+    lastActivityAt: data.lastActivityAt,
+    threadRevision: data.threadRevision,
+    threadExists: data.threadExists,
+    usedAnonymization: data.usedAnonymization,
+    webSearchAvailable: data.webSearchAvailable,
+    webSearchEnabled: data.webSearchEnabled,
+    model: data.model,
+    reasoningEffort: data.reasoningEffort,
+    context: data.context,
   };
 };
 
