@@ -31,58 +31,17 @@ describe("isTemplateDataValue", () => {
 });
 
 describe("isFieldMeta", () => {
-  const compositeField = {
-    path: "lawyer",
-    parts: [
-      { key: "position", inputType: "select", options: ["adw."] },
-      { key: "name", inputType: "text" },
-    ],
-    format: "{{position}} {{name}}",
-  };
   const validLookup = {
     registry: "krs",
     formats: [{ key: "full", template: "[name]" }],
   };
 
-  test("accepts a composite field with parts and format", () => {
-    expect(isFieldMeta(compositeField)).toBe(true);
-  });
-
   test("rejects unknown metadata keys at every owned object boundary", () => {
     expect(isFieldMeta({ path: "client.name", lable: "Client" })).toBe(false);
     expect(
       isFieldMeta({
-        ...compositeField,
-        parts: [{ key: "name", inputType: "text", lable: "Name" }],
-      }),
-    ).toBe(false);
-  });
-
-  test("rejects parts without format (and vice versa)", () => {
-    const { format: _format, ...partsOnly } = compositeField;
-    expect(isFieldMeta(partsOnly)).toBe(false);
-    const { parts: _parts, ...formatOnly } = compositeField;
-    expect(isFieldMeta(formatOnly)).toBe(false);
-  });
-
-  test("rejects an empty parts array", () => {
-    expect(isFieldMeta({ ...compositeField, parts: [] })).toBe(false);
-  });
-
-  test("rejects a part key outside the field-path charset", () => {
-    expect(
-      isFieldMeta({
-        ...compositeField,
-        parts: [{ key: "bad key!", inputType: "text" }],
-      }),
-    ).toBe(false);
-  });
-
-  test("rejects a part with an unknown inputType", () => {
-    expect(
-      isFieldMeta({
-        ...compositeField,
-        parts: [{ key: "position", inputType: "date" }],
+        path: "company",
+        lookup: { ...validLookup, registry: "krs", extra: "no" },
       }),
     ).toBe(false);
   });
@@ -213,9 +172,6 @@ describe("isFieldMeta", () => {
         lookup: validLookup,
       }),
     ).toBe(false);
-    expect(isFieldMeta({ ...compositeField, formula: "rent * 12" })).toBe(
-      false,
-    );
   });
 
   test("rejects multiple active derived source modes", () => {
@@ -229,12 +185,6 @@ describe("isFieldMeta", () => {
       isFieldMeta({
         path: "x",
         aiPrompt: "draft it",
-        lookup: validLookup,
-      }),
-    ).toBe(false);
-    expect(
-      isFieldMeta({
-        ...compositeField,
         lookup: validLookup,
       }),
     ).toBe(false);
@@ -290,7 +240,6 @@ describe("isFieldMeta", () => {
     expect(
       isFieldMeta({ path: "x", source, condition: 'client_type == "company"' }),
     ).toBe(false);
-    expect(isFieldMeta({ ...compositeField, source })).toBe(false);
   });
 
   test("accepts a boolean field with a condition rule", () => {
@@ -332,7 +281,6 @@ describe("isFieldMeta", () => {
         aiAdapt: true,
       }),
     ).toBe(false);
-    expect(isFieldMeta({ ...compositeField, condition: "a == b" })).toBe(false);
   });
 
   test("accepts a string hint and rejects a non-string one", () => {

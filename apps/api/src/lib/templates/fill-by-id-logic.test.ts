@@ -2,15 +2,42 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { fillByIdLogic } from "./fill-by-id-logic";
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
 
 // fillByIdLogic backs `POST /templates/:templateId/fill`. Like fillHandler
 // (the raw-upload route), it used to run applyManifestFillSteps/fillTemplate
@@ -80,7 +107,7 @@ const stubDb = (fileName: string) =>
 describe("fillByIdLogic required fields", () => {
   test("rejects a fill omitting a required field, with the full structured detail", async () => {
     let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buffer = await writeManifest(buffer, requiredFieldManifest);
+    buffer = await authorFieldMarkers(buffer, requiredFieldManifest.fields);
 
     const fakeS3 = startFakeS3();
     try {
@@ -128,7 +155,7 @@ describe("fillByIdLogic required fields", () => {
 
   test("rejects a fill whose required value is whitespace-only", async () => {
     let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buffer = await writeManifest(buffer, requiredFieldManifest);
+    buffer = await authorFieldMarkers(buffer, requiredFieldManifest.fields);
 
     const fakeS3 = startFakeS3();
     try {
@@ -167,10 +194,9 @@ describe("fillByIdLogic required fields", () => {
         ].join(""),
       ),
     );
-    buffer = await writeManifest(buffer, {
-      version: 1,
-      fields: [{ path: "persons.member", label: "Member", required: true }],
-    });
+    buffer = await authorFieldMarkers(buffer, [
+      { path: "persons.member", label: "Member", required: true },
+    ]);
 
     const fakeS3 = startFakeS3();
     try {
@@ -212,10 +238,9 @@ describe("fillByIdLogic required fields", () => {
         ].join(""),
       ),
     );
-    buffer = await writeManifest(buffer, {
-      version: 1,
-      fields: [{ path: "persons.member", label: "Member", required: true }],
-    });
+    buffer = await authorFieldMarkers(buffer, [
+      { path: "persons.member", label: "Member", required: true },
+    ]);
 
     const fakeS3 = startFakeS3();
     try {

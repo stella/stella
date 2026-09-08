@@ -42,12 +42,12 @@ import {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 
-import { replaceResolvedValue } from "./resolved-values";
 import {
   mapRepeatablePath,
   readRowSubPath,
   writeRowSubPath,
 } from "./repeatable-paths";
+import { replaceResolvedValue } from "./resolved-values";
 import type {
   FieldLookup,
   FieldMeta,

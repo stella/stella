@@ -1,22 +1,19 @@
 /**
  * The configure skeleton a freshly created template hands back is a fixed
  * point: sending it through `configure_template_fields` unchanged applies
- * every entry, reports no issue, and leaves the manifest exactly as discovery
- * built it. That is what makes "copy this and edit what should differ" safe
- * advice, and it is the property that breaks the moment a bare entry starts
- * recording a decision nobody made.
+ * every entry, reports no issue, and leaves the manifest exactly as the
+ * document already declared it. That is what makes "copy this and edit what
+ * should differ" safe advice, and it is the property that breaks the moment a
+ * bare entry starts recording a decision nobody made.
  */
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
-import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
-import {
-  applyFieldOverlay,
-  partitionFieldOverlay,
-} from "@/api/lib/templates/field-overlay";
+import type { FieldMeta } from "@/api/lib/docx/types";
+import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
 import { toFieldMetaToolInput } from "@/api/mcp/template-field-input";
 
 const escapeXml = (text: string): string =>
@@ -62,77 +59,76 @@ const SOURCE_PARAGRAPHS = [
   "{% endif %}",
 ];
 
+/** What `create_template` hands back: one bare person entry per configurable
+ *  path, loop item paths included. */
+const skeletonFor = (paths: readonly string[]): FieldMeta[] =>
+  [...new Set(paths)].map((path) =>
+    toFieldMetaToolInput({ path, source: { type: "person" } }),
+  );
+
 describe("the configure skeleton is a fixed point", () => {
-  test("sending it back unchanged applies every entry and changes nothing", async () => {
-    const buffer = await buildDocx(SOURCE_PARAGRAPHS);
-    const discovered = await discoverTemplate(buffer);
-
-    // What creation stores: the manifest discovery alone produces.
-    const created: TemplateManifest = {
-      version: 1,
-      fields: mergeManifestWithDiscovery(null, discovered).map(
-        (field): FieldMeta => ({ path: field.path }),
-      ),
-    };
-
-    // The skeleton: one bare person entry per configurable path, loop item
-    // paths included, exactly as `create_template` spells it.
-    const skeletonPaths = [
+  test("sending it back unchanged applies every entry and decides nothing", async () => {
+    const discovered = await discoverTemplate(
+      await buildDocx(SOURCE_PARAGRAPHS),
+    );
+    // What creation stores: the manifest the document itself declares.
+    const created = deriveManifest(discovered);
+    const skeleton = skeletonFor([
       ...created.fields.map((field) => field.path),
       ...discovered.fields.flatMap((field) =>
         (field.itemFields ?? []).map((item) => `${field.path}.${item.path}`),
       ),
-    ];
-    const skeleton = [...new Set(skeletonPaths)].map((path) =>
-      toFieldMetaToolInput({ path, source: { type: "person" } }),
-    );
+    ]);
 
-    const { applied, issues } = partitionFieldOverlay({
+    const { applied, issues } = partitionFieldConfiguration({
       configured: created.fields,
       discovered,
-      overlay: skeleton,
+      entries: skeleton,
     });
 
     expect(issues).toEqual([]);
-    expect(applied.length).toBe(skeleton.length);
-    expect(applyFieldOverlay(created, applied)).toEqual(created);
+    expect(applied.map(({ field }) => field.path).toSorted()).toEqual(
+      skeleton.map((field) => field.path).toSorted(),
+    );
+    // A bare person entry is a description of the path, not a decision about
+    // it: nothing but the path survives the boundary, so merging the skeleton
+    // onto the manifest leaves every field as the document declared it.
+    for (const { field } of applied) {
+      expect(field).toEqual({ path: field.path });
+    }
   });
 
   test("the skeleton names the loop item paths, which the manifest does not", async () => {
-    const buffer = await buildDocx(SOURCE_PARAGRAPHS);
-    const discovered = await discoverTemplate(buffer);
-    const manifestPaths = mergeManifestWithDiscovery(null, discovered).map(
-      (field) => field.path,
+    const discovered = await discoverTemplate(
+      await buildDocx(SOURCE_PARAGRAPHS),
     );
 
-    expect(manifestPaths).not.toContain("deliverables.item");
+    expect(
+      deriveManifest(discovered).fields.map(({ path }) => path),
+    ).not.toContain("deliverables.item");
     // ...but the document declares it, and a configuration may name it.
     expect(
-      partitionFieldOverlay({
+      partitionFieldConfiguration({
         configured: [],
         discovered,
-        overlay: [{ path: "deliverables.item", label: "Deliverable" }],
+        entries: [{ path: "deliverables.item", label: "Deliverable" }],
       }).issues,
     ).toEqual([]);
   });
 
-  test("an entry that carries a decision does change the manifest", async () => {
-    const buffer = await buildDocx(SOURCE_PARAGRAPHS);
-    const discovered = await discoverTemplate(buffer);
-    const created: TemplateManifest = {
-      version: 1,
-      fields: mergeManifestWithDiscovery(null, discovered).map(
-        (field): FieldMeta => ({ path: field.path }),
-      ),
-    };
+  test("an entry that carries a decision keeps it", async () => {
+    const discovered = await discoverTemplate(
+      await buildDocx(SOURCE_PARAGRAPHS),
+    );
 
-    const configured = applyFieldOverlay(created, [
+    const { applied } = partitionFieldConfiguration({
+      configured: deriveManifest(discovered).fields,
+      discovered,
+      entries: [{ path: "deliverables.item", label: "Deliverable" }],
+    });
+
+    expect(applied.map(({ field }) => field)).toEqual([
       { path: "deliverables.item", label: "Deliverable" },
     ]);
-
-    expect(configured.fields).toContainEqual({
-      path: "deliverables.item",
-      label: "Deliverable",
-    });
   });
 });

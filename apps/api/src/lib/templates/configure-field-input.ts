@@ -616,7 +616,10 @@ const effectiveConfiguration = (
 ): Map<string, FieldMeta> => {
   const byPath = new Map(declared.map((field) => [field.path, field]));
   for (const entry of entries) {
-    byPath.set(entry.path, mergeFieldConfiguration(byPath.get(entry.path), entry));
+    byPath.set(
+      entry.path,
+      mergeFieldConfiguration(byPath.get(entry.path), entry),
+    );
   }
   return byPath;
 };

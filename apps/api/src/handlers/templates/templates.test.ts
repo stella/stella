@@ -1,19 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import { discoverHandler } from "@/api/handlers/templates/discover";
 import { fillHandler } from "@/api/handlers/templates/fill";
-import { manifestHandler } from "@/api/handlers/templates/manifest";
 import { toSafeId } from "@/api/lib/branded-types";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractText } from "@/api/lib/docx/extract-text";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/lib/docx/template-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
+import type { FieldMeta } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -143,16 +142,35 @@ const { scopedDb: stubScopedDb, safeDb: stubSafeDb } = createScopedDbMock({
 const makeDocxFile = async (buf: Buffer) =>
   new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });
 
-const sampleManifest: TemplateManifest = {
-  version: 1,
-  fields: [
-    {
-      path: "clientName",
-      label: "Client Name",
-      inputType: "text",
-      required: true,
-    },
-  ],
+const CLIENT_NAME_FIELD: FieldMeta = {
+  path: "clientName",
+  label: "Client Name",
+  inputType: "text",
+  required: true,
+};
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
 };
 
 // ── Discover ─────────────────────────────────────────────
@@ -163,46 +181,42 @@ describe("template discover", () => {
     const buf = await makeDocx(xml);
 
     const discovered = await discoverTemplate(buf);
-    const manifest = await readManifest(buf);
-    const fields = mergeManifestWithDiscovery(manifest, discovered);
+    const { fields } = deriveManifest(discovered);
 
-    expect(fields.length).toBe(2);
-    const names = fields.map((f) => f.path).toSorted();
-    expect(names).toEqual(["city", "name"]);
+    expect(fields.map((field) => field.path).toSorted()).toEqual([
+      "city",
+      "name",
+    ]);
     expect(discovered.structureErrors).toEqual([]);
   });
 
-  test("returns merged fields when manifest is embedded", async () => {
-    const xml = WRAP(P("Client: {{clientName}}"));
-    let buf = await makeDocx(xml);
-    buf = await writeManifest(buf, sampleManifest);
+  test("returns the configuration the marker's own filters declare", async () => {
+    const buf = await authorFieldMarkers(
+      await makeDocx(WRAP(P("Client: {{clientName}}"))),
+      [CLIENT_NAME_FIELD],
+    );
 
-    const discovered = await discoverTemplate(buf);
-    const manifest = await readManifest(buf);
-    const fields = mergeManifestWithDiscovery(manifest, discovered);
+    const { fields } = deriveManifest(await discoverTemplate(buf));
 
-    const clientField = fields.find((f) => f.path === "clientName");
-    expect(clientField).toBeDefined();
-    expect(clientField?.label).toBe("Client Name");
-    expect(clientField?.inputType).toBe("text");
-    expect(clientField?.required).toBe(true);
+    expect(fields).toEqual([expect.objectContaining(CLIENT_NAME_FIELD)]);
   });
 
   test("returns empty fields for DOCX with no placeholders", async () => {
     const buf = await makeEmptyDocx();
     const discovered = await discoverTemplate(buf);
-    const manifest = await readManifest(buf);
-    const fields = mergeManifestWithDiscovery(manifest, discovered);
 
-    expect(fields).toEqual([]);
+    expect(deriveManifest(discovered).fields).toEqual([]);
     expect(discovered.structureErrors).toEqual([]);
   });
 
   test("discover synthesizes conditions from boolean condition-fields", async () => {
-    let buf = await makeDocx(WRAP(P("Client: {{clientName}}")));
-    buf = await writeManifest(buf, {
-      version: 1,
-      fields: [
+    // The rule is a property of the field, so it is written on the field's own
+    // marker; the boolean it declares is what an {% if %} references by name.
+    const buf = await authorFieldMarkers(
+      await makeDocx(
+        WRAP([P("Client: {{clientName}}"), P("{{hasGuarantor}}")].join("")),
+      ),
+      [
         { path: "clientName", label: "Client Name", inputType: "text" },
         {
           path: "hasGuarantor",
@@ -211,7 +225,7 @@ describe("template discover", () => {
           condition: "has_guarantor",
         },
       ],
-    });
+    );
     const file = await makeDocxFile(buf);
 
     const result = await discoverHandler({
@@ -402,76 +416,6 @@ describe("template fill", () => {
   });
 });
 
-// ── Manifest ─────────────────────────────────────────────
-
-describe("template manifest", () => {
-  test("embeds manifest into DOCX successfully", async () => {
-    const buf = await makeEmptyDocx();
-    const result = await writeManifest(buf, sampleManifest);
-
-    expect(result).toBeInstanceOf(Buffer);
-    expect(result.length).toBeGreaterThan(0);
-
-    const zip = await JSZip.loadAsync(result);
-    const customXml = zip.file("customXml/item1.xml");
-    expect(customXml).not.toBeNull();
-  });
-
-  test("round-trip: write then read manifest", async () => {
-    const buf = await makeEmptyDocx();
-    const written = await writeManifest(buf, sampleManifest);
-    const read = await readManifest(written);
-
-    expect(read).not.toBeNull();
-    expect(read?.version).toBe(1);
-    expect(read?.fields).toHaveLength(1);
-    expect(read?.fields[0]?.path).toBe("clientName");
-    expect(read?.fields[0]?.label).toBe("Client Name");
-  });
-
-  test("returns null for DOCX without manifest", async () => {
-    const buf = await makeEmptyDocx();
-    const manifest = await readManifest(buf);
-    expect(manifest).toBeNull();
-  });
-
-  test("rejects fields with non-object elements", async () => {
-    const buf = await makeEmptyDocx();
-    const file = await makeDocxFile(buf);
-    const result = await manifestHandler({
-      organizationId: fakeOrgId,
-      body: {
-        file,
-        manifest: JSON.stringify({
-          version: 1,
-          fields: [null, "bad"],
-        }),
-      },
-    });
-
-    expect(result).toBeInstanceOf(Response);
-    const resp = result;
-    expect(resp.status).toBe(400);
-    const body = await readTestJson<{ error: string }>(resp);
-    expect(body.error).toContain("'path'");
-  });
-
-  test("overwrites existing stella manifest", async () => {
-    const buf = await makeEmptyDocx();
-    const first = await writeManifest(buf, sampleManifest);
-
-    const updated: TemplateManifest = {
-      version: 1,
-      fields: [{ path: "newField", label: "New Field" }],
-    };
-    const second = await writeManifest(first, updated);
-    const read = await readManifest(second);
-
-    expect(read?.fields).toHaveLength(1);
-    expect(read?.fields[0]?.path).toBe("newField");
-  });
-});
-
 // ── Handler: MIME validation ─────────────────────────────
 
 describe("handler MIME validation", () => {
@@ -504,25 +448,6 @@ describe("handler MIME validation", () => {
       userId: fakeUserId,
       query: {},
       body: { file: pdfFile, values: "{}" },
-    });
-
-    expect(result).toBeInstanceOf(Response);
-    const resp = result;
-    expect(resp.status).toBe(400);
-    const body = await readTestJson<{ error: string }>(resp);
-    expect(body.error).toContain("DOCX");
-  });
-
-  test("manifest rejects non-DOCX file", async () => {
-    const result = await manifestHandler({
-      organizationId: fakeOrgId,
-      body: {
-        file: pdfFile,
-        manifest: JSON.stringify({
-          version: 1,
-          fields: [],
-        }),
-      },
     });
 
     expect(result).toBeInstanceOf(Response);
@@ -642,14 +567,17 @@ describe("fill handler validation", () => {
 // (collectMissingRequiredFields) as every other real fill.
 
 describe("fill handler required fields", () => {
-  const requiredFieldManifest: TemplateManifest = {
-    version: 1,
-    fields: [{ path: "governing_law", label: "Governing law", required: true }],
+  const requiredField: FieldMeta = {
+    path: "governing_law",
+    label: "Governing law",
+    required: true,
   };
 
   test("rejects a download omitting a required field", async () => {
-    let buf = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buf = await writeManifest(buf, requiredFieldManifest);
+    const buf = await authorFieldMarkers(
+      await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
+      [requiredField],
+    );
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
@@ -674,8 +602,10 @@ describe("fill handler required fields", () => {
   });
 
   test("rejects a download whose required value is whitespace-only", async () => {
-    let buf = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buf = await writeManifest(buf, requiredFieldManifest);
+    const buf = await authorFieldMarkers(
+      await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
+      [requiredField],
+    );
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
@@ -694,8 +624,10 @@ describe("fill handler required fields", () => {
   });
 
   test("fills a download once the required field is provided", async () => {
-    let buf = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buf = await writeManifest(buf, requiredFieldManifest);
+    const buf = await authorFieldMarkers(
+      await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
+      [requiredField],
+    );
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
@@ -721,10 +653,9 @@ describe("fill handler required fields", () => {
         ].join(""),
       ),
     );
-    buf = await writeManifest(buf, {
-      version: 1,
-      fields: [{ path: "persons.member", label: "Member", required: true }],
-    });
+    buf = await authorFieldMarkers(buf, [
+      { path: "persons.member", label: "Member", required: true },
+    ]);
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
@@ -763,10 +694,9 @@ describe("fill handler required fields", () => {
         ].join(""),
       ),
     );
-    buf = await writeManifest(buf, {
-      version: 1,
-      fields: [{ path: "persons.member", label: "Member", required: true }],
-    });
+    buf = await authorFieldMarkers(buf, [
+      { path: "persons.member", label: "Member", required: true },
+    ]);
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
@@ -912,11 +842,9 @@ describe("discover → fill round-trip", () => {
     const buf = await makeDocx(xml);
 
     // Step 1: discover the schema
-    const discovered = await discoverTemplate(buf);
-    const manifest = await readManifest(buf);
-    const fields = mergeManifestWithDiscovery(manifest, discovered);
+    const { fields } = deriveManifest(await discoverTemplate(buf));
 
-    const fieldPaths = fields.map((f) => f.path).toSorted();
+    const fieldPaths = fields.map((field) => field.path).toSorted();
     expect(fieldPaths).toEqual(["amount", "client_name", "effective_date"]);
 
     // Step 2: build values from discovered fields
@@ -938,31 +866,22 @@ describe("discover → fill round-trip", () => {
     expect(docXml).toContain("value_for_amount");
   });
 
-  test("discover enriched template then fill", async () => {
-    const xml = WRAP(P("Client: {{clientName}}"));
-    let buf = await makeDocx(xml);
-    buf = await writeManifest(buf, sampleManifest);
+  test("discover a configured template then fill it", async () => {
+    const buf = await authorFieldMarkers(
+      await makeDocx(WRAP(P("Client: {{clientName}}"))),
+      [CLIENT_NAME_FIELD],
+    );
 
-    // Discover: should have manifest metadata
-    const discovered = await discoverTemplate(buf);
-    const manifest = await readManifest(buf);
-    const fields = mergeManifestWithDiscovery(manifest, discovered);
+    const { fields } = deriveManifest(await discoverTemplate(buf));
+    expect(fields).toEqual([expect.objectContaining(CLIENT_NAME_FIELD)]);
 
-    const clientField = fields.find((f) => f.path === "clientName");
-    expect(clientField?.label).toBe("Client Name");
-    expect(clientField?.required).toBe(true);
-
-    // Fill: manifest is stripped from output
-    const result = await fillTemplate(buf, {
-      clientName: "Acme Corp",
-    });
+    const result = await fillTemplate(buf, { clientName: "Acme Corp" });
 
     const zip = await JSZip.loadAsync(result.buffer);
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("Acme Corp");
-
-    // Verify manifest was stripped from filled document
-    const outputManifest = await readManifest(result.buffer);
-    expect(outputManifest).toBeNull();
+    // The filled document carries the value, not the configuration that asked
+    // for it: no filter chain rides along to the counterparty.
+    expect(docXml).not.toContain("label(");
   });
 });

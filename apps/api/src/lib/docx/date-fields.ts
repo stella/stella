@@ -29,12 +29,12 @@ import {
   resolvePath,
 } from "@stll/template-conditions";
 
-import { replaceResolvedValue } from "./resolved-values";
 import {
   mapRepeatablePath,
   readRowSubPath,
   writeRowSubPath,
 } from "./repeatable-paths";
+import { replaceResolvedValue } from "./resolved-values";
 import type { FieldDateFormat, FieldMeta } from "./types";
 
 export type DateFieldError = {

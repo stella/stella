@@ -9,7 +9,7 @@
  * The manifest merge folds a loop's item paths into their array root and
  * drops them, so a validator built on the merged path list refuses
  * `attorneys.name` even though the document declares it. Discovery, the
- * overlay validator, and the field vocabulary an agent is told to use have to
+ * configure boundary, and the field vocabulary an agent is told to use have to
  * agree; these fixtures pin that they do.
  */
 import { describe, expect, test } from "bun:test";
@@ -17,7 +17,7 @@ import JSZip from "jszip";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
-import { partitionFieldOverlay } from "@/api/lib/templates/field-overlay";
+import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
 
 type Block =
   | { type: "paragraph"; text: string }
@@ -110,10 +110,10 @@ const configurablePaths = async (
   const discovered = await discoverTemplate(await buildDocx(blocks));
   return {
     discovered,
-    partition: partitionFieldOverlay({
+    partition: partitionFieldConfiguration({
       configured: [],
       discovered,
-      overlay: paths.map((path) => ({ path, label: path })),
+      entries: paths.map((path) => ({ path, label: path })),
     }),
   };
 };
@@ -133,7 +133,7 @@ describe("loop item paths configure the way they are discovered", () => {
       itemFields: [{ path: "name", kind: "string" }],
     });
     expect(partition.issues).toEqual([]);
-    expect(partition.applied.map((field) => field.path)).toEqual([
+    expect(partition.applied.map(({ field }) => field.path)).toEqual([
       "company",
       "attorneys",
       "attorneys.name",
@@ -171,7 +171,7 @@ describe("loop item paths configure the way they are discovered", () => {
       "scope",
     ]);
 
-    expect(partition.applied.map((field) => field.path)).toEqual([
+    expect(partition.applied.map(({ field }) => field.path)).toEqual([
       "attorneys.name",
       "scope",
     ]);

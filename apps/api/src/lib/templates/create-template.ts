@@ -27,11 +27,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
 

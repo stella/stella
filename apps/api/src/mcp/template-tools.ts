@@ -26,10 +26,8 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
-
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-
 import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -49,12 +47,12 @@ import {
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
 import {
   conditionReferencesOnlySelf,
   fieldConfigurationIssuePath,
 } from "@/api/lib/templates/configure-field-input";
+import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import {
   recordTemplateFill,
   recordTemplateUse,

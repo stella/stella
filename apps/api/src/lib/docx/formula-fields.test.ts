@@ -136,22 +136,19 @@ describe("applyFormulaFields", () => {
 });
 
 describe("applyManifestFillSteps — formula ordering", () => {
-  test("formulas run after composite assembly and before the dependent check", async () => {
-    // The composite assembles "10.5" from its parts; the formula doubles it.
+  test("a formula's result is what the dependent check validates against", async () => {
     const fields: FieldMeta[] = [
+      { path: "total", formula: "rent * 12" },
       {
-        path: "price",
-        parts: [
-          { key: "whole", inputType: "text" },
-          { key: "frac", inputType: "text" },
-        ],
-        format: "{{whole}}.{{frac}}",
+        path: "chosen",
+        inputType: "select",
+        // The static options are only the fallback while the source field is
+        // empty, so "12000" is accepted only once the formula has run.
+        options: ["0"],
+        optionsFrom: "total",
       },
-      { path: "price_doubled", formula: "price * 2" },
     ];
-    const values: Record<string, unknown> = {
-      price: { whole: "10", frac: "5" },
-    };
+    const values: Record<string, unknown> = { rent: "1000", chosen: "12000" };
 
     const error = await applyManifestFillSteps({
       values,
@@ -160,7 +157,6 @@ describe("applyManifestFillSteps — formula ordering", () => {
     });
 
     expect(error).toBeNull();
-    expect(values["price"]).toBe("10.5");
-    expect(values["price_doubled"]).toBe("21");
+    expect(values["total"]).toBe("12000");
   });
 });

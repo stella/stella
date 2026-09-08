@@ -2,10 +2,13 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
 import {
@@ -69,6 +72,31 @@ const stubScopedDb = (): ScopedDb => {
     fn(fakeTx)) as unknown as ScopedDb;
 };
 
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture that names a path the document does not carry is a fixture the
+ * code under test never sees.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
+
 const requiredTextField: FieldMeta = {
   path: "governing_law",
   label: "Governing law",
@@ -76,14 +104,15 @@ const requiredTextField: FieldMeta = {
   required: true,
 };
 
-const makeManifestDocx = async (fields: FieldMeta[]): Promise<Buffer> => {
-  const docx = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-  return await writeManifest(docx, { version: 1, fields });
-};
+const makeConfiguredDocx = async (fields: FieldMeta[]): Promise<Buffer> =>
+  authorFieldMarkers(
+    await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
+    fields,
+  );
 
 describe("fillTemplateDocx required-field rejection", () => {
   test("rejects a fill omitting a required, non-AI-fillable field", async () => {
-    const buffer = await makeManifestDocx([requiredTextField]);
+    const buffer = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
       source: { name: "NDA", fileName: "nda.docx", buffer },
@@ -106,7 +135,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("rejects when the required field is present but empty", async () => {
-    const buffer = await makeManifestDocx([requiredTextField]);
+    const buffer = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
       source: { name: "NDA", fileName: "nda.docx", buffer },
@@ -120,7 +149,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("rejects when the required field is whitespace-only", async () => {
-    const buffer = await makeManifestDocx([requiredTextField]);
+    const buffer = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
       source: { name: "NDA", fileName: "nda.docx", buffer },
@@ -143,10 +172,9 @@ describe("fillTemplateDocx required-field rejection", () => {
         ].join(""),
       ),
     );
-    const withManifest = await writeManifest(buffer, {
-      version: 1,
-      fields: [{ path: "persons.member", label: "Member", required: true }],
-    });
+    const withManifest = await authorFieldMarkers(buffer, [
+      { path: "persons.member", label: "Member", required: true },
+    ]);
 
     const result = await fillTemplateDocx({
       source: { name: "Roster", fileName: "roster.docx", buffer: withManifest },
@@ -178,10 +206,9 @@ describe("fillTemplateDocx required-field rejection", () => {
         ].join(""),
       ),
     );
-    const withManifest = await writeManifest(buffer, {
-      version: 1,
-      fields: [{ path: "persons.member", label: "Member", required: true }],
-    });
+    const withManifest = await authorFieldMarkers(buffer, [
+      { path: "persons.member", label: "Member", required: true },
+    ]);
 
     const result = await fillTemplateDocx({
       source: { name: "Roster", fileName: "roster.docx", buffer: withManifest },
@@ -201,7 +228,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("fills when the required field is provided", async () => {
-    const buffer = await makeManifestDocx([requiredTextField]);
+    const buffer = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
       source: { name: "NDA", fileName: "nda.docx", buffer },
@@ -220,7 +247,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("does not reject a required field that is AI-fillable when omitted; drafts it instead", async () => {
-    const buffer = await makeManifestDocx([
+    const buffer = await makeConfiguredDocx([
       {
         path: "governing_law",
         label: "Governing law",
@@ -251,7 +278,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("reports a field the model could not draft and leaves it unfilled", async () => {
-    const buffer = await makeManifestDocx([
+    const buffer = await makeConfiguredDocx([
       {
         path: "governing_law",
         label: "Governing law",
@@ -293,7 +320,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   });
 
   test("does not reject a required, source-bound field left unfilled", async () => {
-    const buffer = await makeManifestDocx([
+    const buffer = await makeConfiguredDocx([
       {
         path: "governing_law",
         label: "Governing law",
@@ -320,7 +347,7 @@ describe("fillTemplateDocx required-field rejection", () => {
   // so the service must not resolve it for a manifest that declares no AI
   // field. A factory that throws proves it was never called.
   test("never resolves the AI collaborators for a deterministic manifest", async () => {
-    const buffer = await makeManifestDocx([requiredTextField]);
+    const buffer = await makeConfiguredDocx([requiredTextField]);
 
     const result = await fillTemplateDocx({
       source: { name: "NDA", fileName: "nda.docx", buffer },
@@ -420,7 +447,7 @@ describe("fillStoredTemplateDocx use recording", () => {
       "organizationId" | "useRecording"
     >,
   ) => {
-    const buffer = await makeManifestDocx([requiredTextField]);
+    const buffer = await makeConfiguredDocx([requiredTextField]);
     const { scopedDb, updates } = storedTemplateScopedDb();
     const fakeS3 = startFakeS3();
     try {
@@ -502,17 +529,10 @@ describe("describeStoredTemplate array shape", () => {
         ].join(""),
       ),
     );
-    buffer = await writeManifest(buffer, {
-      version: 1,
-      fields: [
-        { path: "deliverables.name", label: "Name", inputType: "text" },
-        {
-          path: "deliverables.due_date",
-          label: "Due date",
-          inputType: "date",
-        },
-      ],
-    });
+    buffer = await authorFieldMarkers(buffer, [
+      { path: "deliverables.name", label: "Name", inputType: "text" },
+      { path: "deliverables.due_date", label: "Due date", inputType: "date" },
+    ]);
 
     // describeStoredTemplate loads via S3; exercise it against the fake store.
     const fakeS3 = startFakeS3();
@@ -531,8 +551,10 @@ describe("describeStoredTemplate array shape", () => {
       const group = result.arrays.at(0);
       expect(group?.path).toBe("deliverables");
       expect(group?.itemFieldPaths.toSorted()).toEqual(["due_date", "name"]);
-      // The item fields still appear individually in `fields` too.
+      // The array root is a field of its own — its item counts configure it —
+      // and the item fields still appear individually beside it.
       expect(result.fields.map((field) => field.path).toSorted()).toEqual([
+        "deliverables",
         "deliverables.due_date",
         "deliverables.name",
       ]);
@@ -556,10 +578,9 @@ describe("describeStoredTemplate array shape", () => {
         ].join(""),
       ),
     );
-    buffer = await writeManifest(buffer, {
-      version: 1,
-      fields: [{ path: "entries.value", label: "Value", inputType: "text" }],
-    });
+    buffer = await authorFieldMarkers(buffer, [
+      { path: "entries.value", label: "Value", inputType: "text" },
+    ]);
 
     const fakeS3 = startFakeS3();
     try {

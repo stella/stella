@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
+import { deriveManifestFromDocx } from "./derived-manifest";
 import { fillTemplate } from "./patch-template";
-import { readManifest, writeManifest } from "./template-manifest";
 import type { FieldMeta } from "./types";
+import { writeFieldFilters } from "./write-field-filters";
 
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
@@ -44,6 +48,30 @@ const lawField: FieldMeta = {
   path: "law",
   label: "Governing law",
   aiAdapt: true,
+};
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
 };
 
 describe("adaptAiFields", () => {
@@ -181,17 +209,21 @@ describe("adaptAiFields", () => {
   });
 });
 
-describe("manifest aiAdapt round-trip", () => {
-  test("writeManifest/readManifest preserve the flag", async () => {
-    const docx = await makeDocx(WRAP(P("{{law}} and {{buyer}}")));
-    const withManifest = await writeManifest(docx, {
-      version: 1,
-      fields: [lawField, { path: "buyer" }],
+describe("the aiAdapt flag is carried by the marker", () => {
+  test("a document declaring it derives a manifest that says so", async () => {
+    const authored = await authorFieldMarkers(
+      await makeDocx(WRAP(P("{{law}} and {{buyer}}"))),
+      [lawField, { path: "buyer" }],
+    );
+
+    const { fields } = await deriveManifestFromDocx(authored);
+
+    expect(fields).toContainEqual({
+      path: "law",
+      label: "Governing law",
+      aiAdapt: true,
     });
-    const manifest = await readManifest(withManifest);
-    expect(manifest?.fields).toEqual([
-      { path: "law", label: "Governing law", aiAdapt: true },
-      { path: "buyer" },
-    ]);
+    // The marker beside it says nothing, so neither does the manifest.
+    expect(fields).toContainEqual({ path: "buyer" });
   });
 });

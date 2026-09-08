@@ -11,6 +11,8 @@
 
 import JSZip from "jszip";
 
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import {
   applyFieldSuggestions,
   type FieldSuggestion,
@@ -20,7 +22,6 @@ import {
   MAIN_DOCUMENT_PART_PATH,
   templateContentPartPaths,
 } from "@/api/lib/docx/ooxml";
-import { filtersFromFieldMeta } from "@/api/lib/docx/field-filters";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 
@@ -111,7 +112,7 @@ export const prepareTemplateFromDocument = async ({
     rewritten,
     fields.map((field) => ({
       path: field.path,
-      filters: filtersFromFieldMeta(field),
+      filters: filtersFromFieldConfig(field),
     })),
   );
 

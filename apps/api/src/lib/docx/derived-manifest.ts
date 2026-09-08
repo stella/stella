@@ -49,4 +49,5 @@ export const deriveManifest = (
 /** The manifest these bytes declare. */
 export const deriveManifestFromDocx = async (
   docxBuffer: Buffer,
-): Promise<TemplateManifest> => deriveManifest(await discoverTemplate(docxBuffer));
+): Promise<TemplateManifest> =>
+  deriveManifest(await discoverTemplate(docxBuffer));

@@ -9,10 +9,14 @@ import {
   buildTemplateCheckFindings,
   MAX_CHECK_FINDINGS,
 } from "@/api/handlers/templates/check-template";
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -508,31 +512,45 @@ describe("template check: bounds", () => {
     expect(findings.length).toBe(MAX_CHECK_FINDINGS);
   });
 
-  test("works against a manifest read back from a real DOCX", async () => {
-    let buffer = await makeDocx(WRAP(P("Client: {{clientName}}")));
-    buffer = await writeManifest(buffer, {
-      version: 1,
-      fields: [
-        { path: "clientName", label: "Client Name", inputType: "text" },
-        { path: "ghost", label: "Ghost", inputType: "text" },
-      ],
-    });
+  test("a real document's derived manifest leaves no marker uncovered", async () => {
+    const declared: FieldMeta[] = [
+      { path: "clientName", label: "Client Name", inputType: "text" },
+    ];
+    const { buffer } = await writeFieldFilters(
+      await makeDocx(
+        WRAP([P("Client: {{clientName}}"), P("{{scope}}")].join("")),
+      ),
+      declared.map((declaredField) => ({
+        path: declaredField.path,
+        filters: filtersFromFieldConfig(declaredField),
+      })),
+    );
 
-    const [discovered, manifest, clauseSlots] = await Promise.all([
+    const [discovered, clauseSlots] = await Promise.all([
       discoverTemplate(buffer),
-      readManifest(buffer),
       discoverClauseSlots(buffer),
     ]);
     const findings = buildTemplateCheckFindings({
       discovered,
-      manifest,
+      manifest: deriveManifest(discovered),
       clauseSlots,
       clauseLinks: [],
-      paragraphs: ["Client: {{clientName}}"],
+      paragraphs: ["Client: {{clientName}}", "{{scope}}"],
     });
 
-    expect(findings).toEqual([
-      { code: "unplacedField", severity: "warning", path: "ghost" },
+    // The unconfigured {{scope}} marker still draws its own findings, so the
+    // fixture reaches the check.
+    expect(findings.map(({ code }) => code)).toEqual([
+      "fieldMissingLabel",
+      "fieldMissingInputType",
     ]);
+    // The manifest is read from the markers, so a field cannot be unplaced and
+    // a marker cannot be uncovered: the coverage findings only ever fire on a
+    // manifest assembled beside the document.
+    expect(
+      findings.filter(
+        ({ code }) => code === "unplacedField" || code === "markerWithoutField",
+      ),
+    ).toEqual([]);
   });
 });

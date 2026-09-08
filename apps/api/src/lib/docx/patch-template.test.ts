@@ -2,10 +2,37 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
-import { writeManifest } from "./template-manifest";
 import type { FieldMeta, TemplateData } from "./types";
+import { writeFieldFilters } from "./write-field-filters";
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
 
 // SPA fixture is ~177KB; template filling needs time.
 setDefaultTimeout(15_000);
@@ -523,24 +550,22 @@ describe("fillTemplate — {% if field_path %} resolves a condition-field rule",
     const xml = WRAP(
       [
         P("Before"),
+        // The rule lives in the field's own marker; the {% if %} below
+        // references the field by name.
+        P("{{ is_company }}"),
         P("{% if is_company %}"),
         P("Company clause for {{client.name}}"),
         P("{% endif %}"),
         P("After"),
       ].join(""),
     );
-    const docx = await makeDocx(xml);
-    // The condition-field carries no marker; its rule is evaluated by name.
-    return await writeManifest(docx, {
-      version: 1,
-      fields: [
-        {
-          path: "is_company",
-          inputType: "boolean",
-          condition: 'client.type == "company"',
-        },
-      ],
-    });
+    return await authorFieldMarkers(await makeDocx(xml), [
+      {
+        path: "is_company",
+        inputType: "boolean",
+        condition: 'client.type == "company"',
+      },
+    ]);
   };
 
   test("includes the block when the field's rule is true", async () => {

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import { parseResRecord } from "@stll/business-registries/ares";
 import { KrsValidationError } from "@stll/business-registries/krs";
 
@@ -29,8 +32,33 @@ import {
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
 import { patchXmlPart } from "./rich-patch";
-import { mergeManifestWithDiscovery, writeManifest } from "./template-manifest";
+import { mergeManifestWithDiscovery } from "./template-manifest";
 import type { FieldMeta, TemplateData, TemplateManifest } from "./types";
+import { writeFieldFilters } from "./write-field-filters";
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
 
 const KRS_ADDRESS = {
   line1: "ul. Stanisława Matyi 8",
@@ -885,7 +913,7 @@ describe("named-format lookup — end-to-end fill", () => {
     const docx = await makeDocx(
       WRAP([P("{{company}}"), P("{{company.full}}")].join("")),
     );
-    const withManifest = await writeManifest(docx, manifest);
+    const withManifest = await authorFieldMarkers(docx, manifest.fields);
     const values: TemplateData = { company: "0000123456" };
 
     const stepError = await applyManifestFillSteps({
@@ -912,7 +940,7 @@ describe("named-format lookup — end-to-end fill", () => {
         ].join(""),
       ),
     );
-    const withManifest = await writeManifest(docx, manifest);
+    const withManifest = await authorFieldMarkers(docx, manifest.fields);
     const values: TemplateData = {
       company: "0000123456",
       items: [{ label: "A" }, { label: "B" }],
@@ -939,7 +967,7 @@ describe("named-format lookup — end-to-end fill", () => {
         `<w:tbl><w:tr>${CELL("{{company}}")}${CELL("{{company.full}}")}</w:tr></w:tbl>`,
       ),
     );
-    const withManifest = await writeManifest(docx, manifest);
+    const withManifest = await authorFieldMarkers(docx, manifest.fields);
     const values: TemplateData = { company: "0000123456" };
 
     const stepError = await applyManifestFillSteps({
@@ -957,8 +985,9 @@ describe("named-format lookup — end-to-end fill", () => {
   });
 
   test("a keyed marker with no declared format stays unmatched", async () => {
+    // No marker carries the lookup: `company` has none of its own here, so
+    // the configuration reaches the fill steps directly.
     const docx = await makeDocx(WRAP(P("{{company.unknown}}")));
-    const withManifest = await writeManifest(docx, manifest);
     const values: TemplateData = { company: "0000123456" };
 
     const stepError = await applyManifestFillSteps({
@@ -971,7 +1000,7 @@ describe("named-format lookup — end-to-end fill", () => {
     // unmatched rather than crashing the fill.
     expect(values["company.unknown"]).toBeUndefined();
 
-    const result = await fillTemplate(withManifest, values);
+    const result = await fillTemplate(docx, values);
     expect(result.unmatchedPlaceholders).toEqual(["company.unknown"]);
   });
 });
@@ -1058,7 +1087,7 @@ describe("lookup formats are addressed by their keys", () => {
     const docx = await makeDocx(
       WRAP([P("{{company}}"), P("{{company.krs}}")].join("")),
     );
-    const withManifest = await writeManifest(docx, manifest);
+    const withManifest = await authorFieldMarkers(docx, manifest.fields);
 
     // Both markers are discovered, and the merge keeps `company` as the one
     // fillable input while its format marker stays a rendering, not a field.
@@ -1109,7 +1138,6 @@ describe("lookup formats are addressed by their keys", () => {
     const docx = await makeDocx(
       WRAP([P("{{company.name}}"), P("{{company.krs}}")].join("")),
     );
-    const withManifest = await writeManifest(docx, manifest);
 
     // No bare {{company}} marker: the format keys ARE the markers, and the
     // lookup root stays the single fillable input.
@@ -1134,7 +1162,7 @@ describe("lookup formats are addressed by their keys", () => {
     expect(stepError).toBeNull();
     expect(calls).toBe(1);
 
-    const result = await fillTemplate(withManifest, values);
+    const result = await fillTemplate(docx, values);
     expect(result.unmatchedPlaceholders).toEqual([]);
     const text = await docText(result.buffer);
     expect(text).toContain(NAME_RENDER);
