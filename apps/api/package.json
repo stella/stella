@@ -64,7 +64,7 @@
     "@better-auth/oauth-provider": "catalog:",
     "@elysia/cors": "^1.4.2",
     "@firecrawl/anydoc": "0.2.4",
-    "@google/genai": "^2.20.0",
+    "@google/genai": "^2.21.0",
     "@hyzyla/pdfium": "2.1.13",
     "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
     "@libpdf/core": "catalog:",
