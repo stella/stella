@@ -3,8 +3,8 @@
  *
  * Stella used to keep field metadata beside the markers, in a custom XML part
  * (`customXml/item{N}.xml`) of the DOCX. The markers carry the configuration
- * now and nothing reads that part, but documents written before the cutover —
- * and the pack templates shipped with one — still hold it, and a filled
+ * now and nothing reads that part, but documents written before the cutover
+ * (and the pack templates shipped with one) still hold it, and a filled
  * document must not carry template metadata out of the workspace. So the fill
  * pipeline strips it, and only that.
  *

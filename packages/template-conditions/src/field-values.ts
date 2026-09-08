@@ -1,6 +1,6 @@
 /**
  * Single source of truth for the DETERMINISTIC field-value transforms a
- * template fill applies — formula (arithmetic over the other values) and
+ * template fill applies: formula (arithmetic over the other values) and
  * locale-aware date rendering.
  *
  * Both the API fill engine (apps/api/src/handlers/docx) and the web live

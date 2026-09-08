@@ -550,7 +550,7 @@ describe("describeStoredTemplate array shape", () => {
       const group = result.arrays.at(0);
       expect(group?.path).toBe("deliverables");
       expect(group?.itemFieldPaths.toSorted()).toEqual(["due_date", "name"]);
-      // The array root is a field of its own — its item counts configure it —
+      // The array root is a field of its own (its item counts configure it),
       // and the item fields still appear individually beside it.
       expect(result.fields.map((field) => field.path).toSorted()).toEqual([
         "deliverables",

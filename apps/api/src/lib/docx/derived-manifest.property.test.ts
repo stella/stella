@@ -4,7 +4,7 @@
  *
  * `writeStoredTemplate` derives the manifest from the bytes it publishes, so no
  * write path can store a disagreeing pair: that half is structural. What is
- * left to prove is that deriving is a FIXED POINT — writing a configuration
+ * left to prove is that deriving is a FIXED POINT: writing a configuration
  * into a document and reading it back yields that configuration, and writing
  * the read-back again changes nothing. Without it, every save would drift the
  * template a little further from what its author asked for.

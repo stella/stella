@@ -3,7 +3,7 @@
  *
  * The scanner in `markers.ts` reads `{{ path | label("Deposit") | required }}`;
  * these render one back. They exist so configuration reaches a document the
- * only way it can — as marker text — through the same vocabulary the scanner
+ * only way it can (as marker text) through the same vocabulary the scanner
  * accepts, and so a round-trip property can pin the two halves together.
  *
  * Not every value can be written: the marker span is delimited by braces and

@@ -221,7 +221,7 @@ export const fillTemplate = async (
 
   // A boolean condition-field IS a named condition (addressed by its path), so
   // synthesize both shapes into one list the evaluator resolves bare names
-  // against — `{% if field_path %}` then resolves the field's rule. The
+  // against; `{% if field_path %}` then resolves the field's rule. The
   // conditions come from the markers, like every other field configuration.
   const synthesized = manifestNamedConditions(
     deriveManifest(await discoverTemplate(data)),

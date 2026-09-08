@@ -5,7 +5,7 @@
  * field, and the manifest calls it `attorneys.name`: the loop's alias is the
  * body's name for the item, the array path is the manifest's. Discovery reads
  * that mapping and the marker writer has to reverse it, so the rule lives here
- * rather than in each of them — two readings of one loop are two different
+ * rather than in each of them; two readings of one loop are two different
  * documents.
  */
 

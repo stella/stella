@@ -4,7 +4,7 @@
  * The DOCX is the template, so configuring a field is an edit to the document:
  * the value marker's filter chain is rewritten, in every content part and at
  * every occurrence of the path, and a repeat's own filters are rewritten on
- * the `{% for %}` opener that declares it. Nothing else in the document moves —
+ * the `{% for %}` opener that declares it. Nothing else in the document moves:
  * the rewrite goes through the same run-splitting machinery the fill patcher
  * uses, so the author's formatting survives it.
  *
