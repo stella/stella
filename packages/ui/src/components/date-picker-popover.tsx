@@ -422,93 +422,78 @@ const DatePickerPopoverContent = ({
   );
 
   // Keyboard handler for the day grid
-  const handleGridKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      const firstDay = days.at(0);
-      if (!firstDay) {
-        return;
-      }
-      const current = focusedDate || value || firstDay.date;
-      let next: string | null = null;
+  const handleGridKeyDown = (e: React.KeyboardEvent) => {
+    const firstDay = days.at(0);
+    if (!firstDay) {
+      return;
+    }
+    const current = focusedDate || value || firstDay.date;
+    let next: string | null = null;
 
-      // The day grid lays out inline (right-to-left under RTL), so the
-      // horizontal arrows must follow visual direction: ArrowLeft advances
-      // a day when the grid flows right-to-left. Read the rendered grid's
-      // computed direction so this stays correct regardless of how the host
-      // app or an enclosing subtree sets `dir`. Up/Down are block-axis and
-      // never mirror.
-      const isRtl =
-        gridRef.current !== null &&
-        getComputedStyle(gridRef.current).direction === "rtl";
-      const horizontalStep = isRtl ? -1 : 1;
+    // The day grid lays out inline (right-to-left under RTL), so the
+    // horizontal arrows must follow visual direction: ArrowLeft advances
+    // a day when the grid flows right-to-left. Read the rendered grid's
+    // computed direction so this stays correct regardless of how the host
+    // app or an enclosing subtree sets `dir`. Up/Down are block-axis and
+    // never mirror.
+    const isRtl =
+      gridRef.current !== null &&
+      getComputedStyle(gridRef.current).direction === "rtl";
+    const horizontalStep = isRtl ? -1 : 1;
 
-      if (e.key === "ArrowRight") {
-        next = addDays(current, horizontalStep);
-      } else if (e.key === "ArrowLeft") {
-        next = addDays(current, -horizontalStep);
-      } else if (e.key === "ArrowDown") {
-        next = addDays(current, 7);
-      } else if (e.key === "ArrowUp") {
-        next = addDays(current, -7);
-      } else if (e.key === "Home") {
-        const dow = Temporal.PlainDate.from(current).dayOfWeek - 1;
-        const offset = (dow - firstDow + 7) % 7;
-        next = addDays(current, -offset);
-      } else if (e.key === "End") {
-        const dow = Temporal.PlainDate.from(current).dayOfWeek - 1;
-        const offset = (dow - firstDow + 7) % 7;
-        next = addDays(current, 6 - offset);
-      } else if (e.key === "PageUp") {
-        next = shiftCalendarDate(
-          current,
-          e.shiftKey ? { years: -1 } : { months: -1 },
-        );
-      } else if (e.key === "PageDown") {
-        next = shiftCalendarDate(
-          current,
-          e.shiftKey ? { years: 1 } : { months: 1 },
-        );
-      } else {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          if (!isDayDisabled(current)) {
-            onChange(current);
-          }
+    if (e.key === "ArrowRight") {
+      next = addDays(current, horizontalStep);
+    } else if (e.key === "ArrowLeft") {
+      next = addDays(current, -horizontalStep);
+    } else if (e.key === "ArrowDown") {
+      next = addDays(current, 7);
+    } else if (e.key === "ArrowUp") {
+      next = addDays(current, -7);
+    } else if (e.key === "Home") {
+      const dow = Temporal.PlainDate.from(current).dayOfWeek - 1;
+      const offset = (dow - firstDow + 7) % 7;
+      next = addDays(current, -offset);
+    } else if (e.key === "End") {
+      const dow = Temporal.PlainDate.from(current).dayOfWeek - 1;
+      const offset = (dow - firstDow + 7) % 7;
+      next = addDays(current, 6 - offset);
+    } else if (e.key === "PageUp") {
+      next = shiftCalendarDate(
+        current,
+        e.shiftKey ? { years: -1 } : { months: -1 },
+      );
+    } else if (e.key === "PageDown") {
+      next = shiftCalendarDate(
+        current,
+        e.shiftKey ? { years: 1 } : { months: 1 },
+      );
+    } else {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (!isDayDisabled(current)) {
+          onChange(current);
         }
-        return;
       }
+      return;
+    }
 
-      e.preventDefault();
-      if (next) {
-        setFocusedDate(next);
-        const { month: nextMonth, year: nextYear } = resolveCalendarViewMonth({
-          override: null,
-          today: next,
-          value: next,
-        });
-        if (nextMonth !== viewMonth || nextYear !== viewYear) {
-          setViewMonthOverride({ month: nextMonth, year: nextYear });
-        }
-        requestAnimationFrame(() => {
-          const btn = gridRef.current?.querySelector<HTMLButtonElement>(
-            `[data-date="${next}"]`,
-          );
-          btn?.focus();
-        });
+    e.preventDefault();
+    if (next) {
+      setFocusedDate(next);
+      const nextDate = Temporal.PlainDate.from(next);
+      const nextMonth = nextDate.month - 1;
+      const nextYear = nextDate.year;
+      if (nextMonth !== viewMonth || nextYear !== viewYear) {
+        setViewMonthOverride({ month: nextMonth, year: nextYear });
       }
-    },
-    [
-      focusedDate,
-      value,
-      days,
-      firstDow,
-      viewMonth,
-      viewYear,
-      isDayDisabled,
-      onChange,
-      setViewMonthOverride,
-    ],
-  );
+      requestAnimationFrame(() => {
+        const btn = gridRef.current?.querySelector<HTMLButtonElement>(
+          `[data-date="${next}"]`,
+        );
+        btn?.focus();
+      });
+    }
+  };
 
   // -- Navigation handlers per view --
 
