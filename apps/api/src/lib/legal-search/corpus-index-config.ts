@@ -159,8 +159,25 @@ export const CORPUS_INDEX_CONFIG_VERSION = "0.8";
 /** Config format consumed by the isolated Quickwit 0.9 final generations. */
 export const CORPUS_FINAL_INDEX_CONFIG_VERSION = "0.9";
 export const CORPUS_FINAL_INDEX_MAX_PARTITIONS = 200;
-export const CORPUS_FINAL_INDEX_DOCSTORE_BLOCKSIZE = 1_000_000;
-export const CORPUS_FINAL_INDEX_DOCSTORE_COMPRESSION_LEVEL = 8;
+
+/** Docstore settings; per generation, as the engine fixes these at index creation. */
+export type CorpusIndexDocstoreSettings = {
+  blocksize: number;
+  compressionLevel: number;
+};
+
+/** Settings the generations before case_law_v7 were created with. */
+export const CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT = {
+  blocksize: 1_000_000,
+  compressionLevel: 8,
+} as const satisfies CorpusIndexDocstoreSettings;
+
+/** Settings case_law_v7 is created with. */
+export const CORPUS_FINAL_INDEX_DOCSTORE_V7 = {
+  blocksize: 65_536,
+  compressionLevel: 8,
+} as const satisfies CorpusIndexDocstoreSettings;
+
 export const CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET = 10_000_000;
 export const CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES = 2_000_000_000;
 export const CORPUS_FINAL_INDEX_MIN_SHARDS = 1;

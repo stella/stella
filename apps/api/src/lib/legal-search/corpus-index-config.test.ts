@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import { CASE_LAW_INDEX_GROUPS } from "@/api/lib/legal-search/case-law-index-groups";
 import {
   caseLawIndexConfig,
+  CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
+  CORPUS_FINAL_INDEX_DOCSTORE_V7,
   corpusIndexConfig,
   DECISION_TIMESTAMP_FIELD,
   TAG_FIELD_VALUE_LIMIT,
@@ -370,4 +372,15 @@ test("the legislation validity window is a pair of fast datetimes", () => {
   // publishes no window still has to be indexed, and an open-ended
   // `version_valid_to` is how the current consolidation says it has no end.
   expect(config.doc_mapping.timestamp_field).toBeUndefined();
+});
+
+// The two declared settings differ in the block size and in nothing else.
+test("the docstore settings a generation chooses differ only in block size", () => {
+  expect(CORPUS_FINAL_INDEX_DOCSTORE_V7.blocksize).toBeLessThan(
+    CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT.blocksize,
+  );
+  expect({
+    ...CORPUS_FINAL_INDEX_DOCSTORE_V7,
+    blocksize: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT.blocksize,
+  }).toEqual({ ...CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT });
 });
