@@ -258,6 +258,18 @@ export type {
   ScannedMarker,
 } from "./markers.js";
 
+// The writer half of the marker grammar: configuration reaches a document as
+// marker text, so the scanner and the renderer are one round trip.
+export {
+  isWritableMarkerLiteral,
+  isWritableMarkerText,
+  renderFilterChain,
+  renderForOpener,
+  renderValueMarker,
+  unwritableFilterValues,
+} from "./render.js";
+export type { ForOpenerOptions } from "./render.js";
+
 // Row-form block placement — shared by the fill/discovery pipeline and the
 // authoring eval so both agree on what a table row declares.
 export { detectRowBlockPair } from "./row-blocks.js";

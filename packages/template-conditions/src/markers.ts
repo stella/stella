@@ -214,12 +214,18 @@ export const normalizeMarkerInner = (inner: string): string =>
  * not a nested marker. An apostrophe stays an ordinary character, so
  * `label("Owner's")` reads as it always did.
  *
+ * A quoted run honours `\`-escapes, the way the argument scanner reads them,
+ * so `label("she said \"yes\"")` is one span rather than three: the span and
+ * the scanner have to agree on where a literal ends or a marker the scanner
+ * would parse is one the recognizer never sees.
+ *
  * The alternatives cannot overlap (the plain one excludes every character the
- * quoted one may start with) and a quoted run's end is forced by its body, so
- * the scan stays linear on adversarial input: a `{{` with no closing `}}`
- * costs one failed pass, not a polynomial retry.
+ * quoted one may start with, and inside a quoted run the escape branch is the
+ * only one that starts with a backslash), so the scan stays linear on
+ * adversarial input: a `{{` with no closing `}}` costs one failed pass, not a
+ * polynomial retry.
  */
-export const MARKER_OUTPUT_BODY = String.raw`(?:[^{}"“”„«»]|["“„«][^"”»]*["”»])*`;
+export const MARKER_OUTPUT_BODY = String.raw`(?:[^{}"“”„«»]|["“„«](?:\\[\s\S]|[^"”»\\])*["”»])*`;
 
 /** What a tag holds between `{%` and `%}`: anything but a brace, and a `%`
  *  only where it does not close the tag. */
