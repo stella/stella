@@ -563,9 +563,11 @@ describe("chat tool schemas", () => {
       refRegistry,
       scopedDb,
     })["update-entity-fields"];
-    if (!tool?.execute) {
+    const execute = tool?.execute;
+    if (!execute) {
       throw new Error("Expected update-entity-fields to be executable");
     }
+    const executionContext = { emitCustomEvent: () => undefined };
 
     for (const value of [
       "not-a-date",
@@ -574,8 +576,13 @@ describe("chat tool schemas", () => {
       "2024-01-01T00:00:00Z",
     ]) {
       entityLookups = 0;
-      const rejection: unknown = await tool
-        .execute({ entityRef, matterRef, propertyRef, value }, {})
+      const rejection: unknown = await Promise.resolve()
+        .then(() =>
+          execute(
+            { entityRef, matterRef, propertyRef, value },
+            executionContext,
+          ),
+        )
         .then(
           () => null,
           (error: unknown) => error,
@@ -595,8 +602,13 @@ describe("chat tool schemas", () => {
     // valid values passed date validation without allowing a mutation.
     for (const value of ["2024-02-29", null]) {
       entityLookups = 0;
-      const rejection: unknown = await tool
-        .execute({ entityRef, matterRef, propertyRef, value }, {})
+      const rejection: unknown = await Promise.resolve()
+        .then(() =>
+          execute(
+            { entityRef, matterRef, propertyRef, value },
+            executionContext,
+          ),
+        )
         .then(
           () => null,
           (error: unknown) => error,
