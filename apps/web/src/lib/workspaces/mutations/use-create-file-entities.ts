@@ -14,6 +14,8 @@ import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { resolveDocumentReferenceMatches } from "@/lib/document-reference-queries";
+import { useDocumentReferenceUploadStore } from "@/lib/document-reference-upload-store";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -632,15 +634,27 @@ export const uploadFileEntitiesBatched = async (
   });
 };
 
+/**
+ * Whether these files still owe the user the question "is this a new version
+ * of a document you already have?".
+ */
+export const REFERENCE_CHECK = {
+  ask: "ask",
+  /** The caller has already put the question and acted on the answer. */
+  skip: "skip",
+} as const;
+
+export type ReferenceCheckMode =
+  (typeof REFERENCE_CHECK)[keyof typeof REFERENCE_CHECK];
+
+type CreateFileEntitiesOptions = {
+  parentId?: string | null | undefined;
+  referenceCheck?: ReferenceCheckMode | undefined;
+};
+
 export type CreateFileEntitiesInput =
-  | {
-      files: File[];
-      parentId?: string | null | undefined;
-    }
-  | {
-      tree: DroppedFileTree;
-      parentId?: string | null | undefined;
-    };
+  | ({ files: File[] } & CreateFileEntitiesOptions)
+  | ({ tree: DroppedFileTree } & CreateFileEntitiesOptions);
 
 const hasUploadInputItems = (input: CreateFileEntitiesInput): boolean => {
   if ("tree" in input) {
@@ -650,6 +664,36 @@ const hasUploadInputItems = (input: CreateFileEntitiesInput): boolean => {
   return input.files.length > 0;
 };
 
+const uploadInputFiles = (input: CreateFileEntitiesInput): File[] =>
+  "tree" in input ? input.tree.files.map(({ file }) => file) : [...input.files];
+
+/**
+ * The same upload minus the files the user chose to file as versions. A
+ * dropped folder keeps its directories: they are created whether or not any
+ * file lands inside them.
+ */
+const withoutUploadInputFiles = (
+  input: CreateFileEntitiesInput,
+  excluded: ReadonlySet<File>,
+): CreateFileEntitiesInput => {
+  if ("tree" in input) {
+    return {
+      tree: {
+        files: input.tree.files.filter(({ file }) => !excluded.has(file)),
+        directoryPaths: input.tree.directoryPaths,
+      },
+      parentId: input.parentId ?? null,
+      referenceCheck: REFERENCE_CHECK.skip,
+    };
+  }
+
+  return {
+    files: input.files.filter((file) => !excluded.has(file)),
+    parentId: input.parentId ?? null,
+    referenceCheck: REFERENCE_CHECK.skip,
+  };
+};
+
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const labels = useBatchUploadLabels();
@@ -657,6 +701,9 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const analytics = useAnalytics();
   const startWorkflow = useStartWorkflow(workspaceId);
+  const askAboutReferencedFiles = useDocumentReferenceUploadStore(
+    (store) => store.ask,
+  );
 
   const ensureFileProperty = async (): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
@@ -753,11 +800,61 @@ export const useCreateFileEntities = (workspaceId: string) => {
     },
   });
 
+  /**
+   * Ask about files that turned out to be versions of documents stella
+   * already holds, then upload what is left as new documents.
+   *
+   * The reference lives in the file itself, so this is the one place that can
+   * tell a re-filed document from a duplicate — before any bytes are sent.
+   * Non-DOCX files never reach a lookup, so an upload of scans or images is
+   * not delayed by this at all.
+   */
+  const createFileEntitiesAfterReferenceCheck = async (
+    input: CreateFileEntitiesInput,
+  ): Promise<void> => {
+    const referenced = await resolveDocumentReferenceMatches({
+      queryClient,
+      files: uploadInputFiles(input),
+      onError: (error) => analytics.captureError(error),
+    });
+
+    if (referenced.length === 0) {
+      mutate(input);
+      return;
+    }
+
+    askAboutReferencedFiles({
+      referenced,
+      onResolved: (newDocumentFiles) => {
+        const keptAsNewDocuments = new Set(newDocumentFiles);
+        const filedAsVersions = new Set(
+          referenced
+            .map(({ file }) => file)
+            .filter((file) => !keptAsNewDocuments.has(file)),
+        );
+        const remaining = withoutUploadInputFiles(input, filedAsVersions);
+        if (hasUploadInputItems(remaining)) {
+          mutate(remaining);
+        }
+      },
+      onCancelled: () => {
+        // Deliberate: the user declined the whole batch, versions included.
+      },
+    });
+  };
+
   const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
     if (isPending || !hasUploadInputItems(input)) {
       return;
     }
-    mutate(input);
+    if (input.referenceCheck === REFERENCE_CHECK.skip) {
+      mutate(input);
+      return;
+    }
+    detached(
+      createFileEntitiesAfterReferenceCheck(input),
+      "use-create-file-entities.reference-check",
+    );
   };
 
   return [isPending, handleCreateFileEntities] as const;
