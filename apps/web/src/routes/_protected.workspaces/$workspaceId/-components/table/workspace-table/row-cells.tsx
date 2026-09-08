@@ -490,18 +490,7 @@ export const DraggableRow = ({
           selected={row_getIsSelected(row)}
         />
       </WorkspaceGridRow>
-      {pendingDrop && (
-        <VersionOrNewFileDialog
-          droppedFile={pendingDrop.droppedFile}
-          entityFileName={pendingDrop.entityFileName}
-          isReplacePending={pendingDrop.isReplacePending}
-          onCreateNewFile={pendingDrop.onCreateNewFile}
-          onOpenChange={pendingDrop.onOpenChange}
-          onOpenChangeComplete={pendingDrop.onOpenChangeComplete}
-          onReplaceVersion={pendingDrop.onReplaceVersion}
-          open={pendingDrop.open}
-        />
-      )}
+      {pendingDrop && <VersionOrNewFileDialog {...pendingDrop} />}
     </>
   );
 };

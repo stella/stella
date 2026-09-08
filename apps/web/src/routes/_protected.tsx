@@ -70,6 +70,7 @@ import {
   useSidebarInlineSize,
 } from "@/components/sidebar";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
+import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -417,6 +418,7 @@ function ProtectedComponent() {
                 <Outlet />
               </WorkspaceFrame>
               <CreateMatterDialog />
+              <DocumentReferenceUploadDialog />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />
             </ChatEditorProvider>
