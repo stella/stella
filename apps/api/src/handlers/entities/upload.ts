@@ -53,6 +53,7 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -889,6 +890,19 @@ const uploadEntityHandler = async function* ({
     }
   }
 
+  // Scanning and the draft-content check above judge what the client sent, so
+  // they run on the submitted bytes. Everything from here describes the stored
+  // ones, which never carry a document reference.
+  const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes({
+    buffer: fileBuffer,
+    mimeType: file.type,
+  });
+  const storedSizeBytes = storedBytes.byteLength;
+  const storedSha256Hex =
+    strippedArchive === null
+      ? sha256Hex
+      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+
   let encrypted = false;
   if (file.type === PDF_MIME_TYPE) {
     const result = await isEncryptedPdf(fileBuffer);
@@ -921,7 +935,7 @@ const uploadEntityHandler = async function* ({
 
   await writeS3ObjectWithRetry({
     contentType: file.type,
-    data: new Uint8Array(fileBuffer),
+    data: storedBytes,
     key: sourceKey,
   });
 
@@ -1063,9 +1077,9 @@ const uploadEntityHandler = async function* ({
             id: fileId,
             fileName: resolvedName.value,
             mimeType: file.type,
-            sizeBytes: file.size,
+            sizeBytes: storedSizeBytes,
             encrypted,
-            sha256Hex,
+            sha256Hex: storedSha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
               encrypted,
@@ -1172,7 +1186,7 @@ const uploadEntityHandler = async function* ({
                 kind: "document",
                 fileName: resolvedName.value,
                 mimeType: file.type,
-                sizeBytes: file.size,
+                sizeBytes: storedSizeBytes,
                 propertyId,
               },
             },
