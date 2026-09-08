@@ -882,6 +882,10 @@ describe("TanStack AI structured output generation", () => {
 
     // Nothing names this failure, so the engine's own wrapper stands rather
     // than being replaced by a 502 that would claim a status it never had.
+    // The wrapper carries no status at all, which is what separates it from a
+    // recovery that fired: a `HandlerError` would answer 502 while classifying
+    // as `unknown` just the same, and would keep this same cause.
+    expect(caught).not.toHaveProperty("status");
     expect(caught).toHaveProperty("cause", providerError);
     expect(classifyAIError(caught)).toBe("unknown");
   });
