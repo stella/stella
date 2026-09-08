@@ -605,14 +605,14 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.",
+        "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address or the private corpus-index-v09 Cloud Map service.",
       overrides: {
         CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://quickwit-search.example.com",
       },
     },
     {
       expected:
-        "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.",
+        "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development or against the private corpus-index-v09 Cloud Map service.",
       overrides: {
         CONTENT_ENCRYPTION_KEY: "a".repeat(64),
         CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "https://quickwit-search.example.com",

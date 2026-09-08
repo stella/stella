@@ -140,7 +140,16 @@ const BACKPRESSURE_DIMENSIONS_PATTERN =
   /^[^=,\s]+=[^=,]+(?:,[^=,\s]+=[^=,]+)*$/u;
 
 const Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN =
-  /^corpus-index-v09\.[a-z0-9-]+\.local$/u;
+  /^corpus-index-v09(-[a-z0-9]+)?\.[a-z0-9-]+\.local$/u;
+
+const isPrivateQ09ServiceEndpoint = (value: string) => {
+  if (!URL.canParse(value)) {
+    return false;
+  }
+  return Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN.test(
+    new URL(value).hostname.toLowerCase(),
+  );
+};
 
 const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
   if (!URL.canParse(value)) {
@@ -150,8 +159,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
   return (
     url.protocol === "https:" ||
     (url.protocol === "http:" &&
-      (isLoopbackHostname(url.hostname) ||
-        Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN.test(url.hostname.toLowerCase())))
+      (isLoopbackHostname(url.hostname) || isPrivateQ09ServiceEndpoint(value)))
   );
 };
 
@@ -467,17 +475,25 @@ const corpusEndpointInvariantViolation = ({
   if (!isDev && CORPUS_INDEX_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.";
   }
+  const q09SearchTargetsPrivateService =
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
+    isPrivateQ09ServiceEndpoint(CORPUS_INDEX_Q09_SEARCH_ENDPOINT);
   if (
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
+    !q09SearchTargetsPrivateService &&
     !isTlsOrLoopbackUrl(CORPUS_INDEX_Q09_SEARCH_ENDPOINT, {
       plaintextProtocol: "http:",
       tlsProtocol: "https:",
     })
   ) {
-    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.";
+    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address or the private corpus-index-v09 Cloud Map service.";
   }
-  if (!isDev && CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined) {
-    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development.";
+  if (
+    !isDev &&
+    CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
+    !q09SearchTargetsPrivateService
+  ) {
+    return "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development or against the private corpus-index-v09 Cloud Map service.";
   }
   if (
     CORPUS_INDEX_Q09_ENDPOINT !== undefined &&
