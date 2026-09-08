@@ -41,6 +41,39 @@ const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
 
 /**
+ * Exact columns the decision-analysis operator role may read, and the single
+ * column it may write. The migration owns these grants in production; the
+ * privilege test folds that SQL back against this map so the two cannot drift.
+ */
+export const CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS = {
+  case_law_decisions: [
+    "id",
+    "source_id",
+    "language",
+    "court",
+    "country",
+    "decision_type",
+    "document_ast",
+    "content_hash",
+    "analysis",
+    "redacted_at",
+    "metadata",
+    "citation_authority",
+    "citation_count",
+  ],
+  case_law_sources: ["id", "descriptor"],
+} as const;
+
+/**
+ * `updated_at` is writable only because it rides every write: the column
+ * carries `$onUpdate`, so the ORM assigns it in the same statement that sets
+ * `analysis`, and a statement touching an ungranted column is refused whole.
+ */
+export const CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS = {
+  case_law_decisions: ["analysis", "updated_at"],
+} as const;
+
+/**
  * Execute a read callback under the same role used by the external public-law
  * database. Writes in the surrounding test setup stay on the owner handle;
  * this role change is local to the callback's transaction.
@@ -320,6 +353,25 @@ const ROLE_GRANT_STATEMENTS = [
         TO stella_public_law_reader
     `,
   ),
+  // Operator role for pre-computed decision analyses: a narrow read plus the
+  // single writable column.
+  `
+    GRANT USAGE ON SCHEMA public TO stella_case_law_analysis_writer
+  `,
+  ...Object.entries(CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+        ON TABLE ${quoteSqlIdentifier(relation)}
+        TO stella_case_law_analysis_writer
+    `,
+  ),
+  ...Object.entries(CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS).map(
+    ([relation, columns]) => `
+      GRANT UPDATE (${columns.map(quoteSqlIdentifier).join(", ")})
+        ON TABLE ${quoteSqlIdentifier(relation)}
+        TO stella_case_law_analysis_writer
+    `,
+  ),
 ] as const;
 
 /**
@@ -338,6 +390,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
+  await db.execute(
+    sql.raw("CREATE ROLE stella_case_law_analysis_writer NOLOGIN"),
+  );
   await installPgliteSchemaPrerequisites(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this

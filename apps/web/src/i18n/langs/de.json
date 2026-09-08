@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Kurzfassung",
+      "aiLayer": "KI-{layer}",
       "backToSection": "Zurück zum Anfang dieses Abschnitts",
       "categories": {
         "facts": "Sachverhalt",
         "holding": "Spruch",
         "procedural-history": "Verfahrensgang",
         "reasoning": "Argumentation"
-      }
+      },
+      "holdingAnchor": "Zum Absatz",
+      "topics": "Themen",
+      "treatment": "Spätere Rezeption"
     },
     "analyzing": "Analyse läuft...",
     "annotations": {

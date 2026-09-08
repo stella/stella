@@ -7,7 +7,7 @@
 import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
-export const EN_SYSTEM_PROMPT = `You are a legal analyst. Analyze the decision and produce a structured navigation hierarchy with annotations of key passages.
+export const EN_SYSTEM_PROMPT = `You are a legal analyst. Analyze the decision and produce a structured navigation hierarchy with annotations of key passages, plus the holding, an abstract and the topics.
 
 ## Typical sections
 

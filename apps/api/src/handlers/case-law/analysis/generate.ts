@@ -7,33 +7,14 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
-import * as v from "valibot";
 
 import type {
   AnalysisGenerating,
-  AnalysisHeading,
-  DecisionAnalysis,
   PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
-import {
-  analysisHeadingInputSchema,
-  parsePersistedDecisionAnalysis,
-} from "@stll/legal-ast/analysis";
 
-// SAFETY: rootDb is used only inside runGeneration, which runs in
-// a fire-and-forget background task after the request scope has
-// ended.
-// eslint-disable-next-line no-restricted-imports -- background task outlives the request scope; no ctx.scopedDb available
-import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
-import {
-  devReparseEnabled,
-  reparseForDev,
-} from "@/api/handlers/case-law/decisions/dev-reparse";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -41,200 +22,22 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  analysisInputOf,
-  type AnalysisInput,
-} from "@/api/lib/case-law/analysis-prompt";
-import {
-  readDecisionAnalysis,
-  readDecisionAnalysisAst,
-} from "@/api/lib/case-law/decision-analysis";
+import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 
-import { normalizeAnalysisHeadingLabels } from "./category-catalog";
-import { getSystemPrompt } from "./prompts/prompt-registry";
-import {
-  analysisSentinel,
-  claimableAnalysisRow,
-  storedAnalysisFingerprint,
-  storedAnalysisState,
-  type AnalysisStoreKey,
-} from "./stored-analysis";
-
-/**
- * Where an analysis and its in-flight sentinel live: the decision row in
- * the local database, normally. A shared corpus read through the read-only
- * handle cannot take that write, so production reports the analysis
- * unavailable there, and a development process keeps it in memory instead.
- *
- * Every write is keyed by the input fingerprint as well as the decision:
- * the row may have been re-parsed since a run began, and a run's result
- * or sentinel cleanup must then leave the newer parse's state alone.
- */
-type AnalysisClaim = AnalysisStoreKey & {
-  /** The stored value this request read and found wanting; see `claimableAnalysisRow`. */
-  observed: unknown;
-};
-
-type AnalysisSave = {
-  decisionId: SafeId<"caseLawDecision">;
-  analysis: DecisionAnalysis;
-  /** The row's `contentHash` when the run was claimed. */
-  contentHash: string | null;
-};
-
-type AnalysisRelease = {
-  decisionId: SafeId<"caseLawDecision">;
-  /** The sentinel `claim` returned to this run. */
-  sentinel: AnalysisGenerating;
-};
-
-type AnalysisStore = {
-  /**
-   * Takes the row for a run over `fingerprint`, provided it still holds
-   * `observed`. Returns the sentinel it wrote, which is the run's
-   * identity from here on; null when another request got there first.
-   */
-  claim: (claim: AnalysisClaim) => Promise<AnalysisGenerating | null>;
-  /**
-   * Stores the result, only where the row still carries this run's
-   * fingerprint and the document it was claimed under. A re-parse during
-   * the run changes `contentHash`; the result would then be rejected by
-   * the next read anyway, so it is not worth the write.
-   */
-  save: (save: AnalysisSave) => Promise<void>;
-  /**
-   * Releases this run's sentinel, and only this run's: the exact value
-   * `claim` wrote. A replacement run that took over this one's stale
-   * sentinel holds a different value and is left alone.
-   */
-  clear: (release: AnalysisRelease) => Promise<void>;
-  /** What the store holds beside the row; null where the row is the store. */
-  peek: (decisionId: SafeId<"caseLawDecision">) => unknown;
-};
-
-const dbAnalysisStore: AnalysisStore = {
-  claim: async ({ decisionId, fingerprint, observed }) => {
-    // audit: skip — background AI analysis sentinel; no user-facing state change
-    const sentinel = analysisSentinel(fingerprint, new Date());
-    const [updated] = await rootDb
-      .update(caseLawDecisions)
-      .set({ analysis: sentinel })
-      .where(claimableAnalysisRow({ decisionId, observed }))
-      .returning({ id: caseLawDecisions.id });
-    return updated === undefined ? null : sentinel;
-  },
-  // Use rootDb (not scopedDb) because case-law analysis is global,
-  // not workspace-scoped.
-  save: async ({ analysis, contentHash, decisionId }) => {
-    // audit: skip — background AI analysis output; no user-facing state change
-    await rootDb
-      .update(caseLawDecisions)
-      .set({ analysis })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          sql`${storedAnalysisFingerprint} = ${analysis.inputFingerprint}`,
-          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${contentHash}`,
-        ),
-      );
-  },
-  clear: async ({ decisionId, sentinel }) => {
-    // audit: skip — background AI analysis sentinel cleanup; no user-facing state change
-    await rootDb
-      .update(caseLawDecisions)
-      .set({ analysis: null })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
-          sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
-        ),
-      );
-  },
-  peek: () => null,
-};
-
-const memoryAnalyses = new Map<SafeId<"caseLawDecision">, unknown>();
-
-const memoryAnalysisStore: AnalysisStore = {
-  claim: async ({ decisionId, fingerprint, observed }) => {
-    // The same compare-and-swap as the row, over what this process holds:
-    // an entry must still be the one this request read (entries are the
-    // exact objects stored, so identity is equality). No entry means the
-    // request read the read-only row, which this store never writes.
-    const held = memoryAnalyses.get(decisionId);
-    if (held !== undefined && held !== observed) {
-      return await Promise.resolve(null);
-    }
-    const sentinel = analysisSentinel(fingerprint, new Date());
-    memoryAnalyses.set(decisionId, sentinel);
-    return await Promise.resolve(sentinel);
-  },
-  // The document behind a memory entry is a read-only row this process
-  // never re-parses, so the fingerprint alone identifies the run here.
-  save: async ({ analysis, decisionId }) => {
-    const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
-    if (held?.inputFingerprint === analysis.inputFingerprint) {
-      memoryAnalyses.set(decisionId, analysis);
-    }
-    await Promise.resolve();
-  },
-  clear: async ({ decisionId, sentinel }) => {
-    if (memoryAnalyses.get(decisionId) === sentinel) {
-      memoryAnalyses.delete(decisionId);
-    }
-    await Promise.resolve();
-  },
-  peek: (decisionId) => memoryAnalyses.get(decisionId) ?? null,
-};
-
-const readsSharedCorpus = (): boolean =>
-  envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
-
-const analysisStore = (): AnalysisStore =>
-  readsSharedCorpus() ? memoryAnalysisStore : dbAnalysisStore;
-
-type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
-
-const analysisOutputSchema = v.strictObject({
-  headings: v.array(analysisHeadingInputSchema),
-});
-
-const createAnalysisHeading = ({
-  heading,
-  language,
-}: {
-  heading: StreamedAnalysisHeading;
-  language: string;
-}): AnalysisHeading =>
-  normalizeAnalysisHeadingLabels({
-    heading: {
-      id: Bun.randomUUIDv7(),
-      label: heading.label,
-      category: heading.category,
-      startAnchorId: heading.startAnchorId,
-      endAnchorId: heading.endAnchorId,
-      annotations: heading.annotations.map((annotation) => ({
-        id: Bun.randomUUIDv7(),
-        summary: annotation.summary,
-        startAnchorId: annotation.startAnchorId,
-        endAnchorId: annotation.endAnchorId,
-        textSnippet: annotation.textSnippet,
-      })),
-      children: [],
-    },
-    language,
-  });
+import { resolveAnalysisInput } from "./analysis-input";
+import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
+import { analysisStore, storesAnalyses } from "./analysis-store";
+import { allowsDerivedAiAnalysis } from "./analysis-update";
+import { refreshSignificance } from "./significance-run";
+import { storedAnalysisState } from "./stored-analysis";
 
 /**
  * Run the AI generation in the background. Updates the DB
@@ -249,6 +52,8 @@ const createAnalysisHeading = ({
 type RunGenerationOptions = {
   decisionId: SafeId<"caseLawDecision">;
   input: AnalysisInput;
+  /** Anchor ids of the parse the input was built over, in reading order. */
+  anchorIds: readonly string[];
   country: string;
   /** The row's `contentHash` at claim time; the save is fenced on it. */
   contentHash: string | null;
@@ -260,6 +65,7 @@ type RunGenerationOptions = {
 };
 
 const runGeneration = async ({
+  anchorIds,
   contentHash,
   country,
   decisionId,
@@ -294,7 +100,7 @@ const runGeneration = async ({
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
-      // Case-law analysis is global, not workspace-scoped (see rootDb use below).
+      // Case-law analysis is global, not workspace-scoped (see the store).
       tenantWorkspaceIds: [],
       analytics: aiAnalytics,
       caching: resolveCaching({
@@ -308,21 +114,14 @@ const runGeneration = async ({
       abortSignal: AbortSignal.timeout(120_000),
     });
 
-    // Assign stable IDs at push time so they don't change across persists
-    const headings = result.headings.map((heading) =>
-      createAnalysisHeading({
-        heading,
-        language: input.language,
-      }),
-    );
-
-    const analysis: DecisionAnalysis = {
-      version: 2,
-      generatedAt: new Date().toISOString(),
+    const analysis = buildDecisionAnalysis({
+      anchorIds,
+      output: result,
+      language: input.language,
       model: modelId,
       inputFingerprint: input.fingerprint,
-      tree: headings,
-    };
+      generatedAt: new Date(),
+    });
 
     await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
@@ -360,47 +159,23 @@ export const generateAnalysis = async (
   promptCachingEnabled: boolean,
 ): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
   // audit: skip — background AI analysis output
-  const decision =
-    envBase.PUBLIC_LAW_DATABASE_URL === undefined
-      ? await scopedDb(async (tx) => await readDecisionAnalysis(tx, decisionId))
-      : await caseLawPublicReadDb(
-          async (tx) => await readDecisionAnalysis(tx, decisionId),
-        );
-
-  if (!decision) {
-    return Result.ok({ status: "error", error: "Decision not found" });
+  const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
+  switch (resolution.kind) {
+    case "decision-not-found":
+      return Result.ok({ status: "error", error: "Decision not found" });
+    case "unparseable-document":
+      return Result.ok({
+        status: "error",
+        error: "Decision has no parseable AST",
+      });
+    case "resolved":
+      break;
+    default: {
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
+    }
   }
-
-  // The text the reader sees: in development that may be the tree's own
-  // parse rather than the stored one, and the anchors must agree. Resolved
-  // before the stored analysis is consulted, because whether that analysis
-  // still applies is a property of this text.
-  const reparsed =
-    devReparseEnabled() && decision.source !== null
-      ? await reparseForDev({
-          adapterKey: decision.source.adapterKey,
-          caseNumber: decision.caseNumber,
-          court: decision.court,
-          decisionDate: decision.decisionDate,
-          decisionType: decision.decisionType,
-          documentUrl: decision.documentUrl,
-          ecli: decision.ecli,
-          id: decisionId,
-          metadata: decision.metadata,
-        })
-      : null;
-  const ast = reparsed ?? (await readDecisionAnalysisAst(decision));
-  if (ast === null) {
-    return Result.ok({
-      status: "error",
-      error: "Decision has no parseable AST",
-    });
-  }
-  const input = analysisInputOf({
-    blocks: ast.blocks,
-    decision,
-    systemPrompt: getSystemPrompt(decision.language),
-  });
+  const { anchorIds, decision, input } = resolution;
 
   const observed = analysisStore().peek(decisionId) ?? decision.analysis;
   const stored = storedAnalysisState({
@@ -410,6 +185,24 @@ export const generateAnalysis = async (
   });
   switch (stored.kind) {
     case "done":
+      // The document layers are settled; the graph one may not be. Fenced
+      // on the citation graph and written in the background, so a reader
+      // never waits for it and a decision whose neighbourhood has not
+      // moved costs one indexed query.
+      if (storesAnalyses()) {
+        detached(
+          refreshSignificance({
+            analysis: stored.analysis,
+            contentHash: decision.contentHash,
+            decisionId,
+            orgAIConfig,
+            orgAIConfigStatus,
+            organizationId,
+            promptCachingEnabled,
+          }),
+          "analysis-generate.refresh-significance",
+        );
+      }
       return Result.ok({ status: "done", analysis: stored.analysis });
     case "generating":
       return Result.ok({ status: "generating" });
@@ -421,11 +214,7 @@ export const generateAnalysis = async (
     }
   }
 
-  // A shared corpus connection is deliberately read-only. It may serve an
-  // analysis already persisted by the owning environment, but this process
-  // must never try to create or update one in that database. A development
-  // process keeps its analyses in memory instead (`memoryAnalysisStore`).
-  if (readsSharedCorpus() && !envBase.isDev) {
+  if (!storesAnalyses()) {
     return Result.ok({
       status: "error",
       error: "Analysis is unavailable for this decision",
@@ -436,10 +225,7 @@ export const generateAnalysis = async (
   // use is still read and served; its text is never sent to a model. Decided
   // before AI availability because it is a property of the decision, not of
   // how this deployment is configured.
-  if (
-    decision.source === null ||
-    !allowsDerivedAi(decision.source.descriptor)
-  ) {
+  if (!allowsDerivedAiAnalysis(decision)) {
     return Result.ok({
       status: "error",
       error: "Analysis is unavailable for this decision",
@@ -472,6 +258,7 @@ export const generateAnalysis = async (
   // Fire-and-forget generation
   detached(
     runGeneration({
+      anchorIds,
       contentHash: decision.contentHash,
       country: decision.country,
       decisionId,

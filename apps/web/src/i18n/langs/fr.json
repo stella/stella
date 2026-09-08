@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Résumé",
+      "aiLayer": "{layer} (IA)",
       "backToSection": "Revenir au début de cette partie",
       "categories": {
         "facts": "Faits",
         "holding": "Solution",
         "procedural-history": "Procédure",
         "reasoning": "Raisonnement"
-      }
+      },
+      "holdingAnchor": "Aller au paragraphe",
+      "topics": "Thèmes",
+      "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
     "annotations": {

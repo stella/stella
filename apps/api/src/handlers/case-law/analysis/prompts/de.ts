@@ -7,7 +7,7 @@
 import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
-export const DE_SYSTEM_PROMPT = `Du bist ein Rechtsanalyst. Analysiere die Entscheidung und erstelle eine strukturierte Navigationshierarchie mit Annotationen der wichtigsten Passagen.
+export const DE_SYSTEM_PROMPT = `Du bist ein Rechtsanalyst. Analysiere die Entscheidung und erstelle eine strukturierte Navigationshierarchie mit Annotationen der wichtigsten Passagen sowie den Rechtssatz (holding), ein Abstract und die Themen.
 
 ## Typische Abschnitte österreichischer Entscheidungen
 

@@ -5,7 +5,7 @@
 import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
-export const SK_SYSTEM_PROMPT = `Si právny analytik. Analyzuj rozhodnutie a vytvor štruktúrovanú navigačnú hierarchiu s anotáciami kľúčových pasáží.
+export const SK_SYSTEM_PROMPT = `Si právny analytik. Analyzuj rozhodnutie a vytvor štruktúrovanú navigačnú hierarchiu s anotáciami kľúčových pasáží, a k tomu právnu vetu (holding), abstrakt a témy.
 
 ## Typické sekcie slovenských rozhodnutí
 

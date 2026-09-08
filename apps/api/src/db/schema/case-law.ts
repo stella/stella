@@ -53,6 +53,8 @@ import {
 
 import {
   authoredNotePolicies,
+  caseLawAnalysisWriterPolicies,
+  caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   isNotNull,
@@ -267,6 +269,7 @@ export const caseLawSources = p.pgTable(
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
+    ...caseLawAnalysisWriterReadPolicies(),
   ],
 );
 
@@ -631,6 +634,7 @@ export const caseLawDecisions = p.pgTable(
     p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
     ...publicCaseLawReaderPolicies(),
+    ...caseLawAnalysisWriterPolicies(),
   ],
 );
 

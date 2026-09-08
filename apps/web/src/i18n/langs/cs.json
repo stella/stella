@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Abstrakt",
+      "aiLayer": "{layer} (AI)",
       "backToSection": "Zpět na začátek této části",
       "categories": {
         "facts": "Skutkový stav",
         "holding": "Právní věta",
         "procedural-history": "Procesní historie",
         "reasoning": "Uvažování"
-      }
+      },
+      "holdingAnchor": "Přejít na odstavec",
+      "topics": "Témata",
+      "treatment": "Pozdější judikatura"
     },
     "analyzing": "Analyzuji...",
     "annotations": {

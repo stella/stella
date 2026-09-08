@@ -18,6 +18,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import { isPendingAnnotationId } from "@/features/case-law/annotations/use-decision-annotations";
+import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type {
@@ -303,6 +304,33 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return [];
   })();
 
+  // The written layers come whole with the finished analysis; a run still
+  // in flight streams only its tree, so there is nothing to show yet.
+  const completeAnalysis =
+    aiEnabled && analysisState.status === "done"
+      ? analysisState.analysis
+      : null;
+
+  const jumpToAnchor = useCallback((anchorId: string) => {
+    const container = mainRef.current;
+    const el = container?.querySelector<HTMLElement>(
+      `#${CSS.escape(anchorId)}`,
+    );
+    if (!container || !el) {
+      return;
+    }
+    container.scrollTo({
+      top:
+        el.getBoundingClientRect().top -
+        container.getBoundingClientRect().top +
+        container.scrollTop,
+      behavior: "instant",
+    });
+    delete el.dataset["highlight"];
+    forceReflow(el);
+    el.dataset["highlight"] = "";
+  }, []);
+
   const sectionMap = (() => {
     if (analysisTree.length === 0 || !ast) {
       return undefined;
@@ -484,6 +512,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
             <aside className="relative max-lg:hidden">
+              {completeAnalysis !== null && showAiNotes && (
+                <AnalysisLayers
+                  analysis={completeAnalysis}
+                  onAnchorClick={jumpToAnchor}
+                />
+              )}
               {hasAnalysis &&
                 showAiNotes &&
                 flatAnalysisHeadings.length > 0 && (

@@ -5,7 +5,7 @@
 import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
-export const PL_SYSTEM_PROMPT = `Jesteś analitykiem prawnym. Przeanalizuj orzeczenie i stwórz ustrukturyzowaną hierarchię nawigacyjną z adnotacjami kluczowych fragmentów.
+export const PL_SYSTEM_PROMPT = `Jesteś analitykiem prawnym. Przeanalizuj orzeczenie i stwórz ustrukturyzowaną hierarchię nawigacyjną z adnotacjami kluczowych fragmentów, a także tezę (holding), abstrakt i tematy.
 
 ## Typowe sekcje polskich orzeczeń
 

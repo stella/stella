@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Santrauka",
+      "aiLayer": "{layer} (DI)",
       "backToSection": "Grįžti į šios dalies pradžią",
       "categories": {
         "facts": "Faktinės aplinkybės",
         "holding": "Teismo išvada",
         "procedural-history": "Procesinė eiga",
         "reasoning": "Mąstymas"
-      }
+      },
+      "holdingAnchor": "Pereiti prie pastraipos",
+      "topics": "Temos",
+      "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
     "annotations": {
