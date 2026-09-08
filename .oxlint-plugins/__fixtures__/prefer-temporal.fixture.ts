@@ -52,7 +52,7 @@ export const localeDate = new Date(isoTimestamp).toLocaleDateString();
 
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: Date clock reads cannot hide behind immediate serialization
 export const serializedDateClock = new Date().toISOString();
-// oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: constructor clock reads cannot bypass the Date.now ban
+// oxlint-disable-next-line prefer-temporal/prefer-temporal, unicorn/prefer-date-now -- fixture: constructor clock reads cannot bypass the Date.now ban
 export const constructedDateClock = new Date().getTime();
 
 // Approved database, protocol, and third-party boundary shapes.
