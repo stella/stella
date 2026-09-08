@@ -133,9 +133,7 @@ type PullRequestSnapshot = {
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
-  // When "merge when ready" was already armed, the moment it was; arming it
-  // again is neither needed nor accepted by GitHub.
-  autoMergeEnabledAt: string | null;
+  handoff: ReturnType<typeof readMergeHandoff>;
   headSha: string;
 };
 
@@ -453,6 +451,29 @@ const readString = (record: Record<string, unknown>, key: string): string => {
   return value;
 };
 
+// Queue membership and auto-merge are independent API fields: a queued PR
+// commonly has no autoMergeRequest. Queue membership takes precedence.
+export const readMergeHandoff = (raw: Record<string, unknown>) => {
+  const queue = raw["mergeQueueEntry"];
+  const autoMerge = raw["autoMergeRequest"];
+  if (queue !== null) {
+    return {
+      status: "queued",
+      entryId: readString(readRecord(queue, "mergeQueueEntry"), "id"),
+    } as const;
+  }
+  if (autoMerge !== null) {
+    return {
+      status: "armed",
+      enabledAt: readString(
+        readRecord(autoMerge, "autoMergeRequest"),
+        "enabledAt",
+      ),
+    } as const;
+  }
+  return { status: "pending" } as const;
+};
+
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
   const value = record[key];
   if (typeof value !== "boolean") {
@@ -473,8 +494,20 @@ const readMember = <T extends string>(
   return match;
 };
 
-const runGh = (args: readonly string[]): string => {
+// Automation can supply a workflow read token without widening the release
+// App's permissions. Only the two merge operations use the write credential.
+const runGh = (
+  args: readonly string[],
+  access: "read" | "write" = "read",
+): string => {
   const result = Bun.spawnSync(["gh", ...args], {
+    env: {
+      ...process.env,
+      GH_TOKEN:
+        access === "read"
+          ? (process.env["GH_READ_TOKEN"] ?? process.env["GH_TOKEN"])
+          : process.env["GH_TOKEN"],
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -526,21 +559,40 @@ const createGhGateway = ({
       ),
 
     readPullRequest: () => {
-      const raw = readRecord(
+      const response = readRecord(
         runGhJson([
-          "pr",
-          "view",
-          ...prArgs,
-          "--json",
-          "number,state,isDraft,mergeable,autoMergeRequest,headRefOid",
+          "api",
+          "graphql",
+          "-f",
+          `query=query($owner:String!, $name:String!, $number:Int!) {
+            repository(owner:$owner, name:$name) {
+              pullRequest(number:$number) {
+                number state isDraft mergeable headRefOid
+                autoMergeRequest { enabledAt }
+                mergeQueueEntry { id }
+              }
+            }
+          }`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-F",
+          `number=${pullNumber}`,
         ]),
-        "pr view",
+        "pull request response",
+      );
+      const raw = readRecord(
+        readRecord(
+          readRecord(response["data"], "data")["repository"],
+          "repository",
+        )["pullRequest"],
+        "pull request",
       );
       const number = raw["number"];
       if (typeof number !== "number") {
         panic("Expected numeric field `number` in gh response");
       }
-      const autoMergeRequest = raw["autoMergeRequest"];
       return {
         number,
         state: readMember(
@@ -554,9 +606,7 @@ const createGhGateway = ({
           readString(raw, "mergeable"),
           "mergeable",
         ),
-        autoMergeEnabledAt: isRecord(autoMergeRequest)
-          ? readString(autoMergeRequest, "enabledAt")
-          : null,
+        handoff: readMergeHandoff(raw),
         headSha: readString(raw, "headRefOid"),
       };
     },
@@ -704,14 +754,17 @@ const createGhGateway = ({
     },
 
     merge: ({ expectedHeadSha }) => {
-      runGh([
-        "pr",
-        "merge",
-        ...prArgs,
-        "--squash",
-        "--match-head-commit",
-        expectedHeadSha,
-      ]);
+      runGh(
+        [
+          "pr",
+          "merge",
+          ...prArgs,
+          "--squash",
+          "--match-head-commit",
+          expectedHeadSha,
+        ],
+        "write",
+      );
       // The merge already happened; the commit SHA just may not be attached to
       // the pull request yet. Retry rather than fail on a reporting lag, which
       // would read as a failed merge.
@@ -736,15 +789,18 @@ const createGhGateway = ({
     // a direct enqueue once they have passed (GitHub refuses auto-merge on
     // an already-clean pull request). Both carry the head pin.
     armMergeWhenReady: ({ expectedHeadSha }) =>
-      runGh([
-        "pr",
-        "merge",
-        ...prArgs,
-        "--squash",
-        "--auto",
-        "--match-head-commit",
-        expectedHeadSha,
-      ]).trim(),
+      runGh(
+        [
+          "pr",
+          "merge",
+          ...prArgs,
+          "--squash",
+          "--auto",
+          "--match-head-commit",
+          expectedHeadSha,
+        ],
+        "write",
+      ).trim(),
   };
 };
 
@@ -819,7 +875,9 @@ const readSettledPullRequest = (
   let pullRequest = gateway.readPullRequest();
   for (
     let attempt = 1;
-    attempt < MERGEABLE_POLL_ATTEMPTS && pullRequest.mergeable === "UNKNOWN";
+    attempt < MERGEABLE_POLL_ATTEMPTS &&
+    pullRequest.mergeable === "UNKNOWN" &&
+    pullRequest.handoff.status !== "queued";
     attempt += 1
   ) {
     Bun.sleepSync(MERGEABLE_POLL_INTERVAL_MS);
@@ -838,6 +896,15 @@ if (import.meta.main) {
   });
 
   const pullRequest = readSettledPullRequest(gateway);
+  if (
+    policy.landing === "merge-when-ready" &&
+    pullRequest.handoff.status === "queued"
+  ) {
+    console.log(
+      `verdict: QUEUED — ${options.repo}#${options.pullNumber} is already in the merge queue; nothing changed.`,
+    );
+    process.exit(0);
+  }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
   const snapshot: MergeBarSnapshot = {
@@ -874,10 +941,22 @@ if (import.meta.main) {
       break;
     }
     case "merge-when-ready": {
-      if (pullRequest.autoMergeEnabledAt !== null) {
-        console.log(
-          `\nverdict: ARMED — merge when ready has been on since ${pullRequest.autoMergeEnabledAt}`,
-        );
+      switch (pullRequest.handoff.status) {
+        case "queued":
+          console.log(`\nverdict: QUEUED — ${pullRequest.handoff.entryId}`);
+          break;
+        case "armed":
+          console.log(
+            `\nverdict: ARMED — merge when ready has been on since ${pullRequest.handoff.enabledAt}`,
+          );
+          break;
+        case "pending":
+          break;
+        default:
+          pullRequest.handoff satisfies never;
+          panic("Unhandled merge handoff state");
+      }
+      if (pullRequest.handoff.status !== "pending") {
         break;
       }
       const outcome = gateway.armMergeWhenReady({
