@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { parseResRecord } from "@stll/business-registries/ares";
+import { ARES_DEFAULT_FORMAT } from "@stll/business-registries/ares/default-format";
 import { KrsValidationError } from "@stll/business-registries/krs";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
@@ -127,6 +128,134 @@ describe("renderLookupHit", () => {
 });
 
 describe("renderLookupOutput", () => {
+  test.each([
+    [
+      "Městský soud v Praze",
+      "B",
+      "8573",
+      "Praha 7",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440, zapsaná v obchodním rejstříku vedeném Městským soudem v Praze pod sp. zn. B 8573",
+    ],
+    [
+      "UNKNOWN",
+      "B",
+      "8573",
+      "Praha 7",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440",
+    ],
+    [null, "B", "8573", null, "společnost **Example a.s.**, IČO: 27082440"],
+    [
+      "Městský soud v Praze",
+      "",
+      "8573",
+      "Praha 7",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440",
+    ],
+    [
+      "Městský soud v Praze",
+      "B",
+      "",
+      "Praha 7",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440",
+    ],
+  ])(
+    "uses the ARES default without inventing absent particulars: %s/%s/%s/%s",
+    (court, section, insert, address, expected) => {
+      const company = {
+        ...parseResRecord({
+          ico: "27082440",
+          obchodniJmeno: "Example a.s.",
+          pravniForma: "121",
+          primarniZaznam: true,
+        }),
+        courtFile: court === null ? null : { court, section, insert },
+      };
+      const hit = {
+        registry: "ares",
+        id: company.ico,
+        name: company.name,
+        legalForm: company.legalForm,
+        address:
+          address === null ? null : { ...KRS_ADDRESS, textAddress: address },
+        registryUrl: company.registryUrl,
+        details: { registry: "ares", company },
+      } satisfies BusinessRegistryHit;
+      expect(renderLookupOutput(null, hit)).toBe(expected);
+      expect(renderLookupOutput(ARES_DEFAULT_FORMAT, hit)).toBe(expected);
+      expect(renderLookupOutput("  ", hit)).toBe(expected);
+      expect(
+        renderLookupOutput(
+          "Custom **[company name]** ([registry number])",
+          hit,
+        ),
+      ).toBe("Custom **Example a.s.** (27082440)");
+      expect(stripLookupMarkdown(renderLookupOutput(null, hit))).toBe(
+        expected.replaceAll("**", ""),
+      );
+    },
+  );
+  test.each(["101", "706", "205", null, "unknown"])(
+    "ARES defaults do not label non-company legal forms as companies: %s",
+    (legalForm) => {
+      const company = {
+        ...parseResRecord({
+          ico: "27082440",
+          obchodniJmeno: "Example",
+          primarniZaznam: true,
+        }),
+        legalForm,
+        courtFile: {
+          court: "Městský soud v Praze",
+          section: "L",
+          insert: "123",
+        },
+      };
+      const hit = {
+        registry: "ares",
+        id: company.ico,
+        name: company.name,
+        legalForm,
+        address: null,
+        registryUrl: company.registryUrl,
+        details: { registry: "ares", company },
+      } satisfies BusinessRegistryHit;
+      expect(renderLookupOutput(null, hit)).toBe("**Example**, IČO: 27082440");
+      expect(renderLookupOutput(ARES_DEFAULT_FORMAT, hit)).toBe(
+        "**Example**, IČO: 27082440",
+      );
+    },
+  );
+  test.each([
+    ["Městský soud v Praze", "Městským soudem v Praze"],
+    ["Krajský soud v Brně", "Krajským soudem v Brně"],
+    ["UNKNOWN", ""],
+    [null, ""],
+  ])(
+    "renders the instrumental court token from ARES particulars: %s",
+    (court, expected) => {
+      const company = {
+        ...parseResRecord({
+          ico: "27082440",
+          obchodniJmeno: "Alza.cz a.s.",
+          primarniZaznam: true,
+        }),
+        courtFile:
+          court === null ? null : { court, section: "B", insert: "8573" },
+      };
+      const hit = {
+        registry: "ares",
+        id: company.ico,
+        name: company.name,
+        legalForm: company.legalForm,
+        address: null,
+        registryUrl: company.registryUrl,
+        details: { registry: "ares", company },
+      } satisfies BusinessRegistryHit;
+      expect(renderLookupOutput("Soud: [court instrumental]", hit)).toBe(
+        `Soud: ${expected}`.trim(),
+      );
+    },
+  );
   test("renders ARES output tokens as readable company particulars", () => {
     const company = {
       ...parseResRecord({

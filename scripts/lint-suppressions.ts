@@ -88,6 +88,11 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "private search projections read without an authorization fragment",
   },
   {
+    rule: "require-safe-route-handlers/no-direct-handler-config",
+    tier: "security",
+    guards: "route registration mutating retained safe-handler permissions",
+  },
+  {
     rule: "require-safe-route-handlers/require-safe-route-handlers",
     tier: "security",
     guards: "authenticated routes mounting handlers outside the safe wrapper",

@@ -125,6 +125,9 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
           if (command === "get_desktop_language") {
             return nativeLanguage;
           }
+          if (command === "registry_get_state") {
+            return { status: "disconnected" };
+          }
           if (command === "is_autostart_enabled") {
             return false;
           }
@@ -242,13 +245,84 @@ const invocationCount = async (page: Page, command: string) =>
   }, command);
 
 const DIRECTIONS = [
-  { groupKey: "ArrowRight", language: "en", nextCardKey: "ArrowRight" },
-  { groupKey: "ArrowLeft", language: "ar", nextCardKey: "ArrowLeft" },
+  {
+    groupKey: "ArrowRight",
+    language: "en",
+    nextCardKey: "ArrowRight",
+    previousGroupKey: "ArrowLeft",
+  },
+  {
+    groupKey: "ArrowLeft",
+    language: "ar",
+    nextCardKey: "ArrowLeft",
+    previousGroupKey: "ArrowRight",
+  },
 ] as const;
 
-for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
+for (const {
+  groupKey,
+  language,
+  nextCardKey,
+  previousGroupKey,
+} of DIRECTIONS) {
   test.describe(`${language} clipboard direction`, () => {
     test.use({ locale: language });
+
+    for (const activation of ["pointer", "keyboard"] as const) {
+      test(`${activation} search action opens registry results in the same clipboard window`, async ({
+        page,
+      }) => {
+        const messages = language === "ar" ? arMessages : enMessages;
+        await openClipboard(page, language);
+        await page.getByRole("searchbox").fill("Clipboard item 2");
+        const registry = page.getByRole("button", {
+          name: messages.clipboard.registrySearchAction.replace(
+            "{query}",
+            "Clipboard item 2",
+          ),
+          exact: true,
+        });
+        if (activation === "pointer") {
+          await registry.click();
+        } else {
+          await registry.focus();
+          await page.keyboard.press("Enter");
+        }
+        await expect(page.getByRole("searchbox")).toHaveValue(
+          "Clipboard item 2",
+        );
+        await expect(page.getByRole("searchbox")).toBeFocused();
+        await expect(
+          page.getByRole("button", {
+            name: messages.clipboard.registryConnect,
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(page).toHaveURL(/\/$/u);
+        expect(await invocationCount(page, "registry_show")).toBe(0);
+        expect(await invocationCount(page, "registry_search")).toBe(0);
+      });
+    }
+
+    test("vertical arrows move between the shared search and clipboard cards", async ({
+      page,
+    }) => {
+      const cards = await openClipboard(page, language);
+      await page.keyboard.press(nextCardKey);
+      await expect(cards.nth(1)).toBeFocused();
+      await page.keyboard.press("ArrowDown");
+      const search = page.getByRole("searchbox");
+      await expect(search).toBeFocused();
+      await search.fill("Clipboard item");
+      await search.press("ArrowDown");
+      await expect(search).toBeFocused();
+      expect(await invocationCount(page, "registry_show")).toBe(0);
+      await search.press("ArrowUp");
+      await expect(cards.first()).toBeFocused();
+      expect(await invocationCount(page, "registry_search")).toBe(0);
+      await cards.first().press("ArrowDown");
+      await expect(search).toBeFocused();
+    });
 
     for (const dismissal of ["dom", "native"] as const) {
       test(`prepares the first card before reopening after ${dismissal} dismissal`, async ({
@@ -346,6 +420,12 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
       await page.keyboard.press("ArrowDown");
       await expect(page.getByRole("searchbox")).toBeFocused();
 
+      await page.keyboard.press(previousGroupKey);
+      await expect(
+        page.getByRole("link", { name: "Stella", exact: true }),
+      ).toBeFocused();
+      await page.keyboard.press(groupKey);
+      await expect(page.getByRole("searchbox")).toBeFocused();
       await page.keyboard.press(groupKey);
       await expect(activeGroup).toBeFocused();
       await expect(selectedCard).toHaveAttribute("aria-current", "true");
@@ -451,6 +531,12 @@ test("restores footer arrow navigation after changing a menu setting", async ({
       .evaluate(
         (control) => getComputedStyle(control, "::after").borderTopColor,
       );
+    await page.keyboard.press("ArrowLeft");
+    await expect(
+      page.getByRole("link", { name: "Stella", exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(search).toBeFocused();
     await page.keyboard.press("ArrowRight");
     await expect(activeGroup).toBeFocused();
     return { indicator: await readFocusIndicator(page), searchFocusColor };
@@ -496,17 +582,22 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   const footerControls = page.locator(
     ".clipboard-controls button:not([disabled]):not([aria-disabled='true']), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
   );
-  await expect(footerControls).toHaveCount(7);
+  const footerControlCount = await footerControls.count();
+  expect(footerControlCount).toBeGreaterThan(1);
+  await expect(footerControls.nth(1)).toHaveAccessibleName(
+    enMessages.clipboard.search,
+  );
+  await expect(page.locator(".clipboard-search button")).toHaveCount(0);
   await expect(footerControls.nth(1)).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   await expect(footerControls.first()).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(footerControls.nth(1)).toBeFocused();
-  for (let index = 2; index < 7; index += 1) {
+  for (let index = 2; index < footerControlCount; index += 1) {
     await page.keyboard.press("ArrowRight");
     await expect(footerControls.nth(index)).toBeFocused();
   }
-  for (let index = 5; index >= 0; index -= 1) {
+  for (let index = footerControlCount - 2; index >= 0; index -= 1) {
     await page.keyboard.press("ArrowLeft");
     await expect(footerControls.nth(index)).toBeFocused();
   }

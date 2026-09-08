@@ -13,6 +13,7 @@ const scriptedStore = () => {
   const bridgeAnswered = Promise.withResolvers<boolean>();
   const linked = Promise.withResolvers<string>();
   const linkCalls: number[] = [];
+  const manualLinkCalls: number[] = [];
   const errors: unknown[] = [];
   const watchSignals: AbortSignal[] = [];
   const seen: DesktopConnectionState[] = [];
@@ -21,6 +22,10 @@ const scriptedStore = () => {
     link: async () => {
       linkCalls.push(linkCalls.length);
       return await linked.promise;
+    },
+    manualLink: async () => {
+      manualLinkCalls.push(manualLinkCalls.length);
+      return "manual@example.com";
     },
     onError: (error) => {
       errors.push(error);
@@ -40,6 +45,7 @@ const scriptedStore = () => {
     errors,
     linkCalls,
     linked,
+    manualLinkCalls,
     seen,
     store,
     watchSignals,
@@ -87,6 +93,31 @@ describe("desktop connection store", () => {
       "connecting",
       "connected",
     ]);
+  });
+
+  test("automatic watches never invoke the explicit-connect link", async () => {
+    const { bridgeAnswered, linkCalls, linked, manualLinkCalls, store } =
+      scriptedStore();
+    store.retain();
+
+    const watching = store.startWatch();
+    bridgeAnswered.resolve(true);
+    linked.resolve("watch@example.com");
+    await watching;
+
+    expect(linkCalls.length).toBe(1);
+    expect(manualLinkCalls.length).toBe(0);
+  });
+
+  test("manual connect invokes the explicit-connect link", async () => {
+    const { manualLinkCalls, store } = scriptedStore();
+    store.retain();
+
+    expect(await store.connect(true)).toEqual({
+      status: "connected",
+      email: "manual@example.com",
+    });
+    expect(manualLinkCalls.length).toBe(1);
   });
 
   test("a watch that finds nothing falls back to saying nothing", async () => {

@@ -2,6 +2,12 @@ macro_rules! with_stella_commands {
   ($consumer:ident) => {
     $consumer! {
       commands::get_state => "get_state",
+      registry::registry_copy => "registry_copy",
+      registry::registry_get_state => "registry_get_state",
+      registry::registry_connect => "registry_connect",
+      registry::registry_disconnect => "registry_disconnect",
+      registry::registry_search => "registry_search",
+      registry::registry_format => "registry_format",
       commands::open_stella_account => "open_stella_account",
       commands::update_notification_preferences => "update_notification_preferences",
       commands::open_session_file => "open_session_file",

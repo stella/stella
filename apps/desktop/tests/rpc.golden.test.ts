@@ -81,7 +81,12 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 const appSnapshot = {
   bridgePort: 45_901,
   bridgeVersion: 11,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v1"],
+  capabilities: [
+    "office-edit.v1",
+    "self-host.connect",
+    "account-link.v1",
+    "registry-search.v1",
+  ],
   linkedAccount: {
     email: "counsel@example.com",
     name: "Jane Counsel",

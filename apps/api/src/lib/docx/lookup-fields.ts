@@ -6,8 +6,8 @@
  * via the shared business-registry dispatch and the marker is filled with the
  * rendered company details. With an author's format template, the [token]
  * slots ("[company name], with its seat in [seat], KRS [registry number]")
- * are substituted deterministically from the hit; otherwise a deterministic
- * "name, seat" rendering is used. Grammar and wording adjustments are not the
+ * are substituted deterministically from the hit; otherwise a registry-specific
+ * default (or "name, seat") is used. Grammar and wording adjustments are not the
  * lookup's job: they happen downstream in the per-occurrence aiAdapt pass.
  *
  * The resolution dependency is injected so the module stays testable
@@ -19,6 +19,16 @@
  */
 
 import { validateIco as validateAresIco } from "@stll/business-registries/ares";
+import {
+  ARES_COURT_INSTRUMENTAL_TOKEN,
+  getAresCourtNameInstrumental,
+} from "@stll/business-registries/ares/court-names";
+import {
+  ARES_DEFAULT_FORMAT,
+  ARES_DEFAULT_FORMAT_PARTS,
+  ARES_FILE_REFERENCE_TOKEN,
+  isAresCommercialCompany,
+} from "@stll/business-registries/ares/default-format";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
@@ -142,9 +152,28 @@ export const createDispatchLookupResolver =
 
 // ── Deterministic rendering ──────────────────────────────
 
-/** Deterministic "name, seat" rendering of a hit, used when the field has no
- *  format template (or the template renders empty). */
+/** Registry-specific default, or "name, seat" when no legal-description
+ *  default exists. Missing particulars never produce dangling clauses. */
 export const renderLookupHit = (hit: BusinessRegistryHit): string => {
+  if (hit.registry === "ares") {
+    const tokens = lookupTemplateTokens(hit);
+    const company = isAresCommercialCompany(hit.legalForm);
+    const parts = [
+      company ? ARES_DEFAULT_FORMAT_PARTS.name : "**[company name]**",
+    ];
+    if (tokens.address) {
+      parts.push(ARES_DEFAULT_FORMAT_PARTS.address);
+    }
+    parts.push(ARES_DEFAULT_FORMAT_PARTS.identifier);
+    if (
+      company &&
+      tokens[ARES_COURT_INSTRUMENTAL_TOKEN] &&
+      tokens[ARES_FILE_REFERENCE_TOKEN]
+    ) {
+      parts.push(ARES_DEFAULT_FORMAT_PARTS.registration);
+    }
+    return renderLookupTemplate(parts.join(", "), hit);
+  }
   const seat = hit.address?.textAddress ?? hit.address?.city ?? null;
   return [hit.name, seat].filter((part) => part !== null).join(", ");
 };
@@ -195,6 +224,13 @@ const lookupTemplateTokens = (
         : null;
       tokens["share capital"] = company.shareCapital;
       tokens["court file"] = formatCourtFile(company.courtFile);
+      tokens[ARES_COURT_INSTRUMENTAL_TOKEN] = company.courtFile
+        ? getAresCourtNameInstrumental(company.courtFile.court)
+        : null;
+      tokens[ARES_FILE_REFERENCE_TOKEN] =
+        company.courtFile?.section.trim() && company.courtFile.insert.trim()
+          ? `${company.courtFile.section.trim()} ${company.courtFile.insert.trim()}`
+          : null;
       tokens["registered on"] = formatAresDate(company.dateRegistered);
       tokens["acting clause"] = company.actingClause;
       tokens["statutory bodies"] = company.statutoryBodies
@@ -321,13 +357,16 @@ export const renderLookupTemplate = (
 
 /** The rendered output for a hit: the author's format template when present
  *  (with its `**bold**` / `*italic*` markers intact — the consumer decides
- *  how to interpret them), falling back to the deterministic "name, seat"
+ *  how to interpret them), falling back to the registry's deterministic default
  *  when there is no template or it renders empty. */
 export const renderLookupOutput = (
   format: string | null | undefined,
   hit: BusinessRegistryHit,
 ): string => {
   const template = format?.trim() ?? "";
+  if (hit.registry === "ares" && template === ARES_DEFAULT_FORMAT) {
+    return renderLookupHit(hit);
+  }
   const rendered = template === "" ? "" : renderLookupTemplate(template, hit);
   return rendered !== "" ? rendered : renderLookupHit(hit);
 };

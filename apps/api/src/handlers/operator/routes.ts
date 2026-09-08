@@ -11,5 +11,5 @@ import readRegistrations from "@/api/handlers/operator/read-registrations";
 export const operatorRoute = new Elysia({ prefix: "/operator" }).get(
   "/registrations",
   readRegistrations.handler,
-  readRegistrations.config,
+  { query: readRegistrations.config.query },
 );

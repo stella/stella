@@ -4738,6 +4738,8 @@ version = "0.0.1"
 dependencies = [
  "objc2",
  "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
  "tauri",
 ]
 

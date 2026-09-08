@@ -1,4 +1,9 @@
-import { createContext, use, useSyncExternalStore } from "react";
+import {
+  createContext,
+  use,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from "react";
 import type { PropsWithChildren } from "react";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
@@ -112,7 +117,13 @@ const suppressTransitions = () => {
   document.head.append(style);
   // Force reflow so suppression takes effect before class changes
   forceReflow(document.documentElement);
-  return () => requestAnimationFrame(() => style.remove());
+  return () => {
+    // Commit the themed values while transitions are still suppressed. A
+    // requestAnimationFrame callback runs before paint, so removing the style
+    // without this second flush can animate the theme change after all.
+    forceReflow(document.documentElement);
+    requestAnimationFrame(() => style.remove());
+  };
 };
 
 export const ThemeProvider = ({ children }: PropsWithChildren) => {
@@ -136,7 +147,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     }
   };
 
-  useExternalSyncEffect(() => {
+  useLayoutEffect(() => {
     if (!hydrated) {
       return;
     }

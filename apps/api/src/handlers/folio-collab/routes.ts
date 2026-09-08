@@ -12,25 +12,25 @@ export const folioCollabRoute = new Elysia({
   .post(
     "/authorize",
     authorizeFolioCollabRoomHandler.handler,
-    authorizeFolioCollabRoomHandler.config,
+    { body: authorizeFolioCollabRoomHandler.config.body },
   )
   .post(
     "/refresh-token",
     refreshFolioCollabToken.handler,
-    refreshFolioCollabToken.config,
+    { body: refreshFolioCollabToken.config.body },
   )
   .post(
     "/heartbeat",
     heartbeatFolioCollabRoom.handler,
-    heartbeatFolioCollabRoom.config,
+    { body: heartbeatFolioCollabRoom.config.body },
   )
   .post(
     "/snapshot/load",
     loadFolioCollabSnapshotHandler.handler,
-    loadFolioCollabSnapshotHandler.config,
+    { body: loadFolioCollabSnapshotHandler.config.body },
   )
   .post(
     "/snapshot/store",
     storeFolioCollabSnapshotHandler.handler,
-    storeFolioCollabSnapshotHandler.config,
+    { body: storeFolioCollabSnapshotHandler.config.body },
   );

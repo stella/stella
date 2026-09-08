@@ -13,6 +13,8 @@ const IDLE = { status: "idle" } as const satisfies DesktopConnectionState;
 type DesktopConnectionStoreOptions = {
   /** Link the account to a running app; rejects when the link fails. */
   link: () => Promise<string>;
+  /** Link from an explicit user action; automatic watches use `link`. */
+  manualLink?: () => Promise<string>;
   /** Report a link failure; the store itself never throws into the UI. */
   onError: (error: unknown) => void;
   /** Resolve true once the local bridge answers, false when the watch ends. */
@@ -35,6 +37,7 @@ type DesktopConnectionStoreOptions = {
  */
 export const createDesktopConnectionStore = ({
   link,
+  manualLink = link,
   onError,
   watch,
 }: DesktopConnectionStoreOptions) => {
@@ -56,14 +59,14 @@ export const createDesktopConnectionStore = ({
    * instead of throwing, and joins the attempt already in flight so a click
    * during the watch (or a second surface) can never link twice.
    */
-  const connect = async (): Promise<DesktopConnectionOutcome> => {
+  const connect = async (explicit = false): Promise<DesktopConnectionOutcome> => {
     const running = attempt;
     if (running) {
       return await running;
     }
 
     publish({ status: "connecting" });
-    const started = link()
+    const started = (explicit ? manualLink : link)()
       .then(
         (email): DesktopConnectionOutcome => ({ status: "connected", email }),
         (error: unknown): DesktopConnectionOutcome => {

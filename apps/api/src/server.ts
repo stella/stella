@@ -12,6 +12,7 @@ import {
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
+import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
@@ -680,6 +681,7 @@ const api = new Elysia()
       .use(catalogueRoute)
       .use(organizationSettingsRoute)
       .use(apiKeysRoute)
+      .use(desktopRegistryRoute)
       .use(aiConfigPublicRoute)
       .use(clauseCategoriesRoute)
       .use(clausesRoute)

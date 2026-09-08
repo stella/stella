@@ -21,6 +21,10 @@ const DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS = 120_000;
 const MIN_DESKTOP_BRIDGE_VERSION = 9;
 const REQUIRED_DESKTOP_BRIDGE_CAPABILITY = "office-edit.v1";
 const DESKTOP_ACCOUNT_LINK_CAPABILITY = "account-link.v1";
+const DESKTOP_REGISTRY_HASH_PREFIX = "#desktop-registry=";
+const DESKTOP_REGISTRY_NONCE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const DESKTOP_REGISTRY_CAPABILITY = "registry-search.v1";
 
 export class DesktopBridgeUnavailableError extends Error {
   public constructor() {
@@ -88,6 +92,25 @@ type BridgeHealth = {
 
 type SelfHostConnectionStatus = {
   trusted: boolean;
+};
+
+type DesktopRegistryGrant = {
+  expiresAt: string;
+  key: string;
+};
+
+type DesktopRegistryConnectInput = {
+  apiBaseUrl: string;
+  nonce: string;
+};
+
+export const readDesktopRegistryNonce = (hash: string): string | null => {
+  if (!hash.startsWith(DESKTOP_REGISTRY_HASH_PREFIX)) {
+    return null;
+  }
+
+  const nonce = hash.slice(DESKTOP_REGISTRY_HASH_PREFIX.length);
+  return DESKTOP_REGISTRY_NONCE_PATTERN.test(nonce) ? nonce : null;
 };
 
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
@@ -457,6 +480,61 @@ export const linkDesktopAccount = async (request: LinkAccountRequest) => {
       status: response.status,
       statusText: response.statusText,
       url: `${DESKTOP_BRIDGE_URL}/v1/link-account`,
+    });
+  }
+
+  throw new DesktopBridgeUnavailableError();
+};
+
+export const connectDesktopRegistry = async ({
+  apiBaseUrl,
+  nonce,
+}: DesktopRegistryConnectInput) => {
+  const health = await readBridgeHealth(500);
+  if (!health) {
+    throw new DesktopBridgeUnavailableError();
+  }
+  assertCompatibleDesktopBridge(health, {
+    requiredCapability: DESKTOP_REGISTRY_CAPABILITY,
+    signalUpdateCheck: false,
+  });
+
+  const grant = unwrapEden(
+    await api["desktop-registry"].grant.post({}),
+  ) satisfies DesktopRegistryGrant;
+  const bridgeUrl = `${DESKTOP_BRIDGE_URL}/v1/registry-connect`;
+
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      bridgeUrl,
+      loopback({
+        body: JSON.stringify({
+          apiBaseUrl,
+          expiresAt: grant.expiresAt,
+          key: grant.key,
+          nonce,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        timeoutMs: 10_000,
+      }),
+    );
+  } catch {
+    throw new DesktopBridgeUnavailableError();
+  }
+
+  if (response.ok) {
+    return;
+  }
+
+  const payload = await parseBridgeResponse(response);
+  if (payload?.message) {
+    throw new FetchBoundaryError({
+      message: payload.message,
+      status: response.status,
+      statusText: response.statusText,
+      url: bridgeUrl,
     });
   }
 

@@ -3,6 +3,8 @@
   "description": "Default capabilities for stella desktop",
   "windows": ["main"],
   "permissions": [
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
     "core:default",
     "allow-get-desktop-language",
     "allow-set-desktop-language",

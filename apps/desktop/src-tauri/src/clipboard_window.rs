@@ -18,7 +18,7 @@ use crate::desktop_telemetry::{
 };
 use crate::window_placement::{self, WorkArea};
 
-const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
+pub(crate) const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
 const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
 const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;

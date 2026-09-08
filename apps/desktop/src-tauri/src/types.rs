@@ -247,8 +247,12 @@ pub const BRIDGE_VERSION: u32 = 12;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
-pub const BRIDGE_CAPABILITIES: &[&str] =
-  &["office-edit.v1", "self-host.connect", "account-link.v1"];
+pub const BRIDGE_CAPABILITIES: &[&str] = &[
+  "office-edit.v1",
+  "self-host.connect",
+  "account-link.v1",
+  "registry-search.v1",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]

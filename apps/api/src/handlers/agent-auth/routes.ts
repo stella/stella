@@ -50,17 +50,17 @@ export const agentAuthRoute = new Elysia()
   .post(
     AGENT_AUTH_IDENTITY_PATH,
     agentIdentityHandler.handler,
-    agentIdentityHandler.config,
+    { body: agentIdentityHandler.config.body },
   )
   .post(
     AGENT_AUTH_CLAIM_PATH,
     agentClaimHandler.handler,
-    agentClaimHandler.config,
+    { body: agentClaimHandler.config.body },
   )
   .post(
     AGENT_AUTH_TOKEN_PATH,
     agentTokenHandler.handler,
-    agentTokenHandler.config,
+    { body: agentTokenHandler.config.body },
   )
   .post(
     AGENT_AUTH_EVENTS_PATH,
@@ -69,7 +69,7 @@ export const agentAuthRoute = new Elysia()
       ctx.set.status = 202;
       return await agentEventsHandler.handler(ctx);
     },
-    agentEventsHandler.config,
+    { body: agentEventsHandler.config.body },
   );
 
 /**

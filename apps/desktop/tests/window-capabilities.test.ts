@@ -34,6 +34,7 @@ const WINDOW_MODULES = {
   "src-tauri/capabilities/clipboard.json": [
     "src/clipboard/ClipboardApp.tsx",
     "src/clipboard/ClipboardImagePreview.tsx",
+    "src/registry/RegistrySearch.tsx",
   ],
   "src-tauri/capabilities/default.json": ["src/mainview/App.tsx"],
 } as const satisfies Record<string, readonly string[]>;

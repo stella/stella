@@ -100,7 +100,12 @@ async fn spawn_test_bridge_with_origins(
   let port = free_loopback_port().await;
   let manager = Arc::new(Mutex::new(SessionManager::new()));
 
-  tokio::spawn(start_bridge(port, static_allowed_origins, manager.clone()));
+  tokio::spawn(start_bridge(
+    port,
+    static_allowed_origins,
+    manager.clone(),
+    Arc::new(Mutex::new(crate::registry::RegistryConnection::default())),
+  ));
 
   let bridge = TestBridge {
     base_url: format!("http://127.0.0.1:{port}"),

@@ -14,6 +14,7 @@
 /* Clipboard is a sibling of the Vite root, so its utilities need an explicit
  * source. Without this, uncommon sizing and glass classes are omitted. */
 @source "../clipboard/**/*.{ts,tsx}";
+@source "../registry/**/*.{ts,tsx}";
 
 html,
 body,
