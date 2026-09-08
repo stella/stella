@@ -280,9 +280,8 @@ const normalizeDate = (v: string | Date | null | undefined): string => {
   return v.length >= 10 ? v.slice(0, 10) : v;
 };
 
-const addDays = (iso: string, n: number): string => {
-  return Temporal.PlainDate.from(iso).add({ days: n }).toString();
-};
+const addDays = (iso: string, n: number): string =>
+  Temporal.PlainDate.from(iso).add({ days: n }).toString();
 
 const isBefore = (a: string, b: string): boolean => a < b;
 const isAfter = (a: string, b: string): boolean => a > b;
@@ -482,9 +481,11 @@ const DatePickerPopoverContent = ({
       e.preventDefault();
       if (next) {
         setFocusedDate(next);
-        const nextDate = Temporal.PlainDate.from(next);
-        const nextMonth = nextDate.month - 1;
-        const nextYear = nextDate.year;
+        const { month: nextMonth, year: nextYear } = resolveCalendarViewMonth({
+          override: null,
+          today: next,
+          value: next,
+        });
         if (nextMonth !== viewMonth || nextYear !== viewYear) {
           setViewMonthOverride({ month: nextMonth, year: nextYear });
         }

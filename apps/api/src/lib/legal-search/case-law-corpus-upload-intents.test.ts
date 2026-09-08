@@ -124,7 +124,9 @@ describe("case-law corpus upload intents", () => {
     expect(write).toBeGreaterThan(preflight);
     expect(failedWriteCleanup).toBeGreaterThan(write);
     expect(skipLocked).toBeGreaterThan(-1);
-    expect(source).toContain("active.leaseExpiresAt.getTime() > Date.now()");
+    expect(source).toContain(
+      "active.leaseExpiresAt.getTime() > Temporal.Now.instant().epochMilliseconds",
+    );
   });
 
   test("keeps rollout tombstones synchronous and historical repair bounded", () => {
