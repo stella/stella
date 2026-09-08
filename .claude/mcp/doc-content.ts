@@ -61,7 +61,7 @@ const normalizedContentType = (contentType: string | null): string | null =>
 const looksLikeHtmlDocument = (text: string): boolean => {
   let prefix = text.replace(/^\uFEFF/u, "").trimStart();
   while (true) {
-    const preamble = prefix.match(/^(?:<\?xml[\s\S]*?\?>|<!--[\s\S]*?-->)/iu);
+    const preamble = /^(?:<\?xml[\s\S]*?\?>|<!--[\s\S]*?-->)/iu.exec(prefix);
     if (!preamble) {
       break;
     }

@@ -61,24 +61,6 @@ type DocChunk = {
   score: number;
 };
 
-type ToolResult = {
-  content: { type: "text"; text: string }[];
-  isError?: boolean;
-};
-
-type RegisterInputTool = <InputSchema extends z.ZodTypeAny>(
-  name: string,
-  config: { description: string; inputSchema: InputSchema },
-  callback: (input: z.infer<InputSchema>) => ToolResult | Promise<ToolResult>,
-) => unknown;
-
-// SAFETY: The SDK's Zod 3/4 compatibility overload exceeds TypeScript's instantiation
-// depth in a clean install. Keep schema inference and handlers checked on this
-// side of a narrow boundary while preserving registerTool's runtime behavior.
-const registerInputTool = server.registerTool.bind(
-  server,
-) as unknown as RegisterInputTool;
-
 server.registerTool(
   "list_doc_sources",
   {
@@ -570,13 +552,13 @@ const splitIntoChunks = (pageText: string) => {
   return [{ heading: DEFAULT_HEADING, text: fallbackText }];
 };
 
-registerInputTool(
+server.registerTool(
   "fetch_docs",
   {
     description:
       `Fetch one small, known Markdown or plain-text documentation URL; successful content is capped at ${MAX_FETCH_DOC_CHARS} characters. ` +
       "For normal retrieval, call search_docs first and fetch_doc_chunks with its selected URL.",
-    inputSchema: z.object({ url: z.string().url() }),
+    inputSchema: { url: z.string().url() },
   },
   async ({ url }) => {
     try {
@@ -604,16 +586,16 @@ registerInputTool(
   },
 );
 
-registerInputTool(
+server.registerTool(
   "search_docs",
   {
     description:
       "Start documentation retrieval here: search configured indexes and return only the top matching page URLs. Pass a selected URL to fetch_doc_chunks, which normalizes known providers to Markdown.",
-    inputSchema: z.object({
+    inputSchema: {
       query: z.string().min(2),
       sources: z.array(z.string()).optional(),
       maxResults: z.number().int().min(1).max(MAX_RESULTS_LIMIT).optional(),
-    }),
+    },
   },
   async ({ query, sources, maxResults }) => {
     try {
@@ -731,16 +713,16 @@ registerInputTool(
   },
 );
 
-registerInputTool(
+server.registerTool(
   "fetch_doc_chunks",
   {
     description:
       "After search_docs, fetch only the most relevant bounded chunks from its selected Markdown or plain-text page URL.",
-    inputSchema: z.object({
+    inputSchema: {
       url: z.string().url(),
       query: z.string().min(2),
       maxChunks: z.number().int().min(1).max(MAX_CHUNKS_LIMIT).optional(),
-    }),
+    },
   },
   async ({ url, query, maxChunks }) => {
     try {

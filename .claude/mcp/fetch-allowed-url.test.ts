@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 
 import { fetchAllowedUrl } from "./fetch-allowed-url";
 
 const allowedHosts = new Set(["docs.example"]);
+
+const fetchInputUrl = (input: string | URL | Request): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof Request ? input.url : input.href;
+};
 
 describe("fetchAllowedUrl", () => {
   test("follows redirects that stay on allowlisted HTTPS hosts", async () => {
@@ -11,7 +19,7 @@ describe("fetchAllowedUrl", () => {
       allowedHosts,
       fetchImpl: async (input, init) => {
         acceptHeaders.push(new Headers(init?.headers).get("accept"));
-        const url = new URL(input.toString());
+        const url = new URL(fetchInputUrl(input));
         if (url.pathname === "/start") {
           return new Response(null, {
             headers: { location: "/target" },
@@ -39,11 +47,11 @@ describe("fetchAllowedUrl", () => {
   test("blocks redirects to non-allowlisted hosts before fetching them", async () => {
     const fetchedUrls: string[] = [];
 
-    await expect(
+    await assert.rejects(
       fetchAllowedUrl({
         allowedHosts,
         fetchImpl: async (input) => {
-          fetchedUrls.push(input.toString());
+          fetchedUrls.push(fetchInputUrl(input));
           return new Response(null, {
             headers: { location: "https://127.0.0.1/secret" },
             status: 302,
@@ -51,7 +59,10 @@ describe("fetchAllowedUrl", () => {
         },
         url: "https://docs.example/start",
       }),
-    ).rejects.toThrow("Blocked: 127.0.0.1 is not a configured doc source");
+      {
+        message: "Blocked: 127.0.0.1 is not a configured doc source",
+      },
+    );
 
     expect(fetchedUrls).toEqual(["https://docs.example/start"]);
   });
@@ -83,7 +94,7 @@ describe("fetchAllowedUrl", () => {
   });
 
   test("rejects responses with oversized content-length", async () => {
-    await expect(
+    await assert.rejects(
       fetchAllowedUrl({
         allowedHosts,
         fetchImpl: async () =>
@@ -93,17 +104,19 @@ describe("fetchAllowedUrl", () => {
         maxResponseBytes: 4,
         url: "https://docs.example/start",
       }),
-    ).rejects.toThrow("Documentation response exceeds size limit");
+      { message: "Documentation response exceeds size limit" },
+    );
   });
 
   test("rejects streamed responses that exceed the byte limit", async () => {
-    await expect(
+    await assert.rejects(
       fetchAllowedUrl({
         allowedHosts,
         fetchImpl: async () => new Response("toolong"),
         maxResponseBytes: 4,
         url: "https://docs.example/start",
       }),
-    ).rejects.toThrow("Documentation response exceeds size limit");
+      { message: "Documentation response exceeds size limit" },
+    );
   });
 });

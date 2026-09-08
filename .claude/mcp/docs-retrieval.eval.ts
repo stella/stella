@@ -68,6 +68,9 @@ const looksLikeHtml = (text: string): boolean =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
 try {
   await client.connect(transport, { timeout: REQUEST_TIMEOUT_MS });
   const listed = await client.listTools(undefined, {
@@ -124,7 +127,7 @@ try {
   const search = await callTool("search_docs", searchInput);
   const searchText = resultText(search);
   const selected: unknown = JSON.parse(searchText);
-  if (!Array.isArray(selected)) {
+  if (!isUnknownArray(selected)) {
     throw new TypeError("search_docs did not return a result array");
   }
   const first = selected.at(0);

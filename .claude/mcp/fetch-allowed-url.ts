@@ -116,9 +116,15 @@ const readLimitedText = async ({
   let totalBytes = 0;
 
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
+    const result = await reader.read();
+    if (result.done) {
       break;
+    }
+    const value: unknown = result.value;
+    if (!(value instanceof Uint8Array)) {
+      throw new TypeError(
+        "Documentation response returned an invalid byte chunk",
+      );
     }
 
     totalBytes += value.byteLength;
