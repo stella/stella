@@ -9,7 +9,7 @@ import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import type { DocumentReferenceMatch } from "@/lib/document-reference-queries";
+import type { ResolvedDocumentReference } from "@/lib/document-reference-queries";
 import { resolveFileDocumentReference } from "@/lib/document-reference-queries";
 import {
   REFERENCE_CHECK,
@@ -31,7 +31,7 @@ type UseVersionOrNewFileDropOptions = {
 
 type DroppedFileResolution =
   | { status: "resolving" }
-  | { status: "resolved"; match: DocumentReferenceMatch | null };
+  | { status: "resolved"; reference: ResolvedDocumentReference | null };
 
 type PendingDrop = {
   file: File;
@@ -101,7 +101,7 @@ export const useVersionOrNewFileDrop = ({
             file: dropped,
             resolution: {
               status: "resolved",
-              match: Result.isError(result) ? null : result.value,
+              reference: Result.isError(result) ? null : result.value,
             },
           }
         : current,
@@ -143,7 +143,7 @@ export const useVersionOrNewFileDrop = ({
   const decision =
     drop.resolution.status === "resolved"
       ? resolveVersionOrNewFileDecision({
-          match: drop.resolution.match,
+          reference: drop.resolution.reference,
           droppedOnEntityId: entity.entityId,
           entityFileName: file.fileName,
           droppedFileName: drop.file.name,
@@ -195,7 +195,7 @@ export const useVersionOrNewFileDrop = ({
         return;
       }
       default: {
-        choice satisfies never;
+        return panic(`Unhandled choice: ${String(choice satisfies never)}`);
       }
     }
   };

@@ -1,27 +1,39 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocumentReferenceMatch } from "@/lib/document-reference-queries";
+import type { DocumentReferenceEvidence } from "@/lib/document-reference";
+import {
+  DOCUMENT_REFERENCE_EVIDENCE,
+  REFERENCE_UPLOAD_ACTION,
+} from "@/lib/document-reference";
+import type {
+  DocumentReferenceMatch,
+  ResolvedDocumentReference,
+} from "@/lib/document-reference-queries";
 import { resolveVersionOrNewFileDecision } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
 
 const DROPPED_ON = "entity-engagement-letter";
 
-const buildMatch = (
+const buildReference = (
   overrides: Partial<DocumentReferenceMatch> = {},
-): DocumentReferenceMatch => ({
-  entityId: DROPPED_ON,
-  entityName: "Engagement letter.docx",
-  workspaceId: "workspace-novak",
-  workspaceName: "Novak v. Horak",
-  stamp: "2026/001/015.v3",
-  versionNumber: 3,
-  currentVersionNumber: 3,
-  ...overrides,
+  evidence: DocumentReferenceEvidence = DOCUMENT_REFERENCE_EVIDENCE.propertiesAndFooter,
+): ResolvedDocumentReference => ({
+  match: {
+    entityId: DROPPED_ON,
+    entityName: "Engagement letter.docx",
+    workspaceId: "workspace-novak",
+    workspaceName: "Novak v. Horak",
+    stamp: "2026/001/015.v3",
+    versionNumber: 3,
+    currentVersionNumber: 3,
+    ...overrides,
+  },
+  evidence,
 });
 
 describe("deciding what a dropped file is offered as", () => {
   test("a reference to the document it was dropped on offers the next version", () => {
     const decision = resolveVersionOrNewFileDecision({
-      match: buildMatch(),
+      reference: buildReference(),
       droppedOnEntityId: DROPPED_ON,
       entityFileName: "Engagement letter.docx",
       droppedFileName: "Engagement letter (1).docx",
@@ -39,12 +51,13 @@ describe("deciding what a dropped file is offered as", () => {
         nextVersionNumber: 4,
       },
       supersededBase: null,
+      defaultAction: REFERENCE_UPLOAD_ACTION.version,
     });
   });
 
   test("a reference to another document names that document and its matter", () => {
     const decision = resolveVersionOrNewFileDecision({
-      match: buildMatch({
+      reference: buildReference({
         entityId: "entity-share-purchase",
         entityName: "Share purchase agreement.docx",
         workspaceId: "workspace-kovac",
@@ -70,12 +83,13 @@ describe("deciding what a dropped file is offered as", () => {
         nextVersionNumber: 2,
       },
       supersededBase: null,
+      defaultAction: REFERENCE_UPLOAD_ACTION.version,
     });
   });
 
   test("a file taken from a superseded version reports both version numbers", () => {
     const decision = resolveVersionOrNewFileDecision({
-      match: buildMatch({ versionNumber: 3, currentVersionNumber: 5 }),
+      reference: buildReference({ versionNumber: 3, currentVersionNumber: 5 }),
       droppedOnEntityId: DROPPED_ON,
       entityFileName: "Engagement letter.docx",
       droppedFileName: "Engagement letter.docx",
@@ -94,7 +108,7 @@ describe("deciding what a dropped file is offered as", () => {
 
   test("a file taken from the current version reports no supersession", () => {
     const decision = resolveVersionOrNewFileDecision({
-      match: buildMatch({ versionNumber: 5, currentVersionNumber: 5 }),
+      reference: buildReference({ versionNumber: 5, currentVersionNumber: 5 }),
       droppedOnEntityId: DROPPED_ON,
       entityFileName: "Engagement letter.docx",
       droppedFileName: "Engagement letter.docx",
@@ -108,7 +122,7 @@ describe("deciding what a dropped file is offered as", () => {
 
   test("a reference whose document has no name leaves the name unset", () => {
     const decision = resolveVersionOrNewFileDecision({
-      match: buildMatch({ entityName: null }),
+      reference: buildReference({ entityName: null }),
       droppedOnEntityId: DROPPED_ON,
       entityFileName: "Engagement letter.docx",
       droppedFileName: "Engagement letter.docx",
@@ -122,7 +136,7 @@ describe("deciding what a dropped file is offered as", () => {
 
   test("a reference with no version suffix is shown whole", () => {
     const decision = resolveVersionOrNewFileDecision({
-      match: buildMatch({ stamp: "2026/001/015" }),
+      reference: buildReference({ stamp: "2026/001/015" }),
       droppedOnEntityId: DROPPED_ON,
       entityFileName: "Engagement letter.docx",
       droppedFileName: "Engagement letter.docx",
@@ -134,10 +148,65 @@ describe("deciding what a dropped file is offered as", () => {
     expect(decision.document.documentReference).toBe("2026/001/015");
   });
 
+  test.each([
+    DOCUMENT_REFERENCE_EVIDENCE.propertiesAndFooter,
+    DOCUMENT_REFERENCE_EVIDENCE.footerOnly,
+  ])("a file that still shows its reference line leads with %s", (evidence) => {
+    const decision = resolveVersionOrNewFileDecision({
+      reference: buildReference({}, evidence),
+      droppedOnEntityId: DROPPED_ON,
+      entityFileName: "Engagement letter.docx",
+      droppedFileName: "Engagement letter.docx",
+    });
+
+    if (decision.type === "extension") {
+      throw new Error("expected a reference decision");
+    }
+    expect(decision.defaultAction).toBe(REFERENCE_UPLOAD_ACTION.version);
+  });
+
+  // The deleted line is the user's own signal that this is a new document, so
+  // the hidden property alone must not file it onto the old one.
+  test("a file whose reference line was removed leads with a new document", () => {
+    const decision = resolveVersionOrNewFileDecision({
+      reference: buildReference({}, DOCUMENT_REFERENCE_EVIDENCE.propertiesOnly),
+      droppedOnEntityId: DROPPED_ON,
+      entityFileName: "Engagement letter.docx",
+      droppedFileName: "Engagement letter.docx",
+    });
+
+    expect(decision.type).toBe("reference-here");
+    if (decision.type === "extension") {
+      throw new Error("expected a reference decision");
+    }
+    expect(decision.defaultAction).toBe(REFERENCE_UPLOAD_ACTION.newDocument);
+    // The document it names is still reported: the version offer stays on the
+    // dialog, it just no longer leads.
+    expect(decision.document.nextVersionNumber).toBe(4);
+  });
+
+  test("a removed reference line leads with a new document elsewhere too", () => {
+    const decision = resolveVersionOrNewFileDecision({
+      reference: buildReference(
+        { entityId: "entity-share-purchase", workspaceId: "workspace-kovac" },
+        DOCUMENT_REFERENCE_EVIDENCE.propertiesOnly,
+      ),
+      droppedOnEntityId: DROPPED_ON,
+      entityFileName: "Engagement letter.docx",
+      droppedFileName: "Engagement letter.docx",
+    });
+
+    expect(decision.type).toBe("reference-elsewhere");
+    if (decision.type === "extension") {
+      throw new Error("expected a reference decision");
+    }
+    expect(decision.defaultAction).toBe(REFERENCE_UPLOAD_ACTION.newDocument);
+  });
+
   test("no reference falls back to matching extensions", () => {
     expect(
       resolveVersionOrNewFileDecision({
-        match: null,
+        reference: null,
         droppedOnEntityId: DROPPED_ON,
         entityFileName: "Engagement letter.docx",
         droppedFileName: "Engagement letter revised.docx",
@@ -153,7 +222,7 @@ describe("deciding what a dropped file is offered as", () => {
   test("no reference and mismatched extensions rules out replacing", () => {
     expect(
       resolveVersionOrNewFileDecision({
-        match: null,
+        reference: null,
         droppedOnEntityId: DROPPED_ON,
         entityFileName: "Engagement letter.docx",
         droppedFileName: "Signed copy.pdf",
