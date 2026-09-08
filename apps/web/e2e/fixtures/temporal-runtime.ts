@@ -26,5 +26,3 @@ if (mode === "native") {
     .toString();
   document.body.dataset["result"] = date;
 }
-
-export {};

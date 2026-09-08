@@ -21,9 +21,8 @@ export const toDayStartDateTime = (date: string): string =>
 
 const toUTCDateKey = (date: Temporal.PlainDate): string => date.toString();
 
-const utcDateFromKey = (dateKey: string): Temporal.PlainDate | null => {
-  return Result.try(() => Temporal.PlainDate.from(dateKey)).unwrapOr(null);
-};
+const utcDateFromKey = (dateKey: string): Temporal.PlainDate | null =>
+  Result.try(() => Temporal.PlainDate.from(dateKey)).unwrapOr(null);
 
 const toCalendarDayKey = (value: string | null | undefined): string | null => {
   if (value === null || value === undefined) {

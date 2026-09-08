@@ -349,12 +349,14 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   });
 
   // Previous week for trend comparison
-  const prevWeekStart = useMemo(() => {
-    return weekStart.subtract({ days: 7 });
-  }, [weekStart]);
-  const prevWeekEnd = useMemo(() => {
-    return weekStart.subtract({ days: 1 });
-  }, [weekStart]);
+  const prevWeekStart = useMemo(
+    () => weekStart.subtract({ days: 7 }),
+    [weekStart],
+  );
+  const prevWeekEnd = useMemo(
+    () => weekStart.subtract({ days: 1 }),
+    [weekStart],
+  );
 
   const { data: previousTimeSummary } = useQuery({
     ...routeQueryOptions(

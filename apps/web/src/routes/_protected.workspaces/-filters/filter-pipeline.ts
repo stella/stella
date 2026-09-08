@@ -16,15 +16,14 @@ export const parseLocalISODateMs = (value: string): number =>
   parsePlainDate(value)?.toZonedDateTime(Temporal.Now.timeZoneId())
     .epochMilliseconds ?? Number.NaN;
 
-const addLocalCalendarDaysMs = (value: number, days: number): number => {
-  return Result.try(
+const addLocalCalendarDaysMs = (value: number, days: number): number =>
+  Result.try(
     () =>
       Temporal.Instant.fromEpochMilliseconds(value)
         .toZonedDateTimeISO(Temporal.Now.timeZoneId())
         .add({ days })
         .toInstant().epochMilliseconds,
   ).unwrapOr(Number.NaN);
-};
 
 const toEpochMilliseconds = (value: Date | string): number =>
   value instanceof Date

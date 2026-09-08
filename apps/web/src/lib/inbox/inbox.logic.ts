@@ -5,14 +5,13 @@ import type { SignalSeverity } from "@stll/api-contract/signals";
 import { Temporal } from "@stll/time";
 
 /** Local-calendar day key; items created on the same day group together. */
-export const inboxDayKey = (createdAt: string): string => {
-  return Result.try(() =>
+export const inboxDayKey = (createdAt: string): string =>
+  Result.try(() =>
     Temporal.Instant.from(createdAt)
       .toZonedDateTimeISO(Temporal.Now.timeZoneId())
       .toPlainDate()
       .toString(),
   ).unwrapOr(createdAt);
-};
 
 /** Higher severity sorts first; ties keep feed order (newest first). */
 export const severityRank = (severity: SignalSeverity): number =>

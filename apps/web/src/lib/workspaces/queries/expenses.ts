@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import type { ExpenseCategory, TimeEntryStatus } from "@stll/api-contract";
-import { Temporal } from "@stll/time";
+import type { Temporal } from "@stll/time";
 
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";

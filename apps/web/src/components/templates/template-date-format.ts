@@ -43,9 +43,8 @@ const today = (): Temporal.PlainDate =>
 
 export const todayIso = (): string => isoFromLocalDate(today());
 
-export const firstOfNextMonthIso = (): string => {
-  return isoFromLocalDate(today().with({ day: 1 }).add({ months: 1 }));
-};
+export const firstOfNextMonthIso = (): string =>
+  isoFromLocalDate(today().with({ day: 1 }).add({ months: 1 }));
 
 export const inDaysIso = (days: number): string =>
   isoFromLocalDate(today().add({ days }));
