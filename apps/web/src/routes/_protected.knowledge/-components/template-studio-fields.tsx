@@ -84,6 +84,7 @@ import {
 import {
   dedupeOutlineFields,
   humanizeConditionExpr,
+  loopSource,
   outlineFieldPaths,
 } from "@/routes/_protected.knowledge/-components/template-studio-outline";
 import {
@@ -685,7 +686,11 @@ const OutlineRow = ({
       return (
         <li className="group/row relative">
           <Tooltip
-            content={onlyChild.path}
+            content={
+              node.alias === undefined
+                ? onlyChild.path
+                : loopSource(node.expr, node.alias)
+            }
             render={
               <button
                 className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
@@ -721,7 +726,7 @@ const OutlineRow = ({
 };
 
 /** A condition / loop block in the outline, rendered as a peer of field rows:
- *  a boxed icon slot (Split for if/elseif/else, Repeat for each) and a human
+ *  a boxed icon slot (Split for a condition, Repeat for a loop) and a human
  *  reading of the opener as the label, with the raw expression kept in the
  *  row's title. Collapsible when it owns children. */
 const OutlineGroupRow = ({
@@ -743,7 +748,14 @@ const OutlineGroupRow = ({
   const friendly = humanizeConditionExpr(node.expr, fields, (key) => t(key));
   let groupLabel: string;
   if (node.kind === "for") {
-    groupLabel = t("templates.studio.repeats", { item: friendly });
+    // An alias only helps beside the path it binds: `attorney in attorneys` is
+    // what the author can type inside the loop, while `attorney in Attorneys`
+    // would pair the loop variable with a label no marker accepts. A loop that
+    // names no variable keeps the friendly reading of its array instead.
+    groupLabel = t("templates.studio.repeats", {
+      item:
+        node.alias === undefined ? friendly : loopSource(node.expr, node.alias),
+    });
   } else if (node.kind === "else") {
     groupLabel = t("templates.studio.otherwise");
   } else if (node.kind === "elif") {
@@ -765,7 +777,9 @@ const OutlineGroupRow = ({
           field rows (which have no leading chevron). */}
       <div className="flex items-center">
         <Tooltip
-          content={node.expr === "" ? groupTitle : node.expr}
+          content={
+            node.expr === "" ? groupTitle : loopSource(node.expr, node.alias)
+          }
           render={
             <button
               className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"

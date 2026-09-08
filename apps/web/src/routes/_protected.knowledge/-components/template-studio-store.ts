@@ -163,6 +163,9 @@ export type OutlineNode =
       type: "group";
       kind: GroupDirectiveKind;
       expr: string;
+      /** Loop variable of a `for` opener (`{% for row in items %}` ⇒ `row`);
+       *  unset for conditional groups. */
+      alias?: string;
       from: number;
       children: OutlineNode[];
     };
