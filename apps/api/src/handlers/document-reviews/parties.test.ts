@@ -1,17 +1,27 @@
 /**
  * The launcher's first-screen call: a document version that already has a
  * cached party detection answers from that row alone, with no model call and
- * no write.
+ * no write; a version that does not reaches the model, and a provider failure
+ * there answers with the status that names it rather than an opaque 500.
  */
 
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { detectReviewParties } from "@/api/lib/document-review/parties";
+import type { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  modelStepFailure,
+  PROVIDER_FAILURE_CASES,
+} from "@/api/tests/helpers/provider-failure-cases";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import reviewParties from "./parties";
+import reviewParties, { createReviewParties } from "./parties";
 
 type ReviewPartiesCtx = Parameters<typeof reviewParties.handler>[0];
 
@@ -51,7 +61,20 @@ const cachedParties = [
   { role: "Seller", name: null },
 ];
 
-const createHarness = () => {
+/** A BYOK org whose `pdf` role resolves, so the availability guard passes. */
+const orgAIConfig = {
+  providers: [{ provider: "openai", apiKey: "test-api-key" }],
+  overrideModels: {
+    chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+    fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+    pdf: { provider: "openai", modelId: "gpt-5.4" },
+    reasoning: { provider: "openai", modelId: "gpt-5.4" },
+  },
+} satisfies OrgAIConfig;
+
+const createHarness = ({
+  cachedRows = [{ parties: cachedParties }],
+}: { cachedRows?: { parties: unknown }[] } = {}) => {
   let insertCalled = false;
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
@@ -60,7 +83,7 @@ const createHarness = () => {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: async () => [{ parties: cachedParties }],
+          limit: async () => cachedRows,
         }),
       }),
     }),
@@ -70,9 +93,8 @@ const createHarness = () => {
     },
   });
 
-  const context = asTestRaw<ReviewPartiesCtx>({
+  const context = createTestHandlerContext<ReviewPartiesCtx>({
     body: { target: { entityId: ENTITY_ID, fileFieldId: FIELD_ID } },
-    memberRole: { role: "owner" },
     workspaceId: WORKSPACE_ID,
     safeDb,
     scopedDb,
@@ -80,12 +102,22 @@ const createHarness = () => {
       activeOrganizationId: toSafeId<"organization">("org_test_parties"),
     },
     user: { id: USER_ID },
-    orgAIConfig: null,
+    orgAIConfig,
     promptCachingEnabled: false,
   });
 
   return { context, insertCalled: () => insertCalled };
 };
+
+/** A prepared DOCX target: the detection fake never reads it. */
+const prepareReviewFilesFake = asTestRaw<typeof fetchAndPrepareReviewFiles>(
+  async () => await Promise.resolve([{ kind: "docx" }]),
+);
+
+const partiesFailingWith = (cause: unknown): typeof detectReviewParties =>
+  asTestRaw<typeof detectReviewParties>(
+    async () => await Promise.resolve(Result.err(modelStepFailure(cause))),
+  );
 
 describe("reviewParties", () => {
   test("answers from the cached row without a model call or a write", async () => {
@@ -99,4 +131,25 @@ describe("reviewParties", () => {
     });
     expect(insertCalled()).toBe(false);
   });
+
+  for (const { cause, message, name, status } of PROVIDER_FAILURE_CASES) {
+    test(`answers ${name} with the status that names it`, async () => {
+      const { context, insertCalled } = createHarness({ cachedRows: [] });
+      const handler = createReviewParties({
+        detectParties: partiesFailingWith(cause),
+        prepareReviewFiles: prepareReviewFilesFake,
+      });
+
+      const result = await handler.handler(context);
+
+      if (!("code" in result)) {
+        throw new Error("Expected the provider failure to return a status");
+      }
+      expect(result.code).toBe(status);
+      expect(result.response).toMatchObject({ message });
+      // A failed detection has nothing to cache: the row would answer every
+      // later call for this version with a result no model produced.
+      expect(insertCalled()).toBe(false);
+    });
+  }
 });
