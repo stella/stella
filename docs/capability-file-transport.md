@@ -74,14 +74,13 @@ alternative transport.
 | `entities.download-zip`        |            | x   | none                                                                |
 | `templates.create`             | x          |     | none                                                                |
 | `templates.discover`           | x          |     | none                                                                |
-| `templates.manifest`           | x          | x   | none                                                                |
 | `templates.prepare`            | x          |     | none                                                                |
 | `templates.save-document`      | x          |     | none                                                                |
 | `views.table-export`           |            | x   | none                                                                |
 | `templates.prefill`            | x (opt.)   |     | none (exposed: fileless mode)                                       |
 
-Four complete alternatives, eight partial alternatives, and nine entries with no
-alternative.
+Four complete alternatives, eight partial alternatives, and eight entries with
+no alternative.
 
 ## Fileless mode
 
@@ -139,8 +138,8 @@ sub-cases:
   persisted, so they want a real purpose variant (validation callback + finalize
   result) added to the presign union, exactly like `agent_skill`.
 - **Transient** (`entities.check-stamp`, `templates.discover`,
-  `templates.manifest`, `templates.prefill`, `templates.prepare`,
-  `templates.fill`): the bytes are consumed to compute an answer and never
+  `templates.prefill`, `templates.prepare`, `templates.fill`): the bytes are
+  consumed to compute an answer and never
   stored. These want a `scratch` purpose whose finalize hands the handler a
   staged object key rather than committing anything, plus a handler-side switch
   from `file: t.File()` to `uploadId: SafeId`.
@@ -163,8 +162,8 @@ C only for its text formats and class D otherwise.
 ### Class D — file-out that is genuinely binary
 
 `entities.download-zip` (streamed zip via `client-zip`), `templates.fill` /
-`templates.fill-by-id` (DOCX/PDF `Uint8Array`), `templates.manifest` (a
-rewritten DOCX), `time-entries.export-pdf` (`buildMinimalPdf`), and
+`templates.fill-by-id` (DOCX/PDF `Uint8Array`), `time-entries.export-pdf`
+(`buildMinimalPdf`), and
 `views.table-export` in `xlsx`/`docx`. None of these is a pre-existing S3 object,
 so there is no URL to presign without first materializing the bytes.
 
