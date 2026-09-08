@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.0
+
+### Minor Changes
+
+- [#3045](https://github.com/stella/stella/pull/3045) [`d6c8fc9`](https://github.com/stella/stella/commit/d6c8fc910050b1b05f9adba3005ead156a705d30) Thanks [@shanehobson](https://github.com/shanehobson)! - The entity readers take a `find` filter: `entities.read-window`, the kanban group reader and the group-counts reader accept `body.find` (via `--input`, like the other structured body fields), narrowing rows to those whose displayed name or chosen columns contain a literal substring. It is not `search`, which ranks an asynchronous index of document titles and adds sort keys; a find filters exactly what the grid renders. `find.scope.type` `all` also matches the row's name, `columns` matches only `find.scope.propertyIds`. `find.term` is at least three characters once trimmed: the cells are read through a trigram index, which a shorter term cannot use.
+
 ## 1.1.0
 
 ### Minor Changes
