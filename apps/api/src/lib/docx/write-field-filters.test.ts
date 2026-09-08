@@ -7,7 +7,7 @@ import {
   filtersFromFieldMeta,
 } from "./field-filters";
 import type { FieldMeta } from "./types";
-import { unwritableRewrites, writeFieldFilters } from "./write-field-filters";
+import { writeFieldFilters } from "./write-field-filters";
 
 const WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -147,7 +147,9 @@ describe("writing a configuration into the document", () => {
   });
 
   test("asking for what the markers already say returns the same bytes", async () => {
-    const docx = await makeDocx([P('{{ deposit | number | label("Kaution") }}')]);
+    const docx = await makeDocx([
+      P('{{ deposit | number | label("Kaution") }}'),
+    ]);
     const field: FieldMeta = {
       path: "deposit",
       inputType: "number",
@@ -215,19 +217,5 @@ describe("writing a configuration into the document", () => {
     const xml = await documentXml(buffer);
     expect(xml).toContain('{{ deposit | number | label("New") }}');
     expect(xml).not.toContain("Old");
-  });
-
-  test("a brace has no marker spelling, and is named before the write", () => {
-    expect(
-      unwritableRewrites([
-        {
-          path: "deposit",
-          filters: filtersFromFieldMeta({
-            path: "deposit",
-            label: "a { b",
-          }),
-        },
-      ]),
-    ).toEqual([{ path: "deposit", filter: "label", value: "a { b" }]);
   });
 });

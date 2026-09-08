@@ -21,7 +21,6 @@ import {
   renderForOpener,
   renderValueMarker,
   scanMarkers,
-  unwritableFilterValues,
   type FilterCall,
   type ScannedMarker,
 } from "@stll/template-conditions";
@@ -37,15 +36,6 @@ export type FieldFilterRewrite = {
   /** The manifest path, loop scoping already applied. */
   path: string;
   filters: readonly FilterCall[];
-};
-
-/** A value the grammar cannot hold, named against the path that asked for it,
- *  so a caller can report the property instead of writing text the scanner
- *  would read back as something else. */
-export type UnwritableRewrite = {
-  path: string;
-  filter: string;
-  value: string;
 };
 
 export type WriteFieldFiltersResult = {
@@ -156,24 +146,12 @@ const rewritePart = (
   };
 };
 
-/** Every rewrite whose chain carries a value no marker can hold. */
-export const unwritableRewrites = (
-  rewrites: readonly FieldFilterRewrite[],
-): UnwritableRewrite[] =>
-  rewrites.flatMap(({ filters, path }) =>
-    unwritableFilterValues(filters).map(({ filter, value }) => ({
-      path,
-      filter,
-      value: String(value),
-    })),
-  );
-
 /**
  * The document with every named path's marker rewritten to carry its chain.
  *
  * Refuses nothing: a path the document does not carry is simply absent from
  * `written`, and a chain the grammar cannot hold must be caught with
- * {@link unwritableRewrites} before the call, because a marker written with a
+ * `unwritableFilterValues` before the call, because a marker written with a
  * brace in it is a marker the scanner stops reading.
  */
 export const writeFieldFilters = async (

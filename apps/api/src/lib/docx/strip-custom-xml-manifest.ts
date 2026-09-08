@@ -39,7 +39,7 @@ const parseCustomXmlSlotIndex = (index: string): number | null => {
 
 /** Escape every regex meta-character (including `\`) for literal matching. */
 const escapeRegExp = (value: string): string =>
-  value.replaceAll(/[\\^$.*+?()[\]{}|]/gu, String.raw`\$&`);
+  value.replaceAll(/[\\^$.*+?()[\]{}|]/gu, (match) => `\\${match}`);
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
@@ -74,9 +74,7 @@ const isStellaManifestPart = (xml: string): boolean => {
 
 /** The slot the Stella manifest occupies, lowest index first so the choice is
  *  deterministic regardless of zip order. */
-const findManifestSlot = async (
-  zip: JSZip,
-): Promise<CustomXmlSlot | null> => {
+const findManifestSlot = async (zip: JSZip): Promise<CustomXmlSlot | null> => {
   const candidates = Object.entries(zip.files).flatMap(([path, entry]) => {
     const index = CUSTOM_XML_DATA_RE.exec(path)?.groups?.["index"];
     return index === undefined

@@ -2099,7 +2099,7 @@ const upsertStoredTemplate = async ({
       recordAuditEvent: context.recordAuditEvent,
       // The new document decides everything: the fields it carries are the
       // ones its markers declare.
-      prepare: async () => Result.ok({ bytes: new Uint8Array(buffer) }),
+      prepare: () => Result.ok({ bytes: new Uint8Array(buffer) }),
     }),
   );
   return Result.isError(written)

@@ -52,6 +52,14 @@ const documentParagraphs = [
 
 const text = fc.stringMatching(/^[- ,.'"a-zA-Zá-ž0-9]{1,16}$/u);
 
+/** The described properties, under the path they belong to. */
+const atPath =
+  (path: string) =>
+  (described: object): object => ({ path, ...described });
+
+/** A generated tuple of fields as the list the writer takes. */
+const asFieldList = (fields: readonly FieldMeta[]): FieldMeta[] => [...fields];
+
 /** One configuration a value marker can hold, generated per path. */
 const valueField = (path: string): fc.Arbitrary<FieldMeta> =>
   fc
@@ -67,7 +75,7 @@ const valueField = (path: string): fc.Arbitrary<FieldMeta> =>
       },
       { requiredKeys: [] },
     )
-    .map((described) => ({ path, ...described }))
+    .map(atPath(path))
     .filter(isFieldMeta);
 
 /** A repeat carries the filters a repeat can: what to call it and how many
@@ -76,11 +84,13 @@ const arrayField: fc.Arbitrary<FieldMeta> = fc
   .record(
     {
       label: text,
-      validation: fc.integer({ min: 0, max: 3 }).map((minItems) => ({ minItems })),
+      validation: fc
+        .integer({ min: 0, max: 3 })
+        .map((minItems) => ({ minItems })),
     },
     { requiredKeys: [] },
   )
-  .map((described) => ({ path: ARRAY_PATH, ...described }))
+  .map(atPath(ARRAY_PATH))
   .filter(isFieldMeta);
 
 const configuration = fc
@@ -90,7 +100,7 @@ const configuration = fc
     valueField(ITEM_PATH),
     arrayField,
   )
-  .map((fields) => [...fields]);
+  .map(asFieldList);
 
 const rewritesFor = (fields: readonly FieldMeta[]) =>
   fields.map((field) => ({
@@ -106,9 +116,7 @@ const rewritesFor = (fields: readonly FieldMeta[]) =>
  *  not a claim about how it is filled. */
 const configured = (fields: readonly FieldMeta[]): FieldMeta[] =>
   rewritesFor(fields).flatMap(({ filters, path }) =>
-    filters.length === 0
-      ? []
-      : fields.filter((field) => field.path === path),
+    filters.length === 0 ? [] : fields.filter((field) => field.path === path),
   );
 
 describe("deriving a manifest from the document that declares it", () => {

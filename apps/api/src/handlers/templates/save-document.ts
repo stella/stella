@@ -86,7 +86,7 @@ const saveTemplateDocument = createSafeRootHandler(
           templateId,
           mode: { type: "new-version", userId: user.id },
           recordAuditEvent,
-          prepare: async () => Result.ok({ bytes: new Uint8Array(buffer) }),
+          prepare: () => Result.ok({ bytes: new Uint8Array(buffer) }),
         }),
       ),
     );

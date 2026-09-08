@@ -3,17 +3,21 @@
  *
  * Bytes in, bytes out: the entries are read against what the markers already
  * declare, merged onto them, written back into the markers, and the manifest
- * is derived from the result. No database, no object storage — the storage
+ * is derived from the result. No database and no object storage: the storage
  * wrapper lives in `handlers/templates/configure-template-fields-service.ts`,
  * and the authoring eval drives this half directly, so the eval and the
  * service run the same code.
  */
 
+import { unwritableFilterValues } from "@stll/template-conditions";
+
+import { arrayOrEmpty } from "@/api/lib/array";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
   arrayFiltersFromFieldMeta,
   filtersFromFieldMeta,
 } from "@/api/lib/docx/field-filters";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
@@ -21,11 +25,9 @@ import type {
   TemplateManifest,
 } from "@/api/lib/docx/types";
 import {
-  unwritableRewrites,
   writeFieldFilters,
   type FieldFilterRewrite,
 } from "@/api/lib/docx/write-field-filters";
-import { arrayOrEmpty } from "@/api/lib/array";
 
 import {
   fieldConfigurationIssuePath,
@@ -33,7 +35,6 @@ import {
   partitionFieldConfiguration,
   type FieldConfigurationIssue,
 } from "./configure-field-input";
-import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 
 export type ConfigureTemplateDocumentResult = {
   /** The document with the configuration written into its markers; the same
@@ -133,36 +134,38 @@ export const configureTemplateDocument = async ({
     declared.fields.map((field) => [field.path, field]),
   );
   const arrays = arrayPaths(discovered);
-  const indexOf = new Map(
-    partitioned.applied.map(({ field, index }) => [field.path, index]),
-  );
 
-  const candidates: FieldFilterRewrite[] = partitioned.applied.map(
-    ({ field }) => {
+  // Each candidate keeps the position the caller sent it at, so an issue this
+  // step raises names the entry the caller wrote rather than a place in a list
+  // it never saw.
+  const candidates: (FieldFilterRewrite & { index: number })[] =
+    partitioned.applied.map(({ field, index }) => {
       const merged = mergeFieldConfiguration(
         declaredByPath.get(field.path),
         field,
       );
       return {
+        index,
         path: field.path,
         filters: arrays.has(field.path)
           ? arrayFiltersFromFieldMeta(merged)
           : filtersFromFieldMeta(merged),
       };
-    },
-  );
+    });
 
-  const unwritable = unwritableRewrites(candidates);
-  const refused = new Set(unwritable.map(({ path }) => path));
-  for (const { filter, path, value } of unwritable) {
-    issues.push(
-      unwritableValueIssue({
-        filter,
-        index: indexOf.get(path) ?? 0,
-        path,
-        value,
-      }),
-    );
+  const refused = new Set<string>();
+  for (const candidate of candidates) {
+    for (const { filter, value } of unwritableFilterValues(candidate.filters)) {
+      refused.add(candidate.path);
+      issues.push(
+        unwritableValueIssue({
+          filter,
+          index: candidate.index,
+          path: candidate.path,
+          value: String(value),
+        }),
+      );
+    }
   }
 
   const rewrites = candidates.filter(({ path }) => !refused.has(path));
@@ -170,9 +173,9 @@ export const configureTemplateDocument = async ({
     buffer,
     rewrites,
   );
-  for (const { path } of rewrites) {
+  for (const { index, path } of rewrites) {
     if (!written.has(path)) {
-      issues.push(noMarkerIssue(path, indexOf.get(path) ?? 0));
+      issues.push(noMarkerIssue(path, index));
     }
   }
 

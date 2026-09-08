@@ -66,7 +66,9 @@ type WriteStoredTemplateOptions = {
    *  disagrees with the document it stored beside it. */
   prepare: (
     snapshot: TemplateWriteSnapshot,
-  ) => Promise<Result<{ bytes: Uint8Array }, HandlerError>>;
+  ) =>
+    | Result<{ bytes: Uint8Array }, HandlerError>
+    | Promise<Result<{ bytes: Uint8Array }, HandlerError>>;
   recordAuditEvent: AuditRecorder;
   writeObject?: typeof writeS3ObjectWithRetry;
 };
