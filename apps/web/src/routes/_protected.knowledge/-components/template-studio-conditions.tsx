@@ -44,7 +44,10 @@ import {
   sanitizeFieldPath,
 } from "@/routes/_protected.knowledge/-components/template-studio-model";
 import type { OperatorWordKey } from "@/routes/_protected.knowledge/-components/template-studio-outline";
-import { humanizeConditionExpr } from "@/routes/_protected.knowledge/-components/template-studio-outline";
+import {
+  humanizeConditionExpr,
+  loopSource,
+} from "@/routes/_protected.knowledge/-components/template-studio-outline";
 import type { StudioField } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import type { FieldValidation } from "@/routes/_protected.knowledge/-components/template-value-source";
@@ -281,7 +284,11 @@ export const LoopFace = ({ selected }: { selected: DirectiveRange }) => {
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
         onBack={() => actions?.deselect()}
-        subtitle={<code className="text-xs">{arrayPath}</code>}
+        subtitle={
+          <code className="text-xs">
+            {loopSource(arrayPath, selected.alias)}
+          </code>
+        }
         title={t("templates.studio.scopeLoop")}
       />
       <div className="flex flex-col gap-4 px-4 py-4">

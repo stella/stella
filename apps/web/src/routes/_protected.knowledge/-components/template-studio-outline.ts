@@ -48,6 +48,7 @@ export const buildOutline = (
       type: "group",
       kind,
       expr: d.expr,
+      ...(d.alias === undefined ? {} : { alias: d.alias }),
       from: d.from,
       children: [],
     };
@@ -181,6 +182,13 @@ export const humanizeConditionExpr = (
   }
   return trimmed;
 };
+
+/** How a loop reads back to its author: the loop variable, the grammar's `in`
+ *  keyword, and the array it walks — the marker's own words (`{% for attorney
+ *  in attorneys %}`), so `in` is the keyword and stays untranslated. Kinds that
+ *  carry no alias (every condition branch) read as the expression alone. */
+export const loopSource = (path: string, alias: string | undefined): string =>
+  alias === undefined ? path : `${alias} in ${path}`;
 
 export const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
   const paths = new Set<string>();
