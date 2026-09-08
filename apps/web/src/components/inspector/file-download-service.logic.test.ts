@@ -4,24 +4,29 @@ import { resolvePrimaryDownloadVariant } from "@/components/inspector/file-downl
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 
 describe("primary download variant", () => {
-  test("hands over the reference copy of a readable DOCX in a referenced matter", () => {
+  test("hands over the reference copy of a readable DOCX whose version is referenced", () => {
     expect(
       resolvePrimaryDownloadVariant({
         encrypted: false,
-        hasReference: true,
         mimeType: DOCX_MIME,
+        reference: "2026/001/015.v3",
       }),
     ).toBe("reference");
   });
 
-  test("keeps the original when the version carries no reference", () => {
-    expect(
-      resolvePrimaryDownloadVariant({
-        encrypted: false,
-        hasReference: false,
-        mimeType: DOCX_MIME,
-      }),
-    ).toBe("original");
+  // The matter's own reference is not the signal: a version created before
+  // the matter got one is stamped null, and the server refuses to build a
+  // reference copy of it.
+  test("keeps the original when the version carries no reference or none is resolved yet", () => {
+    for (const reference of [null, undefined, ""]) {
+      expect(
+        resolvePrimaryDownloadVariant({
+          encrypted: false,
+          mimeType: DOCX_MIME,
+          reference,
+        }),
+      ).toBe("original");
+    }
   });
 
   test("keeps the original for formats that cannot carry a reference", () => {
@@ -29,8 +34,8 @@ describe("primary download variant", () => {
       expect(
         resolvePrimaryDownloadVariant({
           encrypted: false,
-          hasReference: true,
           mimeType,
+          reference: "2026/001/015.v3",
         }),
       ).toBe("original");
     }
@@ -41,8 +46,8 @@ describe("primary download variant", () => {
       expect(
         resolvePrimaryDownloadVariant({
           encrypted,
-          hasReference: true,
           mimeType: DOCX_MIME,
+          reference: "2026/001/015.v3",
         }),
       ).toBe("original");
     }
