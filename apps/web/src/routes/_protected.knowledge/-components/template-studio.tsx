@@ -1088,24 +1088,6 @@ export const TemplateStudioPage = ({
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
         return false;
       }
-      // The document is the only store, so a setting no marker can carry does
-      // not survive this save. The bytes are still worth storing; the author
-      // hears which field lost what rather than finding out at fill time.
-      const unplaced = projected.unplaced.at(0);
-      if (unplaced !== undefined) {
-        stellaToast.add({
-          title: t("templates.templateSaved"),
-          description:
-            unplaced.reason === "unwritable"
-              ? t("templates.studio.fieldSettingBrackets", {
-                  fieldPath: unplaced.path,
-                })
-              : t("templates.studio.fieldWithoutMarker", {
-                  fieldPath: unplaced.path,
-                }),
-          type: "warning",
-        });
-      }
       const bytes = await editor.save();
       if (!bytes) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -1132,6 +1114,25 @@ export const TemplateStudioPage = ({
       }
 
       markSaved();
+
+      // The document is the only store, so a setting no marker can carry did
+      // not survive this save. The bytes were still worth storing; the author
+      // hears which field lost what rather than finding out at fill time.
+      const unplaced = projected.unplaced.at(0);
+      if (unplaced !== undefined) {
+        stellaToast.add({
+          title: t("templates.templateSaved"),
+          description:
+            unplaced.reason === "unwritable"
+              ? t("templates.studio.fieldSettingBrackets", {
+                  fieldPath: unplaced.path,
+                })
+              : t("templates.studio.fieldWithoutMarker", {
+                  fieldPath: unplaced.path,
+                }),
+          type: "warning",
+        });
+      }
 
       // Flush deferred link-row slot renames now that the document (with its
       // already-rewritten clause markers) is persisted, so the row
