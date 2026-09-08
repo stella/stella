@@ -136,15 +136,11 @@ type ClipboardSearchArrowKey = ClipboardInputKey &
   };
 
 /**
- * ArrowRight with the caret at the search field's visual right edge hands
- * focus to the group rail beside the search field (an empty field qualifies).
- * The field resolves its own direction from the query, so an Arabic or Hebrew
- * query puts that edge at offset 0 and the end of the text on the left. With
- * text still to the right of the caret the arrow keeps moving the caret, and
- * any modifier leaves the platform's own word, line, and selection gestures
- * alone.
+ * Horizontal arrows leave search only at the corresponding visual edge.
+ * Query direction determines the caret edge; the toolbar's direction
+ * determines which control receives focus. Modifiers retain native editing.
  */
-export const shouldLeaveSearchForGroups = ({
+export const shouldLeaveClipboardSearch = ({
   altGraphKey,
   altKey,
   ctrlKey,
@@ -158,34 +154,46 @@ export const shouldLeaveSearchForGroups = ({
   shiftKey,
   valueLength,
 }: ClipboardSearchArrowKey) => {
-  const rightEdge = direction === "rtl" ? 0 : valueLength;
+  if (key !== "ArrowLeft" && key !== "ArrowRight") {
+    return false;
+  }
+  const edge =
+    (key === "ArrowRight") === (direction === "ltr") ? valueLength : 0;
   return (
     !isClipboardNameInput(dataset) &&
-    key === "ArrowRight" &&
     !isComposing &&
     !altGraphKey &&
     !altKey &&
     !ctrlKey &&
     !metaKey &&
     !shiftKey &&
-    selectionStart === rightEdge &&
-    selectionEnd === rightEdge
+    selectionStart === edge &&
+    selectionEnd === edge
   );
 };
 
+type ClipboardDirectionalKey = {
+  direction: TextDirection;
+  key: string;
+};
+
 /**
- * The group rail is the row below the timeline: left and right walk its
- * controls, ArrowUp returns to the selected card. Stepping before the first
- * control lands back in the search field, so the two arrows pair up.
+ * Every footer control follows visual order, including the overflow menu
+ * trigger after its popup closes. ArrowUp returns to the selected card.
  */
-export const clipboardGroupRailKeyAction = (key: string) => {
+export const clipboardControlsKeyAction = ({
+  direction,
+  key,
+}: ClipboardDirectionalKey) => {
   switch (key) {
     case "ArrowLeft":
-      return "previous";
+      return direction === "rtl" ? "next" : "previous";
     case "ArrowRight":
-      return "next";
+      return direction === "rtl" ? "previous" : "next";
     case "ArrowUp":
       return "focusTimeline";
+    case "ArrowDown":
+      return "stay";
     default:
       return null;
   }
@@ -209,11 +217,6 @@ export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
   !shortcut.shiftKey &&
   shortcut.key.toLocaleLowerCase() === "c";
 
-type ClipboardTimelineKey = {
-  direction: TextDirection;
-  key: string;
-};
-
 /**
  * The horizontal arrows follow the rail's visual order, not a fixed side: an
  * RTL rail runs right-to-left, so ArrowLeft advances and ArrowRight goes back.
@@ -221,7 +224,7 @@ type ClipboardTimelineKey = {
 export const clipboardTimelineKeyAction = ({
   direction,
   key,
-}: ClipboardTimelineKey) => {
+}: ClipboardDirectionalKey) => {
   if (key === "ArrowDown") {
     return "focusSearch";
   }

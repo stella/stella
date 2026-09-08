@@ -655,6 +655,7 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright/action.yml \
             .github/workflows/ci.yml \
+            apps/desktop \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
             apps/web/package.json \
@@ -1010,6 +1011,10 @@ jobs:
       - name: Test UI browser interactions
         if: steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/ui test:browser
+
+      - name: Test desktop browser interactions
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/desktop test:browser
 
       - name: Test UI playground visuals
         if: steps.ui-browser-tests.outputs.required == 'true'

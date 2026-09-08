@@ -7,7 +7,7 @@ import {
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
-  clipboardGroupRailKeyAction,
+  clipboardControlsKeyAction,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -21,7 +21,7 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
-  shouldLeaveSearchForGroups,
+  shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
@@ -343,12 +343,21 @@ describe("keyboard indexes", () => {
     expect(rtl("ArrowUp")).toBeNull();
   });
 
-  test("group rail arrows walk horizontally and Arrow Up returns to the timeline", () => {
-    expect(clipboardGroupRailKeyAction("ArrowLeft")).toBe("previous");
-    expect(clipboardGroupRailKeyAction("ArrowRight")).toBe("next");
-    expect(clipboardGroupRailKeyAction("ArrowUp")).toBe("focusTimeline");
-    expect(clipboardGroupRailKeyAction("ArrowDown")).toBeNull();
-    expect(clipboardGroupRailKeyAction("Enter")).toBeNull();
+  test("footer arrows follow visual order and Arrow Up returns to the timeline", () => {
+    const ltr = (key: string) =>
+      clipboardControlsKeyAction({ direction: "ltr", key });
+    expect(ltr("ArrowLeft")).toBe("previous");
+    expect(ltr("ArrowRight")).toBe("next");
+    expect(ltr("ArrowUp")).toBe("focusTimeline");
+    expect(ltr("ArrowDown")).toBe("stay");
+    expect(ltr("Enter")).toBeNull();
+
+    const rtl = (key: string) =>
+      clipboardControlsKeyAction({ direction: "rtl", key });
+    expect(rtl("ArrowLeft")).toBe("next");
+    expect(rtl("ArrowRight")).toBe("previous");
+    expect(rtl("ArrowUp")).toBe("focusTimeline");
+    expect(rtl("ArrowDown")).toBe("stay");
   });
 
   test("timeline navigation has no target beyond either edge", () => {
@@ -556,33 +565,41 @@ describe("clipboard input keyboard handling", () => {
       shiftKey: false,
       valueLength: 3,
     };
-    expect(shouldLeaveSearchForGroups(atEnd)).toBe(true);
+    expect(shouldLeaveClipboardSearch(atEnd)).toBe(true);
     expect(
-      shouldLeaveSearchForGroups({
+      shouldLeaveClipboardSearch({
         ...atEnd,
         selectionEnd: 0,
         selectionStart: 0,
         valueLength: 0,
       }),
     ).toBe(true);
-    expect(shouldLeaveSearchForGroups({ ...atEnd, selectionStart: 2 })).toBe(
+    expect(shouldLeaveClipboardSearch({ ...atEnd, selectionStart: 2 })).toBe(
       false,
     );
     expect(
-      shouldLeaveSearchForGroups({
+      shouldLeaveClipboardSearch({
         ...atEnd,
         selectionEnd: 1,
         selectionStart: 1,
       }),
     ).toBe(false);
-    expect(shouldLeaveSearchForGroups({ ...atEnd, isComposing: true })).toBe(
+    expect(shouldLeaveClipboardSearch({ ...atEnd, isComposing: true })).toBe(
       false,
     );
-    expect(shouldLeaveSearchForGroups({ ...atEnd, key: "ArrowLeft" })).toBe(
+    expect(shouldLeaveClipboardSearch({ ...atEnd, key: "ArrowLeft" })).toBe(
       false,
     );
     expect(
-      shouldLeaveSearchForGroups({
+      shouldLeaveClipboardSearch({
+        ...atEnd,
+        key: "ArrowLeft",
+        selectionEnd: 0,
+        selectionStart: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldLeaveClipboardSearch({
         ...atEnd,
         dataset: { clipboardNameInput: "" },
       }),
@@ -611,7 +628,7 @@ describe("clipboard input keyboard handling", () => {
       "metaKey",
       "shiftKey",
     ] as const) {
-      expect(shouldLeaveSearchForGroups({ ...atEnd, [modifier]: true })).toBe(
+      expect(shouldLeaveClipboardSearch({ ...atEnd, [modifier]: true })).toBe(
         false,
       );
     }
@@ -632,15 +649,23 @@ describe("clipboard input keyboard handling", () => {
       shiftKey: false,
       valueLength: 3,
     };
-    expect(shouldLeaveSearchForGroups(rtl)).toBe(true);
+    expect(shouldLeaveClipboardSearch(rtl)).toBe(true);
     expect(
-      shouldLeaveSearchForGroups({
+      shouldLeaveClipboardSearch({
         ...rtl,
         selectionEnd: 3,
         selectionStart: 3,
       }),
     ).toBe(false);
-    expect(shouldLeaveSearchForGroups({ ...rtl, selectionEnd: 3 })).toBe(false);
+    expect(shouldLeaveClipboardSearch({ ...rtl, selectionEnd: 3 })).toBe(false);
+    expect(
+      shouldLeaveClipboardSearch({
+        ...rtl,
+        key: "ArrowLeft",
+        selectionEnd: 3,
+        selectionStart: 3,
+      }),
+    ).toBe(true);
   });
 });
 

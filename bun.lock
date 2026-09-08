@@ -199,6 +199,7 @@
         "use-intl": "catalog:",
       },
       "devDependencies": {
+        "@playwright/test": "^1.62.0",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@tauri-apps/cli": "^2.11.4",

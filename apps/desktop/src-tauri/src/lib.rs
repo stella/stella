@@ -3,6 +3,8 @@ mod autostart;
 mod bridge;
 mod clipboard;
 mod clipboard_commands;
+#[cfg(target_os = "macos")]
+mod clipboard_image_export;
 mod clipboard_screen_capture;
 mod clipboard_store;
 mod clipboard_welcome;
@@ -106,6 +108,10 @@ pub fn run() {
     .manage(clipboard_window::ClipboardWindowPark::default())
     .setup(move |app| {
       let handle = app.handle().clone();
+      #[cfg(target_os = "macos")]
+      if let Ok(mut clipboard) = clipboard_manager.lock() {
+        clipboard.clear_image_exports();
+      }
       let initial_deep_links = app.deep_link().get_current()?;
       let reveal_clipboard_on_launch =
         app_lifecycle::should_reveal_clipboard_on_launch(
@@ -393,7 +399,7 @@ pub fn run() {
     .invoke_handler(with_stella_commands!(generate_stella_handler))
     .build(tauri::generate_context!())
     .expect("error while building stella desktop")
-    .run(|_app, event| match event {
+    .run(|app, event| match event {
       tauri::RunEvent::ExitRequested { api, code, .. } => {
         if app_lifecycle::should_prevent_exit(code) {
           tracing::info!("prevented background desktop process from exiting");
@@ -402,7 +408,17 @@ pub fn run() {
           tracing::info!(?code, "desktop process received an explicit exit request");
         }
       }
-      tauri::RunEvent::Exit => tracing::info!("desktop event loop exited"),
+      tauri::RunEvent::Exit => {
+        #[cfg(target_os = "macos")]
+        if let Some(clipboard) = app.try_state::<ClipboardAppState>()
+          && let Ok(mut clipboard) = clipboard.lock()
+        {
+          clipboard.clear_image_exports();
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = app;
+        tracing::info!("desktop event loop exited");
+      }
       _ => {}
     });
 }

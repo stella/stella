@@ -10,7 +10,7 @@ use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
     ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
-    ClipboardSourceAppVisual, write_item,
+    ClipboardSourceAppVisual,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{self, ClipboardStartupTrace},
@@ -190,13 +190,14 @@ pub fn clipboard_clear_history(
 #[tauri::command]
 pub fn clipboard_create_group(
   color: ClipboardGroupColor,
+  item_id: Option<String>,
   name: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.create_group(&name, color)?;
+    manager.create_group(&name, color, item_id.as_deref())?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -413,20 +414,14 @@ fn write_history_item(
     .map(|image| image.load())
     .transpose()
     .map_err(copy_error)?;
-  state
-    .lock()
-    .map_err(|_| copy_error(lock_error()))?
-    .suppress_next(&item, false);
-  if let Err(error) = write_item(&item, image.as_deref(), false) {
-    if let Ok(mut manager) = state.lock() {
-      manager.clear_suppression();
-    }
+  // Serialize clipboard publication and export lifetime with watcher cleanup.
+  let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
+  if let Err(error) = manager.write_item(&item, image.as_deref()) {
+    manager.clear_suppression();
     return Err(copy_error(error));
   }
-  state
-    .lock()
-    .map_err(|_| lock_error())
-    .and_then(|mut manager| manager.touch_item(id, chrono::Utc::now()))
+  manager
+    .touch_item(id, chrono::Utc::now())
     .map(|_| ())
     .map_err(|message| ClipboardCopyError::History { message })
 }
