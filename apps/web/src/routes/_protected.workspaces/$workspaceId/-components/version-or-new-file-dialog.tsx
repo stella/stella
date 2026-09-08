@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -257,8 +258,7 @@ const DecisionActions = ({
       );
     }
     default: {
-      decision satisfies never;
-      return null;
+      return panic(`Unhandled decision: ${String(decision satisfies never)}`);
     }
   }
 };

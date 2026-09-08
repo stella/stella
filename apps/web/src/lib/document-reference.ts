@@ -43,6 +43,14 @@ const CUSTOM_PROPERTIES_PATH = "docProps/custom.xml";
 const VERIFICATION_CODE_RE = /^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u;
 
 /**
+ * Whether a string has the shape of a verification code. A printed code is
+ * retyped by hand, so the shape is checked before it is looked up: a segment
+ * that cannot be a code gets the same answer as one that resolves to nothing.
+ */
+export const isVerificationCode = (code: string): boolean =>
+  VERIFICATION_CODE_RE.test(code);
+
+/**
  * Matches the shape the API's stamper writes in `buildCustomPropertiesXml`:
  * `<property ... name="stella-ref"><vt:lpwstr>…</vt:lpwstr></property>`.
  */
@@ -97,7 +105,7 @@ export const readDocumentReference = async (
   if (verificationCode === null) {
     return null;
   }
-  if (!VERIFICATION_CODE_RE.test(verificationCode)) {
+  if (!isVerificationCode(verificationCode)) {
     return null;
   }
 
