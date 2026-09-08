@@ -57,6 +57,15 @@ const SPLIT_PAGE_SIZE = 1000;
 const MAX_SETTLEMENT_SPLITS = 10_000;
 const MAX_SETTLEMENT_SCAN_PASSES = 3;
 const SETTLEMENT_SCAN_TIMEOUT_MS = 60_000;
+/**
+ * Both split states a targeted revision can be in. A staged split is either
+ * an indexer split the engine has not published yet or a merge output waiting
+ * to replace its inputs; leaving it out would prove a delete against a
+ * snapshot the index is about to replace.
+ */
+const SETTLEMENT_SPLIT_STATES = "Published,Staged";
+/** Quickwit stamps split and delete-task instants in whole seconds. */
+const METASTORE_TIMESTAMP_UNIT_MS = 1000;
 
 /**
  * What "the engine accepted this batch" is allowed to mean.
@@ -131,11 +140,39 @@ export type CorpusIndexSearchResponse = {
  */
 export type CorpusIndexDeleteTask = {
   opstamp: number;
+  /**
+   * The metastore's own creation instant for the task, at its second
+   * precision. Read from the engine rather than from this process's clock:
+   * it is compared against split publish timestamps issued by the same
+   * metastore, and a local instant would put clock skew inside that
+   * comparison.
+   */
+  createdAt: Temporal.Instant;
+};
+
+type CorpusIndexDeleteSettlementInput = {
+  indexId: string;
+  requiredOpstamp: number;
+  /**
+   * The delete task's metastore creation instant, for a caller that retained
+   * it. A split first published after that instant is excluded from the
+   * proof; `null` keeps every observed split in it.
+   */
+  deleteCreatedAt: Temporal.Instant | null;
 };
 
 export type CorpusIndexDeleteSettlement = {
   requiredOpstamp: number;
-  publishedSplits: number;
+  /**
+   * Splits the proof stands on: published no later than the delete task, or
+   * not published yet.
+   */
+  provingSplits: number;
+  /**
+   * Splits first published after the delete task. They are outside the proof,
+   * and counting them keeps a stalled-settlement diagnostic readable.
+   */
+  excludedSplits: number;
   laggingSplits: number;
   minAppliedOpstamp: number | null;
   settled: boolean;
@@ -195,8 +232,7 @@ export type CorpusIndexClient = {
     query: string,
   ) => Promise<Result<CorpusIndexDeleteTask, CorpusIndexError>>;
   readDeleteSettlement: (
-    indexId: string,
-    requiredOpstamp: number,
+    input: CorpusIndexDeleteSettlementInput,
   ) => Promise<Result<CorpusIndexDeleteSettlement, CorpusIndexError>>;
 };
 
@@ -323,6 +359,57 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
       unaborted: "returned an unreadable body",
     });
   });
+};
+
+type SettlementSplit = {
+  splitId: string;
+  appliedOpstamp: number;
+  /** Null while the split has never been published. */
+  publishedAtSeconds: number | null;
+};
+
+type SettlementPass = {
+  /** Lowest applied opstamp this pass read for each split inside the proof. */
+  provingSplits: Map<string, number>;
+  excludedSplits: number;
+};
+
+const invalidSplitList = () =>
+  new CorpusIndexError({
+    message: "corpus index split list returned an invalid response",
+  });
+
+/** Null while the split has never been published. */
+const parseSplitPublishedAtSeconds = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw invalidSplitList();
+  }
+  return value;
+};
+
+const parseSettlementSplit = (
+  split: Record<string, unknown>,
+): SettlementSplit => {
+  const publishedAtSeconds = parseSplitPublishedAtSeconds(
+    split["publish_timestamp"],
+  );
+  const splitId = split["split_id"];
+  const appliedOpstamp = split["delete_opstamp"];
+  const splitState = split["split_state"];
+  if (
+    (splitState !== "Published" && splitState !== "Staged") ||
+    typeof splitId !== "string" ||
+    splitId.length === 0 ||
+    typeof appliedOpstamp !== "number" ||
+    !Number.isSafeInteger(appliedOpstamp) ||
+    appliedOpstamp < 0
+  ) {
+    throw invalidSplitList();
+  }
+  return { splitId, appliedOpstamp, publishedAtSeconds };
 };
 
 const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
@@ -791,22 +878,33 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           },
           timeoutMs: ADMIN_TIMEOUT_MS,
         });
+        const createdAtSeconds = isRecord(response)
+          ? response["create_timestamp"]
+          : null;
         if (
           !isRecord(response) ||
           typeof response["opstamp"] !== "number" ||
           !Number.isSafeInteger(response["opstamp"]) ||
-          response["opstamp"] < 0
+          response["opstamp"] < 0 ||
+          typeof createdAtSeconds !== "number" ||
+          !Number.isSafeInteger(createdAtSeconds) ||
+          createdAtSeconds < 0
         ) {
           throw new CorpusIndexError({
             message: "corpus index delete task returned an invalid response",
           });
         }
-        return { opstamp: response["opstamp"] };
+        return {
+          opstamp: response["opstamp"],
+          createdAt: Temporal.Instant.fromEpochMilliseconds(
+            createdAtSeconds * METASTORE_TIMESTAMP_UNIT_MS,
+          ),
+        };
       },
       catch: toCorpusIndexError,
     }),
 
-  readDeleteSettlement: async (indexId, requiredOpstamp) =>
+  readDeleteSettlement: async ({ indexId, requiredOpstamp, deleteCreatedAt }) =>
     await Result.tryPromise({
       try: async () => {
         if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
@@ -815,6 +913,15 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
               "corpus index delete settlement received an invalid opstamp",
           });
         }
+        // The metastore stamps both instants in whole seconds, so the delete
+        // task's own instant is compared at that precision. A split published
+        // inside the task's second stays in the proof.
+        const deleteCreatedAtSeconds =
+          deleteCreatedAt === null
+            ? null
+            : Math.floor(
+                deleteCreatedAt.epochMilliseconds / METASTORE_TIMESTAMP_UNIT_MS,
+              );
         const deadline =
           Temporal.Now.instant().epochMilliseconds + SETTLEMENT_SCAN_TIMEOUT_MS;
         const remainingBudget = (): number => {
@@ -827,23 +934,25 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           return Math.min(remaining, ADMIN_TIMEOUT_MS);
         };
         let scanPasses = 0;
-        // Keyed by split id; the value is the lowest opstamp this pass saw for
-        // it, since a split shifting between offset pages can be read twice.
-        const readSplitPass = async (): Promise<Map<string, number>> => {
+        const readSplitPass = async (): Promise<SettlementPass> => {
           scanPasses += 1;
           if (scanPasses > MAX_SETTLEMENT_SCAN_PASSES) {
             throw new CorpusIndexError({
               message:
-                "corpus index split list did not reach a stable published-split set",
+                "corpus index split list did not reach a stable proving-split set",
             });
           }
           let offset = 0;
           let scannedSplits = 0;
-          const passSplitOpstamps = new Map<string, number>();
+          let excludedSplits = 0;
+          // Keyed by split id; the value is the lowest opstamp this pass saw
+          // for it, since a split shifting between offset pages can be read
+          // twice.
+          const provingSplits = new Map<string, number>();
           const readSplitPage = async (): Promise<void> => {
             const response = await requestJson({
               baseUrl: mutationBaseUrl(cluster),
-              path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=Published`,
+              path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=${SETTLEMENT_SPLIT_STATES}`,
               init: { method: "GET" },
               timeoutMs: remainingBudget(),
             });
@@ -851,38 +960,34 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
               ? parseRecordArray(response["splits"])
               : null;
             if (splits === null) {
-              throw new CorpusIndexError({
-                message: "corpus index split list returned an invalid response",
-              });
+              throw invalidSplitList();
             }
             scannedSplits += splits.length;
             if (scannedSplits > MAX_SETTLEMENT_SPLITS) {
               throw new CorpusIndexError({
-                message: `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} published splits`,
+                message: `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} splits`,
               });
             }
             for (const split of splits) {
-              const splitId = split["split_id"];
-              const opstamp = split["delete_opstamp"];
+              const parsed = parseSettlementSplit(split);
+              // A split published after the delete task was created is outside
+              // the proof; see the settlement call site in the projection
+              // cleanup store for why that is exact. A split with no publish
+              // timestamp has not been published yet and stays in the proof.
               if (
-                split["split_state"] !== "Published" ||
-                typeof splitId !== "string" ||
-                splitId.length === 0 ||
-                typeof opstamp !== "number" ||
-                !Number.isSafeInteger(opstamp) ||
-                opstamp < 0
+                deleteCreatedAtSeconds !== null &&
+                parsed.publishedAtSeconds !== null &&
+                parsed.publishedAtSeconds > deleteCreatedAtSeconds
               ) {
-                throw new CorpusIndexError({
-                  message:
-                    "corpus index split list returned an invalid response",
-                });
+                excludedSplits += 1;
+                continue;
               }
-              const previousOpstamp = passSplitOpstamps.get(splitId);
-              passSplitOpstamps.set(
-                splitId,
+              const previousOpstamp = provingSplits.get(parsed.splitId);
+              provingSplits.set(
+                parsed.splitId,
                 previousOpstamp === undefined
-                  ? opstamp
-                  : Math.min(previousOpstamp, opstamp),
+                  ? parsed.appliedOpstamp
+                  : Math.min(previousOpstamp, parsed.appliedOpstamp),
               );
             }
             if (splits.length < SPLIT_PAGE_SIZE) {
@@ -892,17 +997,19 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             await readSplitPage();
           };
           await readSplitPage();
-          return passSplitOpstamps;
+          return { provingSplits, excludedSplits };
         };
         const readStableSplitPass = async (
           previousPassSplitIds: ReadonlySet<string>,
-        ): Promise<Map<string, number>> => {
+        ): Promise<SettlementPass> => {
           const currentPass = await readSplitPass();
-          const currentSplitIds = new Set(currentPass.keys());
+          const currentSplitIds = new Set(currentPass.provingSplits.keys());
           // Quickwit lists by numeric offset, not a snapshot cursor. A split
           // published or retired while an earlier page is read can shift a
           // later page. Only clear durable delete state after one complete
           // pass has exactly the same identity set; ongoing churn fails closed.
+          // Only the proving set has to settle: an index taking continuous
+          // appends never stops adding splits the proof already excludes.
           const stable =
             currentSplitIds.size === previousPassSplitIds.size &&
             currentSplitIds.isSubsetOf(previousPassSplitIds);
@@ -917,8 +1024,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
         // value forward would report it as lagging for as long as the index
         // keeps churning.
         const finalPass = await readStableSplitPass(new Set());
-        const appliedOpstamps = [...finalPass.values()];
-        const publishedSplits = finalPass.size;
+        const appliedOpstamps = [...finalPass.provingSplits.values()];
         const laggingSplits = appliedOpstamps.filter(
           (opstamp) => opstamp < requiredOpstamp,
         ).length;
@@ -926,7 +1032,8 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           appliedOpstamps.length === 0 ? null : Math.min(...appliedOpstamps);
         return {
           requiredOpstamp,
-          publishedSplits,
+          provingSplits: finalPass.provingSplits.size,
+          excludedSplits: finalPass.excludedSplits,
           laggingSplits,
           minAppliedOpstamp,
           settled: laggingSplits === 0,

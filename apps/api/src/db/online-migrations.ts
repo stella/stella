@@ -4,6 +4,7 @@ import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
+import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
 import type {
   OnlineMigrationConnection,
@@ -220,6 +221,7 @@ const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
+  CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
 ];
 
 type PresentIndexState = {

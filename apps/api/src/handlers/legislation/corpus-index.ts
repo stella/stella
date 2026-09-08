@@ -434,12 +434,19 @@ export const reconcileNextLegislationCorpusIndexDelete = async (
           "legislation",
           corpusIndexGeneration(next.indexId),
         ),
-      ).readDeleteSettlement(next.indexId, next.opstamp);
+      ).readDeleteSettlement({
+        indexId: next.indexId,
+        requiredOpstamp: next.opstamp,
+        // The watermark keeps an opstamp, not the metastore instant that
+        // issued it, so no split can be ruled out of the proof and the
+        // pruning below stays behind every split the engine still holds.
+        deleteCreatedAt: null,
+      });
       if (settlement.isErr()) {
         throw settlement.error;
       }
       const appliedOpstamp =
-        settlement.value.publishedSplits === 0
+        settlement.value.provingSplits === 0
           ? next.opstamp
           : settlement.value.minAppliedOpstamp;
       const pending = await scopedDb(async (tx) => {

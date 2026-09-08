@@ -427,7 +427,8 @@ test("an erasure epoch fences an in-flight append until exact cleanup settles", 
   `);
   await db.execute(sql`
     UPDATE corpus_index_projection_intents
-    SET status = 'cleanup_committed', delete_opstamp = 42
+    SET status = 'cleanup_committed', delete_opstamp = 42,
+        delete_task_created_at = clock_timestamp()
     WHERE id = ${RACED_REVISION}
   `);
   await db.execute(sql`

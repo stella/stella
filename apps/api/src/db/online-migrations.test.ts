@@ -23,6 +23,9 @@ const FILTER_INDEX = FILTER_INDEX_CUTOVER.final.name;
 const FILTER_INDEX_REPLACEMENT = FILTER_INDEX_CUTOVER.staged.name;
 const DECISION_DATE_CONSTRAINT = "case_law_decisions_decision_date_bounds";
 const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONSTRAINT}"`;
+const DELETE_RECEIPT_CONSTRAINT =
+  "corpus_index_projection_intents_delete_receipt_paired";
+const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
 
 describe("online migrations", () => {
   test("accepts an already valid index without rebuilding it", async () => {
@@ -311,6 +314,43 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  test("validates the delete-receipt constraint after walking the intents", async () => {
+    const harness = createHarness();
+
+    await runOnlineMigrations(harness.pool);
+
+    const validateOffset = indexOfStatement(
+      harness.statements,
+      VALIDATE_DELETE_RECEIPT_FRAGMENT,
+    );
+    expect(validateOffset).toBeGreaterThan(
+      indexOfStatement(
+        harness.statements,
+        'UPDATE public."corpus_index_projection_intents"',
+      ),
+    );
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup validation rejects an unvalidated delete-receipt constraint without repairing", async () => {
+    const harness = createHarness({ constraintValidated: false });
+
+    const rejection: unknown = await assertOnlineMigrationsApplied(
+      harness.pool,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("is not complete: constraint"),
+    });
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
   test("startup validation rejects an unvalidated decision-date constraint without repairing", async () => {
     const harness = createHarness({ constraintValidated: false });
 
@@ -395,6 +435,11 @@ const createHarness = ({
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
+            return [];
+          }
+          // The delete-receipt repair's walk: no batch boundary left, so the
+          // walk is on its last range.
+          if (query.includes("corpus_index_projection_intents")) {
             return [];
           }
           if (query.includes("starts_with")) {

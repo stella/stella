@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import { envBase } from "@/api/env-base";
 import {
   CORPUS_INDEX_CLUSTER_CONFIG,
@@ -20,6 +22,12 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 // missing or misnamed sort parameter silently degrades search to
 // id-order results. These tests stub global fetch and assert on the
 // outgoing request, not on engine behaviour.
+
+/** The metastore stamps a delete task and a split publish in whole seconds. */
+const DELETE_TASK_SECONDS = 1_787_000_000;
+const DELETE_TASK_CREATED_AT = Temporal.Instant.fromEpochMilliseconds(
+  DELETE_TASK_SECONDS * 1000,
+);
 
 type RecordedRequest = {
   host: string;
@@ -570,7 +578,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
 });
 
 test("delete-by-query posts one document-scoped delete task", async () => {
-  responseBody = { opstamp: 42 };
+  responseBody = { opstamp: 42, create_timestamp: DELETE_TASK_SECONDS };
 
   const result = await getCorpusIndexClient("q08").deleteByQuery(
     "legal_corpus_v1_cze",
@@ -579,7 +587,10 @@ test("delete-by-query posts one document-scoped delete task", async () => {
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
-    expect(result.value).toEqual({ opstamp: 42 });
+    expect(result.value).toEqual({
+      opstamp: 42,
+      createdAt: DELETE_TASK_CREATED_AT,
+    });
   }
   // One task per document, whatever the index layout: a passage-split
   // document is removed by the same single query as a whole one, so the
@@ -593,7 +604,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
 });
 
 test("delete-by-query rejects a response without a usable opstamp", async () => {
-  responseBody = {};
+  responseBody = { create_timestamp: DELETE_TASK_SECONDS };
 
   const result = await getCorpusIndexClient("q08").deleteByQuery(
     "legal_corpus_v1_cze",
@@ -606,39 +617,47 @@ test("delete-by-query rejects a response without a usable opstamp", async () => 
   }
 });
 
-test("delete settlement compares every published split with the retained task", async () => {
+const publishedSplit = ({
+  id,
+  deleteOpstamp,
+  publishedAtSeconds = DELETE_TASK_SECONDS - 60,
+}: {
+  id: string;
+  deleteOpstamp: number;
+  publishedAtSeconds?: number;
+}) => ({
+  split_id: id,
+  split_state: "Published",
+  delete_opstamp: deleteOpstamp,
+  publish_timestamp: publishedAtSeconds,
+});
+
+const readSettlement = async (requiredOpstamp: number) =>
+  await getCorpusIndexClient("q08").readDeleteSettlement({
+    indexId: "legal_corpus_v1_cze",
+    requiredOpstamp,
+    deleteCreatedAt: DELETE_TASK_CREATED_AT,
+  });
+
+test("delete settlement compares every proving split with the retained task", async () => {
   responseBody = {
     offset: 0,
     size: 3,
     splits: [
-      {
-        split_id: "split-42",
-        split_state: "Published",
-        delete_opstamp: 42,
-      },
-      {
-        split_id: "split-41",
-        split_state: "Published",
-        delete_opstamp: 41,
-      },
-      {
-        split_id: "split-45",
-        split_state: "Published",
-        delete_opstamp: 45,
-      },
+      publishedSplit({ id: "split-42", deleteOpstamp: 42 }),
+      publishedSplit({ id: "split-41", deleteOpstamp: 41 }),
+      publishedSplit({ id: "split-45", deleteOpstamp: 45 }),
     ],
   };
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    42,
-  );
+  const result = await readSettlement(42);
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
     expect(result.value).toEqual({
       requiredOpstamp: 42,
-      publishedSplits: 3,
+      provingSplits: 3,
+      excludedSplits: 0,
       laggingSplits: 1,
       minAppliedOpstamp: 41,
       settled: false,
@@ -648,15 +667,128 @@ test("delete settlement compares every published split with the retained task", 
     "/api/v1/indexes/legal_corpus_v1_cze/splits",
   );
   expect(requests.at(0)?.search).toBe(
-    "?offset=0&limit=1000&split_states=Published",
+    "?offset=0&limit=1000&split_states=Published,Staged",
   );
 });
 
+test("delete settlement excludes a split published after the delete task", async () => {
+  responseBody = {
+    splits: [
+      publishedSplit({ id: "split-caught-up", deleteOpstamp: 42 }),
+      // A steady append stream keeps producing these; the delete task cannot
+      // have targeted a revision they alone hold.
+      publishedSplit({
+        id: "split-later",
+        deleteOpstamp: 41,
+        publishedAtSeconds: DELETE_TASK_SECONDS + 1,
+      }),
+    ],
+  };
+
+  const result = await readSettlement(42);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      requiredOpstamp: 42,
+      provingSplits: 1,
+      excludedSplits: 1,
+      laggingSplits: 0,
+      minAppliedOpstamp: 42,
+      settled: true,
+    });
+  }
+});
+
+test("delete settlement keeps a split published inside the task's own second", async () => {
+  responseBody = {
+    splits: [
+      publishedSplit({
+        id: "split-same-second",
+        deleteOpstamp: 41,
+        publishedAtSeconds: DELETE_TASK_SECONDS,
+      }),
+    ],
+  };
+
+  const result = await readSettlement(42);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.excludedSplits).toBe(0);
+    expect(result.value.laggingSplits).toBe(1);
+    expect(result.value.settled).toBe(false);
+  }
+});
+
+test("delete settlement holds a staged split inside the proof", async () => {
+  responseBody = {
+    splits: [
+      publishedSplit({ id: "split-caught-up", deleteOpstamp: 42 }),
+      {
+        split_id: "split-staged",
+        split_state: "Staged",
+        delete_opstamp: 41,
+        publish_timestamp: null,
+      },
+    ],
+  };
+
+  const result = await readSettlement(42);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.provingSplits).toBe(2);
+    expect(result.value.excludedSplits).toBe(0);
+    expect(result.value.laggingSplits).toBe(1);
+    expect(result.value.settled).toBe(false);
+  }
+});
+
+test("delete settlement settles once every proving split crossed the opstamp", async () => {
+  responseBody = {
+    splits: [
+      publishedSplit({ id: "split-42", deleteOpstamp: 42 }),
+      publishedSplit({ id: "split-45", deleteOpstamp: 45 }),
+    ],
+  };
+
+  const result = await readSettlement(42);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.settled).toBe(true);
+    expect(result.value.minAppliedOpstamp).toBe(42);
+  }
+});
+
+test("delete settlement without a delete instant keeps every split", async () => {
+  responseBody = {
+    splits: [
+      publishedSplit({
+        id: "split-later",
+        deleteOpstamp: 41,
+        publishedAtSeconds: DELETE_TASK_SECONDS + 1,
+      }),
+    ],
+  };
+
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement({
+    indexId: "legal_corpus_v1_cze",
+    requiredOpstamp: 42,
+    deleteCreatedAt: null,
+  });
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.provingSplits).toBe(1);
+    expect(result.value.excludedSplits).toBe(0);
+    expect(result.value.settled).toBe(false);
+  }
+});
+
 test("delete settlement rejects an invalid required opstamp", async () => {
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    -1,
-  );
+  const result = await readSettlement(-1);
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -669,10 +801,27 @@ test("delete settlement rejects a split without a usable delete opstamp", async 
     splits: [{ split_id: "split-1", split_state: "Published" }],
   };
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    42,
-  );
+  const result = await readSettlement(42);
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
+});
+
+test("delete settlement rejects a split with an unusable publish timestamp", async () => {
+  responseBody = {
+    splits: [
+      {
+        split_id: "split-1",
+        split_state: "Published",
+        delete_opstamp: 42,
+        publish_timestamp: "2026-08-25T12:00:00Z",
+      },
+    ],
+  };
+
+  const result = await readSettlement(42);
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -684,11 +833,9 @@ const settlementResponse = (splitCount: number) => (url: URL) => {
   const offset = Number(url.searchParams.get("offset") ?? "0");
   const pageSize = Math.min(1000, Math.max(splitCount - offset, 0));
   return {
-    splits: Array.from({ length: pageSize }, (_, index) => ({
-      split_id: `split-${offset + index}`,
-      split_state: "Published",
-      delete_opstamp: 42,
-    })),
+    splits: Array.from({ length: pageSize }, (_, index) =>
+      publishedSplit({ id: `split-${offset + index}`, deleteOpstamp: 42 }),
+    ),
   };
 };
 
@@ -699,27 +846,58 @@ test("delete settlement repeats an offset scan until split identities stabilize"
     if (offset === 0) {
       firstPageReads += 1;
       return {
-        splits: Array.from({ length: 1000 }, (_, index) => ({
-          split_id:
-            firstPageReads === 1 || index > 0 ? `split-${index}` : "split-new",
-          split_state: "Published",
-          delete_opstamp: 42,
-        })),
+        splits: Array.from({ length: 1000 }, (_, index) =>
+          publishedSplit({
+            id:
+              firstPageReads === 1 || index > 0
+                ? `split-${index}`
+                : "split-new",
+            deleteOpstamp: 42,
+          }),
+        ),
       };
     }
     return { splits: [] };
   };
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    42,
-  );
+  const result = await readSettlement(42);
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
-    expect(result.value.publishedSplits).toBe(1000);
+    expect(result.value.provingSplits).toBe(1000);
   }
   expect(firstPageReads).toBe(3);
+});
+
+test("delete settlement ignores churn among the splits it excluded", async () => {
+  let pageReads = 0;
+  responseBodyForUrl = () => {
+    pageReads += 1;
+    return {
+      splits: [
+        publishedSplit({ id: "split-proving", deleteOpstamp: 42 }),
+        // One more append lands between the passes: the proof does not
+        // depend on it, so the scan does not have to wait for it to stop.
+        ...Array.from({ length: pageReads }, (_, index) =>
+          publishedSplit({
+            id: `split-appended-${index}`,
+            deleteOpstamp: 41,
+            publishedAtSeconds: DELETE_TASK_SECONDS + 1,
+          }),
+        ),
+      ],
+    };
+  };
+
+  const result = await readSettlement(42);
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.provingSplits).toBe(1);
+    expect(result.value.excludedSplits).toBe(2);
+    expect(result.value.settled).toBe(true);
+  }
+  expect(pageReads).toBe(2);
 });
 
 test("delete settlement reads each split's opstamp from the pass that stabilized", async () => {
@@ -728,35 +906,26 @@ test("delete settlement reads each split's opstamp from the pass that stabilized
     firstPageReads += 1;
     return {
       splits: [
-        {
-          split_id: "split-lagging",
-          split_state: "Published",
+        publishedSplit({
+          id: "split-lagging",
           // The first pass observes this split before its delete task lands.
-          delete_opstamp: firstPageReads === 1 ? 41 : 42,
-        },
+          deleteOpstamp: firstPageReads === 1 ? 41 : 42,
+        }),
         ...(firstPageReads === 1
           ? []
-          : [
-              {
-                split_id: "split-added",
-                split_state: "Published",
-                delete_opstamp: 42,
-              },
-            ]),
+          : [publishedSplit({ id: "split-added", deleteOpstamp: 42 })]),
       ],
     };
   };
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    42,
-  );
+  const result = await readSettlement(42);
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
     expect(result.value).toEqual({
       requiredOpstamp: 42,
-      publishedSplits: 2,
+      provingSplits: 2,
+      excludedSplits: 0,
       laggingSplits: 0,
       minAppliedOpstamp: 42,
       settled: true,
@@ -764,17 +933,14 @@ test("delete settlement reads each split's opstamp from the pass that stabilized
   }
 });
 
-test("delete settlement accepts exactly the published split ceiling", async () => {
+test("delete settlement accepts exactly the split ceiling", async () => {
   responseBodyForUrl = settlementResponse(10_000);
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    42,
-  );
+  const result = await readSettlement(42);
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
-    expect(result.value.publishedSplits).toBe(10_000);
+    expect(result.value.provingSplits).toBe(10_000);
     expect(result.value.settled).toBe(true);
   }
 });
@@ -782,10 +948,7 @@ test("delete settlement accepts exactly the published split ceiling", async () =
 test("delete settlement rejects the first split beyond its ceiling", async () => {
   responseBodyForUrl = settlementResponse(10_001);
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
-    "legal_corpus_v1_cze",
-    42,
-  );
+  const result = await readSettlement(42);
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
