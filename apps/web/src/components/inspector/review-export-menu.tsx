@@ -18,7 +18,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
-import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
@@ -152,9 +152,13 @@ export const ReviewExportMenu = ({
   // and nothing from the run.
   const handleCounterpartyExport = async (target: CounterpartyExportTarget) => {
     setPending({ audience: EXPORT_AUDIENCE.COUNTERPARTY });
-    await downloadTabOriginalFile({
+    await downloadTabFile({
       fieldId: target.fileFieldId,
       fileName: target.fileName,
+      // The reviewed file as it was uploaded: this export names the
+      // counterparty, and the run carries no signal about whether the
+      // document's version can be handed over with its reference.
+      variant: "original",
       workspaceId,
       onError: (message) => {
         stellaToast.add({

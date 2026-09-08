@@ -1330,6 +1330,7 @@ type Messages = {
     "convertTo": "Convert to";
     "copied": "Copied";
     "copy": "Copy";
+    "copyDocumentReference": "Copy document reference";
     "copyLink": "Copy link";
     "country": "Country";
     "court": "Court";
@@ -1348,6 +1349,7 @@ type Messages = {
     "disconnect": "Disconnect";
     "displayName": "Display name";
     "document": "Document";
+    "documentReference": "Document reference";
     "documentTitle": "Document title";
     "documentation": "Documentation";
     "done": "Done";
@@ -4662,6 +4664,11 @@ type Messages = {
     "slugFormat": "Slug must be lowercase letters, numbers, and hyphens";
     "slugRequired": "Slug is required";
   };
+  "verify": {
+    "notFound": "No document with this reference is available in your organization.";
+    "opened": "Opened via reference <bdi>{reference}</bdi>.";
+    "superseded": "This reference points to version {version, number}; the current version is {currentVersion, number}.";
+  };
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available. Page reading works without a key; add one to raise rate limits.";
@@ -4787,17 +4794,27 @@ type Messages = {
       };
       "downloadAsZip": "Download as ZIP";
       "downloadExtractedText": "Extracted text (.txt)";
+      "downloadFailed": "Download failed";
       "downloadOriginal": "Original file";
+      "downloadOriginalNoReference": "Download original (no reference)";
       "downloadPdf": "PDF";
       "downloadScrubbed": "Download without metadata";
       "downloadScrubbedHint": "Removes the author, company and drafting history the file carries. The copy in the matter keeps them.";
       "downloadSearchablePdf": "Searchable PDF";
+      "downloadWithReference": "Download with reference";
       "itemLimitReached": "This matter has reached its item limit.";
       "maxEntitiesReached": "Maximum number of items reached";
       "ocrAlreadyProcessed": "Text recognition has already completed";
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
       "rateLimited": "Rate limited; resuming in {seconds, number}s";
+      "referencedUpload": {
+        "choiceLabel": "What to do with {fileName}";
+        "description": "{count, plural, one {# file carries a reference to a document you already have.} other {# files carry references to documents you already have.}} Choose what to do with each.";
+        "matchedDocument": "Version {version, number} of <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) in <bdi>{matterName}</bdi>";
+        "title": "File these as new versions?";
+        "uploadAsNewDocument": "Upload as new document";
+      };
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
       "runOcr": "Queue OCR";
@@ -4808,13 +4825,21 @@ type Messages = {
       "uploadingDescription": "Don't close this page until the files are uploaded";
       "uploadingProgress": "{completed, number} of {total, number} uploaded";
       "versionOrNewFile": {
+        "addAsVersion": "Add as version {version, number}";
+        "addAsVersionThere": "Add as version {version, number} there";
+        "checkingReference": "Checking this file's reference...";
         "createNewOption": "Create new file";
         "description": "You dropped \"{fileName}\" onto an existing document.";
         "extensionMismatch": "Extension mismatch: expected {expected}, got {actual}";
         "extensionMismatchError": "File extension does not match the existing document";
         "noExtension": "no extension";
+        "referenceElsewhere": "This file is version {version, number} of <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) in <bdi>{matterName}</bdi>.";
+        "referenceHere": "This file is version {version, number} of <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).";
+        "referenceSuperseded": "It was based on version {basedOn, number}; the current version is {current, number}.";
         "replaceOption": "Upload as new version";
         "title": "Upload new version or create new file?";
+        "unnamedDocument": "an untitled document";
+        "uploadAsNewDocumentHere": "Upload as new document here";
       };
       "versionUploadFailed": "Version upload failed";
       "versionUploaded": "New version uploaded";
@@ -5291,6 +5316,8 @@ type Messages = {
     "reference": "Reference number";
     "referenceConventionHint": "Preferred format: {example}";
     "referenceFormatWarning": "Doesn't match the preferred format.";
+    "referenceNumberingEmptyHint": "Set a reference number to start numbering the documents in this matter.";
+    "referenceNumberingHint": "Documents in this matter are numbered <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi>, and so on; each version adds <bdi>.v1</bdi>, <bdi>.v2</bdi>.";
     "referencePlaceholder": "e.g. 2024/001";
     "referenceTaken": "This reference number is already in use";
     "sections": {

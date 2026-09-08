@@ -10,6 +10,7 @@ import {
   EllipsisVerticalIcon,
   EraserIcon,
   EyeIcon,
+  FileBadgeIcon,
   FilePenLineIcon,
   FileOutputIcon,
   FileTextIcon,
@@ -55,6 +56,8 @@ import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
+import { fetchReferencedFile } from "@/components/inspector/file-download-service";
+import type { PrimaryDownloadVariant } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
@@ -109,6 +112,7 @@ import {
   useCreateEntities,
   useDeleteEntities,
 } from "@/lib/workspaces/mutations/entities";
+import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -127,6 +131,7 @@ import {
   getOcrExportFormats,
   getOcrSources,
   getPdfDownloadFileName,
+  getRowDownloadMenu,
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
@@ -353,6 +358,7 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
+  const { data: matter } = useQuery(workspaceOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -480,9 +486,18 @@ export const RowActions = ({
   // Only formats whose embedded metadata the API can actually strip; offering
   // the action on a file it would refuse is worse than not offering it.
   const canScrub = !isBulk && file !== null && canDownloadScrubbed(file);
-  const hasDownloadVariants =
-    !isBulk &&
-    (hasPdfConversion || canScrub || exportableOcrSources.length > 0);
+  // Reading the matter here is a cache hit: its route loader primes the query.
+  const {
+    hasVariants: hasDownloadVariants,
+    primaryVariant: primaryDownloadVariant,
+  } = getRowDownloadMenu({
+    canScrub,
+    exportableOcrSourceCount: exportableOcrSources.length,
+    file,
+    hasPdfConversion,
+    isBulk,
+    matter,
+  });
 
   const msg: Msg = {
     downloading: t("workspaces.files.downloadAsZip"),
@@ -545,7 +560,7 @@ export const RowActions = ({
     await downloadEntityAsZip(workspaceId, entity, msg);
   };
 
-  const handleDownload = async (variant: DownloadVariant = "original") => {
+  const handleDownload = async (variant: DownloadVariant) => {
     if (isBulk) {
       for (const e of selectedEntities) {
         const f = getFirstFile(e);
@@ -1048,6 +1063,7 @@ export const RowActions = ({
           onDuplicate={handleDuplicate}
           onOcrExport={handleOcrExport}
           onZipDownload={handleZipDownload}
+          primaryDownloadVariant={primaryDownloadVariant}
         />
       </MenuPopup>
       <CopyToMatterDialog
@@ -1436,10 +1452,11 @@ type RowFileOperationsMenuProps = {
   isCellContext: boolean;
   onCopyToMatter: () => void;
   onDelete: () => void;
-  onDownload: (variant?: DownloadVariant) => Promise<void>;
+  onDownload: (variant: DownloadVariant) => Promise<void>;
   onDuplicate: () => Promise<void>;
   onOcrExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
   onZipDownload: () => Promise<void>;
+  primaryDownloadVariant: PrimaryDownloadVariant;
 };
 
 const RowFileOperationsMenu = ({
@@ -1457,11 +1474,13 @@ const RowFileOperationsMenu = ({
   onDuplicate,
   onOcrExport,
   onZipDownload,
+  primaryDownloadVariant,
 }: RowFileOperationsMenuProps) => {
   const t = useTranslations();
   if (isCellContext) {
     return null;
   }
+  const hasReferenceDownload = primaryDownloadVariant === "reference";
   const renderOcrExport = (source: OcrSource) => (
     <OcrExportMenuItems
       exportStatus={source.exportStatus}
@@ -1477,7 +1496,9 @@ const RowFileOperationsMenu = ({
       <MenuSeparator />
       {hasAnyFile && (isBulk || !hasDownloadVariants) && (
         <MenuItem
-          onClick={() => detached(onDownload(), "row-actions.download")}
+          onClick={() =>
+            detached(onDownload("original"), "row-actions.download")
+          }
         >
           <DownloadIcon />
           {t("common.download")}
@@ -1490,11 +1511,25 @@ const RowFileOperationsMenu = ({
             {t("common.download")}
           </MenuSubTrigger>
           <MenuSubPopup>
+            {hasReferenceDownload && (
+              <MenuItem
+                onClick={() =>
+                  detached(onDownload("reference"), "row-actions.download")
+                }
+              >
+                <FileBadgeIcon />
+                {t("workspaces.files.downloadWithReference")}
+              </MenuItem>
+            )}
             <MenuItem
-              onClick={() => detached(onDownload(), "row-actions.download")}
+              onClick={() =>
+                detached(onDownload("original"), "row-actions.download")
+              }
             >
               <DownloadIcon />
-              {t("workspaces.files.downloadOriginal")}
+              {hasReferenceDownload
+                ? t("workspaces.files.downloadOriginalNoReference")
+                : t("workspaces.files.downloadOriginal")}
             </MenuItem>
             {hasPdfConversion && (
               <MenuItem
@@ -1802,10 +1837,32 @@ const downloadOcrExport = async ({
 
 /**
  * Which copy of the file to hand the user. Not an `asPdf` boolean: the answer
- * is "which rendition", and `scrubbed` is served by the API rather than by a
- * presigned storage URL because the bytes are cleaned per request.
+ * is "which rendition", and `scrubbed` and `reference` are served by the API
+ * rather than by a presigned storage URL because those bytes are built per
+ * request. Which of `original` and `reference` leads is not this menu's call:
+ * `resolvePrimaryDownloadVariant` owns it for every download entry point.
  */
-type DownloadVariant = "original" | "pdf" | "scrubbed";
+type DownloadVariant = PrimaryDownloadVariant | "pdf" | "scrubbed";
+
+/** The reference copy, saved under the document's own file name. Every
+ *  failure reads the same: the API refuses a file it cannot stamp exactly as
+ *  it refuses a transport error, and the user's next step is the same. */
+const downloadReferencedFile = async (
+  workspaceId: string,
+  file: FileRef,
+  msg: Msg,
+) => {
+  const blob = await fetchReferencedFile({
+    fieldId: file.fieldId,
+    workspaceId,
+  });
+  if (blob === null) {
+    stellaToast.add({ title: msg.failed, type: "error" });
+    return;
+  }
+
+  downloadFile(blob, file.fileName);
+};
 
 /**
  * Fetched directly rather than through the treaty client: Eden text-decodes
@@ -1848,6 +1905,11 @@ const downloadSingleFile = async (
   variant: DownloadVariant,
   msg: Msg,
 ) => {
+  if (variant === "reference") {
+    await downloadReferencedFile(workspaceId, file, msg);
+    return;
+  }
+
   if (variant === "scrubbed") {
     await downloadScrubbedFile(workspaceId, file, msg);
     return;

@@ -1327,6 +1327,7 @@
     "convertTo": "Konwertuj na",
     "copied": "Skopiowano",
     "copy": "Kopiuj",
+    "copyDocumentReference": "Kopiuj numer referencyjny dokumentu",
     "copyLink": "Kopiuj link",
     "country": "Kraj",
     "court": "Sąd",
@@ -1345,6 +1346,7 @@
     "disconnect": "Rozłącz",
     "displayName": "Nazwa wyświetlana",
     "document": "Dokument",
+    "documentReference": "Numer referencyjny dokumentu",
     "documentTitle": "Tytuł dokumentu",
     "documentation": "Dokumentacja",
     "done": "Gotowe",
@@ -4659,6 +4661,11 @@
     "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki",
     "slugRequired": "Slug jest wymagany"
   },
+  "verify": {
+    "notFound": "W Twojej organizacji nie ma dokumentu o tym numerze referencyjnym.",
+    "opened": "Otwarto na podstawie numeru referencyjnego <bdi>{reference}</bdi>.",
+    "superseded": "Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4784,17 +4791,27 @@
       },
       "downloadAsZip": "Pobierz plik .zip",
       "downloadExtractedText": "Wyodrębniony tekst (.txt)",
+      "downloadFailed": "Pobieranie nie powiodło się",
       "downloadOriginal": "Oryginalny plik",
+      "downloadOriginalNoReference": "Pobierz oryginał (bez numeru referencyjnego)",
       "downloadPdf": "PDF",
       "downloadScrubbed": "Pobierz bez metadanych",
       "downloadScrubbedHint": "Usuwa autora, firmę i historię edycji zapisane w pliku. Kopia w sprawie je zachowuje.",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "downloadWithReference": "Pobierz z numerem referencyjnym",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
       "ocrAlreadyProcessed": "Rozpoznawanie tekstu zostało już ukończone",
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
       "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
       "rateLimited": "Ograniczenie szybkości; wznowienie za {seconds, number} s",
+      "referencedUpload": {
+        "choiceLabel": "Co zrobić z plikiem {fileName}",
+        "description": "{count, plural, one {# plik ma numer referencyjny dokumentu, który już masz.} few {# pliki mają numery referencyjne dokumentów, które już masz.} many {# plików ma numery referencyjne dokumentów, które już masz.} other {# plików ma numery referencyjne dokumentów, które już masz.}} Wybierz, co zrobić z każdym z nich.",
+        "matchedDocument": "Wersja {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) w sprawie <bdi>{matterName}</bdi>",
+        "title": "Zapisać je jako nowe wersje?",
+        "uploadAsNewDocument": "Prześlij jako nowy dokument"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
       "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} many {# plików} other {# plików}}",
       "runOcr": "Dodaj OCR do kolejki",
@@ -4805,13 +4822,21 @@
       "uploadingDescription": "Nie zamykaj tej strony, dopóki pliki nie zostaną przesłane",
       "uploadingProgress": "{completed, number} z {total, number} przesłano",
       "versionOrNewFile": {
+        "addAsVersion": "Dodaj jako wersję {version, number}",
+        "addAsVersionThere": "Dodaj tam jako wersję {version, number}",
+        "checkingReference": "Sprawdzam numer referencyjny pliku...",
         "createNewOption": "Utwórz nowy plik",
         "description": "Upuściłeś \"{fileName}\" na istniejący dokument.",
         "extensionMismatch": "Niezgodne rozszerzenie: oczekiwano {expected}, otrzymano {actual}",
         "extensionMismatchError": "Rozszerzenie pliku nie zgadza się z istniejącym dokumentem",
         "noExtension": "brak rozszerzenia",
+        "referenceElsewhere": "Ten plik to wersja {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) w sprawie <bdi>{matterName}</bdi>.",
+        "referenceHere": "Ten plik to wersja {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
+        "referenceSuperseded": "Powstał na podstawie wersji {basedOn, number}; aktualna jest wersja {current, number}.",
         "replaceOption": "Prześlij jako nową wersję",
-        "title": "Przesłać nową wersję czy utworzyć nowy plik?"
+        "title": "Przesłać nową wersję czy utworzyć nowy plik?",
+        "unnamedDocument": "bez tytułu",
+        "uploadAsNewDocumentHere": "Prześlij tutaj jako nowy dokument"
       },
       "versionUploadFailed": "Przesyłanie wersji nie powiodło się",
       "versionUploaded": "Nowa wersja przesłana",
@@ -5288,6 +5313,8 @@
     "reference": "Numer referencyjny",
     "referenceConventionHint": "Preferowany format: {example}",
     "referenceFormatWarning": "Nie pasuje do preferowanego formatu.",
+    "referenceNumberingEmptyHint": "Podaj numer referencyjny, aby rozpocząć numerowanie dokumentów w tej sprawie.",
+    "referenceNumberingHint": "Dokumenty w tej sprawie są numerowane <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> i tak dalej; każda wersja dodaje <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "np. 2024/001",
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {

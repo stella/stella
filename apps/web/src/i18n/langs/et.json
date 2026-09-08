@@ -1327,6 +1327,7 @@
     "convertTo": "Teisenda",
     "copied": "Kopeeritud",
     "copy": "Kopeeri",
+    "copyDocumentReference": "Kopeeri dokumendi viitenumber",
     "copyLink": "Kopeeri link",
     "country": "Riik",
     "court": "Kohus",
@@ -1345,6 +1346,7 @@
     "disconnect": "Katkesta ühendus",
     "displayName": "Kuvatav nimi",
     "document": "Dokument",
+    "documentReference": "Dokumendi viitenumber",
     "documentTitle": "Dokumendi pealkiri",
     "documentation": "Dokumentatsioon",
     "done": "Valmis",
@@ -4659,6 +4661,11 @@
     "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",
     "slugRequired": "Slug on kohustuslik"
   },
+  "verify": {
+    "notFound": "Teie organisatsioonis ei ole selle viitenumbriga dokumenti.",
+    "opened": "Avatud viitenumbri <bdi>{reference}</bdi> alusel.",
+    "superseded": "See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4784,17 +4791,27 @@
       },
       "downloadAsZip": "Laadi alla .zip-fail",
       "downloadExtractedText": "Eraldatud tekst (.txt)",
+      "downloadFailed": "Allalaadimine ebaõnnestus",
       "downloadOriginal": "Algfail",
+      "downloadOriginalNoReference": "Laadi alla originaal (ilma viitenumbrita)",
       "downloadPdf": "PDF",
       "downloadScrubbed": "Laadi alla ilma metaandmeteta",
       "downloadScrubbedHint": "Eemaldab failis oleva autori, ettevõtte ja muutmisajaloo. Toimikus olev koopia säilitab need.",
       "downloadSearchablePdf": "Otsitav PDF",
+      "downloadWithReference": "Laadi alla koos viitenumbriga",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "ocrAlreadyProcessed": "Tekstituvastus on juba lõpetatud",
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
       "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
       "rateLimited": "Kiiruspiirang; jätkatakse {seconds, number} s pärast",
+      "referencedUpload": {
+        "choiceLabel": "Mida teha failiga {fileName}",
+        "description": "{count, plural, one {# fail kannab viitenumbrit dokumendile, mis sul juba on.} other {# faili kannavad viitenumbreid dokumentidele, mis sul juba on.}} Vali, mida igaühega teha.",
+        "matchedDocument": "Dokumendi <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) versioon {version, number} toimikus <bdi>{matterName}</bdi>",
+        "title": "Kas salvestada need uute versioonidena?",
+        "uploadAsNewDocument": "Laadi üles uue dokumendina"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",
       "retryFailed": "Proovi uuesti {count, plural, one {# faili} other {# faili}}",
       "runOcr": "Lisa OCR järjekorda",
@@ -4805,13 +4822,21 @@
       "uploadingDescription": "Ärge sulgege seda lehte enne, kui failid on üles laaditud",
       "uploadingProgress": "{completed, number}/{total, number} üles laaditud",
       "versionOrNewFile": {
+        "addAsVersion": "Lisa versioonina {version, number}",
+        "addAsVersionThere": "Lisa sinna versioonina {version, number}",
+        "checkingReference": "Faili viitenumbri kontrollimine...",
         "createNewOption": "Loo uus fail",
         "description": "Sa lohistasid \"{fileName}\" olemasolevale dokumendile.",
         "extensionMismatch": "Laiend ei ühti: oodatud {expected}, saadud {actual}",
         "extensionMismatchError": "Faililaiend ei ühti olemasoleva dokumendiga",
         "noExtension": "laiendita",
+        "referenceElsewhere": "See fail on dokumendi <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) versioon {version, number} toimikus <bdi>{matterName}</bdi>.",
+        "referenceHere": "See fail on dokumendi <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) versioon {version, number}.",
+        "referenceSuperseded": "See põhineb versioonil {basedOn, number}; praegune on versioon {current, number}.",
         "replaceOption": "Laadi üles uue versioonina",
-        "title": "Laadida üles uus versioon või luua uus fail?"
+        "title": "Laadida üles uus versioon või luua uus fail?",
+        "unnamedDocument": "pealkirjata",
+        "uploadAsNewDocumentHere": "Laadi siia üles uue dokumendina"
       },
       "versionUploadFailed": "Versiooni üleslaadimine ebaõnnestus",
       "versionUploaded": "Uus versioon üles laaditud",
@@ -5288,6 +5313,8 @@
     "reference": "Viitenumber",
     "referenceConventionHint": "Eelistatud vorming: {example}",
     "referenceFormatWarning": "Ei vasta eelistatud vormingule.",
+    "referenceNumberingEmptyHint": "Määrake viitenumber, et selle toimiku dokumente nummerdama hakata.",
+    "referenceNumberingHint": "Selle toimiku dokumendid nummerdatakse <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> ja nii edasi; iga versioon lisab <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "nt 2024/001",
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {

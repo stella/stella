@@ -51,7 +51,11 @@ import {
   shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
-import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
+import {
+  resolvePrimaryDownloadVariant,
+  type PrimaryDownloadVariant,
+} from "@/components/inspector/file-download-service.logic";
 import {
   FullViewPreviewGuard,
   MetadataPanelSkeleton,
@@ -85,6 +89,7 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
@@ -101,6 +106,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import { toSafeId } from "@/lib/safe-id";
+import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
 const OfficeFileViewer = lazy(async () => {
@@ -287,6 +293,44 @@ const getFileTabEntityState = ({
     resolvedEmailChatMode,
     shouldSurfaceEmailResolutionError,
   };
+};
+
+/** What the header's Download button says it will hand over. */
+const DOWNLOAD_LABEL_KEY = {
+  original: "common.download",
+  reference: "workspaces.files.downloadWithReference",
+} as const satisfies Record<PrimaryDownloadVariant, TranslationKey>;
+
+/**
+ * Which copy the header's Download hands over. The entity read is what
+ * resolves the field's encryption, and a matter with a reference is what
+ * gives its document versions one; the policy itself belongs to
+ * `resolvePrimaryDownloadVariant`, shared with the matter row menu.
+ */
+const getFileTabDownloadVariant = ({
+  entityData,
+  matter,
+  tab,
+}: {
+  entityData:
+    | {
+        fields: {
+          content: { encrypted?: boolean | undefined; type: string };
+          id: string;
+        }[];
+      }
+    | undefined;
+  matter: { reference: string } | undefined;
+  tab: FileTabPanelProps["tab"];
+}): PrimaryDownloadVariant => {
+  const field = entityData?.fields.find((candidate) => candidate.id === tab.id);
+
+  return resolvePrimaryDownloadVariant({
+    encrypted:
+      field?.content.type === "file" ? field.content.encrypted : undefined,
+    hasReference: Boolean(matter?.reference),
+    mimeType: tab.mimeType,
+  });
 };
 
 const getEmailAttachmentState = ({
@@ -541,6 +585,13 @@ export const FileTabPanel = ({
     needsPropertyResolution,
     tab,
   });
+  // Reading the matter is a cache hit inside it: the matter route primes it.
+  const { data: matter } = useQuery(workspaceOptions(tab.workspaceId));
+  const downloadVariant = getFileTabDownloadVariant({
+    entityData: entityQuery.data,
+    matter,
+    tab,
+  });
   const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
     string | null
   >(null);
@@ -716,23 +767,25 @@ export const FileTabPanel = ({
       />
     ) : null;
 
+  const downloadLabel = t(DOWNLOAD_LABEL_KEY[downloadVariant]);
   const downloadButton = (
     <Tooltip
-      content={t("common.download")}
+      content={downloadLabel}
       render={
         <Button
-          aria-label={t("common.download")}
+          aria-label={downloadLabel}
           onClick={() => {
             detached(
-              downloadTabOriginalFile({
+              downloadTabFile({
                 fieldId: tab.id,
                 fileName: tab.fileName,
+                variant: downloadVariant,
                 workspaceId: tab.workspaceId,
                 onError: (message) => {
                   stellaToast.add({ title: message, type: "error" });
                 },
               }),
-              "file-tab-panel.download-tab-original-file",
+              "file-tab-panel.download-tab-file",
             );
           }}
           size="xs"
