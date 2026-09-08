@@ -3,6 +3,7 @@ import type {
   BrowserContext,
   Page,
   Request,
+  TestInfo,
 } from "@playwright/test";
 import { expect, request as apiRequestFactory, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
@@ -93,6 +94,164 @@ type SmokeRouteDef = {
   path: (world: SmokeWorld) => string;
   settleMs?: number;
   expectation?: RouteExpectation;
+};
+
+type RouteNetworkDiagnostic = {
+  requestId: string;
+  method: string;
+  url: string;
+  documentURL: string;
+  cdpTimestamp: number;
+  cdpWallTime: number;
+  resourceType: string | undefined;
+  initiatorType: string | undefined;
+  initiatorURL: string | undefined;
+  status: number | undefined;
+  responseCdpTimestamp: number | undefined;
+  failure: string | undefined;
+};
+
+type RouteSseMessageDiagnostic = {
+  requestId: string;
+  cdpTimestamp: number;
+  eventName: string;
+  eventId: string;
+  data: string;
+};
+
+type RouteNetworkDiagnostics = {
+  requests: RouteNetworkDiagnostic[];
+  sseMessages: RouteSseMessageDiagnostic[];
+};
+
+type RouteNetworkDiagnosticsHandle = {
+  capture: () => RouteNetworkDiagnostics;
+  close: () => Promise<void>;
+};
+
+const isWorkspaceApiUrl = (rawUrl: string): boolean => {
+  const url = new URL(rawUrl);
+  return url.pathname.startsWith("/v1/workspaces/");
+};
+
+const startRouteNetworkDiagnostics = async (
+  page: Page,
+): Promise<RouteNetworkDiagnosticsHandle> => {
+  const cdp = await page.context().newCDPSession(page);
+  const requests = new Map<string, RouteNetworkDiagnostic>();
+  const sseMessages: RouteSseMessageDiagnostic[] = [];
+
+  const onRequestWillBeSent = ({
+    requestId,
+    request,
+    documentURL,
+    timestamp,
+    wallTime,
+    type,
+    initiator,
+  }: {
+    requestId: string;
+    request: { method: string; url: string };
+    documentURL: string;
+    timestamp: number;
+    wallTime: number;
+    type?: string;
+    initiator?: { type?: string; url?: string };
+  }) => {
+    if (!isWorkspaceApiUrl(request.url)) {
+      return;
+    }
+
+    requests.set(requestId, {
+      requestId,
+      method: request.method,
+      url: request.url,
+      documentURL,
+      cdpTimestamp: timestamp,
+      cdpWallTime: wallTime,
+      resourceType: type,
+      initiatorType: initiator?.type,
+      initiatorURL: initiator?.url,
+      status: undefined,
+      responseCdpTimestamp: undefined,
+      failure: undefined,
+    });
+  };
+
+  const onResponseReceived = ({
+    requestId,
+    response,
+    timestamp,
+  }: {
+    requestId: string;
+    response: { status: number };
+    timestamp: number;
+  }) => {
+    const request = requests.get(requestId);
+    if (request === undefined) {
+      return;
+    }
+    request.status = response.status;
+    request.responseCdpTimestamp = timestamp;
+  };
+
+  const onLoadingFailed = ({
+    requestId,
+    errorText,
+  }: {
+    requestId: string;
+    errorText: string;
+  }) => {
+    const request = requests.get(requestId);
+    if (request !== undefined) {
+      request.failure = errorText;
+    }
+  };
+
+  const onEventSourceMessageReceived = ({
+    requestId,
+    timestamp,
+    eventName,
+    eventId,
+    data,
+  }: {
+    requestId: string;
+    timestamp: number;
+    eventName: string;
+    eventId: string;
+    data: string;
+  }) => {
+    sseMessages.push({
+      requestId,
+      cdpTimestamp: timestamp,
+      eventName,
+      eventId,
+      data,
+    });
+  };
+
+  cdp.on("Network.requestWillBeSent", onRequestWillBeSent);
+  cdp.on("Network.responseReceived", onResponseReceived);
+  cdp.on("Network.loadingFailed", onLoadingFailed);
+  cdp.on("Network.eventSourceMessageReceived", onEventSourceMessageReceived);
+  await cdp.send("Network.enable");
+
+  return {
+    capture: () => ({
+      requests: [...requests.values()],
+      sseMessages: [...sseMessages],
+    }),
+    close: async () => {
+      cdp.off("Network.requestWillBeSent", onRequestWillBeSent);
+      cdp.off("Network.responseReceived", onResponseReceived);
+      cdp.off("Network.loadingFailed", onLoadingFailed);
+      cdp.off(
+        "Network.eventSourceMessageReceived",
+        onEventSourceMessageReceived,
+      );
+      await cdp.detach();
+    },
+  };
 };
 
 const staticRoute = (
@@ -342,6 +501,7 @@ const declareRouteSmokeGroup = ({
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
       test(def.template, async () => {
+        const testInfo = test.info();
         if (world === null) {
           throw new Error("route-smoke world was not initialized in beforeAll");
         }
@@ -349,6 +509,7 @@ const declareRouteSmokeGroup = ({
           context,
           results: networkResults,
           route: resolveRoute(def, world),
+          testInfo,
         });
       });
     };
@@ -415,10 +576,12 @@ const smokeRoute = async ({
   context,
   results,
   route,
+  testInfo,
 }: {
   context: BrowserContext;
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
+  testInfo: TestInfo;
 }) => {
   const expectation = route.expectation;
 
@@ -431,6 +594,7 @@ const smokeRoute = async ({
     await smokeRouteTarget({
       context,
       results,
+      testInfo,
       route: {
         template: `${route.template} target`,
         path: expectation.to,
@@ -441,17 +605,19 @@ const smokeRoute = async ({
     return;
   }
 
-  await smokeRouteTarget({ context, results, route });
+  await smokeRouteTarget({ context, results, route, testInfo });
 };
 
 const smokeRouteTarget = async ({
   context,
   results,
   route,
+  testInfo,
 }: {
   context: BrowserContext;
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
+  testInfo: TestInfo;
 }) => {
   // A deeper reading than the budget is either a regression or a fast sample
   // over-reading by one; only more samples tell them apart. A regression
@@ -465,7 +631,7 @@ const smokeRouteTarget = async ({
     if (budget === null || metrics.depth <= budget || remaining === 0) {
       return metrics;
     }
-    const again = await measureRouteTarget({ context, route });
+    const again = await measureRouteTarget({ context, route, testInfo });
     return resampleDeeperReading(
       mergeResampledMetrics(metrics, again),
       remaining - 1,
@@ -473,7 +639,7 @@ const smokeRouteTarget = async ({
   };
 
   const metrics = await resampleDeeperReading(
-    await measureRouteTarget({ context, route }),
+    await measureRouteTarget({ context, route, testInfo }),
     WATERFALL_DEPTH_RESAMPLES,
   );
   // Stored under the template it received; redirect targets arrive as
@@ -484,11 +650,14 @@ const smokeRouteTarget = async ({
 const measureRouteTarget = async ({
   context,
   route,
+  testInfo,
 }: {
   context: BrowserContext;
   route: SmokeRoute;
+  testInfo: TestInfo;
 }): Promise<RouteNetworkMetrics> => {
   const page = await context.newPage();
+  const diagnostics = await startRouteNetworkDiagnostics(page);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -511,6 +680,23 @@ const measureRouteTarget = async ({
     // manifest reflects the fully-rendered route.
     return summarizeCapture(await network.capture());
   } finally {
+    await testInfo.attach(
+      `network-diagnostics-${route.template.replaceAll("/", "_")}`,
+      {
+        body: JSON.stringify(
+          {
+            route: route.template,
+            path: route.path,
+            pageUrl: page.url(),
+            ...diagnostics.capture(),
+          },
+          null,
+          2,
+        ),
+        contentType: "application/json",
+      },
+    );
+    await diagnostics.close();
     detachNetwork();
     detachPage();
     await page.close();
