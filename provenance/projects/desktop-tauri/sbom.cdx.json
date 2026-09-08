@@ -3494,6 +3494,49 @@
       "version": "0.5.4"
     },
     {
+      "bom-ref": "pkg:cargo/color_quant@1.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "color_quant",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/color_quant@1.1.0",
+      "type": "library",
+      "version": "1.1.0"
+    },
+    {
       "bom-ref": "pkg:cargo/combine@4.6.7",
       "evidence": {
         "identity": [
@@ -8496,6 +8539,54 @@
       "version": "0.6.0"
     },
     {
+      "bom-ref": "pkg:cargo/gif@0.14.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "gif",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/gif@0.14.2",
+      "type": "library",
+      "version": "0.14.2"
+    },
+    {
       "bom-ref": "pkg:cargo/gio@0.18.4",
       "evidence": {
         "identity": [
@@ -10731,6 +10822,54 @@
       "purl": "pkg:cargo/image@0.25.10",
       "type": "library",
       "version": "0.25.10"
+    },
+    {
+      "bom-ref": "pkg:cargo/image-webp@0.2.4",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "image-webp",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/image-webp@0.2.4",
+      "type": "library",
+      "version": "0.2.4"
     },
     {
       "bom-ref": "pkg:cargo/indexmap@1.9.3",
@@ -32200,6 +32339,10 @@
       "ref": "pkg:cargo/cmov@0.5.4"
     },
     {
+      "dependsOn": [],
+      "ref": "pkg:cargo/color_quant@1.1.0"
+    },
+    {
       "dependsOn": [
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/memchr@2.8.3"
@@ -32865,6 +33008,13 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/color_quant@1.1.0",
+        "pkg:cargo/weezl@0.1.12"
+      ],
+      "ref": "pkg:cargo/gif@0.14.2"
+    },
+    {
+      "dependsOn": [
         "pkg:cargo/futures-channel@0.3.33",
         "pkg:cargo/futures-core@0.3.34",
         "pkg:cargo/futures-io@0.3.34",
@@ -33265,6 +33415,9 @@
       "dependsOn": [
         "pkg:cargo/bytemuck@1.25.2",
         "pkg:cargo/byteorder-lite@0.1.0",
+        "pkg:cargo/color_quant@1.1.0",
+        "pkg:cargo/gif@0.14.2",
+        "pkg:cargo/image-webp@0.2.4",
         "pkg:cargo/moxcms@0.8.1",
         "pkg:cargo/num-traits@0.2.19",
         "pkg:cargo/png@0.18.1",
@@ -33273,6 +33426,13 @@
         "pkg:cargo/zune-jpeg@0.5.15"
       ],
       "ref": "pkg:cargo/image@0.25.10"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/byteorder-lite@0.1.0",
+        "pkg:cargo/quick-error@2.0.1"
+      ],
+      "ref": "pkg:cargo/image-webp@0.2.4"
     },
     {
       "dependsOn": [
