@@ -55,7 +55,13 @@ import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
-import { inlinesToPlainText, walkInlines } from "./shared-inlines";
+import {
+  ANONYMIZED_CLASS,
+  type WalkInlinesOptions,
+  appendTextInline,
+  inlinesToPlainText,
+  walkInlines,
+} from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -458,7 +464,8 @@ const ECJ_INLINE_OPTIONS = {
 const walkEcjInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-): Inline[] => collapseWhitespace(walkInlines($, el, ECJ_INLINE_OPTIONS));
+  options: WalkInlinesOptions = ECJ_INLINE_OPTIONS,
+): Inline[] => collapseWhitespace(walkInlines($, el, options));
 
 /**
  * The converter pretty-prints its output, so inline text arrives with
@@ -1014,16 +1021,23 @@ const INLINE_TAGS = new Set([
 ]);
 
 /**
- * Drop the breaks at a run's edges. A break separates two lines, so one
- * with nothing on the far side of it opens or closes the paragraph on an
- * empty line — the whitespace `collapseWhitespace` trims, written as a
- * tag. Nothing readable is lost: the break carries no text.
+ * Drop the breaks and blank text at a run's edges. A break separates two
+ * lines, so one with nothing on the far side of it opens or closes the
+ * paragraph on an empty line — the whitespace `collapseWhitespace` trims,
+ * written as a tag. The blank text goes with it: `A <br> ` puts an
+ * indentation gap on each side of the break, and stopping the walk at
+ * that gap would leave the break it surrounds. Nothing readable is lost;
+ * neither node carries a word.
  */
-const trimEdgeBreaks = (inlines: Inline[]): Inline[] => {
-  while (inlines[0]?.type === "line-break") {
+const trimEdgeTrivia = (inlines: Inline[]): Inline[] => {
+  const isTrivia = (node: Inline | undefined): boolean =>
+    node?.type === "line-break" ||
+    (node?.type === "text" && node.text.trim() === "");
+
+  while (isTrivia(inlines[0])) {
     inlines.shift();
   }
-  while (inlines.at(-1)?.type === "line-break") {
+  while (isTrivia(inlines.at(-1))) {
     inlines.pop();
   }
   return inlines;
@@ -1044,9 +1058,19 @@ const visitCell = (
   // between them, so that text was dropped whenever any element child
   // produced a block — the one failure rule 10 does not allow. Collect
   // the loose run instead and close it whenever a block child starts.
+
+  // The walker marks everything inside an `anon-block` element, but its
+  // walk starts at the node it is given: a cell (or a row) carrying the
+  // class itself is above every walk this function starts, so the state
+  // has to be read from the cell's ancestry and seeded into each of
+  // them. Loose text is the cell's content like the elements beside it
+  // and carries the same flag.
+  const anonymized = $cell.closest(`.${ANONYMIZED_CLASS}`).length > 0;
+  const inlineOptions = { ...ECJ_INLINE_OPTIONS, anonymized };
+
   let run: Inline[] = [];
   const flushRun = (): void => {
-    const inlines = trimEdgeBreaks(collapseWhitespace(run));
+    const inlines = collapseWhitespace(trimEdgeTrivia(run));
     run = [];
     const plainText = inlinesToPlainText(inlines).trim();
     if (!plainText) {
@@ -1061,7 +1085,7 @@ const visitCell = (
 
   $cell.contents().each((_, child) => {
     if (isText(child)) {
-      run.push({ type: "text", text: $(child).text() });
+      appendTextInline(run, $(child).text(), anonymized);
       return;
     }
 
@@ -1097,14 +1121,14 @@ const visitCell = (
     // Untrimmed: the run's edges are trimmed once, in `flushRun`, so a
     // span's own leading space still separates it from the text before.
     if (INLINE_TAGS.has(tag)) {
-      run.push(...walkInlines($, $child, ECJ_INLINE_OPTIONS));
+      run.push(...walkInlines($, $child, inlineOptions));
       return;
     }
 
     flushRun();
 
     // As in `visitChild`: anything else still contributes its text.
-    const inlines = walkEcjInlines($, $child);
+    const inlines = walkEcjInlines($, $child, inlineOptions);
     const plainText = inlinesToPlainText(inlines).trim();
     if (!plainText) {
       return;

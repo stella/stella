@@ -663,6 +663,9 @@ describe("parseEcjDecisionHtml", () => {
       "text around an unknown element": `${loose("before")} <section>other</section> ${loose("after")}`,
       "text across a break": `${loose("above")}<br>${loose("below")}`,
       "spans across a break": `<span class="coj-italic">${loose("above")}</span><br><span class="coj-italic">${loose("below")}</span>`,
+      "text across an indented break": `${loose("above")} <br> ${loose("below")}`,
+      "text before trailing breaks": `${loose("edge")} <br> <br> `,
+      "text after leading breaks": ` <br> <br> ${loose("edge")}`,
     };
 
     const rows = Object.values(arrangements)
@@ -706,12 +709,83 @@ describe("parseEcjDecisionHtml", () => {
     const acrossABreak = documentAst.blocks.filter((block) =>
       block.plainText.includes(loose("above")),
     );
-    expect(acrossABreak).toHaveLength(2);
+    expect(acrossABreak).toHaveLength(3);
     for (const block of acrossABreak) {
       expect(block.plainText).toMatch(
         /loose-above content\s*\n\s*loose-below content/u,
       );
     }
+
+    // A break at an edge separates a line from nothing, and the source's
+    // indentation puts a blank text node on each side of it. Both are
+    // trivia: the paragraph opens and closes on its own words.
+    const atAnEdge = documentAst.blocks.filter((block) =>
+      block.plainText.includes(loose("edge")),
+    );
+    expect(atAnEdge).toHaveLength(2);
+    for (const block of atAnEdge) {
+      const inlines = hasBlockInlines(block) ? block.inlines : [];
+      expect(inlines).toEqual([{ type: "text", text: loose("edge") }]);
+      expect(block.plainText).toBe(loose("edge"));
+    }
+  });
+
+  test("anonymizes a cell's own text like the elements beside it", () => {
+    // `anon-block` marks content the publisher anonymized, and the flag
+    // covers everything inside the marked element. The cell walk starts
+    // below it, so a cell that carries the class has to seed the state
+    // itself or its loose text leaves the parser unmarked while the
+    // spans beside it are marked — the same text, protected or not by
+    // where the publisher happened to open a span.
+    const html = [
+      "<html><body><div class='coj-normal' lang='en'>",
+      "<p class='coj-sum-title-1'>JUDGMENT OF THE COURT</p>",
+      "<table><tr>",
+      `<td><span class="coj-count" id="point1">1</span></td>`,
+      `<td class="anon-block">applicant name <span class="coj-italic">and the mark</span> in the case</td>`,
+      "</tr></table>",
+      "</div></body></html>",
+    ].join("");
+
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html,
+    });
+
+    const block = documentAst.blocks.find((candidate) =>
+      candidate.plainText.includes("applicant name"),
+    );
+    expect(block?.plainText).toBe("applicant name and the mark in the case");
+
+    const texts: Extract<Inline, { type: "text" }>[] = [];
+    const collectText = (inlines: readonly Inline[]): void => {
+      for (const inline of inlines) {
+        if (inline.type === "text") {
+          texts.push(inline);
+          continue;
+        }
+        if (hasInlineChildren(inline)) {
+          collectText(inline.children);
+        }
+      }
+    };
+    collectText(
+      block !== undefined && hasBlockInlines(block) ? block.inlines : [],
+    );
+
+    // The loose text is its own inline, so a flag carried only by the
+    // element beside it would leave the cell's own words unmarked.
+    expect(texts.length).toBeGreaterThan(1);
+    expect(texts.map((inline) => inline.text).join("")).toBe(
+      "applicant name and the mark in the case",
+    );
+    expect(texts.filter((inline) => inline.anonymized !== true)).toEqual([]);
   });
 
   test("reads the keyword chain in a non-Latin script", async () => {

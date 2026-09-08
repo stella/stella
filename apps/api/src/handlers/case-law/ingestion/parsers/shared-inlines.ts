@@ -66,6 +66,13 @@ export const appendTextInline = (
  */
 export const ASPOSE_SPACER_GAP = "\u00a0\u00a0";
 
+/**
+ * Class marking content the publisher anonymized. Everything inside the
+ * element carries the flag, so a parser reading a subtree whose walk
+ * starts below the marked element has to seed the state itself.
+ */
+export const ANONYMIZED_CLASS = "anon-block";
+
 export type WalkInlinesOptions = {
   /**
    * Map/validate `<a>` hrefs (e.g. `sanitizeUrl`, which returns
@@ -119,7 +126,7 @@ export const walkInlines = (
       }
 
       const $child = $(child);
-      const childAnon = anonymized || $child.hasClass("anon-block");
+      const childAnon = anonymized || $child.hasClass(ANONYMIZED_CLASS);
 
       if (tag === "br") {
         inlines.push({ type: "line-break" });
