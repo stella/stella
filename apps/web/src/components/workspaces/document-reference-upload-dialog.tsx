@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -25,20 +25,16 @@ import {
 } from "@stll/ui/select";
 
 import { detached } from "@/lib/detached";
+import type { ReferenceUploadAction } from "@/lib/document-reference";
+import {
+  defaultReferenceUploadAction,
+  DOCUMENT_REFERENCE_EVIDENCE,
+  REFERENCE_UPLOAD_ACTION,
+} from "@/lib/document-reference";
 import type { ReferencedFile } from "@/lib/document-reference-queries";
 import type { DocumentReferenceUploadPrompt } from "@/lib/document-reference-upload-store";
 import { useDocumentReferenceUploadStore } from "@/lib/document-reference-upload-store";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
-
-const REFERENCED_FILE_CHOICE = {
-  /** File it onto the document its reference names. */
-  version: "version",
-  /** Ignore the reference and create a separate document. */
-  newDocument: "new-document",
-} as const;
-
-type ReferencedFileChoice =
-  (typeof REFERENCED_FILE_CHOICE)[keyof typeof REFERENCED_FILE_CHOICE];
 
 /**
  * Asks what to do with uploaded files that turned out to be versions of
@@ -48,6 +44,10 @@ type ReferencedFileChoice =
  * question from whichever surface the files came in through. Files with no
  * reference never reach this dialog, so an ordinary upload is never
  * interrupted.
+ *
+ * Each row starts on what that file's own evidence argues for: one that kept
+ * only the hidden property, its visible reference line deleted, starts on
+ * "new document".
  */
 export const DocumentReferenceUploadDialog = () => {
   const prompt = useDocumentReferenceUploadStore((store) => store.prompt);
@@ -83,22 +83,40 @@ type DocumentReferenceUploadDialogBodyProps = {
   onClose: () => void;
 };
 
+/**
+ * One row's own identity and answer. Two files dropped from different folders
+ * can share a filename, so the row carries an id rather than leaning on its
+ * position in the batch.
+ */
+type ReferencedFileRowState = {
+  id: string;
+  entry: ReferencedFile;
+  choice: ReferenceUploadAction;
+};
+
 const DocumentReferenceUploadDialogBody = ({
   prompt: { referenced, onResolved, onCancelled },
   onClose,
 }: DocumentReferenceUploadDialogBodyProps) => {
   const t = useTranslations();
   const uploadVersion = useUploadVersion();
-  const [choices, setChoices] = useState<readonly ReferencedFileChoice[]>(() =>
-    referenced.map(() => REFERENCED_FILE_CHOICE.version),
+  const [rows, setRows] = useState<readonly ReferencedFileRowState[]>(() =>
+    referenced.map((entry) => ({
+      id: crypto.randomUUID(),
+      entry,
+      choice: defaultReferenceUploadAction(entry.evidence),
+    })),
   );
   const [isSending, setIsSending] = useState(false);
 
   const confirm = async () => {
     setIsSending(true);
     const newDocumentFiles: File[] = [];
-    for (const [index, { file, match }] of referenced.entries()) {
-      if (choices[index] === REFERENCED_FILE_CHOICE.newDocument) {
+    for (const {
+      entry: { file, match },
+      choice,
+    } of rows) {
+      if (choice === REFERENCE_UPLOAD_ACTION.newDocument) {
         newDocumentFiles.push(file);
         continue;
       }
@@ -135,16 +153,16 @@ const DocumentReferenceUploadDialogBody = ({
       </DialogHeader>
 
       <DialogPanel className="flex flex-col gap-3">
-        {referenced.map((entry, index) => (
+        {rows.map((row) => (
           <ReferencedFileRow
-            choice={choices[index] ?? REFERENCED_FILE_CHOICE.version}
+            choice={row.choice}
             disabled={isSending}
-            entry={entry}
-            key={`${index}-${entry.file.name}`}
+            entry={row.entry}
+            key={row.id}
             onChoiceChange={(choice) =>
-              setChoices((current) =>
-                current.map((existing, at) =>
-                  at === index ? choice : existing,
+              setRows((current) =>
+                current.map((existing) =>
+                  existing.id === row.id ? { ...existing, choice } : existing,
                 ),
               )
             }
@@ -179,19 +197,21 @@ const DocumentReferenceUploadDialogBody = ({
 
 type ReferencedFileRowProps = {
   entry: ReferencedFile;
-  choice: ReferencedFileChoice;
-  onChoiceChange: (choice: ReferencedFileChoice) => void;
+  choice: ReferenceUploadAction;
+  onChoiceChange: (choice: ReferenceUploadAction) => void;
   disabled: boolean;
 };
 
 const ReferencedFileRow = ({
-  entry: { file, match },
+  entry: { file, match, evidence },
   choice,
   onChoiceChange,
   disabled,
 }: ReferencedFileRowProps) => {
   const t = useTranslations();
-  const selectId = `referenced-upload-${file.name}`;
+  // Two files in one batch can share a filename, so the label cannot be tied
+  // to the row by name.
+  const selectId = useId();
   const bdi = (chunks: ReactNode) => <BidiText>{chunks}</BidiText>;
 
   return (
@@ -218,6 +238,11 @@ const ReferencedFileRow = ({
           })}
         </span>
       )}
+      {evidence === DOCUMENT_REFERENCE_EVIDENCE.propertiesOnly && (
+        <span className="text-muted-foreground text-xs">
+          {t("workspaces.files.versionOrNewFile.referenceLineRemoved")}
+        </span>
+      )}
       <Label className="sr-only" htmlFor={selectId}>
         {t("workspaces.files.referencedUpload.choiceLabel", {
           fileName: file.name,
@@ -228,16 +253,21 @@ const ReferencedFileRow = ({
           <SelectValue />
         </SelectTrigger>
         <SelectPopup>
-          <SelectItem value={REFERENCED_FILE_CHOICE.version}>
+          <SelectItem value={REFERENCE_UPLOAD_ACTION.version}>
             {t("workspaces.files.versionOrNewFile.addAsVersion", {
               version: match.currentVersionNumber + 1,
             })}
           </SelectItem>
-          <SelectItem value={REFERENCED_FILE_CHOICE.newDocument}>
+          <SelectItem value={REFERENCE_UPLOAD_ACTION.newDocument}>
             {t("workspaces.files.referencedUpload.uploadAsNewDocument")}
           </SelectItem>
         </SelectPopup>
       </Select>
+      {choice === REFERENCE_UPLOAD_ACTION.newDocument && (
+        <span className="text-muted-foreground text-xs">
+          {t("workspaces.files.versionOrNewFile.newDocumentDropsReference")}
+        </span>
+      )}
     </div>
   );
 };

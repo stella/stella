@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { readDocumentReference } from "@/lib/document-reference";
+import {
+  DOCUMENT_REFERENCE_EVIDENCE,
+  readDocumentReference,
+} from "@/lib/document-reference";
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -93,7 +96,27 @@ const buildDocx = async ({
 };
 
 describe("reading a stella reference out of an uploaded file", () => {
+  // A file the API stamped carries both: the hidden properties and the
+  // visible line the reader weighs them against.
   test("resolves the code and reference a stamped DOCX carries", async () => {
+    const file = await buildDocx({
+      customPropertiesXml: buildCustomPropertiesXml(
+        "2026/001/015.v3",
+        "kx8mq2n4p3",
+      ),
+      footerXml: buildFooterXml("2026/001/015.v3", "kx8mq2n4p3"),
+    });
+
+    expect(await readDocumentReference(file)).toEqual({
+      verificationCode: "kx8mq2n4p3",
+      stamp: "2026/001/015.v3",
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.propertiesAndFooter,
+    });
+  });
+
+  // The case the offer turns on: the user kept the formatting and deleted the
+  // reference line, so the hidden property is all that is left.
+  test("reports the hidden property alone when the reference line is gone", async () => {
     const file = await buildDocx({
       customPropertiesXml: buildCustomPropertiesXml(
         "2026/001/015.v3",
@@ -104,6 +127,45 @@ describe("reading a stella reference out of an uploaded file", () => {
     expect(await readDocumentReference(file)).toEqual({
       verificationCode: "kx8mq2n4p3",
       stamp: "2026/001/015.v3",
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.propertiesOnly,
+    });
+  });
+
+  // A footer with nothing of stella's in it is a removed line, not a kept one.
+  test("counts an unrelated footer as no reference line at all", async () => {
+    const file = await buildDocx({
+      customPropertiesXml: buildCustomPropertiesXml(
+        "2026/001/015.v3",
+        "kx8mq2n4p3",
+      ),
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        "<w:ftr><w:p><w:r><w:t>Page 1</w:t></w:r></w:p></w:ftr>",
+      ].join("\n"),
+    });
+
+    expect(await readDocumentReference(file)).toEqual({
+      verificationCode: "kx8mq2n4p3",
+      stamp: "2026/001/015.v3",
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.propertiesOnly,
+    });
+  });
+
+  // A line edited into nonsense is still a line the user chose to keep, so it
+  // must not be read as a removal.
+  test("counts a reference line whose code no longer parses as kept", async () => {
+    const file = await buildDocx({
+      customPropertiesXml: buildCustomPropertiesXml(
+        "2026/001/015.v3",
+        "kx8mq2n4p3",
+      ),
+      footerXml: buildFooterXml("2026/001/015.v3", "not a code"),
+    });
+
+    expect(await readDocumentReference(file)).toEqual({
+      verificationCode: "kx8mq2n4p3",
+      stamp: "2026/001/015.v3",
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.propertiesAndFooter,
     });
   });
 
@@ -134,6 +196,7 @@ describe("reading a stella reference out of an uploaded file", () => {
     expect(await readDocumentReference(file)).toEqual({
       verificationCode: "kx8mq2n4p3",
       stamp: "2026/001/015.v3",
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.footerOnly,
     });
   });
 
@@ -145,6 +208,7 @@ describe("reading a stella reference out of an uploaded file", () => {
     expect(await readDocumentReference(file)).toEqual({
       verificationCode: "kx8mq2n4p3",
       stamp: null,
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.footerOnly,
     });
   });
 
@@ -181,6 +245,7 @@ describe("reading a stella reference out of an uploaded file", () => {
     expect(await readDocumentReference(file)).toEqual({
       verificationCode: "kx8mq2n4p3",
       stamp: "2026/001/015.v3",
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.propertiesAndFooter,
     });
   });
 
@@ -264,6 +329,7 @@ describe("reading a stella reference out of an uploaded file", () => {
     expect(await readDocumentReference(file)).toEqual({
       verificationCode: "kx8mq2n4p3",
       stamp: null,
+      evidence: DOCUMENT_REFERENCE_EVIDENCE.propertiesOnly,
     });
   });
 });
