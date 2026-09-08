@@ -1209,8 +1209,8 @@ const foldRenderedLookups = (
         `"${parent}" is configured twice by the markers that render it: ` +
         `paragraph ${existing.paragraphIndex + 1} says ${existing.signature} ` +
         `and paragraph ${declaration.paragraphIndex + 1} says ` +
-        `${declaration.signature}. Keep the lookup on one rendering and write ` +
-        "the others as plain markers.",
+        `${declaration.signature}. Every marker that renders the field has to ` +
+        "carry the same lookup, because they are all printing one hit.",
       paragraphIndex: declaration.paragraphIndex,
       directive: `{{ ${path} | lookup(…) }}`,
     });
