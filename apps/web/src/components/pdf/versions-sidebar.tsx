@@ -21,6 +21,7 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -28,6 +29,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useContentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import Tooltip from "@/components/tooltip";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -571,13 +573,30 @@ const VersionItem = ({
         isViewing={isSelected && !isCurrent}
         loadDiff={loadDiff}
         meta={
-          version.label && (
-            <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
-              <span
-                className={cn("size-2 shrink-0 rounded-full", labelDotColor)}
-              />
-              {version.label}
-            </span>
+          (version.stamp !== null || version.label !== null) && (
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
+              {version.stamp !== null && (
+                <Tooltip
+                  content={t("common.documentReference")}
+                  render={
+                    <span className="text-muted-foreground truncate font-mono text-[10px]" />
+                  }
+                >
+                  <BidiText direction="ltr">{version.stamp}</BidiText>
+                </Tooltip>
+              )}
+              {version.label !== null && (
+                <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      labelDotColor,
+                    )}
+                  />
+                  {version.label}
+                </span>
+              )}
+            </div>
           )
         }
         stats={stats}
