@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { documentCounters, entities, fields } from "@/api/db/schema";
+import {
+  documentCounters,
+  entities,
+  entityVersions,
+  fields,
+} from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -9,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -346,6 +352,10 @@ describe("copy-to-workspace", () => {
             };
           }
 
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
+
           if (table === entities && isInsertedEntity(value)) {
             insertedEntities.push(value);
           } else if (table === fields) {
@@ -513,6 +523,9 @@ describe("copy-to-workspace", () => {
               }),
             };
           }
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === fields && Array.isArray(value)) {
             for (const row of value) {
               if (isInsertedField(row)) {
@@ -628,6 +641,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -752,6 +768,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -882,6 +901,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -1004,6 +1026,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -1094,6 +1119,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -1209,7 +1237,10 @@ describe("copy-to-workspace", () => {
         };
       },
       insert: (table: unknown) => ({
-        values: () => {
+        values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -1317,6 +1348,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -1451,6 +1485,9 @@ describe("copy-to-workspace", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -1552,6 +1589,9 @@ describe("copy-to-workspace", () => {
       select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
           if (table === entities && isInsertedEntity(value)) {
             insertedEntities.push(value);
           }

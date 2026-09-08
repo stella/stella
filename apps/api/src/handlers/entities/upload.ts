@@ -38,6 +38,7 @@ import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -1038,13 +1039,12 @@ const uploadEntityHandler = async function* ({
           docSequence: entityStamp.docSequence,
         });
 
-        await tx.insert(entityVersions).values({
+        await insertEntityVersion(tx, {
           id: entityVersionId,
           workspaceId,
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
-          verificationCode: entityStamp.verificationCode,
         });
 
         await tx
