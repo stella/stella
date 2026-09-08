@@ -5,6 +5,8 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
     "allow-clipboard-get-editor-context",
     "allow-clipboard-get-image-preview",
     "allow-clipboard-set-item-group",

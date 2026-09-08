@@ -5,6 +5,8 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
     "allow-is-autostart-enabled",
     "allow-set-autostart",
     "allow-clipboard-get-snapshot",
