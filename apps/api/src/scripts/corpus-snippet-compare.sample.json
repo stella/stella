@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cze-two-terms",
+    "text": "náhrada škody z prodlení",
+    "country": "cze"
+  },
+  {
+    "id": "cze-diacritics-stripped",
+    "text": "nahrada skody z prodleni",
+    "country": "cze"
+  },
+  {
+    "id": "cze-quoted-phrase",
+    "text": "\"dobré mravy\" výpověď",
+    "country": "cze"
+  },
+  {
+    "id": "cze-inflected-term",
+    "text": "nájemního bytu",
+    "country": "cze"
+  },
+  {
+    "id": "svk-two-terms",
+    "text": "bezdôvodné obohatenie premlčanie",
+    "country": "svk"
+  },
+  {
+    "id": "pol-single-term",
+    "text": "zadośćuczynienie",
+    "country": "pol"
+  }
+]

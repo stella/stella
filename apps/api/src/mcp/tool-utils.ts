@@ -16,6 +16,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
@@ -1185,39 +1186,15 @@ export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
   }
 };
 
-const HTML_ENTITY_TEXT = new Map([
-  ["&amp;", "&"],
-  ["&lt;", "<"],
-  ["&gt;", ">"],
-  ["&quot;", '"'],
-  ["&#x27;", "'"],
-  ["&#39;", "'"],
-]);
-const HTML_ENTITY_PATTERN = /&(?:amp|lt|gt|quot|#x27|#39);/gu;
-const HIGHLIGHT_TAG_PATTERN = /<\/?mark>/gu;
-
 /**
- * Plain text for a search snippet built for the web UI. `escapeAndHighlight`
- * (see `lib/search/highlight.ts`) HTML-escapes the snippet and wraps matches in
- * `<mark>`; an MCP client is an agent or a terminal, never a browser, so the
- * markup is noise there. Tags are dropped before entities are decoded, so an
- * escaped literal `&lt;mark&gt;` in the source text survives as text. Entities
- * are decoded in one pass so `&amp;lt;` decodes to `&lt;`, not `<`.
+ * Plain text for a search snippet built for the web UI. A snippet is
+ * HTML-escaped and wraps its matches in `<mark>`; an MCP client is an agent or
+ * a terminal, never a browser, so the markup is noise there. The format's
+ * owner (`lib/search/highlight.ts`) reads it back; what this adds is the
+ * absent-snippet contract every tool here wants.
  */
-export const toPlainTextSnippet = (snippet: string | null): string | null => {
-  if (snippet === null) {
-    return null;
-  }
-
-  return snippet
-    .replaceAll(HIGHLIGHT_TAG_PATTERN, "")
-    .replaceAll(
-      HTML_ENTITY_PATTERN,
-      (entity) =>
-        HTML_ENTITY_TEXT.get(entity) ??
-        panic(`Unmapped HTML entity: ${entity}`),
-    );
-};
+export const toPlainTextSnippet = (snippet: string | null): string | null =>
+  snippet === null ? null : stripSearchHighlightMarkup(snippet);
 
 export const normalizeTextField = ({
   allowEmptyFallback = true,
