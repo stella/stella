@@ -21,8 +21,10 @@ export const verifyRoute = new Elysia({ prefix: "/v" }).get(
 );
 
 /**
- * Authenticated resolution: `/v1/verify/:code` → entity location.
- * Called by the frontend after the user is logged in.
+ * Authenticated resolution: `/v1/verify/:code` → the referenced document
+ * version (matter, document, reference, version numbers), or 404 when no
+ * version in the caller's organization carries the code. Called by the
+ * frontend after the user is logged in.
  */
 export const verifyAuthRoute = new Elysia({ prefix: "/verify" })
   .use(authMacro)

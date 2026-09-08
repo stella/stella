@@ -466,10 +466,10 @@ export const printPdfHandler = async ({
 };
 
 /**
- * Download a DOCX with Stella stamps injected. Returns the
- * modified file as a streamed `Response`. Only called when
- * the user explicitly requests stamping via a dedicated
- * action (right-click → "Download with stamp").
+ * Download a DOCX with the stella document reference injected. Returns the
+ * modified file as a streamed `Response`. Only called when the user
+ * explicitly asks for it: the download menu offers it as
+ * "Download with reference".
  */
 export const stampedDownloadHandler = async ({
   scopedDb,
