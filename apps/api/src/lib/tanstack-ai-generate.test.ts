@@ -784,6 +784,70 @@ describe("TanStack AI structured output generation", () => {
     expect(providerRequests).toHaveLength(1);
   });
 
+  // An adapter whose SDK exception reports the status as a plain field and
+  // stringifies the response body into the message keeps neither once the
+  // engine rebuilds the run error: the body in the message is the only
+  // evidence left of what the provider answered. The streaming seam recovers
+  // it, so this one has to as well; otherwise quota, billing, retired model
+  // and outage all reach the classifier as one unnamed failure.
+  test("classifies a generated object's failure whose only detail is the provider body", async () => {
+    queueRun(
+      throwingRun(
+        new Error(
+          JSON.stringify({
+            error: {
+              code: 429,
+              message: "Resource has been exhausted.",
+              status: "RESOURCE_EXHAUSTED",
+            },
+          }),
+        ),
+      ),
+    );
+
+    const caught = await generateObjectForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(classifyAIError(caught)).toBe("quota_exhausted");
+    expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
+  });
+
+  test("leaves a generated object's plain-text failure unclassified", async () => {
+    const providerError = new Error("The model is currently overloaded.");
+    queueRun(throwingRun(providerError));
+
+    const caught = await generateObjectForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // Nothing names this failure, so the engine's own wrapper stands rather
+    // than being replaced by a 502 that would claim a status it never had.
+    expect(caught).toHaveProperty("cause", providerError);
+    expect(classifyAIError(caught)).toBe("unknown");
+  });
+
   test("retries deferred structured streams after control-only chunks", async () => {
     queueRun(
       throwingRun(
