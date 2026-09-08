@@ -10,9 +10,13 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
   isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -25,6 +29,8 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -547,10 +553,38 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 type DecisionContent = {
   fulltext: string | undefined;
   documentAst: DocumentAst | EmptyAst | undefined;
+  /** The rich HTML document, which is what the parser reads. */
   sourceRaw: string | undefined;
+  /**
+   * The plain-text document, where the portal served that endpoint and not the
+   * rich one. Kept because it is a response fetched for this decision: a row
+   * built from it carries fulltext and no AST, and dropping the payload would
+   * leave that row with nothing to re-read.
+   */
+  fallbackText: string | undefined;
 };
 
-const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set(["text/html"]);
+/**
+ * The pages fetched for one decision, as the stored raw names them. A row
+ * written before the envelope holds the document alone, as bare HTML.
+ */
+const CZ_NSS_RAW_PART = {
+  DOCUMENT: "document",
+  DETAIL: "detail",
+  TEXT: "text",
+} as const;
+
+/**
+ * Shortest plain-text payload this adapter reads as a document. Below it the
+ * endpoint answered with a portal notice rather than a decision, and the crawl
+ * and the replay have to draw that line in the same place.
+ */
+const CZ_NSS_MIN_FULLTEXT_CHARS = 100;
+
+const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set([
+  "text/html",
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+]);
 
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
@@ -657,6 +691,7 @@ const fetchDecisionContent = async (
           fulltext: parsed.fulltext,
           documentAst: parsed.documentAst,
           sourceRaw: html,
+          fallbackText: undefined,
         };
       }
     }
@@ -683,25 +718,373 @@ const fetchDecisionContent = async (
         fulltext: undefined,
         documentAst: undefined,
         sourceRaw: undefined,
+        fallbackText: undefined,
       };
     }
 
     const buffer = await response.arrayBuffer();
     const text = new TextDecoder("utf-16").decode(buffer);
     const body = stripHtml(text);
+    const usable = body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
     return {
-      fulltext: body.length > 100 ? body : undefined,
+      fulltext: usable ? body : undefined,
       documentAst: undefined,
       sourceRaw: undefined,
+      // Decoded rather than verbatim: the endpoint serves UTF-16, and the raw
+      // is stored as text. It is the payload this row's fulltext came from.
+      fallbackText: usable ? text : undefined,
     };
   } catch {
     return {
       fulltext: undefined,
       documentAst: undefined,
       sourceRaw: undefined,
+      fallbackText: undefined,
     };
   }
 };
+
+// ── Source-field inventory ───────────────────────────────
+
+/**
+ * Every field the portal states on the detail page read for one decision.
+ *
+ * The portal names each one in a `data-field-id` attribute, and prints the
+ * fields a document has: a decision the court wrote no headnote for carries
+ * the flag and not the sentence, one that never left a regional court carries
+ * no cassation block. The list is therefore the union over the document kinds
+ * the portal serves, and {@link listCzNssSourceFields} reads back whichever of
+ * them one page states.
+ *
+ * Declared once so the disposition map below is total by type: a field id
+ * added here without a disposition does not compile.
+ */
+const CZ_NSS_SOURCE_FIELDS = [
+  "aktualizovano",
+  "aplikovanepravnipredpisysb§",
+  "aplikovanepravnipredpisysbcislo",
+  "aplikovanepravnipredpisysbcl",
+  "aplikovanepravnipredpisysbodst",
+  "aplikovanepravnipredpisysbpism",
+  "aplikovanepravnipredpisysbpredpis",
+  "aplikovanepravnipredpisysbrok",
+  "aplikovanopravoeu",
+  "citace",
+  "cj",
+  "datumnapadenehorozhodnuti",
+  "datumpravnimoci",
+  "datumpredkladacihorozhodnutinss",
+  "datumrozhodnutikrajskehosoudu",
+  "datumskonceniirizeni",
+  "datumvydanirozhodnuti",
+  "datumvyhotovenirozhodnuti",
+  "datumvypravenirozhodnuti",
+  "datumzahajenirizeni",
+  "datumzahajenirizeninka",
+  "druh",
+  "druhdokumentuavyrokrozhodnuti",
+  "ecli",
+  "hvtparagrafy",
+  "identifikacevesbirkach",
+  "identifikacevesbirkachdelenejudikat",
+  "identifikacevesbirkachdelenerok",
+  "identifikacevesbirkachdelenesesit",
+  "kasacnistiznostoznacenivecideleneclistu",
+  "kasacnistiznostoznacenivecideleneporc",
+  "kasacnistiznostoznacenivecidelenerejstrik",
+  "kasacnistiznostoznacenivecidelenerok",
+  "kasacnistiznostoznacenivecidelenesenat",
+  "kasacnistiznostoznacenivecivcelku",
+  "kasacniustavnistiznost",
+  "krajskysoud",
+  "napadeno",
+  "nazevorganu",
+  "nazevsoudusubjektu",
+  "nazevspravnihoorganu",
+  "oblastupravy",
+  "oznacenivecidelenecislojednaci",
+  "oznacenivecideleneporadovecislo",
+  "oznacenivecidelenerejstrikovaznacka",
+  "oznacenivecidelenerok",
+  "oznacenivecidelenesenat",
+  "oznacenivecivcelku",
+  "podanakasacnistiznostD",
+  "povaha",
+  "pravnivetaanv",
+  "pravnivetaupravena",
+  "prejudikaturaoznacenivecideleneclistu",
+  "prejudikaturaoznacenivecideleneporc",
+  "prejudikaturaoznacenivecidelenerejstrik",
+  "prejudikaturaoznacenivecidelenerok",
+  "prejudikaturaoznacenivecidelenesenat",
+  "prejudikaturaoznacenivecivcelku",
+  "rozhodnuto",
+  "rozhodnutivevztahukrizeni",
+  "rozhodnutonapkasst",
+  "sbnsspublikovano",
+  "souladnaprejudikatura",
+  "soudcezpravodaj",
+  "soudsenat",
+  "spzncjpredkladacihorozhodnutinss",
+  "spzncjrizenipodani",
+  "spzncjrozhodnutispravnihoorganu",
+  "stavrizeni",
+  "sz",
+  "typrizeni",
+  "typucastnika",
+  "typzastupce",
+  "ucastnicirizeniz",
+  "ucastnikrizeni",
+  "vyrokrozhodnuti",
+  "zastupce",
+  "zobrazovanedatum",
+] as const;
+
+type CzNssSourceField = (typeof CZ_NSS_SOURCE_FIELDS)[number];
+
+/**
+ * Why a family of fields is left. Written once per family rather than once per
+ * field: the portal splits one fact across a row of columns, and a reason
+ * repeated per column would read as seven decisions where one was taken.
+ */
+const CZ_NSS_EXCLUSION = {
+  LISTING_REFERENCE:
+    "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+  RELATED_CASE_LAW:
+    "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+  PROCEEDING_HISTORY:
+    "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+  PROCEEDING_DATES:
+    "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+  PARTY_GRID:
+    "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+  REPORTER_PUBLICATION:
+    "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as `citation`.",
+  APPLIED_LEGISLATION:
+    "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+  PORTAL_RECORD:
+    "What the portal states about its own record rather than about the decision: when the entry was refreshed, which date its result list sorts on, and the paragraph-search aid printed beside it.",
+} as const;
+
+const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
+  aktualizovano: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  "aplikovanepravnipredpisysb§": excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbcislo: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbcl: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbodst: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbpism: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbpredpis: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbrok: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanopravoeu: excludedSourceField(CZ_NSS_EXCLUSION.APPLIED_LEGISLATION),
+  citace: {
+    disposition: "stored",
+    target: { type: "metadata", key: "citation" },
+  },
+  cj: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  datumnapadenehorozhodnuti: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  datumpravnimoci: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumpredkladacihorozhodnutinss: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  datumrozhodnutikrajskehosoudu: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  datumskonceniirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumvydanirozhodnuti: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  datumvyhotovenirozhodnuti: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
+  datumvypravenirozhodnuti: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
+  datumzahajenirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumzahajenirizeninka: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  druh: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  druhdokumentuavyrokrozhodnuti: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
+  hvtparagrafy: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  identifikacevesbirkach: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  identifikacevesbirkachdelenejudikat: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  identifikacevesbirkachdelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  identifikacevesbirkachdelenesesit: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  kasacnistiznostoznacenivecideleneclistu: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecideleneporc: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecidelenerejstrik: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecidelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecidelenesenat: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecivcelku: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacniustavnistiznost: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  krajskysoud: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  napadeno: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  nazevorganu: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  nazevsoudusubjektu: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  nazevspravnihoorganu: {
+    disposition: "stored",
+    target: { type: "metadata", key: "administrativeAuthority" },
+  },
+  oblastupravy: {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalArea" },
+  },
+  oznacenivecidelenecislojednaci: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecideleneporadovecislo: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecidelenerejstrikovaznacka: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecidelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecidelenesenat: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecivcelku: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  podanakasacnistiznostD: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  povaha: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
+  pravnivetaanv: excludedSourceField(
+    "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
+  ),
+  pravnivetaupravena: {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalSentence" },
+  },
+  prejudikaturaoznacenivecideleneclistu: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecideleneporc: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecidelenerejstrik: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecidelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecidelenesenat: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecivcelku: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  rozhodnuto: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  rozhodnutivevztahukrizeni: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  rozhodnutonapkasst: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  sbnsspublikovano: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
+  souladnaprejudikatura: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
+  soudcezpravodaj: {
+    disposition: "stored",
+    target: { type: "metadata", key: "judge" },
+  },
+  soudsenat: {
+    disposition: "stored",
+    target: { type: "metadata", key: "senate" },
+  },
+  spzncjpredkladacihorozhodnutinss: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  spzncjrizenipodani: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  spzncjrozhodnutispravnihoorganu: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  stavrizeni: {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseStatus" },
+  },
+  sz: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  typrizeni: {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseType" },
+  },
+  typucastnika: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  typzastupce: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  ucastnicirizeniz: {
+    disposition: "stored",
+    target: { type: "metadata", key: "parties" },
+  },
+  ucastnikrizeni: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  vyrokrozhodnuti: {
+    disposition: "stored",
+    target: { type: "metadata", key: "outcome" },
+  },
+  zastupce: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  zobrazovanedatum: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+} as const satisfies Record<CzNssSourceField, SourceFieldDisposition>;
+
+/** How the portal names each field it prints on a detail page. */
+const CZ_NSS_FIELD_ID_RE = /data-field-id="(?<field>[^"]+)"/giu;
+
+/** Numeric character references, which ids such as `…sb&#xA7;` carry. */
+const NUMERIC_ENTITY_RE = /&#(?<hex>x[0-9a-f]+|\d+);/giu;
+
+const decodeNumericEntities = (value: string): string =>
+  value.replaceAll(NUMERIC_ENTITY_RE, (match, reference: string) => {
+    const code = reference.startsWith("x")
+      ? Number.parseInt(reference.slice(1), 16)
+      : Number.parseInt(reference, 10);
+    return Number.isNaN(code) ? match : String.fromCodePoint(code);
+  });
+
+/** What the portal states on one detail page, by the names it gives them. */
+const listCzNssSourceFields = (html: string): readonly string[] => [
+  ...new Set(
+    [...html.matchAll(CZ_NSS_FIELD_ID_RE)].map((match) =>
+      decodeNumericEntities(match.groups?.["field"] ?? ""),
+    ),
+  ),
+];
 
 /**
  * The fields the portal states on a document's own detail page, which no
@@ -814,7 +1197,7 @@ const EMPTY_DETAIL: CzNssDetailMetadata = {
  * a document not yet read and comes back for.
  */
 type DetailFetch =
-  | { type: "fetched"; detail: CzNssDetailMetadata }
+  | { type: "fetched"; detail: CzNssDetailMetadata; html: string | null }
   | { type: "unavailable" };
 
 const fetchDetailMetadata = async (
@@ -835,7 +1218,7 @@ const fetchDetailMetadata = async (
       },
     );
     if (response.status === 404) {
-      return { type: "fetched", detail: EMPTY_DETAIL };
+      return { type: "fetched", detail: EMPTY_DETAIL, html: null };
     }
     if (!response.ok) {
       return { type: "unavailable" };
@@ -843,18 +1226,59 @@ const fetchDetailMetadata = async (
 
     const html = await response.text();
 
-    return { type: "fetched", detail: parseCzNssDetailMetadata(html) };
+    return { type: "fetched", detail: parseCzNssDetailMetadata(html), html };
   } catch {
     return { type: "unavailable" };
   }
 };
 
-/** Convert a parsed row into an IngestionResult. */
-const rowToResult = (
-  row: ParsedRow,
-  content: DecisionContent,
+type RowToResultOptions = {
+  row: ParsedRow;
+  content: DecisionContent;
+  detail: CzNssDetailMetadata;
+  /** The detail page as served, where it was read for this document. */
+  detailHtml: string | null;
+};
+
+/**
+ * The metadata keys a detail page fills, written once so the crawl and the
+ * stored-raw replay cannot drift into filling different ones.
+ */
+const detailMetadataFields = (
   detail: CzNssDetailMetadata,
-): IngestionResult => {
+): Record<string, unknown> => ({
+  ecli: detail.ecli,
+  judge: detail.judge,
+  senate: detail.senate,
+  legalArea: detail.legalArea,
+  decisionType: detail.decisionType,
+  decisionDate: detail.decisionDate,
+  outcome: detail.outcome,
+  caseType: detail.caseType,
+  parties: detail.parties,
+  caseStatus: detail.caseStatus,
+  administrativeAuthority: detail.administrativeAuthority,
+  citation: detail.citation,
+  legalSentence: detail.legalSentence,
+});
+
+/** The keys a detail page states a value for, for a replay that merges them. */
+const statedDetailMetadataFields = (
+  detail: CzNssDetailMetadata,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(detailMetadataFields(detail)).filter(
+      ([, value]) => value !== undefined,
+    ),
+  );
+
+/** Convert a parsed row into an IngestionResult. */
+const rowToResult = ({
+  content,
+  detail,
+  detailHtml,
+  row,
+}: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
   const court = courtFromEcli(detail.ecli);
   const decisionDate = (() => {
@@ -870,6 +1294,15 @@ const rowToResult = (
   // This source publishes the docket with the sheet number appended.
   const publishedCaseNumber = row.publishedCaseNumber ?? row.caseNumber;
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
+  const rawParts = {
+    ...(content.sourceRaw === undefined
+      ? {}
+      : { [CZ_NSS_RAW_PART.DOCUMENT]: content.sourceRaw }),
+    ...(content.fallbackText === undefined
+      ? {}
+      : { [CZ_NSS_RAW_PART.TEXT]: content.fallbackText }),
+    ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
+  };
 
   return {
     caseNumber: row.caseNumber,
@@ -914,19 +1347,9 @@ const rowToResult = (
       // together, so the split stays reversible from what we stored.
       publishedCaseNumber,
       court,
-      ecli: detail.ecli,
-      judge: detail.judge,
-      senate: detail.senate,
-      legalArea: detail.legalArea,
-      decisionType: detail.decisionType,
-      decisionDate: detail.decisionDate,
+      ...detailMetadataFields(detail),
+      // The listing states an outcome for rows whose detail page does not.
       outcome: detail.outcome ?? row.outcome,
-      caseType: detail.caseType,
-      parties: detail.parties,
-      caseStatus: detail.caseStatus,
-      administrativeAuthority: detail.administrativeAuthority,
-      citation: detail.citation,
-      legalSentence: detail.legalSentence,
     },
     // Fulltext is parser output, not publisher identity. Keeping it out makes
     // crawl and replay converge on the same source hash after parser changes.
@@ -939,8 +1362,17 @@ const rowToResult = (
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
-    sourceRaw: content.sourceRaw,
-    sourceRawContentType: "text/html",
+    // Every response fetched for this decision, not just the one the parser
+    // reads: the headnote and the rest of the portal's metadata are on the
+    // detail page, so a row that stored the document alone could never recover
+    // a field read later without going back to the court. A row the portal
+    // served nothing for still states no raw.
+    ...(Object.keys(rawParts).length === 0
+      ? {}
+      : {
+          sourceRaw: encodeSourceRawEnvelope(rawParts),
+          sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        }),
   };
 };
 
@@ -986,7 +1418,102 @@ const storedPublishedCaseNumber = ({
   return caseNumber;
 };
 
-/** Rebuild one NSS decision from the exact HTML the crawl stored. */
+/**
+ * The document a stored payload holds: the rich HTML the parser reads, or the
+ * plain text the portal serves where that endpoint answered instead.
+ */
+type StoredDocument =
+  | { type: "html"; html: string }
+  | { type: "text"; text: string };
+
+const storedDocumentOf = (
+  raw: string,
+  parts: SourceRawParts | null,
+): StoredDocument | null => {
+  // A payload that is not an envelope is a row stored when the raw held the
+  // rich document alone.
+  if (parts === null) {
+    return { type: "html", html: raw };
+  }
+  const html = parts[CZ_NSS_RAW_PART.DOCUMENT];
+  if (html !== undefined) {
+    return { type: "html", html };
+  }
+  const text = parts[CZ_NSS_RAW_PART.TEXT];
+  return text === undefined ? null : { type: "text", text };
+};
+
+type RebuildStoredDocumentOptions = {
+  document: StoredDocument;
+  caseNumber: string;
+  ecli: string | undefined;
+  court: string;
+  decisionDate: string | undefined;
+  decisionType: string | undefined;
+  sourceUrl: string | undefined;
+  detailMetadata: Record<string, unknown>;
+};
+
+type RebuiltDocument = {
+  fulltext: string | undefined;
+  documentAst: DocumentAst | EmptyAst;
+};
+
+/**
+ * What the crawl built from this payload, rebuilt from the payload alone, or
+ * `null` where it holds nothing a row could be stored on.
+ */
+const rebuildStoredDocument = ({
+  caseNumber,
+  court,
+  decisionDate,
+  decisionType,
+  detailMetadata,
+  document,
+  ecli,
+  sourceUrl,
+}: RebuildStoredDocumentOptions): RebuiltDocument | null => {
+  if (document.type === "text") {
+    // The same reading the crawl takes from this endpoint, down to the floor
+    // that tells a document from a portal error page.
+    const body = stripHtml(document.text);
+    return body.length > CZ_NSS_MIN_FULLTEXT_CHARS
+      ? { fulltext: body, documentAst: EMPTY_AST }
+      : null;
+  }
+
+  const parsed = parseNssDecisionHtml({
+    caseNumber,
+    ecli,
+    court,
+    decisionDate,
+    decisionType,
+    sourceUrl,
+    html: document.html,
+    detailMetadata,
+  });
+
+  return parsed.documentAst.blocks.length === 0
+    ? null
+    : { fulltext: parsed.fulltext, documentAst: parsed.documentAst };
+};
+
+/**
+ * Rebuild one NSS decision from what the crawl stored for it.
+ *
+ * Two payload shapes reach this, and the difference is what a replay can
+ * recover. A row stored since the raw became an envelope carries the document
+ * and the detail page, so the replay derives the portal's metadata from the
+ * page itself and a field first read later lands on the row. A row stored
+ * before it carries the document alone: its metadata is whatever the ingest
+ * of the day wrote, and only a re-crawl can add to it.
+ *
+ * The document itself is whichever of the two endpoints answered for this
+ * decision, and a replay rebuilds what the crawl built from it: an AST from
+ * the rich HTML, plain fulltext under an empty AST from the text endpoint. A
+ * replay that read only the rich part would reject every text-served row as
+ * having no document, which is a row the crawl stored quite deliberately.
+ */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
@@ -1001,31 +1528,43 @@ const reparseStoredRaw = (
     };
   }
 
-  const html = new TextDecoder().decode(stored.raw);
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(raw);
+  const storedDocument = storedDocumentOf(raw, parts);
+  const storedDetailHtml = parts?.[CZ_NSS_RAW_PART.DETAIL];
+  const storedDetail =
+    storedDetailHtml === undefined
+      ? undefined
+      : parseCzNssDetailMetadata(storedDetailHtml);
   const sourceUrl = stored.sourceUrl ?? undefined;
   const decisionDate = stored.decisionDate ?? undefined;
   const decisionType = stored.decisionType ?? undefined;
   const ecli = stored.ecli ?? undefined;
-  const parsed = parseNssDecisionHtml({
-    caseNumber: stored.caseNumber,
-    ecli,
-    court: stored.court,
-    decisionDate,
-    decisionType,
-    sourceUrl,
-    html,
-    detailMetadata: stored.metadata,
-  });
+  const rebuilt =
+    storedDocument === null
+      ? null
+      : rebuildStoredDocument({
+          document: storedDocument,
+          caseNumber: stored.caseNumber,
+          ecli,
+          court: stored.court,
+          decisionDate,
+          decisionType,
+          sourceUrl,
+          detailMetadata: stored.metadata,
+        });
 
-  if (parsed.documentAst.blocks.length === 0) {
+  if (rebuilt === null) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: `no blocks parsed from the stored payload for ${stored.caseNumber}`,
+      detail: `no document parsed from the stored payload for ${stored.caseNumber}`,
     };
   }
 
-  const citation = nonEmptyString(stored.metadata["citation"]);
+  const citation =
+    nonEmptyString(storedDetail?.citation) ??
+    nonEmptyString(stored.metadata["citation"]);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
@@ -1055,25 +1594,42 @@ const reparseStoredRaw = (
       language: stored.language,
       decisionDate,
       decisionType,
-      fulltext: parsed.fulltext,
+      fulltext: rebuilt.fulltext,
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
       // Written back rather than passed through: a legacy row states the
       // reference only in `metadata.caseNumber`, and a replay that left the
       // metadata as it found it would leave the split unreversible for good.
       // For a row stored since, these are the values already there.
-      metadata: { ...stored.metadata, sheetNumber, publishedCaseNumber },
+      metadata: {
+        ...stored.metadata,
+        // What the stored detail page states wins over what the row holds: the
+        // page is the publisher's, the row is what an older parser made of it.
+        ...(storedDetail === undefined
+          ? {}
+          : statedDetailMetadataFields(storedDetail)),
+        sheetNumber,
+        publishedCaseNumber,
+      },
+      // The sentence this replay writes, not the one the row arrived with: a
+      // row whose detail page was stored before anything read the headnote
+      // gains it here, and a hash still taken from the old metadata would make
+      // the crawl read the replayed row as changed on its next pass.
       rawHash: czNssSourceHash({
         caseNumber: stored.caseNumber,
         sheetNumber,
         decisionDate,
         decisionType,
-        legalSentence: nonEmptyString(stored.metadata["legalSentence"]),
+        legalSentence:
+          nonEmptyString(storedDetail?.legalSentence) ??
+          nonEmptyString(stored.metadata["legalSentence"]),
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
-      documentAst: parsed.documentAst,
-      sourceRaw: html,
-      sourceRawContentType: "text/html",
+      documentAst: rebuilt.documentAst,
+      // The payload verbatim, in the shape it was stored in: a replay re-reads
+      // a decision, it does not rewrite what the crawl fetched for it.
+      sourceRaw: raw,
+      sourceRawContentType: stored.contentType ?? "text/html",
     },
   };
 };
@@ -1301,6 +1857,7 @@ const EMPTY_CONTENT: DecisionContent = {
   fulltext: undefined,
   documentAst: undefined,
   sourceRaw: undefined,
+  fallbackText: undefined,
 };
 
 /**
@@ -1342,7 +1899,12 @@ export const buildCzNssDecision = async ({
     // key it on.
     return {
       type: "detail-unavailable",
-      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+      decision: rowToResult({
+        row,
+        content: EMPTY_CONTENT,
+        detail: EMPTY_DETAIL,
+        detailHtml: null,
+      }),
     };
   }
 
@@ -1350,10 +1912,15 @@ export const buildCzNssDecision = async ({
   if (detailFetch.type === "unavailable") {
     return {
       type: "detail-unavailable",
-      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+      decision: rowToResult({
+        row,
+        content: EMPTY_CONTENT,
+        detail: EMPTY_DETAIL,
+        detailHtml: null,
+      }),
     };
   }
-  const { detail } = detailFetch;
+  const { detail, html: detailHtml } = detailFetch;
   const content = await fetchDecisionContent(
     documentId,
     row,
@@ -1361,7 +1928,7 @@ export const buildCzNssDecision = async ({
     session,
     signal,
   );
-  const decision = rowToResult(row, content, detail);
+  const decision = rowToResult({ row, content, detail, detailHtml });
 
   // Both document endpoints answered with nothing usable. The metadata row is
   // still a decision to the crawl; to the reconciliation it is a document that
@@ -1642,6 +2209,11 @@ const parseCursor = (cursor: string | null): { date: string; page: number } => {
 
 export const czNssAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_NSS,
+  sourceFields: {
+    status: "declared",
+    fields: CZ_NSS_SOURCE_FIELD_DISPOSITIONS,
+    listSourceFields: listCzNssSourceFields,
+  },
   name: "Czech Supreme Administrative Court",
   country: "CZE",
   language: "cs",

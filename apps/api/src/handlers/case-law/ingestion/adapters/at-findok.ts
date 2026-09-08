@@ -9,6 +9,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
   sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -707,6 +708,7 @@ export const createAtFindokAdapter = (
   const loadManifest = createManifestLoader(dependencies);
   return defineSourceAdapter({
     key: ADAPTER_KEYS.AT_FINDOK,
+    sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
     name: "Austrian Fiscal Courts (Findok BFG and UFS)",
     country: COUNTRY,
     language: LANGUAGE,

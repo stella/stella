@@ -11,6 +11,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -883,6 +884,7 @@ const buildCzRegionalFromPayload = async (
 
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
+  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   name: "Czech Regional Courts",
   country: "CZE",
   language: "cs",

@@ -44,6 +44,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -940,6 +941,7 @@ const buildSkUsFromPayload = async (
 
 export const skUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_US,
+  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   name: "ustavnysud.sk",
   country: "SVK",
   language: "sk",

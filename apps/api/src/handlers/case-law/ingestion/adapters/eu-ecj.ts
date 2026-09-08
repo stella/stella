@@ -10,6 +10,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -1516,6 +1517,7 @@ const ECJ_PAGE_TIMEOUT = 300_000;
 
 export const euEcjAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.EU_ECJ,
+  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   name: "Court of Justice of the European Union",
   country: "EU",
   language: "en",

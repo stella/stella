@@ -39,6 +39,7 @@ import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import {
+  decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -169,6 +170,13 @@ const DOCUMENT_HTML = `<html><body>
   řízení o kasační stížnosti.</p>
 </body></html>`;
 
+/** What the plain-text endpoint serves where the rich one is unavailable. */
+const DOCUMENT_TEXT =
+  "Nejvyšší správní soud rozhodl v senátě složeném z předsedy JUDr. Karla " +
+  "Šimky ve věci žalobce proti žalovanému Ministerstvu vnitra, o kasační " +
+  "stížnosti žalobce proti rozsudku městského soudu, takto: Kasační stížnost " +
+  "se zamítá.";
+
 /**
  * One field of the detail page, in the portal's own markup: a `data-field-id`
  * div whose label and value are two spans told apart by their class, and
@@ -213,6 +221,8 @@ type StubOptions = {
   continuation?: readonly Response[];
   /** Status for both document endpoints; 200 serves the fixture. */
   documentStatus?: number;
+  /** Status for the rich HTML document alone; defaults to `documentStatus`. */
+  htmlDocumentStatus?: number;
   /** Status for the detail page alone; defaults to `documentStatus`. */
   detailStatus?: number;
   /** The headnote the detail page states, if the court wrote one. */
@@ -225,10 +235,15 @@ const htmlResponse = (body: string, status = 200): Response =>
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 
+/** The plain-text endpoint serves UTF-16, which is what the adapter decodes. */
+const utf16Response = (body: string): Response =>
+  new Response(Buffer.from(body, "utf16le"));
+
 const installStub = ({
   continuation = [],
   documentStatus = 200,
   detailStatus = documentStatus,
+  htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
 }: StubOptions): { requests: RecordedRequest[] } => {
@@ -270,13 +285,13 @@ const installStub = ({
             : htmlResponse("", detailStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Html/")) {
-          return documentStatus === 200
+          return htmlDocumentStatus === 200
             ? htmlResponse(DOCUMENT_HTML)
-            : htmlResponse("", documentStatus);
+            : htmlResponse("", htmlDocumentStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Text/")) {
           return documentStatus === 200
-            ? new Response(DOCUMENT_HTML)
+            ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
         if (url.pathname === "/") {
@@ -1336,7 +1351,7 @@ describe("cz-nss buildDecision", () => {
     ).not.toBe("ne");
   });
 
-  test("a replay carries the headnote the crawl read, and cannot add one", async () => {
+  test("a replay reads the headnote back off the stored detail page", async () => {
     const decision = await crawledWithHeadnote(HEADNOTE);
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
@@ -1346,10 +1361,11 @@ describe("cz-nss buildDecision", () => {
       throw new TypeError("Stored-raw replay must not contact the publisher");
     });
 
-    const replayed = async (metadata: Record<string, unknown>) =>
+    const replayed = async (
+      stored: Pick<StoredRawReparseInput, "raw" | "contentType" | "metadata">,
+    ) =>
       await reparse({
-        raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
-        contentType: decision.sourceRawContentType ?? null,
+        ...stored,
         caseNumber: decision.caseNumber,
         sourceDocumentId: decision.sourceDocumentId ?? null,
         language: decision.language,
@@ -1359,27 +1375,40 @@ describe("cz-nss buildDecision", () => {
         decisionType: decision.decisionType ?? null,
         sourceUrl: decision.sourceUrl ?? null,
         documentUrl: decision.documentUrl ?? null,
-        metadata,
       } satisfies StoredRawReparseInput);
 
-    const carried = await replayed(decision.metadata);
-    // The stored payload is the decision document; the headnote is a field of
-    // the detail page. A replay therefore keeps what the crawl wrote and
-    // cannot recover the sentence for a row stored without it.
-    const { legalSentence: _dropped, ...withoutHeadnote } = decision.metadata;
-    const bare = await replayed(withoutHeadnote);
+    // The row as stored today: both pages the crawl fetched. The headnote is
+    // on the detail page, so a replay recovers it even for a row written
+    // before anything read that field.
+    const { legalSentence: _unread, ...beforeCapture } = decision.metadata;
+    const recovered = await replayed({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      metadata: beforeCapture,
+    });
 
-    expect(carried.type).toBe("parsed");
-    expect(bare.type).toBe("parsed");
-    if (carried.type !== "parsed" || bare.type !== "parsed") {
+    // A row stored before the raw held every page carries the document alone,
+    // and the sentence is on neither document endpoint. Only a re-crawl adds
+    // it there.
+    const legacy = await replayed({
+      raw: new TextEncoder().encode(DOCUMENT_HTML),
+      contentType: "text/html",
+      metadata: beforeCapture,
+    });
+
+    expect(recovered.type).toBe("parsed");
+    expect(legacy.type).toBe("parsed");
+    if (recovered.type !== "parsed" || legacy.type !== "parsed") {
       return;
     }
-    expect(carried.result.metadata["legalSentence"]).toBe(HEADNOTE);
-    expect(bare.result.metadata["legalSentence"]).toBeUndefined();
+    expect(recovered.result.metadata["legalSentence"]).toBe(HEADNOTE);
+    expect(legacy.result.metadata["legalSentence"]).toBeUndefined();
     // Crawl and replay have to agree on the hash, or every replayed row would
-    // read as changed to the crawl that next re-reads it, and back again.
-    expect(carried.result.rawHash).toBe(decision.rawHash);
-    expect(bare.result.rawHash).not.toBe(decision.rawHash);
+    // read as changed to the crawl that next re-reads it, and back again. For
+    // a row whose metadata never read the sentence, the stored detail page is
+    // what brings the two back into agreement.
+    expect(recovered.result.rawHash).toBe(decision.rawHash);
+    expect(legacy.result.rawHash).not.toBe(decision.rawHash);
   });
 
   test("a headnote the court adds or edits moves the source hash", async () => {
@@ -1403,6 +1432,62 @@ describe("cz-nss buildDecision", () => {
     expect(none.rawHash).toBe(
       hashContent("1 Az 4/2026-79|2026-06-10|rozsudek"),
     );
+  });
+
+  test("a row built from the text endpoint still stores what was fetched", async () => {
+    const payload = await listedRow();
+    // The portal serves the rich document for most decisions and the plain
+    // text for the rest; the fallback row used to keep neither response.
+    installStub({ search: [], htmlDocumentStatus: 404 });
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+
+    const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual(["detail", "text"]);
+  });
+
+  test("a replay rebuilds the text-served row the crawl built", async () => {
+    const payload = await listedRow();
+    installStub({ search: [], htmlDocumentStatus: 404 });
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+
+    const outcome = await reparse({
+      raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      contentType: built.decision.sourceRawContentType ?? null,
+      caseNumber: built.decision.caseNumber,
+      sourceDocumentId: built.decision.sourceDocumentId ?? null,
+      language: built.decision.language,
+      court: built.decision.court,
+      ecli: built.decision.ecli ?? null,
+      decisionDate: built.decision.decisionDate ?? null,
+      decisionType: built.decision.decisionType ?? null,
+      sourceUrl: built.decision.sourceUrl ?? null,
+      documentUrl: built.decision.documentUrl ?? null,
+      metadata: built.decision.metadata,
+    } satisfies StoredRawReparseInput);
+
+    // The portal served this decision as plain text, and that is the document
+    // the row was stored on. A replay that read only the rich part would
+    // report it as having none and leave the row behind.
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.fulltext).toBe(built.decision.fulltext);
+    expect(outcome.result.documentAst).toEqual(built.decision.documentAst);
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {

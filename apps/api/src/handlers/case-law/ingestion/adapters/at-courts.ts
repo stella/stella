@@ -9,6 +9,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -981,6 +982,7 @@ const createAdapter = <const TKey extends AdapterKey>(
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
     key: source.key,
+    sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
     name: source.name,
     country: COUNTRY,
     language: LANGUAGE,

@@ -14,7 +14,10 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  PENDING_SOURCE_FIELD_INVENTORY,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -297,6 +300,7 @@ type StubAdapterOptions = {
 
 const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
+  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   name: "replay stub",
   country: "EU",
   language: "en",

@@ -1,5 +1,4 @@
-import { panic } from "better-result";
-import type { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
@@ -152,6 +151,62 @@ export type SliceCoverage = {
 export type SyncPage = {
   decisions: IngestionResult[];
   nextCursor: string | null;
+};
+
+/**
+ * Every response an adapter fetched for one decision, under the name it gives
+ * each part.
+ *
+ * A source that serves a decision across several pages — a detail page beside
+ * the document itself — has to store all of them or replay can only ever
+ * recover what the parser already read. A field first captured later is then
+ * unrecoverable for stored rows: the page that states it was fetched, parsed
+ * for the fields of the day, and dropped.
+ *
+ * Parts are named by role rather than by URL: a replay asks for the detail
+ * page, and which address served it is history.
+ */
+export type SourceRawParts = Readonly<Record<string, string>>;
+
+/**
+ * Media type for a multi-part raw payload, distinct from `application/json` so
+ * a reader can tell an envelope from a publisher's own JSON document.
+ */
+export const SOURCE_RAW_ENVELOPE_CONTENT_TYPE =
+  "application/vnd.stella.case-law-raw+json";
+
+const SOURCE_RAW_ENVELOPE_VERSION = 1;
+
+export const encodeSourceRawEnvelope = (parts: SourceRawParts): string =>
+  JSON.stringify({ version: SOURCE_RAW_ENVELOPE_VERSION, parts });
+
+/**
+ * The parts of a stored envelope, or `null` for a payload that is not one —
+ * which is how a row stored before its adapter had an envelope reads, and why
+ * every caller has to handle it rather than assume the shape it writes today.
+ */
+export const decodeSourceRawEnvelope = (raw: string): SourceRawParts | null => {
+  const parsed = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    !("version" in parsed) ||
+    parsed.version !== SOURCE_RAW_ENVELOPE_VERSION ||
+    !("parts" in parsed) ||
+    typeof parsed.parts !== "object" ||
+    parsed.parts === null
+  ) {
+    return null;
+  }
+
+  const parts = Object.entries(parsed.parts);
+  return parts.every(([, value]) => typeof value === "string")
+    ? Object.fromEntries(parts.map(([name, value]) => [name, String(value)]))
+    : null;
 };
 
 /**
@@ -464,6 +519,119 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
     : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
 
 /**
+ * Where a field the publisher states ends up once the decision is stored.
+ *
+ * A union rather than a string, because the four destinations are read back
+ * differently: a metadata key is looked up by name, a result field is a column
+ * of the row, and the last two are not fields at all.
+ */
+export type SourceFieldTarget =
+  /** `metadata[key]` on the stored row. */
+  | { readonly type: "metadata"; readonly key: string }
+  /** A field of the ingestion result itself, spelled as the contract does. */
+  | { readonly type: "result"; readonly key: keyof IngestionResult }
+  /** Reaches the row inside the parsed document: AST, sections or fulltext. */
+  | { readonly type: "document" }
+  /** Keys the row: the publisher id the decision is stored under. */
+  | { readonly type: "identity" };
+
+/**
+ * Marks a reason that went through {@link excludedSourceField}. The symbol is
+ * not exported, so an exclusion written as a bare object literal does not
+ * satisfy the union: the only way to state one is through the constructor,
+ * which is where a blank reason is rejected.
+ */
+const STATED_REASON: unique symbol = Symbol("stated exclusion reason");
+
+type Whitespace = " " | "\t" | "\n" | "\r";
+
+type Trimmed<TText extends string> = TText extends `${Whitespace}${infer TRest}`
+  ? Trimmed<TRest>
+  : TText extends `${infer TRest}${Whitespace}`
+    ? Trimmed<TRest>
+    : TText;
+
+/** A reason with words in it, or `never`, which fails at the call site. */
+type StatedReason<TText extends string> =
+  Trimmed<TText> extends "" ? never : TText;
+
+/**
+ * What an adapter does with one field its source states.
+ *
+ * Exclusion carries a reason because that is the whole point: a field nobody
+ * decided about and a field deliberately left is the same silence otherwise,
+ * and the first is how a published headnote sits unread on a page the adapter
+ * already fetches. A blank reason would be that same silence wearing the
+ * shape of a decision, so it cannot be written.
+ */
+export type SourceFieldDisposition =
+  | { readonly disposition: "stored"; readonly target: SourceFieldTarget }
+  | {
+      readonly disposition: "excluded";
+      readonly reason: string;
+      readonly [STATED_REASON]: true;
+    };
+
+/**
+ * State why a field the source publishes is not stored. The reason has to say
+ * something: `""` and `"   "` are compile errors rather than a check somebody
+ * has to remember to run.
+ */
+export const excludedSourceField = <const TText extends string>(
+  reason: StatedReason<TText>,
+): SourceFieldDisposition => ({
+  disposition: "excluded",
+  reason,
+  [STATED_REASON]: true,
+});
+
+/**
+ * Every field a source states for one decision, and what becomes of it.
+ *
+ * Scoped to the per-decision pages an adapter fetches — the labelled detail,
+ * print or metadata payloads it parses for a document, not the listing that
+ * named it, whose columns the cursor and identity conformance suites cover.
+ *
+ * `fields` is total over the source's own field names by construction: an
+ * adapter declares those names once as a `SOURCE_FIELDS` list and writes the
+ * map `as const satisfies Record<<that union>, SourceFieldDisposition>`, so a
+ * name added to the list without a disposition does not compile.
+ *
+ * `listSourceFields` reads the same payload the parser reads and answers what
+ * the publisher labelled on it. The conformance suite drives it over each
+ * adapter's fixture: a name it returns that the map does not hold fails with
+ * the field name, which is the check a per-adapter test cannot make about the
+ * fields its author never noticed.
+ */
+type DeclaredSourceFieldInventory = {
+  readonly status: "declared";
+  readonly fields: Readonly<Record<string, SourceFieldDisposition>>;
+  readonly listSourceFields: (payload: string) => readonly string[];
+};
+
+/**
+ * An adapter's inventory, or the one sanctioned way to not have one yet.
+ *
+ * `pending-inventory` is a ratchet, not an option: the committed baseline in
+ * `source-field-inventory-baseline.json` names exactly which adapters may
+ * declare it, and the conformance suite fails both ways — a pending adapter
+ * missing from the baseline, and a baseline entry that has since enrolled. The
+ * set can therefore only shrink.
+ */
+export type SourceFieldInventory =
+  | DeclaredSourceFieldInventory
+  | { readonly status: "pending-inventory" };
+
+/**
+ * For an adapter whose source fields nobody has inventoried yet. Written out
+ * at the adapter rather than defaulted, so enrolment is a visible edit and the
+ * baseline can name what is left.
+ */
+export const PENDING_SOURCE_FIELD_INVENTORY = {
+  status: "pending-inventory",
+} as const satisfies SourceFieldInventory;
+
+/**
  * Interface for court data source adapters.
  *
  * Each adapter knows how to paginate through a specific
@@ -533,6 +701,16 @@ export type SourceAdapter = {
    * it knows whether its publisher states no total or its probe broke.
    */
   getTotalCount: (signal: AbortSignal) => Promise<SourceTotalCount>;
+  /**
+   * Every field this source states for a decision, stored or excluded with a
+   * reason. Required: a field nobody decided about is how published material
+   * an adapter already fetches goes unstored, and the decision has to live in
+   * the adapter rather than in whoever last read the page.
+   *
+   * `PENDING_SOURCE_FIELD_INVENTORY` is the only way to not have one, and the
+   * committed baseline names every adapter allowed to use it.
+   */
+  sourceFields: SourceFieldInventory;
   /**
    * Ask the publisher what it lists for a slice, so the standing
    * reconciliation loop can compare that against what is held and ingest the

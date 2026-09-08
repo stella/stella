@@ -142,6 +142,9 @@ const detailPageHtml = (
     detailRowHtml("Typ rozhodnutí", "ROZSUDEK"),
     detailRowHtml("Heslo", "Dovolání"),
     detailRowHtml("Kategorie rozhodnutí", "E"),
+    // The day the court handed the document to the web, which the detail page
+    // states and the print page does not.
+    detailRowHtml("Zveřejněno na webu", "10. 6. 2026"),
     ...(abstract === undefined ? [] : [abstractRowHtml(abstract)]),
   ].join("");
   return `<!DOCTYPE HTML><html><body><table>${rows}</table><font face="Times New Roman">${DECISION_BODY}</font></body></html>`;
@@ -710,14 +713,18 @@ describe("cz-ns buildDecision", () => {
     expect(new Set(hashes).size).toBe(hashes.length);
   });
 
-  test("a decision the court wrote neither for hashes as it did before", async () => {
+  test("the day the court published the document is part of the hash", async () => {
     const decision = await crawledWithSummary({});
 
-    // The literal is the hash's pre-existing input, so re-hashing the rows the
-    // court wrote neither for cannot happen without editing this line.
+    // Every stored row's hash moved once when the publication day joined this
+    // literal, and that pass is what carries the day and the multi-part raw
+    // onto rows written before either existed: the refresh check skips a row
+    // whose hash stands still. The literal is here so the next such move is a
+    // decision somebody makes rather than a side effect of editing the parser.
+    expect(decision.metadata["zverejnenoNaWebu"]).toBe("2026-06-10");
     expect(decision.rawHash).toBe(
       hashContent(
-        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|28. 5. 2026`,
+        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|28. 5. 2026|2026-06-10`,
       ),
     );
   });

@@ -9,6 +9,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -757,6 +758,7 @@ const buildSkCourtsFromPayload = async (
 
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
+  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   name: "obcan.justice.sk",
   country: "SVK",
   language: "sk",
