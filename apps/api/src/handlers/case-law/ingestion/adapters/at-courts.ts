@@ -354,7 +354,9 @@ const listingQuery = (
   source: AtRisSourceDefinition,
   slice: string | undefined,
   page: number,
-  court?: string,
+  // RIS's `Gericht` filter token, not a court's name: `AUSL` selects the
+  // foreign-court rows this source excludes.
+  courtFilter?: string,
 ): string => {
   const params = new URLSearchParams({
     Applikation: source.application,
@@ -372,8 +374,8 @@ const listingQuery = (
     params.set("EntscheidungsdatumVon", range.from);
     params.set("EntscheidungsdatumBis", range.to);
   }
-  if (court !== undefined) {
-    params.set("Gericht", court);
+  if (courtFilter !== undefined) {
+    params.set("Gericht", courtFilter);
   }
   return `${API_URL}?${params.toString()}`;
 };
@@ -823,7 +825,7 @@ type FetchListingOptions = {
   source: AtRisSourceDefinition;
   signal?: AbortSignal | undefined;
   slice?: string | undefined;
-  court?: string | undefined;
+  courtFilter?: string | undefined;
 };
 
 const fetchListing = async ({
@@ -833,10 +835,10 @@ const fetchListing = async ({
   source,
   signal,
   slice,
-  court,
+  courtFilter,
 }: FetchListingOptions): Promise<RisListingPage> => {
   const response = await dependencies.request(
-    listingQuery(source, slice, page, court),
+    listingQuery(source, slice, page, courtFilter),
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
       adapterKey: source.key,
@@ -1034,7 +1036,7 @@ const createAdapter = <const TKey extends AdapterKey>(
         await dependencies.sleep(REQUEST_INTERVAL_MS);
         const excluded = await fetchListing({
           cursor: null,
-          court: "AUSL",
+          courtFilter: "AUSL",
           dependencies,
           page: 1,
           signal,

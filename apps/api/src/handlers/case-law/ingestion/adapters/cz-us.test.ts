@@ -377,6 +377,41 @@ describe("czUsAdapter.fetchPage", () => {
     ]);
   });
 
+  test("stores the court the decision's own identifier names", async () => {
+    const rows = [
+      {
+        id: "2101",
+        sz: "I-43-24_1",
+        caseNumber: "I.ÚS 43/24",
+        date: "1. 2. 2024",
+        ecli: "ECLI:CZ:US:2024:1.US.43.24.1",
+      },
+      // The same court, stated by nothing: a row NALUS lists without an
+      // identifier still has to be attributed, and falls back to the
+      // publisher's own court rather than to a bare code or to nothing.
+      {
+        id: "2102",
+        sz: "I-44-24_1",
+        caseNumber: "I.ÚS 44/24",
+        date: "1. 2. 2024",
+      },
+    ];
+    installSearchMock({ rows });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(page.decisions.map(({ court }) => court)).toEqual([
+      "Ústavní soud",
+      "Ústavní soud",
+    ]);
+    expect(page.decisions.map(({ metadata }) => metadata["court"])).toEqual([
+      "Ústavní soud",
+      "Ústavní soud",
+    ]);
+  });
+
   test("does not synthesize colliding ECLI aliases from unsafe counters", async () => {
     installSearchMock({
       rows: [
