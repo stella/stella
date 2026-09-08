@@ -7,10 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReferenceMatch } from "@/api/lib/document-reference-lookup";
-import {
-  lookupByStamp,
-  lookupByVerificationCode,
-} from "@/api/lib/document-reference-lookup";
+import { lookupByVerificationCode } from "@/api/lib/document-reference-lookup";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
@@ -47,30 +44,25 @@ const checkStampHandler = async function* ({
   }
 
   const buffer = await file.arrayBuffer();
-  const { stamp, verificationCode } = await extractStamp(buffer);
+  const { verificationCode } = await extractStamp(buffer);
 
-  if (!verificationCode && !stamp) {
+  // Only the verification code proves which version the file came from. The
+  // printed reference string is deliberately not a fallback: a matter can be
+  // re-referenced and the freed reference reused, so the same string can name
+  // two unrelated documents over time.
+  if (!verificationCode) {
     return Result.ok(noMatch);
   }
 
-  // Both attempts share one RLS transaction: the verification code is
-  // globally unique so it decides on its own, and the reference string is
-  // only consulted when the document carries no code or the code resolved to
-  // nothing this organization can see.
   const match = yield* Result.await(
-    safeDb(async (tx) => {
-      if (verificationCode) {
-        const byCode = await lookupByVerificationCode({
+    safeDb(
+      async (tx) =>
+        await lookupByVerificationCode({
           tx,
           organizationId,
           verificationCode,
-        });
-        if (byCode) {
-          return byCode;
-        }
-      }
-      return stamp ? await lookupByStamp({ tx, organizationId, stamp }) : null;
-    }),
+        }),
+    ),
   );
 
   return Result.ok({ match } satisfies CheckStampResult);
@@ -79,9 +71,10 @@ const checkStampHandler = async function* ({
 const config = {
   description:
     "Check whether an uploaded DOCX carries a stella document reference and, " +
-    "if so, which document in this organization it belongs to. The embedded " +
-    "verification code is tried first, then the reference string, and the " +
-    "answer is match with the entity id and name, its matter id and name, " +
+    "if so, which document in this organization it belongs to. Only the " +
+    "embedded verification code identifies the version; the printed " +
+    "reference string alone never resolves. The answer is match with the " +
+    "entity id and name, its matter id and name, " +
     "the reference, the version number the reference was frozen onto, and " +
     "the document's current version number (higher than that one when the " +
     "uploaded file is superseded), or match null. Nothing is stored: this is " +
