@@ -1,3 +1,7 @@
+import { Result } from "better-result";
+
+import { parsePlainDate, Temporal } from "@stll/time";
+
 export type Page<T> = {
   items: T[];
   nextCursor: string | null;
@@ -12,7 +16,6 @@ type CursorPageOptions<T> = {
   cursorForItem: (item: T) => string;
 };
 
-const dateOnlyCursorPartPattern = /^\d{4}-\d{2}-\d{2}$/u;
 const uuidCursorPartPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 
@@ -52,18 +55,8 @@ export const decodePaginationCursor = (cursor: string): unknown[] | null => {
 
 export const isDateOnlyPaginationCursorPart = (
   value: unknown,
-): value is string => {
-  if (typeof value !== "string" || !dateOnlyCursorPartPattern.test(value)) {
-    return false;
-  }
-
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-
-  return (
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().slice(0, 10) === value
-  );
-};
+): value is string =>
+  typeof value === "string" && parsePlainDate(value) !== null;
 
 export const isUuidPaginationCursorPart = (value: unknown): value is string =>
   typeof value === "string" && uuidCursorPartPattern.test(value);
@@ -75,11 +68,12 @@ export const parseDateTimePaginationCursorPart = (
     return null;
   }
 
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
+  const parsed = Result.try(() => Temporal.Instant.from(value)).unwrapOr(null);
+  if (
+    parsed === null ||
+    parsed.toString({ fractionalSecondDigits: 3 }) !== value
+  ) {
     return null;
   }
-
-  return parsed;
+  return new Date(parsed.epochMilliseconds);
 };

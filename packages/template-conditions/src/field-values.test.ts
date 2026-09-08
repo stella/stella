@@ -18,6 +18,13 @@ describe("formatDate", () => {
       formatDate("not-a-date", { locale: "en", style: "long" }),
     ).toBeNull();
   });
+
+  test("accepts a leap day and rejects a nonexistent calendar day", () => {
+    expect(formatDate("2028-02-29", { locale: "en", style: "iso" })).toBe(
+      "2028-02-29",
+    );
+    expect(formatDate("2028-02-30", { locale: "en", style: "iso" })).toBeNull();
+  });
 });
 
 describe("renderDeterministicFieldValue", () => {

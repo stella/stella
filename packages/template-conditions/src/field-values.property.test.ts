@@ -33,6 +33,19 @@ const invalidIsoDate = fc
       fc.integer({ min: 1, max: 12 }),
       fc.integer({ min: 32, max: 99 }),
     ),
+    fc
+      .tuple(
+        fc.integer({ min: 0, max: 9999 }),
+        fc.constantFrom(
+          [2, 30] as const,
+          [2, 31] as const,
+          [4, 31] as const,
+          [6, 31] as const,
+          [9, 31] as const,
+          [11, 31] as const,
+        ),
+      )
+      .map(([year, [month, day]]) => [year, month, day] as const),
   )
   .map(
     ([year, month, day]) => `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}`,

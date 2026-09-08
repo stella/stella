@@ -915,6 +915,7 @@
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",
+        "temporal-polyfill": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -1051,6 +1052,7 @@
         "@stll/ui": "workspace:^",
         "better-result": "catalog:",
         "lucide-react": "catalog:",
+        "temporal-polyfill": "catalog:",
         "use-intl": "catalog:",
       },
       "devDependencies": {

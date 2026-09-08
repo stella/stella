@@ -48,7 +48,8 @@
   },
   "dependencies": {
     "@stll/conditions": "workspace:^",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
