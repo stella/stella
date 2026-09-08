@@ -37,8 +37,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
+  aiAvailabilityOptions,
   aiConfigKeys,
   aiConfigOptions,
+  updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 
@@ -228,11 +230,15 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
           providers: getProviderValues(nextProviders),
         }),
       );
-      queryClient.setQueryData(aiConfigKeys.availability({ organizationId }), {
-        available: true,
-        instanceProvisioned: config.instanceProvisioned,
-        orgConfigured: true,
-      });
+      queryClient.setQueryData(
+        aiAvailabilityOptions({ organizationId }).queryKey,
+        (current) =>
+          updateCachedAIAvailability({
+            current,
+            instanceProvisioned: config.instanceProvisioned,
+            orgConfigured: true,
+          }),
+      );
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: aiConfigKeys.byOrganization({ organizationId }),
@@ -268,11 +274,15 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       const nextProviders = [createProviderCredentialDraft()];
       setProviders(nextProviders);
       setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
-      queryClient.setQueryData(aiConfigKeys.availability({ organizationId }), {
-        available: config.instanceProvisioned,
-        instanceProvisioned: config.instanceProvisioned,
-        orgConfigured: false,
-      });
+      queryClient.setQueryData(
+        aiAvailabilityOptions({ organizationId }).queryKey,
+        (current) =>
+          updateCachedAIAvailability({
+            current,
+            instanceProvisioned: config.instanceProvisioned,
+            orgConfigured: false,
+          }),
+      );
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: aiConfigKeys.byOrganization({ organizationId }),

@@ -48,6 +48,7 @@ import {
   aiAvailabilityOptions,
   aiConfigOptions,
   aiConfigKeys,
+  updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 
 type AIAvailabilityContextValue = {
@@ -349,12 +350,16 @@ export const AIKeyRequiredDialog = ({
     onSuccess: async (data) => {
       setProviders(providerDraftsFromStoredProviders(data.providers));
       queryClient.setQueryData(
-        aiConfigKeys.availability({ organizationId: activeOrganizationId }),
-        {
-          available: true,
-          instanceProvisioned: config?.instanceProvisioned ?? false,
-          orgConfigured: true,
-        },
+        aiAvailabilityOptions({ organizationId: activeOrganizationId })
+          .queryKey,
+        (current) =>
+          updateCachedAIAvailability({
+            current,
+            ...(config === undefined
+              ? {}
+              : { instanceProvisioned: config.instanceProvisioned }),
+            orgConfigured: true,
+          }),
       );
       await Promise.all([
         queryClient.invalidateQueries({

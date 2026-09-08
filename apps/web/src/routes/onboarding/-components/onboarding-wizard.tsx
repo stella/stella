@@ -36,7 +36,11 @@ import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
-import { aiConfigKeys } from "@/lib/organization/ai-config-queries";
+import {
+  aiAvailabilityOptions,
+  aiConfigKeys,
+  updateCachedAIAvailability,
+} from "@/lib/organization/ai-config-queries";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
@@ -423,12 +427,12 @@ export const OnboardingWizard = () => {
             });
           } else {
             queryClient.setQueryData(
-              aiConfigKeys.availability({ organizationId: orgData.id }),
-              {
-                available: true,
-                instanceProvisioned: false,
-                orgConfigured: true,
-              },
+              aiAvailabilityOptions({ organizationId: orgData.id }).queryKey,
+              (current) =>
+                updateCachedAIAvailability({
+                  current,
+                  orgConfigured: true,
+                }),
             );
             await Promise.all([
               queryClient.invalidateQueries({
