@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import { entities, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -714,13 +715,12 @@ export const copyEntities = async ({
     });
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
-    await tx.insert(entityVersions).values({
+    await insertEntityVersion(tx, {
       id: newVersionId,
       workspaceId: targetWorkspaceId,
       entityId: newEntityId,
       versionNumber: 1,
       stamp: entityStamp?.stamp ?? null,
-      verificationCode: entityStamp?.verificationCode ?? null,
     });
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair

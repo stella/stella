@@ -21,6 +21,7 @@ import { createFileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { LIMITS } from "@/api/lib/limits";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -562,10 +563,13 @@ describe("duplicateWorkspace", () => {
             return undefined;
           }
 
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
+
           if (
             table === auditLogs ||
             table === entities ||
-            table === entityVersions ||
             table === properties ||
             table === workspaces
           ) {
@@ -785,9 +789,12 @@ describe("duplicateWorkspace", () => {
             return undefined;
           }
 
+          if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          }
+
           if (
             table === auditLogs ||
-            table === entityVersions ||
             table === fields ||
             table === properties ||
             table === workspaces

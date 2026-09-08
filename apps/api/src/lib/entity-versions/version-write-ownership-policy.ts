@@ -15,25 +15,22 @@ export type VersionWriteCapability =
 // durable extraction request that must commit with the source. The lint rule
 // consumes this map, verifies every grant is exercised, and rejects the same
 // mutations elsewhere.
+//
+// INSERT_VERSION_ROW is held by exactly one module. Every version row carries a
+// verification code that must be globally unique, and the insert owner is where
+// a code collision is detected and redrawn; a second insert site would be a
+// second, unretried code generator.
 export const REVIEWED_VERSION_MUTATION_OWNERS = {
-  "handlers/entities/clip.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
-    VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
-  ],
+  "handlers/entities/clip.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
   "handlers/entities/copy-utils.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
-  "handlers/entities/create.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
-    VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
-  ],
+  "handlers/entities/create.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
   "handlers/entities/delete-version.ts": [
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "handlers/entities/finalize-desktop-edit-session.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
     VERSION_WRITE_CAPABILITY.USE_VERSION_UTILS,
@@ -42,50 +39,44 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
   "handlers/entities/restore-version.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
     VERSION_WRITE_CAPABILITY.USE_VERSION_UTILS,
   ],
   "handlers/entities/upload.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/tasks/create-task-entity.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "handlers/uploads/entity-create-tree.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "handlers/uploads/entity-version.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
   "handlers/workspaces/duplicate.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/entities/create-from-buffer.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/entity-versions/create-entity-version-from-buffer.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
-  "lib/entity-versions/write-file-version.ts": [
+  "lib/entity-versions/insert-entity-version.ts": [
     VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
+  ],
+  "lib/entity-versions/write-file-version.ts": [
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
     VERSION_WRITE_CAPABILITY.USE_VERSION_UTILS,
   ],
   "lib/infosoud/agenda-import.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/uploads/entity-create.ts": [
-    VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],

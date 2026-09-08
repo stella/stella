@@ -8,7 +8,6 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import {
   desktopEditSessions,
   entities,
-  entityVersions,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -32,6 +31,7 @@ import {
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import {
   buildVersionStamp,
@@ -471,12 +471,11 @@ export const finalizeDesktopEditSessionHandler = async ({
         key: sourceKey,
       });
 
-      await tx.insert(entityVersions).values({
+      await insertEntityVersion(tx, {
         entityId: editSession.entityId,
         id: nextVersionId,
         source: DESKTOP_EDIT_DOCUMENT_SOURCE,
         stamp: nextVersionStamp.stamp,
-        verificationCode: nextVersionStamp.verificationCode,
         versionNumber: nextVersionNumber,
         workspaceId: authorizedSession.value.workspaceId,
       });
