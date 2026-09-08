@@ -302,6 +302,19 @@ describe("writing the session into the document", () => {
     ).toEqual([]);
   });
 
+  test("a boolean an {% if %} reads is not a loss when it has no marker", () => {
+    // The derived manifest reads `boolean` off the structure, so the session
+    // holds such a field for every conditional block. Reporting them would
+    // warn on every save of every template that has one.
+    const doc = documentWith(["{{ rent }}"]);
+    expect(
+      markerConfigRewrites({
+        ...doc,
+        fields: [studioField({ path: "is_company", inputType: "boolean" })],
+      }).unplaced,
+    ).toEqual([]);
+  });
+
   test("a configuration with no marker to carry it is reported, not dropped", () => {
     const doc = documentWith(["{{ rent }}"]);
     const { rewrites, unplaced } = markerConfigRewrites({

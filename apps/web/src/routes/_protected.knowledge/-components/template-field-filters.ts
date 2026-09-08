@@ -75,10 +75,19 @@ type MarkerConfigRewriteOptions = {
   markerText: (range: { from: number; to: number }) => string;
 };
 
-/** A field says something worth reporting when it carries any filter beyond the
- *  plain text input every field has by default. */
+/** The input controls the DOCUMENT already implies: a marker with no input
+ *  filter asks for text, and a path an `{% if %}` reads is a yes/no question.
+ *  A field carrying only one of these has decided nothing an author would
+ *  miss, so its marker going away is not a loss to report. */
+const DERIVED_INPUT_FILTERS: ReadonlySet<string> = new Set([
+  "text",
+  "checkbox",
+]);
+
+/** A field says something worth reporting when it carries a filter the
+ *  document's own structure did not already imply. */
 const carriesConfiguration = (field: StudioField): boolean =>
-  fieldFilters(field).some(({ name }) => name !== "text");
+  fieldFilters(field).some(({ name }) => !DERIVED_INPUT_FILTERS.has(name));
 
 /**
  * The edits that put the session's field configuration into the document's
