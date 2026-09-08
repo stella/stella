@@ -1,13 +1,162 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   evaluateMergeBar,
   mergeBarRepositoryPolicy,
+  readMergeHandoff,
   type MergeBarSnapshot,
 } from "./merge-bar";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
+
+describe("merge handoff state", () => {
+  test("the merge gate reads with the workflow token and pins writes with the App token", () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "merge-bar-credentials-"),
+    );
+    const executable = path.join(directory, "gh");
+    const response = JSON.stringify({
+      data: {
+        repository: {
+          pullRequest: {
+            number: 123,
+            state: "OPEN",
+            isDraft: false,
+            mergeable: "MERGEABLE",
+            headRefOid: HEAD_SHA,
+            autoMergeRequest: null,
+            mergeQueueEntry: null,
+          },
+        },
+      },
+    });
+    writeFileSync(
+      executable,
+      `#!/bin/sh
+if [ "$1 $2" = 'pr merge' ]; then
+  [ "$GH_TOKEN" = write-fixture ] || exit 91
+  case "$*" in *'--match-head-commit ${HEAD_SHA}'*) exit 0;; *) exit 92;; esac
+fi
+[ "$GH_TOKEN" = read-fixture ] || exit 93
+case "$*" in
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *check-runs*) printf 'Overlay check\\tcompleted\\tsuccess\\n';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' '${response}';
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *mergeCommit*) printf '%s\\n' '{"mergeCommit":{"oid":"${HEAD_SHA}"}}';;
+  *) exit 94;;
+esac
+`,
+    );
+    chmodSync(executable, 0o700);
+    try {
+      const result = Bun.spawnSync({
+        cmd: [
+          process.execPath,
+          fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+          "123",
+          "--repo",
+          "stella/stella-plane",
+        ],
+        env: {
+          ...process.env,
+          PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          GH_READ_TOKEN: "read-fixture",
+          GH_TOKEN: "write-fixture",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.stderr.toString()).toBe("");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain("verdict: MERGE");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("an already queued PR exits without another GitHub operation even when mergeability is unknown", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
+    const executable = path.join(directory, "gh");
+    const response = JSON.stringify({
+      data: {
+        repository: {
+          pullRequest: {
+            number: 123,
+            state: "OPEN",
+            isDraft: false,
+            mergeable: "UNKNOWN",
+            headRefOid: HEAD_SHA,
+            autoMergeRequest: null,
+            mergeQueueEntry: { id: "entry" },
+          },
+        },
+      },
+    });
+    writeFileSync(
+      executable,
+      `#!/bin/sh\nif [ "$1" != api ] || [ "$2" != graphql ]; then exit 99; fi\nprintf '%s\\n' '${response}'\n`,
+    );
+    chmodSync(executable, 0o700);
+    try {
+      const result = Bun.spawnSync({
+        cmd: [
+          process.execPath,
+          fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+          "123",
+        ],
+        env: {
+          ...process.env,
+          PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain(
+        "already in the merge queue; nothing changed",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test.each([null, { enabledAt: "2026-09-08T07:00:00Z" }])(
+    "recognizes queue membership independently of auto-merge: %j",
+    (autoMergeRequest) => {
+      expect(
+        readMergeHandoff({
+          autoMergeRequest,
+          mergeQueueEntry: { id: "queue-entry" },
+        }),
+      ).toEqual({ status: "queued", entryId: "queue-entry" });
+    },
+  );
+
+  test("distinguishes an armed PR from one awaiting handoff", () => {
+    expect(
+      readMergeHandoff({ autoMergeRequest: null, mergeQueueEntry: null }),
+    ).toEqual({ status: "pending" });
+    expect(
+      readMergeHandoff({
+        autoMergeRequest: { enabledAt: "2026-09-08T07:00:00Z" },
+        mergeQueueEntry: null,
+      }),
+    ).toEqual({ status: "armed", enabledAt: "2026-09-08T07:00:00Z" });
+  });
+
+  test("missing queue state cannot be interpreted as permission to enqueue", () => {
+    expect(() => readMergeHandoff({ autoMergeRequest: null })).toThrow(
+      "Expected an object for mergeQueueEntry",
+    );
+  });
+});
 
 const passingSnapshot = (
   overrides: Partial<MergeBarSnapshot> = {},
@@ -17,7 +166,7 @@ const passingSnapshot = (
     state: "OPEN",
     isDraft: false,
     mergeable: "MERGEABLE",
-    autoMergeEnabledAt: null,
+    handoff: { status: "pending" },
     headSha: HEAD_SHA,
   },
   landing: "merge",
