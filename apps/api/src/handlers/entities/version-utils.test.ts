@@ -55,22 +55,16 @@ describe("buildVersionStamp", () => {
     });
 
     expect(result.stamp).toBe("2026/001/015.v3");
-    expect(result.verificationCode).toMatch(
-      /^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u,
-    );
   });
 
-  test("returns nulls when the entity has no stampable workspace reference", () => {
+  test("returns a null stamp when the entity has no stampable workspace reference", () => {
     expect(
       buildVersionStamp({
         docSequence: null,
         versionNumber: 2,
         workspaceReference: "2026/001",
       }),
-    ).toEqual({
-      stamp: null,
-      verificationCode: null,
-    });
+    ).toEqual({ stamp: null });
 
     expect(
       buildVersionStamp({
@@ -78,10 +72,7 @@ describe("buildVersionStamp", () => {
         versionNumber: 2,
         workspaceReference: null,
       }),
-    ).toEqual({
-      stamp: null,
-      verificationCode: null,
-    });
+    ).toEqual({ stamp: null });
   });
 });
 

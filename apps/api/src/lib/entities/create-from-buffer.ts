@@ -5,13 +5,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import {
-  entities,
-  entityVersions,
-  fields,
-  pendingUploads,
-  workspaces,
-} from "@/api/db/schema";
+import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -28,6 +22,7 @@ import {
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -315,13 +310,12 @@ export const createEntityFromBuffer = async ({
           docSequence: entityStamp.docSequence,
         });
 
-        await tx.insert(entityVersions).values({
+        await insertEntityVersion(tx, {
           id: entityVersionId,
           workspaceId,
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
-          verificationCode: entityStamp.verificationCode,
         });
 
         await tx

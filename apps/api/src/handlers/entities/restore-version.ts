@@ -10,6 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
   nextEntityVersionNumber,
@@ -143,13 +144,12 @@ export default createSafeHandler(
           workspaceReference: workspace?.reference ?? null,
         });
 
-        await tx.insert(entityVersions).values({
+        await insertEntityVersion(tx, {
           createdBy: userId,
           entityId: params.entityId,
           id: nextVersionId,
           label: `Restored from v${String(version.versionNumber)}`,
           stamp: nextVersionStamp.stamp,
-          verificationCode: nextVersionStamp.verificationCode,
           versionNumber: nextVersionNumber,
           workspaceId,
         });

@@ -7,7 +7,6 @@ import type { SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import {
   entities,
-  entityVersions,
   legalListItems,
   LIST_ITEM_TYPES,
   taskAssignees,
@@ -28,6 +27,7 @@ import {
   ENTITY_PRIORITIES,
   TASK_STATUSES,
 } from "@/api/lib/entity-constants";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -405,7 +405,7 @@ export const createTaskEntityHandler = async function* ({
       });
 
       const entityVersionId = createSafeId<"entityVersion">();
-      await tx.insert(entityVersions).values({
+      await insertEntityVersion(tx, {
         id: entityVersionId,
         workspaceId,
         entityId,

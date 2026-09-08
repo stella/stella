@@ -6,7 +6,6 @@ import type { Static } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
-  entityVersions,
   pendingUploads,
   type PendingUploadPurposeData,
   workspaces,
@@ -23,6 +22,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -405,7 +405,7 @@ const createDirectoryRows = async ({
       createdBy: userId,
     });
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
-    await tx.insert(entityVersions).values({
+    await insertEntityVersion(tx, {
       id: entityVersionId,
       workspaceId,
       entityId,

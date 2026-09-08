@@ -19,6 +19,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -112,11 +113,10 @@ describe("createCreateWorkspaceDocumentTools", () => {
           if (table === entities) {
             insertedFileName = values.name;
           }
-          if (
-            table === entities ||
-            table === entityVersions ||
-            table === fields
-          ) {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(values);
+          }
+          if (table === entities || table === fields) {
             return undefined;
           }
           return undefined;
