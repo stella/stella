@@ -472,6 +472,14 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await expect
     .poll(async () => await invocationCount(page, "clipboard_hide"))
     .toBe(3);
+
+  await page.getByRole("searchbox").focus();
+  await page.getByRole("searchbox").evaluate((input) => input.blur());
+  await expect(page.locator("body")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(async () => await invocationCount(page, "clipboard_hide"))
+    .toBe(4);
 });
 
 test("creates a group from a clip with inline preset and custom colors", async ({

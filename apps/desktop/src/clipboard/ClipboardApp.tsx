@@ -2013,7 +2013,11 @@ const ClipboardApp = () => {
       handleControlsKeyDown(event, event.target);
       return;
     }
-    if (event.key !== "Escape" || event.isComposing) {
+    handleEscape(event);
+  };
+
+  const handleEscape = (event: KeyboardEvent) => {
+    if (event.key !== "Escape" || event.isComposing || event.defaultPrevented) {
       return;
     }
     if (
@@ -2042,11 +2046,15 @@ const ClipboardApp = () => {
     }
     timeline.addEventListener("keydown", handleKeyDown);
     timeline.addEventListener("keydown", handleKeyDownCapture, true);
+    // Bubble after popup handlers, and keep dismissal available when native
+    // focus returns to the document body instead of a timeline control.
+    window.addEventListener("keydown", handleEscape);
     return () => {
       timeline.removeEventListener("keydown", handleKeyDown);
       timeline.removeEventListener("keydown", handleKeyDownCapture, true);
+      window.removeEventListener("keydown", handleEscape);
     };
-  }, [handleKeyDown, handleKeyDownCapture]);
+  }, [handleEscape, handleKeyDown, handleKeyDownCapture]);
 
   const captureActive = snapshot.captureStatus === "active";
   const nextCaptureStatus: ClipboardCaptureStatus = captureActive
