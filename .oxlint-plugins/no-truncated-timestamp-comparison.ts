@@ -62,6 +62,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //
 // Allowed — Drizzle comparison calls:
 //   lt(runs.claimedAt, new Date(Date.now() - STALE_MS))  // fresh clock read
+//   lt(runs.claimedAt, new Date(Temporal.Now.instant().epochMilliseconds - STALE_MS))
 //   lte(jobs.nextRunAt, now)          // `const now = new Date()` in this file
 //   lte(sources.leaseExpiresAt, sql`now()`)              // compared in-DB
 //   lt(decisions.createdAt, pgTimestampCursorBoundary(cursor))
@@ -340,6 +341,10 @@ const isSqlTaggedTemplate = (node: unknown): boolean => {
 const isIdentifierNamed = (node: unknown, name: string): boolean =>
   isAstNode(node) && node.type === "Identifier" && node.name === name;
 
+const TEMPORAL_MODULES = new Set(["@stll/time", "temporal-polyfill/full"]);
+
+type ClockReadPredicate = (node: unknown) => boolean;
+
 const isDateNowCall = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
     return false;
@@ -369,8 +374,11 @@ const isClockAdjustment = (node: unknown): boolean =>
       isClockAdjustment(node.left) &&
       isClockAdjustment(node.right)));
 
-const isClockArithmetic = (node: unknown): boolean => {
-  if (isDateNowCall(node)) {
+const isClockArithmetic = (
+  node: unknown,
+  isClockRead: ClockReadPredicate,
+): boolean => {
+  if (isClockRead(node)) {
     return true;
   }
   if (!isAstNode(node) || node.type !== "BinaryExpression") {
@@ -386,16 +394,20 @@ const isClockArithmetic = (node: unknown): boolean => {
     return false;
   }
   return (
-    (isClockArithmetic(node.left) && isClockAdjustment(node.right)) ||
-    (isClockAdjustment(node.left) && isClockArithmetic(node.right))
+    (isClockArithmetic(node.left, isClockRead) &&
+      isClockAdjustment(node.right)) ||
+    (isClockAdjustment(node.left) && isClockArithmetic(node.right, isClockRead))
   );
 };
 
 // The entire operand, not merely one branch or nested subexpression, must be
 // a fresh clock read. A substring test would incorrectly exempt
 // `cursor.createdAt ?? new Date()` and re-open the truncation bug.
-const isFreshClockRead = (node: unknown): boolean => {
-  if (isDateNowCall(node)) {
+const isFreshClockRead = (
+  node: unknown,
+  isClockRead: ClockReadPredicate,
+): boolean => {
+  if (isClockRead(node)) {
     return true;
   }
   if (!isAstNode(node) || node.type !== "NewExpression") {
@@ -409,7 +421,8 @@ const isFreshClockRead = (node: unknown): boolean => {
   }
   return (
     node.arguments.length === 0 ||
-    (node.arguments.length === 1 && isClockArithmetic(node.arguments[0]))
+    (node.arguments.length === 1 &&
+      isClockArithmetic(node.arguments[0], isClockRead))
   );
 };
 
@@ -445,7 +458,8 @@ export default eslintCompatPlugin({
             "createTimestampIdCursorCodec / pgTimestampCursorBoundary, " +
             "timestampCasToken / timestampMatchesCasToken, resolve the " +
             "boundary in-database by id, or cast the operand `::timestamptz`. " +
-            "A cutoff read straight from the clock (new Date() / Date.now()) " +
+            "A cutoff read straight from the clock (new Date(), Date.now(), " +
+            "or imported Temporal.Now.instant().epochMilliseconds) " +
             "is exempt; anything else that is sound needs a disable comment " +
             "saying why.",
         },
@@ -474,6 +488,72 @@ export default eslintCompatPlugin({
             (scope?.upper ? findVariable(scope.upper) : null);
           return findVariable(context.sourceCode.getScope(identifier));
         };
+
+        const isImportedTemporal = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "Identifier") {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some((definition) => {
+            if (
+              definition.type !== "ImportBinding" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "ImportSpecifier" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "ImportDeclaration" ||
+              !isAstNode(definition.parent.source) ||
+              typeof definition.parent.source.value !== "string" ||
+              !TEMPORAL_MODULES.has(definition.parent.source.value)
+            ) {
+              return false;
+            }
+            const { imported } = definition.node;
+            return (
+              isAstNode(imported) &&
+              ((imported.type === "Identifier" &&
+                imported.name === "Temporal") ||
+                (imported.type === "Literal" && imported.value === "Temporal"))
+            );
+          });
+        };
+
+        const isNamedMember = (node: unknown, name: string): boolean =>
+          isAstNode(node) &&
+          node.type === "MemberExpression" &&
+          node.computed !== true &&
+          isIdentifierNamed(node.property, name);
+
+        const isTemporalNowEpochMilliseconds = (node: unknown): boolean => {
+          if (!isNamedMember(node, "epochMilliseconds") || !isAstNode(node)) {
+            return false;
+          }
+          const instantCall = node.object;
+          if (
+            !isAstNode(instantCall) ||
+            instantCall.type !== "CallExpression" ||
+            !Array.isArray(instantCall.arguments) ||
+            instantCall.arguments.length !== 0 ||
+            !isNamedMember(instantCall.callee, "instant") ||
+            !isAstNode(instantCall.callee)
+          ) {
+            return false;
+          }
+          const nowMember = instantCall.callee.object;
+          return (
+            isNamedMember(nowMember, "Now") &&
+            isAstNode(nowMember) &&
+            isImportedTemporal(nowMember.object)
+          );
+        };
+
+        const isRecognizedClockRead = (node: unknown): boolean =>
+          isDateNowCall(node) || isTemporalNowEpochMilliseconds(node);
+
+        const isFreshClockOperand = (node: unknown): boolean =>
+          isFreshClockRead(node, isRecognizedClockRead);
 
         const isPgTableCall = (node: unknown): boolean =>
           isAstNode(node) &&
@@ -548,7 +628,7 @@ export default eslintCompatPlugin({
             ) {
               return false;
             }
-            return isFreshClockRead(def.node.init);
+            return isFreshClockOperand(def.node.init);
           });
         };
 
@@ -589,7 +669,7 @@ export default eslintCompatPlugin({
             const callee = calleeName(expression);
             return (
               (callee !== undefined && allowedOperandCalls.has(callee)) ||
-              isFreshClockRead(expression) ||
+              isFreshClockOperand(expression) ||
               bindsToClockRead(expression) ||
               isSafeSqlFragment(expression)
             );
@@ -628,7 +708,7 @@ export default eslintCompatPlugin({
           if (callee !== undefined && allowedOperandCalls.has(callee)) {
             return true;
           }
-          if (isFreshClockRead(node)) {
+          if (isFreshClockOperand(node)) {
             return true;
           }
           return bindsToClockRead(node) || bindsToSafeSqlFragment(node);
