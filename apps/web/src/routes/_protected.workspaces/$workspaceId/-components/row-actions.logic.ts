@@ -5,6 +5,10 @@ import {
   hasDocumentProperties,
 } from "@stll/api-contract";
 
+import {
+  resolvePrimaryDownloadVariant,
+  type PrimaryDownloadVariant,
+} from "@/components/inspector/file-download-service.logic";
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -23,6 +27,59 @@ export type OcrSource = {
 
 export type RowActionContext = "bulk" | "cell" | "row";
 export type OcrExportFormat = "searchable-pdf" | "text";
+
+type RowDownloadMenuInput = {
+  canScrub: boolean;
+  exportableOcrSourceCount: number;
+  /** The row's file, or null for a folder, a task, or an empty row. */
+  file: { encrypted: boolean; mimeType: string } | null;
+  hasPdfConversion: boolean;
+  isBulk: boolean;
+  /** The matter the row lives in: its documents carry a reference only when
+   *  the matter itself has one. */
+  matter: { reference: string } | undefined;
+};
+
+type RowDownloadMenu = {
+  /** Whether Download opens a submenu instead of acting on its own. */
+  hasVariants: boolean;
+  /** What the plain Download hands over. */
+  primaryVariant: PrimaryDownloadVariant;
+};
+
+/**
+ * The shape of a row's download menu. A bulk selection keeps the originals:
+ * it spans files whose versions do not share one answer. Everything else
+ * defers to the shared policy, so the row menu and the inspector header
+ * cannot disagree about which copy leads.
+ */
+export const getRowDownloadMenu = ({
+  canScrub,
+  exportableOcrSourceCount,
+  file,
+  hasPdfConversion,
+  isBulk,
+  matter,
+}: RowDownloadMenuInput): RowDownloadMenu => {
+  const primaryVariant =
+    isBulk || file === null
+      ? "original"
+      : resolvePrimaryDownloadVariant({
+          encrypted: file.encrypted,
+          hasReference: Boolean(matter?.reference),
+          mimeType: file.mimeType,
+        });
+
+  return {
+    hasVariants:
+      !isBulk &&
+      (hasPdfConversion ||
+        canScrub ||
+        primaryVariant === "reference" ||
+        exportableOcrSourceCount > 0),
+    primaryVariant,
+  };
+};
 
 export const canDownloadScrubbed = (file: {
   encrypted: boolean;

@@ -1312,6 +1312,7 @@
     "convertTo": "تحويل إلى",
     "copied": "تم النسخ",
     "copy": "نسخ",
+    "copyDocumentReference": "نسخ مرجع المستند",
     "copyLink": "نسخ الرابط",
     "country": "الدولة",
     "court": "محكمة",
@@ -1330,6 +1331,7 @@
     "disconnect": "قطع الاتصال",
     "displayName": "الاسم المعروض",
     "document": "مستند",
+    "documentReference": "مرجع المستند",
     "documentTitle": "عنوان المستند",
     "documentation": "التوثيق",
     "done": "تم",
@@ -4621,6 +4623,11 @@
     "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط",
     "slugRequired": "المعرّف مطلوب"
   },
+  "verify": {
+    "notFound": "لا يوجد مستند بهذا المرجع متاح في مؤسستك.",
+    "opened": "فُتح عبر المرجع <bdi>{reference}</bdi>.",
+    "superseded": "يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4746,17 +4753,27 @@
       },
       "downloadAsZip": "تنزيل بصيغة ZIP",
       "downloadExtractedText": "النص المستخرج (.txt)",
+      "downloadFailed": "فشل التنزيل",
       "downloadOriginal": "الملف الأصلي",
+      "downloadOriginalNoReference": "تنزيل الأصل (بدون مرجع)",
       "downloadPdf": "PDF",
       "downloadScrubbed": "تنزيل بدون بيانات وصفية",
       "downloadScrubbedHint": "يزيل المؤلف والشركة وسجل التحرير التي يحملها الملف. تحتفظ بها النسخة الموجودة في الملف القانوني.",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
+      "downloadWithReference": "تنزيل مع المرجع",
       "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
       "ocrAlreadyProcessed": "اكتمل التعرّف على النص بالفعل",
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
       "rateLimited": "تم تقييد المعدل؛ الاستئناف خلال {seconds, number} ثانية",
+      "referencedUpload": {
+        "choiceLabel": "ما العمل مع {fileName}",
+        "description": "{count, plural, zero {لا ملفات تحمل مرجع مستند لديك بالفعل.} one {ملف واحد يحمل مرجع مستند لديك بالفعل.} two {ملفان يحملان مرجعَي مستندين لديك بالفعل.} few {# ملفات تحمل مراجع مستندات لديك بالفعل.} many {# ملفًا تحمل مراجع مستندات لديك بالفعل.} other {# ملف يحمل مراجع مستندات لديك بالفعل.}} اختر ما تريد فعله بكل منها.",
+        "matchedDocument": "الإصدار {version, number} من <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) في الملف القانوني <bdi>{matterName}</bdi>",
+        "title": "هل تحفظها كإصدارات جديدة؟",
+        "uploadAsNewDocument": "رفع كمستند جديد"
+      },
       "renamedToAvoidConflicts": "{count, plural, zero {لم تتم إعادة تسمية أي ملف لتجنب التعارضات} one {تمت إعادة تسمية ملف واحد لتجنب التعارضات} two {تمت إعادة تسمية ملفين لتجنب التعارضات} few {تمت إعادة تسمية # ملفات لتجنب التعارضات} many {تمت إعادة تسمية # ملفًا لتجنب التعارضات} other {تمت إعادة تسمية # ملف لتجنب التعارضات}}",
       "retryFailed": "إعادة محاولة {count, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}",
       "runOcr": "إضافة OCR إلى قائمة الانتظار",
@@ -4767,13 +4784,21 @@
       "uploadingDescription": "لا تغلق هذه الصفحة حتى يتم رفع الملفات",
       "uploadingProgress": "تم رفع {completed, number} من أصل {total, number}",
       "versionOrNewFile": {
+        "addAsVersion": "إضافة كإصدار {version, number}",
+        "addAsVersionThere": "إضافة هناك كإصدار {version, number}",
+        "checkingReference": "جارٍ التحقق من مرجع الملف...",
         "createNewOption": "إنشاء ملف جديد",
         "description": "لقد أفلتّ «{fileName}» فوق مستند موجود.",
         "extensionMismatch": "عدم تطابق الامتداد: المتوقع {expected}، والمستلَم {actual}",
         "extensionMismatchError": "امتداد الملف لا يطابق المستند الموجود",
         "noExtension": "بدون امتداد",
+        "referenceElsewhere": "هذا الملف هو الإصدار {version, number} من <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) في الملف القانوني <bdi>{matterName}</bdi>.",
+        "referenceHere": "هذا الملف هو الإصدار {version, number} من <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
+        "referenceSuperseded": "يستند إلى الإصدار {basedOn, number}؛ والإصدار الحالي هو {current, number}.",
         "replaceOption": "رفع كإصدار جديد",
-        "title": "رفع إصدار جديد أم إنشاء ملف جديد؟"
+        "title": "رفع إصدار جديد أم إنشاء ملف جديد؟",
+        "unnamedDocument": "مستند بلا عنوان",
+        "uploadAsNewDocumentHere": "رفعه هنا كمستند جديد"
       },
       "versionUploadFailed": "فشل رفع الإصدار",
       "versionUploaded": "تم رفع إصدار جديد",
@@ -5250,6 +5275,8 @@
     "reference": "الرقم المرجعي",
     "referenceConventionHint": "التنسيق المفضل: {example}",
     "referenceFormatWarning": "لا يطابق التنسيق المفضل.",
+    "referenceNumberingEmptyHint": "أدخل رقمًا مرجعيًا لبدء ترقيم مستندات هذا الملف القانوني.",
+    "referenceNumberingHint": "تُرقَّم مستندات هذا الملف القانوني هكذا: <bdi>{firstDocument}</bdi>، <bdi>{secondDocument}</bdi>، وهكذا؛ ويضيف كل إصدار <bdi>.v1</bdi> و<bdi>.v2</bdi>.",
     "referencePlaceholder": "مثال: 2024/001",
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {

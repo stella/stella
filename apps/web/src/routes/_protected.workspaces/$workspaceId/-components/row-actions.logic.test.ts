@@ -11,6 +11,7 @@ import {
   getOcrExportFormats,
   getOcrSource,
   getOcrSources,
+  getRowDownloadMenu,
   hasOcrExport,
   getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
@@ -162,6 +163,62 @@ describe("OCR export formats", () => {
     expect(hasOcrExport({ ...source, exportStatus: "unavailable" })).toBe(
       false,
     );
+  });
+});
+
+describe("row download menu", () => {
+  const docx = {
+    encrypted: false,
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  };
+  const plainMenu = {
+    canScrub: false,
+    exportableOcrSourceCount: 0,
+    hasPdfConversion: false,
+    isBulk: false,
+  };
+
+  test("leads with the reference copy in a matter that has a reference", () => {
+    expect(
+      getRowDownloadMenu({
+        ...plainMenu,
+        file: docx,
+        matter: { reference: "2026/001" },
+      }),
+    ).toEqual({ hasVariants: true, primaryVariant: "reference" });
+  });
+
+  test("offers no variants for a document whose matter has no reference", () => {
+    expect(
+      getRowDownloadMenu({
+        ...plainMenu,
+        file: docx,
+        matter: { reference: "" },
+      }),
+    ).toEqual({ hasVariants: false, primaryVariant: "original" });
+  });
+
+  test("keeps a bulk selection on the originals", () => {
+    expect(
+      getRowDownloadMenu({
+        ...plainMenu,
+        file: docx,
+        isBulk: true,
+        matter: { reference: "2026/001" },
+      }),
+    ).toEqual({ hasVariants: false, primaryVariant: "original" });
+  });
+
+  test("still opens the submenu for a rendition the reference cannot ride", () => {
+    expect(
+      getRowDownloadMenu({
+        ...plainMenu,
+        file: { encrypted: false, mimeType: "image/png" },
+        hasPdfConversion: true,
+        matter: { reference: "2026/001" },
+      }),
+    ).toEqual({ hasVariants: true, primaryVariant: "original" });
   });
 });
 

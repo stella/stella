@@ -1312,6 +1312,7 @@
     "convertTo": "Pārvērst par",
     "copied": "Nokopēts",
     "copy": "Kopēt",
+    "copyDocumentReference": "Kopēt dokumenta atsauces numuru",
     "copyLink": "Kopēt saiti",
     "country": "Valsts",
     "court": "Tiesa",
@@ -1330,6 +1331,7 @@
     "disconnect": "Atvienot",
     "displayName": "Attēlojamais vārds",
     "document": "Dokuments",
+    "documentReference": "Dokumenta atsauces numurs",
     "documentTitle": "Dokumenta nosaukums",
     "documentation": "Dokumentācija",
     "done": "Gatavs",
@@ -4621,6 +4623,11 @@
     "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises",
     "slugRequired": "Slug ir obligāts"
   },
+  "verify": {
+    "notFound": "Jūsu organizācijā nav pieejams neviens dokuments ar šo atsauces numuru.",
+    "opened": "Atvērts pēc atsauces numura <bdi>{reference}</bdi>.",
+    "superseded": "Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4746,17 +4753,27 @@
       },
       "downloadAsZip": "Lejupielādēt .zip failu",
       "downloadExtractedText": "Izvilktais teksts (.txt)",
+      "downloadFailed": "Lejupielāde neizdevās",
       "downloadOriginal": "Oriģinālais fails",
+      "downloadOriginalNoReference": "Lejupielādēt oriģinālu (bez atsauces numura)",
       "downloadPdf": "PDF",
       "downloadScrubbed": "Lejupielādēt bez metadatiem",
       "downloadScrubbedHint": "Noņem failā esošo autoru, uzņēmumu un rediģēšanas vēsturi. Lietā esošā kopija tos saglabā.",
       "downloadSearchablePdf": "Meklējams PDF",
+      "downloadWithReference": "Lejupielādēt ar atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",
+      "referencedUpload": {
+        "choiceLabel": "Ko darīt ar failu {fileName}",
+        "description": "{count, plural, zero {# failu ir atsauces numuri dokumentiem, kas jums jau ir.} one {# failam ir atsauces numurs dokumentam, kas jums jau ir.} other {# failiem ir atsauces numuri dokumentiem, kas jums jau ir.}} Izvēlieties, ko darīt ar katru no tiem.",
+        "matchedDocument": "Dokumenta <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. versija lietā <bdi>{matterName}</bdi>",
+        "title": "Vai saglabāt tos kā jaunas versijas?",
+        "uploadAsNewDocument": "Augšupielādēt kā jaunu dokumentu"
+      },
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
       "runOcr": "Ievietot OCR rindā",
@@ -4767,13 +4784,21 @@
       "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti",
       "uploadingProgress": "{completed, number} no {total, number} augšupielādēti",
       "versionOrNewFile": {
+        "addAsVersion": "Pievienot kā {version, number}. versiju",
+        "addAsVersionThere": "Pievienot tur kā {version, number}. versiju",
+        "checkingReference": "Tiek pārbaudīts faila atsauces numurs...",
         "createNewOption": "Izveidot jaunu failu",
         "description": "Jūs nometāt \"{fileName}\" uz esoša dokumenta.",
         "extensionMismatch": "Paplašinājums nesakrīt: gaidīts {expected}, saņemts {actual}",
         "extensionMismatchError": "Faila paplašinājums nesakrīt ar esošo dokumentu",
         "noExtension": "bez paplašinājuma",
+        "referenceElsewhere": "Šis fails ir dokumenta <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. versija lietā <bdi>{matterName}</bdi>.",
+        "referenceHere": "Šis fails ir dokumenta <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. versija.",
+        "referenceSuperseded": "Tas balstās uz {basedOn, number}. versiju; pašreizējā ir {current, number}. versija.",
         "replaceOption": "Augšupielādēt kā jaunu versiju",
-        "title": "Augšupielādēt jaunu versiju vai izveidot jaunu failu?"
+        "title": "Augšupielādēt jaunu versiju vai izveidot jaunu failu?",
+        "unnamedDocument": "bez nosaukuma",
+        "uploadAsNewDocumentHere": "Augšupielādēt šeit kā jaunu dokumentu"
       },
       "versionUploadFailed": "Versijas augšupielāde neizdevās",
       "versionUploaded": "Jauna versija augšupielādēta",
@@ -5250,6 +5275,8 @@
     "reference": "Atsauces numurs",
     "referenceConventionHint": "Vēlamais formāts: {example}",
     "referenceFormatWarning": "Neatbilst vēlamajam formātam.",
+    "referenceNumberingEmptyHint": "Norādiet atsauces numuru, lai sāktu numurēt šīs lietas dokumentus.",
+    "referenceNumberingHint": "Šīs lietas dokumenti tiek numurēti <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> un tā tālāk; katra versija pievieno <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "piem. 2024/001",
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
