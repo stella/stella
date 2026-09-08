@@ -44,6 +44,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -88,51 +89,22 @@ const CZ_NSS_LANGUAGE = "cs";
  * judgments the NSS reviews (a single day's listing mixes `1 Az 4/2026` of the
  * Městský soud v Praze with `52 Af 4/2026` of the Krajský soud v Hradci
  * Králové). Neither the row nor the detail fields name the deciding court; the
- * ECLI does, in its court code, so `courtFromEcli` reads it from there and this
- * label covers only documents that carry no ECLI.
+ * ECLI does, in its court code, so `czDecisionCourt` reads it from there and
+ * this label covers only documents that carry no ECLI.
  */
 const CZ_NSS_COURT = "Nejvyšší správní soud";
 
-/**
- * ECLI court codes the portal publishes under, to the court's name.
- *
- * The list is the one the corpus has shown so far; an unlisted code is
- * reported rather than mapped, and the row keeps the fallback label so the
- * document is still stored.
- */
-export const CZ_ECLI_COURTS = {
-  NSS: CZ_NSS_COURT,
-  MSPH: "Městský soud v Praze",
-  KSBR: "Krajský soud v Brně",
-  KSCB: "Krajský soud v Českých Budějovicích",
-  KSHK: "Krajský soud v Hradci Králové",
-  KSOS: "Krajský soud v Ostravě",
-  KSPH: "Krajský soud v Praze",
-  KSPL: "Krajský soud v Plzni",
-  KSUL: "Krajský soud v Ústí nad Labem",
-} as const satisfies Record<string, string>;
-
-/** Codes are four letters at most; the bound keeps an odd ECLI out of the log. */
-const ECLI_COURT_CODE = /^ECLI:CZ:(?<code>[A-Z]{1,8}):/u;
-
-const isEcliCourtCode = (code: string): code is keyof typeof CZ_ECLI_COURTS =>
-  Object.hasOwn(CZ_ECLI_COURTS, code);
-
-/** The deciding court named by an ECLI, or the fallback label. */
-export const courtFromEcli = (ecli: string | undefined): string => {
-  if (ecli === undefined) {
-    return CZ_NSS_COURT;
-  }
-  const code = ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
-  if (code === undefined) {
-    return CZ_NSS_COURT;
-  }
-  if (isEcliCourtCode(code)) {
-    return CZ_ECLI_COURTS[code];
-  }
-  logger.warn("case_law.ingestion.cz_nss.unknown_ecli_court", { code });
-  return CZ_NSS_COURT;
-};
+/** The deciding court this portal states for one decision. */
+const czNssCourt = (
+  ecli: string | undefined,
+  sourceDocumentId: string | undefined,
+): string =>
+  czDecisionCourt({
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
+    ecli,
+    publisherCourt: CZ_NSS_COURT,
+    sourceDocumentId,
+  });
 
 /**
  * Rows the portal renders inline on the results page a search returns.
@@ -707,7 +679,7 @@ const fetchDecisionContent = async (
         const parsed = parseNssDecisionHtml({
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
-          court: courtFromEcli(detail.ecli),
+          court: czNssCourt(detail.ecli, documentId),
           decisionDate: (() => {
             if (detail.decisionDate) {
               return parseCeDate(detail.decisionDate);
@@ -1318,7 +1290,7 @@ const rowToResult = ({
   row,
 }: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
-  const court = courtFromEcli(detail.ecli);
+  const court = czNssCourt(detail.ecli, sourceDocumentId);
   const decisionDate = (() => {
     if (detail.decisionDate) {
       return parseCeDate(detail.decisionDate);
