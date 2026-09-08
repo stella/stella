@@ -110,7 +110,13 @@ const MAX_FAVICON_BYTES: usize = 512 * 1024;
 #[cfg(target_os = "linux")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["image/png"];
 #[cfg(target_os = "macos")]
-const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["public.png", "public.tiff"];
+const MACOS_PNG_FORMAT: &str = "public.png";
+#[cfg(target_os = "macos")]
+const MACOS_FILE_URL_FORMAT: &str = "public.file-url";
+#[cfg(target_os = "macos")]
+const MAX_CLIPBOARD_FILE_URL_BYTES: usize = 16 * 1024;
+#[cfg(target_os = "macos")]
+const CLIPBOARD_IMAGE_FORMATS: &[&str] = &[MACOS_PNG_FORMAT, "public.tiff"];
 #[cfg(target_os = "windows")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["PNG"];
 #[cfg(debug_assertions)]
@@ -861,6 +867,7 @@ pub enum ClipboardImageCleanupStatus {
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSnapshot {
   pub capture_status: ClipboardCaptureStatus,
+  pub group_limit: usize,
   pub groups: Vec<ClipboardGroup>,
   pub items: Vec<ClipboardItem>,
   pub persistence: ClipboardPersistenceStatus,
@@ -896,6 +903,8 @@ pub struct PersistedClipboardState {
 
 pub struct ClipboardManager {
   capture_status: ClipboardCaptureStatus,
+  #[cfg(target_os = "macos")]
+  image_exports: crate::clipboard_image_export::ClipboardImageExports,
   groups: Vec<ClipboardGroup>,
   image_discovery_status: ClipboardImageCleanupStatus,
   items: Vec<ClipboardItem>,
@@ -1244,6 +1253,8 @@ impl ClipboardManager {
   pub fn new() -> Self {
     Self {
       capture_status: ClipboardCaptureStatus::Active,
+      #[cfg(target_os = "macos")]
+      image_exports: crate::clipboard_image_export::ClipboardImageExports::new(),
       groups: Vec::new(),
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       items: Vec::new(),
@@ -1314,6 +1325,7 @@ impl ClipboardManager {
     source_app_visuals.sort_by(|left, right| left.key.cmp(&right.key));
     ClipboardSnapshot {
       capture_status: self.capture_status,
+      group_limit: MAX_GROUPS,
       groups: self.groups.clone(),
       items: self
         .items
@@ -1440,7 +1452,19 @@ impl ClipboardManager {
     &mut self,
     name: &str,
     color: ClipboardGroupColor,
+    item_id: Option<&str>,
   ) -> Result<String, String> {
+    let item_index = if let Some(item_id) = item_id {
+      Some(
+        self
+          .items
+          .iter()
+          .position(|item| item.id() == item_id)
+          .ok_or_else(|| "clipboard item no longer exists".to_string())?,
+      )
+    } else {
+      None
+    };
     if self.groups.len() >= MAX_GROUPS {
       return Err("clipboard group limit reached".to_string());
     }
@@ -1452,6 +1476,9 @@ impl ClipboardManager {
       id: id.clone(),
       name,
     });
+    if let Some(item_index) = item_index {
+      self.items[item_index].set_group_id(Some(id.clone()), Utc::now());
+    }
     self.persist_or_restore(checkpoint)?;
     Ok(id)
   }
@@ -3260,6 +3287,16 @@ fn resolve_clipboard_image_capture(
 
 impl ClipboardHandler for HistoryClipboardHandler {
   fn on_clipboard_change(&mut self) {
+    // Re-read formats while holding the publication lock: a stale watcher
+    // observation must never remove an export just published by a copy.
+    let Ok(mut manager) = self.manager.lock() else {
+      self.telemetry.capture(DesktopErrorReport {
+        window: DesktopTelemetryWindow::Clipboard,
+        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+        code: DesktopTelemetryErrorCode::LockPoisoned,
+      });
+      return;
+    };
     let formats = match self.clipboard.available_formats() {
       Ok(formats) => formats,
       Err(error) => {
@@ -3272,15 +3309,23 @@ impl ClipboardHandler for HistoryClipboardHandler {
         return;
       }
     };
+    #[cfg(target_os = "macos")]
+    if let Err(error) = manager.reconcile_image_exports() {
+      tracing::warn!(error = %error, "replaced clipboard image export cleanup will be retried");
+      self.telemetry.capture(DesktopErrorReport {
+        window: DesktopTelemetryWindow::Clipboard,
+        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+        code: DesktopTelemetryErrorCode::PersistenceFailed,
+      });
+    }
     if formats
       .iter()
       .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
     {
-      if let Ok(mut manager) = self.manager.lock() {
-        manager.clear_suppression();
-      }
+      manager.clear_suppression();
       return;
     }
+    drop(manager);
     if should_ignore_formats(&formats) {
       return;
     }
@@ -3894,37 +3939,104 @@ pub fn initialize_and_watch(
   watcher.start_watch();
 }
 
-pub fn write_item(
-  item: &ClipboardItem,
-  image_bytes: Option<&[u8]>,
-  plain_text_only: bool,
-) -> Result<(), String> {
-  let clipboard = ClipboardContext::new()
-    .map_err(|error| format!("clipboard is unavailable: {error}"))?;
-  let mut contents = match item {
-    ClipboardItem::Text { plain_text, .. }
-    | ClipboardItem::FormattedText { plain_text, .. } => {
-      vec![ClipboardContent::Text(plain_text.clone())]
-    }
-    ClipboardItem::Image { .. } => {
-      if plain_text_only {
-        return Err("clipboard image cannot be copied as plain text".to_string());
+impl ClipboardManager {
+  pub fn write_item(
+    &mut self,
+    item: &ClipboardItem,
+    image_bytes: Option<&[u8]>,
+  ) -> Result<(), String> {
+    let clipboard = ClipboardContext::new()
+      .map_err(|error| format!("clipboard is unavailable: {error}"))?;
+    self.suppress_next(item, false);
+    let mut contents = match item {
+      ClipboardItem::Text { plain_text, .. }
+      | ClipboardItem::FormattedText { plain_text, .. } => {
+        vec![ClipboardContent::Text(plain_text.clone())]
       }
-      let image =
-        image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
-      let image = RustImageData::from_bytes(image)
-        .map_err(|error| format!("clipboard image is invalid: {error}"))?;
-      vec![ClipboardContent::Image(image)]
-    }
-  };
-  if !plain_text_only {
+      ClipboardItem::Image { .. } => {
+        let image =
+          image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
+        let image = RustImageData::from_bytes(image)
+          .map_err(|error| format!("clipboard image is invalid: {error}"))?;
+        #[cfg(target_os = "macos")]
+        {
+          self.reconcile_image_exports()?;
+          let png = encode_png_bounded(&image, MAX_ITEM_IMAGE_BYTES)?;
+          return self.image_exports.publish(&png, |url| {
+            // Both representations belong to one pasteboard item. Publishing
+            // Files separately would make some receivers paste two objects.
+            set_clipboard_contents(
+              &clipboard,
+              vec![
+                ClipboardContent::Other(MACOS_PNG_FORMAT.to_string(), png.clone()),
+                ClipboardContent::Other(
+                  MACOS_FILE_URL_FORMAT.to_string(),
+                  url.as_str().as_bytes().to_vec(),
+                ),
+              ],
+            )
+          });
+        }
+        #[cfg(not(target_os = "macos"))]
+        vec![ClipboardContent::Image(image)]
+      }
+    };
     if let Some(html) = item.html() {
       contents.push(ClipboardContent::Html(html.to_string()));
     }
     if let Some(rtf) = item.rtf() {
       contents.push(ClipboardContent::Rtf(rtf.to_string()));
     }
+    set_clipboard_contents(&clipboard, contents)?;
+    #[cfg(target_os = "macos")]
+    if let Err(error) = self.reconcile_image_exports() {
+      tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
+    }
+    Ok(())
   }
+
+  #[cfg(target_os = "macos")]
+  pub fn reconcile_image_exports(&mut self) -> Result<(), String> {
+    let current_file = current_clipboard_export_file()?;
+    self.image_exports.reconcile(current_file.as_deref())
+  }
+}
+
+#[cfg(target_os = "macos")]
+fn current_clipboard_export_file() -> Result<Option<PathBuf>, String> {
+  use objc2_app_kit::NSPasteboard;
+  use objc2_foundation::NSString;
+
+  let pasteboard = NSPasteboard::generalPasteboard();
+  let change_count = pasteboard.changeCount();
+  let file_url_type = NSString::from_str(MACOS_FILE_URL_FORMAT);
+  let has_file_url = pasteboard
+    .types()
+    .is_some_and(|types| types.containsObject(&file_url_type));
+  let path = if has_file_url {
+    let data = pasteboard
+      .dataForType(&file_url_type)
+      .ok_or_else(|| "clipboard file URL could not be read".to_string())?;
+    if data.length() > MAX_CLIPBOARD_FILE_URL_BYTES {
+      return Err("clipboard file URL exceeds the size limit".to_string());
+    }
+    String::from_utf8(data.to_vec())
+      .ok()
+      .and_then(|value| Url::parse(&value).ok())
+      .and_then(|url| url.to_file_path().ok())
+  } else {
+    None
+  };
+  if pasteboard.changeCount() != change_count {
+    return Err("clipboard changed while reading its file URL".to_string());
+  }
+  Ok(path)
+}
+
+fn set_clipboard_contents(
+  clipboard: &ClipboardContext,
+  mut contents: Vec<ClipboardContent>,
+) -> Result<(), String> {
   contents.push(ClipboardContent::Other(
     INTERNAL_CLIPBOARD_FORMAT.to_string(),
     Vec::new(),
@@ -5557,7 +5669,7 @@ mod tests {
     let now = Utc::now();
     let mut manager = ready_manager();
     let group_id = manager
-      .create_group("Templates", ClipboardGroupColor::default())
+      .create_group("Templates", ClipboardGroupColor::default(), None)
       .unwrap();
     let mut ungrouped = text_item(now - Duration::days(400), "ungrouped");
     ungrouped.set_group_id(Some(group_id.clone()), Utc::now());
@@ -6092,10 +6204,89 @@ mod tests {
   }
 
   #[test]
+  fn creating_a_group_without_an_item_leaves_history_unchanged() {
+    let mut manager = ready_manager();
+    manager.items.push(text_item(Utc::now(), "unfiled"));
+    let items_before = manager.items.clone();
+
+    let group_id = manager
+      .create_group("Research", ClipboardGroupColor::default(), None)
+      .unwrap();
+
+    assert_eq!(manager.groups.len(), 1);
+    assert_eq!(manager.groups[0].id, group_id);
+    assert_eq!(manager.groups[0].name, "Research");
+    assert_eq!(manager.items, items_before);
+  }
+
+  #[test]
+  fn creating_a_group_can_file_an_item_atomically() {
+    let mut manager = ready_manager();
+    manager.items.push(text_item(Utc::now(), "clause"));
+    let item_id = manager.items[0].id().to_string();
+
+    let group_id = manager
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#60a5fa").unwrap(),
+        Some(&item_id),
+      )
+      .unwrap();
+
+    assert_eq!(manager.groups.len(), 1);
+    assert_eq!(manager.groups[0].id, group_id);
+    assert_eq!(manager.items[0].group_id(), Some(group_id.as_str()));
+    assert!(manager.items[0].grouped_at().is_some());
+  }
+
+  #[test]
+  fn creating_a_group_for_a_missing_item_changes_nothing() {
+    let mut manager = ready_manager();
+    manager.items.push(text_item(Utc::now(), "clause"));
+    let groups_before = manager.groups.clone();
+    let items_before = manager.items.clone();
+
+    assert_eq!(
+      manager
+        .create_group("Research", ClipboardGroupColor::default(), Some("missing"),),
+      Err("clipboard item no longer exists".to_string())
+    );
+    assert_eq!(manager.groups, groups_before);
+    assert_eq!(manager.items, items_before);
+  }
+
+  #[test]
+  fn failed_group_creation_restores_the_group_and_item() {
+    let store_path = unique_store_path();
+    std::fs::create_dir_all(&store_path).unwrap();
+    let mut manager = ready_manager();
+    manager.items.push(text_item(Utc::now(), "clause"));
+    let item_id = manager.items[0].id().to_string();
+    let groups_before = manager.groups.clone();
+    let items_before = manager.items.clone();
+    manager.persistence =
+      ClipboardPersistence::Encrypted(ClipboardStore::new([7; 32], store_path.clone()));
+
+    assert!(
+      manager
+        .create_group("Research", ClipboardGroupColor::default(), Some(&item_id),)
+        .is_err()
+    );
+    assert_eq!(manager.groups, groups_before);
+    assert_eq!(manager.items, items_before);
+
+    std::fs::remove_dir(store_path).unwrap();
+  }
+
+  #[test]
   fn deleting_a_group_can_preserve_its_clips() {
     let mut manager = ready_manager();
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::parse("#60a5fa").unwrap())
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#60a5fa").unwrap(),
+        None,
+      )
       .unwrap();
     let mut grouped = text_item(Utc::now() - Duration::days(400), "grouped");
     let grouped_id = grouped.id().to_string();
@@ -6127,7 +6318,11 @@ mod tests {
     assert!(capture(&mut manager, "grouped", None, Utc::now()));
     assert!(capture(&mut manager, "ungrouped", None, Utc::now()));
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::parse("#60a5fa").unwrap())
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#60a5fa").unwrap(),
+        None,
+      )
       .unwrap();
     let grouped_id = manager.items[1].id().to_string();
     assert!(
@@ -6149,11 +6344,21 @@ mod tests {
   fn updating_a_group_trims_and_rejects_duplicate_names() {
     let mut manager = ready_manager();
     let research_id = manager
-      .create_group("Research", ClipboardGroupColor::parse("#60a5fa").unwrap())
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#60a5fa").unwrap(),
+        None,
+      )
       .unwrap();
     manager
-      .create_group("Templates", ClipboardGroupColor::default())
+      .create_group("Templates", ClipboardGroupColor::default(), None)
       .unwrap();
+    let groups_before_duplicate = manager.groups.clone();
+    assert_eq!(
+      manager.create_group(" templates ", ClipboardGroupColor::default(), None),
+      Err("clipboard group name already exists".to_string())
+    );
+    assert_eq!(manager.groups, groups_before_duplicate);
     let amber = ClipboardGroupColor::parse("#fbbf24").unwrap();
 
     assert!(
@@ -6177,15 +6382,35 @@ mod tests {
     let mut manager = ready_manager();
     for index in 0..MAX_GROUPS {
       manager
-        .create_group(&format!("Group {index}"), ClipboardGroupColor::default())
+        .create_group(
+          &format!("Group {index}"),
+          ClipboardGroupColor::default(),
+          None,
+        )
         .unwrap();
     }
 
     assert!(
       manager
-        .create_group("One too many", ClipboardGroupColor::default())
+        .create_group("One too many", ClipboardGroupColor::default(), None)
         .is_err()
     );
+
+    let snapshot = manager.snapshot();
+    assert_eq!(snapshot.group_limit, MAX_GROUPS);
+    let snapshot_json = serde_json::to_value(snapshot).unwrap();
+    assert_eq!(snapshot_json["groupLimit"], MAX_GROUPS);
+
+    let persisted = PersistedClipboardState {
+      capture_status: manager.capture_status,
+      groups: manager.groups.clone(),
+      items: manager.items.clone(),
+      pending_image_blob_ids: manager.pending_image_blob_ids.clone(),
+      retention: manager.retention,
+      source_app_visuals: Vec::new(),
+    };
+    let persisted_json = serde_json::to_value(persisted).unwrap();
+    assert!(persisted_json.get("groupLimit").is_none());
 
     let mut manager = ready_manager();
     assert!(
@@ -6193,6 +6418,7 @@ mod tests {
         .create_group(
           &"x".repeat(MAX_GROUP_NAME_CHARACTERS + 1),
           ClipboardGroupColor::default(),
+          None,
         )
         .is_err()
     );
@@ -6207,7 +6433,8 @@ mod tests {
       manager
         .create_group(
           &international_name,
-          ClipboardGroupColor::parse("#60a5fa").unwrap()
+          ClipboardGroupColor::parse("#60a5fa").unwrap(),
+          None,
         )
         .is_ok()
     );
@@ -6216,6 +6443,7 @@ mod tests {
         .create_group(
           &format!("{international_name}界"),
           ClipboardGroupColor::parse("#60a5fa").unwrap(),
+          None,
         )
         .is_err()
     );
@@ -6283,7 +6511,11 @@ mod tests {
     let mut manager = ready_manager();
     assert!(capture(&mut manager, "grouped", None, now));
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::parse("#34d399").unwrap())
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#34d399").unwrap(),
+        None,
+      )
       .unwrap();
     let item_id = manager.items[0].id().to_string();
     manager
@@ -6304,7 +6536,11 @@ mod tests {
     let mut manager = ready_manager();
     assert!(capture(&mut manager, "clause", None, Utc::now()));
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::parse("#34d399").unwrap())
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#34d399").unwrap(),
+        None,
+      )
       .unwrap();
     let item_id = manager.items[0].id().to_string();
 

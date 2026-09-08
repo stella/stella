@@ -15,6 +15,7 @@ import {
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   captureStatus: "active",
+  groupLimit: 24,
   groups: [],
   items: [],
   persistence: { imageCleanup: "idle", status: "encrypted" },
@@ -41,6 +42,31 @@ describe("clipboard snapshot welcome state", () => {
     expect(isClipboardSnapshot(snapshotWithWelcomeStatus("initializing"))).toBe(
       false,
     );
+  });
+});
+
+describe("clipboard snapshot group limit", () => {
+  test("requires a positive safe integer supplied by native", () => {
+    for (const groupLimit of [
+      undefined,
+      0,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          groupLimit,
+        }),
+      ).toBe(false);
+    }
+    expect(
+      isClipboardSnapshot({
+        ...snapshotWithWelcomeStatus("completed"),
+        groupLimit: 24,
+      }),
+    ).toBe(true);
   });
 });
 

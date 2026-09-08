@@ -6,6 +6,7 @@ import type * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
+import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 
 const HexColorPicker = lazy(async () => {
@@ -50,15 +51,30 @@ type ColorPickerProps = {
   className?: string;
 };
 
-type ColorPickerContentProps = {
+type ColorPickerContentBaseProps = {
   value?: string | undefined;
   onSelect?: ((value: string) => void) | undefined;
-  onClear?: (() => void) | undefined;
   presets: ColorPreset[];
-  columns: number;
-  defaultExpanded: boolean;
   moreLabel: string;
 };
+
+type ColorPickerContentProps = ColorPickerContentBaseProps &
+  (
+    | {
+        columns: number;
+        defaultExpanded: boolean;
+        onClear?: (() => void) | undefined;
+        /** Popover content closes on preset selection. */
+        presentation?: "popover";
+      }
+    | {
+        columns?: never;
+        defaultExpanded?: never;
+        onClear?: never;
+        /** Inline content stays mounted and reserves its popup for custom color. */
+        presentation: "inline";
+      }
+  );
 
 // ---------------------------------------------------------------------------
 // Default presets — 18 curated colors using semantic CSS variables
@@ -107,6 +123,11 @@ const isLightHex = (hex: string): boolean => {
   return (r * 299 + g * 587 + b * 114) / 1000 > 220;
 };
 
+const checkIconColorClassNames = {
+  dark: "text-(--color-white)",
+  light: "text-(--color-black)",
+} as const;
+
 /** Check if a value looks like a 6-char hex (no CSS vars, no named colors). */
 const looksLikeHex = (v: string) => /^[0-9A-Fa-f]{6}$/u.test(v);
 
@@ -120,38 +141,188 @@ const ColorSwatch = ({
   label,
   isLight,
   onClick,
+  presentation,
 }: {
   cssColor: string;
   selected: boolean;
   label: string;
   isLight: boolean;
   onClick: () => void;
-}) => (
-  <PopoverPrimitive.Close
-    render={
-      <button
-        aria-label={label}
-        className={cn(
-          "hover:border-foreground relative flex size-6 items-center justify-center rounded-md border transition-[transform,border-color] hover:scale-115 sm:size-5",
-          selected
-            ? "border-foreground ring-ring/24 ring-1"
-            : "border-border/40",
-          isLight && !selected && "border-border",
-        )}
-        onClick={onClick}
-        style={{ backgroundColor: cssColor }}
-        type="button"
+  presentation: "inline" | "popover";
+}) => {
+  let selectionClassName = "border-border/40";
+  if (selected) {
+    selectionClassName =
+      presentation === "inline"
+        ? "border-transparent ring-2 ring-ring"
+        : "border-foreground ring-ring/24 ring-1";
+  }
+  const swatch = (
+    <button
+      aria-label={label}
+      aria-pressed={selected}
+      className={cn(
+        presentation === "inline"
+          ? "ring-offset-popover relative grid size-11 shrink-0 place-items-center rounded-full border ring-offset-2 transition-transform outline-none hover:scale-105 focus-visible:ring-2"
+          : "hover:border-foreground relative flex size-6 items-center justify-center rounded-md border transition-[transform,border-color] hover:scale-115 sm:size-5",
+        selectionClassName,
+        isLight && !selected && "border-border",
+      )}
+      onClick={onClick}
+      style={{ backgroundColor: cssColor }}
+      type="button"
+    >
+      {selected && (
+        <CheckIcon
+          className={cn(
+            "pointer-events-none",
+            presentation === "inline"
+              ? "bg-background/88 text-foreground size-5 rounded-full p-0.5 shadow-sm"
+              : "size-3 sm:size-2.5",
+            presentation === "popover" &&
+              checkIconColorClassNames[isLight ? "light" : "dark"],
+          )}
+        />
+      )}
+    </button>
+  );
+
+  return presentation === "inline" ? (
+    swatch
+  ) : (
+    <PopoverPrimitive.Close render={swatch} />
+  );
+};
+
+type CustomColorControlsProps = {
+  handleInputChange: (raw: string) => void;
+  handlePickerChange: (hex: string) => void;
+  inputHex: string;
+  pickerHex: string;
+};
+
+const CustomColorControls = ({
+  handleInputChange,
+  handlePickerChange,
+  inputHex,
+  pickerHex,
+}: CustomColorControlsProps) => (
+  <>
+    <Suspense
+      fallback={
+        <div
+          aria-hidden
+          className="ring-border/30 h-[140px] w-full rounded-lg ring-1"
+        />
+      }
+    >
+      <HexColorPicker
+        className="ring-border/30 !h-[140px] !w-full overflow-hidden rounded-lg ring-1"
+        color={pickerHex}
+        onChange={(hex) => handlePickerChange(hex.replace("#", ""))}
       />
-    }
-  >
-    {selected && (
-      <CheckIcon
-        className="pointer-events-none size-3 sm:size-2.5"
-        style={{ color: isLight ? "#000" : "#fff" }}
+    </Suspense>
+    <div className="flex items-center gap-1.5">
+      <span className="text-muted-foreground text-[11px]">#</span>
+      <input
+        aria-label="Custom hex color"
+        className="border-input bg-background text-foreground h-6 flex-1 rounded border px-1.5 font-mono text-[11px] outline-none"
+        dir="ltr"
+        maxLength={6}
+        onChange={(event) => handleInputChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") {
+            event.stopPropagation();
+          }
+        }}
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        placeholder="FF0000"
+        value={inputHex}
       />
-    )}
-  </PopoverPrimitive.Close>
+      {isValidHex(inputHex) && (
+        <span
+          className="border-border size-6 shrink-0 rounded border"
+          style={{ backgroundColor: `#${inputHex}` }}
+        />
+      )}
+    </div>
+  </>
 );
+
+type InlineCustomColorProps = {
+  customSelected: boolean;
+  handleInputChange: (raw: string) => void;
+  handlePickerChange: (hex: string) => void;
+  inputHex: string;
+  label: string;
+  pickerHex: string;
+  presets: ColorPreset[];
+  value: string | undefined;
+};
+
+const InlineCustomColor = ({
+  customSelected,
+  handleInputChange,
+  handlePickerChange,
+  inputHex,
+  label,
+  pickerHex,
+  presets,
+  value,
+}: InlineCustomColorProps) => {
+  const customColor = customSelected ? `#${value}` : undefined;
+  const customGradient = `conic-gradient(${presets
+    .map((preset) => swatchColor(preset))
+    .join(", ")})`;
+
+  return (
+    <PopoverPrimitive.Root>
+      <PopoverPrimitive.Trigger
+        render={
+          <button
+            aria-label={label}
+            aria-pressed={customSelected}
+            className={cn(
+              "ring-offset-popover relative grid size-11 shrink-0 place-items-center rounded-full border border-transparent ring-offset-2 transition-transform outline-none hover:scale-105 focus-visible:ring-2",
+              customSelected && "ring-ring ring-2",
+            )}
+            style={
+              customColor
+                ? { backgroundColor: customColor }
+                : { backgroundImage: customGradient }
+            }
+            type="button"
+          />
+        }
+      >
+        {customSelected ? (
+          <CheckIcon className="bg-background/88 text-foreground pointer-events-none size-5 rounded-full p-0.5 shadow-sm" />
+        ) : null}
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Positioner
+          align="end"
+          className={OVERLAY_LAYER_CLASS_NAMES.popup}
+          side="bottom"
+          sideOffset={4}
+        >
+          <PopoverPrimitive.Popup
+            className="bg-popover text-popover-foreground flex w-56 flex-col gap-2 rounded-lg border p-2 shadow-lg/5"
+            data-slot="color-picker-custom-popup"
+          >
+            <CustomColorControls
+              handleInputChange={handleInputChange}
+              handlePickerChange={handlePickerChange}
+              inputHex={inputHex}
+              pickerHex={pickerHex}
+            />
+          </PopoverPrimitive.Popup>
+        </PopoverPrimitive.Positioner>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // ColorPickerContent (public — for embedding without popover)
@@ -165,6 +336,7 @@ const ColorPickerContent = ({
   columns,
   defaultExpanded,
   moreLabel,
+  presentation = "popover",
 }: ColorPickerContentProps) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   // pickerHex: last valid 6-char hex from the visual picker (drives the picker's color prop)
@@ -173,6 +345,8 @@ const ColorPickerContent = ({
     () => (looksLikeHex(value ?? "") ? value : "000000") ?? "000000",
   );
   const [inputHex, setInputHex] = useState("");
+  const presetSelected = presets.some((preset) => preset.value === value);
+  const customSelected = !presetSelected && looksLikeHex(value ?? "");
 
   /** Called when the visual picker (SB square / hue strip) emits a color. */
   const handlePickerChange = (hex: string) => {
@@ -196,6 +370,34 @@ const ColorPickerContent = ({
       onSelect?.(cleaned);
     }
   };
+
+  if (presentation === "inline") {
+    return (
+      <div className="flex items-center gap-1" data-slot="color-picker">
+        {presets.map((preset) => (
+          <ColorSwatch
+            key={preset.value}
+            cssColor={swatchColor(preset)}
+            isLight={looksLikeHex(preset.value) && isLightHex(preset.value)}
+            label={preset.label}
+            onClick={() => onSelect?.(preset.value)}
+            presentation="inline"
+            selected={value === preset.value}
+          />
+        ))}
+        <InlineCustomColor
+          customSelected={customSelected}
+          handleInputChange={handleInputChange}
+          handlePickerChange={handlePickerChange}
+          inputHex={inputHex}
+          label={moreLabel}
+          pickerHex={pickerHex}
+          presets={presets}
+          value={value}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1.5" data-slot="color-picker">
@@ -233,6 +435,7 @@ const ColorPickerContent = ({
             isLight={looksLikeHex(preset.value) && isLightHex(preset.value)}
             label={preset.label}
             onClick={() => onSelect?.(preset.value)}
+            presentation="popover"
             selected={value === preset.value}
           />
         ))}
@@ -250,41 +453,12 @@ const ColorPickerContent = ({
         </button>
       ) : (
         <div className="border-border flex flex-col gap-2 border-t pt-2">
-          <Suspense
-            fallback={
-              <div
-                aria-hidden
-                className="ring-border/30 h-[140px] w-full rounded-lg ring-1"
-              />
-            }
-          >
-            <HexColorPicker
-              className="ring-border/30 !h-[140px] !w-full overflow-hidden rounded-lg ring-1"
-              color={pickerHex}
-              onChange={(hex) => handlePickerChange(hex.replace("#", ""))}
-            />
-          </Suspense>
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted-foreground text-[11px]">#</span>
-            <input
-              aria-label="Custom hex color"
-              className="border-input bg-background text-foreground h-6 flex-1 rounded border px-1.5 font-mono text-[11px] outline-none"
-              dir="ltr"
-              maxLength={6}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              placeholder="FF0000"
-              value={inputHex}
-            />
-            {isValidHex(inputHex) && (
-              <span
-                className="border-border size-6 shrink-0 rounded border"
-                style={{ backgroundColor: `#${inputHex}` }}
-              />
-            )}
-          </div>
+          <CustomColorControls
+            handleInputChange={handleInputChange}
+            handlePickerChange={handlePickerChange}
+            inputHex={inputHex}
+            pickerHex={pickerHex}
+          />
         </div>
       )}
     </div>
@@ -319,7 +493,7 @@ const ColorPicker = ({
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
         align={align}
-        className="z-50"
+        className={OVERLAY_LAYER_CLASS_NAMES.popup}
         side={side}
         sideOffset={4}
       >
@@ -336,6 +510,7 @@ const ColorPicker = ({
             moreLabel={moreLabel}
             onClear={onClear}
             onSelect={onSelect}
+            presentation="popover"
             presets={presets}
             value={value}
           />
