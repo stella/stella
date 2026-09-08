@@ -34,6 +34,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -76,6 +77,17 @@ const RESULT_DETAIL_URL = "https://nalus.usoud.cz/Search/ResultDetail.aspx";
 const SEARCH_URL = "https://nalus.usoud.cz/Search/Search.aspx";
 const RESULTS_URL = "https://nalus.usoud.cz/Search/Results.aspx";
 const TEXT_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
+
+/**
+ * The court a NALUS decision is stored under when nothing about it names one.
+ *
+ * A publisher is not a court, so this is the fallback and not the label: the
+ * deciding court is read off the decision's own ECLI through
+ * {@link czDecisionCourt}, which is what keeps a record NALUS republishes
+ * from another court out of the Constitutional Court's shelf and out of its
+ * authority tier.
+ */
+const CZ_US_PUBLISHER_COURT = "Ústavní soud";
 
 const persistableNalusComponent = (
   namespace: "nalus-record" | "nalus-sz" | "nalus-ecli",
@@ -429,6 +441,17 @@ const parseDecisionPage = ({
       ? buildEcli(parsed.caseNumber, decisionYear, ecliCounter)
       : undefined);
 
+  // The court NALUS states for this decision, read off the identifier NALUS
+  // itself published. Not `ecli`: `buildEcli` reconstructs an identifier
+  // carrying this adapter's own court code, so a court read back from it
+  // would be the constant this call exists to remove.
+  const court = czDecisionCourt({
+    adapterKey: ADAPTER_KEYS.CZ_US,
+    ecli: listedEcli,
+    publisherCourt: CZ_US_PUBLISHER_COURT,
+    sourceDocumentId,
+  });
+
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let resolvedFulltext = fulltext;
 
@@ -437,7 +460,7 @@ const parseDecisionPage = ({
       html,
       caseNumber: parsed.caseNumber,
       ecli,
-      court: "Ústavní soud",
+      court,
       decisionDate: parsed.decisionDate,
       decisionType: decisionForm?.toLowerCase(),
     });
@@ -469,7 +492,7 @@ const parseDecisionPage = ({
       nalusSz,
     ),
     ecli,
-    court: "Ústavní soud",
+    court,
     country: "CZE",
     language: "cs",
     decisionDate: parsed.decisionDate,
@@ -479,7 +502,7 @@ const parseDecisionPage = ({
     metadata: {
       caseNumber: parsed.caseNumber,
       ecli,
-      court: "Ústavní soud" as const,
+      court,
       decisionDate: parsed.decisionDate,
       decisionType: decisionForm?.toLowerCase(),
       judge: judge || undefined,
@@ -1259,54 +1282,62 @@ const listedOnlyDecision = (
     sourceRaw: string;
     sourceRawContentType: string;
   },
-): IngestionResult => ({
-  caseNumber: listed.caseNumber,
-  caseNumberIsPlaceholder: listed.listingDocketMissing === true,
-  isListingOnly: true,
-  sourceDocumentId: listed.sourceDocumentId,
-  sourceDocumentIdAliases: nalusIdentities({
-    recordId: listed.nalusRecordId,
-    sz: listed.sz,
+): IngestionResult => {
+  const court = czDecisionCourt({
+    adapterKey: ADAPTER_KEYS.CZ_US,
     ecli: listed.ecli,
-  })?.aliases,
-  sourceDocumentIdRepairAliases:
-    listed.identityQuarantined === true
-      ? undefined
-      : listed.quarantineRepairIds.map(
-          (quarantineId) => `nalus-quarantine:${quarantineId}`,
-        ),
-  legacySourceUrls: legacySourceUrlsFor(
-    listed.caseNumber,
-    listed.counter,
-    listed.sz,
-  ),
-  ecli: listed.ecli,
-  court: "Ústavní soud",
-  country: "CZE",
-  language: "cs",
-  sourceUrl: listed.sourceUrl,
-  metadata: {
+    publisherCourt: CZ_US_PUBLISHER_COURT,
+    sourceDocumentId: listed.sourceDocumentId,
+  });
+  return {
     caseNumber: listed.caseNumber,
+    caseNumberIsPlaceholder: listed.listingDocketMissing === true,
+    isListingOnly: true,
+    sourceDocumentId: listed.sourceDocumentId,
+    sourceDocumentIdAliases: nalusIdentities({
+      recordId: listed.nalusRecordId,
+      sz: listed.sz,
+      ecli: listed.ecli,
+    })?.aliases,
+    sourceDocumentIdRepairAliases:
+      listed.identityQuarantined === true
+        ? undefined
+        : listed.quarantineRepairIds.map(
+            (quarantineId) => `nalus-quarantine:${quarantineId}`,
+          ),
+    legacySourceUrls: legacySourceUrlsFor(
+      listed.caseNumber,
+      listed.counter,
+      listed.sz,
+    ),
     ecli: listed.ecli,
-    court: "Ústavní soud",
-    ...(listed.nalusRecordId === undefined
-      ? {}
-      : { nalusRecordId: listed.nalusRecordId }),
-    nalusSz: listed.sz,
-    listingDocketMissing: listed.listingDocketMissing,
-    identityQuarantined: listed.identityQuarantined,
-    ecliCounter: listed.counter,
-    listedOnly: true,
-    listedOnlyReason: reason,
-  },
-  rawHash: hashContent(
-    `${listed.sourceDocumentId}|${listed.caseNumber}|listed-only|${reason}`,
-  ),
-  parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
-  documentAst: EMPTY_AST,
-  sourceRaw: rawSource?.sourceRaw ?? listed.listingHtml,
-  sourceRawContentType: rawSource?.sourceRawContentType ?? "text/html",
-});
+    court,
+    country: "CZE",
+    language: "cs",
+    sourceUrl: listed.sourceUrl,
+    metadata: {
+      caseNumber: listed.caseNumber,
+      ecli: listed.ecli,
+      court,
+      ...(listed.nalusRecordId === undefined
+        ? {}
+        : { nalusRecordId: listed.nalusRecordId }),
+      nalusSz: listed.sz,
+      listingDocketMissing: listed.listingDocketMissing,
+      identityQuarantined: listed.identityQuarantined,
+      ecliCounter: listed.counter,
+      listedOnly: true,
+      listedOnlyReason: reason,
+    },
+    rawHash: hashContent(
+      `${listed.sourceDocumentId}|${listed.caseNumber}|listed-only|${reason}`,
+    ),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
+    documentAst: EMPTY_AST,
+    sourceRaw: rawSource?.sourceRaw ?? listed.listingHtml,
+    sourceRawContentType: rawSource?.sourceRawContentType ?? "text/html",
+  };
+};
 
 const fetchListedDecisions = async (
   listed: readonly ListedDecision[],

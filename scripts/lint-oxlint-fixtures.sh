@@ -37,6 +37,7 @@ if grep -qE "Failed to load JS plugin|ERR_MODULE_NOT_FOUND" \
 fi
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
+bun test ./.oxlint-plugins/__tests__/no-literal-decision-court.test.ts
 
 exec bun --bun oxlint -c oxlint.config.ts \
   --report-unused-disable-directives-severity=error \
