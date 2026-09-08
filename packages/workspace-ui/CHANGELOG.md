@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.10.2
+
+### Patch Changes
+
+- [#3141](https://github.com/stella/stella/pull/3141) [`088e15d`](https://github.com/stella/stella/commit/088e15d2cb4c37a1b7f7e5380bbca62ab1704ce2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use Temporal for calendar calculations and wall clocks, with a native implementation when available and a bundled fallback otherwise. Preserve serialized timestamps and existing Date-based library interfaces.
+- Updated dependencies [[`088e15d`](https://github.com/stella/stella/commit/088e15d2cb4c37a1b7f7e5380bbca62ab1704ce2)]:
+  - @stll/ui@0.26.1
+
 ## 0.10.1
 
 ### Patch Changes
