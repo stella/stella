@@ -5,6 +5,7 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_GENERATION_STATUSES,
   corpusIndexClusterForGeneration,
+  corpusIndexProjectionStore,
   isCorpusGeneration,
   parseCorpusFamily,
   parseCorpusIndexGenerationStatus,
@@ -71,6 +72,26 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
   expect(() =>
     corpusIndexClusterForGeneration("case_law", "case_law_v8"),
   ).toThrow("Unknown case_law corpus index generation");
+});
+
+test("a generation reads its row currency from one declared store", () => {
+  expect(corpusIndexProjectionStore("case_law", "case_law_v4")).toBe(
+    "legacy_projection_row",
+  );
+  expect(corpusIndexProjectionStore("case_law", "case_law_v6")).toBe(
+    "projection_state",
+  );
+  expect(corpusIndexProjectionStore("legislation", "legislation_v1")).toBe(
+    "legacy_projection_row",
+  );
+  expect(corpusIndexProjectionStore("legislation", "legislation_v2")).toBe(
+    "projection_state",
+  );
+  // An undeclared generation is nothing the final projection builds, so it
+  // keeps the store every rebuild rehearsal and fixture writes.
+  expect(corpusIndexProjectionStore("case_law", "case_law_v40")).toBe(
+    "legacy_projection_row",
+  );
 });
 
 test("every final manifest generation selects its declared cluster", () => {

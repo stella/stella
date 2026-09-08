@@ -67,7 +67,10 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
-import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  corpusIndexClusterForGeneration,
+  corpusIndexProjectionStore,
+} from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
@@ -826,8 +829,19 @@ export const clearIndexMarks = async ({
   generation,
   indexId,
   limit,
-}: ClearIndexMarksOptions): Promise<number> =>
-  await scopedDb(async (tx) => {
+}: ClearIndexMarksOptions): Promise<number> => {
+  // The repair is the legacy projection trigger: clearing the mark is what
+  // re-enqueues the decision. A generation whose work comes from projection
+  // state has no such trigger, so the same write would leave every row in the
+  // slice current and the next run would clear it again.
+  if (
+    corpusIndexProjectionStore("case_law", generation) === "projection_state"
+  ) {
+    panic(
+      `${generation} is projected from its projection state; clearing index marks cannot re-enqueue it`,
+    );
+  }
+  return await scopedDb(async (tx) => {
     // audit: skip — search index maintenance; rebuilds derived state
     const cleared = await tx.execute(sql`
       UPDATE ${caseLawDecisions}
@@ -845,3 +859,4 @@ export const clearIndexMarks = async ({
     `);
     return countReturnedRows(cleared);
   });
+};

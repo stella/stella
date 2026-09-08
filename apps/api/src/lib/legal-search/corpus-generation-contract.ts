@@ -97,6 +97,45 @@ export const requireQuickwitCluster = (value: unknown): QuickwitCluster =>
   parseQuickwitCluster(value) ??
   panic(`Unknown Quickwit cluster reference: ${String(value)}`);
 
+/**
+ * Which relation answers "this generation holds the entity now, with no queued
+ * mutation".
+ *
+ * A generation built by the per-entity projection queue keeps that answer in
+ * its own projection row. A generation built by the final projection keeps
+ * desired and applied state in `corpus_index_projection_states` and never
+ * writes a projection row, so reading one for it returns nothing at all.
+ * Both sets are the generation declarations above, read once here, so a
+ * generation cannot be routed to one store in a query and to the other in the
+ * pipeline that builds it.
+ */
+const CORPUS_INDEX_PROJECTION_STORES = [
+  "legacy_projection_row",
+  "projection_state",
+] as const;
+export type CorpusIndexProjectionStore =
+  (typeof CORPUS_INDEX_PROJECTION_STORES)[number];
+
+const PROJECTION_STORE_BY_CLUSTER = {
+  q08: "legacy_projection_row",
+  q09: "projection_state",
+} as const satisfies Record<QuickwitCluster, CorpusIndexProjectionStore>;
+
+/**
+ * An undeclared generation keeps the legacy store: only a declared final
+ * generation is built by the final projection, and rebuild rehearsals and
+ * fixtures drive the legacy queue.
+ */
+export const corpusIndexProjectionStore = (
+  family: CorpusFamily,
+  generation: string,
+): CorpusIndexProjectionStore => {
+  const cluster = parseCorpusIndexClusterForGeneration(family, generation);
+  return cluster === null
+    ? "legacy_projection_row"
+    : PROJECTION_STORE_BY_CLUSTER[cluster];
+};
+
 export const parseCorpusIndexGenerationStatus = (
   value: unknown,
 ): CorpusIndexGenerationStatus | null =>
