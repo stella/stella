@@ -25,7 +25,8 @@ const argumentValue = (name: string): string | undefined => {
 
 const label = argumentValue("--label") ?? "current";
 const serverEntry = path.resolve(
-  argumentValue("--server") ?? path.join(import.meta.dirname, "stella-docs.ts"),
+  argumentValue("--server") ??
+    path.join(import.meta.dirname, "..", "stella-docs.ts"),
 );
 const transport = new StdioClientTransport({
   args: ["run", serverEntry],
