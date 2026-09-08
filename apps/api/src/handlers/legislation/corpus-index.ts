@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import { corpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
+import { legislationDocumentCorpusIndexIdSql } from "@/api/lib/legal-search/legislation-corpus-projection";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -200,7 +201,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
             hasContent,
             redistributableLegislationSource,
             isNotNull(legislationDocuments.indexedHash),
-            sql`${legislationDocuments.indexedGeneration} <> (${generation} || '_' || lower(${legislationDocuments.country}))`,
+            sql`${legislationDocuments.indexedGeneration} <> (${legislationDocumentCorpusIndexIdSql(generation)})`,
           ),
         )
         .limit(limit - fresh.length),
@@ -226,7 +227,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
             hasContent,
             redistributableLegislationSource,
             isNotNull(legislationDocuments.indexedHash),
-            sql`${legislationDocuments.indexedGeneration} = (${generation} || '_' || lower(${legislationDocuments.country}))`,
+            sql`${legislationDocuments.indexedGeneration} = (${legislationDocumentCorpusIndexIdSql(generation)})`,
             sql`${legislationDocuments.indexedHash} IS DISTINCT FROM ${legislationDocuments.contentHash}`,
           ),
         )

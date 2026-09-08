@@ -39,6 +39,7 @@ import {
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
+import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
@@ -268,6 +269,8 @@ const extractCorpusSnippet = (
 type RehydrateLegislationCandidatesOptions = {
   body: SearchLegislationBody;
   candidates: readonly ScoredCandidate[];
+  /** The generation the hits were read from; it decides row currency. */
+  generation: string;
   legislationDb: LegislationReadDb;
 };
 
@@ -278,6 +281,7 @@ type RehydrateLegislationCandidatesOptions = {
 export const rehydrateLegislationCandidates = async ({
   body,
   candidates,
+  generation,
   legislationDb,
 }: RehydrateLegislationCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
@@ -288,11 +292,9 @@ export const rehydrateLegislationCandidates = async ({
   // it no longer matches.
   const rehydrationFilters: SQL[] = [
     redistributableLegislationSource,
-    // Accept only hits whose index state is current. The equality fails for
-    // rows cleared for a write retry (null contentHash) and for rows whose
-    // payload changed but are not re-indexed yet (indexedHash cleared by
-    // ingestion), so stale index copies cannot serve outdated snippets.
-    eq(legislationDocuments.indexedHash, legislationDocuments.contentHash),
+    // Accept only hits this generation currently holds, read from whichever
+    // relation the generation records that in.
+    currentLegislationCorpusProjection(generation),
   ];
   if (body.jurisdiction) {
     rehydrationFilters.push(
@@ -403,6 +405,7 @@ const corpusIndexSearch = async (
       await rehydrateLegislationCandidates({
         body,
         candidates,
+        generation,
         legislationDb,
       }),
   });

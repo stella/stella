@@ -546,10 +546,22 @@ describe("public-law reader role", () => {
     const result = await rehydrateLegislationCandidates({
       body: { query: "reader role census" },
       candidates: [{ id: createSafeId<"legislationDocument">(), score: 1 }],
+      generation: "legislation_v1",
       legislationDb,
     });
 
     expect(result.ranked).toEqual([]);
+
+    // A generation the final projection builds reads its projection state
+    // instead of the serving marker, so the census covers both predicates.
+    const projected = await rehydrateLegislationCandidates({
+      body: { query: "reader role census" },
+      candidates: [{ id: createSafeId<"legislationDocument">(), score: 1 }],
+      generation: "legislation_v2",
+      legislationDb,
+    });
+
+    expect(projected.ranked).toEqual([]);
   });
 
   test("executes list, sitemap, and search projections as the reader role", async () => {
