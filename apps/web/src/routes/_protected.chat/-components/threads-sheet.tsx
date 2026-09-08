@@ -16,7 +16,6 @@ import { MessageSquareIcon, SearchIcon, TrashIcon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -72,7 +71,6 @@ export const ThreadsSheet = ({
 }: ThreadsSheetProps) => {
   const t = useTranslations();
   const commonT = useTranslations("common");
-  const format = useFormatter();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 250);
@@ -373,6 +371,7 @@ const ThreadRow = ({
   onOpenChange,
   thread,
 }: ThreadRowProps) => {
+  const format = useFormatter();
   const threadRef: ChatThreadRef =
     thread.scope === "workspace"
       ? {
@@ -437,9 +436,7 @@ const ThreadRow = ({
                     {" · "}
                   </>
                 ) : null}
-                {format.dateTime(
-                  Temporal.Instant.from(thread.updatedAt).epochMilliseconds,
-                )}
+                {format.dateTime(thread.updatedAt.getTime())}
               </span>
             </Link>
             <ChatTitleSuggestButton

@@ -5,7 +5,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
@@ -428,17 +427,14 @@ function AuditLogsTableBody({
       {data.items.map((log) => (
         <TableRow key={log.id}>
           <TableCell className="text-xs whitespace-nowrap">
-            {format.dateTime(
-              Temporal.Instant.from(log.createdAt).epochMilliseconds,
-              {
-                year: "numeric",
-                month: "numeric",
-                day: "numeric",
-                hour: "numeric",
-                minute: "numeric",
-                second: "numeric",
-              },
-            )}
+            {format.dateTime(log.createdAt.getTime(), {
+              year: "numeric",
+              month: "numeric",
+              day: "numeric",
+              hour: "numeric",
+              minute: "numeric",
+              second: "numeric",
+            })}
           </TableCell>
           <TableCell className="font-mono text-xs">
             <bdi>{log.actor}</bdi>

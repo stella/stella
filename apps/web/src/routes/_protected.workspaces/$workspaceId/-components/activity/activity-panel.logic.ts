@@ -134,16 +134,13 @@ export const resolveVisibleActivityTriggerType = (
   type: ActivityTriggerType,
 ): VisibleActivityTriggerType | null => VISIBLE_ACTIVITY_TRIGGER_TYPES[type];
 
-export const activityDayKey = (activityAt: string): string => {
-  try {
-    return Temporal.Instant.from(activityAt)
+export const activityDayKey = (activityAt: string): string =>
+  Result.try(() =>
+    Temporal.Instant.from(activityAt)
       .toZonedDateTimeISO(Temporal.Now.timeZoneId())
       .toPlainDate()
-      .toString();
-  } catch {
-    return activityAt;
-  }
-};
+      .toString(),
+  ).unwrapOr(activityAt);
 
 export type ActivityGroup =
   | {

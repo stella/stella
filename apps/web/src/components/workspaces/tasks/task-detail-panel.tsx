@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
@@ -864,8 +863,7 @@ const TaskDetailPanelContent = ({
                     </div>
                     <time className="text-muted-foreground shrink-0">
                       {format.dateTime(
-                        Temporal.Instant.from(event.occurredAt)
-                          .epochMilliseconds,
+                        event.occurredAt.getTime(),
                         DAY_AND_MONTH_FORMAT,
                       )}
                     </time>

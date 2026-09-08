@@ -250,7 +250,9 @@ const TeamCell = ({ workspace }: CellProps) => (
 );
 
 const CreatedAtCell = ({ workspace }: CellProps) => {
-  const date = Temporal.Instant.from(workspace.createdAt)
+  const date = Temporal.Instant.fromEpochMilliseconds(
+    workspace.createdAt.getTime(),
+  )
     .toZonedDateTimeISO(Temporal.Now.timeZoneId())
     .toPlainDate();
   return (

@@ -195,13 +195,27 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const isGlobalObject = (node: unknown): boolean => {
+        const isGlobalObject = (
+          node: unknown,
+          visited = new Set<Variable>(),
+        ): boolean => {
           const expression = unwrapExpression(node);
-          return (
+          if (
             isIdentifierReference(expression) &&
             (expression.name === "globalThis" ||
               expression.name === "global") &&
             isGlobalReference(expression)
+          ) {
+            return true;
+          }
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const definition = constantDefinition(expression, visited);
+          return (
+            definition !== null &&
+            definition.path.length === 0 &&
+            isGlobalObject(definition.init, visited)
           );
         };
 
@@ -215,17 +229,23 @@ export default eslintCompatPlugin({
               return true;
             }
             const definition = constantDefinition(expression, visited);
+            if (definition === null) {
+              return false;
+            }
+            if (definition.path.length === 0) {
+              return isGlobalDate(definition.init, visited);
+            }
             return (
-              definition !== null &&
-              definition.path.length === 0 &&
-              isGlobalDate(definition.init, visited)
+              definition.path.length === 1 &&
+              definition.path.at(0) === "Date" &&
+              isGlobalObject(definition.init, visited)
             );
           }
           return (
             isAstNode(expression) &&
             expression.type === "MemberExpression" &&
             getPropertyName(expression.property) === "Date" &&
-            isGlobalObject(expression.object)
+            isGlobalObject(expression.object, visited)
           );
         };
 

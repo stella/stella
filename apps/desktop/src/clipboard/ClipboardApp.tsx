@@ -362,7 +362,7 @@ const ClipboardCard = ({
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
     rendersHtml
       ? "clipboard-html [&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
-      : "tab-4 whitespace-pre-wrap",
+      : "whitespace-pre-wrap tab-4",
   );
   let previewContent: ReactNode;
   if (item.type === "image") {
@@ -2201,7 +2201,7 @@ const ClipboardApp = () => {
         ) : (
           <div
             aria-label={t("timeline")}
-            className="scrollbar-none absolute inset-0 flex items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+            className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
             onPointerMove={handleRailPointerMove}
             ref={timelineRailRef}
             role="list"
@@ -2361,7 +2361,7 @@ const ClipboardApp = () => {
 
         <nav
           aria-label={t("groups")}
-          className="clipboard-groups-rail border-border scrollbar-none flex min-w-0 items-center gap-1 overflow-x-auto border-s ps-2"
+          className="clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2"
         >
           <Button
             aria-pressed={activeGroupId === null}

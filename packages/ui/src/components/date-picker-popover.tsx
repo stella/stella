@@ -186,6 +186,19 @@ const getWeekdayLabels = (
 
 const monthFormatters = new Map<string, Intl.DateTimeFormat>();
 
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const getDateFormatter = (
+  locale: string,
+  options: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat => {
+  const key = `${locale}:${JSON.stringify(options)}`;
+  const formatter =
+    dateFormatters.get(key) ?? new Intl.DateTimeFormat(locale, options);
+  dateFormatters.set(key, formatter);
+  return formatter;
+};
+
 const getMonthFormatter = (
   locale: string,
   format: "long" | "short",

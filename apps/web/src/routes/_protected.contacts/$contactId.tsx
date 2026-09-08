@@ -9,7 +9,6 @@ import {
 import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -449,10 +448,7 @@ function ContactDetailPage() {
                     </BidiText>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
-                        date: format.dateTime(
-                          Temporal.Instant.from(matter.createdAt)
-                            .epochMilliseconds,
-                        ),
+                        date: format.dateTime(matter.createdAt.getTime()),
                       })}
                     </span>
                   </MatterRefLink>

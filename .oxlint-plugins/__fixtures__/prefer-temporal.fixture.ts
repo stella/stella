@@ -22,6 +22,15 @@ const { UTC: utcAlias } = DateAlias;
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: stable aliases retain Date provenance
 export const aliasedUtc = utcAlias(2026, 8, 8);
 
+const { Date: DestructuredDateAlias } = globalThis;
+// oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: destructuring Date from the global retains provenance
+export const destructuredDateNow = DestructuredDateAlias.now();
+
+const globalAlias = globalThis;
+const { Date: AliasedGlobalDate } = globalAlias;
+// oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: destructured Date from an aliased global retains provenance
+export const destructuredCalendarDate = new AliasedGlobalDate(2026, 8, 8);
+
 const typedDate: Date = new Date(epochMilliseconds);
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: typed Date calendar getters must use Temporal
 export const calendarYear = typedDate.getUTCFullYear();
@@ -58,6 +67,21 @@ export const formApi = {
 };
 formApi.setDate("2026-09-08");
 formApi.getFullYear();
+
+class LocalDate {
+  static now = () => 0;
+  readonly parts: number[];
+
+  constructor(...parts: number[]) {
+    this.parts = parts;
+  }
+}
+const localGlobalLookalike = { Date: LocalDate };
+const { Date: LocalDateAlias } = localGlobalLookalike;
+export const localDestructuredDate = {
+  now: LocalDateAlias.now(),
+  date: new LocalDateAlias(2026, 8, 8),
+};
 
 export const withShadowedDate = (Date: {
   (): string;
