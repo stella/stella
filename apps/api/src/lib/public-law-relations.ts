@@ -26,136 +26,194 @@ export const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = Object.keys(
   PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
 ).filter((schemaImport) => schemaImport.startsWith("caseLaw"));
 
-export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
-  case_law_citations: [
-    "id",
-    "citing_decision_id",
-    "cited_decision_id",
-    "citation_text",
-    "kind",
-    "section_index",
-    "polarity",
-  ],
-  case_law_corpus_index_projections: [
-    "generation",
-    "decision_id",
-    "index_id",
-    "indexed_hash",
-    "pending_action",
-  ],
-  case_law_decision_identifiers: [
-    "decision_id",
-    "type",
-    "value",
-    "normalized_value",
-    "created_at",
-  ],
-  case_law_decisions: [
-    "id",
-    "source_id",
-    "case_number",
-    "slug",
-    "ecli",
-    "citation_key",
-    "court",
-    "country",
-    "language",
-    "language_group_key",
-    "decision_date",
-    "decision_type",
-    "fulltext",
-    "sections",
-    "document_ast",
-    "analysis",
-    "source_url",
-    "document_url",
-    "metadata",
-    "redacted_at",
-    "citation_authority",
-    "citation_count",
-    "text_s3_key",
-    "ast_s3_key",
-    "content_hash",
-    "indexed_hash",
-    "created_at",
-    "updated_at",
-  ],
-  case_law_provision_citations: [
-    "decision_id",
-    "jurisdiction",
-    "work_identifier",
-    "work_number",
-    "work_year",
-    "work_collection",
-    "work_eli",
-    "unit",
-    "section",
-    "section_suffix",
-    "subsection",
-    "letter",
-    "point",
-    "sentence",
-    "open_ended",
-    "anchor",
-    "version_valid_from",
-    "decision_date",
-    "sentence_text",
-    "span_start",
-    "span_end",
-    "work_source",
-    "confidence",
-  ],
-  case_law_sources: ["id", "name", "adapter_key", "descriptor"],
-  corpus_index_generations: [
-    "family",
-    "generation",
-    "cluster",
-    "manifest_digest",
-    "status",
-  ],
+/** How this release relates to a column's grant. */
+export type PublicLawColumnGrant = "required" | "permitted";
+
+export type PublicLawColumnGrantsByRelation = Readonly<
+  Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
+>;
+
+/**
+ * Each column declares how this release relates to its grant:
+ *
+ * - `required`: this release reads the column, so a role that cannot read it
+ *   cannot serve. A missing grant fails the attestation.
+ * - `permitted`: the grant exists but this release does not read it. A missing
+ *   grant still serves, and holding the grant is not over-privilege.
+ *
+ * Anything readable beyond required plus permitted is over-privilege and fails
+ * the attestation either way.
+ *
+ * Staging rule: the release whose migration grants a column lists it
+ * `permitted`, and the release that starts reading it flips it to `required`.
+ * Granting and reading in one release stays a single `required` entry. Give a
+ * grant up in the reverse order: drop the read and the column to `permitted`
+ * first, revoke in a later release. Either way both releases boot while the
+ * migration and the code are one step apart.
+ */
+export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    id: "required",
+    citing_decision_id: "required",
+    cited_decision_id: "required",
+    citation_text: "required",
+    kind: "required",
+    section_index: "required",
+    polarity: "required",
+  },
+  case_law_corpus_index_projections: {
+    generation: "required",
+    decision_id: "required",
+    index_id: "required",
+    indexed_hash: "required",
+    pending_action: "required",
+  },
+  case_law_decision_identifiers: {
+    decision_id: "required",
+    type: "required",
+    value: "required",
+    normalized_value: "required",
+    created_at: "required",
+  },
+  case_law_decisions: {
+    id: "required",
+    source_id: "required",
+    case_number: "required",
+    slug: "required",
+    ecli: "required",
+    citation_key: "required",
+    court: "required",
+    country: "required",
+    language: "required",
+    language_group_key: "required",
+    decision_date: "required",
+    decision_type: "required",
+    fulltext: "required",
+    sections: "required",
+    document_ast: "required",
+    analysis: "required",
+    source_url: "required",
+    document_url: "required",
+    metadata: "required",
+    redacted_at: "required",
+    citation_authority: "required",
+    citation_count: "required",
+    text_s3_key: "required",
+    ast_s3_key: "required",
+    content_hash: "required",
+    indexed_hash: "required",
+    created_at: "required",
+    updated_at: "required",
+  },
+  case_law_provision_citations: {
+    decision_id: "required",
+    jurisdiction: "required",
+    work_identifier: "required",
+    work_number: "required",
+    work_year: "required",
+    work_collection: "required",
+    work_eli: "required",
+    unit: "required",
+    section: "required",
+    section_suffix: "required",
+    subsection: "required",
+    letter: "required",
+    point: "required",
+    sentence: "required",
+    open_ended: "required",
+    anchor: "required",
+    version_valid_from: "required",
+    decision_date: "required",
+    sentence_text: "required",
+    span_start: "required",
+    span_end: "required",
+    work_source: "required",
+    confidence: "required",
+  },
+  case_law_sources: {
+    id: "required",
+    name: "required",
+    adapter_key: "required",
+    descriptor: "required",
+  },
+  corpus_index_generations: {
+    family: "required",
+    generation: "required",
+    cluster: "required",
+    manifest_digest: "required",
+    status: "required",
+  },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The applied revision, the work schedule and the failure detail are
   // operator state and stay on the owning service side.
-  corpus_index_projection_states: [
-    "family",
-    "generation",
-    "entity_id",
-    "desired_action",
-    "desired_epoch",
-    "desired_fingerprint",
-    "desired_index_id",
-    "applied_action",
-    "applied_epoch",
-    "applied_fingerprint",
-    "applied_index_id",
-  ],
-  legislation_documents: [
-    "id",
-    "source_id",
-    "eli",
-    "title",
-    "country",
-    "language",
-    "document_type",
-    "status",
-    "effective_date",
-    "version_valid_from",
-    "version_valid_to",
-    "fulltext",
-    "sections",
-    "document_ast",
-    "source_url",
-    "document_url",
-    "citation_authority",
-    "text_s3_key",
-    "ast_s3_key",
-    "content_hash",
-    "indexed_hash",
-    "created_at",
-    "updated_at",
-  ],
-  legislation_sources: ["id", "descriptor"],
-} as const satisfies Record<PublicLawRelation, readonly string[]>;
+  corpus_index_projection_states: {
+    family: "required",
+    generation: "required",
+    entity_id: "required",
+    desired_action: "required",
+    desired_epoch: "required",
+    desired_fingerprint: "required",
+    desired_index_id: "required",
+    applied_action: "required",
+    applied_epoch: "required",
+    applied_fingerprint: "required",
+    applied_index_id: "required",
+  },
+  legislation_documents: {
+    id: "required",
+    source_id: "required",
+    eli: "required",
+    title: "required",
+    country: "required",
+    language: "required",
+    document_type: "required",
+    status: "required",
+    effective_date: "required",
+    version_valid_from: "required",
+    version_valid_to: "required",
+    fulltext: "required",
+    sections: "required",
+    document_ast: "required",
+    source_url: "required",
+    document_url: "required",
+    citation_authority: "required",
+    text_s3_key: "required",
+    ast_s3_key: "required",
+    content_hash: "required",
+    indexed_hash: "required",
+    created_at: "required",
+    updated_at: "required",
+  },
+  legislation_sources: {
+    id: "required",
+    descriptor: "required",
+  },
+} as const satisfies Record<
+  PublicLawRelation,
+  Readonly<Record<string, PublicLawColumnGrant>>
+>;
+
+export type PublicLawColumnPair = {
+  relation: string;
+  column: string;
+  grant: PublicLawColumnGrant;
+};
+
+/**
+ * Flatten a grant map into one entry per column, tag included. Every column
+ * the reader role may hold is here; migrations grant exactly this set, and the
+ * `required` subset is what a release cannot serve without.
+ */
+export const publicLawColumnPairs = (
+  grants: PublicLawColumnGrantsByRelation,
+): PublicLawColumnPair[] =>
+  Object.entries(grants).flatMap(([relation, columns]) =>
+    Object.entries(columns).map(([column, grant]) => ({
+      relation,
+      column,
+      grant,
+    })),
+  );
 
 /**
  * The v0.7.22 reader contract retained during the bounded rollout window.

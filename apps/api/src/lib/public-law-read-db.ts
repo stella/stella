@@ -10,7 +10,14 @@ import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
-import { PUBLIC_LAW_COLUMNS_BY_RELATION } from "@/api/lib/public-law-relations";
+import {
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
+} from "@/api/lib/public-law-relations";
+import type {
+  PublicLawColumnGrantsByRelation,
+  PublicLawColumnPair,
+} from "@/api/lib/public-law-relations";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
 
@@ -95,24 +102,41 @@ type ExternalPublicLawDatabase = {
 let externalPublicLawDatabase: ExternalPublicLawDatabase | null = null;
 
 /**
- * What `current_user` may do, in the terms the validator judges.
- * Exported so the role a migration defines can be held to the same query.
+ * The column tuples of one bound, as a relation a CTE can name. An empty bound
+ * still has to type-check as `(text, text)`, so it degenerates to no rows
+ * rather than to invalid `VALUES ()`.
  */
-export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
-  const expectedColumns = Object.entries(
-    PUBLIC_LAW_COLUMNS_BY_RELATION,
-  ).flatMap(([relation, columns]) =>
-    columns.map((column) => ({ relation, column })),
-  );
-  const expectedValues = sql.join(
-    expectedColumns.map(
-      ({ relation, column }) => sql`(${relation}::text, ${column}::text)`,
-    ),
-    sql.raw(","),
+const columnTupleSource = (
+  columns: readonly PublicLawColumnPair[],
+): SqlFragment =>
+  columns.length === 0
+    ? sql`SELECT NULL::text, NULL::text WHERE false`
+    : sql`VALUES ${sql.join(
+        columns.map(
+          ({ relation, column }) => sql`(${relation}::text, ${column}::text)`,
+        ),
+        sql.raw(","),
+      )}`;
+
+/**
+ * What `current_user` may do, in the terms the validator judges.
+ * Exported so the role a migration defines can be held to the same query, and
+ * parameterized so the security suite can judge the same role against a
+ * deliberately staged grant map.
+ */
+export const publicLawDatabaseRolePermissionsSql = (
+  columnGrants: PublicLawColumnGrantsByRelation = PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+): SqlFragment => {
+  const grantedColumns = publicLawColumnPairs(columnGrants);
+  const requiredColumns = grantedColumns.filter(
+    ({ grant }) => grant === "required",
   );
   return sql`
-      WITH expected(relation, column_name) AS (
-        VALUES ${expectedValues}
+      WITH required(relation, column_name) AS (
+        ${columnTupleSource(requiredColumns)}
+      ),
+      granted(relation, column_name) AS (
+        ${columnTupleSource(grantedColumns)}
       )
       SELECT
         EXISTS (
@@ -145,22 +169,28 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
           'CONNECT'
         ) AS "canConnect",
         (
-          SELECT count(*) = ${expectedColumns.length}
-            AND bool_and(
-              has_column_privilege(
-                current_user,
-                columns.attrelid,
-                columns.attnum,
-                'SELECT'
-              )
+          -- The lower bound: every column this release reads. A grant staged
+          -- ahead of its read is not required here, so the release before it
+          -- still serves.
+          SELECT count(*) = ${requiredColumns.length}
+            AND coalesce(
+              bool_and(
+                has_column_privilege(
+                  current_user,
+                  columns.attrelid,
+                  columns.attnum,
+                  'SELECT'
+                )
+              ),
+              true
             )
-          FROM expected
-          INNER JOIN pg_class AS tables ON tables.relname = expected.relation
+          FROM required
+          INNER JOIN pg_class AS tables ON tables.relname = required.relation
           INNER JOIN pg_namespace AS schemas
             ON schemas.oid = tables.relnamespace
           INNER JOIN pg_attribute AS columns
             ON columns.attrelid = tables.oid
-            AND columns.attname = expected.column_name
+            AND columns.attname = required.column_name
           WHERE schemas.nspname = 'public'
             AND columns.attnum > 0
             AND NOT columns.attisdropped
@@ -200,22 +230,23 @@ export const publicLawDatabaseRolePermissionsSql = (): SqlFragment => {
             )
         ) AS "canUseSequence",
         EXISTS (
-          -- Any readable column outside the exact allowlist is excess.
+          -- The upper bound: required plus permitted. Any readable column
+          -- outside it is excess, including a grant no release has declared.
           SELECT 1
           FROM pg_attribute AS columns
           INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
           INNER JOIN pg_namespace AS schemas
             ON schemas.oid = tables.relnamespace
-          LEFT JOIN expected
+          LEFT JOIN granted
             ON schemas.nspname = 'public'
-            AND expected.relation = tables.relname
-            AND expected.column_name = columns.attname
+            AND granted.relation = tables.relname
+            AND granted.column_name = columns.attname
           WHERE schemas.nspname <> 'information_schema'
             AND schemas.nspname !~ '^pg_'
             AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
             AND columns.attnum > 0
             AND NOT columns.attisdropped
-            AND expected.relation IS NULL
+            AND granted.relation IS NULL
             AND has_column_privilege(
               current_user,
               columns.attrelid,

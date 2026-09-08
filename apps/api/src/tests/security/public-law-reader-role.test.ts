@@ -59,11 +59,16 @@ import {
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
 import {
-  PUBLIC_LAW_COLUMNS_BY_RELATION,
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+} from "@/api/lib/public-law-relations";
+import type {
+  PublicLawColumnGrant,
+  PublicLawColumnGrantsByRelation,
 } from "@/api/lib/public-law-relations";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -106,10 +111,10 @@ const forbiddenColumnRead = async (
       (error: unknown) => error,
     );
 
-const expectedQualifiedColumns = Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION)
-  .flatMap(([relation, columns]) =>
-    columns.map((column) => `${relation}.${column}`),
-  )
+const expectedQualifiedColumns = publicLawColumnPairs(
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+)
+  .map(({ relation, column }) => `${relation}.${column}`)
   .toSorted();
 
 let testDb: TestDatabase;
@@ -133,6 +138,7 @@ const revokeOtherDatabaseConnectFromPublic = async (
 
 const rolePermissionsAfter = async (
   setup: (tx: TestDatabaseTransaction) => Promise<void>,
+  columnGrants: PublicLawColumnGrantsByRelation = PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
 ): Promise<PublicLawDatabaseRolePermissions | undefined> => {
   let permissions: PublicLawDatabaseRolePermissions | undefined;
   try {
@@ -141,7 +147,7 @@ const rolePermissionsAfter = async (
       await setup(tx);
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
       const result = await tx.execute<PublicLawDatabaseRolePermissions>(
-        publicLawDatabaseRolePermissionsSql(),
+        publicLawDatabaseRolePermissionsSql(columnGrants),
       );
       permissions = result.rows.at(0);
       tx.rollback();
@@ -171,6 +177,49 @@ const caseLawReaderDb = (): CaseLawPublicReadDb => {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only branded read handle
   return readDb as unknown as CaseLawPublicReadDb;
 };
+
+// A column the reader role is never granted, used to stage one grant against
+// the map: the same column reads as required, permitted, or undeclared.
+const STAGED_RELATION = "legislation_sources";
+const STAGED_COLUMN = "config";
+
+const grantsStaging = (
+  grant: PublicLawColumnGrant,
+): PublicLawColumnGrantsByRelation => ({
+  ...PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  [STAGED_RELATION]: {
+    ...PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.legislation_sources,
+    [STAGED_COLUMN]: grant,
+  },
+});
+
+const grantStagedColumn = async (
+  tx: TestDatabaseTransaction,
+): Promise<void> => {
+  await tx.execute(
+    sql.raw(
+      `GRANT SELECT (${quoted(STAGED_COLUMN)}) ON TABLE ${quoted(STAGED_RELATION)} TO ${quoted(READER_ROLE)}`,
+    ),
+  );
+};
+
+const withoutExtraGrants = async (): Promise<void> => {};
+
+/** The same grants, every column staged rather than read. */
+const wholeMapPermitted = (): PublicLawColumnGrantsByRelation =>
+  Object.fromEntries(
+    Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
+      ([relation, columns]) => [
+        relation,
+        Object.fromEntries(
+          Object.keys(columns).map((column): [string, PublicLawColumnGrant] => [
+            column,
+            "permitted",
+          ]),
+        ),
+      ],
+    ),
+  );
 
 beforeAll(
   async () => {
@@ -307,6 +356,40 @@ describe("public-law reader role", () => {
     expect(crossSchemaReader).toMatchObject({ canReadOtherData: true });
   });
 
+  test("startup attestation refuses a required column the role cannot read", async () => {
+    expect(
+      await rolePermissionsAfter(withoutExtraGrants, grantsStaging("required")),
+    ).toMatchObject({ canReadPublicLaw: false, canReadOtherData: false });
+  });
+
+  test("startup attestation serves without a permitted column's grant", async () => {
+    expect(
+      await rolePermissionsAfter(
+        withoutExtraGrants,
+        grantsStaging("permitted"),
+      ),
+    ).toMatchObject({ canReadPublicLaw: true, canReadOtherData: false });
+  });
+
+  test("startup attestation serves a permitted column granted ahead of its read", async () => {
+    expect(
+      await rolePermissionsAfter(grantStagedColumn, grantsStaging("permitted")),
+    ).toMatchObject({ canReadPublicLaw: true, canReadOtherData: false });
+  });
+
+  test("startup attestation refuses a grant the map declares at neither stage", async () => {
+    expect(await rolePermissionsAfter(grantStagedColumn)).toMatchObject({
+      canReadPublicLaw: true,
+      canReadOtherData: true,
+    });
+  });
+
+  test("startup attestation holds when the map requires nothing", async () => {
+    expect(
+      await rolePermissionsAfter(withoutExtraGrants, wholeMapPermitted()),
+    ).toMatchObject({ canReadPublicLaw: true, canReadOtherData: false });
+  });
+
   test("startup attestation rejects database CREATE, sequences, and delegable SELECT", async () => {
     const databaseCreator = await rolePermissionsAfter(async (tx) => {
       const result = await tx.execute<{ name: string }>(
@@ -427,11 +510,11 @@ describe("public-law reader role", () => {
           ),
         );
         for (const [relation, columns] of Object.entries(
-          PUBLIC_LAW_COLUMNS_BY_RELATION,
+          PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
         )) {
           await tx.execute(
             sql.raw(
-              `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
+              `GRANT SELECT (${Object.keys(columns).map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
             ),
           );
         }
@@ -461,11 +544,11 @@ describe("public-law reader role", () => {
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
       for (const [relation, columns] of Object.entries(
-        PUBLIC_LAW_COLUMNS_BY_RELATION,
+        PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
       )) {
         await tx.execute(
           sql.raw(
-            `SELECT ${columns.map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
+            `SELECT ${Object.keys(columns).map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
           ),
         );
       }
@@ -764,7 +847,7 @@ describe("public-law reader role", () => {
     `);
 
     expect(result.rows.map(({ tablename }) => tablename)).toEqual(
-      Object.keys(PUBLIC_LAW_COLUMNS_BY_RELATION).toSorted(),
+      Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).toSorted(),
     );
   });
 
@@ -870,7 +953,10 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
-  test("effective grants equal the source-of-truth map", () => {
+  // Migrations grant required plus permitted: a column staged ahead of its
+  // read is already granted, and one whose read has gone away is not revoked
+  // until a later release.
+  test("effective grants equal every column the map declares", () => {
     const sources = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) =>
@@ -882,8 +968,8 @@ describe("public-law reader migrations", () => {
 
     const grants = foldReaderSelectGrants(sources, READER_ROLE);
     const expected = Object.fromEntries(
-      Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION).map(
-        ([relation, columns]) => [relation, [...columns].toSorted()],
+      Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
+        ([relation, columns]) => [relation, Object.keys(columns).toSorted()],
       ),
     );
 

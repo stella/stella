@@ -10,7 +10,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  PUBLIC_LAW_COLUMNS_BY_RELATION,
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
@@ -346,9 +346,9 @@ const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMNS_BY_RELATION).map(
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
     ([relation, columns]) => `
-      GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
