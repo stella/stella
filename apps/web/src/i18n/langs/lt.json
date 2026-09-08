@@ -4272,6 +4272,7 @@
       "existingField": "Esamas laukas…",
       "expressionPlaceholder": "išraiška",
       "fieldHelp": "Kai kas nors pildys šį šabloną, jo bus paprašyta šios reikšmės. Čia nusprendžiate, kaip atrodys tas klausimas.",
+      "fieldSettingBrackets": "Šablono žymuo negali turėti rietinių skliaustų. Pašalinkite juos iš lauko „{fieldPath}“ nustatymų.",
       "fillFormPreview": "Taip atrodys formoje",
       "fillStale": "Neišsaugoti pakeitimai — išsaugokite, kad pildytumėte naujausius laukus.",
       "filledByPerson": "Asmuo",

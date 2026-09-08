@@ -18,7 +18,6 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {
   type EditableLookupFormat,
-  type EditablePart,
   type FieldSource,
   type FieldValidation,
   type TemplateEditableField,
@@ -185,10 +184,6 @@ const parseField = (raw: Record<string, unknown>): StudioField => {
       field.lookup = { registry: rawLookup["registry"], formats };
     }
   }
-  if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
-    field.parts = parseEditableParts(raw["parts"]);
-    field.format = raw["format"];
-  }
   if (typeof raw["formula"] === "string") {
     field.formula = raw["formula"];
   }
@@ -255,26 +250,6 @@ export const parseFields = (manifest: unknown): StudioField[] => {
   );
 };
 
-const parseEditableParts = (raw: unknown[]): EditablePart[] => {
-  const parts: EditablePart[] = [];
-  for (const part of raw) {
-    if (!isRecord(part)) {
-      continue;
-    }
-    parts.push({
-      key: typeof part["key"] === "string" ? part["key"] : "",
-      label: typeof part["label"] === "string" ? part["label"] : undefined,
-      inputType: part["inputType"] === "select" ? "select" : "text",
-      options: Array.isArray(part["options"])
-        ? part["options"].filter((o): o is string => typeof o === "string")
-        : [],
-      pattern:
-        typeof part["pattern"] === "string" ? part["pattern"] : undefined,
-    });
-  }
-  return parts;
-};
-
 /** Parse the persisted lookup `formats` list (the sole carrier of renderings;
  *  the first entry is the default). Rows missing a key or template are
  *  dropped; an empty result drops the lookup entirely upstream. */
@@ -295,7 +270,7 @@ const parseEditableLookupFormats = (raw: unknown): EditableLookupFormat[] => {
   return formats;
 };
 
-type ManifestField = {
+export type ManifestField = {
   path: string;
   inputType: TemplateEditableField["inputType"];
   label?: string;
@@ -304,8 +279,6 @@ type ManifestField = {
   aiPrompt?: string;
   aiAdapt?: boolean;
   aiSeesDocument?: boolean;
-  parts?: EditablePart[];
-  format?: string;
   optionsFrom?: string;
   lookup?: TemplateEditableField["lookup"];
   formula?: string;
@@ -321,8 +294,6 @@ type AiSettingsDisposition = "all" | "adapt-only" | "none";
 
 const AI_SETTINGS_DISPOSITION = {
   input: "all",
-  "composite-draft": "all",
-  composite: "all",
   lookup: "adapt-only",
   formula: "none",
   condition: "none",
@@ -330,9 +301,9 @@ const AI_SETTINGS_DISPOSITION = {
 } as const satisfies Record<TemplateValueSource["type"], AiSettingsDisposition>;
 
 /** One session field as it is persisted: only the settings that are
- *  actually set, in the manifest's `FieldMeta` shape. Shared by the
- *  template manifest build and recipe snapshots. */
-const studioFieldToManifestField = (f: StudioField): ManifestField => {
+ *  actually set, in the manifest's `FieldMeta` shape. Shared by the marker
+ *  filter writer and recipe snapshots. */
+export const studioFieldToManifestField = (f: StudioField): ManifestField => {
   const field: ManifestField = { path: f.path, inputType: f.inputType };
   if (f.label) {
     field.label = f.label;
@@ -401,14 +372,6 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     case "lookup":
       field.lookup = f.valueSource.lookup;
       return field;
-    case "composite":
-      field.parts = f.valueSource.parts;
-      field.format = f.valueSource.format;
-      return field;
-    case "composite-draft":
-      // Drafts are valid editor state but not valid manifest state. Omit the
-      // incomplete source and continue with ordinary field metadata.
-      break;
     case "input":
       break;
     default: {
@@ -422,19 +385,6 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     field.optionsFrom = f.optionsFrom;
   }
   return field;
-};
-
-export const buildManifest = (original: unknown, fields: StudioField[]) => {
-  const version =
-    isRecord(original) && typeof original["version"] === "number"
-      ? original["version"]
-      : 1;
-  return {
-    version,
-    fields: fields.flatMap((f) =>
-      f.path ? [studioFieldToManifestField(f)] : [],
-    ),
-  };
 };
 
 // ── Recipes (saved structural blocks) ────────────────────
@@ -641,16 +591,6 @@ const recipeFieldToStudioPatch = (
   }
   if (field.lookup !== undefined) {
     patch.lookup = field.lookup;
-  }
-  if (field.parts !== undefined && field.format !== undefined) {
-    patch.parts = field.parts.map((part) => ({
-      key: part.key,
-      label: part.label,
-      inputType: part.inputType,
-      options: optionalArray(part.options),
-      pattern: part.pattern,
-    }));
-    patch.format = field.format;
   }
   return patch;
 };

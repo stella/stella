@@ -4272,6 +4272,7 @@
       "existingField": "Existující pole…",
       "expressionPlaceholder": "výraz",
       "fieldHelp": "Když někdo vzor vyplňuje, bude dotázán na tuto hodnotu. Zde určíte, jak bude otázka vypadat.",
+      "fieldSettingBrackets": "Značka ve vzoru nemůže obsahovat složené závorky. Odstraňte je z nastavení pole „{fieldPath}“.",
       "fillFormPreview": "Jak se zobrazí ve formuláři",
       "fillStale": "Neuložené změny — uložte, aby se vyplňovala aktuální pole.",
       "filledByPerson": "Osoba",

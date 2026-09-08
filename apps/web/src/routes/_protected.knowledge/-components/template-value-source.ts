@@ -1,10 +1,9 @@
 import type { ConditionNode } from "@stll/template-conditions";
 
 import type { TemplateDateFormat } from "@/components/templates/template-date-format";
-import {
-  defaultCompositeFormat,
-  type InputType,
-  type LookupRegistry,
+import type {
+  InputType,
+  LookupRegistry,
 } from "@/components/templates/template-field-manifest";
 
 /** A field's value source, resolved server-side at fill time. */
@@ -25,19 +24,9 @@ export type EditableLookup = {
   formats: EditableLookupFormat[];
 };
 
-export type EditablePart = {
-  key: string;
-  inputType: "text" | "select";
-  options: string[];
-  label?: string | undefined;
-  pattern?: string | undefined;
-};
-
 /** Exactly one value source is active for a field. */
 export type TemplateValueSource =
   | { type: "input" }
-  | { type: "composite"; parts: EditablePart[]; format: string }
-  | { type: "composite-draft"; parts: EditablePart[]; format: string }
   | { type: "lookup"; lookup: EditableLookup }
   | { type: "formula"; formula: string }
   | { type: "binding"; source: FieldSource }
@@ -65,8 +54,6 @@ export type TemplateEditableField = {
   required: boolean;
   options: string[];
   valueSource: TemplateValueSource;
-  parts?: EditablePart[] | undefined;
-  format?: string | undefined;
   optionsFrom?: string | undefined;
   lookup?: EditableLookup | undefined;
   formula?: string | undefined;
@@ -85,26 +72,12 @@ export type EditableField = TemplateEditableField & {
 
 type ValueSourceField = Pick<
   TemplateEditableField,
-  | "parts"
-  | "format"
-  | "lookup"
-  | "formula"
-  | "source"
-  | "condition"
-  | "conditionAst"
-  | "inputType"
+  "lookup" | "formula" | "source" | "condition" | "conditionAst" | "inputType"
 >;
 
 type ValueSourcePatch = Pick<
   TemplateEditableField,
-  | "valueSource"
-  | "parts"
-  | "format"
-  | "lookup"
-  | "formula"
-  | "source"
-  | "condition"
-  | "conditionAst"
+  "valueSource" | "lookup" | "formula" | "source" | "condition" | "conditionAst"
 >;
 
 type ValueSourceOptions = { preserveDraft?: boolean };
@@ -114,19 +87,6 @@ export const templateValueSourceOf = (
   field: ValueSourceField,
   options: ValueSourceOptions = {},
 ): TemplateValueSource => {
-  if (field.parts !== undefined && field.parts.length > 0) {
-    const format = field.format?.trim() || defaultCompositeFormat(field.parts);
-    if (format !== undefined && format !== "") {
-      return { type: "composite", parts: field.parts, format };
-    }
-  }
-  if (field.parts !== undefined && options.preserveDraft === true) {
-    return {
-      type: "composite-draft",
-      parts: field.parts,
-      format: field.format ?? "",
-    };
-  }
   if (field.formula !== undefined) {
     const formula = field.formula.trim();
     if (formula !== "" || options.preserveDraft === true) {
@@ -148,21 +108,14 @@ export const templateValueSourceOf = (
   return { type: "input" };
 };
 
-/** Clear every inactive legacy sibling while retaining whether a composite
- * format is authored or derived. */
+/** Clear every inactive legacy sibling of the source this field resolves to. */
 export const templateValueSourcePatch = (
   field: ValueSourceField,
   options: ValueSourceOptions = {},
 ): ValueSourcePatch => {
   const valueSource = templateValueSourceOf(field, options);
-  const isComposite =
-    valueSource.type === "composite" || valueSource.type === "composite-draft";
   return {
     valueSource,
-    parts: isComposite ? valueSource.parts : undefined,
-    // An absent/blank format is derived from the current parts. Do not turn
-    // that derivation into an authored string or it stops tracking edits.
-    format: isComposite ? field.format : undefined,
     lookup: valueSource.type === "lookup" ? valueSource.lookup : undefined,
     formula: valueSource.type === "formula" ? valueSource.formula : undefined,
     source: valueSource.type === "binding" ? valueSource.source : undefined,
@@ -193,22 +146,7 @@ export const templateValueSourceTransition = ({
     return templateValueSourcePatch(
       {
         ...next,
-        parts: undefined,
-        format: undefined,
         lookup: undefined,
-        source: undefined,
-        condition: undefined,
-        conditionAst: undefined,
-      },
-      options,
-    );
-  }
-  if (patch.parts !== undefined) {
-    return templateValueSourcePatch(
-      {
-        ...next,
-        lookup: undefined,
-        formula: undefined,
         source: undefined,
         condition: undefined,
         conditionAst: undefined,
@@ -220,8 +158,6 @@ export const templateValueSourceTransition = ({
     return templateValueSourcePatch(
       {
         ...next,
-        parts: undefined,
-        format: undefined,
         formula: undefined,
         source: undefined,
         condition: undefined,
@@ -234,8 +170,6 @@ export const templateValueSourceTransition = ({
     return templateValueSourcePatch(
       {
         ...next,
-        parts: undefined,
-        format: undefined,
         lookup: undefined,
         formula: undefined,
         condition: undefined,
@@ -248,8 +182,6 @@ export const templateValueSourceTransition = ({
     return templateValueSourcePatch(
       {
         ...next,
-        parts: undefined,
-        format: undefined,
         lookup: undefined,
         formula: undefined,
         source: undefined,

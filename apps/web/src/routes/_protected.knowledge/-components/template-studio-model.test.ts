@@ -1,15 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildManifest, parseFields } from "./template-studio-model";
+import {
+  parseFields,
+  studioFieldToManifestField,
+} from "./template-studio-model";
 import {
   templateValueSourcePatch,
   templateValueSourceTransition,
   type TemplateEditableField,
 } from "./template-value-source";
 
+/** The persisted shape of one parsed field, or null when nothing parsed. */
+const persisted = (fields: ReturnType<typeof parseFields>) => {
+  const [field] = fields;
+  return field === undefined ? null : studioFieldToManifestField(field);
+};
+
 describe("template value-source state", () => {
   test("drops rival persisted sources and round-trips the selected source", () => {
-    const [field] = parseFields({
+    const fields = parseFields({
       version: 1,
       fields: [
         {
@@ -20,38 +29,23 @@ describe("template value-source state", () => {
             formats: [{ key: "output_1", template: "{{name}}" }],
           },
           formula: "1 + 1",
-          parts: [{ key: "first", inputType: "text" }],
-          format: "{{first}}",
         },
       ],
     });
 
-    expect(field?.valueSource).toMatchObject({
-      type: "composite",
-      format: "{{first}}",
+    expect(fields.at(0)?.valueSource).toEqual({
+      type: "formula",
+      formula: "1 + 1",
     });
-    expect(
-      buildManifest({}, field === undefined ? [] : [field]).fields,
-    ).toEqual([
-      {
-        path: "company",
-        inputType: "text",
-        parts: [
-          {
-            key: "first",
-            inputType: "text",
-            options: [],
-            label: undefined,
-            pattern: undefined,
-          },
-        ],
-        format: "{{first}}",
-      },
-    ]);
+    expect(persisted(fields)).toEqual({
+      path: "company",
+      inputType: "text",
+      formula: "1 + 1",
+    });
   });
 
   test("keeps a formula exclusive when a legacy lookup sibling is present", () => {
-    const [field] = parseFields({
+    const fields = parseFields({
       fields: [
         {
           path: "amount",
@@ -65,17 +59,19 @@ describe("template value-source state", () => {
       ],
     });
 
-    expect(field?.valueSource).toEqual({
+    expect(fields.at(0)?.valueSource).toEqual({
       type: "formula",
       formula: "base * 2",
     });
-    expect(
-      buildManifest({}, field === undefined ? [] : [field]).fields,
-    ).toEqual([{ path: "amount", inputType: "number", formula: "base * 2" }]);
+    expect(persisted(fields)).toEqual({
+      path: "amount",
+      inputType: "number",
+      formula: "base * 2",
+    });
   });
 
   test("preserves AI adaptation for a registry lookup", () => {
-    const [field] = parseFields({
+    const fields = parseFields({
       fields: [
         {
           path: "company",
@@ -90,92 +86,36 @@ describe("template value-source state", () => {
       ],
     });
 
-    expect(
-      buildManifest({}, field === undefined ? [] : [field]).fields,
-    ).toEqual([
-      {
-        path: "company",
-        inputType: "text",
-        aiPrompt: "Match the surrounding grammatical case.",
-        aiAdapt: true,
-        lookup: {
-          registry: "companies-house",
-          formats: [{ key: "output_1", template: "{{name}}" }],
-        },
+    expect(persisted(fields)).toEqual({
+      path: "company",
+      inputType: "text",
+      aiPrompt: "Match the surrounding grammatical case.",
+      aiAdapt: true,
+      lookup: {
+        registry: "companies-house",
+        formats: [{ key: "output_1", template: "{{name}}" }],
       },
-    ]);
-  });
-
-  test("preserves AI adaptation for a composite field", () => {
-    const [field] = parseFields({
-      fields: [
-        {
-          path: "company",
-          inputType: "text",
-          aiPrompt: "Match the surrounding grammatical case.",
-          aiAdapt: true,
-          parts: [{ key: "name", inputType: "text" }],
-          format: "{{name}}",
-        },
-      ],
     });
-
-    expect(
-      buildManifest({}, field === undefined ? [] : [field]).fields,
-    ).toEqual([
-      {
-        path: "company",
-        inputType: "text",
-        aiPrompt: "Match the surrounding grammatical case.",
-        aiAdapt: true,
-        parts: [
-          {
-            key: "name",
-            inputType: "text",
-            options: [],
-            label: undefined,
-            pattern: undefined,
-          },
-        ],
-        format: "{{name}}",
-      },
-    ]);
   });
 
-  test("preserves AI drafting for a composite field", () => {
-    const [field] = parseFields({
+  test("preserves AI drafting for a plain input field", () => {
+    const fields = parseFields({
       fields: [
         {
           path: "company",
           inputType: "text",
           aiPrompt: "Draft the company name.",
           aiSeesDocument: true,
-          parts: [{ key: "name", inputType: "text" }],
-          format: "{{name}}",
         },
       ],
     });
 
-    expect(
-      buildManifest({}, field === undefined ? [] : [field]).fields,
-    ).toEqual([
-      {
-        path: "company",
-        inputType: "text",
-        aiPrompt: "Draft the company name.",
-        aiSeesDocument: true,
-        parts: [
-          {
-            key: "name",
-            inputType: "text",
-            options: [],
-            label: undefined,
-            pattern: undefined,
-          },
-        ],
-        format: "{{name}}",
-      },
-    ]);
+    expect(persisted(fields)).toEqual({
+      path: "company",
+      inputType: "text",
+      aiPrompt: "Draft the company name.",
+      aiSeesDocument: true,
+    });
   });
 
   test("does not serialize a stale legacy sibling against the discriminator", () => {
@@ -186,14 +126,13 @@ describe("template value-source state", () => {
       throw new Error("expected parsed field");
     }
 
-    const stale = { ...field, formula: "base * 2" };
-    expect(buildManifest({}, [stale]).fields).toEqual([
-      { path: "amount", inputType: "number" },
-    ]);
+    expect(
+      studioFieldToManifestField({ ...field, formula: "base * 2" }),
+    ).toEqual({ path: "amount", inputType: "number" });
   });
 
   test("drops AI settings that are incompatible with the selected source", () => {
-    const [field] = parseFields({
+    const fields = parseFields({
       fields: [
         {
           path: "amount",
@@ -206,43 +145,11 @@ describe("template value-source state", () => {
       ],
     });
 
-    expect(
-      buildManifest({}, field === undefined ? [] : [field]).fields,
-    ).toEqual([{ path: "amount", inputType: "number", formula: "base * 2" }]);
-  });
-
-  test("preserves an incomplete composite while editing, then normalizes it on save", () => {
-    const field = {
-      path: "name",
-      kind: "string",
-      label: "Name",
-      inputType: "text",
-      required: false,
-      options: [],
-      parts: [{ key: "", inputType: "text", options: [] }],
-      format: "",
-      valueSource: { type: "input" },
-    } satisfies TemplateEditableField;
-    const draft = {
-      ...field,
-      ...templateValueSourcePatch(field, { preserveDraft: true }),
-    };
-
-    expect(draft.valueSource).toEqual({
-      type: "composite-draft",
-      parts: [{ key: "", inputType: "text", options: [] }],
-      format: "",
+    expect(persisted(fields)).toEqual({
+      path: "amount",
+      inputType: "number",
+      formula: "base * 2",
     });
-    expect(
-      buildManifest({}, [
-        {
-          ...draft,
-          aiPrompt: undefined,
-          aiAdapt: false,
-          aiSeesDocument: false,
-        },
-      ]).fields,
-    ).toEqual([{ path: "name", label: "Name", inputType: "text" }]);
   });
 
   test("preserves an empty formula while editing, then omits it on save", () => {
@@ -263,55 +170,16 @@ describe("template value-source state", () => {
 
     expect(draft.valueSource).toEqual({ type: "formula", formula: "" });
     expect(
-      buildManifest({}, [
-        {
-          ...draft,
-          aiPrompt: undefined,
-          aiAdapt: false,
-          aiSeesDocument: false,
-        },
-      ]).fields,
-    ).toEqual([{ path: "amount", label: "Amount", inputType: "number" }]);
+      studioFieldToManifestField({
+        ...draft,
+        aiPrompt: undefined,
+        aiAdapt: false,
+        aiSeesDocument: false,
+      }),
+    ).toEqual({ path: "amount", label: "Amount", inputType: "number" });
   });
 
-  test("keeps derived composite formats synchronized with part edits", () => {
-    const field = {
-      path: "name",
-      kind: "string",
-      label: "Name",
-      inputType: "text",
-      required: false,
-      options: [],
-      parts: [{ key: "first", inputType: "text", options: [] }],
-      valueSource: { type: "input" },
-    } satisfies TemplateEditableField;
-    const initialSource = templateValueSourcePatch(field, {
-      preserveDraft: true,
-    });
-    const nextParts = [
-      ...field.parts,
-      { key: "last", inputType: "text" as const, options: [] },
-    ];
-    const nextSource = templateValueSourceTransition({
-      field: { ...field, ...initialSource },
-      patch: { parts: nextParts },
-      preserveDraft: true,
-    });
-
-    expect(initialSource).toMatchObject({
-      valueSource: { type: "composite", format: "{{first}}" },
-      format: undefined,
-    });
-    expect(nextSource).toMatchObject({
-      valueSource: {
-        type: "composite",
-        format: "{{first}} {{last}}",
-      },
-      format: undefined,
-    });
-  });
-
-  test("constructs an explicit formula transition from a composite", () => {
+  test("constructs an explicit formula transition from a lookup", () => {
     const field = {
       path: "amount",
       kind: "number",
@@ -319,12 +187,16 @@ describe("template value-source state", () => {
       inputType: "number",
       required: false,
       options: [],
-      parts: [{ key: "value", inputType: "text", options: [] }],
-      format: "{{value}}",
+      lookup: {
+        registry: "companies-house",
+        formats: [{ key: "output_1", template: "{{name}}" }],
+      },
       valueSource: {
-        type: "composite",
-        parts: [{ key: "value", inputType: "text", options: [] }],
-        format: "{{value}}",
+        type: "lookup",
+        lookup: {
+          registry: "companies-house",
+          formats: [{ key: "output_1", template: "{{name}}" }],
+        },
       },
     } satisfies TemplateEditableField;
 
@@ -336,8 +208,6 @@ describe("template value-source state", () => {
       }),
     ).toEqual({
       valueSource: { type: "formula", formula: "" },
-      parts: undefined,
-      format: undefined,
       lookup: undefined,
       formula: "",
       source: undefined,

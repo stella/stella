@@ -24,23 +24,3 @@ const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
 
 export const isInputType = (value: string): value is InputType =>
   INPUT_TYPE_SET.has(value);
-
-/**
- * The manifest shape of a field's composite configuration: parts and format
- * are emitted together, or not at all (a half-configured composite — no parts
- * yet, or no format yet — saves as a plain field). Only the part `key`s are
- * read, so callers may pass any part-shaped list (e.g. `EditablePart[]`)
- * without this module depending on that type.
- */
-export const defaultCompositeFormat = (
-  parts: readonly { key: string }[],
-): string | undefined => {
-  const keys = parts.flatMap((p) => {
-    const key = p.key.trim();
-    return key === "" ? [] : [key];
-  });
-  if (keys.length === 0) {
-    return undefined;
-  }
-  return keys.map((k) => `{{${k}}}`).join(" ");
-};

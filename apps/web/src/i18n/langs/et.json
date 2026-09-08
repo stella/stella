@@ -4272,6 +4272,7 @@
       "existingField": "Olemasolev väli…",
       "expressionPlaceholder": "avaldis",
       "fieldHelp": "Kui keegi seda malli täidab, küsitakse temalt seda väärtust. Siin otsustate, kuidas see küsimus välja näeb.",
+      "fieldSettingBrackets": "Malli märgend ei tohi sisaldada loogsulge. Eemalda need välja „{fieldPath}“ sätetest.",
       "fillFormPreview": "Nii kuvatakse see vormis",
       "fillStale": "Salvestamata muudatused — salvestage, et täita uusimate väljadega.",
       "filledByPerson": "Isik",

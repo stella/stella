@@ -4275,6 +4275,7 @@ type Messages = {
       "existingField": "Existing field…";
       "expressionPlaceholder": "expression";
       "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
+      "fieldSettingBrackets": "A template marker cannot contain curly brackets. Remove them from the settings of “{fieldPath}”.";
       "fillFormPreview": "How it appears in the fill form";
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";

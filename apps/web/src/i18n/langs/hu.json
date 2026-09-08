@@ -4272,6 +4272,7 @@
       "existingField": "Meglévő mező…",
       "expressionPlaceholder": "kifejezés",
       "fieldHelp": "Amikor valaki kitölti ezt a sablont, ezt az értéket fogja megadni. Itt döntheti el, hogyan nézzen ki ez a kérdés.",
+      "fieldSettingBrackets": "A sablonjelölő nem tartalmazhat kapcsos zárójelet. Távolítsa el őket a(z) „{fieldPath}” beállításaiból.",
       "fillFormPreview": "Így jelenik meg az űrlapon",
       "fillStale": "Mentetlen módosítások — mentsen, hogy a legfrissebb mezőkkel töltse ki.",
       "filledByPerson": "Személy",

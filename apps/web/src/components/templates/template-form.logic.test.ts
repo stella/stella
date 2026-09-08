@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ResolvedField } from "./template-discover-types";
 import {
+  groupFieldsByPrefix,
   readAiFieldErrorPaths,
   runLeadingSingleFlight,
 } from "./template-form.logic";
@@ -88,5 +90,57 @@ describe("runLeadingSingleFlight", () => {
 
     await runLeadingSingleFlight(state, operation);
     expect(state.current).toBeNull();
+  });
+});
+
+describe("fill-form grouping", () => {
+  const field = (path: string, label?: string): ResolvedField => ({
+    path,
+    kind: "string",
+    count: 1,
+    ...(label === undefined ? {} : { label }),
+  });
+
+  test("titles a group with the parent field's label when the template fills it", () => {
+    const groups = groupFieldsByPrefix([
+      field("landlord", "Landlord"),
+      field("landlord.name"),
+      field("note"),
+    ]);
+
+    expect(groups).toEqual([
+      {
+        kind: "named",
+        prefix: "landlord",
+        legend: "Landlord",
+        fields: [field("landlord", "Landlord"), field("landlord.name")],
+        children: [field("landlord.name")],
+      },
+      { kind: "ungrouped", fields: [field("note")] },
+    ]);
+  });
+
+  test("falls back to the authored prefix without a labelled parent", () => {
+    const groups = groupFieldsByPrefix([
+      field("tenant.name"),
+      field("tenant", "   "),
+    ]);
+
+    expect(groups.at(0)).toMatchObject({ legend: "tenant" });
+  });
+
+  test("keeps the parent field out of the registry-autofill scope", () => {
+    const groups = groupFieldsByPrefix([field("seat"), field("seat.city")]);
+
+    expect(groups.at(0)).toMatchObject({
+      fields: [field("seat"), field("seat.city")],
+      children: [field("seat.city")],
+    });
+  });
+
+  test("groups nothing when no path is dotted", () => {
+    expect(groupFieldsByPrefix([field("a"), field("b")])).toEqual([
+      { kind: "ungrouped", fields: [field("a"), field("b")] },
+    ]);
   });
 });
