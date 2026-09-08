@@ -2,6 +2,9 @@
   "name": "stella-docs-mcp",
   "private": true,
   "type": "module",
+  "scripts": {
+    "eval:retrieval": "node docs-retrieval.eval.ts"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "zod": "^4.4.3"
