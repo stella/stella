@@ -1275,6 +1275,11 @@ type FetchResultPageOptions = {
  * infinite scroll does: the field names, and the whole search query in the
  * body. The endpoint answers a body-only request, so a page is reachable
  * without the session that first ran the search.
+ *
+ * The two ways this fails are returned rather than thrown, so the one error
+ * value is built here and each caller propagates it the way its own contract
+ * requires: the crawl's `fetchPage` is already a `Result`, and the
+ * reconciliation's page read is defined to throw.
  */
 const fetchResultPage = async ({
   continuation,
@@ -1283,7 +1288,7 @@ const fetchResultPage = async ({
   statedCount,
   session,
   signal,
-}: FetchResultPageOptions): Promise<string> => {
+}: FetchResultPageOptions): Promise<Result<string, AdapterFetchError>> => {
   const formData = new URLSearchParams();
   formData.set("vyhledavaciPodminky", continuation.conditions);
   formData.set("zobrazeniVysledkuId", continuation.viewId);
@@ -1306,12 +1311,14 @@ const fetchResultPage = async ({
 
   if (!response.ok) {
     invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS pagination failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: `${date}:${page}`,
-      httpStatus: response.status,
-    });
+    return Result.err(
+      new AdapterFetchError({
+        message: `NSS pagination failed: ${response.status}`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: `${date}:${page}`,
+        httpStatus: response.status,
+      }),
+    );
   }
 
   const html = await response.text();
@@ -1326,18 +1333,20 @@ const fetchResultPage = async ({
     statedCount === null ? null : czNssExpectedRows({ page, statedCount });
   if (html.trim() === "" && requiredRows !== 0) {
     invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS pagination for ${date} answered no rows for page ${page}, which ${
-        requiredRows === null
-          ? "the day's unstated record count cannot show is past its last record"
-          : `its stated count of ${statedCount} requires ${requiredRows} of`
-      }`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: `${date}:${page}`,
-    });
+    return Result.err(
+      new AdapterFetchError({
+        message: `NSS pagination for ${date} answered no rows for page ${page}, which ${
+          requiredRows === null
+            ? "the day's unstated record count cannot show is past its last record"
+            : `its stated count of ${statedCount} requires ${requiredRows} of`
+        }`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: `${date}:${page}`,
+      }),
+    );
   }
 
-  return html;
+  return Result.ok(html);
 };
 
 // ── Shared build path ────────────────────────────────────
@@ -1569,19 +1578,25 @@ const listCzNssSlicePage = async ({
     });
   }
 
-  const rows =
+  const continued =
     page === 0
-      ? firstPageRows
-      : parseResultRows(
-          await fetchResultPage({
-            continuation,
-            date: slice,
-            page,
-            statedCount: search.statedCount,
-            session,
-            signal: effectiveSignal,
-          }),
-        );
+      ? null
+      : await fetchResultPage({
+          continuation,
+          date: slice,
+          page,
+          statedCount: search.statedCount,
+          session,
+          signal: effectiveSignal,
+        });
+  if (continued !== null && !Result.isOk(continued)) {
+    // This read is defined to throw (see the note above), so the error the
+    // fetch built is carried out as it stands rather than restated.
+    const { error } = continued;
+    throw error;
+  }
+  const rows =
+    continued === null ? firstPageRows : parseResultRows(continued.value);
 
   // How many rows this page must carry, from the count the portal stated for
   // the whole day. A short page is refused rather than returned, because the
@@ -1814,9 +1829,9 @@ export const czNssAdapter = defineSourceAdapter({
         }
 
         // Page 0 results are inline in the search response.
-        const html =
+        const continued =
           page === 0
-            ? searchResult.html
+            ? null
             : await fetchResultPage({
                 continuation,
                 date,
@@ -1825,8 +1840,19 @@ export const czNssAdapter = defineSourceAdapter({
                 session,
                 signal: effectiveSignal,
               });
+        if (continued !== null && !Result.isOk(continued)) {
+          // Carried out as it stands: this whole body is the `try` of the
+          // `Result.tryPromise` below, whose `catch` turns it into the `Err`
+          // this adapter answers with. The cursor stays where it is and the
+          // page is asked for again, rather than the day being settled on a
+          // response the endpoint refused.
+          const { error } = continued;
+          throw error;
+        }
 
-        const rows = parseResultRows(html);
+        const rows = parseResultRows(
+          continued === null ? searchResult.html : continued.value,
+        );
         const decisions: IngestionResult[] = [];
 
         for (const row of rows) {
