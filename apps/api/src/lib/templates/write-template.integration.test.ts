@@ -12,16 +12,16 @@ import {
   templateVersions,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import { arrayOrEmpty } from "@/api/lib/array";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
-import type { TemplateManifest } from "@/api/lib/docx/types";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
+import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -53,12 +53,10 @@ afterAll(async () => await releaseRlsFixture());
 const fixture = async () => {
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(ids.orgA, templateId);
-  const manifest: TemplateManifest = {
-    version: 1,
-    fields: [{ path: "initial" }],
-  };
+  const initial = await docxWithMarkers(["initial"]);
+  const manifest = await deriveManifestFromDocx(initial);
   const objects = new Map<string, Uint8Array>([
-    [s3Key, new TextEncoder().encode(JSON.stringify(manifest))],
+    [s3Key, new Uint8Array(initial)],
   ]);
   await testDb.insert(templates).values({
     id: templateId,
@@ -87,15 +85,18 @@ const fixture = async () => {
     templateId,
     recordAuditEvent,
   };
-  const prepare = async (snapshot: { manifest: TemplateManifest | null }) => {
-    const next: TemplateManifest = {
-      version: 1,
-      fields: [...arrayOrEmpty(snapshot.manifest?.fields), { path: "added" }],
-    };
-    return Result.ok({
-      manifest: next,
-      bytes: new TextEncoder().encode(JSON.stringify(next)),
-    });
+  // One more marker than the document the pointer currently names, so a
+  // retried attempt against the same pointer publishes the same document.
+  const prepare = async (snapshot: { s3Key: string }) => {
+    const current = objects.get(snapshot.s3Key);
+    const paths =
+      current === undefined
+        ? ["initial"]
+        : (await deriveManifestFromDocx(Buffer.from(current))).fields.map(
+            ({ path }) => path,
+          );
+    const next = await docxWithMarkers([...paths, `added_${String(paths.length)}`]);
+    return Result.ok({ bytes: new Uint8Array(next) });
   };
   const writeObject: NonNullable<
     Parameters<typeof writeStoredTemplate>[0]["writeObject"]
@@ -188,8 +189,12 @@ test.each(
           message: "Published bytes missing",
         });
       }
-      const embedded: unknown = JSON.parse(new TextDecoder().decode(stored));
-      expect(embedded).toEqual(version.manifest);
+      // The manifest a version records is what its own bytes declare: the
+      // writer derives it, so the pair cannot drift apart in storage.
+      const declared: unknown = await deriveManifestFromDocx(
+        Buffer.from(stored),
+      );
+      expect(declared).toEqual(version.manifest);
       expect(
         state.intents.some(({ objectKey }) => objectKey === version.s3Key),
       ).toBe(false);

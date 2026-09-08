@@ -29,16 +29,13 @@ const WRITABLE_NUMBER = /^-?\d+(?:\.\d+)?$/u;
 export const isWritableMarkerText = (value: string): boolean =>
   !RESERVED_IN_MARKER.test(value);
 
-/** True when a literal has a spelling the scanner reads back as itself. */
+/** True when a literal has a spelling the scanner reads back as itself. A
+ *  boolean has exactly two, both of them writable. */
 export const isWritableMarkerLiteral = (value: MarkerLiteral): boolean => {
-  switch (typeof value) {
-    case "string":
-      return isWritableMarkerText(value);
-    case "number":
-      return WRITABLE_NUMBER.test(String(value));
-    default:
-      return true;
+  if (typeof value === "string") {
+    return isWritableMarkerText(value);
   }
+  return typeof value !== "number" || WRITABLE_NUMBER.test(String(value));
 };
 
 /** One string literal, double-quoted, with backslashes and quotes escaped the
@@ -46,16 +43,8 @@ export const isWritableMarkerLiteral = (value: MarkerLiteral): boolean => {
 const renderString = (value: string): string =>
   `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 
-const renderLiteral = (value: MarkerLiteral): string => {
-  switch (typeof value) {
-    case "string":
-      return renderString(value);
-    case "number":
-      return String(value);
-    default:
-      return value ? "true" : "false";
-  }
-};
+const renderLiteral = (value: MarkerLiteral): string =>
+  typeof value === "string" ? renderString(value) : String(value);
 
 const renderArgument = (arg: FilterArgument): string =>
   arg.kind === "positional"

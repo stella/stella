@@ -14,13 +14,13 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import {
+  arrayFiltersFromFieldConfig,
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 import { propertyConfig } from "@stll/property-testing";
 
 import { deriveManifestFromDocx } from "./derived-manifest";
-import {
-  arrayFiltersFromFieldMeta,
-  filtersFromFieldMeta,
-} from "./field-filters";
 import { isFieldMeta, type FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
@@ -107,8 +107,8 @@ const rewritesFor = (fields: readonly FieldMeta[]) =>
     path: field.path,
     filters:
       field.path === ARRAY_PATH
-        ? arrayFiltersFromFieldMeta(field)
-        : filtersFromFieldMeta(field),
+        ? arrayFiltersFromFieldConfig(field)
+        : filtersFromFieldConfig(field),
   }));
 
 /** The fields whose configuration a marker actually carries. A field that

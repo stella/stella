@@ -256,6 +256,23 @@ export type {
   ScannedMarker,
 } from "./markers.js";
 
+// A field's configuration as the chain that declares it. One writer, because
+// two would be two documents: the api rewrites markers through it when a
+// configure call lands, and the Studio writes the same chains when it saves.
+export {
+  ARRAY_FILTER_NAMES,
+  arrayFiltersFromFieldConfig,
+  filtersFromFieldConfig,
+  isArrayFilterName,
+} from "./field-config.js";
+export type {
+  MarkerFieldConfig,
+  MarkerFieldInputType,
+  MarkerFieldLookup,
+  MarkerFieldSource,
+  MarkerFieldValidation,
+} from "./field-config.js";
+
 // The writer half of the marker grammar: configuration reaches a document as
 // marker text, so the scanner and the renderer are one round trip.
 export {

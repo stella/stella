@@ -21,9 +21,11 @@
  * block, and AI-drafted `{{execSummary}}` / `{{ contract.summary }}` fields.
  */
 
-import { renderValueMarker } from "@stll/template-conditions";
+import {
+  filtersFromFieldConfig,
+  renderValueMarker,
+} from "@stll/template-conditions";
 
-import { filtersFromFieldMeta } from "@/api/lib/docx/field-filters";
 import type { FieldMeta } from "@/api/lib/docx/types";
 
 /** The report's two AI-drafted fields. The generator receives the whole report
@@ -62,7 +64,7 @@ const aiMarker = (path: (typeof AI_FIELDS)[number]["path"]): string => {
   if (!field) {
     throw new Error(`no AI field ${path}`);
   }
-  return renderValueMarker(path, filtersFromFieldMeta(field));
+  return renderValueMarker(path, filtersFromFieldConfig(field));
 };
 
 const escXml = (value: string): string =>

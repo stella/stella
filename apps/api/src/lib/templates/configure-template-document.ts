@@ -9,15 +9,15 @@
  * service run the same code.
  */
 
-import { unwritableFilterValues } from "@stll/template-conditions";
+import {
+  arrayFiltersFromFieldConfig,
+  filtersFromFieldConfig,
+  unwritableFilterValues,
+} from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  arrayFiltersFromFieldMeta,
-  filtersFromFieldMeta,
-} from "@/api/lib/docx/field-filters";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
@@ -148,8 +148,8 @@ export const configureTemplateDocument = async ({
         index,
         path: field.path,
         filters: arrays.has(field.path)
-          ? arrayFiltersFromFieldMeta(merged)
-          : filtersFromFieldMeta(merged),
+          ? arrayFiltersFromFieldConfig(merged)
+          : filtersFromFieldConfig(merged),
       };
     });
 

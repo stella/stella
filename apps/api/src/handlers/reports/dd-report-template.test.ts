@@ -8,6 +8,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
 import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
@@ -20,7 +21,6 @@ import type { ReportJustification } from "./build-report-data";
 import { assembleReportData } from "./build-report-data";
 import {
   DD_REPORT_KEY,
-  DD_REPORT_MANIFEST,
   getBuiltinReportTemplate,
   initBuiltinReportTemplates,
 } from "./builtin-templates";
@@ -34,6 +34,13 @@ const loadDdReportBuffer = async (): Promise<Buffer> => {
   }
   return await builtin.loadBuffer();
 };
+
+// The report's AI-drafted fields as its own markers declare them: the asset is
+// the template, so a drift between the committed DOCX and what the fill drafts
+// shows up here rather than in a hand-kept copy.
+const ddReportFields = (
+  await deriveManifestFromDocx(await loadDdReportBuffer())
+).fields;
 
 /** Wrap justification content as the row shape the assembler reads. */
 const justification = (
@@ -277,7 +284,7 @@ describe("Due Diligence Report built-in template", () => {
     // per-contract summary), using the stub generator.
     const { values: record } = await resolveAiFields({
       values: data,
-      fields: DD_REPORT_MANIFEST.fields,
+      fields: ddReportFields,
       generate: stubGenerate,
     });
     if (!isTemplateData(record)) {
@@ -366,7 +373,7 @@ describe("Due Diligence Report built-in template", () => {
     };
     const { values: record } = await resolveAiFields({
       values: data,
-      fields: DD_REPORT_MANIFEST.fields,
+      fields: ddReportFields,
       generate: data.aiNarrative ? spy : undefined,
     });
     if (!isTemplateData(record)) {

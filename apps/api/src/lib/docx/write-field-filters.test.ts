@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { discoverTemplate } from "./discover-template";
 import {
-  arrayFiltersFromFieldMeta,
-  filtersFromFieldMeta,
-} from "./field-filters";
+  arrayFiltersFromFieldConfig,
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
+import { discoverTemplate } from "./discover-template";
 import type { FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
@@ -44,7 +44,7 @@ const documentXml = async (buffer: Buffer): Promise<string> => {
 
 const rewrite = (field: FieldMeta) => ({
   path: field.path,
-  filters: filtersFromFieldMeta(field),
+  filters: filtersFromFieldConfig(field),
 });
 
 describe("writing a configuration into the document", () => {
@@ -129,7 +129,7 @@ describe("writing a configuration into the document", () => {
     const { buffer, written } = await writeFieldFilters(docx, [
       {
         path: "items",
-        filters: arrayFiltersFromFieldMeta({
+        filters: arrayFiltersFromFieldConfig({
           path: "items",
           label: "Items",
           // A value filter has no meaning on a repeat, and the array writer is

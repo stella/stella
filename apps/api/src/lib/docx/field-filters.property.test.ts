@@ -11,7 +11,11 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
-import { classifyMarker, renderValueMarker } from "@stll/template-conditions";
+import {
+  classifyMarker,
+  filtersFromFieldConfig,
+  renderValueMarker,
+} from "@stll/template-conditions";
 
 import {
   ATTORNEY_REFS,
@@ -22,7 +26,7 @@ import {
   WORKSPACE_CONTACT_ROLES,
 } from "@/api/lib/template-binding/binding-sources";
 
-import { fieldMetaFromFilters, filtersFromFieldMeta } from "./field-filters";
+import { fieldMetaFromFilters } from "./field-filters";
 import {
   DATE_FORMAT_STYLES,
   isFieldMeta,
@@ -178,7 +182,7 @@ describe("a field and its filter chain are one round trip", () => {
   test("the chain a field writes reads back as that field", () => {
     fc.assert(
       fc.property(field, (original) => {
-        const filters = filtersFromFieldMeta(original);
+        const filters = filtersFromFieldConfig(original);
         fc.pre(filters.length > 0);
         const { field: readBack, issues } = fieldMetaFromFilters(
           original.path,
@@ -194,7 +198,7 @@ describe("a field and its filter chain are one round trip", () => {
   test("the chain survives the marker text it is written into", () => {
     fc.assert(
       fc.property(field, (original) => {
-        const filters = filtersFromFieldMeta(original);
+        const filters = filtersFromFieldConfig(original);
         fc.pre(filters.length > 0);
         const marker = renderValueMarker(original.path, filters);
         expect(classifyMarker(marker.slice(2, -2), "output")).toEqual({
@@ -210,11 +214,11 @@ describe("a field and its filter chain are one round trip", () => {
   test("a field the document already declares is a fixed point of the writer", () => {
     fc.assert(
       fc.property(field, (original) => {
-        const once = filtersFromFieldMeta(original);
+        const once = filtersFromFieldConfig(original);
         fc.pre(once.length > 0);
         const readBack = fieldMetaFromFilters(original.path, once).field;
         expect(readBack).not.toBeNull();
-        expect(filtersFromFieldMeta(readBack ?? original)).toEqual(once);
+        expect(filtersFromFieldConfig(readBack ?? original)).toEqual(once);
       }),
       propertyConfig(),
     );

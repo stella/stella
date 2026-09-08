@@ -2,15 +2,15 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { DATE_FORMAT_SPEC_HINT } from "@stll/agent-input";
-import { classifyMarker, renderValueMarker } from "@stll/template-conditions";
+import {
+  classifyMarker,
+  filtersFromFieldConfig,
+  renderValueMarker,
+} from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
 
 import { discoverTemplate } from "./discover-template";
-import {
-  fieldMetaFromFilters,
-  FIELD_META_FILTERS,
-  filtersFromFieldMeta,
-} from "./field-filters";
+import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
 import type { FieldMeta } from "./types";
 
 const WRAP = (body: string) =>
@@ -307,10 +307,18 @@ describe("item counts", () => {
 });
 
 describe("the filter catalogue", () => {
-  test("composites are the one deliberate exclusion", () => {
-    expect(FIELD_META_FILTERS.parts).toEqual({
+  test("only the path and the derived condition AST are excluded", () => {
+    const excluded = Object.entries(FIELD_META_FILTERS).flatMap(
+      ([property, disposition]) =>
+        "excluded" in disposition ? [property] : [],
+    );
+
+    // Everything else has to be expressible as a filter: the marker is the
+    // only place a field's configuration lives.
+    expect(excluded).toEqual(["path", "conditionAst"]);
+    expect(FIELD_META_FILTERS.conditionAst).toEqual({
       excluded:
-        "a composite is written as document text around its part markers, so the format needs no filter",
+        "the canonical AST is derived from `condition` when it is saved",
     });
   });
 });
@@ -324,7 +332,7 @@ describe("the filter catalogue", () => {
  * fixed point below now exercises the code the configure boundary runs.
  */
 const markerFor = (field: FieldMeta): string =>
-  renderValueMarker(field.path, filtersFromFieldMeta(field));
+  renderValueMarker(field.path, filtersFromFieldConfig(field));
 
 describe("the document layer is a fixed point", () => {
   test("a manifest re-authored from its own fields discovers identically", async () => {

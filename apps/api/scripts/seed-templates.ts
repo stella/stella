@@ -1,3 +1,6 @@
+import {
+  filtersFromFieldConfig,
+} from "@stll/template-conditions";
 /**
  * Seed templates & clauses (Knowledge section).
  *
@@ -35,9 +38,8 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
-import { filtersFromFieldMeta } from "@/api/lib/docx/field-filters";
-import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import type { FieldMeta } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";
@@ -2466,7 +2468,7 @@ export async function seedTemplates(
       bare,
       [...t.fields, ...conditionFields].map((field) => ({
         path: field.path,
-        filters: filtersFromFieldMeta(field),
+        filters: filtersFromFieldConfig(field),
       })),
     );
     const manifest = await deriveManifestFromDocx(docxBuffer);

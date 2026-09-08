@@ -3,10 +3,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import {
-  DATE_FORMAT_STYLES,
-  formatDate,
-} from "./field-values";
+import { DATE_FORMAT_STYLES, formatDate } from "./field-values";
 
 const LOCALES = ["cs", "de", "pl", "en", "ar"] as const;
 
@@ -86,4 +83,3 @@ describe("formatDate (properties)", () => {
     );
   });
 });
-
