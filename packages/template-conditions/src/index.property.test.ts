@@ -356,7 +356,7 @@ const renderExpression = (node: ExprNode, parentPrecedence = 0): string => {
       return node.path;
     case "not":
       return wrapIfNeeded(
-        `!(${renderExpression(node.child)})`,
+        `not (${renderExpression(node.child)})`,
         PRECEDENCE.unary,
         parentPrecedence,
       );

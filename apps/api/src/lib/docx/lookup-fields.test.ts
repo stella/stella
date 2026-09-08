@@ -44,11 +44,11 @@ const KRS_ADDRESS = {
 
 const KRS_HIT: BusinessRegistryHit = {
   registry: "krs",
-  id: "0000592109",
+  id: "0000123456",
   name: "Żabka Polska sp. z o.o.",
   legalForm: "spółka z ograniczoną odpowiedzialnością",
   address: KRS_ADDRESS,
-  registryUrl: "https://example.invalid/krs/0000592109",
+  registryUrl: "https://example.invalid/krs/0000123456",
 };
 
 // An empty default template falls back to the deterministic "name, address"
@@ -64,7 +64,7 @@ const hitResolver =
 
 describe("isPlausibleLookupValue", () => {
   test("accepts a 10-digit KRS number, whitespace-tolerant", () => {
-    expect(isPlausibleLookupValue("krs", "0000592109")).toBe(true);
+    expect(isPlausibleLookupValue("krs", "0000123456")).toBe(true);
     expect(isPlausibleLookupValue("krs", " 0000 592 109 ")).toBe(true);
   });
 
@@ -74,9 +74,9 @@ describe("isPlausibleLookupValue", () => {
   });
 
   test("rejects short, long, and non-numeric inputs", () => {
-    expect(isPlausibleLookupValue("krs", "592109")).toBe(false);
-    expect(isPlausibleLookupValue("krs", "00005921090")).toBe(false);
-    expect(isPlausibleLookupValue("krs", "KRS0592109")).toBe(false);
+    expect(isPlausibleLookupValue("krs", "123456")).toBe(false);
+    expect(isPlausibleLookupValue("krs", "00001234560")).toBe(false);
+    expect(isPlausibleLookupValue("krs", "KRS0123456")).toBe(false);
   });
 });
 
@@ -274,21 +274,21 @@ describe("resolveLookupFields", () => {
 
   test("rejects when the registry has no match, naming the field", async () => {
     const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
+      values: { buyer_krs: "0000123456" },
       fields: [krsField],
       resolve: async () => ({ type: "not-found" }),
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors.at(0)?.message).toBe(
-        'Field "buyer_krs": no company found in KRS for "0000592109".',
+        'Field "buyer_krs": no company found in KRS for "0000123456".',
       );
     }
   });
 
   test("rejects on an upstream error, surfacing its message", async () => {
     const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
+      values: { buyer_krs: "0000123456" },
       fields: [krsField],
       resolve: async () => ({ type: "error", message: "KRS API error: 503" }),
     });
@@ -302,7 +302,7 @@ describe("resolveLookupFields", () => {
 
   test("replaces the number with the deterministic rendering", async () => {
     const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109", other: "kept" },
+      values: { buyer_krs: "0000123456", other: "kept" },
       fields: [krsField],
       resolve: hitResolver(KRS_HIT),
     });
@@ -317,7 +317,7 @@ describe("resolveLookupFields", () => {
 
   test("replaces a nested value where resolvePath found it", async () => {
     const result = await resolveLookupFields({
-      values: { buyer: { krs: "0000592109" } },
+      values: { buyer: { krs: "0000123456" } },
       fields: [
         {
           path: "buyer.krs",
@@ -338,15 +338,15 @@ describe("resolveLookupFields", () => {
   });
 
   test("resolves a lookup field inside a repeatable each row", async () => {
-    // Inside `{{#each companies}}` the value arrives as an array of row
+    // Inside `{% for company in companies %}` the value arrives as an array of row
     // objects, so the field path `companies.krs` resolves to undefined at the
     // top level; each row's sub-path number must be resolved and rendered in
     // place. Every format is written as a flat dotted key on the row, and the
     // first one additionally replaces the submitted number at the row path,
-    // which is what the bare `{{companies.krs}}` marker renders.
+    // which is what the bare `{{ company.krs }}` marker renders.
     const result = await resolveLookupFields({
       values: {
-        companies: [{ krs: "0000592109" }, { krs: "0000592109" }],
+        companies: [{ krs: "0000123456" }, { krs: "0000123456" }],
       },
       fields: [
         {
@@ -403,7 +403,7 @@ describe("resolveLookupFields", () => {
     // [token] template is substituted from the hit, no formatter involved.
     // Grammar adjustments happen downstream in the per-occurrence aiAdapt pass.
     const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
+      values: { buyer_krs: "0000123456" },
       fields: [
         {
           path: "buyer_krs",
@@ -428,7 +428,7 @@ describe("resolveLookupFields", () => {
 
   test("turns **bold** / *italic* in the format into a rich patch value", async () => {
     const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
+      values: { buyer_krs: "0000123456" },
       fields: [
         {
           path: "buyer_krs",
@@ -464,7 +464,7 @@ describe("resolveLookupFields", () => {
   test("renders two named formats off one hit alongside the default", async () => {
     let calls = 0;
     const result = await resolveLookupFields({
-      values: { company: "0000592109" },
+      values: { company: "0000123456" },
       fields: [
         {
           path: "company",
@@ -502,7 +502,7 @@ describe("resolveLookupFields", () => {
 
   test("emits no value for an undeclared format key (stays unmatched)", async () => {
     const result = await resolveLookupFields({
-      values: { company: "0000592109" },
+      values: { company: "0000123456" },
       fields: [
         {
           path: "company",
@@ -530,7 +530,7 @@ describe("resolveLookupFields", () => {
 
   test("named-format values inherit the field's bold/italic markdown", async () => {
     const result = await resolveLookupFields({
-      values: { company: "0000592109" },
+      values: { company: "0000123456" },
       fields: [
         {
           path: "company",
@@ -559,7 +559,7 @@ describe("resolveLookupFields", () => {
     // The aiAdapt pass rewrites plain string stubs only, so the rendered
     // output stays a string with the markers removed.
     const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
+      values: { buyer_krs: "0000123456" },
       fields: [
         {
           path: "buyer_krs",
@@ -631,7 +631,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     const resolver = createDispatchLookupResolver({
       dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
     });
-    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    const outcome = await resolver({ registry: "krs", query: "0000123456" });
     expect(outcome).toEqual({ type: "hit", hit: KRS_HIT });
   });
 
@@ -639,7 +639,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     const resolver = createDispatchLookupResolver({
       dispatch: stubDispatch({ lookup: async () => null }),
     });
-    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    const outcome = await resolver({ registry: "krs", query: "0000123456" });
     expect(outcome).toEqual({ type: "not-found" });
   });
 
@@ -651,7 +651,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
         },
       }),
     });
-    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    const outcome = await resolver({ registry: "krs", query: "0000123456" });
     expect(outcome).toEqual({
       type: "error",
       message: "KRS number must be 10 digits",
@@ -669,7 +669,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
         },
       }),
     });
-    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    const outcome = await resolver({ registry: "krs", query: "0000123456" });
     expect(outcome).toEqual({
       type: "error",
       message: "The krs registry is not available in this deployment.",
@@ -705,7 +705,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
 
 describe("applyLookupFields — fill flow over a mocked dispatch", () => {
   test("rewrites the submitted KRS number in place and returns null", async () => {
-    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const values: Record<string, unknown> = { buyer_krs: "0000123456" };
     const error = await applyLookupFields(
       values,
       { fields: [krsField] },
@@ -728,7 +728,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
   });
 
   test("returns the combined message when a lookup fails", async () => {
-    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const values: Record<string, unknown> = { buyer_krs: "0000123456" };
     const error = await applyLookupFields(
       values,
       { fields: [krsField] },
@@ -745,23 +745,23 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       },
     );
     expect(error).toBe(
-      'Field "buyer_krs": no company found in KRS for "0000592109".',
+      'Field "buyer_krs": no company found in KRS for "0000123456".',
     );
-    expect(values["buyer_krs"]).toBe("0000592109");
+    expect(values["buyer_krs"]).toBe("0000123456");
   });
 
   test("is a no-op without a manifest", async () => {
-    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const values: Record<string, unknown> = { buyer_krs: "0000123456" };
     const error = await applyLookupFields(values, null, {
       resolve: hitResolver(KRS_HIT),
     });
     expect(error).toBeNull();
-    expect(values["buyer_krs"]).toBe("0000592109");
+    expect(values["buyer_krs"]).toBe("0000123456");
   });
 
   test("refuses an unconfigured registry during fill without calling it", async () => {
     let lookupCalls = 0;
-    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const values: Record<string, unknown> = { buyer_krs: "0000123456" };
     const error = await applyLookupFields(
       values,
       { fields: [krsField] },
@@ -786,11 +786,11 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
     );
     // The registry was never called; the submitted number is left untouched.
     expect(lookupCalls).toBe(0);
-    expect(values["buyer_krs"]).toBe("0000592109");
+    expect(values["buyer_krs"]).toBe("0000123456");
   });
 
   test("resolves a deployed registry through fill without jurisdiction preferences", async () => {
-    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const values: Record<string, unknown> = { buyer_krs: "0000123456" };
     const error = await applyLookupFields(
       values,
       { fields: [krsField] },
@@ -819,7 +819,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
 // format. A document references the bare `{{company}}` (default rendering) and
 // the keyed `{{company.full}}` (the named rendering of the SAME hit). Both must
 // fill from one submitted registry number, in plain paragraphs, inside an
-// `{{#each}}` loop, and inside a table — the flat dotted `company.full` key the
+// `{% for %}` loop, and inside a table — the flat dotted `company.full` key the
 // resolver writes has to survive flattenTemplateData and block expansion so the
 // keyed marker is never left unmatched or surfaced as a separate field.
 describe("named-format lookup — end-to-end fill", () => {
@@ -886,7 +886,7 @@ describe("named-format lookup — end-to-end fill", () => {
       WRAP([P("{{company}}"), P("{{company.full}}")].join("")),
     );
     const withManifest = await writeManifest(docx, manifest);
-    const values: TemplateData = { company: "0000592109" };
+    const values: TemplateData = { company: "0000123456" };
 
     const stepError = await applyManifestFillSteps({
       values,
@@ -906,15 +906,15 @@ describe("named-format lookup — end-to-end fill", () => {
     const docx = await makeDocx(
       WRAP(
         [
-          P("{{#each items}}"),
-          P("{{items.label}}: {{company}} / {{company.full}}"),
-          P("{{/each}}"),
+          P("{% for item in items %}"),
+          P("{{ item.label }}: {{company}} / {{company.full}}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );
     const withManifest = await writeManifest(docx, manifest);
     const values: TemplateData = {
-      company: "0000592109",
+      company: "0000123456",
       items: [{ label: "A" }, { label: "B" }],
     };
 
@@ -940,7 +940,7 @@ describe("named-format lookup — end-to-end fill", () => {
       ),
     );
     const withManifest = await writeManifest(docx, manifest);
-    const values: TemplateData = { company: "0000592109" };
+    const values: TemplateData = { company: "0000123456" };
 
     const stepError = await applyManifestFillSteps({
       values,
@@ -959,7 +959,7 @@ describe("named-format lookup — end-to-end fill", () => {
   test("a keyed marker with no declared format stays unmatched", async () => {
     const docx = await makeDocx(WRAP(P("{{company.unknown}}")));
     const withManifest = await writeManifest(docx, manifest);
-    const values: TemplateData = { company: "0000592109" };
+    const values: TemplateData = { company: "0000123456" };
 
     const stepError = await applyManifestFillSteps({
       values,
@@ -1008,11 +1008,11 @@ describe("lookup formats are addressed by their keys", () => {
   };
 
   const NAME_RENDER = "Żabka Polska sp. z o.o.";
-  const KRS_RENDER = "KRS 0000592109";
+  const KRS_RENDER = "KRS 0000123456";
 
   test("the first format is addressable by its key, not only by the bare marker", async () => {
     const result = await resolveLookupFields({
-      values: { company: "0000592109" },
+      values: { company: "0000123456" },
       fields: [
         {
           path: "company",
@@ -1071,7 +1071,7 @@ describe("lookup formats are addressed by their keys", () => {
     expect(resolved.map((f) => f.path)).toEqual(["company"]);
 
     let calls = 0;
-    const values: TemplateData = { company: "0000592109" };
+    const values: TemplateData = { company: "0000123456" };
     const stepError = await applyManifestFillSteps({
       values,
       manifest,
@@ -1122,7 +1122,7 @@ describe("lookup formats are addressed by their keys", () => {
     expect(resolved.map((f) => f.path)).toEqual(["company"]);
 
     let calls = 0;
-    const values: TemplateData = { company: "0000592109" };
+    const values: TemplateData = { company: "0000123456" };
     const stepError = await applyManifestFillSteps({
       values,
       manifest,

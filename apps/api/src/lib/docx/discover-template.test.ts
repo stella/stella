@@ -52,9 +52,11 @@ describe("discoverTemplate", () => {
 
   test("conditional infers boolean field", async () => {
     const xml = WRAP(
-      [P("{{#if has_guarantor}}"), P("Guarantor clause"), P("{{/if}}")].join(
-        "",
-      ),
+      [
+        P("{% if has_guarantor %}"),
+        P("Guarantor clause"),
+        P("{% endif %}"),
+      ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -66,9 +68,11 @@ describe("discoverTemplate", () => {
 
   test("conditional with comparison infers string field", async () => {
     const xml = WRAP(
-      [P('{{#if jurisdiction == "CZ"}}'), P("Czech clause"), P("{{/if}}")].join(
-        "",
-      ),
+      [
+        P('{% if jurisdiction == "CZ" %}'),
+        P("Czech clause"),
+        P("{% endif %}"),
+      ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -80,7 +84,7 @@ describe("discoverTemplate", () => {
 
   test("inline-only condition infers its boolean driver", async () => {
     const xml = WRAP(
-      P("Buyer{{#if has_spouse}} and their spouse{{/if}} hereby agrees."),
+      P("Buyer{% if has_spouse %} and their spouse{% endif %} hereby agrees."),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -93,7 +97,7 @@ describe("discoverTemplate", () => {
   });
 
   test("inline condition discovery shares the canonical operator grammar", async () => {
-    const xml = WRAP(P('{{#if roles contains "admin"}}Administrator{{/if}}'));
+    const xml = WRAP(P('{% if "admin" in roles %}Administrator{% endif %}'));
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
@@ -103,13 +107,13 @@ describe("discoverTemplate", () => {
   });
 
   test("inline parse errors are part of template discovery", async () => {
-    const xml = WRAP(P("Buyer {{#if has_spouse}} and spouse"));
+    const xml = WRAP(P("Buyer {% if has_spouse %} and spouse"));
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
     expect(result.structureErrors).toEqual([
       expect.objectContaining({
-        directive: "{{#if has_spouse}}",
+        directive: "{% if has_spouse %}",
         paragraphIndex: 0,
         source: "body",
       }),
@@ -119,9 +123,9 @@ describe("discoverTemplate", () => {
   test("loop infers array field with item fields", async () => {
     const xml = WRAP(
       [
-        P("{{#each sellers}}"),
-        P("{{sellers.name}}, {{sellers.address}}"),
-        P("{{/each}}"),
+        P("{% for seller in sellers %}"),
+        P("{{ seller.name }}, {{ seller.address }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -138,7 +142,9 @@ describe("discoverTemplate", () => {
   });
 
   test("inline static loop infers its array input", async () => {
-    const xml = WRAP(P("Parties: {{#each parties}}party; {{/each}}"));
+    const xml = WRAP(
+      P("Parties: {% for party in parties %}party; {% endfor %}"),
+    );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
@@ -150,7 +156,9 @@ describe("discoverTemplate", () => {
   });
 
   test("inline primitive loop exposes its value item field", async () => {
-    const xml = WRAP(P("Tags: {{#each tags}}{{tags.value}}, {{/each}}"));
+    const xml = WRAP(
+      P("Tags: {% for tag in tags %}{{ tag.value }}, {% endfor %}"),
+    );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
@@ -162,12 +170,50 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("an inline loop nested in another is an array of its own", async () => {
+    const xml = WRAP(
+      P(
+        "{% for group in groups %}{{ group.title }}: " +
+          "{% for item in group.items %}{{ item.name }}, {% endfor %}" +
+          "{% endfor %}",
+      ),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.fields.find((field) => field.path === "groups")).toEqual({
+      path: "groups",
+      kind: "array",
+      count: 1,
+      itemFields: [
+        { path: "items.name", kind: "string", count: 1 },
+        { path: "title", kind: "string", count: 1 },
+      ],
+    });
+    expect(
+      result.fields.find((field) => field.path === "groups.items"),
+    ).toEqual({
+      path: "groups.items",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "name", kind: "string", count: 1 }],
+    });
+    // The inner item is not a field of its own: the loop alias names the
+    // array's items, and the manifest speaks the array path.
+    expect(
+      result.fields.find((field) => field.path === "item"),
+    ).toBeUndefined();
+    expect(result.placeholders).toContainEqual({
+      name: "groups.items.name",
+      count: 1,
+    });
+  });
+
   test("inline loops inside block rows inherit the enclosing row path", async () => {
     const xml = WRAP(
       [
-        P("{{#each groups}}"),
-        P("Items: {{#each items}}{{items.name}}, {{/each}}"),
-        P("{{/each}}"),
+        P("{% for group in groups %}"),
+        P("Items: {% for item in items %}{{ item.name }}, {% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
@@ -192,12 +238,12 @@ describe("discoverTemplate", () => {
   test("nested block loop shorthand inherits the enclosing row path", async () => {
     const xml = WRAP(
       [
-        P("{{#each groups}}"),
-        P("{{groups.title}}"),
-        P("{{#each items}}"),
-        P("{{items.name}}"),
-        P("{{/each}}"),
-        P("{{/each}}"),
+        P("{% for group in groups %}"),
+        P("{{ group.title }}"),
+        P("{% for item in items %}"),
+        P("{{ item.name }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
@@ -222,9 +268,9 @@ describe("discoverTemplate", () => {
   test("condition-only paths join repeated row fields", async () => {
     const xml = WRAP(
       [
-        P("{{#each sellers}}"),
-        P("{{sellers.name}}{{#if sellers.is_company}} Ltd{{/if}}"),
-        P("{{/each}}"),
+        P("{% for seller in sellers %}"),
+        P("{{ seller.name }}{% if seller.is_company %} Ltd{% endif %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -240,12 +286,12 @@ describe("discoverTemplate", () => {
   test("block conditions nested in loops join repeated row fields", async () => {
     const xml = WRAP(
       [
-        P("{{#each sellers}}"),
-        P("{{sellers.name}}"),
-        P("{{#if is_company}}"),
+        P("{% for seller in sellers %}"),
+        P("{{ seller.name }}"),
+        P("{% if is_company %}"),
         P("Company"),
-        P("{{/if}}"),
-        P("{{/each}}"),
+        P("{% endif %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -260,9 +306,11 @@ describe("discoverTemplate", () => {
 
   test("preserves dotted primitive loop roots", async () => {
     const xml = WRAP(
-      [P("{{#each deal.tags}}"), P("{{deal.tags.value}}"), P("{{/each}}")].join(
-        "",
-      ),
+      [
+        P("{% for tag in deal.tags %}"),
+        P("{{ tag.value }}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -277,9 +325,11 @@ describe("discoverTemplate", () => {
 
   test("preserves dotted condition-only inputs", async () => {
     const xml = WRAP(
-      [P("{{#if client.has_spouse}}"), P("Spouse details"), P("{{/if}}")].join(
-        "",
-      ),
+      [
+        P("{% if client.has_spouse %}"),
+        P("Spouse details"),
+        P("{% endif %}"),
+      ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -296,13 +346,13 @@ describe("discoverTemplate", () => {
   test("nested loops expose condition inputs at every inherited row scope", async () => {
     const xml = WRAP(
       [
-        P("{{#each groups}}"),
-        P("{{#each groups.items}}"),
-        P("{{#if group_enabled and groups.is_master}}"),
+        P("{% for group in groups %}"),
+        P("{% for item in group.items %}"),
+        P("{% if group_enabled and group.is_master %}"),
         P("Item"),
-        P("{{/if}}"),
-        P("{{/each}}"),
-        P("{{/each}}"),
+        P("{% endif %}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -343,12 +393,12 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       [
         P("Contract: {{contract_date}}"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor: {{guarantor_name}}"),
-        P("{{/if}}"),
-        P("{{#each sellers}}"),
-        P("Seller: {{sellers.name}}"),
-        P("{{/each}}"),
+        P("{% endif %}"),
+        P("{% for seller in sellers %}"),
+        P("Seller: {{ seller.name }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -371,9 +421,9 @@ describe("discoverTemplate", () => {
   test("structure errors for unclosed blocks", async () => {
     const xml = WRAP(
       [
-        P("{{#if x}}"),
+        P("{% if x %}"),
         P("Content"),
-        // Missing {{/if}}
+        // Missing {% endif %}
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -408,7 +458,9 @@ describe("discoverTemplate", () => {
 
   test("field inside #if gets visibleWhen", async () => {
     const xml = WRAP(
-      [P("{{#if isUK}}"), P("Number: {{uk_number}}"), P("{{/if}}")].join(""),
+      [P("{% if isUK %}"), P("Number: {{uk_number}}"), P("{% endif %}")].join(
+        "",
+      ),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -420,7 +472,9 @@ describe("discoverTemplate", () => {
 
   test("fields inside inline branches get visibleWhen", async () => {
     const xml = WRAP(
-      P("{{#if has_spouse}}{{spouse.name}}{{#else}}{{single_name}}{{/if}}"),
+      P(
+        "{% if has_spouse %}{{spouse.name}}{% else %}{{single_name}}{% endif %}",
+      ),
     );
     const result = await discoverTemplate(await makeDocx(xml));
 
@@ -429,15 +483,15 @@ describe("discoverTemplate", () => {
     ).toBe("has_spouse");
     expect(
       result.fields.find((field) => field.path === "single_name")?.visibleWhen,
-    ).toBe("!has_spouse");
+    ).toBe("not has_spouse");
   });
 
   test("inline visibility composes with its enclosing block", async () => {
     const xml = WRAP(
       [
-        P("{{#if is_person}}"),
-        P("{{#if has_spouse}}{{spouse.name}}{{/if}}"),
-        P("{{/if}}"),
+        P("{% if is_person %}"),
+        P("{% if has_spouse %}{{spouse.name}}{% endif %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
@@ -449,9 +503,12 @@ describe("discoverTemplate", () => {
 
   test("field outside #if has no visibleWhen", async () => {
     const xml = WRAP(
-      [P("{{name}}"), P("{{#if isUK}}"), P("{{uk_number}}"), P("{{/if}}")].join(
-        "",
-      ),
+      [
+        P("{{name}}"),
+        P("{% if isUK %}"),
+        P("{{uk_number}}"),
+        P("{% endif %}"),
+      ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -464,9 +521,9 @@ describe("discoverTemplate", () => {
     const xml = WRAP(
       [
         P("{{name}}"),
-        P("{{#if isUK}}"),
+        P("{% if isUK %}"),
         P("{{name}} again"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -476,48 +533,48 @@ describe("discoverTemplate", () => {
     expect(nameField?.visibleWhen).toBeUndefined();
   });
 
-  test("field in #else gets negated visibleWhen", async () => {
+  test("field in {% else %} gets negated visibleWhen", async () => {
     const xml = WRAP(
       [
-        P("{{#if isUK}}"),
+        P("{% if isUK %}"),
         P("{{uk_number}}"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("{{other_number}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
     const otherField = result.fields.find((f) => f.path === "other_number");
-    expect(otherField?.visibleWhen).toBe("!isUK");
+    expect(otherField?.visibleWhen).toBe("not isUK");
   });
 
-  test("field in #elseif gets compound visibleWhen", async () => {
+  test("field in {% elif %} gets compound visibleWhen", async () => {
     const xml = WRAP(
       [
-        P("{{#if isUK}}"),
+        P("{% if isUK %}"),
         P("{{uk_field}}"),
-        P("{{#elseif isDE}}"),
+        P("{% elif isDE %}"),
         P("{{de_field}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
     const deField = result.fields.find((f) => f.path === "de_field");
-    expect(deField?.visibleWhen).toBe("!isUK and isDE");
+    expect(deField?.visibleWhen).toBe("not isUK and isDE");
   });
 
   test("nested #if combines conditions with and", async () => {
     const xml = WRAP(
       [
-        P("{{#if isUK}}"),
-        P("{{#if hasLicense}}"),
+        P("{% if isUK %}"),
+        P("{% if hasLicense %}"),
         P("{{license_number}}"),
-        P("{{/if}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
@@ -529,7 +586,7 @@ describe("discoverTemplate", () => {
 
   test("condition driver field has no visibleWhen", async () => {
     const xml = WRAP(
-      [P("{{#if isUK}}"), P("{{uk_number}}"), P("{{/if}}")].join(""),
+      [P("{% if isUK %}"), P("{{uk_number}}"), P("{% endif %}")].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
@@ -540,23 +597,23 @@ describe("discoverTemplate", () => {
     expect(isUKField?.visibleWhen).toBeUndefined();
   });
 
-  test("else after elseif gets full negation", async () => {
+  test("else after elif gets full negation", async () => {
     const xml = WRAP(
       [
-        P("{{#if isUK}}"),
+        P("{% if isUK %}"),
         P("{{uk_field}}"),
-        P("{{#elseif isDE}}"),
+        P("{% elif isDE %}"),
         P("{{de_field}}"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("{{other_field}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const buf = await makeDocx(xml);
     const result = await discoverTemplate(buf);
 
     const otherField = result.fields.find((f) => f.path === "other_field");
-    expect(otherField?.visibleWhen).toBe("!isUK and !isDE");
+    expect(otherField?.visibleWhen).toBe("not isUK and not isDE");
   });
 });
 
@@ -566,7 +623,11 @@ describe("template authoring warnings", () => {
 
   test("a loop placeholder written without its item prefix is reported", async () => {
     const xml = WRAP(
-      [P("{{#each attorneys}}"), P("{{name}}"), P("{{/each}}")].join(""),
+      [
+        P("{% for attorney in attorneys %}"),
+        P("{{name}}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
 
@@ -579,23 +640,25 @@ describe("template authoring warnings", () => {
 
     expect(result.warnings).toEqual([
       {
-        code: "unprefixed_item_path",
+        code: "unaliased_item_path",
         path: "name",
-        message: expect.stringContaining("{{#each attorneys}}"),
-        hint: "Write {{attorneys.name}} to fill it from each attorneys item.",
+        message: expect.stringContaining("{% for attorney in attorneys %}"),
+        hint: "Write {{ attorney.name }} to fill it from each attorneys item.",
       },
     ]);
   });
 
   test("an inline loop scopes its own placeholders", async () => {
-    const unprefixed = WRAP(P("{{#each attorneys}} {{name}} {{/each}}"));
+    const unprefixed = WRAP(
+      P("{% for attorney in attorneys %} {{name}} {% endfor %}"),
+    );
     const prefixed = WRAP(
-      P("{{#each attorneys}} {{attorneys.name}} {{/each}}"),
+      P("{% for attorney in attorneys %} {{ attorney.name }} {% endfor %}"),
     );
 
     expect(
       codesOf((await discoverTemplate(await makeDocx(unprefixed))).warnings),
-    ).toEqual(["unprefixed_item_path"]);
+    ).toEqual(["unaliased_item_path"]);
     expect((await discoverTemplate(await makeDocx(prefixed))).warnings).toEqual(
       [],
     );
@@ -604,11 +667,11 @@ describe("template authoring warnings", () => {
   test("a nested loop accepts either the declared or the qualified path", async () => {
     const xml = WRAP(
       [
-        P("{{#each contracts}}"),
-        P("{{#each items}}"),
-        P("{{contracts.items.name}}"),
-        P("{{/each}}"),
-        P("{{/each}}"),
+        P("{% for contract in contracts %}"),
+        P("{% for item in items %}"),
+        P("{{ contract.items.name }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
@@ -618,47 +681,55 @@ describe("template authoring warnings", () => {
 
   test("a placeholder outside every loop is not an item-path warning", async () => {
     const xml = WRAP(
-      [P("{{client.name}}"), P("{{#each attorneys}}"), P("{{/each}}")].join(""),
+      [
+        P("{{client.name}}"),
+        P("{% for attorney in attorneys %}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
 
     expect(result.warnings).toEqual([]);
   });
 
-  test("a this-prefixed placeholder is reported", async () => {
+  test("a placeholder that misses the loop alias is reported", async () => {
     const xml = WRAP(
-      [P("{{#each attorneys}}"), P("{{this.name}}"), P("{{/each}}")].join(""),
+      [
+        P("{% for attorney in attorneys %}"),
+        P("{{this.name}}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
 
     expect(result.warnings).toEqual([
       {
-        code: "this_prefix",
+        code: "unaliased_item_path",
         path: "this.name",
-        message: expect.stringContaining("{{this.name}}"),
-        hint: "Inside {{#each items}} write the loop path: {{items.name}}.",
+        message: expect.stringContaining("{% for attorney in attorneys %}"),
+        hint: "Write {{ attorney.this.name }} to fill it from each attorneys item.",
       },
     ]);
   });
 
-  test("block tokens outside the grammar are reported as unknown directives", async () => {
+  test("old-dialect and unsupported tags are reported with their replacement", async () => {
     const xml = WRAP(
       [
+        P("{% for attorney in attorneys %}"),
+        P("{{ attorney.name }}"),
         P("{{#each attorneys}}"),
-        P("{{attorneys.name}}"),
-        P("{{#endeach}}"),
-        P("{{/endif}}"),
+        P("{% set x = 1 %}"),
       ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
 
     expect(codesOf(result.warnings)).toEqual([
-      "unknown_directive",
-      "unknown_directive",
+      "legacy_marker",
+      "unsupported_tag",
     ]);
     expect(result.warnings.map(({ path }) => path)).toEqual([
-      "{{#endeach}}",
-      "{{/endif}}",
+      "{{#each attorneys}}",
+      "{% set x = 1 %}",
     ]);
   });
 
@@ -674,7 +745,7 @@ describe("template authoring warnings", () => {
         code: "bracket_index",
         path: "{{attorneys[0].name}}",
         message: expect.stringContaining("brackets"),
-        hint: expect.stringContaining("{{#each items}}"),
+        hint: expect.stringContaining("{% for item in items %}"),
       },
     ]);
   });
@@ -693,9 +764,11 @@ describe("template authoring warnings", () => {
 
   test("condition expressions expose the paths they read", async () => {
     const xml = WRAP(
-      [P("{{#if has_guarantor}}"), P("{{guarantor.name}}"), P("{{/if}}")].join(
-        "",
-      ),
+      [
+        P("{% if has_guarantor %}"),
+        P("{{guarantor.name}}"),
+        P("{% endif %}"),
+      ].join(""),
     );
     const result = await discoverTemplate(await makeDocx(xml));
 
@@ -709,8 +782,8 @@ describe("row-form block markers", () => {
       TBL(
         TR(TC(P("Deliverable")), TC(P("Fee"))),
         TR(
-          TC(P("{{#each deliverables}}{{deliverables.item}}")),
-          TC(P("{{deliverables.fee}}{{/each}}")),
+          TC(P("{% for deliverable in deliverables %}{{ deliverable.item }}")),
+          TC(P("{{ deliverable.fee }}{% endfor %}")),
         ),
       ),
     );
@@ -718,8 +791,11 @@ describe("row-form block markers", () => {
       TBL(
         TR(TC(P("Deliverable")), TC(P("Fee"))),
         TR(
-          TC(P("{{#each deliverables}}"), P("{{deliverables.item}}")),
-          TC(P("{{deliverables.fee}}"), P("{{/each}}")),
+          TC(
+            P("{% for deliverable in deliverables %}"),
+            P("{{ deliverable.item }}"),
+          ),
+          TC(P("{{ deliverable.fee }}"), P("{% endfor %}")),
         ),
       ),
     );
@@ -748,8 +824,8 @@ describe("row-form block markers", () => {
     const xml = WRAP(
       TBL(
         TR(
-          TC(P("{{#if penalty}}Late fee")),
-          TC(P("{{penalty_amount}}{{/if}}")),
+          TC(P("{% if penalty %}Late fee")),
+          TC(P("{{penalty_amount}}{% endif %}")),
         ),
       ),
     );

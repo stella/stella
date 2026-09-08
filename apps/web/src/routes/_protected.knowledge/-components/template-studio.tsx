@@ -51,6 +51,17 @@ import { toSafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
 import { inputTypeValueKind } from "@/lib/value-types";
+import type { BlockGestureKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
+import {
+  clauseSlotMarker,
+  conditionBranchTag,
+  conditionOpenTag,
+  CONDITION_CLOSE_TAG,
+  fieldMarker,
+  loopOpenTag,
+  LOOP_CLOSE_TAG,
+  rewriteFieldMarkerPath,
+} from "@/routes/_protected.knowledge/-components/template-markers";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
   protectedRouteApi,
@@ -167,9 +178,15 @@ const MIRROR_SOURCE_MAX_CHARS = 400;
 /** Mirror-offer toasts stay long enough to rename the placeholder first. */
 const MIRROR_OFFER_TOAST_MS = 10_000;
 /** Item key a field gets when it turns repeatable: `lawyer` re-paths to
- *  `lawyer.value` under `{{#each lawyer}}` — the engine's object-item
- *  convention (bare `{{lawyer}}` inside its own loop never substitutes). */
+ *  `lawyer.value` under `{% for … in lawyer %}` — the engine's object-item
+ *  convention (a bare `{{ lawyer }}` inside its own loop never substitutes). */
 const LOOP_ITEM_KEY = "value";
+
+/** Stand-in names a fresh block insert selects, so typing renames the
+ *  condition, the array, or the clause slot immediately. */
+const CONDITION_PLACEHOLDER = "condition";
+const LOOP_PLACEHOLDER = "items";
+const CLAUSE_PLACEHOLDER = "Clause";
 
 /** The first field path not already taken: `field`, then `field_2`, `field_3`… */
 const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
@@ -180,19 +197,19 @@ const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
   return path;
 };
 
-// True when the caret sits inside an `{{#each}}…{{/each}}` body, paired by
-// walking sorted directives with a stack. An `each` opener encloses the
-// caret when `opener.to <= head` and its matching `endeach.from >= head`.
-const caretInEachBlock = (state: EditorState): boolean => {
+// True when the caret sits inside a `{% for %}`…`{% endfor %}` body, paired by
+// walking sorted directives with a stack. A `for` opener encloses the
+// caret when `opener.to <= head` and its matching `endfor.from >= head`.
+const caretInForBlock = (state: EditorState): boolean => {
   const head = state.selection.from;
   const directives = getTemplateDirectives(state).toSorted(
     (a, b) => a.from - b.from,
   );
   const stack: DirectiveRange[] = [];
   for (const d of directives) {
-    if (d.kind === "each") {
+    if (d.kind === "for") {
       stack.push(d);
-    } else if (d.kind === "endeach") {
+    } else if (d.kind === "endfor") {
       const open = stack.pop();
       if (open !== undefined && open.to <= head && d.from >= head) {
         return true;
@@ -202,8 +219,8 @@ const caretInEachBlock = (state: EditorState): boolean => {
   return false;
 };
 
-// The innermost opener/closer pair (e.g. `{{#if}}`/`{{/if}}` or
-// `{{#each}}`/`{{/each}}`) that encloses this field's marker, paired by
+// The innermost opener/closer pair (e.g. `{% if %}`/`{% endif %}` or
+// `{% for %}`/`{% endfor %}`) that encloses this field's marker, paired by
 // walking the sorted directives like buildOutline does. Returns null when the
 // marker is not inside any matching block.
 const enclosingDirectivePair = (
@@ -297,7 +314,7 @@ export const TemplateStudioPage = ({
     }
   }, [markDirty]);
   // Right-click on selected text offers the structural gestures directly:
-  // turn it into a {{field}}, or wrap it in a condition / loop block.
+  // turn it into a value marker, or wrap it in a condition / loop block.
   const makeFieldContextItems = useMemo(
     () => [
       {
@@ -534,7 +551,7 @@ export const TemplateStudioPage = ({
   /** Bilingual mirror for Make field: ask the model for the EXACT verbatim
    *  substring of the parallel cell that corresponds to the source phrase,
    *  then queue an accept/reject in-document suggestion replacing it with
-   *  the same `{{path}}` marker. No confident verbatim hit, no proposal. */
+   *  the same value marker. No confident verbatim hit, no proposal. */
   const proposeFieldMirror = async ({
     path,
     sourceText,
@@ -549,7 +566,7 @@ export const TemplateStudioPage = ({
       text: sibling.text,
       instructions:
         `This text is the parallel-language twin of a clause in which the ` +
-        `exact phrase "${phrase}" became the field {{${path}}}. Return ` +
+        `exact phrase "${phrase}" became the field ${fieldMarker(path)}. Return ` +
         `exactly ONE suggestion: fieldPath must be "${path}" and ` +
         `literalText must be the EXACT verbatim substring of this text ` +
         `that corresponds to that phrase. If there is no clear ` +
@@ -577,7 +594,7 @@ export const TemplateStudioPage = ({
         spec: {
           id: `mirror-field-${path}`,
           literalText: literal,
-          suggestedText: `{{${path}}}`,
+          suggestedText: fieldMarker(path),
           topic: path,
           rationale: t("templates.studio.mirrorFieldRationale"),
           scopeText: sibling.text,
@@ -609,7 +626,7 @@ export const TemplateStudioPage = ({
     ]);
   };
 
-  // The hero gesture: turn the current text selection into a `{{field}}`,
+  // The hero gesture: turn the current text selection into a value marker,
   // deriving a unique field path from the selected text and registering it in
   // the session (the dispatched selection change re-runs syncSelection).
   // Returns the created path so callers can apply extra config on top.
@@ -632,7 +649,7 @@ export const TemplateStudioPage = ({
       path = `${base}_${n}`;
     }
     view.dispatch(
-      view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
+      view.state.tr.insertText(fieldMarker(path), from, to).scrollIntoView(),
     );
     view.focus();
     upsertField(path, {});
@@ -665,7 +682,7 @@ export const TemplateStudioPage = ({
   const insertInline = (text: string) =>
     withEditorView((view) => {
       const { from, to } = view.state.selection;
-      // Inserting inside an existing {{marker}} would nest markers and break
+      // Inserting inside an existing marker would nest markers and break
       // the grammar. Strict interior overlap only: a caret parked at a
       // marker's edge is a legitimate insertion point.
       const intersects = getTemplateDirectives(view.state).some(
@@ -695,12 +712,13 @@ export const TemplateStudioPage = ({
   ) =>
     withEditorView((view) => {
       const { from, to } = options?.range ?? view.state.selection;
-      // A lookup field's non-default output is addressed by `{{path.key}}`;
-      // the bare `{{path}}` renders the default (first) format.
-      const marker =
+      // A lookup field's non-default output is addressed by `{{ path.key }}`;
+      // the bare `{{ path }}` renders the default (first) format.
+      const marker = fieldMarker(
         options?.formatKey === undefined
-          ? `{{${path}}}`
-          : `{{${path}.${options.formatKey}}}`;
+          ? path
+          : `${path}.${options.formatKey}`,
+      );
       view.dispatch(
         view.state.tr.insertText(marker, from, to).scrollIntoView(),
       );
@@ -737,8 +755,11 @@ export const TemplateStudioPage = ({
         return;
       }
       const para = (text: string) => markerParagraph(state, paragraph, text);
+      // Search from the end: the name to rename is the tag's last token, and
+      // a `{% for item in item %}` opener repeats it as the loop variable.
+      const placeholderOffset = open.lastIndexOf(placeholder);
       const selectPlaceholder = (tr: Transaction, openStart: number) => {
-        const namePos = openStart + 1 + open.indexOf(placeholder);
+        const namePos = openStart + 1 + placeholderOffset;
         return tr.setSelection(
           TextSelection.create(tr.doc, namePos, namePos + placeholder.length),
         );
@@ -746,7 +767,7 @@ export const TemplateStudioPage = ({
       const { from, to } = range ?? state.selection;
       try {
         // Inline condition: a partial selection inside one paragraph wraps the
-        // selected text in inline {{#if}}…{{/if}} markers (the fill engine
+        // selected text in inline `{% if %}`…`{% endif %}` tags (the fill engine
         // resolves them mid-paragraph), instead of promoting whole paragraphs.
         if (allowInline && from !== to) {
           const $from = state.doc.resolve(from);
@@ -756,7 +777,7 @@ export const TemplateStudioPage = ({
             $to.parentOffset === $to.parent.content.size;
           if ($from.sameParent($to) && !wholeParagraph) {
             const tr = state.tr.insertText(close, to).insertText(open, from);
-            const namePos = from + open.indexOf(placeholder);
+            const namePos = from + placeholderOffset;
             view.dispatch(
               tr
                 .setSelection(
@@ -814,33 +835,45 @@ export const TemplateStudioPage = ({
       "field",
       useTemplateStudioStore.getState().fields,
     );
-    insertInline(`{{${path}}}`);
+    insertInline(fieldMarker(path));
     upsertField(path, {});
   };
 
   const insertCondition = (range?: { from: number; to: number }) =>
-    insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range, true);
+    insertOrWrapBlock(
+      conditionOpenTag(CONDITION_PLACEHOLDER),
+      CONDITION_CLOSE_TAG,
+      CONDITION_PLACEHOLDER,
+      range,
+      true,
+    );
   // Place an already-defined condition by its expression (an empty expr falls
   // back to the generic placeholder, matching a fresh insert).
   const insertExistingCondition = (expr: string) => {
     const conditionExpr = expr.trim() || "condition";
     insertOrWrapBlock(
-      `{{#if ${conditionExpr}}}`,
-      "{{/if}}",
+      conditionOpenTag(conditionExpr),
+      CONDITION_CLOSE_TAG,
       conditionExpr,
       undefined,
       true,
     );
   };
   const insertLoop = (range?: { from: number; to: number }) =>
-    insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
-  const insertClause = () => insertInline("{{@clause:Clause}}");
+    insertOrWrapBlock(
+      loopOpenTag(LOOP_PLACEHOLDER),
+      LOOP_CLOSE_TAG,
+      LOOP_PLACEHOLDER,
+      range,
+      true,
+    );
+  const insertClause = () => insertInline(clauseSlotMarker(CLAUSE_PLACEHOLDER));
 
   /** Explicit-click block mirror: wrap the parallel cell's paragraphs in
    *  the same block. The opener's live expression is read at click time via
    *  the synced selected directive (the user typically renames the
    *  placeholder before clicking), so the mirror uses the final name. */
-  const applyBlockMirror = (kind: "if" | "each") => {
+  const applyBlockMirror = (kind: BlockGestureKind) => {
     const view = editorViewRef.current;
     const { selected } = useTemplateStudioStore.getState();
     const expr = selected?.expr.trim() ?? "";
@@ -855,13 +888,19 @@ export const TemplateStudioPage = ({
       return;
     }
     if (kind === "if") {
-      insertOrWrapBlock(`{{#if ${expr}}}`, "{{/if}}", expr, range, true);
+      insertOrWrapBlock(
+        conditionOpenTag(expr),
+        CONDITION_CLOSE_TAG,
+        expr,
+        range,
+        true,
+      );
     } else {
-      insertOrWrapBlock(`{{#each ${expr}}}`, "{{/each}}", expr, range, true);
+      insertOrWrapBlock(loopOpenTag(expr), LOOP_CLOSE_TAG, expr, range, true);
     }
   };
 
-  const offerBlockMirror = (kind: "if" | "each") => {
+  const offerBlockMirror = (kind: BlockGestureKind) => {
     stellaToast.add({
       title: t("templates.studio.mirrorBlockOffer"),
       type: "info",
@@ -876,7 +915,7 @@ export const TemplateStudioPage = ({
   /** Wrap-in-condition/loop with the bilingual-mirror offer on top: detect
    *  the parallel cell before the wrap shifts positions, then toast. */
   const wrapBlockWithMirrorOffer = (
-    kind: "if" | "each",
+    kind: BlockGestureKind,
     range?: { from: number; to: number },
   ) => {
     const view = editorViewRef.current;
@@ -904,8 +943,8 @@ export const TemplateStudioPage = ({
       insertExistingFieldAt(path, { range }),
     insertExistingCondition: (conditionName, range) =>
       insertOrWrapBlock(
-        `{{#if ${conditionName}}}`,
-        "{{/if}}",
+        conditionOpenTag(conditionName),
+        CONDITION_CLOSE_TAG,
         conditionName,
         range,
         true,
@@ -917,7 +956,7 @@ export const TemplateStudioPage = ({
         );
         view.dispatch(
           view.state.tr
-            .insertText(`{{@clause:${slotName}}}`, range.from, range.to)
+            .insertText(clauseSlotMarker(slotName), range.from, range.to)
             .scrollIntoView(),
         );
         view.focus();
@@ -956,9 +995,9 @@ export const TemplateStudioPage = ({
         view.dispatch(
           state.tr
             .insert(pos, [
-              para(`{{#each ${loopPath}}}`),
-              ...fieldPaths.map((path) => para(`{{${path}}}`)),
-              para("{{/each}}"),
+              para(loopOpenTag(loopPath)),
+              ...fieldPaths.map((path) => para(fieldMarker(path))),
+              para(LOOP_CLOSE_TAG),
             ])
             .scrollIntoView(),
         );
@@ -978,7 +1017,7 @@ export const TemplateStudioPage = ({
         prepared.fields.map((f) => f.path),
       );
     } else {
-      insertInline(prepared.fields.map((f) => `{{${f.path}}}`).join(" "));
+      insertInline(prepared.fields.map((f) => fieldMarker(f.path)).join(" "));
     }
     for (const field of prepared.fields) {
       upsertField(field.path, field.config);
@@ -1032,7 +1071,7 @@ export const TemplateStudioPage = ({
       markSaved();
 
       // Flush deferred link-row slot renames now that the document (with its
-      // already-rewritten {{@clause:...}} markers) is persisted, so the row
+      // already-rewritten clause markers) is persisted, so the row
       // rename can never outlive an unsaved document edit. Only the
       // pre-save snapshot flushes; the live log may have grown mid-save.
       const { dropPendingSlotRenames } = useTemplateStudioStore.getState();
@@ -1105,7 +1144,7 @@ export const TemplateStudioPage = ({
       // Invalidate the templates subtree (which nests the clauses, check, and
       // preview keys) only AFTER the flush: refetching between the document
       // POST and the link-row PATCHes would observe the intermediate state
-      // where the stored DOCX already carries the renamed {{@clause:...}}
+      // where the stored DOCX already carries the renamed clause
       // markers but template_clauses.slotName does not, showing a false
       // check-badge mismatch.
       //
@@ -1156,7 +1195,8 @@ export const TemplateStudioPage = ({
 
   // Repeatable ON: rename the field to the loop-item convention
   // (`lawyer` → `lawyer.value`, every marker rewritten), then wrap the first
-  // marker's containing paragraph in `{{#each lawyer}}` / `{{/each}}`. The
+  // marker's containing paragraph in `{% for … in lawyer %}` / `{% endfor %}`.
+  // The
   // wrap is paragraph-anchored like insertOrWrapBlock (works inside table
   // cells) but keeps the caret in the marker so the field face stays open.
   const makeFieldRepeatable = (path: string): boolean => {
@@ -1187,11 +1227,11 @@ export const TemplateStudioPage = ({
       return false;
     }
     // Inline-or-block wrap, matching conditions: an inline marker becomes an
-    // inline {{#each}} (the fill engine resolves these), a whole-paragraph
+    // inline `{% for %}` (the fill engine resolves these), a whole-paragraph
     // marker promotes to its own opener/closer paragraphs.
     insertOrWrapBlock(
-      `{{#each ${path}}}`,
-      "{{/each}}",
+      loopOpenTag(path),
+      LOOP_CLOSE_TAG,
       path,
       { from: marker.from, to: marker.to },
       true,
@@ -1219,7 +1259,7 @@ export const TemplateStudioPage = ({
     }
     // Read the loop name first and verify this field actually belongs to it;
     // the shared remover otherwise mirrors unwrapFieldCondition's guard/delete.
-    const pair = enclosingDirectivePair(view.state, path, "each", "endeach");
+    const pair = enclosingDirectivePair(view.state, path, "for", "endfor");
     if (pair === null) {
       return false;
     }
@@ -1227,7 +1267,7 @@ export const TemplateStudioPage = ({
     if (!path.startsWith(`${loopPath}.`)) {
       return false;
     }
-    const result = removeEnclosingDirectiveParagraphs(path, "each", "endeach");
+    const result = removeEnclosingDirectiveParagraphs(path, "for", "endfor");
     if (result === null) {
       return false;
     }
@@ -1238,7 +1278,7 @@ export const TemplateStudioPage = ({
     return actionsRef.current?.renameFieldPath(path, flatPath) ?? false;
   };
 
-  // Inline-wrap this field's own marker in `{{#if condition}}…{{/if}}`. The
+  // Inline-wrap this field's own marker in `{% if condition %}`…`{% endif %}`. The
   // marker is text inside one paragraph, so insertCondition's inline branch
   // wraps it in place; the field face stays open (the caret remains in the
   // marker). The expression is set straight after via the shared condition
@@ -1258,7 +1298,7 @@ export const TemplateStudioPage = ({
     insertCondition({ from: marker.from, to: marker.to });
     // The wrap moves the caret into the new opener's placeholder name; park it
     // back inside the field marker so the field face stays open. The opener
-    // adds `{{#if condition}}` (length below) before the marker's old start.
+    // is inserted before the marker's old start.
     const reopened = getTemplateDirectives(view.state)
       .filter((d) => d.kind === "placeholder" && d.expr === path)
       .toSorted((a, b) => a.from - b.from)
@@ -1326,7 +1366,7 @@ export const TemplateStudioPage = ({
     return pair;
   };
 
-  // Rewrite the `{{#if …}}` opener of the block that encloses this field's
+  // Rewrite the `{% if … %}` opener of the block that encloses this field's
   // marker (re-derived from the live document, so it works whether the block
   // was just created by wrapFieldInCondition or already existed).
   const rewriteFieldConditionExpr = (path: string, next: string): boolean => {
@@ -1343,7 +1383,7 @@ export const TemplateStudioPage = ({
       return true;
     }
     const tr = view.state.tr.insertText(
-      `{{#if ${trimmed}}}`,
+      conditionOpenTag(trimmed),
       pair.opener.from,
       pair.opener.to,
     );
@@ -1364,7 +1404,7 @@ export const TemplateStudioPage = ({
     return true;
   };
 
-  // Remove the inline `{{#if …}}` / `{{/if}}` pair around this field's marker,
+  // Remove the inline `{% if … %}` / `{% endif %}` pair around this field's marker,
   // keeping the field. Guarded: only when the block body holds nothing but
   // this field's marker (the face disables Remove otherwise). Delete the
   // closer first so the opener's positions stay valid.
@@ -1386,17 +1426,11 @@ export const TemplateStudioPage = ({
       if (!view) {
         return;
       }
-      const positional = buildPositionalText(view.state.doc);
-      const literal = `{{${path}}}`;
-      const ranges: { from: number; to: number }[] = [];
-      let idx = positional.text.indexOf(literal);
-      while (idx !== -1) {
-        ranges.push({
-          from: positional.pmPositionAt(idx),
-          to: positional.pmPositionAt(idx + literal.length - 1) + 1,
-        });
-        idx = positional.text.indexOf(literal, idx + literal.length);
-      }
+      // Delete the scanned marker ranges, not a literal text match: a value
+      // marker carries the field's filter chain, so its text is not `{{path}}`.
+      const ranges = getTemplateDirectives(view.state)
+        .filter((d) => d.kind === "placeholder" && d.expr === path)
+        .toSorted((a, b) => a.from - b.from);
       if (ranges.length > 0) {
         const tr = view.state.tr;
         for (const range of ranges.toReversed()) {
@@ -1431,11 +1465,11 @@ export const TemplateStudioPage = ({
     insertLoop,
     insertClause,
     insertRecipe,
-    insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
+    insertClauseSlot: (slotName) => insertInline(clauseSlotMarker(slotName)),
     insertText: (text) => insertInline(text),
     isCaretInLoop: () => {
       const view = editorViewRef.current;
-      return view !== null && caretInEachBlock(view.state);
+      return view !== null && caretInForBlock(view.state);
     },
     makeField: () => {
       makeField();
@@ -1525,37 +1559,34 @@ export const TemplateStudioPage = ({
       if (!isFieldPath(trimmed) || taken) {
         return false;
       }
-      // Rewrite the bare `{{oldPath}}` marker plus every keyed lookup marker
-      // `{{oldPath.<formatKey>}}` (a lookup field's non-default formats are
-      // addressed by `{{path.key}}`; the bare marker renders the default).
-      // Each rewrite carries the path replacement to apply at its range.
+      // Rewrite the bare marker plus every keyed lookup marker
+      // `{{ oldPath.<formatKey> }}` (a lookup field's non-default formats are
+      // addressed by `{{ path.key }}`; the bare marker renders the default).
+      // Each marker is re-emitted from its own scanned text, so the filter
+      // chain that configures the field survives the rename.
       const renamed = useTemplateStudioStore
         .getState()
         .fields.find((f) => f.path === oldPath);
-      const renamedFormats = optionalArray(renamed?.lookup?.formats);
-      const literals: { literal: string; replacement: string }[] = [
-        { literal: `{{${oldPath}}}`, replacement: `{{${trimmed}}}` },
-        ...renamedFormats.map((format) => ({
-          literal: `{{${oldPath}.${format.key}}}`,
-          replacement: `{{${trimmed}.${format.key}}}`,
-        })),
-      ];
-      // Last occurrence first so earlier positions stay valid while the
-      // transaction accumulates.
-      const positional = buildPositionalText(view.state.doc);
-      const ranges: { from: number; to: number; replacement: string }[] = [];
-      for (const { literal, replacement } of literals) {
-        let idx = positional.text.indexOf(literal);
-        while (idx !== -1) {
-          ranges.push({
-            from: positional.pmPositionAt(idx),
-            to: positional.pmPositionAt(idx + literal.length - 1) + 1,
-            replacement,
-          });
-          idx = positional.text.indexOf(literal, idx + literal.length);
-        }
+      const renamePaths = new Map([[oldPath, trimmed]]);
+      for (const format of optionalArray(renamed?.lookup?.formats)) {
+        renamePaths.set(`${oldPath}.${format.key}`, `${trimmed}.${format.key}`);
       }
-      ranges.sort((a, b) => a.from - b.from);
+      const ranges = getTemplateDirectives(view.state)
+        .flatMap((d) => {
+          const nextPath =
+            d.kind === "placeholder" ? renamePaths.get(d.expr) : undefined;
+          if (nextPath === undefined) {
+            return [];
+          }
+          const replacement = rewriteFieldMarkerPath(
+            view.state.doc.textBetween(d.from, d.to),
+            nextPath,
+          );
+          return replacement === null
+            ? []
+            : [{ from: d.from, to: d.to, replacement }];
+        })
+        .toSorted((a, b) => a.from - b.from);
       const first = ranges.at(0);
       if (first !== undefined) {
         const tr = view.state.tr;
@@ -1603,11 +1634,7 @@ export const TemplateStudioPage = ({
       // Rewrite highest position first so earlier ranges stay valid as the
       // transaction accumulates. Preserve each marker's version modifier.
       for (const d of targets.toSorted((a, b) => b.from - a.from)) {
-        const marker =
-          d.clauseVersion === undefined
-            ? `{{@clause:${trimmed}}}`
-            : `{{@clause:${trimmed}:${d.clauseVersion}}}`;
-        tr.insertText(marker, d.from, d.to);
+        tr.insertText(clauseSlotMarker(trimmed, d.clauseVersion), d.from, d.to);
       }
       // Park the caret inside the first (lowest-position) rewritten marker so
       // selection sync re-derives the clause face with the new slot name.
@@ -1631,7 +1658,7 @@ export const TemplateStudioPage = ({
       if (
         !view ||
         !selected ||
-        (selected.kind !== "if" && selected.kind !== "elseif") ||
+        (selected.kind !== "if" && selected.kind !== "elif") ||
         trimmed === "" ||
         /[{}]/u.test(trimmed)
       ) {
@@ -1640,9 +1667,10 @@ export const TemplateStudioPage = ({
       if (trimmed === selected.expr) {
         return true;
       }
-      const token = selected.kind === "if" ? "#if" : "#elseif";
       const tr = view.state.tr.insertText(
-        `{{${token} ${trimmed}}}`,
+        selected.kind === "if"
+          ? conditionOpenTag(trimmed)
+          : conditionBranchTag(trimmed),
         selected.from,
         selected.to,
       );
@@ -1729,7 +1757,7 @@ export const TemplateStudioPage = ({
                   wrapBlockWithMirrorOffer("if", range);
                 }
                 if (id === WRAP_EACH_CONTEXT_ID) {
-                  wrapBlockWithMirrorOffer("each", range);
+                  wrapBlockWithMirrorOffer("for", range);
                 }
               }}
               customContextMenuItems={makeFieldContextItems}

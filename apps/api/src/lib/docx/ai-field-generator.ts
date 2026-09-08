@@ -398,7 +398,7 @@ const conditionDecisionSchema = v.strictObject({
  * Model-backed decider for AI-decided boolean fields (a boolean FieldMeta with
  * an aiPrompt). Returns `undefined` when the org has no usable AI config or the
  * model fails, so callers leave the condition unset — the referencing
- * `{{#if}}` is then falsy and its block is excluded (the correct default).
+ * `{% if %}` is then falsy and its block is excluded (the correct default).
  */
 export const buildAiConditionDecider = ({
   orgAIConfig,

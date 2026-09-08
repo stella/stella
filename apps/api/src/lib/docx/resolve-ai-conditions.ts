@@ -3,13 +3,13 @@
  *
  * A boolean manifest field with an `aiPrompt` is a yes/no question the model
  * answers at fill time (e.g. "Is this a consumer contract?"). Its value must be
- * a real boolean so the `{{#if field_path}}` block that references it includes
+ * a real boolean so the `{% if field_path %}` block that references it includes
  * or excludes its content correctly.
  *
  * Mirrors `resolveAiFields` (string drafts): this module stays free of any
  * model/provider dependency so it is pure and testable. The fill boundary
  * injects the decider (wired to the org's model); with no decider the field is
- * left unset, so the referencing `{{#if}}` is falsy and the block is excluded —
+ * left unset, so the referencing `{% if %}` is falsy and the block is excluded —
  * the correct default. A value the user actually supplied always wins.
  */
 

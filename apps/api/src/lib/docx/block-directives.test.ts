@@ -89,24 +89,24 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition("items", { items: [] })).toBe(false);
   });
 
-  test("negation: !truthy", () => {
+  test("negation: not truthy", () => {
     expect(
-      evaluateCondition("!is_individual", {
+      evaluateCondition("not is_individual", {
         is_individual: true,
       }),
     ).toBe(false);
   });
 
-  test("negation: !falsy", () => {
+  test("negation: not falsy", () => {
     expect(
-      evaluateCondition("!is_individual", {
+      evaluateCondition("not is_individual", {
         is_individual: false,
       }),
     ).toBe(true);
   });
 
-  test("negation: !missing", () => {
-    expect(evaluateCondition("!missing", {})).toBe(true);
+  test("negation: not missing", () => {
+    expect(evaluateCondition("not missing", {})).toBe(true);
   });
 
   test("equality: string ==", () => {
@@ -218,7 +218,7 @@ describe("evaluateCondition", () => {
 
   test("negation with comparison", () => {
     expect(
-      evaluateCondition('!jurisdiction == "CZ"', {
+      evaluateCondition('not jurisdiction == "CZ"', {
         jurisdiction: "CZ",
       }),
     ).toBe(false);
@@ -226,7 +226,7 @@ describe("evaluateCondition", () => {
 
   test("combined: negation and or", () => {
     expect(
-      evaluateCondition("!has_guarantor or price <= 5000", {
+      evaluateCondition("not has_guarantor or price <= 5000", {
         has_guarantor: false,
         price: 10_000,
       }),
@@ -322,13 +322,13 @@ describe("flattenTemplateData", () => {
 // ── scanBlockDirectives ──────────────────────────────────
 
 describe("scanBlockDirectives", () => {
-  test("finds #if and /if", () => {
+  test("finds {% if %} and {% endif %}", () => {
     const xml = WRAP(
       [
         P("Intro"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("Outro"),
       ].join(""),
     );
@@ -345,37 +345,43 @@ describe("scanBlockDirectives", () => {
     ]);
   });
 
-  test("finds #each and /each", () => {
+  test("finds {% for %} and {% endfor %}", () => {
     const xml = WRAP(
-      [P("{{#each sellers}}"), P("{{sellers.name}}"), P("{{/each}}")].join(""),
+      [
+        P("{% for seller in sellers %}"),
+        P("{{ seller.name }}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const body = parseBody(xml);
     const directives = scanBlockDirectives(body);
 
     expect(directives).toEqual([
       {
-        kind: "each",
+        alias: "seller",
+        filters: [],
+        kind: "for",
         expression: "sellers",
         paragraphIndex: 0,
       },
       {
-        kind: "endeach",
+        kind: "endfor",
         expression: "",
         paragraphIndex: 2,
       },
     ]);
   });
 
-  test("finds #elseif and #else", () => {
+  test("finds {% elif %} and {% else %}", () => {
     const xml = WRAP(
       [
-        P('{{#if jurisdiction == "CZ"}}'),
+        P('{% if jurisdiction == "CZ" %}'),
         P("Czech clause"),
-        P('{{#elseif jurisdiction == "SK"}}'),
+        P('{% elif jurisdiction == "SK" %}'),
         P("Slovak clause"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("ICC clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -383,7 +389,7 @@ describe("scanBlockDirectives", () => {
 
     expect(directives).toHaveLength(4);
     expect(directives[0]?.kind).toBe("if");
-    expect(directives[1]?.kind).toBe("elseif");
+    expect(directives[1]?.kind).toBe("elif");
     expect(directives[2]?.kind).toBe("else");
     expect(directives[3]?.kind).toBe("endif");
   });
@@ -398,9 +404,11 @@ describe("scanBlockDirectives", () => {
 
   test("handles extra whitespace", () => {
     const xml = WRAP(
-      [P("  {{#if   has_guarantor  }}  "), P("Content"), P("  {{/if}}  ")].join(
-        "",
-      ),
+      [
+        P("  {% if has_guarantor %}  "),
+        P("Content"),
+        P("  {% endif %}  "),
+      ].join(""),
     );
     const body = parseBody(xml);
     const directives = scanBlockDirectives(body);
@@ -450,10 +458,10 @@ describe("parseBlockTree", () => {
     expect(ifBlock.branches[1]?.condition).toBe(""); // else
   });
 
-  test("if/elseif/else block", () => {
+  test("if/elif/else block", () => {
     const directives = [
       { kind: "if" as const, expression: "a", paragraphIndex: 0 },
-      { kind: "elseif" as const, expression: "b", paragraphIndex: 2 },
+      { kind: "elif" as const, expression: "b", paragraphIndex: 2 },
       { kind: "else" as const, expression: "", paragraphIndex: 4 },
       { kind: "endif" as const, expression: "", paragraphIndex: 6 },
     ];
@@ -470,15 +478,15 @@ describe("parseBlockTree", () => {
     expect(ifBlock.branches[2]?.condition).toBe(""); // else
   });
 
-  test("simple each block", () => {
+  test("simple for block", () => {
     const directives = [
       {
-        kind: "each" as const,
+        kind: "for" as const,
         expression: "sellers",
         paragraphIndex: 0,
       },
       {
-        kind: "endeach" as const,
+        kind: "endfor" as const,
         expression: "",
         paragraphIndex: 3,
       },
@@ -488,7 +496,7 @@ describe("parseBlockTree", () => {
     expect(errors).toEqual([]);
     expect(blocks).toHaveLength(1);
     const each = blocks[0];
-    if (each?.kind !== "each") {
+    if (each?.kind !== "for") {
       throw new Error(`Expected an 'each' block, got ${each?.kind ?? "none"}`);
     }
     expect(each.arrayPath).toBe("sellers");
@@ -496,7 +504,7 @@ describe("parseBlockTree", () => {
     expect(each.contentEnd).toBe(3);
   });
 
-  test("unclosed #if reports error", () => {
+  test("unclosed {% if %} reports error", () => {
     const directives = [
       { kind: "if" as const, expression: "x", paragraphIndex: 0 },
     ];
@@ -506,10 +514,10 @@ describe("parseBlockTree", () => {
     expect(errors[0]?.message).toContain("Unclosed");
   });
 
-  test("unclosed #each reports error", () => {
+  test("unclosed {% for %} reports error", () => {
     const directives = [
       {
-        kind: "each" as const,
+        kind: "for" as const,
         expression: "items",
         paragraphIndex: 0,
       },
@@ -520,7 +528,7 @@ describe("parseBlockTree", () => {
     expect(errors[0]?.message).toContain("Unclosed");
   });
 
-  test("orphaned /if reports error", () => {
+  test("orphaned {% endif %} reports error", () => {
     const directives = [
       { kind: "endif" as const, expression: "", paragraphIndex: 5 },
     ];
@@ -530,11 +538,11 @@ describe("parseBlockTree", () => {
     expect(errors[0]?.message).toContain("Orphaned");
   });
 
-  test("mismatched close: /each inside #if", () => {
+  test("mismatched close: {% endfor %} inside {% if %}", () => {
     const directives = [
       { kind: "if" as const, expression: "x", paragraphIndex: 0 },
       {
-        kind: "endeach" as const,
+        kind: "endfor" as const,
         expression: "",
         paragraphIndex: 2,
       },
@@ -552,9 +560,9 @@ describe("processBlockDirectives — conditionals", () => {
     const xml = WRAP(
       [
         P("Intro"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("Outro"),
       ].join(""),
     );
@@ -569,9 +577,9 @@ describe("processBlockDirectives — conditionals", () => {
     const xml = WRAP(
       [
         P("Intro"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("Outro"),
       ].join(""),
     );
@@ -585,11 +593,11 @@ describe("processBlockDirectives — conditionals", () => {
   test("if/else: true branch", () => {
     const xml = WRAP(
       [
-        P("{{#if is_company}}"),
+        P("{% if is_company %}"),
         P("Company info"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("Individual info"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -602,11 +610,11 @@ describe("processBlockDirectives — conditionals", () => {
   test("if/else: false branch (else)", () => {
     const xml = WRAP(
       [
-        P("{{#if is_company}}"),
+        P("{% if is_company %}"),
         P("Company info"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("Individual info"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -616,16 +624,16 @@ describe("processBlockDirectives — conditionals", () => {
     expect(texts).toEqual(["Individual info"]);
   });
 
-  test("if/elseif/else: first branch", () => {
+  test("if/elif/else: first branch", () => {
     const xml = WRAP(
       [
-        P('{{#if jurisdiction == "CZ"}}'),
+        P('{% if jurisdiction == "CZ" %}'),
         P("Czech clause"),
-        P('{{#elseif jurisdiction == "SK"}}'),
+        P('{% elif jurisdiction == "SK" %}'),
         P("Slovak clause"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("ICC clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -635,16 +643,16 @@ describe("processBlockDirectives — conditionals", () => {
     expect(texts).toEqual(["Czech clause"]);
   });
 
-  test("if/elseif/else: second branch", () => {
+  test("if/elif/else: second branch", () => {
     const xml = WRAP(
       [
-        P('{{#if jurisdiction == "CZ"}}'),
+        P('{% if jurisdiction == "CZ" %}'),
         P("Czech clause"),
-        P('{{#elseif jurisdiction == "SK"}}'),
+        P('{% elif jurisdiction == "SK" %}'),
         P("Slovak clause"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("ICC clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -654,16 +662,16 @@ describe("processBlockDirectives — conditionals", () => {
     expect(texts).toEqual(["Slovak clause"]);
   });
 
-  test("if/elseif/else: else branch", () => {
+  test("if/elif/else: else branch", () => {
     const xml = WRAP(
       [
-        P('{{#if jurisdiction == "CZ"}}'),
+        P('{% if jurisdiction == "CZ" %}'),
         P("Czech clause"),
-        P('{{#elseif jurisdiction == "SK"}}'),
+        P('{% elif jurisdiction == "SK" %}'),
         P("Slovak clause"),
-        P("{{#else}}"),
+        P("{% else %}"),
         P("ICC clause"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -676,9 +684,9 @@ describe("processBlockDirectives — conditionals", () => {
   test("negation in condition", () => {
     const xml = WRAP(
       [
-        P("{{#if !is_individual}}"),
+        P("{% if not is_individual %}"),
         P("Company: {{company_id}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -691,11 +699,11 @@ describe("processBlockDirectives — conditionals", () => {
   test("nested if blocks", () => {
     const xml = WRAP(
       [
-        P("{{#if is_company}}"),
-        P("{{#if has_guarantor}}"),
+        P("{% if is_company %}"),
+        P("{% if has_guarantor %}"),
         P("Company with guarantor"),
-        P("{{/if}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -711,12 +719,12 @@ describe("processBlockDirectives — conditionals", () => {
   test("nested if: inner false", () => {
     const xml = WRAP(
       [
-        P("{{#if is_company}}"),
+        P("{% if is_company %}"),
         P("Company"),
-        P("{{#if has_guarantor}}"),
+        P("{% if has_guarantor %}"),
         P("With guarantor"),
-        P("{{/if}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -732,11 +740,11 @@ describe("processBlockDirectives — conditionals", () => {
   test("nested if: outer false removes all", () => {
     const xml = WRAP(
       [
-        P("{{#if is_company}}"),
-        P("{{#if has_guarantor}}"),
+        P("{% if is_company %}"),
+        P("{% if has_guarantor %}"),
         P("Guarantor"),
-        P("{{/if}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -752,12 +760,12 @@ describe("processBlockDirectives — conditionals", () => {
   test("adjacent if blocks", () => {
     const xml = WRAP(
       [
-        P("{{#if a}}"),
+        P("{% if a %}"),
         P("Block A"),
-        P("{{/if}}"),
-        P("{{#if b}}"),
+        P("{% endif %}"),
+        P("{% if b %}"),
         P("Block B"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -769,7 +777,7 @@ describe("processBlockDirectives — conditionals", () => {
 
   test("empty if block (no content paragraphs)", () => {
     const xml = WRAP(
-      [P("Before"), P("{{#if x}}"), P("{{/if}}"), P("After")].join(""),
+      [P("Before"), P("{% if x %}"), P("{% endif %}"), P("After")].join(""),
     );
     const body = parseBody(xml);
     processBlockDirectives(body, { x: true });
@@ -781,11 +789,11 @@ describe("processBlockDirectives — conditionals", () => {
   test("multi-paragraph content in if", () => {
     const xml = WRAP(
       [
-        P("{{#if show}}"),
+        P("{% if show %}"),
         P("Line 1"),
         P("Line 2"),
         P("Line 3"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -801,17 +809,17 @@ describe("processBlockDirectives — conditionals", () => {
 // A date field rendered to localized display text (e.g. "13. června 2028")
 // must still be compared as its raw ISO value by an ordering condition: the
 // condition engine only orders ISO `YYYY-MM-DD` strings, so without the overlay
-// `{{#if signing_date > "..."}}` would compare the display string and silently
+// `{% if signing_date > "..." %}` would compare the display string and silently
 // evaluate false. The overlay is keyed by field path; substitution still uses
 // the formatted value in `data`.
 describe("processBlockDirectives — raw condition values overlay", () => {
   const DATE_IF = WRAP(
     [
-      P('{{#if signing_date > "2028-01-01"}}'),
+      P('{% if signing_date > "2028-01-01" %}'),
       P("After cutoff"),
-      P("{{#else}}"),
+      P("{% else %}"),
       P("Before cutoff"),
-      P("{{/if}}"),
+      P("{% endif %}"),
     ].join(""),
   );
 
@@ -887,9 +895,9 @@ describe("processBlockDirectives — loops", () => {
     const xml = WRAP(
       [
         P("Sellers:"),
-        P("{{#each sellers}}"),
-        P("Name: {{sellers.name}}"),
-        P("{{/each}}"),
+        P("{% for seller in sellers %}"),
+        P("Name: {{ seller.name }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -911,7 +919,13 @@ describe("processBlockDirectives — loops", () => {
 
   test("primitive rows share the contract-supported value representation", () => {
     const body = parseBody(
-      WRAP([P("{{#each tags}}"), P("{{tags.value}}"), P("{{/each}}")].join("")),
+      WRAP(
+        [
+          P("{% for tag in tags %}"),
+          P("{{ tag.value }}"),
+          P("{% endfor %}"),
+        ].join(""),
+      ),
     );
     const { patchValues } = processBlockDirectives(body, {
       tags: ["one", 2, true],
@@ -936,14 +950,14 @@ describe("processBlockDirectives — loops", () => {
     const body = parseBody(
       WRAP(
         [
-          P("{{#each tags}}"),
-          P('{{#if value == "keep"}}'),
-          P("bare {{tags.value}}"),
-          P("{{/if}}"),
-          P('{{#if tags.value == "keep"}}'),
-          P("qualified {{tags.value}}"),
-          P("{{/if}}"),
-          P("{{/each}}"),
+          P("{% for tag in tags %}"),
+          P('{% if value == "keep" %}'),
+          P("bare {{ tag.value }}"),
+          P("{% endif %}"),
+          P('{% if tag.value == "keep" %}'),
+          P("qualified {{ tag.value }}"),
+          P("{% endif %}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );
@@ -962,11 +976,11 @@ describe("processBlockDirectives — loops", () => {
     const body = parseBody(
       WRAP(
         [
-          P("{{#each deal.tags}}"),
-          P('{{#if deal.tags.value == "keep"}}'),
-          P("{{deal.tags.value}}"),
-          P("{{/if}}"),
-          P("{{/each}}"),
+          P("{% for tag in deal.tags %}"),
+          P('{% if tag.value == "keep" %}'),
+          P("{{ tag.value }}"),
+          P("{% endif %}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );
@@ -981,11 +995,11 @@ describe("processBlockDirectives — loops", () => {
   test("inner-loop condition compares a row's raw date, not the localized text", () => {
     const xml = WRAP(
       [
-        P("{{#each people}}"),
-        P('{{#if dob > "2028-01-01"}}'),
+        P("{% for item in people %}"),
+        P('{% if dob > "2028-01-01" %}'),
         P("After cutoff"),
-        P("{{/if}}"),
-        P("{{/each}}"),
+        P("{% endif %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1012,9 +1026,9 @@ describe("processBlockDirectives — loops", () => {
     const xml = WRAP(
       [
         P("Before"),
-        P("{{#each items}}"),
-        P("Item: {{items.name}}"),
-        P("{{/each}}"),
+        P("{% for item in items %}"),
+        P("Item: {{ item.name }}"),
+        P("{% endfor %}"),
         P("After"),
       ].join(""),
     );
@@ -1028,10 +1042,10 @@ describe("processBlockDirectives — loops", () => {
   test("each with multi-paragraph body", () => {
     const xml = WRAP(
       [
-        P("{{#each sellers}}"),
-        P("Name: {{sellers.name}}"),
-        P("Address: {{sellers.address}}"),
-        P("{{/each}}"),
+        P("{% for seller in sellers %}"),
+        P("Name: {{ seller.name }}"),
+        P("Address: {{ seller.address }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1053,7 +1067,9 @@ describe("processBlockDirectives — loops", () => {
 
   test("each with missing array path removes block", () => {
     const xml = WRAP(
-      [P("{{#each missing}}"), P("Content"), P("{{/each}}")].join(""),
+      [P("{% for item in missing %}"), P("Content"), P("{% endfor %}")].join(
+        "",
+      ),
     );
     const body = parseBody(xml);
     processBlockDirectives(body, {});
@@ -1066,9 +1082,9 @@ describe("processBlockDirectives — loops", () => {
     // Paragraph with bold run
     const xml = WRAP(
       [
-        "<w:p><w:r><w:t>{{#each items}}</w:t></w:r></w:p>",
-        "<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Bold: {{items.x}}</w:t></w:r></w:p>",
-        "<w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>",
+        "<w:p><w:r><w:t>{% for item in items %}</w:t></w:r></w:p>",
+        "<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Bold: {{ item.x }}</w:t></w:r></w:p>",
+        "<w:p><w:r><w:t>{% endfor %}</w:t></w:r></w:p>",
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1091,11 +1107,11 @@ describe("processBlockDirectives — combined", () => {
   test("conditional inside loop", () => {
     const xml = WRAP(
       [
-        P("{{#each sellers}}"),
-        P("{{#if sellers.is_company}}"),
-        P("Company: {{sellers.name}}"),
-        P("{{/if}}"),
-        P("{{/each}}"),
+        P("{% for seller in sellers %}"),
+        P("{% if seller.is_company %}"),
+        P("Company: {{ seller.name }}"),
+        P("{% endif %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1116,12 +1132,12 @@ describe("processBlockDirectives — combined", () => {
   test("loop inside conditional", () => {
     const xml = WRAP(
       [
-        P("{{#if has_sellers}}"),
+        P("{% if has_sellers %}"),
         P("Sellers:"),
-        P("{{#each sellers}}"),
-        P("- {{sellers.name}}"),
-        P("{{/each}}"),
-        P("{{/if}}"),
+        P("{% for seller in sellers %}"),
+        P("- {{ seller.name }}"),
+        P("{% endfor %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1139,11 +1155,11 @@ describe("processBlockDirectives — combined", () => {
   test("loop inside false conditional is removed", () => {
     const xml = WRAP(
       [
-        P("{{#if has_sellers}}"),
-        P("{{#each sellers}}"),
-        P("- {{sellers.name}}"),
-        P("{{/each}}"),
-        P("{{/if}}"),
+        P("{% if has_sellers %}"),
+        P("{% for seller in sellers %}"),
+        P("- {{ seller.name }}"),
+        P("{% endfor %}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1164,9 +1180,9 @@ describe("processBlockDirectives — edge cases", () => {
     // Directive text split across multiple w:r/w:t runs
     const xml = WRAP(
       [
-        "<w:p><w:r><w:t>{{#if </w:t></w:r><w:r><w:t>show}}</w:t></w:r></w:p>",
+        "<w:p><w:r><w:t>{% if </w:t></w:r><w:r><w:t>show %}</w:t></w:r></w:p>",
         P("Visible"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1191,9 +1207,9 @@ describe("processBlockDirectives — edge cases", () => {
   test("returns structural errors", () => {
     const xml = WRAP(
       [
-        P("{{#if x}}"),
+        P("{% if x %}"),
         P("Content"),
-        // Missing {{/if}}
+        // Missing {% endif %}
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1208,19 +1224,23 @@ describe("processBlockDirectives — edge cases", () => {
 
 // ── Loop-scoped clause numbering ─────────────────────────
 
-const numKeysOf = (text: string): string[] =>
-  [...text.matchAll(numPattern())].flatMap((m) => (m[1] ? [m[1]] : []));
+const markerKeys = (text: string, pattern: RegExp): string[] =>
+  [...text.matchAll(pattern)].flatMap((match) => {
+    const key = match.groups?.["key"];
+    return key === undefined ? [] : [key];
+  });
 
-const refKeysOf = (text: string): string[] =>
-  [...text.matchAll(refPattern())].flatMap((m) => (m[1] ? [m[1]] : []));
+const numKeysOf = (text: string): string[] => markerKeys(text, numPattern());
 
-describe("processBlockDirectives — loop-scoped @num/@ref", () => {
-  test("each iteration gets a distinct @num key; intra-iteration @ref follows it", () => {
+const refKeysOf = (text: string): string[] => markerKeys(text, refPattern());
+
+describe("processBlockDirectives — loop-scoped num()/ref()", () => {
+  test("each iteration gets a distinct num() key; intra-iteration ref() follows it", () => {
     const xml = WRAP(
       [
-        P("{{#each items}}"),
-        P("Clause {{@num:item}}. {{items.name}} (see {{@ref:item}})"),
-        P("{{/each}}"),
+        P("{% for item in items %}"),
+        P("Clause {{ num('item') }}. {{ item.name }} (see {{ ref('item') }})"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1241,13 +1261,13 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
     }
   });
 
-  test("@ref to a key defined outside the loop body is left untouched", () => {
+  test("ref() to a key defined outside the loop body is left untouched", () => {
     const xml = WRAP(
       [
-        P("Clause {{@num:base}}. Base."),
-        P("{{#each items}}"),
-        P("Item {{@num:item}} under {{@ref:base}}"),
-        P("{{/each}}"),
+        P("Clause {{ num('base') }}. Base."),
+        P("{% for item in items %}"),
+        P("Item {{ num('item') }} under {{ ref('base') }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1257,7 +1277,7 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
     // Both expanded paragraphs still reference the shared outer key
     const refKeys = texts.flatMap(refKeysOf);
     expect(refKeys).toEqual(["base", "base"]);
-    // While their own @num keys are iteration-scoped and distinct
+    // While their own num() keys are iteration-scoped and distinct
     const itemNumKeys = texts.flatMap(numKeysOf).filter((k) => k !== "base");
     expect(itemNumKeys).toHaveLength(2);
     expect(new Set(itemNumKeys).size).toBe(2);
@@ -1266,12 +1286,12 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
   test("sibling loops over the same array never share numbering keys", () => {
     const xml = WRAP(
       [
-        P("{{#each items}}"),
-        P("First {{@num:item}}"),
-        P("{{/each}}"),
-        P("{{#each items}}"),
-        P("Second {{@num:item}}"),
-        P("{{/each}}"),
+        P("{% for item in items %}"),
+        P("First {{ num('item') }}"),
+        P("{% endfor %}"),
+        P("{% for item in items %}"),
+        P("Second {{ num('item') }}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1285,11 +1305,11 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
   test("nested loops compose suffixes so every occurrence is unique", () => {
     const xml = WRAP(
       [
-        P("{{#each groups}}"),
-        P("{{#each subitems}}"),
-        P("Item {{@num:sub}}"),
-        P("{{/each}}"),
-        P("{{/each}}"),
+        P("{% for group in groups %}"),
+        P("{% for subitem in subitems %}"),
+        P("Item {{ num('sub') }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1305,11 +1325,11 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
   test("primitive nested loop shorthand keeps patch values scoped per outer row", () => {
     const xml = WRAP(
       [
-        P("{{#each groups}}"),
-        P("{{#each subitems}}"),
-        P("{{subitems.value}}"),
-        P("{{/each}}"),
-        P("{{/each}}"),
+        P("{% for group in groups %}"),
+        P("{% for subitem in subitems %}"),
+        P("{{ subitem.value }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);
@@ -1390,14 +1410,16 @@ describe("pruneDanglingNumPr", () => {
   });
 });
 
-// ── Iteration tokens: {{@index}} / {{@count}} ────────────
+// ── Iteration tokens: {{ loop.index }} / {{ loop.length }} ────────────
 
 describe("processBlockDirectives — iteration tokens", () => {
-  test("resolves {{@index}} (1-based) and {{@count}} per item", () => {
+  test("resolves {{ loop.index }} (1-based) and {{ loop.length }} per item", () => {
     const xml = WRAP(
-      [P("{{#each rows}}"), P("{{@index}} of {{@count}}"), P("{{/each}}")].join(
-        "",
-      ),
+      [
+        P("{% for row in rows %}"),
+        P("{{ loop.index }} of {{ loop.length }}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const body = parseBody(xml);
     processBlockDirectives(body, { rows: [{}, {}, {}] });
@@ -1406,16 +1428,24 @@ describe("processBlockDirectives — iteration tokens", () => {
 
   test("empty array removes the block (no tokens emitted)", () => {
     const xml = WRAP(
-      [P("{{#each rows}}"), P("Item {{@index}}"), P("{{/each}}")].join(""),
+      [
+        P("{% for row in rows %}"),
+        P("Item {{ loop.index }}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const body = parseBody(xml);
     processBlockDirectives(body, { rows: [] });
     expect(bodyTexts(body)).toEqual([]);
   });
 
-  test("{{@index}} composes with an item field placeholder", () => {
+  test("{{ loop.index }} composes with an item field placeholder", () => {
     const xml = WRAP(
-      [P("{{#each p}}"), P("{{@index}}. {{p.name}}"), P("{{/each}}")].join(""),
+      [
+        P("{% for item in p %}"),
+        P("{{ loop.index }}. {{ item.name }}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     const body = parseBody(xml);
     const { patchValues } = processBlockDirectives(body, {
@@ -1431,15 +1461,40 @@ describe("processBlockDirectives — iteration tokens", () => {
     expect(patchValues["__each_p_1_name"]).toBe("Bob");
   });
 
-  test("nested loops: {{@index}}/{{@count}} bind to the innermost loop", () => {
+  test("a filter on a nested loop path keeps that loop's keys per outer item", () => {
     const xml = WRAP(
       [
-        P("{{#each groups}}"),
-        P("G{{@index}}/{{@count}}"),
-        P("{{#each groups.items}}"),
-        P("I{{@index}}/{{@count}}"),
-        P("{{/each}}"),
-        P("{{/each}}"),
+        P("{% for group in groups %}"),
+        P('{% for item in group.items | label("Items") %}'),
+        P("{{ item.name }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    const { patchValues } = processBlockDirectives(body, {
+      groups: [{ items: [{ name: "first" }] }, { items: [{ name: "second" }] }],
+    });
+
+    // Each outer item's inner loop writes its own keys; sharing them would
+    // render the last group's values in every group.
+    expect(new Set(Object.keys(patchValues)).size).toBe(
+      Object.keys(patchValues).length,
+    );
+    expect(
+      bodyTexts(body).map((text) => patchValues[text.slice(2, -2)]),
+    ).toEqual(["first", "second"]);
+  });
+
+  test("nested loops: {{ loop.index }}/{{ loop.length }} bind to the innermost loop", () => {
+    const xml = WRAP(
+      [
+        P("{% for group in groups %}"),
+        P("G{{ loop.index }}/{{ loop.length }}"),
+        P("{% for item in group.items %}"),
+        P("I{{ loop.index }}/{{ loop.length }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
       ].join(""),
     );
     const body = parseBody(xml);

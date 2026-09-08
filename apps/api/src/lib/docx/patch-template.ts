@@ -3,8 +3,8 @@
  * template by mutating WordprocessingML directly. Returns
  * diagnostics about unmatched placeholders and unused values.
  *
- * When the template contains block directives ({{#if}},
- * {{#each}}), a pre-processing step manipulates the OOXML
+ * When the template contains block directives ({% if %},
+ * {% for %}), a pre-processing step manipulates the OOXML
  * DOM before value replacement runs.
  */
 
@@ -220,7 +220,7 @@ export const fillTemplate = async (
   const manifest = await readManifestFromZip(zip);
   // A boolean condition-field IS a named condition (addressed by its path), so
   // synthesize both shapes into one list the evaluator resolves bare names
-  // against — `{{#if field_path}}` then resolves the field's rule.
+  // against — `{% if field_path %}` then resolves the field's rule.
   const synthesized = manifest ? manifestNamedConditions(manifest) : [];
   const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
@@ -231,7 +231,7 @@ export const fillTemplate = async (
     effectiveValues = values;
   } else if (isTemplateData(values)) {
     // Raw (pre-format) values stashed by the fill pipeline so a date field that
-    // is both display-formatted and referenced by a `{{#if}}` compares against
+    // is both display-formatted and referenced by a `{% if %}` compares against
     // its ISO value, not the localized string (see CONDITION_RAW_VALUES). On a
     // plain map (no overlay) this is undefined and evaluation uses `values` as
     // before.
@@ -261,13 +261,13 @@ export const fillTemplate = async (
   // Resolve clause cross-references / numbering across the body and every
   // header/footer part — the same shared template-content parts used by value
   // replacement and placeholder discovery — after
-  // conditional removal, so clauses dropped by a {{#if}} are not numbered and
+  // conditional removal, so clauses dropped by a {% if %} are not numbered and
   // references to them stay unresolved. Numbering shares one counter space and
   // `@ref` must resolve across parts, so this is two-phase over a parsed DOM
   // (split-run aware): assignNumbersInDoc over each part threading one shared
   // `numbers` map (body first so document order drives the count), then
   // resolveRefsInDoc over each part with the full map. Operating on the DOM
-  // (paragraph span text) rather than the raw string lets a `{{@num}}`/`{{@ref}}`
+  // (paragraph span text) rather than the raw string lets a `num()`/`ref()`
   // that Word split across runs be seen and rewritten, the same way the
   // placeholder pipeline handles split markers.
   const numberingZip = await JSZip.loadAsync(data);

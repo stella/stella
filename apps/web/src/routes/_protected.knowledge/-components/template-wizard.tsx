@@ -1731,7 +1731,7 @@ export const FieldConfigEditor = ({
   /** The host renders its own formula affordance (the Studio's source
    *  picker); drop the built-in control to avoid duplicating it. */
   hideFormulaControl?: boolean;
-  /** Hide the data-binding affordance. Set for a field inside an `{{#each}}`
+  /** Hide the data-binding affordance. Set for a field inside a `{% for %}`
    *  repeat block: the backend resolver leaves loop-item paths unresolved, so
    *  a binding there would silently produce nothing. */
   hideSourceControl?: boolean;

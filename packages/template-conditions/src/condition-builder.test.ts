@@ -66,9 +66,9 @@ describe("serializeCondition", () => {
     expect(serializeCondition(and())).toBe("");
   });
 
-  test("contains emits a quoted value like the other operators", () => {
+  test("membership emits the literal on the left of `in`", () => {
     expect(serializeCondition(contains("parties", "guarantor"))).toBe(
-      'parties contains "guarantor"',
+      '"guarantor" in parties',
     );
   });
 });
@@ -92,7 +92,7 @@ describe("serializeCondition → evaluateCondition round-trip", () => {
     ).toBe(false);
   });
 
-  test("a contains rule round-trips through the evaluator", () => {
+  test("a membership rule round-trips through the evaluator", () => {
     const containsExpr = serializeCondition(contains("parties", "guarantor"));
     expect(
       evaluateCondition(containsExpr, { parties: ["buyer", "guarantor"] }),

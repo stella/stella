@@ -109,7 +109,7 @@ export const LinkClauseDialog = ({
     enabled: open,
   });
 
-  // Slots discovered in the template document ({{@clause:...}}
+  // Slots discovered in the template document (clause markers
   // markers) and slots already taken by existing links.
   const { data: previewData } = useQuery({
     ...templatePreviewOptions(activeOrganizationId, templateId),

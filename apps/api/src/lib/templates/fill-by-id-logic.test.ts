@@ -160,9 +160,11 @@ describe("fillByIdLogic required fields", () => {
   test("rejects when a required loop item field is missing in one row", async () => {
     let buffer = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buffer = await writeManifest(buffer, {
@@ -203,9 +205,11 @@ describe("fillByIdLogic required fields", () => {
   test("rejects when a required loop item field's row is not an object", async () => {
     let buffer = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buffer = await writeManifest(buffer, {

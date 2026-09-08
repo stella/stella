@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,7 +27,10 @@ import type {
 } from "@stll/folio-react";
 import { displayLanguageName } from "@stll/locales";
 import type { DeterministicFieldConfig } from "@stll/template-conditions";
-import { renderDeterministicFieldValue } from "@stll/template-conditions";
+import {
+  assertNever,
+  renderDeterministicFieldValue,
+} from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { Label } from "@stll/ui/label";
 import {
@@ -83,6 +87,10 @@ import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link
 import { parseArrayItemKey } from "@/routes/_protected.knowledge/-components/template-array-item-key";
 import { TemplateCheckDialog } from "@/routes/_protected.knowledge/-components/template-check-dialog";
 import type { LinkedClause } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import {
+  LOOP_INDEX_MARKER,
+  LOOP_LENGTH_MARKER,
+} from "@/routes/_protected.knowledge/-components/template-markers";
 import {
   ConditionFace,
   LoopFace,
@@ -387,7 +395,7 @@ export const StudioSaveAction = () => {
 // Filling happens in-place as the "Fill" subtab. It targets the *saved*
 // template (the fill endpoint reads from S3). The persisted manifest carries no
 // field kind/itemFields, so re-discover the stored DOCX (the same merge the
-// fill endpoint uses) to get the real field shape — {{#each}} array fields
+// fill endpoint uses) to get the real field shape — `{% for %}` array fields
 // included — rather than reconstructing it from the flat manifest.
 export const TemplateFillFacet = ({
   templateId,
@@ -511,7 +519,7 @@ export const TemplateFillFacet = ({
  *  dispatcher.
  *
  *  Repeatable (array) fields preview with their FIRST item only: the form
- *  names item inputs `path[i].sub` while the `{{#each}}` body's markers use
+ *  names item inputs `path[i].sub` while the `{% for %}` body's markers use
  *  the bare item path (`path.sub`), so item 0's values map onto those paths
  *  and the loop body previews with the first entry. Expanding the loop into
  *  one preview per item is a known future item. */
@@ -723,7 +731,7 @@ const applyCachedLookupRenderings = (
     // `field.path` and every later format under the keyed
     // `${field.path}.${format.key}`; the preview plugin matches markers by
     // exact expression, so each configured format needs its own request and
-    // its own preview slot or keyed markers like `{{company.address}}` stay
+    // its own preview slot or keyed markers like `{{ company.address }}` stay
     // blank.
     for (const [index, format] of lookup.formats.entries()) {
       const request: LookupPreviewRequest = {
@@ -783,9 +791,9 @@ const queueLookupPreviews = (
 
 /** One field entry in an "Existing field…" insert list. A lookup field with
  *  more than one output format expands into a submenu so the author picks WHICH
- *  rendering to insert: the first format as the default (`{{path}}`), each
- *  later format keyed (`{{path.key}}`). Single-format lookups and non-lookup
- *  fields insert with one click as `{{path}}`. */
+ *  rendering to insert: the first format as the default (`{{ path }}`), each
+ *  later format keyed (`{{ path.key }}`). Single-format lookups and non-lookup
+ *  fields insert with one click as `{{ path }}`. */
 export const InsertExistingFieldItem = ({
   field,
   onInsert,
@@ -924,7 +932,7 @@ export const StudioInsertRow = () => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   // Linked clauses feed the Insert > Clause slot submenu so the user picks a
-  // real clause instead of typing a slot name into a bare {{@clause:...}}.
+  // real clause instead of typing a slot name into a bare clause marker.
   const { data: clausesData } = useQuery({
     ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
     enabled: sessionTemplateId !== null,
@@ -933,8 +941,8 @@ export const StudioInsertRow = () => {
   const { data: recipesData } = useQuery(
     templateRecipesOptions(activeOrganizationId),
   );
-  // The loop-token submenu (`{{@index}}`/`{{@count}}`) only makes sense inside
-  // an `{{#each}}` body. `isCaretInLoop` reads the live caret imperatively, so
+  // The loop-counter submenu only makes sense inside
+  // a `{% for %}` body. `isCaretInLoop` reads the live caret imperatively, so
   // recompute it each time the menu opens rather than reactively.
   const [caretInLoop, setCaretInLoop] = useState(false);
   const preserveEditorFocusRef = useRef(false);
@@ -1039,11 +1047,13 @@ export const StudioInsertRow = () => {
                 {t("templates.studio.loop")}
               </MenuSubTrigger>
               <MenuSubPopup>
-                <MenuItem onClick={() => actions.insertText("{{@index}}")}>
+                <MenuItem onClick={() => actions.insertText(LOOP_INDEX_MARKER)}>
                   <HashIcon />
                   {t("templates.studio.insertItemNumber")}
                 </MenuItem>
-                <MenuItem onClick={() => actions.insertText("{{@count}}")}>
+                <MenuItem
+                  onClick={() => actions.insertText(LOOP_LENGTH_MARKER)}
+                >
                   <SigmaIcon />
                   {t("templates.studio.insertItemTotal")}
                 </MenuItem>
@@ -1078,7 +1088,7 @@ export const StudioInsertRow = () => {
                 // Only links bound to a concrete slot are insertable here: fill
                 // resolution matches links by their persisted slotName, so a
                 // slugified-title fallback for a null-slot link would leave its
-                // {{@clause:...}} marker unresolved in the generated document.
+                // clause marker unresolved in the generated document.
                 const slotName = link.slotName;
                 if (slotName === null) {
                   return null;
@@ -1173,30 +1183,47 @@ export const Inspector = ({
   onFieldUpdate,
   onFieldBack,
 }: InspectorProps) => {
-  if (selected?.kind === "placeholder") {
-    const field =
-      fields.find((f) => f.path === selected.expr) ??
-      defaultStudioField(selected.expr);
-    return (
-      <FieldFace
-        field={field}
-        key={field.path}
-        onBack={onFieldBack}
-        onUpdate={(patch) => onFieldUpdate(field.path, patch)}
-      />
-    );
-  }
-
-  if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
-    return <ConditionFace fields={fields} selected={selected} />;
-  }
-
-  if (selected?.kind === "clause") {
-    return <ClauseFace selected={selected} />;
-  }
-
-  if (selected?.kind === "each") {
-    return <LoopFace key={selected.expr} selected={selected} />;
+  // Which directive earns its own settings face is a decision per grammar
+  // kind, so the switch is total: a new kind must choose a face or the
+  // overview. Closers and loop counters have nothing to configure.
+  const face = ((): ReactElement | null => {
+    if (selected === null) {
+      return null;
+    }
+    switch (selected.kind) {
+      case "placeholder": {
+        const field =
+          fields.find((f) => f.path === selected.expr) ??
+          defaultStudioField(selected.expr);
+        return (
+          <FieldFace
+            field={field}
+            key={field.path}
+            onBack={onFieldBack}
+            onUpdate={(patch) => onFieldUpdate(field.path, patch)}
+          />
+        );
+      }
+      case "if":
+      case "elif":
+        return <ConditionFace fields={fields} selected={selected} />;
+      case "clause":
+        return <ClauseFace selected={selected} />;
+      case "for":
+        return <LoopFace key={selected.expr} selected={selected} />;
+      case "else":
+      case "endif":
+      case "endfor":
+      case "num":
+      case "ref":
+      case "loop":
+        return null;
+      default:
+        return assertNever(selected.kind);
+    }
+  })();
+  if (face !== null) {
+    return face;
   }
 
   // Default: whole-template overview — the field/condition outline. Identity

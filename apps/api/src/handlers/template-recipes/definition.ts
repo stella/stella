@@ -15,7 +15,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 /**
  * A template recipe is a saved structural block: a snapshot of pre-configured
- * field metadata (a `FieldMeta` subset), optionally wrapped in a `{{#each}}`
+ * field metadata (a `FieldMeta` subset), optionally wrapped in a `{% for %}`
  * loop. Inserting a recipe into a template drops the markers into the document
  * and registers these field configs in the authoring session.
  *

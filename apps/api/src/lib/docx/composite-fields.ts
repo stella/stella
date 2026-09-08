@@ -4,7 +4,7 @@
  * A manifest field with `parts` + `format` is filled as several parts (e.g. a
  * select for a professional title plus a free-text name) that are validated
  * and joined into the single string the document's one {{marker}} carries:
- * format "{{position}} {{name}}" renders "rad. praw. Jan Kowalski".
+ * format "{{position}} {{name}}" renders "rad. praw. Tomasz Nowicki".
  *
  * Pure: no IO, no model/provider dependency. The fill boundary calls
  * {@link resolveCompositeFields} on the incoming values before substitution
@@ -209,7 +209,7 @@ const assembleCompositeValue = ({
  * A plain string value passes through unchanged (backward compatible);
  * an absent value is left for the fill's unmatched diagnostics.
  *
- * A composite field inside an `{{#each}}` loop keeps a dotted path
+ * A composite field inside an `{% for %}` loop keeps a dotted path
  * (`parties.signer`) while the value is an array of rows
  * (`parties: [{ signer: { title, name } }]`); the direct `resolvePath` then
  * returns undefined, so each row's sub-path object is assembled in place

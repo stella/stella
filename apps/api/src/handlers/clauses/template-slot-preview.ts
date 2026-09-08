@@ -1,7 +1,7 @@
 /**
  * Live fill preview for clause slots.
  *
- * For a template, resolve each linked `{{@clause:Name}}` slot to the PLAIN
+ * For a template, resolve each linked `{{ clause("Name") }}` slot to the PLAIN
  * TEXT of its linked clause (keyed by slot name) so the Studio Fill subtab
  * can substitute the clause body into the in-document preview, mirroring
  * what the download/fill path produces. Server-side resolution reuses the

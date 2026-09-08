@@ -32,7 +32,7 @@ export type ConditionSource =
   | { kind: "ai"; prompt: string };
 
 export const conditionSourceOf = (field: StudioField): ConditionSource => {
-  // An AST is authoritative when set (formula rules have no `{{#if}}` string
+  // An AST is authoritative when set (formula rules have no `{% if %}` string
   // form, so they only ever round-trip as the AST).
   if (field.conditionAst !== undefined) {
     return { kind: "rule", expr: "", node: field.conditionAst };
@@ -51,7 +51,7 @@ const isBooleanField = (field: StudioField): boolean =>
 
 /** One reusable condition the picker can insert: every boolean field (its bare
  *  path is the gate). Shown in plain language; inserting references it by path
- *  so editing the source once updates every `{{#if}}` that points at it. */
+ *  so editing the source once updates every `{% if %}` that points at it. */
 type ReusableCondition = {
   /** The token a marker references: the field path. */
   ref: string;

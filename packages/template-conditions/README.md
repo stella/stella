@@ -7,7 +7,7 @@ functions usable on both backend (Bun) and frontend (browser).
 
 Boolean conditions are evaluated through the canonical
 [`@stll/conditions`](https://github.com/stella/stella/tree/main/packages/conditions)
-AST and its single evaluator, so template `{{#if ...}}` conditionals share one
+AST and its single evaluator, so template `{% if ... %}` conditionals share one
 set of operators and semantics with the rest of the system. This package owns
 the template surface: the marker grammar, the string parser, the named-condition
 resolver, the numeric expression evaluator, and the no-code builder serializer.

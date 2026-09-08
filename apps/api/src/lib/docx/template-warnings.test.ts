@@ -17,6 +17,10 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
+const TC = (text: string) => `<w:tc>${P(text)}</w:tc>`;
+const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
+const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
+
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
@@ -37,7 +41,7 @@ const refuseAll = (): RegistryAvailabilityLoader & { calls: () => number } => {
 };
 
 describe("field overlay warnings", () => {
-  // `is_signed` drives {{#if is_signed}} AND prints as {{is_signed}}.
+  // `is_signed` drives {% if is_signed %} AND prints as {{is_signed}}.
   const bothRoles = {
     conditionPaths: ["is_signed"],
     placeholderPaths: ["is_signed", "client.name"],
@@ -61,7 +65,7 @@ describe("field overlay warnings", () => {
     ]);
   });
 
-  test("a condition on a path used only by {{#if}} is the intended use", async () => {
+  test("a condition on a path used only by {% if %} is the intended use", async () => {
     expect(
       await fieldOverlayWarnings({
         conditionPaths: ["is_signed"],
@@ -238,16 +242,25 @@ describe("warning code census", () => {
   test("every declared code is produced by a template that triggers it", async () => {
     const xml = WRAP(
       [
-        P("{{#if is_signed}}"),
+        P("{% if is_signed %}"),
         P("Signed by {{is_signed}}"),
-        P("{{/if}}"),
+        P("{% endif %}"),
         P("{{company}} of {{company.seat}}"),
-        P("{{#each attorneys}}"),
+        P("{% for attorney in attorneys %}"),
         P("{{name}}"),
-        P("{{this.name}}"),
         P("{{attorneys[0].name}}"),
-        P("{{#endeach}}"),
+        P("{{ rent * 12 }}"),
+        P("{{ rent | upper }}"),
+        P("{{#each attorneys}}"),
+        P("{% set x = 1 %}"),
+        P("{% endfor %}"),
         P("Name: {{unclosed"),
+        // A row-form pair whose halves are in two different rows: the shape a
+        // model writes when it starts the repeat in the header row.
+        TBL(
+          TR(TC("{% for d in rows %}Deliverable"), TC("Fee")),
+          TR(TC("{{ d.item }}"), TC("{{ d.fee }}{% endfor %}")),
+        ),
       ].join(""),
     );
     const discovered = await discoverTemplate(await makeDocx(xml));

@@ -79,6 +79,7 @@
     "@sinclair/typebox": "^0.34.52",
     "@smithy/fetch-http-handler": "^5.7.2",
     "@stll/agent-engine": "workspace:*",
+    "@stll/agent-input": "workspace:*",
     "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize": "catalog:",
     "@stll/anonymize-chat": "workspace:*",

@@ -7,7 +7,7 @@
  * an author instead types the opener in front of the first cell's text and the
  * closer behind the last cell's text:
  *
- *     | {{#each deliverables}}{{deliverables.item}} | {{deliverables.fee}}{{/each}} |
+ *     | {% for d in deliverables %}{{ d.item }} | {{ d.fee }}{% endfor %} |
  *
  * Both placements mean the same thing — the `w:tr` is the unit — so this
  * module recognizes the row form purely from text, and the consumer rewrites
@@ -36,23 +36,23 @@ export type RowBlockPair = {
 };
 
 const CLOSER_OF = {
-  each: "endeach",
+  for: "endfor",
   if: "endif",
-} as const satisfies Record<"each" | "if", "endeach" | "endif">;
+} as const satisfies Record<"for" | "if", "endfor" | "endif">;
 
 type OpenKind = keyof typeof CLOSER_OF;
 
 const isOpenKind = (kind: string): kind is OpenKind =>
-  kind === "each" || kind === "if";
+  kind === "for" || kind === "if";
 
 /**
  * Block markers in one paragraph that do not pair inside it. A pair that opens
- * and closes within the paragraph is an inline span (`the Buyer{{#if x}} and
- * spouse{{/if}}`), which the inline engine already owns; only what is left
+ * and closes within the paragraph is an inline span (`the Buyer{% if x %} and
+ * spouse{% endif %}`), which the inline engine already owns; only what is left
  * over can reach across cells.
  *
- * A branch marker (`{{#elseif}}`, `{{#else}}`) counts as left over unless its
- * `{{#if}}` also closes in this paragraph. Only the opener and the closer of a
+ * A branch marker (`{% elif %}`, `{% else %}`) counts as left over unless its
+ * `{% if %}` also closes in this paragraph. Only the opener and the closer of a
  * row block are hoisted, so a branch marker stranded between them would stay
  * buried in the cell text: a false condition would drop the whole row and the
  * branch that should have rendered with it, and a true one would leave the
@@ -69,7 +69,7 @@ const danglingBlockMarkers = (text: string): ScannedMarker[] => {
   type OpenFrame = {
     kind: OpenKind;
     marker: ScannedMarker;
-    /** `{{#elseif}}` / `{{#else}}` markers belonging to this frame. */
+    /** `{% elif %}` / `{% else %}` markers belonging to this frame. */
     branches: ScannedMarker[];
   };
   const open: OpenFrame[] = [];
@@ -80,7 +80,7 @@ const danglingBlockMarkers = (text: string): ScannedMarker[] => {
       open.push({ kind, marker, branches: [] });
       continue;
     }
-    if (kind === "endeach" || kind === "endif") {
+    if (kind === "endfor" || kind === "endif") {
       const innermost = open.at(-1);
       if (innermost && CLOSER_OF[innermost.kind] === kind) {
         // The frame closed here, so its branch markers closed with it.
@@ -90,7 +90,7 @@ const danglingBlockMarkers = (text: string): ScannedMarker[] => {
       }
       continue;
     }
-    if (kind === "elseif" || kind === "else") {
+    if (kind === "elif" || kind === "else") {
       const innermost = open.at(-1);
       if (innermost?.kind === "if") {
         innermost.branches.push(marker);
@@ -139,7 +139,7 @@ const suffixesCell = (
  * paragraph, they are a matching opener/closer pair, the closer sits in a LATER
  * cell than the opener, the opener prefixes its cell and the closer suffixes
  * its cell. Everything else — one half of a pair, two nested pairs, a stray
- * `{{#else}}`, a pair wrapping the paragraphs of a single cell — is left to the
+ * `{% else %}`, a pair wrapping the paragraphs of a single cell — is left to the
  * engine's existing structure errors rather than guessed at.
  */
 export const detectRowBlockPair = (

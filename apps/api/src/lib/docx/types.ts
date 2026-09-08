@@ -2,11 +2,13 @@
 
 import * as v from "valibot";
 
+import { isPlausibleLocale } from "@stll/agent-input";
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
   type ConditionNode,
+  type FilterCall,
   DATE_FORMAT_STYLES,
   type DateFormatStyle,
   type FieldDateFormat,
@@ -108,7 +110,7 @@ export type ExtractedParagraph = Omit<ExtractedDocxParagraph, "source"> & {
   isDirective?: boolean | undefined;
   /** Which directive this paragraph represents. */
   directiveKind?: BlockDirectiveKind | undefined;
-  /** The expression inside the directive (empty for `#else`). */
+  /** The expression inside the directive (empty for `{% else %}`). */
   directiveExpression?: string | undefined;
 };
 
@@ -142,7 +144,13 @@ export type TemplateData = Record<string, TemplateDataValue>;
 
 export type BlockDirective = {
   kind: BlockDirectiveKind;
+  /** The condition of an `{% if %}`/`{% elif %}`, or the array path of a
+   *  `{% for alias in path %}`. Empty for a closer. */
   expression: string;
+  /** The loop variable of a `{% for %}`; absent on every other directive. */
+  alias?: string;
+  /** Filters written on a `{% for %}`'s path, which configure the array. */
+  filters?: readonly FilterCall[];
   paragraphIndex: number;
 };
 
@@ -158,15 +166,17 @@ export type IfBlock = {
   directiveParagraphs: number[];
 };
 
-export type EachBlock = {
-  kind: "each";
+export type LoopBlock = {
+  kind: "for";
+  /** The loop variable the body addresses items through. */
+  alias: string;
   arrayPath: string;
   contentStart: number;
   contentEnd: number;
   directiveParagraphs: number[];
 };
 
-export type Block = IfBlock | EachBlock;
+export type Block = IfBlock | LoopBlock;
 
 export type TemplateFieldKind = "string" | "boolean" | "array" | "object";
 
@@ -197,11 +207,22 @@ export type DiscoveredTemplate = {
    *  meant. Never blocks a save; reported so it is fixed before the first
    *  fill. */
   warnings: TemplateWarning[];
-  /** Paths a `{{#if}}` / `{{#elseif}}` expression reads, sorted. Distinguishes
+  /** Paths a `{% if %}` / `{% elif %}` expression reads, sorted. Distinguishes
    *  a condition driver from a value marker, which the field list alone
    *  cannot: a path can be both. */
   conditionPaths: string[];
+  /** The manifest the document itself declares: one entry per marker whose
+   *  filter chain configures something. This is the document layer — the
+   *  bytes are the source of truth, and a stored overlay only refines it. */
+  documentFields: FieldMeta[];
+  /** Each `{% for alias in path %}` the document opens, as the name its body
+   *  writes and the array path the manifest speaks. An alias two loops give
+   *  different arrays is absent: it names nothing on its own. */
+  loopAliases: LoopAlias[];
 };
+
+/** One loop's name for its item, and the array path it stands for. */
+export type LoopAlias = { alias: string; path: string };
 
 // ── Custom XML Manifest ─────────────────────────────────
 
@@ -276,20 +297,15 @@ export type TemplateManifest = {
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** Structurally malformed BCP-47 tags make `Intl` throw a RangeError; a
- *  well-formed but unknown tag passes and merely falls back to the default
- *  locale at format time. */
-export const isPlausibleLocale = (value: string): boolean => {
-  try {
-    Intl.DateTimeFormat.supportedLocalesOf(value);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 const describedString = (description: string) =>
   v.pipe(v.string(), v.description(description));
+
+/** A string whose empty value says nothing: an empty join template renders
+ *  nothing and an empty regex constrains nothing, so "" on either can only be
+ *  a placeholder for a property the caller is not setting. Rejecting it here is
+ *  what lets the tool surface read it as omitted. */
+const nonEmptyString = (description: string) =>
+  v.pipe(v.string(), v.minLength(1), v.description(description));
 
 const fieldPathSchema = (description: string) =>
   v.pipe(
@@ -298,7 +314,7 @@ const fieldPathSchema = (description: string) =>
     v.description(description),
   );
 
-export const fieldPartSchema = v.strictObject({
+const fieldPartSchema = v.strictObject({
   key: fieldPathSchema("Part key used in format"),
   label: v.optional(describedString("Part label")),
   inputType: v.pipe(
@@ -311,7 +327,7 @@ export const fieldPartSchema = v.strictObject({
       v.description("Allowed values for a select part"),
     ),
   ),
-  pattern: v.optional(describedString("Regex for the whole part value")),
+  pattern: v.optional(nonEmptyString("Regex for the whole part value")),
 });
 
 export const fieldLookupFormatSchema = v.strictObject({
@@ -343,25 +359,51 @@ export const fieldLookupSchema = v.pipe(
   v.description("Who fills = business-registry lookup"),
 );
 
+export const FIELD_DATE_FORMAT_DESCRIPTION = "Date rendering config";
+
+/**
+ * The persisted pair, canonical only: `new Intl.DateTimeFormat("cs_CZ")`
+ * throws, so what a manifest stores has to be the spelling `Intl` accepts. The
+ * agent-facing mirror in `mcp/template-field-input.ts` reads the other
+ * spellings and canonicalizes before this schema sees them.
+ */
+export const fieldDateFormatObjectSchema = v.strictObject({
+  locale: v.pipe(
+    v.string(),
+    v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
+    v.description("BCP-47 language tag"),
+  ),
+  style: v.pipe(
+    v.picklist(DATE_FORMAT_STYLES),
+    v.description("Date rendering style"),
+  ),
+});
+
 export const fieldDateFormatSchema = v.pipe(
-  v.strictObject({
-    locale: v.pipe(
-      v.string(),
-      v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
-      v.description("BCP-47 language tag"),
-    ),
-    style: v.pipe(
-      v.picklist(DATE_FORMAT_STYLES),
-      v.description("Date rendering style"),
-    ),
-  }),
-  v.description("Date rendering config"),
+  fieldDateFormatObjectSchema,
+  v.description(FIELD_DATE_FORMAT_DESCRIPTION),
 );
 
 /** Shared with the snake_case MCP mirror in `mcp/template-field-input.ts`, so
  *  both surfaces advertise the same line. */
 export const FIELD_VALIDATION_DESCRIPTION = "Field-level value constraints";
-export const FIELD_PARTS_DESCRIPTION = "Composite field parts";
+
+/** Composites are engine-side: no agent-facing surface advertises them. */
+const FIELD_PARTS_DESCRIPTION = "Composite field parts";
+
+/**
+ * A maximum of 0 admits nothing, so no author means it: it is what a client
+ * that fills in every declared property writes for a length or a count it is
+ * not constraining, and saving it makes a field nobody can fill. Rejecting
+ * the value keeps the rest of that entry, which is what the configure tool
+ * does with a property it cannot read. `min*` and `max` are left alone: a
+ * bound of 0 is a real one.
+ *
+ * The marker filters read the same bound (`applyNumericValidation` in
+ * field-filters.ts), so `{{ x | max_items(0) }}` in a DOCX is refused where
+ * the wire refuses it.
+ */
+export const SMALLEST_MAXIMUM = 1;
 
 export const fieldValidationObjectSchema = v.strictObject({
   required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
@@ -369,7 +411,12 @@ export const fieldValidationObjectSchema = v.strictObject({
     v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
   ),
   maxLength: v.optional(
-    v.pipe(v.number(), v.finite(), v.description("Maximum string length")),
+    v.pipe(
+      v.number(),
+      v.finite(),
+      v.minValue(SMALLEST_MAXIMUM),
+      v.description("Maximum string length, at least 1"),
+    ),
   ),
   min: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Minimum numeric value")),
@@ -377,12 +424,17 @@ export const fieldValidationObjectSchema = v.strictObject({
   max: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
   ),
-  pattern: v.optional(describedString("Regex for the whole value")),
+  pattern: v.optional(nonEmptyString("Regex for the whole value")),
   minItems: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
   ),
   maxItems: v.optional(
-    v.pipe(v.number(), v.finite(), v.description("Maximum repeated items")),
+    v.pipe(
+      v.number(),
+      v.finite(),
+      v.minValue(SMALLEST_MAXIMUM),
+      v.description("Maximum repeated items, at least 1"),
+    ),
   ),
 });
 
@@ -486,6 +538,37 @@ export const describeDerivedSourceConflict = (
 
 const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
 
+/** The persisted keys that say who fills a field. They travel as one cluster:
+ *  naming a source replaces whatever was there, so a field that used to be a
+ *  lookup does not keep it beside its new source. */
+export const FIELD_SOURCE_KEYS = [
+  "aiAdapt",
+  "aiPrompt",
+  "aiSeesDocument",
+  "condition",
+  "formula",
+  "lookup",
+  "source",
+] as const satisfies readonly (keyof FieldMeta)[];
+
+export type FieldSourceKey = (typeof FIELD_SOURCE_KEYS)[number];
+
+/**
+ * The cluster, cleared. Spread ahead of a configuration's own keys so a
+ * configure call that names one source (or none: a field a person fills)
+ * carries the clear with it, and total over the cluster by construction, so a
+ * new source property cannot be forgotten here.
+ */
+export const CLEARED_FIELD_SOURCE = {
+  aiAdapt: undefined,
+  aiPrompt: undefined,
+  aiSeesDocument: undefined,
+  condition: undefined,
+  formula: undefined,
+  lookup: undefined,
+  source: undefined,
+} satisfies Record<FieldSourceKey, undefined>;
+
 /**
  * Every description below is advertised in `configure_template_fields`'s
  * `inputSchema`,
@@ -495,7 +578,7 @@ const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
  * reference resource — see `mcp/template-field-reference.ts`.
  */
 const fieldMetaObjectSchema = v.strictObject({
-  path: fieldPathSchema("Field path; must match a {{marker}}"),
+  path: fieldPathSchema("Field path; must match a {{ marker }}"),
   label: v.optional(describedString("Field label")),
   hint: v.optional(describedString("Fill hint for the person filling")),
   inputType: v.optional(
@@ -523,7 +606,7 @@ const fieldMetaObjectSchema = v.strictObject({
       v.description(FIELD_PARTS_DESCRIPTION),
     ),
   ),
-  format: v.optional(describedString("Join template over the part keys")),
+  format: v.optional(nonEmptyString("Join template over the part keys")),
   optionsFrom: v.optional(
     fieldPathSchema("Dependent select: source field path"),
   ),
@@ -532,7 +615,7 @@ const fieldMetaObjectSchema = v.strictObject({
     v.pipe(fieldSourceSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
   formula: v.optional(describedString("Arithmetic over other fields")),
-  condition: v.optional(describedString("Boolean rule for an {{#if}} marker")),
+  condition: v.optional(describedString("Boolean rule for an {% if %} tag")),
   conditionAst: v.optional(
     v.pipe(
       conditionNodeSchema,
@@ -540,9 +623,17 @@ const fieldMetaObjectSchema = v.strictObject({
     ),
   ),
   dateFormat: v.optional(fieldDateFormatSchema),
+  sourceLayer: v.optional(
+    v.pipe(
+      v.picklist(["configuration"]),
+      v.description(
+        "Set when a configure call decided who fills this field, so a marker filter cannot reinstate the source it replaced",
+      ),
+    ),
+  ),
 });
 
-export const hasCompleteCompositeField = ({
+const hasCompleteCompositeField = ({
   format,
   parts,
 }: {
@@ -550,7 +641,7 @@ export const hasCompleteCompositeField = ({
   parts?: readonly unknown[] | undefined;
 }): boolean => (parts === undefined) === (format === undefined);
 
-const fieldMetaSchema = v.pipe(
+export const fieldMetaSchema = v.pipe(
   fieldMetaObjectSchema,
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
@@ -565,10 +656,19 @@ const fieldMetaSchema = v.pipe(
 );
 
 /** Model-facing subset: conditionAst is the persisted canonical form, not an
- * authoring input. This schema derives its public fields from the persisted
- * object schema and applies the same named invariant predicates. */
+ * authoring input, a composite field's `parts`/`format` are assembled by
+ * the engine — the document text around the markers is the format an author
+ * writes — and `sourceLayer` is a record of who decided the source, which the
+ * boundary stamps rather than the caller. This schema derives its public
+ * fields from the persisted object schema and applies the same named invariant
+ * predicates. */
 export const fieldMetaToolInputObjectSchema = v.strictObject({
-  ...v.omit(fieldMetaObjectSchema, ["conditionAst"]).entries,
+  ...v.omit(fieldMetaObjectSchema, [
+    "conditionAst",
+    "parts",
+    "format",
+    "sourceLayer",
+  ]).entries,
   source: v.optional(
     v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
@@ -578,15 +678,42 @@ export const fieldMetaToolInputSchema = v.pipe(
   fieldMetaToolInputObjectSchema,
   v.check(
     (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
-      hasCompleteCompositeField(field),
-    "parts and format must be provided together",
-  ),
-  v.check(
-    (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
       hasCompatibleDerivedSources(field),
     (issue) => describeDerivedSourceConflict(issue.input),
   ),
 );
+
+/**
+ * The tool-wire property each manifest key is configured through: its own
+ * snake_case key, or the `source` union the derived half folds up into. Total
+ * over the model-facing shape, so a new manifest key cannot ship without
+ * saying which property a caller sets it with.
+ *
+ * Lives here, beside the schema, because both the wire serializer and the
+ * engine's own diagnostics have to name a property the way the caller spelled
+ * it, and two lists of that mapping would drift.
+ */
+export const FIELD_WIRE_PROPERTY = {
+  path: "path",
+  label: "label",
+  hint: "hint",
+  inputType: "input_type",
+  options: "options",
+  optionsFrom: "options_from",
+  validation: "validation",
+  required: "required",
+  dateFormat: "date_format",
+  aiPrompt: "source",
+  aiAdapt: "source",
+  aiSeesDocument: "source",
+  lookup: "source",
+  source: "source",
+  formula: "source",
+  condition: "source",
+} as const satisfies Record<
+  keyof v.InferOutput<typeof fieldMetaToolInputObjectSchema>,
+  string
+>;
 
 export const isFieldPart = (value: unknown): value is FieldPart =>
   v.is(fieldPartSchema, value);
@@ -709,6 +836,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;
+  /** Mirrors {@link FieldMeta.sourceLayer}: carried through the merge so the
+   *  manifest a save writes still says the configuration owns the source. */
+  sourceLayer?: "configuration" | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */

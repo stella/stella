@@ -127,11 +127,11 @@ const buildReplaceSpec = (args: BuildReplaceSpecArgs): ReplacementSpec =>
 
 describe("buildOperationSpecs", () => {
   test("replaceInBlock with an unknown blockId degrades to a whole-document literal search", () => {
-    const doc = makeDoc(["KRS register.", "Company KRS no. 0000592109."]);
+    const doc = makeDoc(["KRS register.", "Company KRS no. 0000123456."]);
     const operation: DocxEditOperation = {
       type: "replaceInBlock",
       blockId: "not-in-any-snapshot",
-      find: "0000592109",
+      find: "0000123456",
       replace: "{{company.krs}}",
       severity: "medium",
       area: "Identifiers",
@@ -159,7 +159,7 @@ describe("buildOperationSpecs", () => {
         suggestions[0]?.range.to ?? 0,
         "\n",
       ),
-    ).toBe("0000592109");
+    ).toBe("0000123456");
   });
 
   test("replaceBlock and deleteBlock still need the snapshot block for their literal", () => {
@@ -368,17 +368,20 @@ describe("operationFingerprint", () => {
 });
 
 describe("extractFieldMarkerPath", () => {
-  test("accepts exactly one {{path}} marker (whitespace tolerated)", () => {
+  test("accepts exactly one value marker (whitespace tolerated)", () => {
     expect(extractFieldMarkerPath("{{company.name}}")).toBe("company.name");
     expect(extractFieldMarkerPath("  {{ signing_date }}  ")).toBe(
       "signing_date",
     );
+    expect(extractFieldMarkerPath("{{ fee | number | min(0) }}")).toBe("fee");
   });
 
-  test("rejects non-marker replacements and invalid paths", () => {
+  test("rejects non-marker replacements, tags, and invalid paths", () => {
     expect(extractFieldMarkerPath("Example Ltd.")).toBeNull();
     expect(extractFieldMarkerPath("{{a}} and {{b}}")).toBeNull();
     expect(extractFieldMarkerPath("{{attorneys[0].name}}")).toBeNull();
-    expect(extractFieldMarkerPath("{{#if condition}}")).toBeNull();
+    expect(extractFieldMarkerPath("{% if condition %}")).toBeNull();
+    expect(extractFieldMarkerPath('{{ clause("Liability") }}')).toBeNull();
+    expect(extractFieldMarkerPath("{{ loop.index }}")).toBeNull();
   });
 });

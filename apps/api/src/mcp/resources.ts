@@ -96,7 +96,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     title: "Template field configuration",
     description:
       "How configure_template_fields configures each template field: " +
-      "input types, validation, composite parts, registry lookups, contact " +
+      "input types, validation, registry lookups, contact " +
       "and matter bindings, and who fills the field. Read this before " +
       "passing fields.",
     mimeType: "text/markdown",

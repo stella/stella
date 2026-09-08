@@ -10,8 +10,13 @@ import {
   acceptAllChanges,
   rejectAIEditRevision,
 } from "@stll/folio-core/prosemirror/commands/comments";
+import { assertNever } from "@stll/template-conditions";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
+import {
+  formatMarker,
+  loopOpenTag,
+} from "@/routes/_protected.knowledge/-components/template-markers";
 
 import {
   buildTrackedChangeDoc,
@@ -95,11 +100,33 @@ const trackedRuns = (
   return out;
 };
 
+/** The tag text the api would have extracted for this directive, written
+ *  through the Studio's writer so the fixtures cannot drift from the
+ *  grammar. */
+const directiveText = (
+  kind: NonNullable<ClauseParagraph["directiveKind"]>,
+  expr: string,
+): string => {
+  switch (kind) {
+    case "if":
+    case "elif":
+      return formatMarker({ kind, expr });
+    case "for":
+      return loopOpenTag(expr);
+    case "else":
+    case "endif":
+    case "endfor":
+      return formatMarker({ kind });
+    default:
+      return assertNever(kind);
+  }
+};
+
 const directive = (
   directiveKind: NonNullable<ClauseParagraph["directiveKind"]>,
   directiveExpression: string,
 ): ClauseParagraph => ({
-  text: `{{#${directiveKind} ${directiveExpression}}}`.trim(),
+  text: directiveText(directiveKind, directiveExpression),
   isDirective: true,
   directiveKind,
   directiveExpression,
@@ -129,10 +156,14 @@ describe("clause body ⇄ TipTap round-trip", () => {
   });
 
   test("a directive carries its kind/expression/text on the node", () => {
-    const doc = clauseBodyToTipTap([directive("each", "items")]);
+    const doc = clauseBodyToTipTap([directive("for", "items")]);
     expect(doc.content?.at(0)).toEqual({
       type: CLAUSE_DIRECTIVE_NODE,
-      attrs: { kind: "each", expression: "items", text: "{{#each items}}" },
+      attrs: {
+        kind: "for",
+        expression: "items",
+        text: loopOpenTag("items"),
+      },
     });
   });
 
@@ -242,7 +273,11 @@ describe("clause body ⇄ TipTap round-trip", () => {
         { type: "paragraph", content: [{ type: "text", text: "Body first" }] },
         {
           type: CLAUSE_DIRECTIVE_NODE,
-          attrs: { kind: "if", expression: "x", text: "{{#if x}}" },
+          attrs: {
+            kind: "if",
+            expression: "x",
+            text: formatMarker({ kind: "if", expr: "x" }),
+          },
         },
       ],
     };

@@ -1,6 +1,7 @@
 import type { DirectiveRange } from "@stll/folio-react";
-import { isFieldPath } from "@stll/template-conditions";
+import { assertNever, isFieldPath } from "@stll/template-conditions";
 
+import type { GroupDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type {
   OutlineNode,
   StudioField,
@@ -31,49 +32,63 @@ export const dedupeOutlineFields = (nodes: OutlineNode[]): OutlineRowItem[] => {
   return result;
 };
 
-/** Folds the flat directive scan into the document's nesting: if/each
- *  markers open groups that own everything up to their closer, so the
- *  panel mirrors which fields only appear under a condition or repeat. */
+/** Folds the flat directive scan into the document's nesting: if/for
+ *  tags open groups that own everything up to their closer, so the
+ *  panel mirrors which fields only appear under a condition or repeat.
+ *  The switch is total over the grammar's directive kinds, so a new kind
+ *  must state whether it earns an outline row. */
 export const buildOutline = (
   directives: readonly DirectiveRange[],
 ): OutlineNode[] => {
   const root: OutlineNode[] = [];
   const stack: OutlineNode[][] = [root];
   const top = () => stack.at(-1) ?? root;
-  for (const d of directives.toSorted((a, b) => a.from - b.from)) {
-    if (d.kind === "placeholder") {
-      top().push({ type: "field", path: d.expr, from: d.from });
-    } else if (d.kind === "clause") {
-      top().push({ type: "clause", name: d.expr, from: d.from });
-    } else if (d.kind === "if" || d.kind === "each") {
-      const group: OutlineNode = {
-        type: "group",
-        kind: d.kind,
-        expr: d.expr,
-        from: d.from,
-        children: [],
-      };
-      top().push(group);
-      stack.push(group.children);
-    } else if (d.kind === "elseif" || d.kind === "else") {
-      // A branch closes the previous branch and opens a sibling group.
-      if (stack.length > 1) {
-        stack.pop();
-      }
-      const group: OutlineNode = {
-        type: "group",
-        kind: d.kind,
-        expr: d.expr,
-        from: d.from,
-        children: [],
-      };
-      top().push(group);
-      stack.push(group.children);
-    } else if (
-      (d.kind === "endif" || d.kind === "endeach") &&
-      stack.length > 1
-    ) {
+  const openGroup = (kind: GroupDirectiveKind, d: DirectiveRange) => {
+    const group: OutlineNode = {
+      type: "group",
+      kind,
+      expr: d.expr,
+      from: d.from,
+      children: [],
+    };
+    top().push(group);
+    stack.push(group.children);
+  };
+  const closeGroup = () => {
+    if (stack.length > 1) {
       stack.pop();
+    }
+  };
+  for (const d of directives.toSorted((a, b) => a.from - b.from)) {
+    switch (d.kind) {
+      case "placeholder":
+        top().push({ type: "field", path: d.expr, from: d.from });
+        break;
+      case "clause":
+        top().push({ type: "clause", name: d.expr, from: d.from });
+        break;
+      case "if":
+      case "for":
+        openGroup(d.kind, d);
+        break;
+      case "elif":
+      case "else":
+        // A branch closes the previous branch and opens a sibling group.
+        closeGroup();
+        openGroup(d.kind, d);
+        break;
+      case "endif":
+      case "endfor":
+        closeGroup();
+        break;
+      // Inline tokens carry no structure: a numbering anchor, a reference to
+      // one, and a loop counter all read as part of the text around them.
+      case "num":
+      case "ref":
+      case "loop":
+        break;
+      default:
+        assertNever(d.kind);
     }
   }
   return root;
@@ -104,8 +119,12 @@ const CONDITION_OPERATOR_WORDS: readonly {
   { operator: "==", labelKey: "templates.conditionOpIs" },
   { operator: ">", labelKey: "templates.conditionOpGreaterThan" },
   { operator: "<", labelKey: "templates.conditionOpLessThan" },
-  { operator: "contains", labelKey: "templates.conditionOpContains" },
 ];
+
+/** Membership reads value-first in the grammar (`"guarantor" in parties`) but
+ *  field-first as a sentence, so it is matched apart from the comparisons. */
+const MEMBERSHIP_RE =
+  /^(?<value>"[^"]*"|'[^']*'|[\p{L}\p{N}_.-]+)\s+in\s+(?<path>[\p{L}\p{N}_.-]+)$/u;
 
 /** Strip matching surrounding quotes from a comparison's right-hand side so
  *  `state == "draft"` reads as `is draft`, not `is "draft"`. */
@@ -142,6 +161,11 @@ export const humanizeConditionExpr = (
   // A bare field path with no operator is a yes/no question gating the block.
   if (isFieldPath(trimmed)) {
     return labelFor(trimmed);
+  }
+  const membership = MEMBERSHIP_RE.exec(trimmed);
+  const membershipPath = membership?.groups?.["path"];
+  if (membershipPath !== undefined) {
+    return `${labelFor(membershipPath)} ${operatorWord("templates.conditionOpContains")} ${unquote(membership?.groups?.["value"] ?? "")}`;
   }
   for (const { operator, labelKey } of CONDITION_OPERATOR_WORDS) {
     const index = trimmed.indexOf(operator);

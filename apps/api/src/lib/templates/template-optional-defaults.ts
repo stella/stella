@@ -89,7 +89,7 @@ const isMissingRequiredValue = (value: unknown): boolean => {
  * a value it was never given, or silently leaving a `{{marker}}` unfilled —
  * for exactly the fields where only the user can supply the answer.
  *
- * A dotted path whose container resolves to an array (a `{{#each}}` loop item
+ * A dotted path whose container resolves to an array (a `{% for %}` loop item
  * field, e.g. `persons.member` against `{ persons: [{ member: "..." }] }`) is
  * checked per row via {@link findRepeatableContainer}: `resolvePath` alone
  * cannot index into the array and would report every such field as always

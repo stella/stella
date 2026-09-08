@@ -19,7 +19,7 @@ const leafOperands = (node: ConditionNode): Operand[] => {
 /**
  * Whether any leaf in the tree uses a `formula` operand. Formula operands only
  * evaluate in the JS template domain, so callers use this to gate persistence
- * (store the AST, not a `{{#if}}` string) and to strip such nodes at the SQL
+ * (store the AST, not a `{% if %}` string) and to strip such nodes at the SQL
  * filter boundary.
  */
 export const conditionHasFormula = (node: ConditionNode): boolean => {

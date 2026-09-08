@@ -19,6 +19,10 @@
  * Pure: no IO, no model/provider dependency.
  */
 
+import { panic } from "better-result";
+
+import type { Normalized } from "@stll/agent-input";
+import { askSentence, normalizeDateValue } from "@stll/agent-input";
 import {
   DATE_FORMAT_EXAMPLE_ISO,
   formatDate,
@@ -56,9 +60,26 @@ export { DATE_FORMAT_EXAMPLE_ISO } from "@stll/template-conditions";
 export const formatDateExample = (dateFormat: FieldDateFormat): string =>
   formatDate(DATE_FORMAT_EXAMPLE_ISO, dateFormat) ?? DATE_FORMAT_EXAMPLE_ISO;
 
-/** Format one incoming date value, pushing a field-named error on a non-string
- *  or malformed value and returning the formatted display string (or null when
- *  the value is absent/empty/invalid and nothing should be written back). */
+/**
+ * The submitted value of one date field, as the ISO date both the formatter
+ * and the `{% if %}` comparison read. The field's own locale is what makes a
+ * date written the way the document renders it readable, so every caller
+ * (this module, the raw-value stash in `manifest-fill-steps`, and the prefill
+ * suggestions) goes through here rather than each choosing which locales to
+ * accept. A field with no format of its own reads English alone.
+ */
+export const normalizeDateFieldValue = (
+  incoming: unknown,
+  dateFormat: FieldDateFormat | null,
+): Normalized<string> =>
+  normalizeDateValue(incoming, {
+    locales: dateFormat === null ? [] : [dateFormat.locale],
+  });
+
+/** Format one incoming date value, pushing a field-named error carrying the
+ *  normalizer's own wording when the value names no calendar date, and
+ *  returning the formatted display string (or null when the value is
+ *  absent/empty/unreadable and nothing should be written back). */
 const formatDateValue = (
   path: string,
   incoming: unknown,
@@ -68,25 +89,22 @@ const formatDateValue = (
   if (incoming === undefined) {
     return null;
   }
-  if (typeof incoming !== "string") {
+  if (typeof incoming === "string" && incoming.trim() === "") {
+    return null;
+  }
+  const normalized = normalizeDateFieldValue(incoming, dateFormat);
+  if (!normalized.ok) {
     errors.push({
       path,
-      message: `Field "${path}": expected an ISO date (YYYY-MM-DD).`,
+      message: `Field "${path}": ${askSentence(normalized)} ${normalized.hint}`,
     });
     return null;
   }
-  if (incoming.trim() === "") {
-    return null;
-  }
-  const formatted = formatIsoDate(incoming, dateFormat);
+  const formatted = formatIsoDate(normalized.value, dateFormat);
   if (formatted === null) {
-    errors.push({
-      path,
-      message:
-        `Field "${path}": "${incoming}" is not a valid date ` +
-        "(expected YYYY-MM-DD).",
-    });
-    return null;
+    return panic(
+      `Field "${path}": the normalizer produced ${normalized.value}, which the formatter refused`,
+    );
   }
   return formatted;
 };
@@ -98,7 +116,7 @@ const formatDateValue = (
  * for the fill's unmatched diagnostics; a malformed one is an error naming
  * the field.
  *
- * A date field inside an `{{#each}}` loop keeps a dotted path (`people.dob`)
+ * A date field inside an `{% for %}` loop keeps a dotted path (`people.dob`)
  * while the value arrives as an array of rows (`people: [{ dob }]`); the direct
  * `resolvePath` then returns undefined, so each row's sub-path value is
  * formatted in place instead (see {@link mapRepeatablePath}).

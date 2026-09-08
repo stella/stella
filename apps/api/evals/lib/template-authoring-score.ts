@@ -8,15 +8,28 @@
  * marked-up document blocks, the `fields` overlay it passed, the paths the
  * real discovery found) plus the outcome of the real fill round trip, and
  * gets back a run score whose every field is a count or a named code.
+ *
+ * A trap is a placement or a spelling the ENGINE refuses, so the detectors
+ * ask the engine's own parsers (`scanMarkers`, `classifyMarkerDefect`,
+ * `detectRowBlockPair`, `parseInlineConditions`) and, for a configuration
+ * trap, the refusals `partitionFieldOverlay` actually returned, rather than
+ * re-deriving the rules: a placement the engine learns to run, or an overlay
+ * shape it learns to fold, stops being a trap here on the same day.
  */
 
 import {
   assertNever,
+  blockDirectiveLinePattern,
+  classifyMarkerDefect,
   detectRowBlockPair,
   isBlockDirectiveKind,
+  type ScannedMarker,
   scanInvalidMarkers,
   scanMarkers,
 } from "@stll/template-conditions";
+
+import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
+import { conditionReferencesOnlySelf } from "@/api/lib/templates/field-overlay";
 
 /**
  * One block of the document the model authored. A table cell holds a
@@ -34,7 +47,6 @@ export type AuthoredBlock =
 type OverlayFieldView = {
   path: string;
   condition?: string | undefined;
-  lookup?: { formats?: readonly { key: string }[] | undefined } | undefined;
 };
 
 /**
@@ -43,20 +55,25 @@ type OverlayFieldView = {
  * resources failed to teach rather than "the template was wrong".
  */
 export const GRAMMAR_TRAP_CODES = [
-  /** `{{name}}` inside `{{#each attorneys}}` instead of `{{attorneys.name}}`. */
-  "unprefixed_item_path",
-  /** `{{this.name}}` / `{{this}}`: a Handlebars reflex stella does not have. */
-  "this_prefix",
-  /** A directive-shaped marker that classifies to nothing (`{{#endeach}}`). */
-  "unknown_directive",
+  /** `{{ name }}` inside `{% for attorney in attorneys %}` instead of
+   *  `{{ attorney.name }}` — the loop's item is addressed by its alias. */
+  "unaliased_item_path",
+  /** A marker in the old dialect (`{{#each}}`, `{{@num:k}}`). */
+  "legacy_marker",
+  /** A Jinja tag this dialect does not run (`{% set %}`, `{% macro %}`). */
+  "unsupported_tag",
+  /** A filter outside the field-configuration catalogue (`| upper`). */
+  "unknown_filter",
+  /** Arithmetic, a call or a Python literal inside `{{ }}`. */
+  "python_expression",
   /** `{{attorneys[0].name}}` instead of the numeric segment `attorneys.0.name`. */
   "bracket_index",
   /** One value given a per-language path (`date_pl` beside `date_en`). */
   "language_variant_path",
-  /** A block directive sharing its paragraph with text or another directive. */
+  /** A block directive in a placement no engine runs: not the paragraph form,
+   *  not a row block's opener/closer pair, and not a span the inline engine
+   *  parses (`{% if x %}…{% endif %}` within one paragraph). */
   "block_marker_inline",
-  /** A lookup declared per leaf (`company.krs`) instead of one parent with formats. */
-  "lookup_not_parent",
   /** A `condition` on a field the person answers as a yes/no question. */
   "condition_on_input",
 ] as const;
@@ -67,13 +84,14 @@ type GrammarTrapCode = (typeof GRAMMAR_TRAP_CODES)[number];
 export type GrammarTrapCounts = Record<GrammarTrapCode, number>;
 
 const zeroTrapCounts = (): GrammarTrapCounts => ({
-  unprefixed_item_path: 0,
-  this_prefix: 0,
-  unknown_directive: 0,
+  unaliased_item_path: 0,
+  legacy_marker: 0,
+  unsupported_tag: 0,
+  unknown_filter: 0,
+  python_expression: 0,
   bracket_index: 0,
   language_variant_path: 0,
   block_marker_inline: 0,
-  lookup_not_parent: 0,
   condition_on_input: 0,
 });
 
@@ -89,6 +107,19 @@ type ScannedParagraph = {
 };
 
 const NO_ROW_BLOCK: ReadonlySet<number> = new Set<number>();
+
+/** The paragraph text with those markers cut out, which is what the inline
+ *  engine reads once the row engine has hoisted a row block's pair away. */
+const withoutMarkers = (
+  text: string,
+  markers: readonly ScannedMarker[],
+): string => {
+  let remainder = text;
+  for (const marker of [...markers].toSorted((a, b) => b.start - a.start)) {
+    remainder = remainder.slice(0, marker.start) + remainder.slice(marker.end);
+  }
+  return remainder;
+};
 
 /**
  * One table row's paragraphs, with the row block its cells declare (if any)
@@ -128,8 +159,6 @@ const paragraphsOf = (blocks: readonly AuthoredBlock[]): ScannedParagraph[] =>
       ? [{ text: block.text, rowBlockStarts: NO_ROW_BLOCK }]
       : block.rows.flatMap(rowParagraphs),
   );
-
-const DIRECTIVE_SHAPED_RE = /^[#/@]/u;
 
 /** Two-letter tags a bilingual document is likely to suffix a path with.
  *  Deliberately short: a longer list starts eating real field names. */
@@ -197,16 +226,6 @@ const countLanguageVariants = (paths: readonly string[]): number => {
   return count;
 };
 
-const rootSegment = (path: string): string => path.split(".")[0] ?? path;
-
-/** A truthiness test on the field's own path (`penalty`, `penalty == true`),
- *  which is the tick-box confusion wherever it appears. */
-const TRUTHINESS_TAIL_RE = /\s*(?:==|=|is)\s*true$/u;
-
-const isSelfReferentialCondition = (path: string, condition: string): boolean =>
-  condition.trim().toLowerCase().replace(TRUTHINESS_TAIL_RE, "").trim() ===
-  path.toLowerCase();
-
 type DetectGrammarTrapsOptions = {
   /** The document the model authored, in order. */
   blocks: readonly AuthoredBlock[];
@@ -228,49 +247,70 @@ export const detectGrammarTraps = ({
   booleanInputPaths,
 }: DetectGrammarTrapsOptions): GrammarTrapCounts => {
   const counts = zeroTrapCounts();
-  const eachStack: string[] = [];
+  /** The loops open at this point, each with the alias its body must use. */
+  const eachStack: { alias: string; path: string }[] = [];
   const placeholderPaths: string[] = [];
-  const arrayPaths = new Set<string>();
 
   for (const { rowBlockStarts, text } of paragraphsOf(blocks)) {
-    for (const invalid of scanInvalidMarkers(text)) {
-      if (DIRECTIVE_SHAPED_RE.test(invalid.inner)) {
-        counts.unknown_directive += 1;
+    // The grammar package diagnoses a rejected span; the eval only counts what
+    // it names, so a defect kind added there lands here with no second list.
+    for (const { form, inner } of scanInvalidMarkers(text)) {
+      const defect = classifyMarkerDefect(inner, form);
+      if (defect === null) {
+        continue;
       }
-      if (invalid.inner.includes("[")) {
-        counts.bracket_index += 1;
+      switch (defect.kind) {
+        case "legacy_marker":
+          counts.legacy_marker += 1;
+          break;
+        case "unsupported_tag":
+          counts.unsupported_tag += 1;
+          break;
+        case "unknown_filter":
+          counts.unknown_filter += 1;
+          break;
+        case "python_expression":
+          counts.python_expression += 1;
+          break;
+        case "bracket_index":
+          counts.bracket_index += 1;
+          break;
+        default:
+          assertNever(defect.kind);
       }
     }
 
     const markers = scanMarkers(text);
     // A row block's two markers are placed as the grammar allows: the opener
-    // in front of one cell's text, the closer behind another's. Only markers
-    // that genuinely share a paragraph with other content are the trap.
+    // in front of one cell's text, the closer behind another's, and the row
+    // engine hoists them out of the cell before anything else reads it.
+    const rowBlockMarkers = markers.filter((marker) =>
+      rowBlockStarts.has(marker.start),
+    );
     const blockMarkers = markers.filter(
       (marker) =>
         isBlockDirectiveKind(marker.meta.kind) &&
         !rowBlockStarts.has(marker.start),
     );
-    if (blockMarkers.length > 0) {
-      let remainder = text;
-      for (const marker of blockMarkers.toReversed()) {
-        remainder =
-          remainder.slice(0, marker.start) + remainder.slice(marker.end);
-      }
-      // Two block directives in one paragraph (`{{#if x}}{{/if}}`) leave an
-      // empty remainder, yet neither occupies a paragraph of its own.
-      if (remainder.trim() !== "" || blockMarkers.length > 1) {
-        counts.block_marker_inline += 1;
-      }
+    // Three placements the engine runs, so none of them is a trap: no block
+    // directive left for it at all, a paragraph that is one directive and
+    // nothing else (the block form), and a span the inline engine parses. Only
+    // what `parseInlineConditions` refuses is a placement that renders as
+    // literal markers.
+    if (
+      blockMarkers.length > 0 &&
+      !blockDirectiveLinePattern().test(text) &&
+      !parseInlineConditions(withoutMarkers(text, rowBlockMarkers)).ok
+    ) {
+      counts.block_marker_inline += 1;
     }
 
     for (const { meta } of markers) {
-      if (meta.kind === "each") {
-        arrayPaths.add(meta.expr);
-        eachStack.push(meta.expr);
+      if (meta.kind === "for") {
+        eachStack.push({ alias: meta.alias, path: meta.path });
         continue;
       }
-      if (meta.kind === "endeach") {
+      if (meta.kind === "endfor") {
         eachStack.pop();
         continue;
       }
@@ -279,17 +319,14 @@ export const detectGrammarTraps = ({
       }
       const { expr } = meta;
       placeholderPaths.push(expr);
-      if (expr === "this" || expr.startsWith("this.")) {
-        counts.this_prefix += 1;
-        continue;
-      }
       const enclosing = eachStack.at(-1);
       if (
         enclosing !== undefined &&
-        expr !== enclosing &&
-        !expr.startsWith(`${enclosing}.`)
+        ![enclosing.alias, enclosing.path].some(
+          (head) => expr === head || expr.startsWith(`${head}.`),
+        )
       ) {
-        counts.unprefixed_item_path += 1;
+        counts.unaliased_item_path += 1;
       }
     }
   }
@@ -298,22 +335,16 @@ export const detectGrammarTraps = ({
     ...new Set(placeholderPaths),
   ]);
 
-  const markerPathSet = new Set(placeholderPaths);
+  // A condition that reads only the field's own value is one the engine drops
+  // before it configures anything, so it is no longer a trap; what remains is
+  // a condition that makes a question the person was meant to answer derived.
   const booleanInputs = new Set(booleanInputPaths);
   for (const field of overlay) {
-    if (
-      field.lookup !== undefined &&
-      field.path.includes(".") &&
-      markerPathSet.has(rootSegment(field.path)) &&
-      !arrayPaths.has(rootSegment(field.path))
-    ) {
-      counts.lookup_not_parent += 1;
-    }
     const { condition } = field;
     if (
       condition !== undefined &&
-      (booleanInputs.has(field.path) ||
-        isSelfReferentialCondition(field.path, condition))
+      booleanInputs.has(field.path) &&
+      !conditionReferencesOnlySelf(field.path, condition)
     ) {
       counts.condition_on_input += 1;
     }
@@ -376,6 +407,10 @@ export type RoundTripDefects = {
   conditionalRowKept: boolean;
   /** A date field rendered outside the locale and style it asked for. */
   dateLocaleMismatch: boolean;
+  /** The fill refused the saved template outright, so nothing rendered. It
+   *  is the round trip that failed, not the configuration: every entry the
+   *  call carried had already landed. */
+  fillError: string | null;
 };
 
 export const cleanRoundTrip = (): RoundTripDefects => ({
@@ -383,13 +418,26 @@ export const cleanRoundTrip = (): RoundTripDefects => ({
   blankRepeatedRows: 0,
   conditionalRowKept: false,
   dateLocaleMismatch: false,
+  fillError: null,
 });
 
 const hasRoundTripDefect = (roundTrip: RoundTripDefects): boolean =>
   roundTrip.leftoverMarkers > 0 ||
   roundTrip.blankRepeatedRows > 0 ||
   roundTrip.conditionalRowKept ||
-  roundTrip.dateLocaleMismatch;
+  roundTrip.dateLocaleMismatch ||
+  roundTrip.fillError !== null;
+
+/**
+ * An overlay issue's `path` names either the entry it refuses (`fields.3`) or
+ * the single property it dropped out of an entry that otherwise applied
+ * (`fields.3.parts`). Only the first means the entry did not land, so the two
+ * are told apart here, once, rather than at every reader.
+ */
+const ENTRY_ISSUE_PATH = /^fields\.\d+$/u;
+
+export const isEntryOverlayIssue = ({ path }: { path: string }): boolean =>
+  ENTRY_ISSUE_PATH.test(path);
 
 /**
  * What became of the model's last create/configure call. `rejected` covers the
@@ -409,8 +457,10 @@ export type AuthoringSteps = {
   authored: boolean;
   /** `create_template` accepted the document. */
   created: boolean;
-  /** `configure_template_fields` applied every entry, with no issue left,
-   *  and configured what the brief asked for. */
+  /** `configure_template_fields` landed every entry, with no entry-level
+   *  issue left, and configured what the brief asked for. A property the
+   *  tool site dropped out of an entry that otherwise applied is reported,
+   *  never a step failure: the entry landed. */
   configured: boolean;
   /** The fill round trip rendered cleanly. */
   filled: boolean;
@@ -444,7 +494,10 @@ export type SaveAttempt =
       status: "saved";
       paths: PathComparison;
       traps: GrammarTrapCounts;
+      /** Entry-level refusals: the entry did not land. */
       overlayIssues: readonly string[];
+      /** Properties dropped out of entries that did land. */
+      propertyDrops: readonly string[];
       configDefects: readonly string[];
       /** Source wording the template dropped: marking values fillable must
        *  not licence rewriting or deleting the rest of the document. */
@@ -465,6 +518,7 @@ export type AuthoringRunScore = {
   paths: PathComparison;
   traps: GrammarTrapCounts;
   overlayIssues: readonly string[];
+  propertyDrops: readonly string[];
   configDefects: readonly string[];
   fidelity: readonly string[];
   roundTrip: RoundTripDefects;
@@ -489,6 +543,7 @@ const emptyScore = (): Omit<AuthoringRunScore, "outcome" | "note"> => ({
   paths: { missing: [], extra: [] },
   traps: zeroTrapCounts(),
   overlayIssues: [],
+  propertyDrops: [],
   configDefects: [],
   fidelity: [],
   roundTrip: cleanRoundTrip(),
@@ -565,6 +620,7 @@ const scoreAttempt = (
         paths: attempt.paths,
         traps: attempt.traps,
         overlayIssues: attempt.overlayIssues,
+        propertyDrops: attempt.propertyDrops,
         configDefects: attempt.configDefects,
         fidelity: attempt.fidelity,
         roundTrip: attempt.roundTrip,

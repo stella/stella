@@ -118,12 +118,48 @@ describe("comparisons", () => {
     }
   });
 
-  test("contains is a predicate carrying a literal payload", () => {
-    expect(parseCondition('notes contains "urgent"')).toEqual({
+  test("`in` is a predicate carrying a literal payload", () => {
+    expect(parseCondition('"urgent" in notes')).toEqual({
       type: "predicate",
       operand: { type: "path", path: "notes" },
       op: "contains",
       value: "urgent",
+    });
+  });
+
+  test("`is defined` / `is not defined` test presence, not truthiness", () => {
+    expect(parseCondition("deposit is defined")).toEqual({
+      type: "predicate",
+      operand: { type: "path", path: "deposit" },
+      op: "is_not_empty",
+    });
+    expect(parseCondition("deposit is not defined")).toEqual({
+      type: "predicate",
+      operand: { type: "path", path: "deposit" },
+      op: "is_empty",
+    });
+  });
+
+  test("a single-quoted literal reads like a double-quoted one", () => {
+    expect(parseCondition("country == 'UK'")).toEqual({
+      type: "compare",
+      left: { type: "path", path: "country" },
+      op: "eq",
+      right: { type: "literal", value: "UK" },
+    });
+  });
+
+  test("a path whose first letters spell a keyword stays one operand", () => {
+    expect(parseCondition("international == true")).toEqual({
+      type: "compare",
+      left: { type: "path", path: "international" },
+      op: "eq",
+      right: { type: "literal", value: true },
+    });
+    expect(parseCondition("notes")).toEqual({
+      type: "predicate",
+      operand: { type: "path", path: "notes" },
+      op: "is_truthy",
     });
   });
 });
@@ -176,8 +212,8 @@ describe("logical structure", () => {
 });
 
 describe("negation", () => {
-  test("! wraps the node in a negated and-group", () => {
-    expect(parseCondition("!isUK")).toEqual({
+  test("not wraps the node in a negated and-group", () => {
+    expect(parseCondition("not isUK")).toEqual({
       type: "group",
       combinator: "and",
       negated: true,
@@ -185,8 +221,8 @@ describe("negation", () => {
     });
   });
 
-  test("!! nests two negated groups", () => {
-    expect(parseCondition("!!isUK")).toEqual({
+  test("not not nests two negated groups", () => {
+    expect(parseCondition("not not isUK")).toEqual({
       type: "group",
       combinator: "and",
       negated: true,
@@ -201,8 +237,8 @@ describe("negation", () => {
     });
   });
 
-  test("!(a and b) negates the parenthesized group", () => {
-    expect(parseCondition("!(a and b)")).toEqual({
+  test("not (a and b) negates the parenthesized group", () => {
+    expect(parseCondition("not (a and b)")).toEqual({
       type: "group",
       combinator: "and",
       negated: true,

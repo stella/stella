@@ -96,8 +96,8 @@ describe("hasLiveMarker", () => {
   });
 
   test("keeps an each-loop lookup whose keyed marker outlives its bare path", () => {
-    // Inside `{{#each companies}}` the field path is `companies.krs`. Deleting
-    // `{{companies.krs}}` but keeping `{{companies.krs.full}}` leaves only the
+    // Inside `{% for company in companies %}` the field path is `companies.krs`. Deleting
+    // `{{ company.krs }}` but keeping `{{ company.krs.full }}` leaves only the
     // keyed path discovered; gating on the bare path alone would wrongly prune.
     const discovered = new Set(["companies", "companies.krs.full"]);
     const field = lookupField("companies.krs", ["output_1", "full"]);
@@ -133,6 +133,8 @@ test("save manifest resolution retains source and nested AI metadata", () => {
     structureErrors: [],
     warnings: [],
     conditionPaths: [],
+    documentFields: [],
+    loopAliases: [],
   };
   const manifest: TemplateManifest = {
     version: 1,

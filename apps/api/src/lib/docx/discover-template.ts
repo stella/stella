@@ -15,11 +15,24 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
-import { parseCondition, type ConditionNode } from "@stll/template-conditions";
+import {
+  parseCondition,
+  type ConditionNode,
+  type FilterCall,
+} from "@stll/template-conditions";
+
+import { arrayOrEmpty } from "@/api/lib/array";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
-import { PLACEHOLDER_RE } from "./discover-placeholders";
+import { scanPlaceholders } from "./discover-placeholders";
+import {
+  arrayFieldFromFilters,
+  fieldMetaFromFilters,
+  filterChainSignature,
+  foldItemCountConstraints,
+} from "./field-filters";
 import { parseInlineConditions } from "./inline-conditions";
+import type { InlineGroup } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
   paragraphText,
@@ -28,17 +41,20 @@ import {
 } from "./ooxml";
 import {
   authoredParagraphIndices,
+  misplacedRowBlocks,
   normalizeRowBlockMarkers,
 } from "./row-block-markers";
 import {
   boundTemplateWarnings,
   collectParagraphWarnings,
+  rowBlockAcrossRowsWarning,
   type TemplateWarning,
 } from "./template-warnings";
 import type {
   DiscoveredField,
   DiscoveredPlaceholder,
   DiscoveredTemplate,
+  FieldMeta,
   TemplateFieldKind,
   TemplateStructureError,
 } from "./types";
@@ -94,21 +110,25 @@ type ConditionFieldOptions = {
   /** Every path the expression reads, accumulated across containers. */
   conditionPaths: Set<string>;
   condition: string;
-  rowPaths?: readonly string[];
+  rowScopes?: readonly RowScope[];
 };
 
 const registerConditionFields = ({
   condition,
   conditionPaths,
   fields,
-  rowPaths = [],
+  rowScopes = [],
 }: ConditionFieldOptions): void => {
   const root = parseCondition(condition);
   if (!root) {
     return;
   }
+  const rowPaths = rowScopePaths(rowScopes);
 
-  const registerPath = (path: string, kind: "boolean" | "string"): void => {
+  const registerPath = (rawPath: string, kind: "boolean" | "string"): void => {
+    // A condition inside a loop reads the item through the loop alias; the
+    // manifest speaks the array path, so resolve the alias before registering.
+    const path = qualifyRowScopedPlaceholder(rawPath, rowScopes);
     registerField(fields, path, kind);
     conditionPaths.add(path);
 
@@ -176,6 +196,8 @@ const qualifyRowScopedPath = (
 };
 
 type RowScope = {
+  /** The loop variable the body addresses items through. */
+  alias: string;
   declaredPath: string;
   scopedPath: string;
 };
@@ -195,17 +217,36 @@ const qualifyRowScopedPlaceholder = (
   ) {
     return path;
   }
-  for (const { declaredPath, scopedPath } of rowScopes.toReversed()) {
-    if (path === declaredPath) {
-      return scopedPath;
-    }
-    const declaredPrefix = `${declaredPath}.`;
-    if (path.startsWith(declaredPrefix)) {
-      return `${scopedPath}.${path.slice(declaredPrefix.length)}`;
+  for (const { alias, declaredPath, scopedPath } of rowScopes.toReversed()) {
+    // The alias is the authored form; the declared path still resolves so a
+    // template that reaches for the loop's own path is discovered the same way
+    // it fills (`unaliased_item_path` names it as a warning).
+    for (const head of [alias, declaredPath]) {
+      if (path === head) {
+        return scopedPath;
+      }
+      if (path.startsWith(`${head}.`)) {
+        return `${scopedPath}.${path.slice(head.length + 1)}`;
+      }
     }
   }
   return path;
 };
+
+/**
+ * The manifest path of a loop declared inside other loops. A nested loop names
+ * its array through the enclosing alias (`{% for i in group.items %}`), so the
+ * alias resolves first; a loop that names a bare path inherits the innermost
+ * row scope, as it always has.
+ */
+const qualifyLoopPath = (
+  declaredPath: string,
+  rowScopes: readonly RowScope[],
+): string =>
+  qualifyRowScopedPath(
+    qualifyRowScopedPlaceholder(declaredPath, rowScopes),
+    rowScopePaths(rowScopes),
+  );
 
 const requireRowScopes = (
   arrayScopes: ReadonlyMap<number, readonly RowScope[]>,
@@ -223,24 +264,27 @@ const requireRowScopes = (
 /**
  * Negate a condition expression.
  *
- * - Simple: `isUK` → `!isUK`
- * - Already negated: `!isUK` → `isUK`
- * - Compound: `isUK and hasLicense` → `!(isUK and hasLicense)`
+ * - Simple: `isUK` → `not isUK`
+ * - Already negated: `not isUK` → `isUK`
+ * - Compound: `isUK and hasLicense` → `not (isUK and hasLicense)`
  *
  * Uses parentheses for compound expressions so that
  * `evaluateCondition` treats the negation as applying
  * to the entire sub-expression (De Morgan via grouping).
  */
+const NEGATED_ATOM_RE = /^not\s+(?<atom>[\p{L}\p{N}_.-]+)$/u;
+
 const negateExpr = (expr: string): string => {
   const trimmed = expr.trim();
-  if (trimmed.startsWith("!") && !trimmed.includes(" ")) {
-    return trimmed.slice(1);
+  const negated = NEGATED_ATOM_RE.exec(trimmed);
+  if (negated) {
+    return negated.groups?.["atom"] ?? trimmed;
   }
   // Compound expression: wrap in parens to negate as a unit
   if (trimmed.includes(" ")) {
-    return `!(${trimmed})`;
+    return `not (${trimmed})`;
   }
-  return `!${trimmed}`;
+  return `not ${trimmed}`;
 };
 
 const wrapConjunctionPart = (expr: string): string =>
@@ -284,7 +328,7 @@ const recordFieldCondition = (
 /**
  * Build a paragraph-index-to-condition map by walking
  * the flat directive list with a stack. Handles
- * arbitrary nesting and elseif/else compound negation.
+ * arbitrary nesting and elif/else compound negation.
  *
  * Each directive marks a boundary; paragraphs between
  * boundaries inherit the current stack's combined
@@ -343,12 +387,12 @@ const buildConditionMapFromRanges = (
         paragraphIndex: d.paragraphIndex + 1,
         condition: currentFullCondition(),
       });
-    } else if (d.kind === "elseif") {
+    } else if (d.kind === "elif") {
       const frame = stack.at(-1);
       if (!frame) {
         continue;
       }
-      // Wrap the elseif expression in parens if it
+      // Wrap the elif expression in parens if it
       // contains `or` to preserve precedence when joined
 
       const exprPart = d.expression.includes(" or ")
@@ -382,7 +426,7 @@ const buildConditionMapFromRanges = (
         condition: currentFullCondition(),
       });
     }
-    // each/endeach: no condition change
+    // for/endfor: no condition change
   }
 
   boundaries.sort((a, b) => a.paragraphIndex - b.paragraphIndex);
@@ -411,6 +455,20 @@ const buildConditionMapFromRanges = (
   return map;
 };
 
+/**
+ * One path's field configuration as the document declares it: the filter chain
+ * of the occurrence that carries it, and the paragraph it sits in so a
+ * disagreement between two occurrences can name both.
+ */
+type DocumentFieldDeclaration = {
+  filters: readonly FilterCall[];
+  signature: string;
+  paragraphIndex: number;
+  /** A loop path's filters configure the repeat, not a value, so the two are
+   *  read by different halves of the catalogue. */
+  scope: "value" | "array";
+};
+
 type AnalysisResult = {
   fields: FieldAccumulator;
   errors: TemplateStructureError[];
@@ -418,21 +476,90 @@ type AnalysisResult = {
   fieldConditions: Map<string, string | null>;
   warnings: TemplateWarning[];
   conditionPaths: Set<string>;
+  documentFilters: Map<string, DocumentFieldDeclaration>;
+  /** Alias to the array paths it was bound to. More than one path means the
+   *  document uses the name for two different loops, so it names nothing. */
+  loopAliases: Map<string, Set<string>>;
+};
+
+const recordLoopAlias = (
+  aliases: Map<string, Set<string>>,
+  alias: string,
+  path: string,
+): void => {
+  if (alias === path) {
+    return;
+  }
+  const paths = aliases.get(alias) ?? new Set<string>();
+  paths.add(path);
+  aliases.set(alias, paths);
+};
+
+/**
+ * Record one marker's filter chain against its path. Filters may sit on any
+ * ONE occurrence of a path — repeating the identical chain is fine, since it
+ * says the same thing — but two occurrences that configure the same field
+ * differently have no resolution the author would recognize, so both
+ * paragraphs are named and neither wins.
+ */
+type RecordDeclarationOptions = {
+  declarations: Map<string, DocumentFieldDeclaration>;
+  errors: TemplateStructureError[];
+  filters: readonly FilterCall[];
+  paragraphIndex: number;
+  path: string;
+  scope?: "value" | "array";
+};
+
+const recordFieldDeclaration = ({
+  declarations,
+  errors,
+  filters,
+  paragraphIndex,
+  path,
+  scope = "value",
+}: RecordDeclarationOptions): void => {
+  if (filters.length === 0) {
+    return;
+  }
+  const signature = filterChainSignature(filters);
+  const existing = declarations.get(path);
+  if (existing === undefined) {
+    declarations.set(path, { filters, signature, paragraphIndex, scope });
+    return;
+  }
+  if (existing.signature === signature) {
+    return;
+  }
+  errors.push({
+    message:
+      `"${path}" is configured twice with different filters: paragraph ` +
+      `${existing.paragraphIndex + 1} says ${existing.signature} and ` +
+      `paragraph ${paragraphIndex + 1} says ${signature}. Keep the filters on ` +
+      "one occurrence and write the others as a plain {{ " +
+      `${path} }} marker.`,
+    paragraphIndex,
+    directive: `{{ ${path} | … }}`,
+  });
 };
 
 type ContainerStructureOptions = {
   body: slimdom.Element;
   conditionPaths: Set<string>;
+  documentFilters: Map<string, DocumentFieldDeclaration>;
   errors: TemplateStructureError[];
   fields: FieldAccumulator;
+  loopAliases: Map<string, Set<string>>;
   warnings: TemplateWarning[];
 };
 
 const collectContainerStructure = ({
   body,
   conditionPaths,
+  documentFilters,
   errors,
   fields,
+  loopAliases,
   warnings,
 }: ContainerStructureOptions) => {
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
@@ -456,24 +583,32 @@ const collectContainerStructure = ({
   );
   for (let i = 0; i < paragraphs.length; i++) {
     const directive = directiveByParagraph.get(i);
-    if (directive?.kind === "endeach") {
+    if (directive?.kind === "endfor") {
       activeArrays.pop();
     }
-    if (directive?.kind === "if" || directive?.kind === "elseif") {
+    if (directive?.kind === "if" || directive?.kind === "elif") {
       registerConditionFields({
         condition: directive.expression,
         conditionPaths,
         fields,
-        rowPaths: rowScopePaths(activeArrays),
+        rowScopes: [...activeArrays],
       });
     }
-    if (directive?.kind === "each") {
-      const scopedPath = qualifyRowScopedPath(
-        directive.expression,
-        rowScopePaths(activeArrays),
-      );
+    if (directive?.kind === "for") {
+      const scopedPath = qualifyLoopPath(directive.expression, activeArrays);
       registerField(fields, scopedPath, "array");
+      const alias = directive.alias ?? directive.expression;
+      recordLoopAlias(loopAliases, alias, scopedPath);
+      recordFieldDeclaration({
+        declarations: documentFilters,
+        errors,
+        filters: arrayOrEmpty(directive.filters),
+        paragraphIndex: authoredIndices[i] ?? i,
+        path: scopedPath,
+        scope: "array",
+      });
       activeArrays.push({
+        alias,
         declaredPath: directive.expression,
         scopedPath,
       });
@@ -516,7 +651,7 @@ const collectLoopItemFields = ({
   fields: FieldAccumulator;
 }): void => {
   for (const block of blocks) {
-    if (block.kind !== "each") {
+    if (block.kind !== "for") {
       continue;
     }
     const blockScope = requireRowScopes(arrayScopes, block.contentStart - 1).at(
@@ -538,11 +673,12 @@ const collectLoopItemFields = ({
         continue;
       }
 
-      const text = paragraphText(para);
-      const prefix = `${block.arrayPath}.`;
-      for (const match of text.matchAll(PLACEHOLDER_RE)) {
-        const name = match.groups?.["name"];
-        if (name?.startsWith(prefix)) {
+      const prefixes = [...new Set([block.alias, block.arrayPath])].map(
+        (head) => `${head}.`,
+      );
+      for (const { name } of scanPlaceholders(paragraphText(para))) {
+        const prefix = prefixes.find((candidate) => name.startsWith(candidate));
+        if (prefix !== undefined) {
           entry?.itemPaths.add(name.slice(prefix.length));
         }
       }
@@ -556,9 +692,11 @@ const collectParagraphPlaceholders = ({
   conditionMap,
   conditionPaths,
   directiveIndices,
+  documentFilters,
   errors,
   fieldConditions,
   fields,
+  loopAliases,
   paragraphs,
   placeholderCounts,
 }: ReturnType<typeof collectContainerStructure> & AnalysisResult): void => {
@@ -579,6 +717,7 @@ const collectParagraphPlaceholders = ({
       start: number;
     }[] = [];
     const inlineLoopScopes: {
+      alias: string;
       declaredPath: string;
       end: number;
       scopedPath: string;
@@ -593,88 +732,147 @@ const collectParagraphPlaceholders = ({
         directive: inline.directive,
       });
     } else {
-      for (const group of inline.groups) {
-        if (group.kind === "each") {
-          const scopedPath = qualifyRowScopedPath(
-            group.arrayPath,
-            rowScopePaths(requireRowScopes(arrayScopes, i)),
-          );
-          registerField(fields, scopedPath, "array");
-          inlineLoopScopes.push({
-            declaredPath: group.arrayPath,
-            end: group.contentEnd,
-            scopedPath,
-            start: group.contentStart,
-          });
-          const entry = fields.get(scopedPath);
-          const content = text.slice(group.contentStart, group.contentEnd);
-          const prefix = `${group.arrayPath}.`;
-          for (const match of content.matchAll(PLACEHOLDER_RE)) {
-            const name = match.groups?.["name"];
-            if (name?.startsWith(prefix)) {
-              entry?.itemPaths.add(name.slice(prefix.length));
+      // Inline blocks nest, and the parser hands back one level at a time:
+      // applying an outer group leaves its inner markers in the text, where
+      // the next pass reads them as top-level. Discovery descends the same
+      // way, or a nested loop's array is never registered and the items its
+      // body writes look like fields of their own.
+      const visitInlineGroups = (
+        groups: readonly InlineGroup[],
+        span: string,
+        offset: number,
+      ): void => {
+        for (const group of groups) {
+          if (group.kind === "for") {
+            const scopedPath = qualifyLoopPath(group.arrayPath, [
+              ...requireRowScopes(arrayScopes, i),
+              ...inlineLoopScopes,
+            ]);
+            registerField(fields, scopedPath, "array");
+            recordLoopAlias(loopAliases, group.alias, scopedPath);
+            recordFieldDeclaration({
+              declarations: documentFilters,
+              errors,
+              filters: group.filters,
+              paragraphIndex: authoredIndices[i] ?? i,
+              path: scopedPath,
+              scope: "array",
+            });
+            inlineLoopScopes.push({
+              alias: group.alias,
+              declaredPath: group.arrayPath,
+              end: offset + group.contentEnd,
+              scopedPath,
+              start: offset + group.contentStart,
+            });
+            const entry = fields.get(scopedPath);
+            const content = span.slice(group.contentStart, group.contentEnd);
+            const prefixes = [...new Set([group.alias, group.arrayPath])].map(
+              (head) => `${head}.`,
+            );
+            for (const { name } of scanPlaceholders(content)) {
+              const prefix = prefixes.find((candidate) =>
+                name.startsWith(candidate),
+              );
+              if (prefix !== undefined) {
+                entry?.itemPaths.add(name.slice(prefix.length));
+              }
+            }
+            const nested = parseInlineConditions(content);
+            // The span is balanced by construction: the outer parse already
+            // reported anything that was not.
+            if (nested.ok) {
+              visitInlineGroups(
+                nested.groups,
+                content,
+                offset + group.contentStart,
+              );
+            }
+            continue;
+          }
+
+          const priorConditions: string[] = [];
+          for (const branch of group.branches) {
+            registerConditionFields({
+              condition: branch.condition,
+              conditionPaths,
+              fields,
+              rowScopes: [
+                ...requireRowScopes(arrayScopes, i),
+                ...inlineLoopScopes.map(
+                  ({ alias, declaredPath, scopedPath }) => ({
+                    alias,
+                    declaredPath,
+                    scopedPath,
+                  }),
+                ),
+              ],
+            });
+            const branchCondition =
+              branch.condition === ""
+                ? priorConditions.map(negateExpr).join(" and ")
+                : [
+                    ...priorConditions.map(negateExpr),
+                    wrapConjunctionPart(branch.condition),
+                  ].join(" and ");
+            inlineBranchConditions.push({
+              condition: combineConditions(
+                paraCondition,
+                branchCondition || undefined,
+              ),
+              end: offset + branch.contentEnd,
+              start: offset + branch.contentStart,
+            });
+            if (branch.condition !== "") {
+              priorConditions.push(branch.condition);
+            }
+            const nested = parseInlineConditions(
+              span.slice(branch.contentStart, branch.contentEnd),
+            );
+            if (nested.ok) {
+              visitInlineGroups(
+                nested.groups,
+                span.slice(branch.contentStart, branch.contentEnd),
+                offset + branch.contentStart,
+              );
             }
           }
-          continue;
         }
-
-        const priorConditions: string[] = [];
-        for (const branch of group.branches) {
-          registerConditionFields({
-            condition: branch.condition,
-            conditionPaths,
-            fields,
-            rowPaths: rowScopePaths(requireRowScopes(arrayScopes, i)),
-          });
-          const branchCondition =
-            branch.condition === ""
-              ? priorConditions.map(negateExpr).join(" and ")
-              : [
-                  ...priorConditions.map(negateExpr),
-                  wrapConjunctionPart(branch.condition),
-                ].join(" and ");
-          inlineBranchConditions.push({
-            condition: combineConditions(
-              paraCondition,
-              branchCondition || undefined,
-            ),
-            end: branch.contentEnd,
-            start: branch.contentStart,
-          });
-          if (branch.condition !== "") {
-            priorConditions.push(branch.condition);
-          }
-        }
-      }
+      };
+      visitInlineGroups(inline.groups, text, 0);
     }
 
-    for (const match of text.matchAll(PLACEHOLDER_RE)) {
-      const declaredName = match.groups?.["name"];
-      if (!declaredName) {
-        continue;
-      }
-      // @-prefixed markers (@clause:, @num:, @ref:) are resolved at fill time,
-      // not user-entered fields — keep them out of the discovered schema.
-      if (declaredName.startsWith("@")) {
-        continue;
-      }
-      const loopScope = inlineLoopScopes.find(
-        ({ end, start }) => start <= match.index && match.index < end,
+    for (const {
+      filters,
+      name: declaredName,
+      start: markerStart,
+    } of scanPlaceholders(text)) {
+      // Every inline loop whose body holds this marker, outermost first, so
+      // the innermost alias resolves the name and each enclosing array still
+      // learns the item path it repeats.
+      const enclosingLoops = inlineLoopScopes.filter(
+        ({ end, start }) => start <= markerStart && markerStart < end,
       );
-      const declaredLoopPrefix = `${loopScope?.declaredPath ?? ""}.`;
-      const inlineScopedName =
-        loopScope !== undefined && declaredName.startsWith(declaredLoopPrefix)
-          ? `${loopScope.scopedPath}.${declaredName.slice(declaredLoopPrefix.length)}`
-          : declaredName;
+      const inlineScopedName = qualifyRowScopedPlaceholder(
+        declaredName,
+        enclosingLoops,
+      );
       const scopedArrayPaths = requireRowScopes(arrayScopes, i);
       const name = qualifyRowScopedPlaceholder(
         inlineScopedName,
         scopedArrayPaths,
       );
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
+      recordFieldDeclaration({
+        declarations: documentFilters,
+        errors,
+        filters,
+        paragraphIndex: authoredIndices[i] ?? i,
+        path: name,
+      });
 
       const inlineCondition = inlineBranchConditions.find(
-        ({ end, start }) => start <= match.index && match.index < end,
+        ({ end, start }) => start <= markerStart && markerStart < end,
       )?.condition;
       recordFieldCondition(
         fieldConditions,
@@ -700,12 +898,13 @@ const collectParagraphPlaceholders = ({
       // Register the full path as string
       registerField(fields, name, "string");
 
-      if (scopedArrayPaths.length > 0) {
-        for (const { scopedPath: arrayPath } of scopedArrayPaths) {
-          const prefix = `${arrayPath}.`;
-          if (name.startsWith(prefix)) {
-            fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));
-          }
+      for (const { scopedPath: arrayPath } of [
+        ...scopedArrayPaths,
+        ...enclosingLoops,
+      ]) {
+        const prefix = `${arrayPath}.`;
+        if (name.startsWith(prefix)) {
+          fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));
         }
       }
     }
@@ -725,22 +924,32 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const placeholderCounts = new Map<string, number>();
   const errors: TemplateStructureError[] = [];
   const fieldConditions = new Map<string, string | null>();
-  const warnings: TemplateWarning[] = [];
+  // Read after the row form is normalized away, so only the pairs that could
+  // not be one are left to name.
+  const warnings: TemplateWarning[] = misplacedRowBlocks(body).map(
+    rowBlockAcrossRowsWarning,
+  );
   const conditionPaths = new Set<string>();
+  const documentFilters = new Map<string, DocumentFieldDeclaration>();
+  const loopAliases = new Map<string, Set<string>>();
   const structure = collectContainerStructure({
     body,
     conditionPaths,
+    documentFilters,
     errors,
     fields,
+    loopAliases,
     warnings,
   });
   collectLoopItemFields({ ...structure, fields });
   collectParagraphPlaceholders({
     ...structure,
     conditionPaths,
+    documentFilters,
     errors,
     fieldConditions,
     fields,
+    loopAliases,
     placeholderCounts,
     warnings,
   });
@@ -752,6 +961,8 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
     fieldConditions,
     warnings,
     conditionPaths,
+    documentFilters,
+    loopAliases,
   };
 };
 
@@ -781,6 +992,21 @@ const mergeAnalysis = (
 
   primary.errors.push(...secondary.errors);
   primary.warnings.push(...secondary.warnings);
+  for (const [alias, paths] of secondary.loopAliases) {
+    for (const path of paths) {
+      recordLoopAlias(primary.loopAliases, alias, path);
+    }
+  }
+  for (const [path, declaration] of secondary.documentFilters) {
+    recordFieldDeclaration({
+      declarations: primary.documentFilters,
+      errors: primary.errors,
+      filters: declaration.filters,
+      paragraphIndex: declaration.paragraphIndex,
+      path,
+      scope: declaration.scope,
+    });
+  }
   for (const path of secondary.conditionPaths) {
     primary.conditionPaths.add(path);
   }
@@ -820,6 +1046,8 @@ const analyzeHeadersAndFooters = async (
     fieldConditions: new Map(),
     warnings: [],
     conditionPaths: new Set(),
+    documentFilters: new Map(),
+    loopAliases: new Map(),
   };
 
   // Sort entries alphabetically to match the order used by
@@ -888,6 +1116,8 @@ export const discoverTemplate = async (
     structureErrors: [],
     warnings: [],
     conditionPaths: [],
+    documentFields: [],
+    loopAliases: [],
   };
 
   const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
@@ -976,5 +1206,58 @@ export const discoverTemplate = async (
     structureErrors: errors,
     warnings: boundTemplateWarnings(primary.warnings),
     conditionPaths,
+    documentFields: documentLayerFields({
+      arrayPaths: new Set(arrayPaths),
+      declarations: primary.documentFilters,
+      errors,
+    }),
+    loopAliases: [...primary.loopAliases]
+      .flatMap(([alias, paths]) => {
+        const [path] = [...paths];
+        // An alias two loops gave different arrays names nothing on its own.
+        return paths.size === 1 && path !== undefined ? [{ alias, path }] : [];
+      })
+      .toSorted((left, right) => compareCodeUnit(left.alias, right.alias)),
   };
+};
+
+type DocumentLayerOptions = {
+  /** The paths the document loops over, so a count written on one of their
+   *  items reaches the repeat it counts. */
+  arrayPaths: ReadonlySet<string>;
+  declarations: ReadonlyMap<string, DocumentFieldDeclaration>;
+  errors: TemplateStructureError[];
+};
+
+/**
+ * The manifest the markers themselves declare, in path order. A filter the
+ * marker cannot act on becomes a structure error against the paragraph it was
+ * written in, so the author is told what to change rather than getting a field
+ * that silently ignores half its configuration.
+ */
+const documentLayerFields = ({
+  arrayPaths,
+  declarations,
+  errors,
+}: DocumentLayerOptions): FieldMeta[] => {
+  const fields: FieldMeta[] = [];
+  for (const [path, { filters, paragraphIndex, scope }] of [
+    ...declarations,
+  ].toSorted(([a], [b]) => compareCodeUnit(a, b))) {
+    const { field, issues } =
+      scope === "array"
+        ? arrayFieldFromFilters(path, filters)
+        : fieldMetaFromFilters(path, filters);
+    for (const { filter, hint, message } of issues) {
+      errors.push({
+        message: `${message} ${hint}`,
+        paragraphIndex,
+        directive: `{{ ${path} | ${filter}(…) }}`,
+      });
+    }
+    if (field) {
+      fields.push(field);
+    }
+  }
+  return foldItemCountConstraints(fields, arrayPaths).fields;
 };

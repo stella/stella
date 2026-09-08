@@ -502,7 +502,7 @@ const fillReport = async ({
   linkBase: ReportLinkBase | undefined;
 }): Promise<FillReportResult> => {
   // Deterministic export: no generators (resolveAiFields is a no-op without a
-  // generator) and no usage preflight. The template's {{#if aiNarrative}}
+  // generator) and no usage preflight. The template's {% if aiNarrative %}
   // sections are removed at fill time, so the unfilled AI-field placeholders
   // never survive into the output.
   const generators = aiNarrative

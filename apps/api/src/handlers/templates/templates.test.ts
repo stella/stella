@@ -393,7 +393,7 @@ describe("template fill", () => {
 
   test("returns structure errors for mismatched blocks", async () => {
     const xml = WRAP(
-      [P("{{#if show}}"), P("Content"), P("{{/each}}")].join(""),
+      [P("{% if show %}"), P("Content"), P("{% endfor %}")].join(""),
     );
     const buf = await makeDocx(xml);
 
@@ -714,9 +714,11 @@ describe("fill handler required fields", () => {
   test("rejects when a required loop item field is missing in one row", async () => {
     let buf = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buf = await writeManifest(buf, {
@@ -754,9 +756,11 @@ describe("fill handler required fields", () => {
   test("fills when every row supplies the required loop item field", async () => {
     let buf = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buf = await writeManifest(buf, {
@@ -872,7 +876,10 @@ describe("fill handler download response", () => {
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
-      body: { file, values: JSON.stringify({ name: "Maciej Kuropatwiński" }) },
+      body: {
+        file,
+        values: JSON.stringify({ name: "Małgorzata Wróblewska-Żak" }),
+      },
     });
 
     expect(result).toBeInstanceOf(Response);
@@ -887,7 +894,7 @@ describe("fill handler download response", () => {
     const bytes = Buffer.from(await resp.arrayBuffer());
     const zip = await JSZip.loadAsync(bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
-    expect(docXml).toContain("Maciej Kuropatwiński");
+    expect(docXml).toContain("Małgorzata Wróblewska-Żak");
   });
 });
 

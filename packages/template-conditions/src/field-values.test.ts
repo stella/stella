@@ -40,9 +40,9 @@ describe("renderDeterministicFieldValue", () => {
     };
     expect(
       renderDeterministicFieldValue(field, {
-        lawyer: { position: "rad. praw.", name: "Jan Kowalski" },
+        lawyer: { position: "rad. praw.", name: "Tomasz Nowicki" },
       }),
-    ).toBe("rad. praw. Jan Kowalski");
+    ).toBe("rad. praw. Tomasz Nowicki");
   });
 
   test("composite: a non-object value yields null (caller's scalar path)", () => {

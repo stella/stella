@@ -17,21 +17,25 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { normalizeDateFormatSpec, normalizeLocale } from "@stll/agent-input";
+
 import type {
+  FieldDateFormat,
   FieldLookup,
-  FieldPart,
   FieldSource,
+  FieldSourceKey,
   FieldValidation,
   fieldMetaToolInputSchema,
 } from "@/api/lib/docx/types";
 import {
-  FIELD_PARTS_DESCRIPTION,
+  CLEARED_FIELD_SOURCE,
+  FIELD_DATE_FORMAT_DESCRIPTION,
   FIELD_VALIDATION_DESCRIPTION,
+  FIELD_WIRE_PROPERTY,
+  fieldDateFormatObjectSchema,
   fieldLookupFormatSchema,
   fieldMetaToolInputObjectSchema,
-  fieldPartSchema,
   fieldValidationObjectSchema,
-  hasCompleteCompositeField,
   LOOKUP_FORMATS_MAX,
   LOOKUP_REGISTRIES,
 } from "@/api/lib/docx/types";
@@ -45,7 +49,6 @@ import {
 } from "@/api/lib/template-binding/binding-sources";
 
 const { entries: fieldEntries } = fieldMetaToolInputObjectSchema;
-const { entries: partEntries } = fieldPartSchema;
 const { entries: validationEntries } = fieldValidationObjectSchema;
 
 /**
@@ -139,13 +142,42 @@ const templateFieldValidationInputSchema = v.pipe(
   v.description(FIELD_VALIDATION_DESCRIPTION),
 );
 
-const templateFieldPartInputSchema = v.strictObject({
-  key: partEntries.key,
-  label: partEntries.label,
-  input_type: partEntries.inputType,
-  options: partEntries.options,
-  pattern: partEntries.pattern,
-});
+/**
+ * The wire's own date format. `locale` accepts every spelling the reader
+ * reads (`cs_CZ`, `en-gb`) rather than only the canonical one, and
+ * {@link toFieldMetaToolInput} canonicalizes before the persisted schema sees
+ * it — `new Intl.DateTimeFormat("cs_CZ")` throws, so leniency stops here. The
+ * projected JSON Schema is unchanged: a check carries no keyword.
+ */
+const templateFieldDateFormatInputSchema = v.optional(
+  v.pipe(
+    v.strictObject({
+      locale: v.pipe(
+        v.string(),
+        v.check((value) => normalizeLocale(value).ok, "Invalid BCP-47 locale"),
+        v.description("BCP-47 language tag"),
+      ),
+      style: fieldDateFormatObjectSchema.entries.style,
+    }),
+    v.description(FIELD_DATE_FORMAT_DESCRIPTION),
+  ),
+);
+
+/** The wire pair as the manifest stores it. The schema above already accepted
+ *  the spelling, so the reader cannot refuse it here. */
+const toPersistedDateFormat = (
+  dateFormat: v.InferOutput<typeof templateFieldDateFormatInputSchema>,
+): FieldDateFormat | undefined => {
+  if (dateFormat === undefined) {
+    return undefined;
+  }
+  const normalized = normalizeDateFormatSpec(dateFormat);
+  return normalized.ok
+    ? normalized.value
+    : panic(
+        `Unreadable date format past the wire schema: ${normalized.received}`,
+      );
+};
 
 const templateFieldInputObjectSchema = v.strictObject({
   path: fieldEntries.path,
@@ -155,14 +187,6 @@ const templateFieldInputObjectSchema = v.strictObject({
   options: fieldEntries.options,
   validation: v.optional(templateFieldValidationInputSchema),
   required: fieldEntries.required,
-  parts: v.optional(
-    v.pipe(
-      v.array(templateFieldPartInputSchema),
-      v.minLength(1),
-      v.description(FIELD_PARTS_DESCRIPTION),
-    ),
-  ),
-  format: fieldEntries.format,
   options_from: fieldEntries.optionsFrom,
   source: v.optional(
     v.pipe(
@@ -170,7 +194,7 @@ const templateFieldInputObjectSchema = v.strictObject({
       v.description("Who fills the field; one branch, by type"),
     ),
   ),
-  date_format: fieldEntries.dateFormat,
+  date_format: templateFieldDateFormatInputSchema,
 });
 
 /** An `ai` source names exactly one half of the AI contract: a drafting
@@ -181,32 +205,8 @@ const hasUsableAiSource = (source: TemplateFieldSourceInput): boolean =>
   source.type !== "ai" ||
   (source.prompt !== undefined) !== (source.adapt === true);
 
-/** A composite field is assembled from its own `parts`, so nothing else may
- *  produce its value. */
-const hasCompatibleCompositeSource = ({
-  parts,
-  source,
-}: {
-  parts?: readonly unknown[] | undefined;
-  source?: TemplateFieldSourceInput | undefined;
-}): boolean =>
-  parts === undefined || source === undefined || source.type === "person";
-
 export const templateFieldInputSchema = v.pipe(
   templateFieldInputObjectSchema,
-  v.check(
-    (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
-      hasCompleteCompositeField(field),
-    "parts and format must be provided together",
-  ),
-  v.forward(
-    v.check(
-      (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
-        hasCompatibleCompositeSource(field),
-      'A composite field is assembled from its parts, so its source must be "person".',
-    ),
-    ["source"],
-  ),
   v.forward(
     v.check(
       (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
@@ -225,33 +225,18 @@ type TemplateFieldInput = v.InferOutput<typeof templateFieldInputSchema>;
 export type DescribedTemplateField = Omit<TemplateFieldInput, "source"> & {
   source: TemplateFieldSourceInput;
 };
-type TemplateFieldPartInput = v.InferOutput<
-  typeof templateFieldPartInputSchema
->;
 type TemplateFieldValidationInput = v.InferOutput<
   typeof templateFieldValidationInputSchema
 >;
 
 type PersistedFieldInput = v.InferOutput<typeof fieldMetaToolInputSchema>;
 
-/** Persisted properties the wire carries under their own key. The derived
- *  half (`aiPrompt`, `aiAdapt`, `aiSeesDocument`, `lookup`, `source`,
- *  `formula`, `condition`) is folded into `source` instead, and is total over
- *  the union below rather than listed here. */
-const FIELD_WIRE_KEYS = {
-  path: "path",
-  label: "label",
-  hint: "hint",
-  inputType: "input_type",
-  options: "options",
-  validation: "validation",
-  required: "required",
-  parts: "parts",
-  format: "format",
-  optionsFrom: "options_from",
-  dateFormat: "date_format",
-} as const satisfies Record<
-  Exclude<keyof PersistedFieldInput, FoldedIntoSourceKey>,
+/** Persisted properties the wire carries under their own key, read off the
+ *  manifest-to-wire map. The derived half (`aiPrompt`, `aiAdapt`,
+ *  `aiSeesDocument`, `lookup`, `source`, `formula`, `condition`) is folded
+ *  into `source` instead, and is total over the union below. */
+const FIELD_WIRE_KEYS = FIELD_WIRE_PROPERTY satisfies Record<
+  Exclude<keyof PersistedFieldInput, FieldSourceKey>,
   keyof TemplateFieldInput
 >;
 
@@ -269,33 +254,11 @@ const VALIDATION_WIRE_KEYS = {
   keyof TemplateFieldValidationInput
 >;
 
-const PART_WIRE_KEYS = {
-  key: "key",
-  label: "label",
-  inputType: "input_type",
-  options: "options",
-  pattern: "pattern",
-} as const satisfies Record<keyof FieldPart, keyof TemplateFieldPartInput>;
-
 /** Camel-case field data returned by the template service. Describe uses
  * `null` for absent values, while the tool treats null as absence. */
 type DescribedFieldInput = {
   [Key in keyof PersistedFieldInput]?: PersistedFieldInput[Key] | null;
 } & { path: string };
-
-const toFieldPart = (part: TemplateFieldPartInput): FieldPart => ({
-  key: part[PART_WIRE_KEYS.key],
-  ...(part[PART_WIRE_KEYS.label] === undefined
-    ? {}
-    : { label: part[PART_WIRE_KEYS.label] }),
-  inputType: part[PART_WIRE_KEYS.inputType],
-  ...(part[PART_WIRE_KEYS.options] === undefined
-    ? {}
-    : { options: part[PART_WIRE_KEYS.options] }),
-  ...(part[PART_WIRE_KEYS.pattern] === undefined
-    ? {}
-    : { pattern: part[PART_WIRE_KEYS.pattern] }),
-});
 
 const toFieldValidation = (
   validation: TemplateFieldValidationInput,
@@ -359,33 +322,15 @@ const toTemplateFieldValidationInput = (
  *  wire union produces exactly one of these shapes, and every key appears in
  *  it: an entry merges onto the field it names, so a key the new branch omits
  *  has to be present and cleared, or the old branch survives the merge. */
-/** The persisted properties `source` folds up. Everything else on a field
- *  travels under its own wire key. */
-type FoldedIntoSourceKey =
-  | "aiAdapt"
-  | "aiPrompt"
-  | "aiSeesDocument"
-  | "condition"
-  | "formula"
-  | "lookup"
-  | "source";
-
 type PersistedFieldSourceProperties = Required<{
-  [Key in Exclude<FoldedIntoSourceKey, "source">]: PersistedFieldInput[Key];
+  [Key in Exclude<FieldSourceKey, "source">]: PersistedFieldInput[Key];
 }> & { source: FieldSource | undefined };
 
 /** Nothing set: the shape every branch below starts from, so switching a
  *  field from a lookup to a person clears the lookup rather than keeping it
  *  beside the new source. */
-const NO_PERSISTED_SOURCE: PersistedFieldSourceProperties = {
-  aiAdapt: undefined,
-  aiPrompt: undefined,
-  aiSeesDocument: undefined,
-  condition: undefined,
-  formula: undefined,
-  lookup: undefined,
-  source: undefined,
-};
+const NO_PERSISTED_SOURCE: PersistedFieldSourceProperties =
+  CLEARED_FIELD_SOURCE;
 
 /**
  * One wire source branch, spread onto the persisted field. Exhaustive over
@@ -547,26 +492,6 @@ export const toTemplateFieldWireInput = (
   ...(field.required === null || field.required === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.required]: field.required }),
-  ...(field.parts === null || field.parts === undefined
-    ? {}
-    : {
-        [FIELD_WIRE_KEYS.parts]: field.parts.map((part) => ({
-          [PART_WIRE_KEYS.key]: part.key,
-          ...(part.label === undefined
-            ? {}
-            : { [PART_WIRE_KEYS.label]: part.label }),
-          [PART_WIRE_KEYS.inputType]: part.inputType,
-          ...(part.options === undefined
-            ? {}
-            : { [PART_WIRE_KEYS.options]: part.options }),
-          ...(part.pattern === undefined
-            ? {}
-            : { [PART_WIRE_KEYS.pattern]: part.pattern }),
-        })),
-      }),
-  ...(field.format === null || field.format === undefined
-    ? {}
-    : { [FIELD_WIRE_KEYS.format]: field.format }),
   ...(field.optionsFrom === null || field.optionsFrom === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.optionsFrom]: field.optionsFrom }),
@@ -580,7 +505,6 @@ export const toTemplateFieldWireInput = (
  * describe serializer. */
 export const toFieldMetaToolInput = ({
   [FIELD_WIRE_KEYS.validation]: validation,
-  [FIELD_WIRE_KEYS.parts]: parts,
   source,
   ...field
 }: TemplateFieldInput): PersistedFieldInput => ({
@@ -603,15 +527,13 @@ export const toFieldMetaToolInput = ({
   ...(field[FIELD_WIRE_KEYS.required] === undefined
     ? {}
     : { required: field[FIELD_WIRE_KEYS.required] }),
-  ...(parts === undefined ? {} : { parts: parts.map(toFieldPart) }),
-  ...(field[FIELD_WIRE_KEYS.format] === undefined
-    ? {}
-    : { format: field[FIELD_WIRE_KEYS.format] }),
   ...(field[FIELD_WIRE_KEYS.optionsFrom] === undefined
     ? {}
     : { optionsFrom: field[FIELD_WIRE_KEYS.optionsFrom] }),
   ...(source === undefined ? {} : toPersistedFieldSource(source)),
   ...(field[FIELD_WIRE_KEYS.dateFormat] === undefined
     ? {}
-    : { dateFormat: field[FIELD_WIRE_KEYS.dateFormat] }),
+    : {
+        dateFormat: toPersistedDateFormat(field[FIELD_WIRE_KEYS.dateFormat]),
+      }),
 });

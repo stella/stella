@@ -47,6 +47,12 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
+  clauseSlotMarker,
+  conditionOpenTag,
+  CONDITION_CLOSE_TAG,
+  fieldMarker,
+} from "@/routes/_protected.knowledge/-components/template-markers";
+import {
   sanitizeFieldPath,
   slugify,
 } from "@/routes/_protected.knowledge/-components/template-studio-model";
@@ -54,6 +60,15 @@ import {
   useTemplateStudioStore,
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
+
+// Marker shapes the menu shows as a hint badge or a preview: document
+// content, not interface text, so deliberately untranslated (the concept
+// caption beside each one IS translated).
+const ELLIPSIS = "…";
+const FIELD_SAMPLE = fieldMarker(ELLIPSIS);
+const CONDITION_OPEN_SAMPLE = conditionOpenTag(ELLIPSIS);
+const CONDITION_SAMPLE = `${CONDITION_OPEN_SAMPLE} ${ELLIPSIS} ${CONDITION_CLOSE_TAG}`;
+const CLAUSE_SAMPLE = clauseSlotMarker(ELLIPSIS);
 
 type SlashMenuPopoverProps = {
   slash: SlashMenu;
@@ -466,8 +481,10 @@ export const useTemplateStudioSlashMenu = ({
     consumed: { tr: Transaction; from: number },
     path: string,
   ) => {
-    const tr = consumed.tr.insertText(`{{${path}}}`, consumed.from);
-    const namePos = consumed.from + 2;
+    const marker = fieldMarker(path);
+    const tr = consumed.tr.insertText(marker, consumed.from);
+    // Select the path inside the marker so typing renames the new field.
+    const namePos = consumed.from + marker.indexOf(path);
     tr.setSelection(
       TextSelection.create(tr.doc, namePos, namePos + path.length),
     ).scrollIntoView();
@@ -514,7 +531,7 @@ export const useTemplateStudioSlashMenu = ({
     if (item.kind === "field") {
       view.dispatch(
         consumed.tr
-          .insertText(`{{${item.path}}}`, consumed.from)
+          .insertText(fieldMarker(item.path), consumed.from)
           .scrollIntoView(),
       );
       view.focus();
@@ -537,7 +554,7 @@ export const useTemplateStudioSlashMenu = ({
       return;
     }
     view.dispatch(
-      consumed.tr.insertText(`{{${path}}}`, consumed.from).scrollIntoView(),
+      consumed.tr.insertText(fieldMarker(path), consumed.from).scrollIntoView(),
     );
     view.focus();
     markDirty();
@@ -606,7 +623,7 @@ export const useTemplateStudioSlashMenu = ({
     const slotName = uniqueClauseSlotName(slugify(clause.title));
     view.dispatch(
       consumed.tr
-        .insertText(`{{@clause:${slotName}}}`, consumed.from)
+        .insertText(clauseSlotMarker(slotName), consumed.from)
         .scrollIntoView(),
     );
     view.focus();
@@ -992,7 +1009,7 @@ const SlashPreview = ({
     return (
       <SlashTextPreview
         body={t("templates.studio.conceptField")}
-        marker={`{{${field.path}}}`}
+        marker={fieldMarker(field.path)}
         title={slashFieldFace(field, fields).label}
       />
     );
@@ -1019,7 +1036,7 @@ const SlashRootPreview = ({ item }: { item: SlashRootItem }) => {
     return (
       <SlashTextPreview
         body={t("templates.studio.conceptField")}
-        marker={`{{${item.path}}}`}
+        marker={fieldMarker(item.path)}
         title={t("templates.studio.makeField")}
       />
     );
@@ -1028,7 +1045,7 @@ const SlashRootPreview = ({ item }: { item: SlashRootItem }) => {
     return (
       <SlashTextPreview
         body={t("templates.studio.conceptCondition")}
-        marker="{{#if …}} … {{/if}}"
+        marker={CONDITION_SAMPLE}
         title={t("templates.studio.showOnlyIf")}
       />
     );
@@ -1037,7 +1054,7 @@ const SlashRootPreview = ({ item }: { item: SlashRootItem }) => {
     return (
       <SlashTextPreview
         body={t("templates.studio.conceptField")}
-        marker="{{ … }}"
+        marker={FIELD_SAMPLE}
         title={t("templates.studio.existingField")}
       />
     );
@@ -1045,7 +1062,7 @@ const SlashRootPreview = ({ item }: { item: SlashRootItem }) => {
   return (
     <SlashTextPreview
       body={t("templates.studio.conceptClause")}
-      marker="{{@clause: … }}"
+      marker={CLAUSE_SAMPLE}
       title={t("common.clauses")}
     />
   );
@@ -1129,14 +1146,14 @@ const slashRootFace = (item: SlashRootItem): SlashRootFace => {
     return {
       icon: BracesIcon,
       labelKey: "templates.studio.makeField",
-      hint: "{{ }}",
+      hint: FIELD_SAMPLE,
     };
   }
   if (item.kind === "create-condition") {
     return {
       icon: SplitIcon,
       labelKey: "templates.studio.showOnlyIf",
-      hint: "{{#if}}",
+      hint: CONDITION_OPEN_SAMPLE,
     };
   }
   if (item.kind === "open-fields") {

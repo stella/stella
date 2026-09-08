@@ -96,8 +96,8 @@ describe("processBlockDirectives — table-row repeat", () => {
       TBL(
         TR(TC(P("Field")), TC(P("Value"))),
         TR(
-          TC(P("{{#each fields}}"), P("{{fields.label}}")),
-          TC(P("{{fields.value}}"), P("{{/each}}")),
+          TC(P("{% for field in fields %}"), P("{{ field.label }}")),
+          TC(P("{{ field.value }}"), P("{% endfor %}")),
         ),
       ),
     );
@@ -119,8 +119,8 @@ describe("processBlockDirectives — table-row repeat", () => {
     expect(texts).toContain("{{__each_fields_1_label}}");
     expect(texts).toContain("{{__each_fields_1_value}}");
     // marker text is stripped from the output rows
-    expect(texts).not.toContain("{{#each fields}}");
-    expect(texts).not.toContain("{{/each}}");
+    expect(texts).not.toContain("{% for field in fields %}");
+    expect(texts).not.toContain("{% endfor %}");
 
     expect(patchValues["__each_fields_0_label"]).toBe("Term");
     expect(patchValues["__each_fields_0_value"]).toBe("2y");
@@ -133,9 +133,9 @@ describe("processBlockDirectives — table-row repeat", () => {
       TBL(
         TR(
           TC(
-            P("{{#each rows}}"),
-            P("{{rows.label}}: {{rows.value}}"),
-            P("{{/each}}"),
+            P("{% for row in rows %}"),
+            P("{{ row.label }}: {{ row.value }}"),
+            P("{% endfor %}"),
           ),
         ),
       ),
@@ -156,8 +156,8 @@ describe("processBlockDirectives — table-row repeat", () => {
       TBL(
         TR(TC(P("Field")), TC(P("Value"))),
         TR(
-          TC(P("{{#each fields}}"), P("{{fields.label}}")),
-          TC(P("{{fields.value}}"), P("{{/each}}")),
+          TC(P("{% for field in fields %}"), P("{{ field.label }}")),
+          TC(P("{{ field.value }}"), P("{% endfor %}")),
         ),
       ),
     );
@@ -169,10 +169,16 @@ describe("processBlockDirectives — table-row repeat", () => {
     expect(bodyTexts(body)).toEqual(["Field", "Value"]);
   });
 
-  test("{{@index}} / {{@count}} resolve inside cloned rows", () => {
+  test("{{ loop.index }} / {{ loop.length }} resolve inside cloned rows", () => {
     const xml = WRAP(
       TBL(
-        TR(TC(P("{{#each rows}}"), P("{{@index}}/{{@count}}"), P("{{/each}}"))),
+        TR(
+          TC(
+            P("{% for row in rows %}"),
+            P("{{ loop.index }}/{{ loop.length }}"),
+            P("{% endfor %}"),
+          ),
+        ),
       ),
     );
     const body = parseBody(xml);
@@ -188,7 +194,9 @@ describe("processBlockDirectives — table-row repeat", () => {
 describe("processBlockDirectives — malformed table placement", () => {
   test("opener inside a row, closer outside the table → structure error", () => {
     const xml = WRAP(
-      TBL(TR(TC(P("{{#each x}}")))) + P("{{x.v}}") + P("{{/each}}"),
+      TBL(TR(TC(P("{% for item in x %}")))) +
+        P("{{ item.v }}") +
+        P("{% endfor %}"),
     );
     const body = parseBody(xml);
     const { errors } = processBlockDirectives(body, {
@@ -197,13 +205,15 @@ describe("processBlockDirectives — malformed table placement", () => {
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]?.message).toContain("table");
-    // markers neutralized: no {{#each}} / {{/each}} left to loop on
-    expect(bodyTexts(body)).not.toContain("{{#each x}}");
-    expect(bodyTexts(body)).not.toContain("{{/each}}");
+    // markers neutralized: no {% for %} / {% endfor %} left to loop on
+    expect(bodyTexts(body)).not.toContain("{% for item in x %}");
+    expect(bodyTexts(body)).not.toContain("{% endfor %}");
   });
 
   test("opener and closer in different rows → structure error", () => {
-    const xml = WRAP(TBL(TR(TC(P("{{#each x}}"))), TR(TC(P("{{/each}}")))));
+    const xml = WRAP(
+      TBL(TR(TC(P("{% for item in x %}"))), TR(TC(P("{% endfor %}")))),
+    );
     const body = parseBody(xml);
     const { errors } = processBlockDirectives(body, {
       x: [{ v: "a" }],
@@ -213,28 +223,28 @@ describe("processBlockDirectives — malformed table placement", () => {
     expect(errors[0]?.message).toContain("table");
   });
 
-  test("{{#if}} opening in a row and closing outside the table → structure error", () => {
+  test("{% if %} opening in a row and closing outside the table → structure error", () => {
     const xml = WRAP(
-      TBL(TR(TC(P("{{#if flag}}")))) + P("Body text") + P("{{/if}}"),
+      TBL(TR(TC(P("{% if flag %}")))) + P("Body text") + P("{% endif %}"),
     );
     const body = parseBody(xml);
     const { errors } = processBlockDirectives(body, { flag: true });
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]?.message).toContain("table");
-    expect(errors[0]?.directive).toBe("{{#if flag}}");
+    expect(errors[0]?.directive).toBe("{% if flag %}");
     // Markers neutralized: nothing left for the scanner to re-open.
     const texts = bodyTexts(body);
-    expect(texts).not.toContain("{{#if flag}}");
-    expect(texts).not.toContain("{{/if}}");
+    expect(texts).not.toContain("{% if flag %}");
+    expect(texts).not.toContain("{% endif %}");
     expect(emptyCellCount(body)).toBe(0);
   });
 
-  test("{{#if}} spanning two rows → structure error, every branch marker cleared", () => {
+  test("{% if %} spanning two rows → structure error, every branch marker cleared", () => {
     const xml = WRAP(
       TBL(
-        TR(TC(P("{{#if flag}}"), P("Yes"))),
-        TR(TC(P("{{#else}}"), P("No"), P("{{/if}}"))),
+        TR(TC(P("{% if flag %}"), P("Yes"))),
+        TR(TC(P("{% else %}"), P("No"), P("{% endif %}"))),
       ),
     );
     const body = parseBody(xml);
@@ -243,14 +253,14 @@ describe("processBlockDirectives — malformed table placement", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]?.message).toContain("table");
     const texts = bodyTexts(body);
-    expect(texts).not.toContain("{{#if flag}}");
-    expect(texts).not.toContain("{{#else}}");
-    expect(texts).not.toContain("{{/if}}");
+    expect(texts).not.toContain("{% if flag %}");
+    expect(texts).not.toContain("{% else %}");
+    expect(texts).not.toContain("{% endif %}");
   });
 
   test.each([
-    ["else", "{{#else}}"],
-    ["elseif", "{{#elseif fallback}}"],
+    ["else", "{% else %}"],
+    ["elseif", "{% elif fallback %}"],
   ])(
     "a nested-row %s marker rejects the outer-row conditional without pruning content",
     (_kind, branchMarker) => {
@@ -258,11 +268,11 @@ describe("processBlockDirectives — malformed table placement", () => {
         TBL(
           TR(
             TC(
-              P("{{#if flag}}"),
+              P("{% if flag %}"),
               P("Outer before"),
               TBL(TR(TC(P(branchMarker), P("Nested content")))),
               P("Outer after"),
-              P("{{/if}}"),
+              P("{% endif %}"),
             ),
           ),
         ),
@@ -296,10 +306,10 @@ describe("processBlockDirectives — malformed table placement", () => {
 describe("processBlockDirectives — table cloning in body loops", () => {
   test("a whole table between body-level markers is cloned per item", () => {
     const xml = WRAP(
-      P("{{#each sections}}") +
-        P("Section: {{sections.title}}") +
-        TBL(TR(TC(P("Detail: {{sections.detail}}")))) +
-        P("{{/each}}"),
+      P("{% for section in sections %}") +
+        P("Section: {{ section.title }}") +
+        TBL(TR(TC(P("Detail: {{ section.detail }}")))) +
+        P("{% endfor %}"),
     );
     const body = parseBody(xml);
     const { patchValues, errors } = processBlockDirectives(body, {
@@ -325,16 +335,16 @@ describe("processBlockDirectives — table cloning in body loops", () => {
   });
 });
 
-// ── {{#if}} branch pruning removes whole tables ──────────
+// ── {% if %} branch pruning removes whole tables ──────────
 
 describe("processBlockDirectives — if-branch table pruning", () => {
-  test("losing {{#if}} branch's table is removed, not left as a shell", () => {
+  test("losing {% if %} branch's table is removed, not left as a shell", () => {
     const xml = WRAP(
-      P("{{#if hasVerdicts}}") +
+      P("{% if hasVerdicts %}") +
         TBL(TR(TC(P("Field")), TC(P("Value")), TC(P("Verdict")))) +
-        P("{{#else}}") +
+        P("{% else %}") +
         TBL(TR(TC(P("Field")), TC(P("Value")))) +
-        P("{{/if}}"),
+        P("{% endif %}"),
     );
     const body = parseBody(xml);
     const { errors } = processBlockDirectives(body, { hasVerdicts: false });
@@ -347,17 +357,17 @@ describe("processBlockDirectives — if-branch table pruning", () => {
     expect(texts).toContain("Field");
     expect(texts).toContain("Value");
     // Directive markers are gone.
-    expect(texts).not.toContain("{{#if hasVerdicts}}");
-    expect(texts).not.toContain("{{/if}}");
+    expect(texts).not.toContain("{% if hasVerdicts %}");
+    expect(texts).not.toContain("{% endif %}");
   });
 
-  test("winning {{#if}} branch's table is kept, else branch's table dropped", () => {
+  test("winning {% if %} branch's table is kept, else branch's table dropped", () => {
     const xml = WRAP(
-      P("{{#if hasVerdicts}}") +
+      P("{% if hasVerdicts %}") +
         TBL(TR(TC(P("Field")), TC(P("Value")), TC(P("Verdict")))) +
-        P("{{#else}}") +
+        P("{% else %}") +
         TBL(TR(TC(P("Field")), TC(P("Value")))) +
-        P("{{/if}}"),
+        P("{% endif %}"),
     );
     const body = parseBody(xml);
     const { errors } = processBlockDirectives(body, { hasVerdicts: true });
@@ -370,9 +380,9 @@ describe("processBlockDirectives — if-branch table pruning", () => {
   test("if-false with a single table and no else removes the table entirely", () => {
     const xml = WRAP(
       P("Intro") +
-        P("{{#if hasVerdicts}}") +
+        P("{% if hasVerdicts %}") +
         TBL(TR(TC(P("Verdict table")))) +
-        P("{{/if}}") +
+        P("{% endif %}") +
         P("Outro"),
     );
     const body = parseBody(xml);
@@ -384,14 +394,14 @@ describe("processBlockDirectives — if-branch table pruning", () => {
   });
 });
 
-// ── {{#if}} confined to a table row ──────────────────────
+// ── {% if %} confined to a table row ──────────────────────
 
 // A bilingual scope table: one scope item per row, Polish cell | English cell,
 // the whole row wrapped in a conditional that opens in the first cell and
 // closes in the last.
 const bilingualScopeRow = TR(
-  TC(P("{{#if scope.analysis}}"), P("Analiza umowy")),
-  TC(P("Contract analysis"), P("{{/if}}")),
+  TC(P("{% if scope.analysis %}"), P("Analiza umowy")),
+  TC(P("Contract analysis"), P("{% endif %}")),
 );
 const bilingualScopeTable = TBL(
   TR(TC(P("Zakres")), TC(P("Scope"))),
@@ -434,7 +444,11 @@ describe("processBlockDirectives — table-row conditionals", () => {
         TR(TC(P("Zakres")), TC(P("Scope"))),
         TR(
           TC(P("Analiza umowy")),
-          TC(P("{{#if scope.analysis}}"), P("Contract analysis"), P("{{/if}}")),
+          TC(
+            P("{% if scope.analysis %}"),
+            P("Contract analysis"),
+            P("{% endif %}"),
+          ),
         ),
       ),
     );
@@ -449,13 +463,13 @@ describe("processBlockDirectives — table-row conditionals", () => {
     expect(bodyTexts(body)).toEqual(["Zakres", "Scope"]);
   });
 
-  test("an {{#else}} branch inside a row keeps the row and the else content", () => {
+  test("an {% else %} branch inside a row keeps the row and the else content", () => {
     const xml = WRAP(
       TBL(
         TR(
-          TC(P("{{#if scope.analysis}}"), P("Analiza umowy")),
-          TC(P("Contract analysis"), P("{{#else}}")),
-          TC(P("Brak"), P("None"), P("{{/if}}")),
+          TC(P("{% if scope.analysis %}"), P("Analiza umowy")),
+          TC(P("Contract analysis"), P("{% else %}")),
+          TC(P("Brak"), P("None"), P("{% endif %}")),
         ),
       ),
     );
@@ -476,9 +490,9 @@ describe("processBlockDirectives — table-row conditionals", () => {
     const xml = WRAP(
       TBL(
         TR(
-          TC(P("{{#if scope.analysis}}")),
+          TC(P("{% if scope.analysis %}")),
           TC(P("Analiza umowy")),
-          TC(P("Contract analysis"), P("{{/if}}")),
+          TC(P("Contract analysis"), P("{% endif %}")),
         ),
       ),
     );
@@ -499,9 +513,9 @@ describe("processBlockDirectives — table-row conditionals", () => {
     const xml = WRAP(
       TBL(
         TR(
-          TC(P("{{#if scope.analysis}}")),
+          TC(P("{% if scope.analysis %}")),
           TC(P("Analiza umowy")),
-          TC(P("Contract analysis"), P("{{/if}}")),
+          TC(P("Contract analysis"), P("{% endif %}")),
         ),
       ),
     );
@@ -519,7 +533,9 @@ describe("processBlockDirectives — table-row conditionals", () => {
   test("a false condition in a single-row table removes the table shell", () => {
     const xml = WRAP(
       P("Intro") +
-        TBL(TR(TC(P("{{#if scope.analysis}}"), P("Analiza"), P("{{/if}}")))) +
+        TBL(
+          TR(TC(P("{% if scope.analysis %}"), P("Analiza"), P("{% endif %}"))),
+        ) +
         P("Outro"),
     );
     const body = parseBody(xml);
@@ -542,12 +558,12 @@ describe("processBlockDirectives — table-row conditionals", () => {
       TBL(
         TR(
           TC(
-            P("{{#if scope.analysis}}"),
+            P("{% if scope.analysis %}"),
             P("Analiza"),
-            P("{{/if}}"),
-            P("{{#if scope.litigation}}"),
+            P("{% endif %}"),
+            P("{% if scope.litigation %}"),
             P("Spory"),
-            P("{{/if}}"),
+            P("{% endif %}"),
           ),
         ),
       ) +
@@ -575,7 +591,9 @@ describe("processBlockDirectives — table-row conditionals", () => {
       P("Intro") +
         TBL(
           wrappedRow(
-            TR(TC(P("{{#if scope.analysis}}"), P("Analiza"), P("{{/if}}"))),
+            TR(
+              TC(P("{% if scope.analysis %}"), P("Analiza"), P("{% endif %}")),
+            ),
           ),
         ) +
         P("Outro"),
@@ -596,9 +614,9 @@ describe("processBlockDirectives — table-row conditionals", () => {
     // spell-check pass. The scanner joins a paragraph's run text, so the block
     // is recognized and the row is still the unit.
     const splitOpener =
-      "<w:p><w:r><w:t>{{#if </w:t></w:r><w:r><w:t>scope.analysis}}</w:t></w:r></w:p>";
+      "<w:p><w:r><w:t>{% if </w:t></w:r><w:r><w:t>scope.analysis %}</w:t></w:r></w:p>";
     const splitCloser =
-      "<w:p><w:r><w:t>{{/</w:t></w:r><w:r><w:t>if}}</w:t></w:r></w:p>";
+      "<w:p><w:r><w:t>{% end</w:t></w:r><w:r><w:t>if %}</w:t></w:r></w:p>";
     const xml = WRAP(
       TBL(
         TR(TC(P("Zakres")), TC(P("Scope"))),
@@ -624,11 +642,11 @@ describe("processBlockDirectives — table-row conditionals", () => {
         TR(TC(P("Zakres")), TC(P("Scope"))),
         TR(
           TC(
-            P("{{#each items}}"),
-            P("{{#if items.include}}"),
-            P("{{items.pl}}"),
+            P("{% for item in items %}"),
+            P("{% if item.include %}"),
+            P("{{ item.pl }}"),
           ),
-          TC(P("{{items.en}}"), P("{{/if}}"), P("{{/each}}")),
+          TC(P("{{ item.en }}"), P("{% endif %}"), P("{% endfor %}")),
         ),
       ),
     );
@@ -649,7 +667,7 @@ describe("processBlockDirectives — table-row conditionals", () => {
     expect(texts).toContain("{{__each_items_0_pl}}");
     expect(texts).toContain("{{__each_items_2_en}}");
     expect(texts).not.toContain("{{__each_items_1_pl}}");
-    expect(texts.join("|")).not.toContain("{{#if");
+    expect(texts.join("|")).not.toContain("{% if");
   });
 });
 
@@ -658,19 +676,16 @@ describe("processBlockDirectives — table-row conditionals", () => {
 describe("processBlockDirectives — nested each (contracts → fields)", () => {
   test("outer body loop with an inner row-repeat resolves both levels", () => {
     const xml = WRAP(
-      P("{{#each contracts}}") +
-        P("Contract: {{contracts.name}}") +
+      P("{% for contract in contracts %}") +
+        P("Contract: {{ contract.name }}") +
         TBL(
           TR(TC(P("Field")), TC(P("Value"))),
           TR(
-            TC(
-              P("{{#each contracts.fields}}"),
-              P("{{contracts.fields.label}}"),
-            ),
-            TC(P("{{contracts.fields.value}}"), P("{{/each}}")),
+            TC(P("{% for field in contract.fields %}"), P("{{ field.label }}")),
+            TC(P("{{ field.value }}"), P("{% endfor %}")),
           ),
         ) +
-        P("{{/each}}"),
+        P("{% endfor %}"),
     );
     const body = parseBody(xml);
     const { patchValues, errors } = processBlockDirectives(body, {
@@ -713,8 +728,8 @@ describe("fillTemplate — tables", () => {
         TBL(
           TR(TC(P("Field")), TC(P("Value"))),
           TR(
-            TC(P("{{#each fields}}"), P("{{fields.label}}")),
-            TC(P("{{fields.value}}"), P("{{/each}}")),
+            TC(P("{% for field in fields %}"), P("{{ field.label }}")),
+            TC(P("{{ field.value }}"), P("{% endfor %}")),
           ),
         ),
       ),
@@ -746,12 +761,12 @@ describe("fillTemplate — tables", () => {
         TBL(
           TR(TC(P("Zakres")), TC(P("Scope"))),
           TR(
-            TC(P("{{#if scope.analysis}}"), P("Analiza umowy")),
-            TC(P("Contract analysis"), P("{{/if}}")),
+            TC(P("{% if scope.analysis %}"), P("Analiza umowy")),
+            TC(P("Contract analysis"), P("{% endif %}")),
           ),
           TR(
-            TC(P("{{#if scope.litigation}}"), P("Spory sądowe")),
-            TC(P("Litigation"), P("{{/if}}")),
+            TC(P("{% if scope.litigation %}"), P("Spory sądowe")),
+            TC(P("Litigation"), P("{% endif %}")),
           ),
         ),
       ),
@@ -784,19 +799,19 @@ describe("fillTemplate — tables", () => {
   test("nested contracts → fields fills end-to-end", async () => {
     const docx = await makeDocx(
       WRAP(
-        P("{{#each contracts}}") +
-          P("Contract: {{contracts.name}}") +
+        P("{% for contract in contracts %}") +
+          P("Contract: {{ contract.name }}") +
           TBL(
             TR(TC(P("Field")), TC(P("Value"))),
             TR(
               TC(
-                P("{{#each contracts.fields}}"),
-                P("{{contracts.fields.label}}"),
+                P("{% for field in contract.fields %}"),
+                P("{{ field.label }}"),
               ),
-              TC(P("{{contracts.fields.value}}"), P("{{/each}}")),
+              TC(P("{{ field.value }}"), P("{% endfor %}")),
             ),
           ) +
-          P("{{/each}}"),
+          P("{% endfor %}"),
       ),
     );
     const { buffer, unmatchedPlaceholders, structureErrors } =
@@ -835,7 +850,7 @@ describe("fillTemplate — tables", () => {
 
 // ── Property: a row conditional never corrupts the table ─
 
-describe("property: {{#if}} markers placed anywhere inside one row", () => {
+describe("property: {% if %} markers placed anywhere inside one row", () => {
   test(
     "no cell is left without a paragraph and no table without a row",
     () => {
@@ -852,15 +867,15 @@ describe("property: {{#if}} markers placed anywhere inside one row", () => {
         fc.property(placement, ({ cellPicks, flag, withElse }) => {
           const tokens = withElse
             ? [
-                "{{#if flag}}",
+                "{% if flag %}",
                 "PL",
                 "EN",
-                "{{#else}}",
+                "{% else %}",
                 "PL alt",
                 "EN alt",
-                "{{/if}}",
+                "{% endif %}",
               ]
-            : ["{{#if flag}}", "PL", "EN", "{{/if}}"];
+            : ["{% if flag %}", "PL", "EN", "{% endif %}"];
           // A non-decreasing cell index keeps each cell's paragraphs contiguous
           // in document order, the only shape a real row can have.
           const picks = cellPicks

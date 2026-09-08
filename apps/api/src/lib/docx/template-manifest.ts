@@ -214,6 +214,13 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.aiSeesDocument !== undefined) {
     attrs.push(`aiSeesDocument="${field.aiSeesDocument}"`);
   }
+  // The one property whose meaning is that something is ABSENT: without it a
+  // configuration that cleared or replaced a marker's filter-declared source
+  // would serialize as silence, and the document layer would put that source
+  // back on the next read.
+  if (field.sourceLayer !== undefined) {
+    attrs.push(`sourceLayer="${escapeXml(field.sourceLayer)}"`);
+  }
   if (field.format !== undefined) {
     attrs.push(`format="${escapeXml(field.format)}"`);
   }
@@ -469,6 +476,9 @@ const applyStandardFieldAttributes = (
   const aiSeesDocument = el.getAttribute("aiSeesDocument");
   if (aiSeesDocument !== null) {
     field.aiSeesDocument = aiSeesDocument === "true";
+  }
+  if (el.getAttribute("sourceLayer") === "configuration") {
+    field.sourceLayer = "configuration";
   }
   const optionsFrom = el.getAttribute("optionsFrom");
   if (optionsFrom !== null && isFieldPath(optionsFrom)) {
@@ -988,6 +998,7 @@ const toFieldMeta = (field: ResolvedField): FieldMeta => ({
   condition: field.condition,
   conditionAst: field.conditionAst,
   dateFormat: field.dateFormat,
+  sourceLayer: field.sourceLayer,
 });
 
 /**
@@ -1069,7 +1080,7 @@ export const mergeManifestWithDiscovery = (
         continue;
       }
       // Loop-item metadata (e.g. "lawyers.name" under a discovered
-      // {{#each lawyers}}) merges into the array's itemFields above; adding
+      // {% for lawyer in lawyers %}) merges into the array's itemFields above; adding
       // it as a flat field would shadow the array root in the prefix filter
       // below and break the array rendering.
       const root = f.path.split(".").at(0);
@@ -1098,6 +1109,7 @@ export const mergeManifestWithDiscovery = (
         condition: f.condition,
         conditionAst: f.conditionAst,
         dateFormat: f.dateFormat,
+        sourceLayer: f.sourceLayer,
       });
     }
   }
@@ -1200,6 +1212,9 @@ const mergeField = (
     }
     if (meta.dateFormat !== undefined) {
       resolved.dateFormat = meta.dateFormat;
+    }
+    if (meta.sourceLayer !== undefined) {
+      resolved.sourceLayer = meta.sourceLayer;
     }
   }
 

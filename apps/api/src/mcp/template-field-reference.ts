@@ -27,6 +27,10 @@ import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-referen
  * per-property guidance lives here — pulled on demand — while the schema
  * carries the structure plus one short line per property.
  *
+ * The same properties are writable in the document as marker filters, which is
+ * where an author should put them; this tool is the way to set them without
+ * rewriting the DOCX. The filter catalogue lives with the marker grammar.
+ *
  * Both inventories below are keyed by their source of truth
  * ({@link templateFieldInputSchema}'s own keys, and the `source` union's own
  * branches), so a new field property or source branch is a compile error here
@@ -72,7 +76,7 @@ true satisfies Exclude<
   : never;
 
 const FIELD_PROPERTY_DOCS = {
-  path: "Must match a `{{marker}}` in the DOCX. Identical paths anywhere in the document are one field and one question.",
+  path: "Must match a `{{ marker }}` in the DOCX. Identical paths anywhere in the document are one field and one question.",
   label: "Question label shown to the person filling the field.",
   hint: "Short fill guidance shown with the input.",
   input_type: `Input control: ${INPUT_TYPES.join(", ")}. Defaults to text.`,
@@ -80,15 +84,11 @@ const FIELD_PROPERTY_DOCS = {
   options_from:
     "Dependent select: the path of another field whose entered values supply this field's options. Use instead of `options`.",
   validation:
-    "Constraints checked at fill time: `required`, `min_length`/`max_length`, `min`/`max`, `pattern` (a regex matched against the complete value), `min_items`/`max_items` for repeated fields.",
+    "Constraints checked at fill time: `required`, `min_length`/`max_length`, `min`/`max`, `pattern` (a regex matched against the complete value), `min_items`/`max_items` for repeated fields. A maximum is at least 1: 0 admits nothing, so send the property only when you mean to constrain it.",
   required: "Whether the fill form rejects an empty value.",
-  parts:
-    "Composite field: one entry per sub-input (`key`, `label`, `input_type` text or select, `options`, `pattern`). Set `format` alongside it. A composite field is assembled from its parts, so its `source` must stay `person`.",
-  format:
-    "Join template over the composite part keys, for example `{{title}} {{name}}`. Required with `parts`, meaningless without.",
   source:
     "Who fills the field. ONE object with a `type`; the branches are listed below. Omit it for a field the person fills.",
-  date_format: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}.`,
+  date_format: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}. The stored tag is the canonical spelling; \`cs_CZ\` and \`cs-cz\` are read as \`cs-CZ\`.`,
 } as const satisfies Record<FieldConfigProperty, string>;
 
 /** One branch of the `source` union, keyed by its `type`. Total over the
@@ -156,7 +156,7 @@ const SOURCE_BRANCH_DOCS = {
   },
   condition: {
     detail:
-      "A boolean rule for a field a `{{#if field_path}}` marker references. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
+      "A boolean rule for a field a `{% if field_path %}` tag references. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
     properties: ["`expression`: for example `amount > 1000`"],
   },
 } as const satisfies Record<TemplateFieldSourceType, SourceBranchDoc>;
@@ -183,9 +183,12 @@ export const buildFieldReference = (): string => {
   return [
     "stella template field configuration (`configure_template_fields`)",
     "",
-    "Markers decide WHICH values are fillable; a field configuration decides " +
-      "how each one behaves. Configuration never lives in the DOCX. See " +
-      `${TEMPLATE_MARKER_REFERENCE_URI} for the marker grammar.`,
+    "A marker's filter chain is the primary way to configure a field, and it " +
+      "lives in the DOCX: " +
+      '`{{ deposit | number | label("Kaution") | required }}`. See ' +
+      `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool configures ` +
+      "the same properties from outside the document, for a template whose " +
+      "markers you are not rewriting; where both say something, this wins.",
     "",
     "Send one entry per field path. Every entry's `path` must match a marker " +
       "in the template, unknown properties are rejected, and an entry " +

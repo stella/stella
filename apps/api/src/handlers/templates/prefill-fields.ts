@@ -4,12 +4,19 @@
  * field list for the prompt, and map the model's structured answer back to
  * field paths. The model never sees UUIDs or raw manifest internals.
  *
- * Formula (derived) fields and `{{#each}}` array fields are skipped: the
+ * Formula (derived) fields and `{% for %}` array fields are skipped: the
  * former are computed at fill time, the latter have no single value to
  * propose. Composite fields are flattened to one target per part.
  */
 
-import type { ResolvedField } from "@/api/lib/docx/types";
+import {
+  normalizeBoolean,
+  normalizeEnumValue,
+  normalizeNumber,
+} from "@stll/agent-input";
+
+import { normalizeDateFieldValue } from "@/api/lib/docx/date-fields";
+import type { FieldDateFormat, ResolvedField } from "@/api/lib/docx/types";
 
 export type PrefillTarget = {
   /** Simple mapped id used in the model conversation (f1, f2, …). */
@@ -25,6 +32,9 @@ export type PrefillTarget = {
   inputType: string;
   /** Allowed values for select inputs; free-form otherwise. */
   options: string[] | null;
+  /** The field's own date format, when it has one: a date is read in the
+   *  locale the document renders it in, the same way filling reads it. */
+  dateFormat: FieldDateFormat | null;
 };
 
 const targetInputType = (field: ResolvedField): string =>
@@ -64,6 +74,8 @@ export const buildPrefillTargets = (
             part.options.length > 0
               ? part.options
               : null,
+          // A part is text or a select; only the whole field carries a date.
+          dateFormat: null,
         });
       }
       continue;
@@ -81,6 +93,7 @@ export const buildPrefillTargets = (
         inputType === "select" && field.options && field.options.length > 0
           ? field.options
           : null,
+      dateFormat: field.dateFormat ?? null,
     });
   }
 
@@ -134,11 +147,12 @@ export type PrefillSuggestion = {
 const MAX_SNIPPET_CHARS = 300;
 const MAX_VALUE_CHARS = 4000;
 
-const TRUE_WORDS = new Set(["true", "yes", "1"]);
-const FALSE_WORDS = new Set(["false", "no", "0"]);
-
-/** Normalize one model value against its target's input type; null drops the
- *  suggestion (unparseable boolean, value outside a select's options, …). */
+/**
+ * Read one model value against its target's input type through the wire
+ * normalizers, so a prefill suggestion is spelled exactly the way the fill
+ * tools accept a value. A value the reader would have to ask about is dropped:
+ * a suggestion is an offer, and there is nobody here to ask.
+ */
 const normalizeValue = (
   target: PrefillTarget,
   rawValue: string,
@@ -148,24 +162,20 @@ const normalizeValue = (
     return null;
   }
   if (target.options) {
-    const exact = target.options.find((option) => option === value);
-    if (exact !== undefined) {
-      return exact;
-    }
-    const caseInsensitive = target.options.find(
-      (option) => option.toLowerCase() === value.toLowerCase(),
-    );
-    return caseInsensitive ?? null;
+    const option = normalizeEnumValue(value, target.options);
+    return option.ok ? option.value : null;
   }
   if (target.inputType === "boolean") {
-    const lower = value.toLowerCase();
-    if (TRUE_WORDS.has(lower)) {
-      return "true";
-    }
-    if (FALSE_WORDS.has(lower)) {
-      return "false";
-    }
-    return null;
+    const decided = normalizeBoolean(value);
+    return decided.ok ? String(decided.value) : null;
+  }
+  if (target.inputType === "number") {
+    const number = normalizeNumber(value);
+    return number.ok ? String(number.value) : null;
+  }
+  if (target.inputType === "date") {
+    const date = normalizeDateFieldValue(value, target.dateFormat);
+    return date.ok ? date.value : null;
   }
   return value;
 };

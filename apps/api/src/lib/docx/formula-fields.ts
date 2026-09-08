@@ -72,7 +72,7 @@ export const resolveFormulaFields = ({
     }
     const { formula } = field;
 
-    // A formula field inside an `{{#each}}` loop keeps a dotted path
+    // A formula field inside an `{% for %}` loop keeps a dotted path
     // (`items.total`) while the values arrive as rows; evaluate the expression
     // per row against the row context (so `qty * price` resolves the row's own
     // fields) and write the derived value back into the row, dropping any

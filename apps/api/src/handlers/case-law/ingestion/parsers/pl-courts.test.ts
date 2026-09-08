@@ -58,7 +58,7 @@ describe("parsePlDecisionContent", () => {
         <h2>UZASADNIENIE</h2>
         <p>Powód powołał się na <a href="http://isap.sejm.gov.pl">art. 24 k.c.</a>.</p>
         <p>Warszawa, dnia 4 grudnia 2013 r.</p>
-        <p>SSA Jan Kowalski</p>
+        <p>SSA Tomasz Nowicki</p>
       </div>
     `;
 
@@ -130,7 +130,7 @@ describe("parsePlDecisionContent", () => {
       "Warszawa, dnia 4 grudnia 2013 r.",
     );
     expect(findByRole(documentAst.blocks, "signature")?.plainText).toContain(
-      "SSA Jan Kowalski",
+      "SSA Tomasz Nowicki",
     );
     expect(fulltext).toContain("zasądza od pozwanego");
   });
@@ -217,7 +217,7 @@ describe("parsePlDecisionContent", () => {
 
   test("preserves spaces across adjacent formatted inline nodes", () => {
     const content =
-      "<p><strong>Przewodniczący </strong><em>SSA Jan Kowalski</em></p>";
+      "<p><strong>Przewodniczący </strong><em>SSA Tomasz Nowicki</em></p>";
 
     const { documentAst } = parsePlDecisionContent(baseInput(content));
 
@@ -225,6 +225,6 @@ describe("parsePlDecisionContent", () => {
       (block) => block.type === "paragraph" && block.plainText.includes("SSA"),
     );
 
-    expect(intro?.plainText).toBe("Przewodniczący SSA Jan Kowalski");
+    expect(intro?.plainText).toBe("Przewodniczący SSA Tomasz Nowicki");
   });
 });

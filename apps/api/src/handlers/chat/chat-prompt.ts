@@ -1327,7 +1327,7 @@ export const buildActiveTemplatePrompt = (
 
   return [
     `ACTIVE TEMPLATE: The user is authoring the reusable document template "${safeName}" in the template studio. It is an org-level template, not a matter document — do not call matter retrieval (\`read.*\`) or \`create-document\` for requests about it; the full text is in the block list below. Plain questions about the template get a normal text answer.`,
-    "TEMPLATE MARKERS: `{{field.path}}` placeholders, `{{#if ...}}` / `{{#each ...}}` ... `{{/if}}` / `{{/each}}` blocks, and `{{@clause:...}}` slots are template directives. Keep them intact unless the user explicitly asks to change them.",
+    "TEMPLATE MARKERS: `{{field.path}}` placeholders, `{% if ... %}` / `{% for item in ... %}` ... `{% endif %}` / `{% endfor %}` blocks, and `{{ clause('...') }}` slots are template directives. Keep them intact unless the user explicitly asks to change them.",
     ...editingSections,
   ].join("\n");
 };

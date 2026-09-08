@@ -1010,7 +1010,7 @@ describe("OpenAI-compatible MCP tools", () => {
         }),
       );
       const result = await handleMcpToolCall({
-        args: { registry: "krs", query: "0000592109" },
+        args: { registry: "krs", query: "0000123456" },
         context: {
           ...baseContext,
           enabledRegistrySlugs: ["ares"],
@@ -1031,7 +1031,7 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(executeRegistryLookupMock).toHaveBeenCalledTimes(1);
       expect(executeRegistryLookupMock.mock.calls.at(0)?.at(0)).toMatchObject({
         handler: { slug: "krs" },
-        query: "0000592109",
+        query: "0000123456",
       });
     });
   });

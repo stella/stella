@@ -51,7 +51,11 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
-import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
+import {
+  conditionReferencesOnlySelf,
+  fieldOverlayIssuePath,
+  resolveTemplateFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
@@ -423,9 +427,6 @@ const toTemplateDetailPayload = (
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
 type TemplateDetailField = TemplateDetailPayload["fields"][number];
-type TemplateDetailFieldPart = NonNullable<
-  TemplateDetailField["parts"]
->[number];
 
 const templateFieldOptionItems = (
   payload: TemplateDetailPayload,
@@ -435,34 +436,12 @@ const templateFieldOptionItems = (
     return options ? options.map((_option, index) => ({ index, options })) : [];
   });
 
-const templateFieldPartItems = (
-  payload: TemplateDetailPayload,
-): readonly TemplateDetailFieldPart[] =>
-  payload.fields.flatMap((field) => compact(field.parts));
-
-const templateFieldPartOptionItems = (
-  payload: TemplateDetailPayload,
-): readonly { index: number; options: string[] }[] =>
-  templateFieldPartItems(payload).flatMap((part) => {
-    const options = part.options;
-    return options ? options.map((_option, index) => ({ index, options })) : [];
-  });
-
 const templateFieldFormatItems = (
   payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
   payload.fields.flatMap((field) =>
     field.source.type === "lookup" ? arrayOrEmpty(field.source.formats) : [],
   );
-
-const compact = <T>(
-  items: readonly (T | null)[] | null | undefined,
-): readonly T[] => {
-  if (items === undefined || items === null) {
-    return [];
-  }
-  return items.filter((item) => item !== null);
-};
 
 const buildTemplateDetailTextFieldSpecs = (
   organizationId: string,
@@ -509,25 +488,6 @@ const buildTemplateDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "fields[].options[]",
     items: templateFieldOptionItems,
-    scope: () => organizationId,
-    read: (item: { index: number; options: string[] }) =>
-      item.options[item.index],
-    apply: (item: { index: number; options: string[] }, value) => {
-      item.options[item.index] = value;
-    },
-  }),
-  defineTextFieldSpec({
-    path: "fields[].parts[].label",
-    items: templateFieldPartItems,
-    scope: () => organizationId,
-    read: (part: TemplateDetailFieldPart) => part.label,
-    apply: (part: TemplateDetailFieldPart, value) => {
-      part.label = value;
-    },
-  }),
-  defineTextFieldSpec({
-    path: "fields[].parts[].options[]",
-    items: templateFieldPartOptionItems,
     scope: () => organizationId,
     read: (item: { index: number; options: string[] }) =>
       item.options[item.index],
@@ -588,9 +548,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
     `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
     `file or strip parts out to fit. Read ${TEMPLATE_MARKER_REFERENCE_URI} ` +
-    "before authoring the DOCX. Returns the template id, its discovered " +
-    "fields, arrays, conditions, computed values and marker warnings. Then " +
-    "call configure_template_fields to say who fills each field.",
+    "before authoring: markers are the docxtpl dialect of Jinja, and a value " +
+    "marker's filters configure the field. Returns the template id, its " +
+    "fields, arrays, conditions, computed values and warnings; " +
+    "configure_template_fields sets what the filters did not.",
   inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
@@ -610,8 +571,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Configure an existing template's fields: who fills each one, its input " +
-    "control, options and validation. The document's {{markers}} are " +
-    "untouched. Pass template_id and one entry per field path; every path " +
+    "control, options and validation, for a template whose markers you are " +
+    "not rewriting. The document is untouched, and a filter written on a " +
+    "marker says the same thing. Pass template_id and one entry per field " +
+    "path; every path " +
     `must already exist as a marker. Read ${TEMPLATE_FIELD_REFERENCE_URI} ` +
     "first. Returns the template's full field configuration afterwards.",
   inputSchema: configureTemplateFieldsArgsSchema,
@@ -648,7 +611,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "configuration, in the shape the field reference documents " +
       `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
       "formula fields, and the configure_template_fields call to make next. " +
-      "`arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
+      "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1011,7 +974,7 @@ type TemplateFillCompletionGate =
 /**
  * The completion gate both fill tools run over renderer diagnostics. Owning it
  * here is what keeps the transient tool and the persisting one on one policy:
- * a live `{{placeholder}}` is an error under the default mode whether the
+ * a live `{{ placeholder }}` is an error under the default mode whether the
  * document is handed back or written into a matter.
  */
 const gateTemplateFillCompletion = ({
@@ -1690,7 +1653,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     await releaseClaim();
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
   }
-  // A live `{{placeholder}}` is rejected before the document reaches the
+  // A live `{{ placeholder }}` is rejected before the document reaches the
   // matter, not reported afterwards: this tool persists, so it cannot be
   // laxer than the transient fill_template.
   const completion = gateTemplateFillCompletion({
@@ -2292,7 +2255,7 @@ const describeTemplateForAgent = async ({
 };
 
 /** `configure_template_fields`: overlay field configuration onto an existing
- *  template. The stored document bytes keep their {{markers}}; only the
+ *  template. The stored document bytes keep their markers; only the
  *  manifest changes. */
 /**
  * The position of the `fields` entry a validation issue belongs to, or null
@@ -2313,7 +2276,163 @@ const entryIndexOfIssue = (issue: v.BaseIssue<unknown>): number | null => {
   return typeof position.key === "number" ? position.key : null;
 };
 
-type ConfigureEntries =
+type TemplateFieldProperty = keyof v.InferInput<
+  typeof templateFieldInputSchema
+>;
+
+/**
+ * The properties that decide WHO fills a field. Dropping one would silently
+ * turn a derived field into a question for the person filling, so an entry
+ * that gets one wrong is reported whole and applied not at all. Typed against
+ * the entry's own keys, so renaming one is a compile error here.
+ */
+const DECISION_PROPERTIES = [
+  "source",
+] as const satisfies readonly TemplateFieldProperty[];
+
+/** Every property the entry schema declares, so an undeclared key is reported
+ *  as one rather than as a value the schema rejected. */
+const DECLARED_ENTRY_PROPERTIES: ReadonlySet<string> = new Set(
+  Object.keys(templateFieldInputSchema.entries),
+);
+
+/** What to do with an entry the schema refused: drop the one property the
+ *  issue is about — named by its key path from the entry down — and keep the
+ *  rest, or reject the entry whole. */
+type EntryRepair =
+  | { type: "drop-property"; path: readonly string[]; message: string }
+  | { type: "reject-entry" };
+
+const ENTRY_REJECTED: EntryRepair = { type: "reject-entry" };
+
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+const isEntryRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The keys, from the entry down, of the smallest value an issue can cost.
+ * The walk follows the issue's own path as far as the entry can be rebuilt
+ * without it: through plain objects, while each key is a string the value
+ * carries. It stops at the nearest object property when the path turns into
+ * an array element or into something that is not an object, because removing
+ * one item out of a list the caller sent would silently renumber the rest.
+ */
+const droppablePath = (
+  issue: v.BaseIssue<unknown>,
+  entry: unknown,
+): string[] => {
+  const keys: string[] = [];
+  let value = entry;
+  for (const segment of arrayOrEmpty(issue.path).slice(2)) {
+    if (
+      typeof segment.key !== "string" ||
+      !isEntryRecord(value) ||
+      !Object.hasOwn(value, segment.key)
+    ) {
+      break;
+    }
+    keys.push(segment.key);
+    value = value[segment.key];
+  }
+  return keys;
+};
+
+/**
+ * How one issue is answered. A property costs itself: a strict-schema client
+ * fills every property it can see, so a key this surface retired, a caller
+ * misspelled, or a constraint it wrote as a placeholder must cost that key
+ * and not the field it configures — and not its siblings either, so a refused
+ * `validation.max_items` leaves the `validation.pattern` beside it standing.
+ * The issue names the key it cost, so a misspelled `lable` does not vanish
+ * silently.
+ *
+ * The entry as a whole goes only when it cannot be read: an unusable `path`,
+ * a shape that is not an entry, or a property that decides WHO fills the
+ * field — dropping that would silently turn a derived field into a question
+ * for the person filling.
+ */
+const repairForIssue = (
+  issue: v.BaseIssue<unknown>,
+  entry: unknown,
+): EntryRepair => {
+  const path = droppablePath(issue, entry);
+  const property = path.at(0);
+  if (property === undefined || property === "path") {
+    return ENTRY_REJECTED;
+  }
+  if (!DECLARED_ENTRY_PROPERTIES.has(property)) {
+    return {
+      type: "drop-property",
+      path: [property],
+      message: `\`${property}\` is not a property of a field entry.`,
+    };
+  }
+  return DECISION_PROPERTIES.some((decision) => decision === property)
+    ? ENTRY_REJECTED
+    : {
+        type: "drop-property",
+        path,
+        message: `\`${path.at(-1) ?? property}\` was dropped: ${issue.message}`,
+      };
+};
+
+/** One entry with the value at `path` removed, rebuilding the objects above
+ *  it. `null` when the path is not there to remove. */
+const withoutPath = (
+  entry: unknown,
+  path: readonly string[],
+): Record<string, unknown> | null => {
+  const [head, ...rest] = path;
+  if (
+    head === undefined ||
+    !isEntryRecord(entry) ||
+    !Object.hasOwn(entry, head)
+  ) {
+    return null;
+  }
+  if (rest.length === 0) {
+    const { [head]: _dropped, ...remaining } = entry;
+    return remaining;
+  }
+  const inner = withoutPath(entry[head], rest);
+  return inner === null ? null : { ...entry, [head]: inner };
+};
+
+/**
+ * The one `source` shape that is read before the entry is parsed at all: a
+ * condition on the field's own value.
+ *
+ * `{ "type": "condition", "expression": "expenses_reimbursed" }` on
+ * `expenses_reimbursed` says "ask this when the answer is yes", which no one
+ * can ever answer. The entry means the plain question, so the condition is
+ * dropped and the rest of the entry applies — a decision property normally
+ * costs the whole entry, and this one is not a decision, it is a shape with
+ * no meaning. `null` when the entry is not that shape.
+ */
+const withoutCircularCondition = (
+  entry: unknown,
+): Record<string, unknown> | null => {
+  if (!isEntryRecord(entry)) {
+    return null;
+  }
+  const { path, source } = entry;
+  if (
+    typeof path !== "string" ||
+    !isEntryRecord(source) ||
+    source["type"] !== "condition"
+  ) {
+    return null;
+  }
+  const expression = source["expression"];
+  return typeof expression === "string" &&
+    conditionReferencesOnlySelf(path, expression)
+    ? withoutPath(entry, ["source"])
+    : null;
+};
+
+export type ConfigureEntries =
   | { type: "rejected"; result: InternalToolErrorResult }
   | {
       type: "parsed";
@@ -2330,20 +2449,43 @@ type ConfigureEntries =
     };
 
 /**
- * Read the request one entry at a time. The schema is the tool's own, applied
- * to a shrinking `fields` array: an entry it refuses drops out with its own
- * issue and the rest are re-parsed, so a caller that got one property wrong
- * still configures the entries beside it. Anything the schema objects to
- * outside `fields` is about the request, and fails it.
+ * Read the request one property at a time. The schema is the tool's own,
+ * applied to a `fields` array that is repaired between attempts: a value it
+ * refuses — an invalid constraint, or a key the entry does not declare — is
+ * dropped from its entry at the exact key the issue names, and reported on
+ * its own; only an entry whose `path` (or whose shape as a whole) is
+ * unreadable drops out. A caller that got one property wrong still configures
+ * everything else it sent, including the rest of that entry and the siblings
+ * of the key that went. Anything the schema objects to outside `fields` is
+ * about the request, and fails it.
+ *
+ * The loop terminates: every pass either removes one key from an entry or
+ * drops an entry, and an entry carries finitely many keys.
  */
-const parseConfigureEntries = (
+export const parseConfigureEntries = (
   args: Record<string, unknown>,
 ): ConfigureEntries => {
   const schema = CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource;
-  const sent: unknown[] | null = Array.isArray(args["fields"])
-    ? args["fields"]
+  const sentFields: unknown = args["fields"];
+  const sent: unknown[] | null = isUnknownArray(sentFields)
+    ? [...sentFields]
     : null;
   const issues: FieldOverlayIssue[] = [];
+  for (const [position, entry] of sent === null ? [] : sent.entries()) {
+    const dropped = withoutCircularCondition(entry);
+    if (dropped === null || sent === null) {
+      continue;
+    }
+    sent[position] = dropped;
+    issues.push({
+      path: fieldOverlayIssuePath(position, "source"),
+      index: position,
+      message:
+        "`source` was dropped: a condition that reads only the field's own " +
+        "value cannot decide whether to ask for it.",
+      hint: `The rest of the entry was applied and the field stays a question the person answers. A condition names the OTHER field it depends on; see ${TEMPLATE_FIELD_REFERENCE_URI}.`,
+    });
+  }
   let positions = sent === null ? [] : sent.map((_entry, index) => index);
   for (;;) {
     const candidate =
@@ -2361,6 +2503,7 @@ const parseConfigureEntries = (
       };
     }
     const rejected = new Set<number>();
+    const repaired = new Set<number>();
     for (const issue of parsed.issues) {
       const local = entryIndexOfIssue(issue);
       if (local === null || sent === null) {
@@ -2372,12 +2515,28 @@ const parseConfigureEntries = (
       const position =
         positions[local] ??
         panic(`entry issue names position ${String(local)}`);
-      if (rejected.has(position)) {
+      if (rejected.has(position) || repaired.has(position)) {
+        continue;
+      }
+      const repair = repairForIssue(issue, sent[position]);
+      const without =
+        repair.type === "reject-entry"
+          ? null
+          : withoutPath(sent[position], repair.path);
+      if (repair.type === "drop-property" && without !== null) {
+        repaired.add(position);
+        sent[position] = without;
+        issues.push({
+          path: fieldOverlayIssuePath(position, repair.path.join(".")),
+          index: position,
+          message: repair.message,
+          hint: `The rest of the entry was applied. Check that property against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again if the field needs it.`,
+        });
         continue;
       }
       rejected.add(position);
       issues.push({
-        path: `fields.${position}`,
+        path: fieldOverlayIssuePath(position),
         index: position,
         message: issue.message,
         hint: `Fix this entry against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again; the other entries were applied.`,
@@ -2427,7 +2586,7 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
       parsed.applied.at(issue.index) ??
       panic(`configure issue names applied entry ${String(issue.index)}`);
     return {
-      path: `fields.${index}`,
+      path: fieldOverlayIssuePath(index, issue.property),
       index,
       message: issue.message,
       hint: issue.hint,

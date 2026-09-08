@@ -1493,7 +1493,7 @@ export const justifications = p.pgTable(
 
 /** Structural kind of a stored template. `document` templates fill into a
  *  single output document; `report` templates are the layout for a view→report
- *  export (repeating {{#each}} sections). The picker filters on this so a report
+ *  export (repeating {% for %} sections). The picker filters on this so a report
  *  export never offers a plain document template and vice versa. */
 export const TEMPLATE_KINDS = ["document", "report"] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];

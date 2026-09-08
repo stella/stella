@@ -2778,7 +2778,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "configure-fields"],
             toolName: "configure_template_fields",
             description:
-              "Configure an existing template's fields: who fills each one, its input control, options and validation.",
+              "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting.",
             flags: [
               {
                 flag: "--template-id",
@@ -2813,7 +2813,7 @@ export const generatedRouteMap: RouteNode = {
                     properties: {
                       path: {
                         type: "string",
-                        description: "Field path; must match a {{marker}}",
+                        description: "Field path; must match a {{ marker }}",
                       },
                       label: {
                         type: "string",
@@ -2848,7 +2848,8 @@ export const generatedRouteMap: RouteNode = {
                           },
                           max_length: {
                             type: "number",
-                            description: "Maximum string length",
+                            minimum: 1,
+                            description: "Maximum string length, at least 1",
                           },
                           min: {
                             type: "number",
@@ -2860,6 +2861,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                           pattern: {
                             type: "string",
+                            minLength: 1,
                             description: "Regex for the whole value",
                           },
                           min_items: {
@@ -2868,7 +2870,8 @@ export const generatedRouteMap: RouteNode = {
                           },
                           max_items: {
                             type: "number",
-                            description: "Maximum repeated items",
+                            minimum: 1,
+                            description: "Maximum repeated items, at least 1",
                           },
                         },
                         required: [],
@@ -2878,46 +2881,6 @@ export const generatedRouteMap: RouteNode = {
                       required: {
                         type: "boolean",
                         description: "Value is required",
-                      },
-                      parts: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            key: {
-                              type: "string",
-                              description: "Part key used in format",
-                            },
-                            label: {
-                              type: "string",
-                              description: "Part label",
-                            },
-                            input_type: {
-                              enum: ["text", "select"],
-                              type: "string",
-                              description: "Part input control",
-                            },
-                            options: {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                              description: "Allowed values for a select part",
-                            },
-                            pattern: {
-                              type: "string",
-                              description: "Regex for the whole part value",
-                            },
-                          },
-                          required: ["key", "input_type"],
-                          additionalProperties: false,
-                        },
-                        minItems: 1,
-                        description: "Composite field parts",
-                      },
-                      format: {
-                        type: "string",
-                        description: "Join template over the part keys",
                       },
                       options_from: {
                         type: "string",
@@ -3866,14 +3829,7 @@ export const generatedRouteMap: RouteNode = {
                           "Whether the paragraph is a template directive marker",
                       },
                       directive_kind: {
-                        enum: [
-                          "if",
-                          "elseif",
-                          "else",
-                          "endif",
-                          "each",
-                          "endeach",
-                        ],
+                        enum: ["if", "elif", "else", "endif", "for", "endfor"],
                         type: "string",
                         description: "Directive kind when is_directive is set",
                       },
@@ -7263,7 +7219,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -7275,11 +7231,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -7648,7 +7604,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -7660,11 +7616,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -7929,7 +7885,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -7941,11 +7897,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -8120,7 +8076,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -8132,11 +8088,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -8392,7 +8348,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -8404,11 +8360,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -38357,7 +38313,7 @@ export const generatedRouteMap: RouteNode = {
                                         type: "string",
                                       },
                                       {
-                                        const: "elseif",
+                                        const: "elif",
                                         type: "string",
                                       },
                                       {
@@ -38369,11 +38325,11 @@ export const generatedRouteMap: RouteNode = {
                                         type: "string",
                                       },
                                       {
-                                        const: "each",
+                                        const: "for",
                                         type: "string",
                                       },
                                       {
-                                        const: "endeach",
+                                        const: "endfor",
                                         type: "string",
                                       },
                                     ],

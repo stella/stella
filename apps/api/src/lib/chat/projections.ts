@@ -1560,18 +1560,6 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       date_format: v.optional(
         v.strictObject({ locale: v.string(), style: v.string() }),
       ),
-      parts: v.optional(
-        v.array(
-          v.strictObject({
-            key: v.string(),
-            label: v.optional(v.string()),
-            input_type: v.string(),
-            options: v.optional(v.array(v.string())),
-            pattern: v.optional(v.string()),
-          }),
-        ),
-      ),
-      format: v.optional(v.string()),
     }),
   ),
   // Derived fields, named the way the `fields` overlay names them, so a
@@ -1580,7 +1568,7 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
     v.strictObject({ path: v.string(), condition: v.string() }),
   ),
   computed: v.array(v.strictObject({ path: v.string(), formula: v.string() })),
-  // Every {{#each}} loop over object items: `path` belongs in `values` as an
+  // Every {% for %} loop over object items: `path` belongs in `values` as an
   // array of objects (one per `itemFieldPaths` entry), not a flat dotted key.
   // Manifest field entries for the loop's own contents still appear in
   // `fields` above; this is only the array-shape annotation `fields` cannot

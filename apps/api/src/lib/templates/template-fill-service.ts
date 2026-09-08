@@ -208,12 +208,12 @@ type DescribedField = {
 };
 
 /**
- * A `{{#each path}}` loop discovered in the document: `path` in `values` must
+ * A `{% for item in path %}` loop discovered in the document: `path` in `values` must
  * be an array of objects, one per `itemFieldPaths` entry, not a flat dotted
  * key. Manifest fields for the loop's contents (e.g. `deliverables.name`,
  * `deliverables.due_date`) still appear in `fields` individually — this group
  * is what tells a caller those paths are array items rather than top-level
- * scalars. Absent for a bare `{{#each}}` of primitive values (already
+ * scalars. Absent for a bare `{% for %}` of primitive values (already
  * addressed by its own array-typed field).
  */
 type DescribedArrayGroup = {
@@ -222,7 +222,7 @@ type DescribedArrayGroup = {
 };
 
 /** Walk discovered fields (from {@link discoverTemplate}) for every
- *  `{{#each}}` loop over object items, regardless of whether the template
+ *  `{% for %}` loop over object items, regardless of whether the template
  *  also carries a manifest — manifest fields never declare the array root
  *  itself, only its dotted item paths, so this is the only source for the
  *  array shape. */
@@ -240,10 +240,10 @@ const collectDescribedArrayGroups = (
     }
     // A loop item field path of exactly "value" is genuinely ambiguous from
     // discovered marker text alone: it is the primitive-loop convention
-    // (`{{#each tags}}{{tags.value}}{{/each}}`, values.tags an array of
+    // (`{% for tag in tags %}{{ tag.value }}{% endfor %}`, values.tags an array of
     // scalars) AND the marker an object-item loop produces when its one
     // declared property happens to be literally named "value"
-    // (`{{#each entries}}{{entries.value}}{{/each}}`, values.entries an
+    // (`{% for entry in entries %}{{ entry.value }}{% endfor %}`, values.entries an
     // array of `{ value }` objects) — both compile to the identical
     // itemFields shape. Suppressing this group on that heuristic hid the
     // latter, real case from `arrays` entirely; the fill engine accepts
@@ -700,7 +700,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     record = drafted.values;
     aiFieldErrors = drafted.errors;
     // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
-    // before substitution so its {{#if field_path}} block resolves correctly.
+    // before substitution so its {% if field_path %} block resolves correctly.
     record = await resolveAiConditions({
       values: record,
       fields: manifest.fields,

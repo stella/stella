@@ -5,7 +5,7 @@
  * manifest declares, and either fill or ask when a required fact is missing?
  *
  * Each task builds a fixture DOCX (a Custom XML manifest over `{{marker}}`,
- * `{{#if}}` and `{{#each}}` placeholders) in memory, then gives the model the
+ * `{% if %}` and `{% for %}` placeholders) in memory, then gives the model the
  * SAME tool name, description and input schema `fill_template` and
  * `describe_template` register in chat, backed by the DB-free
  * `fillTemplateDocx` service instead of a stored template. Scoring compares
@@ -86,7 +86,7 @@ const SYSTEM_PROMPT = [
   "lawyer. Exactly one template is available; its id is given below. Call",
   "describe_template first to learn its field paths, labels and input",
   "types, then call fill_template once with a `values` object mapping each",
-  "field path to its value. An `{{#each arrayPath}}` field's item paths are",
+  "field path to its value. An `{% for item in arrayPath %}` field's item paths are",
   "listed dotted (`arrayPath.itemField`); supply `values.arrayPath` as an",
   "array of objects keyed by the item field names. Write date values as",
   "ISO 8601 (YYYY-MM-DD). Use only the exact strings offered for a select",
@@ -462,10 +462,12 @@ const SOW_MANIFEST: TemplateManifest = { version: 1, fields: SOW_FIELDS };
 const SOW_PARAGRAPHS = [
   P("STATEMENT OF WORK"),
   P("Statement of Work for {{client_name}}."),
-  P("{{#each deliverables}}"),
-  P("- {{deliverables.name}} (due {{deliverables.due_date}})"),
-  P("{{/each}}"),
-  P("{{#if rush_fee_applies}}A rush fee applies to this engagement.{{/if}}"),
+  P("{% for deliverable in deliverables %}"),
+  P("- {{ deliverable.name }} (due {{ deliverable.due_date }})"),
+  P("{% endfor %}"),
+  P(
+    "{% if rush_fee_applies %}A rush fee applies to this engagement.{% endif %}",
+  ),
 ];
 
 // Kept as name/date pairs (not two flat lists) so scoring can check each

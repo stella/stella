@@ -155,12 +155,12 @@ describe("property: nested objects in #each items resolve", () => {
         identifier,
         fc.array(leafValue, { minLength: 1, maxLength: 5 }),
         async (arrayName, nestedObj, nestedField, values) => {
-          // Template: {{#each arr}}{{arr.nested.field}}{{/each}}
+          // Template: {% for item in arr %}{{ item.nested.field }}{% endfor %}
           const xml = WRAP(
             [
-              P(`{{#each ${arrayName}}}`),
-              P(`{{${arrayName}.${nestedObj}.${nestedField}}}`),
-              P("{{/each}}"),
+              P(`{% for item in ${arrayName} %}`),
+              P(`{{ item.${nestedObj}.${nestedField} }}`),
+              P("{% endfor %}"),
             ].join(""),
           );
           const docx = await makeDocx(xml);
@@ -193,10 +193,10 @@ describe("property: nested objects in #each items resolve", () => {
         async (arrayName, strVal, nestedVal) => {
           const xml = WRAP(
             [
-              P(`{{#each ${arrayName}}}`),
-              P(`Name: {{${arrayName}.name}}`),
-              P(`City: {{${arrayName}.addr.city}}`),
-              P("{{/each}}"),
+              P(`{% for item in ${arrayName} %}`),
+              P(`Name: {{ item.name }}`),
+              P(`City: {{ item.addr.city }}`),
+              P("{% endfor %}"),
             ].join(""),
           );
           const docx = await makeDocx(xml);
@@ -240,13 +240,17 @@ describe("property: declared nested loop paths stay condition aliases", () => {
             );
           }
 
-          const templateParts = paths.map((path) => P(`{{#each ${path}}}`));
-          templateParts.push(
-            P(`{{#if ${deepestPath}.${conditionField}}}`),
-            P("visible"),
-            P("{{/if}}"),
+          const templateParts = paths.map((path) =>
+            P(`{% for row in ${path} %}`),
           );
-          templateParts.push(...paths.toReversed().map(() => P("{{/each}}")));
+          templateParts.push(
+            P(`{% if row.${conditionField} %}`),
+            P("visible"),
+            P("{% endif %}"),
+          );
+          templateParts.push(
+            ...paths.toReversed().map(() => P("{% endfor %}")),
+          );
 
           let rows: TemplateDataValue[] = enabledValues.map((enabled) => ({
             [conditionField]: enabled,
@@ -294,13 +298,15 @@ describe("property: declared nested loop paths stay condition aliases", () => {
           throw new Error("Nested paths always contain at least two segments");
         }
 
-        const templateParts = paths.map((path) => P(`{{#each ${path}}}`));
-        templateParts.push(
-          P(`{{#if ${deepestPath}.${field} > "2028-01-01"}}`),
-          P("after"),
-          P("{{/if}}"),
+        const templateParts = paths.map((path) =>
+          P(`{% for row in ${path} %}`),
         );
-        templateParts.push(...paths.toReversed().map(() => P("{{/each}}")));
+        templateParts.push(
+          P(`{% if row.${field} > "2028-01-01" %}`),
+          P("after"),
+          P("{% endif %}"),
+        );
+        templateParts.push(...paths.toReversed().map(() => P("{% endfor %}")));
 
         let rows: TemplateDataValue[] = values.map(() => ({
           [field]: "1. ledna 2030",
@@ -343,9 +349,11 @@ describe("property: arrays inside loop items are not recursed into", () => {
     // registerItemPatchValues to recurse into array indices.
 
     const xml = WRAP(
-      [P("{{#each items}}"), P("Name: {{items.name}}"), P("{{/each}}")].join(
-        "",
-      ),
+      [
+        P("{% for item in items %}"),
+        P("Name: {{ item.name }}"),
+        P("{% endfor %}"),
+      ].join(""),
     );
     fc.assert(
       fc.property(
@@ -385,7 +393,9 @@ describe("property: compound condition inference per sub-expression", () => {
           const condition = `${boolVar} and ${strVar} == "${strLiteral}"`;
 
           const xml = WRAP(
-            [P(`{{#if ${condition}}}`), P("Content"), P("{{/if}}")].join(""),
+            [P(`{% if ${condition} %}`), P("Content"), P("{% endif %}")].join(
+              "",
+            ),
           );
           const docx = await makeDocx(xml);
           const result = await discoverTemplate(docx);
@@ -428,7 +438,9 @@ describe("property: compound condition inference per sub-expression", () => {
           const condition = `${varName} == "${LITERAL_LEFT} and ${LITERAL_RIGHT}"`;
 
           const xml = WRAP(
-            [P(`{{#if ${condition}}}`), P("Content"), P("{{/if}}")].join(""),
+            [P(`{% if ${condition} %}`), P("Content"), P("{% endif %}")].join(
+              "",
+            ),
           );
           const docx = await makeDocx(xml);
           const result = await discoverTemplate(docx);
@@ -461,9 +473,9 @@ describe("kind promotion: comparison overrides truthiness", () => {
     // is more specific; the field should be inferred as "string".
     const xml = WRAP(
       [
-        P('{{#if status and status == "active"}}'),
+        P('{% if status and status == "active" %}'),
         P("Content"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const docx = await makeDocx(xml);
@@ -477,9 +489,11 @@ describe("kind promotion: comparison overrides truthiness", () => {
   test("comparison before truthiness in the same condition", async () => {
     // Reversed order: `role == "admin" and role`
     const xml = WRAP(
-      [P('{{#if role == "admin" and role}}'), P("Content"), P("{{/if}}")].join(
-        "",
-      ),
+      [
+        P('{% if role == "admin" and role %}'),
+        P("Content"),
+        P("{% endif %}"),
+      ].join(""),
     );
     const docx = await makeDocx(xml);
     const result = await discoverTemplate(docx);
@@ -494,12 +508,12 @@ describe("kind promotion: comparison overrides truthiness", () => {
     // The comparison is more specific and should win.
     const xml = WRAP(
       [
-        P("{{#if verified}}"),
+        P("{% if verified %}"),
         P("Verified"),
-        P("{{/if}}"),
-        P('{{#if verified == "yes"}}'),
+        P("{% endif %}"),
+        P('{% if verified == "yes" %}'),
         P("Confirmed"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const docx = await makeDocx(xml);
@@ -515,12 +529,12 @@ describe("kind promotion: comparison overrides truthiness", () => {
     // then in comparison. Array should win.
     const xml = WRAP(
       [
-        P("{{#each items}}"),
-        P("{{items.name}}"),
-        P("{{/each}}"),
-        P("{{#if items}}"),
+        P("{% for item in items %}"),
+        P("{{ item.name }}"),
+        P("{% endfor %}"),
+        P("{% if items %}"),
         P("Has items"),
-        P("{{/if}}"),
+        P("{% endif %}"),
       ].join(""),
     );
     const docx = await makeDocx(xml);
@@ -542,11 +556,11 @@ describe("property: MAX_PASSES reports an error", () => {
     const depth = 25;
     const paragraphs: string[] = [];
     for (let i = 0; i < depth; i++) {
-      paragraphs.push(P(`{{#if level_${i}}}`));
+      paragraphs.push(P(`{% if level_${i} %}`));
     }
     paragraphs.push(P("Deep content"));
     for (let i = depth - 1; i >= 0; i--) {
-      paragraphs.push(P("{{/if}}"));
+      paragraphs.push(P("{% endif %}"));
     }
 
     const xml = WRAP(paragraphs.join(""));
@@ -618,7 +632,7 @@ describe("property: evaluateCondition consistency", () => {
       fc.property(identifier, leafValue, (path, value) => {
         const data = { [path]: value };
         const pos = evaluateCondition(path, data);
-        const neg = evaluateCondition(`!${path}`, data);
+        const neg = evaluateCondition(`not ${path}`, data);
         expect(neg).toBe(!pos);
       }),
       propertyConfig({ numRuns: 100 }),
@@ -638,10 +652,10 @@ describe("property: evaluateCondition consistency", () => {
   });
 });
 
-describe("property: loop-expanded @num markers number sequentially", () => {
+describe("property: loop-expanded num() markers number sequentially", () => {
   test("n items yield clause numbers exactly 1..n in document order", async () => {
     // Bug: assignNumbers reuses the first number for a repeated key,
-    // so cloned {{@num:item}} markers all rendered the same number.
+    // so cloned {{ num("item") }} markers all rendered the same number.
     // Expansion now scopes loop-local keys per iteration.
     await fc.assert(
       fc.asyncProperty(
@@ -649,9 +663,9 @@ describe("property: loop-expanded @num markers number sequentially", () => {
         async (names) => {
           const xml = WRAP(
             [
-              P("{{#each items}}"),
-              P("Clause {{@num:item}}. {{items.name}}"),
-              P("{{/each}}"),
+              P("{% for item in items %}"),
+              P("Clause {{ num('item') }}. {{ item.name }}"),
+              P("{% endfor %}"),
             ].join(""),
           );
           const docx = await makeDocx(xml);
@@ -670,14 +684,14 @@ describe("property: loop-expanded @num markers number sequentially", () => {
     );
   });
 
-  test("intra-iteration @ref always equals that iteration's @num", async () => {
+  test("intra-iteration ref() always equals that iteration's num()", async () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (count) => {
         const xml = WRAP(
           [
-            P("{{#each items}}"),
-            P("Clause {{@num:x}} refers to {{@ref:x}} end"),
-            P("{{/each}}"),
+            P("{% for item in items %}"),
+            P("Clause {{ num('x') }} refers to {{ ref('x') }} end"),
+            P("{% endfor %}"),
           ].join(""),
         );
         const docx = await makeDocx(xml);
@@ -699,15 +713,15 @@ describe("property: loop-expanded @num markers number sequentially", () => {
     );
   });
 
-  test("a @ref to a clause outside the loop resolves identically in every iteration", async () => {
+  test("a ref() to a clause outside the loop resolves identically in every iteration", async () => {
     await fc.assert(
       fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (count) => {
         const xml = WRAP(
           [
-            P("Clause {{@num:base}}. Base."),
-            P("{{#each items}}"),
-            P("Item under {{@ref:base}} end"),
-            P("{{/each}}"),
+            P("Clause {{ num('base') }}. Base."),
+            P("{% for item in items %}"),
+            P("Item under {{ ref('base') }} end"),
+            P("{% endfor %}"),
           ].join(""),
         );
         const docx = await makeDocx(xml);
@@ -722,6 +736,79 @@ describe("property: loop-expanded @num markers number sequentially", () => {
         expect(refs).toEqual(Array.from({ length: count }, () => "1"));
       }),
       propertyConfig({ numRuns: 20 }),
+    );
+  });
+});
+
+// ── Inline nesting ───────────────────────────────────────
+
+/** The whole paragraph's text, in document order, with runs joined. */
+const paragraphTextsOf = async (buffer: Buffer): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(buffer);
+  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  return [...parseBody(xml).getElementsByTagNameNS(W_NS, "p")].map((p) =>
+    paragraphText(p),
+  );
+};
+
+describe("property: an inline loop may condition on its own position", () => {
+  // `{% for a in xs %}{{ a.n }}{% if not loop.last %}, {% endif %}{% endfor %}`
+  // is the comma-join every drafting model writes. It has to render the list
+  // for any item count, leave no marker behind, and produce no blank rows.
+  test("a comma-join renders every item with n-1 separators", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.constantFrom("Alice", "Bob", "Carol", "Dan", "Eve"), {
+          minLength: 1,
+          maxLength: 5,
+        }),
+        async (names) => {
+          const xml = WRAP(
+            P(
+              "appoints: {% for a in attorneys %}{{ a.name }}" +
+                "{% if not loop.last %}, {% endif %}{% endfor %}.",
+            ),
+          );
+          const { buffer } = await fillTemplate(await makeDocx(xml), {
+            attorneys: names.map((name) => ({ name })),
+          });
+
+          expect(await paragraphTextsOf(buffer)).toEqual([
+            `appoints: ${names.join(", ")}.`,
+          ]);
+        },
+      ),
+      propertyConfig({ numRuns: 25 }),
+    );
+  });
+
+  test("an item-field condition inside the loop reads that item", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 5 }),
+        async (leads) => {
+          const xml = WRAP(
+            P(
+              "{% for a in attorneys %}{{ a.name }}" +
+                "{% if a.lead %}*{% endif %}" +
+                "{% if not loop.last %}, {% endif %}{% endfor %}",
+            ),
+          );
+          const attorneys = leads.map((lead, index) => ({
+            name: `N${String(index)}`,
+            lead,
+          }));
+          const { buffer } = await fillTemplate(await makeDocx(xml), {
+            attorneys,
+          });
+
+          const expected = attorneys
+            .map(({ lead, name }) => (lead ? `${name}*` : name))
+            .join(", ");
+          expect(await paragraphTextsOf(buffer)).toEqual([expected]);
+        },
+      ),
+      propertyConfig({ numRuns: 25 }),
     );
   });
 });

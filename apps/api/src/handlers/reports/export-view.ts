@@ -58,7 +58,7 @@ const config = {
     format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
     // Include the template's AI-drafted narrative (executive + per-contract
     // summaries). Optional for back-compat; absent defaults to on. When false
-    // the worker skips every model call and the template's {{#if aiNarrative}}
+    // the worker skips every model call and the template's {% if aiNarrative %}
     // sections are removed, so the export is fast and deterministic.
     aiNarrative: t.Optional(t.Boolean()),
   }),

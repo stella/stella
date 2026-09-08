@@ -655,8 +655,6 @@ describe("MCP template tools", () => {
           aiAdapt: false,
           optionsFrom: null,
           dateFormat: null,
-          parts: null,
-          format: null,
         },
         {
           path: "scope",
@@ -673,8 +671,6 @@ describe("MCP template tools", () => {
           aiAdapt: false,
           optionsFrom: null,
           dateFormat: null,
-          parts: null,
-          format: null,
         },
         {
           path: "role",
@@ -691,8 +687,6 @@ describe("MCP template tools", () => {
           aiAdapt: false,
           optionsFrom: "parties",
           dateFormat: null,
-          parts: null,
-          format: null,
         },
       ],
       conditions: [{ path: "isCorp", condition: "type == 'corp'" }],
@@ -738,7 +732,7 @@ describe("MCP template tools", () => {
         }),
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
-      // A `{{#each}}` loop over object items is surfaced separately from the
+      // A `{% for %}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
     });
@@ -753,14 +747,6 @@ describe("MCP template tools", () => {
           label: "Smith role",
           inputType: "select",
           options: ["Smith director"],
-          parts: [
-            {
-              key: "capacity",
-              label: "Smith capacity",
-              inputType: "select",
-              options: ["Smith signatory"],
-            },
-          ],
           lookup: {
             registry: "krs",
             formats: [
@@ -782,13 +768,11 @@ describe("MCP template tools", () => {
       ],
     });
     anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 9,
+      entityCount: 7,
       fields: [
         "[PERSON_1] POA",
         "[PERSON_1] role",
         "[PERSON_1] director",
-        "[PERSON_1] capacity",
-        "[PERSON_1] signatory",
         "[company name], [PERSON_1] registry",
         "{{[PERSON_1].name}}",
         "{{[PERSON_1].name}} is split across runs.",
@@ -809,12 +793,6 @@ describe("MCP template tools", () => {
         {
           label: "[PERSON_1] role",
           options: ["[PERSON_1] director"],
-          parts: [
-            {
-              label: "[PERSON_1] capacity",
-              options: ["[PERSON_1] signatory"],
-            },
-          ],
           source: {
             type: "lookup",
             formats: [
@@ -853,8 +831,6 @@ describe("MCP template tools", () => {
         "Smith POA",
         "Smith role",
         "Smith director",
-        "Smith capacity",
-        "Smith signatory",
         "[company name], Smith registry",
         "{{Smith.name}}",
         "{{Smith.name}} is split across runs.",
@@ -2314,14 +2290,15 @@ describe("MCP template tools", () => {
           {
             code: "unprefixed_item_path",
             path: "name",
-            message: "{{name}} inside {{#each attorneys}} is not item-scoped",
-            hint: "Write {{attorneys.name}}.",
+            message:
+              "{{name}} inside {% for attorney in attorneys %} is not item-scoped",
+            hint: "Write {{ attorney.name }}.",
           },
           {
             code: "unknown_directive",
             path: "{{#endeach}}",
             message: "{{#endeach}} is not a directive",
-            hint: "Close the loop with {{/each}}.",
+            hint: "Close the loop with {% endfor %}.",
           },
         ],
       }),
@@ -2331,7 +2308,7 @@ describe("MCP template tools", () => {
       args: {
         name: "POA",
         docx_base64: await makeValidDocxBase64([
-          "{{#each attorneys}}",
+          "{% for attorney in attorneys %}",
           "{{name}}",
           "{{#endeach}}",
         ]),
@@ -2883,12 +2860,10 @@ describe("MCP template tools", () => {
     return payload.issues;
   };
 
-  test("configure_template_fields reports a malformed field config as its own entry", async () => {
-    // `parts` without `format` has no join template, so the entry-level check
-    // refuses that entry.
-    const issues = await configureEntryIssues([
-      { path: "fee", parts: [{ key: "amount", input_type: "text" }] },
-    ]);
+  test("configure_template_fields refuses an entry whose path it cannot read", async () => {
+    // Without a usable path there is no field to configure, so the entry as a
+    // whole is the smallest thing that can be refused.
+    const issues = await configureEntryIssues([{ path: 7, label: "Fee" }]);
 
     expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
@@ -2933,19 +2908,152 @@ describe("MCP template tools", () => {
     expect(conflict?.message).toContain("adapt");
   });
 
-  test("configure_template_fields reports a composite field bound to something other than its parts", async () => {
+  test("configure_template_fields drops a retired property and configures the rest of the entry", async () => {
+    // A strict-schema client fills every property it can see, so a key this
+    // surface no longer declares costs that key and not the field.
     const issues = await configureEntryIssues([
       {
         path: "property_address",
+        label: "Address",
         parts: [{ key: "street", input_type: "text" }],
         format: "{{street}}",
-        source: { type: "contact", field: "address" },
       },
     ]);
 
-    const conflict = issues.at(0);
-    expect(conflict?.path).toBe("fields.0");
-    expect(conflict?.message).toContain("parts");
+    expect(issues).toMatchObject([
+      { path: "fields.0.parts", index: 0 },
+      { path: "fields.0.format", index: 0 },
+    ]);
+    for (const issue of issues) {
+      expect(issue.message).toContain("is not a property of a field entry");
+    }
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [{ path: "property_address", label: "Address" }],
+      }),
+    );
+  });
+
+  test("configure_template_fields drops a maximum of 0 and keeps a real one", async () => {
+    // The same strict-schema client writes a typed placeholder for every
+    // constraint it is not setting. A maximum of 0 admits nothing, so the
+    // property rejects it and the entry keeps everything else it decided;
+    // a maximum that constrains something is untouched.
+    const issues = await configureEntryIssues([
+      {
+        path: "attorneys",
+        label: "Attorneys",
+        validation: {
+          min: 0,
+          max: 0,
+          min_length: 0,
+          max_length: 0,
+          min_items: 0,
+          max_items: 0,
+        },
+      },
+      { path: "fee", validation: { max_items: 3 } },
+    ]);
+
+    expect(issues).toMatchObject([
+      { path: "fields.0.validation.max_length", index: 0 },
+      { path: "fields.0.validation.max_items", index: 0 },
+    ]);
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [
+          {
+            path: "attorneys",
+            label: "Attorneys",
+            validation: { min: 0, max: 0, minLength: 0, minItems: 0 },
+          },
+          { path: "fee", validation: { maxItems: 3 } },
+        ],
+      }),
+    );
+  });
+
+  test("configure_template_fields drops the refused constraint, not its siblings", async () => {
+    // The issue names a leaf, so that is what it costs: a pattern the caller
+    // meant is not collateral damage of a maximum it did not.
+    const issues = await configureEntryIssues([
+      {
+        path: "invoice_number",
+        validation: { pattern: "^\\d+$", max_items: 0 },
+      },
+    ]);
+
+    expect(issues).toMatchObject([
+      { path: "fields.0.validation.max_items", index: 0 },
+    ]);
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [{ path: "invoice_number", validation: { pattern: "^\\d+$" } }],
+      }),
+    );
+  });
+
+  test("configure_template_fields drops a whole list rather than renumbering it", async () => {
+    // Removing one item out of a list the caller sent would silently shift
+    // the rest, so the walk stops at the nearest object property.
+    const issues = await configureEntryIssues([
+      { path: "governing_law", options: ["Czech law", 7] },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0.options", index: 0 }]);
+  });
+
+  test("configure_template_fields drops a condition that reads only its own field", async () => {
+    // "Show this input when it is true" cannot be answered: the input has to
+    // be shown first. The entry means the plain question, so the condition is
+    // dropped and the rest of the entry — a decision property normally costs
+    // the whole entry — still configures the field.
+    const issues = await configureEntryIssues([
+      {
+        path: "expenses_reimbursed",
+        label: "Expenses reimbursed",
+        input_type: "boolean",
+        source: { type: "condition", expression: "expenses_reimbursed" },
+      },
+      {
+        path: "expense_cap",
+        source: { type: "condition", expression: "expenses_reimbursed" },
+      },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0.source", index: 0 }]);
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [
+          {
+            path: "expenses_reimbursed",
+            label: "Expenses reimbursed",
+            inputType: "boolean",
+          },
+          { path: "expense_cap", condition: "expenses_reimbursed" },
+        ],
+      }),
+    );
+  });
+
+  test("configure_template_fields still refuses an entry whose source is unreadable", async () => {
+    // `source` decides WHO fills the field, so no part of it is dropped on
+    // its own however deep the schema's objection sits.
+    const issues = await configureEntryIssues([
+      {
+        path: "company",
+        source: {
+          type: "lookup",
+          registry: "krs",
+          formats: [
+            { key: "name", template: "[name]" },
+            { key: "krs", template: 7 },
+          ],
+        },
+      },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
 
   test("configure_template_fields reads a null-padded field entry as a plain text field", async () => {
@@ -2971,8 +3079,6 @@ describe("MCP template tools", () => {
             options: null,
             validation: { required: true, min_length: null, pattern: null },
             required: null,
-            parts: null,
-            format: null,
             options_from: null,
             source: null,
             date_format: null,
@@ -2997,21 +3103,24 @@ describe("MCP template tools", () => {
     );
   });
 
-  test("configure_template_fields still refuses a misspelled key that carries null", async () => {
-    // Null is absence only for a property the surface declares: dropping it
-    // for any key would turn `lable: null` into a silently accepted typo. The
-    // entry is refused; the call still reports which one and why.
-    const issues = await configureEntryIssues([{ path: "name", lable: null }]);
-
-    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
-  });
-
-  test("configure_template_fields refuses an entry with an unknown metadata key", async () => {
-    const issues = await configureEntryIssues([
+  test("configure_template_fields names a misspelled key rather than swallowing it", async () => {
+    // Null is absence only for a property the surface declares: a key it does
+    // not declare is dropped on its own and named, so `lable` is neither a
+    // silently accepted typo nor a refusal of the field it meant to label.
+    for (const entry of [
+      { path: "name", lable: null },
       { path: "fee", lable: "Misspelled label" },
-    ]);
+    ]) {
+      const issues = await configureEntryIssues([entry]);
 
-    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
+      expect(issues).toMatchObject([
+        {
+          path: "fields.0.lable",
+          index: 0,
+          message: "`lable` is not a property of a field entry.",
+        },
+      ]);
+    }
   });
 
   test("configure_template_fields applies the overlay and returns the updated fields", async () => {
@@ -3044,8 +3153,6 @@ describe("MCP template tools", () => {
             aiAdapt: false,
             optionsFrom: null,
             dateFormat: null,
-            parts: null,
-            format: null,
           },
         ],
       }),
@@ -3128,8 +3235,6 @@ describe("MCP template tools", () => {
             options: null,
             validation: null,
             required: true,
-            parts: null,
-            format: null,
             options_from: null,
             source: null,
             date_format: null,
@@ -3227,11 +3332,134 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("configure_template_fields keeps the property a group entry could not carry", async () => {
+    // A group's entry is applied; one property of it is not. The issue path
+    // says which, and the entry number is the caller's own, so an entry the
+    // schema dropped earlier cannot shift it.
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({
+        issues: [
+          {
+            path: "fields.0.label",
+            index: 0,
+            property: "label",
+            message:
+              '"property_address" is a group of {{property_address.street}}; ' +
+              "a group carries no label.",
+            hint: "Send label on the child paths instead.",
+          },
+        ],
+        manifest: { version: 1, fields: [] },
+      });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Mietvertrag" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          { path: "property_address", label: "Anschrift", parts: [] },
+          { path: "rent" },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      issues: [
+        { path: "fields.0.parts", index: 0 },
+        { path: "fields.0.label", index: 0 },
+      ],
+    });
+  });
+
+  test("configure_template_fields passes a lookup format key's own entry to the service", async () => {
+    // `{{company.address}}` is the "address" format of the lookup on
+    // `company`. The entry is not the tool's to refuse: it reaches the
+    // service, which folds it into that format and reports what a format
+    // cannot hold, one property at a time.
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({
+        issues: [
+          {
+            path: "fields.1.date_format",
+            index: 1,
+            property: "date_format",
+            message:
+              '"company.address" renders the "address" format of ' +
+              '"company"\'s lookup; a format carries no date_format, so it ' +
+              "was dropped.",
+            hint: 'Send date_format on "company", the field a person fills.',
+          },
+        ],
+        manifest: { version: 1, fields: [] },
+      });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "company",
+            source: {
+              type: "lookup",
+              registry: "krs",
+              formats: [{ key: "address", template: "[seat]" }],
+            },
+          },
+          {
+            path: "company.address",
+            label: "Registered address",
+            required: true,
+            date_format: { locale: "pl-PL", style: "long" },
+            source: {
+              type: "lookup",
+              registry: "krs",
+              formats: [{ key: "address", template: "[street], [city]" }],
+            },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(received).toMatchObject([
+      { path: "company" },
+      {
+        path: "company.address",
+        required: true,
+        lookup: {
+          registry: "krs",
+          formats: [{ key: "address", template: "[street], [city]" }],
+        },
+      },
+    ]);
+    expect(parseToolPayload(result)).toMatchObject({
+      issues: [{ path: "fields.1.date_format", index: 1 }],
+    });
+  });
+
   /**
    * The exact call one model sent when it filled every optional property it
    * could see: a placeholder in every string, a `parts` entry with an empty
    * key, a lookup on a field that also declares a contact binding. The whole
-   * call used to be refused. Every entry that can be applied must be.
+   * call used to be refused, then the placeholder-filled entries were. Every
+   * entry that can be applied must be, and each dropped key must be named.
    */
   test("configure_template_fields applies the usable entries of a placeholder-filled call", async () => {
     let received: unknown;
@@ -3275,17 +3503,125 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    // The one entry the schema accepts is applied...
-    expect(received).toEqual([{ path: "ucinnost_od", inputType: "date" }]);
-    // ...and each placeholder-filled entry is reported at its own position.
-    const { issues } = asTestRaw<{ issues: unknown[] }>(
+    // Every entry is configured, the placeholders it filled included...
+    expect(received).toMatchObject([
+      { path: "strana_a", label: "strana_a", inputType: "text" },
+      { path: "ucinnost_od", inputType: "date" },
+      { path: "strana_b", label: "strana_b", inputType: "text" },
+    ]);
+    // ...and the retired keys cost themselves, named at their own positions.
+    const { issues } = asTestRaw<{ issues: { path: string }[] }>(
       parseToolPayload(result),
     );
-    expect(issues.length).toBe(2);
-    expect(issues).toMatchObject([
-      { path: "fields.0", index: 0 },
-      { path: "fields.2", index: 2 },
+    expect(issues.map((issue) => issue.path).toSorted()).toEqual([
+      "fields.0.format",
+      "fields.0.parts",
+      "fields.2.format",
+      "fields.2.parts",
     ]);
+  });
+
+  test("configure_template_fields applies an entry whose optional properties are empty placeholders", async () => {
+    // The payload a model that fills every declared property actually sends,
+    // taken verbatim from an authoring-eval trace: `options_from`, `format`
+    // and the numeric bounds are placeholders it never meant to set.
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Dohoda o mlcenlivosti" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "rozhodne_pravo",
+            label: "Rozhodné právo",
+            hint: "Vyberte rozhodné právo.",
+            input_type: "select",
+            options: ["České republiky", "Slovenské republiky"],
+            validation: {
+              required: true,
+              min_length: 0,
+              max_length: 0,
+              min: 0,
+              max: 0,
+              pattern: "",
+              min_items: 0,
+              max_items: 0,
+            },
+            required: true,
+            options_from: "",
+            source: { type: "person" },
+            date_format: { locale: "cs", style: "long" },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const { issues } = asTestRaw<{ issues: { path: string }[] }>(
+      parseToolPayload(result),
+    );
+    // `options_from: ""` is a placeholder the property refuses, so it reads as
+    // omitted. A maximum of 0 admits nothing, so each of the two is refused
+    // and named on its own; everything else the entry decided is applied.
+    expect(received).toMatchObject([
+      {
+        path: "rozhodne_pravo",
+        inputType: "select",
+        options: ["České republiky", "Slovenské republiky"],
+        required: true,
+      },
+    ]);
+    expect(issues).toMatchObject([
+      { path: "fields.0.validation.max_length" },
+      { path: "fields.0.validation.max_items" },
+    ]);
+    expect(received).not.toMatchObject([{ optionsFrom: "" }]);
+  });
+
+  test("configure_template_fields drops one unusable optional property and keeps the entry", async () => {
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          { path: "company", label: "Company", options_from: "not a path!" },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const { issues } = asTestRaw<{
+      issues: { path: string; index: number; message: string }[];
+    }>(parseToolPayload(result));
+    expect(issues).toMatchObject([{ path: "fields.0.options_from", index: 0 }]);
+    expect(issues[0]?.message).toContain("`options_from` was dropped");
+    // The rest of the entry is applied.
+    expect(received).toEqual([{ path: "company", label: "Company" }]);
   });
 
   test("configure_template_fields forbids members without template:update permission", async () => {

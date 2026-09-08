@@ -254,7 +254,7 @@ const targetBody = (
  * skipped when nothing targets them.
  *
  * Keyed by patch key, not slot name: two markers can name the same slot with
- * different version modifiers (`{{@clause:X}}` and `{{@clause:X:v2}}`) and
+ * different version modifiers (`{{ clause("X") }}` and `{{ clause("X", "v2") }}`) and
  * resolve to different bodies.
  */
 const resolveSlotBodies = async (

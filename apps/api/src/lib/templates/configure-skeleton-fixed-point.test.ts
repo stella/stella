@@ -54,12 +54,12 @@ const buildDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
  *  conditional block: every path shape the skeleton has to spell. */
 const SOURCE_PARAGRAPHS = [
   "Statement of Work for {{client_name}}",
-  "{{#each deliverables}}",
-  "{{deliverables.item}} — {{deliverables.fee}}",
-  "{{/each}}",
-  "{{#if expenses_reimbursed}}",
+  "{% for deliverable in deliverables %}",
+  "{{ deliverable.item }} — {{ deliverable.fee }}",
+  "{% endfor %}",
+  "{% if expenses_reimbursed %}",
   "Expenses are reimbursed at cost.",
-  "{{/if}}",
+  "{% endif %}",
 ];
 
 describe("the configure skeleton is a fixed point", () => {

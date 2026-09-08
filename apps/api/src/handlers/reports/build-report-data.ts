@@ -238,7 +238,7 @@ export type ReportData = {
    *  Verdict column) and the executive-summary findings breakdown: a view with
    *  no playbook renders the plain variants and no verdict/severity noise. */
   hasVerdicts: boolean;
-  /** Drives the built-in template's `{{#if aiNarrative}}` gates: when false the
+  /** Drives the built-in template's `{% if aiNarrative %}` gates: when false the
    *  executive-summary and per-contract summary paragraphs are removed entirely
    *  and no AI generator runs, so the export is fast and deterministic. */
   aiNarrative: boolean;

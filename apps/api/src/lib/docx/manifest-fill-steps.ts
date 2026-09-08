@@ -10,7 +10,7 @@
  * boundary applies after this pipeline) receives the locale-rendered date
  * as the stub it inflects per occurrence. Just before that, each date
  * field's raw ISO value is stashed on the map (under CONDITION_RAW_VALUES)
- * so a date both formatted and referenced by a `{{#if}}` still compares as
+ * so a date both formatted and referenced by a `{% if %}` still compares as
  * an ISO date in `fillTemplate`, not as the localized display text. Mutates
  * `values` in place and returns the first failing step's combined
  * validation message (the boundary rejects with it, naming the field), or
@@ -28,7 +28,7 @@ import {
 import { checkArrayBounds } from "./array-bounds";
 import { CONDITION_RAW_VALUES } from "./block-directives";
 import { applyCompositeFields } from "./composite-fields";
-import { applyDateFields } from "./date-fields";
+import { applyDateFields, normalizeDateFieldValue } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
 import { applyLookupFields, type LookupResolver } from "./lookup-fields";
@@ -40,18 +40,18 @@ import type { FieldMeta } from "./types";
  * intact at this point in the pipeline) under {@link CONDITION_RAW_VALUES} on
  * the values map, keyed by field path. `applyDateFields` then rewrites those
  * paths in `values` to localized display text for substitution; the stashed
- * overlay lets `{{#if dateField > "2028-01-01"}}` conditions in `fillTemplate`
+ * overlay lets `{% if dateField > "2028-01-01" %}` conditions in `fillTemplate`
  * compare the ISO value instead of the display string. Non-string or empty
  * values are skipped (nothing to compare, and `applyDateFields` reports the
- * malformed ones). No-op when the manifest declares no formatted date fields.
+ * unreadable ones). No-op when the manifest declares no formatted date fields.
  *
- * A date field inside an `{{#each}}` loop keeps a dotted path (`people.dob`)
+ * A date field inside an `{% for %}` loop keeps a dotted path (`people.dob`)
  * while the value is an array of rows; its raw ISO is stashed per row under an
  * index-qualified key (`people.0.dob`) so a top-level
- * `{{#if people.0.dob > "..."}}` compares the ISO value, and the loop expander
+ * `{% if people.0.dob > "..." %}` compares the ISO value, and the loop expander
  * overlays the same raw value as the bare sub-path in each row's condition
  * context (see `applyRowRawOverlay` in block-directives) so a condition
- * referencing the field from *inside* the loop body, `{{#if dob > "..."}}`,
+ * referencing the field from *inside* the loop body, `{% if dob > "..." %}`,
  * compares the ISO value too.
  */
 const stashRawDateValues = (
@@ -63,22 +63,32 @@ const stashRawDateValues = (
     if (field.inputType !== "date" || field.dateFormat === undefined) {
       continue;
     }
+    const dateFormat = field.dateFormat;
+    // The stash is what a condition compares, so it holds the ISO date the
+    // value NAMES, not the spelling the agent sent: `{% if signed_on >
+    // "2028-01-01" %}` has to compare dates whether the value arrived as
+    // `2028-06-13` or as `13. 6. 2028`.
+    const raw = (incoming: unknown): string | null => {
+      const normalized = normalizeDateFieldValue(incoming, dateFormat);
+      return normalized.ok ? normalized.value : null;
+    };
     const incoming = resolvePath(field.path, values);
     if (incoming === undefined) {
       mapRepeatablePath(
         values,
         field.path,
         ({ row, subPath, index, containerPath }) => {
-          const raw = readRowSubPath(row, subPath);
-          if (typeof raw === "string" && raw.trim() !== "") {
-            rawDates[`${containerPath}.${index}.${subPath}`] = raw;
+          const iso = raw(readRowSubPath(row, subPath));
+          if (iso !== null) {
+            rawDates[`${containerPath}.${index}.${subPath}`] = iso;
           }
         },
       );
       continue;
     }
-    if (typeof incoming === "string" && incoming.trim() !== "") {
-      rawDates[field.path] = incoming;
+    const iso = raw(incoming);
+    if (iso !== null) {
+      rawDates[field.path] = iso;
     }
   }
   if (Object.keys(rawDates).length > 0) {

@@ -77,10 +77,22 @@ whether a contract change helped.
     `warnings[]` with closed codes for the known traps (unprefixed loop item,
     unknown directive, split marker, and so on). A census test keeps the code
     list and the reference in step.
-13. **Tolerate client encodings once, at the boundary.** Strict-schema clients send
-    `null` for unset optionals; treat null on a plain optional as absence on every
-    validation surface, through the tool factory, guarded by a registry-wide test.
-    Do not add per-tool tolerance code.
+13. **Read each value kind leniently, in one place.** A model spells a value the
+    way its training data did: `null` for an unset optional, `4 000` for a
+    number, `1. 10. 2026` for a date, `ano` for a boolean, `cs_CZ` for a locale.
+    Every kind the wire accepts gets ONE owner that auto-normalizes the
+    spellings carrying a single meaning and returns ONE ask-for-a-fix shape
+    (`received`, `expected`, `hint`) when a spelling carries two: `01/02/2026`
+    and a bare `1,234` are asked about with both readings named, never guessed,
+    because guessing wrong is a wrong date or a factor of a thousand on an
+    instrument. Null and the placeholder encodings are that rule for "absent"
+    and live in the tool factory; the value kinds live in
+    `packages/agent-input/`. Cover each kind with a property test over
+    its whole spelling class rather than the examples someone happened to
+    write down, and add a guard (an ownership row, a census test) so a new call
+    site cannot parse the kind itself. Never per-tool tolerance code, and never
+    a second reader: two lenient readers of one kind are worse than one strict
+    one, because they disagree.
 
 ## References Are Read Verbatim
 
@@ -115,6 +127,8 @@ whether a contract change helped.
 
 - Tool factory and boundary normalisation: `apps/api/src/mcp/valibot-tool-definition.ts`,
   `apps/api/src/mcp/tool-utils.ts`
+- One reader per value kind, and its census: `packages/agent-input/src/`,
+  `apps/api/src/lib/agent-input-owner.test.ts`
 - Registry-wide guards: `apps/api/src/mcp/uuid-id-inputs.test.ts`,
   `apps/api/src/mcp/null-optional-inputs.test.ts`
 - Warnings census and references: `apps/api/src/lib/docx/template-warnings.ts`,

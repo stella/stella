@@ -90,12 +90,6 @@ describe("template field input schema", () => {
     ).toEqual(sortedKeys(persisted.validation.wrapped.pipe[0].entries));
   });
 
-  test("advertises the persisted part keys in snake_case", () => {
-    expect(
-      sortedCamelKeys(advertised.parts.wrapped.pipe[0].item.entries),
-    ).toEqual(sortedKeys(persisted.parts.wrapped.pipe[0].item.entries));
-  });
-
   test("maps every advertised key onto its persisted spelling", () => {
     const mapped = toFieldMetaToolInput({
       path: "company",
@@ -114,16 +108,6 @@ describe("template field input schema", () => {
         max_items: 3,
       },
       required: true,
-      parts: [
-        {
-          key: "title",
-          label: "Title",
-          input_type: "select",
-          options: ["Mr", "Ms"],
-          pattern: "^.+$",
-        },
-      ],
-      format: "{{title}} {{name}}",
       options_from: "parties",
       source: { type: "contact", field: "displayName" },
       date_format: { locale: "cs", style: "long" },
@@ -142,9 +126,6 @@ describe("template field input schema", () => {
     }
     expect(sortedKeys(mapped.validation ?? {})).toEqual(
       sortedKeys(persisted.validation.wrapped.pipe[0].entries),
-    );
-    expect(sortedKeys(mapped.parts?.at(0) ?? {})).toEqual(
-      sortedKeys(persisted.parts.wrapped.pipe[0].item.entries),
     );
   });
 
@@ -281,25 +262,20 @@ describe("template field input schema", () => {
     expect(parsed.success).toBe(false);
   });
 
-  test("a composite field keeps the person source its parts assemble", () => {
-    const bound = v.safeParse(templateFieldInputSchema, {
-      path: "property_address",
-      parts: [{ key: "street", input_type: "text" }],
-      format: "{{street}}",
-      source: { type: "contact", field: "address" },
-    });
-    expect(bound.success).toBe(false);
-    expect(
-      bound.issues?.some((issue) => issue.path?.at(-1)?.key === "source"),
-    ).toBe(true);
-
-    const person = v.safeParse(templateFieldInputSchema, {
-      path: "property_address",
-      parts: [{ key: "street", input_type: "text" }],
-      format: "{{street}}",
-      source: { type: "person" },
-    });
-    expect(person.success).toBe(true);
+  test("the retired composite keys are not properties of an entry", () => {
+    // The document text around the markers is the format now, so a field is
+    // never assembled from parts through this surface.
+    for (const composite of [
+      { parts: [{ key: "street", input_type: "text" }] },
+      { format: "{{street}}" },
+    ]) {
+      expect(
+        v.safeParse(templateFieldInputSchema, {
+          path: "property_address",
+          ...composite,
+        }).success,
+      ).toBe(false);
+    }
   });
 
   test("omits absent optional keys instead of writing undefined", () => {
@@ -315,8 +291,6 @@ describe("template field input schema", () => {
       input_type: "select",
       options_from: "parties",
       validation: { required: true, min_length: 2, max_items: 4 },
-      parts: [{ key: "title", input_type: "text" }],
-      format: "{{title}}",
       date_format: { locale: "cs", style: "long" },
     });
 
@@ -328,8 +302,6 @@ describe("template field input schema", () => {
       inputType: "select",
       optionsFrom: "parties",
       validation: { required: true, minLength: 2, maxItems: 4 },
-      parts: [{ key: "title", inputType: "text" }],
-      format: "{{title}}",
       dateFormat: { locale: "cs", style: "long" },
     });
   });
@@ -352,16 +324,6 @@ describe("template field input schema", () => {
         maxItems: 3,
       },
       required: true,
-      parts: [
-        {
-          key: "title",
-          label: "Title",
-          inputType: "select",
-          options: ["Mr"],
-          pattern: "^.+$",
-        },
-      ],
-      format: "{{title}}",
       optionsFrom: "parties",
       dateFormat: { locale: "cs", style: "long" },
     });
@@ -395,9 +357,6 @@ describe("template field input schema", () => {
     expect(sortedKeys(wireField.validation ?? {})).toEqual(
       sortedKeys(advertised.validation.wrapped.pipe[0].entries),
     );
-    expect(sortedKeys(wireField.parts?.at(0) ?? {})).toEqual(
-      sortedKeys(advertised.parts.wrapped.pipe[0].item.entries),
-    );
     expect(
       toFieldMetaToolInput(v.parse(templateFieldInputSchema, wireField)),
     ).toEqual(persistedField);
@@ -422,8 +381,6 @@ describe("template field input schema", () => {
       aiAdapt: false,
       optionsFrom: null,
       dateFormat: null,
-      parts: null,
-      format: null,
     });
 
     const parsed = parseFieldsOverlay([wireField]);
@@ -500,23 +457,6 @@ describe("template field input schema", () => {
           template_id: TEMPLATE_ID,
           fields: [{ path: "company", validation: {} }],
         });
-      });
-    }
-
-    for (const key of Object.keys(
-      advertised.parts.wrapped.pipe[0].item.entries,
-    )) {
-      test(`fields[].parts[].${key}`, () => {
-        const parsed = parseFieldsOverlay([
-          {
-            path: "company",
-            format: "{{title}}",
-            parts: [{ key: "title", input_type: "text", [key]: null }],
-          },
-        ]);
-        // A part's `key` and `input_type` are required, so null stays an error
-        // there rather than silently becoming an omitted property.
-        expect(parsed.success).toBe(key !== "key" && key !== "input_type");
       });
     }
 

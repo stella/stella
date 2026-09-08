@@ -35,13 +35,13 @@ describe("slugify", () => {
 
   test("keeps letters and numbers of any script under the unicode charset", () => {
     expect(
-      slugify("Jan Kowalski", {
+      slugify("Tomasz Nowicki", {
         charset: "unicode",
         separator: "_",
         maxLength: 40,
         fallback: "field",
       }),
-    ).toBe("jan_kowalski");
+    ).toBe("tomasz_nowicki");
     expect(
       slugify("契約書", {
         charset: "unicode",

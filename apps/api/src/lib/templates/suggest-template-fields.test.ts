@@ -16,7 +16,7 @@ describe("fieldSuggestionsSchema", () => {
     const result = v.safeParse(fieldSuggestionsSchema, {
       suggestions: [
         {
-          literalText: "Jan Kowalski",
+          literalText: "Tomasz Nowicki",
           fieldPath: "signatory.name",
           inputType: "text",
           label: null,
@@ -34,7 +34,7 @@ describe("fieldSuggestionsSchema", () => {
           aiPrompt: "Draft the scope of this power of attorney",
         },
         {
-          literalText: "ROKA NIERUCHOMOŚCI Sp. z o.o.",
+          literalText: "MODRZEW INWESTYCJE Sp. z o.o.",
           fieldPath: "company.name",
           inputType: null,
           label: null,

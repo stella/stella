@@ -66,7 +66,7 @@ const buildDocx = async (blocks: readonly Block[]): Promise<Buffer> => {
   return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 };
 
-/** The bilingual power of attorney: one `{{#each}}` per language section,
+/** The bilingual power of attorney: one `{% for %}` per language section,
  *  each opener and closer in a paragraph of its own. */
 const POWER_OF_ATTORNEY: readonly Block[] = [
   { type: "paragraph", text: "PEŁNOMOCNICTWO / POWER OF ATTORNEY" },
@@ -75,13 +75,13 @@ const POWER_OF_ATTORNEY: readonly Block[] = [
     text: "{{company}}, z siedzibą przy {{company.address}}, KRS {{company.krs}},",
   },
   { type: "paragraph", text: "niniejszym ustanawia pełnomocnikami:" },
-  { type: "paragraph", text: "{{#each attorneys}}" },
-  { type: "paragraph", text: "{{attorneys.name}}" },
-  { type: "paragraph", text: "{{/each}}" },
+  { type: "paragraph", text: "{% for attorney in attorneys %}" },
+  { type: "paragraph", text: "{{ attorney.name }}" },
+  { type: "paragraph", text: "{% endfor %}" },
   { type: "paragraph", text: "hereby appoints as its attorneys:" },
-  { type: "paragraph", text: "{{#each attorneys}}" },
-  { type: "paragraph", text: "{{attorneys.name}}" },
-  { type: "paragraph", text: "{{/each}}" },
+  { type: "paragraph", text: "{% for attorney in attorneys %}" },
+  { type: "paragraph", text: "{{ attorney.name }}" },
+  { type: "paragraph", text: "{% endfor %}" },
   { type: "paragraph", text: "Zakres pełnomocnictwa: {{scope}}." },
   { type: "paragraph", text: "Warszawa, dnia {{signing_date}} r." },
 ];
@@ -95,9 +95,9 @@ const STATEMENT_OF_WORK: readonly Block[] = [
     rows: [
       ["Deliverable", "Due date", "Fee"],
       [
-        "{{#each deliverables}}{{deliverables.item}}",
-        "{{deliverables.due_date}}",
-        "{{deliverables.fee}}{{/each}}",
+        "{% for deliverable in deliverables %}{{ deliverable.item }}",
+        "{{ deliverable.due_date }}",
+        "{{ deliverable.fee }}{% endfor %}",
       ],
     ],
   },
@@ -119,7 +119,7 @@ const configurablePaths = async (
 };
 
 describe("loop item paths configure the way they are discovered", () => {
-  test("an {{#each}} over its own paragraphs declares the prefixed item path", async () => {
+  test("an {% for %} over its own paragraphs declares the prefixed item path", async () => {
     const { discovered, partition } = await configurablePaths(
       POWER_OF_ATTORNEY,
       ["company", "attorneys", "attorneys.name", "scope", "signing_date"],
@@ -142,7 +142,7 @@ describe("loop item paths configure the way they are discovered", () => {
     ]);
   });
 
-  test("a row-confined {{#each}} declares the same prefixed item paths", async () => {
+  test("a row-confined {% for %} declares the same prefixed item paths", async () => {
     const { discovered, partition } = await configurablePaths(
       STATEMENT_OF_WORK,
       [

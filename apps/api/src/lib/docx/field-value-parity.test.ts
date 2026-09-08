@@ -52,7 +52,7 @@ const cases: ParityCase[] = [
       ],
       format: "{{position}} {{name}}",
     },
-    values: { lawyer: { position: "rad. praw.", name: "Jan Kowalski" } },
+    values: { lawyer: { position: "rad. praw.", name: "Tomasz Nowicki" } },
   },
   {
     name: "formula (arithmetic)",

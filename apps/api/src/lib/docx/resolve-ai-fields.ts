@@ -12,7 +12,7 @@
  *
  * Array-scoped fields: when a field's dotted path crosses an array (e.g.
  * `contracts.summary` where `contracts` resolves to an array of objects), the
- * flat draft would be orphaned — `{{#each}}` expansion rewrites the placeholder
+ * flat draft would be orphaned — `{% for %}` expansion rewrites the placeholder
  * to a synthetic per-row key sourced from the row object, so a value under the
  * flat path never reaches the loop. Instead we draft one value per row and
  * write it ONTO the row object at the remainder path, where

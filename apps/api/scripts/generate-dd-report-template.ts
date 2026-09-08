@@ -2,7 +2,7 @@
  * Generate the built-in "Due Diligence Report" DOCX asset.
  *
  * Bun-runnable: `bun apps/api/scripts/generate-dd-report-template.ts`.
- * Hand-builds the OOXML with JSZip (literal `{{...}}` / `{{#each}}` / `{{#if}}`
+ * Hand-builds the OOXML with JSZip (literal `{{...}}` / `{% for %}` / `{% if %}`
  * markers placed verbatim in paragraphs, which a structured document builder
  * would fight), then embeds the report manifest via `writeManifest` and writes
  * the committed asset the runtime loads.
@@ -11,13 +11,13 @@
  * navy title/heading hierarchy backed by a real `styles.xml`, a page-1 cover
  * block (confidentiality notice, title, subtitle, rule), a running header and a
  * "Page X of Y" footer, and bordered/shaded tables. It exercises the engine's
- * report shape: an outer `{{#each contracts}}` body loop, TWO variants of the
+ * report shape: an outer `{% for contract in contracts %}` body loop, TWO variants of the
  * per-contract field table (with vs. without a Verdict column) selected by a
- * block `{{#if hasVerdicts}}/{{#else}}/{{/if}}` (whole tables pruned by the
- * block-unit `{{#if}}` engine), an inner row-repeat over
- * `{{#each contracts.fields}}`, block `{{#if}}` gates on per-contract flags
- * (`hasDocumentType`, `hasRiskLevel`, `hasRisks`), a `{{#each contracts.risks}}`
- * block, and AI-drafted `{{execSummary}}` / `{{contracts.summary}}` fields.
+ * block `{% if hasVerdicts %}/{% else %}/{% endif %}` (whole tables pruned by the
+ * block-unit `{% if %}` engine), an inner row-repeat over
+ * `{% for field in contract.fields %}`, block `{% if %}` gates on per-contract flags
+ * (`hasDocumentType`, `hasRiskLevel`, `hasRisks`), a `{% for risk in contract.risks %}`
+ * block, and AI-drafted `{{execSummary}}` / `{{ contract.summary }}` fields.
  */
 
 import { DD_REPORT_MANIFEST } from "@/api/handlers/reports/builtin-templates";
@@ -151,7 +151,7 @@ const statsRow = (label: string, path: string): string =>
 
 // ONE label/value stats table with no header band (the shaded label column
 // carries the structure). The red-flag/severity rows are verdict-only, and the
-// engine cannot gate individual rows INSIDE a table (a block {{#if}} whose
+// engine cannot gate individual rows INSIDE a table (a block {% if %} whose
 // markers sit in different rows strips only the marker paragraphs, leaving
 // ghost rows and empty cells — verified against processBlockDirectives), so
 // the gate selects between two whole-table variants, same as the field table.
@@ -171,19 +171,19 @@ const statsTableBasic = table(
 );
 
 const statsBlock =
-  P("{{#if hasVerdicts}}") +
+  P("{% if hasVerdicts %}") +
   statsTableFull +
-  P("{{#else}}") +
+  P("{% else %}") +
   statsTableBasic +
-  P("{{/if}}");
+  P("{% endif %}");
 
 const execSummarySection =
   styledP("Executive Summary", "Heading1") +
-  // The narrative paragraph is AI-drafted; gate only it on {{#if aiNarrative}}
+  // The narrative paragraph is AI-drafted; gate only it on {% if aiNarrative %}
   // so a deterministic export keeps the heading and the stats below.
-  P("{{#if aiNarrative}}") +
+  P("{% if aiNarrative %}") +
   styledP("{{execSummary}}", "BodyText") +
-  P("{{/if}}") +
+  P("{% endif %}") +
   statsBlock;
 
 // ── Per-contract field table (two variants) ──────────────────────────────────
@@ -206,14 +206,14 @@ const fieldsTableWithVerdict = (() => {
       ROW_TRPR,
       cell(
         { width: FIELD_LABEL_COL, fill: LABEL_FILL },
-        P("{{#each contracts.fields}}"),
-        cellP("{{contracts.fields.label}}", LABEL_RPR),
+        P("{% for field in contract.fields %}"),
+        cellP("{{ field.label }}", LABEL_RPR),
       ),
-      cell({ width: valueCol }, cellP("{{contracts.fields.value}}")),
+      cell({ width: valueCol }, cellP("{{ field.value }}")),
       cell(
         { width: verdictCol },
-        cellP("{{contracts.fields.verdict}}"),
-        P("{{/each}}"),
+        cellP("{{ field.verdict }}"),
+        P("{% endfor %}"),
       ),
     ),
   );
@@ -234,69 +234,63 @@ const fieldsTableNoVerdict = (() => {
       ROW_TRPR,
       cell(
         { width: FIELD_LABEL_COL, fill: LABEL_FILL },
-        P("{{#each contracts.fields}}"),
-        cellP("{{contracts.fields.label}}", LABEL_RPR),
+        P("{% for field in contract.fields %}"),
+        cellP("{{ field.label }}", LABEL_RPR),
       ),
-      cell(
-        { width: valueCol },
-        cellP("{{contracts.fields.value}}"),
-        P("{{/each}}"),
-      ),
+      cell({ width: valueCol }, cellP("{{ field.value }}"), P("{% endfor %}")),
     ),
   );
 })();
 
 const fieldsTableVariants =
-  P("{{#if hasVerdicts}}") +
+  P("{% if hasVerdicts %}") +
   fieldsTableWithVerdict +
-  P("{{#else}}") +
+  P("{% else %}") +
   fieldsTableNoVerdict +
-  P("{{/if}}");
+  P("{% endif %}");
 
 // ── Risks block ──────────────────────────────────────────────────────────────
 
 const risksBlock =
-  P("{{#if contracts.hasRisks}}") +
+  P("{% if contract.hasRisks %}") +
   styledP("Risks", "Heading3") +
-  P("{{#each contracts.risks}}") +
-  boldLeadP(
-    "{{contracts.risks.issue}}  ·  {{contracts.risks.severity}}  ·  {{contracts.risks.verdict}}",
-  ) +
-  styledP("{{contracts.risks.rationale}}", "BodyText") +
+  P("{% for risk in contract.risks %}") +
+  boldLeadP("{{ risk.issue }}  ·  {{ risk.severity }}  ·  {{ risk.verdict }}") +
+  styledP("{{ risk.rationale }}", "BodyText") +
   // The citation line is gated per risk. Inside the risks loop the condition
-  // must use the BARE item-relative path ({{#if hasCitation}}): the loop
+  // must use the BARE item-relative path ({% if hasCitation %}): the loop
   // recursion assigns the risk item's own fields onto the evaluation context,
   // while the prefixed form (contracts.risks.hasCitation) would resolve
   // `contracts` to the contract item, whose `risks` is an array — undefined.
-  P("{{#if hasCitation}}") +
-  styledP("Citation: {{contracts.risks.citation}}", "Caption") +
-  P("{{/if}}") +
-  P("{{/each}}") +
-  P("{{/if}}");
+  P("{% if hasCitation %}") +
+  styledP("Citation: {{ risk.citation }}", "Caption") +
+  P("{% endif %}") +
+  P("{% endfor %}") +
+  P("{% endif %}");
 
 // ── Per-contract section ─────────────────────────────────────────────────────
 
-// Document type / risk level render as separate block-level {{#if}} lines
+// Document type / risk level render as separate block-level {% if %} lines
 // (block conditions see the loop item's context; inline conditions would not),
 // so nothing dangles when the view has no document-type column or no verdicts.
 const contractSection =
-  P("{{#each contracts}}") +
-  styledP("{{@index}}. {{contracts.name}}", "Heading2") +
-  P("{{#if contracts.hasDocumentType}}") +
-  styledP("Document type: {{contracts.documentType}}", "Caption") +
-  P("{{/if}}") +
-  P("{{#if contracts.hasRiskLevel}}") +
-  styledP("Risk level: {{contracts.riskLevel}}", "Caption") +
-  P("{{/if}}") +
+  P("{% for contract in contracts %}") +
+  styledP("{{ loop.index }}. {{ contract.name }}", "Heading2") +
+  P("{% if contract.hasDocumentType %}") +
+  styledP("Document type: {{ contract.documentType }}", "Caption") +
+  P("{% endif %}") +
+  P("{% if contract.hasRiskLevel %}") +
+  styledP("Risk level: {{ contract.riskLevel }}", "Caption") +
+  P("{% endif %}") +
   fieldsTableVariants +
   risksBlock +
   // The per-contract summary is AI-drafted; gate the heading AND value on
-  // {{#if aiNarrative}} so a deterministic export leaves nothing behind.
-  P("{{#if aiNarrative}}") +
+  // {% if aiNarrative %} so a deterministic export leaves nothing behind.
+  P("{% if aiNarrative %}") +
   styledP("Summary", "Heading3") +
-  styledP("{{contracts.summary}}", "BodyText") +
-  P("{{/if}}") +
-  P("{{/each}}");
+  styledP("{{ contract.summary }}", "BodyText") +
+  P("{% endif %}") +
+  P("{% endfor %}");
 
 // ── Annex — review matrix ────────────────────────────────────────────────────
 
@@ -314,13 +308,13 @@ const annexTable = table(
     ROW_TRPR,
     cell(
       { width: ANNEX_NAME_COL, fill: LABEL_FILL },
-      P("{{#each grid.rows}}"),
-      cellP("{{grid.rows.name}}", LABEL_RPR),
+      P("{% for row in grid.rows %}"),
+      cellP("{{ row.name }}", LABEL_RPR),
     ),
     cell(
       { width: ANNEX_SUMMARY_COL },
-      cellP("{{grid.rows.summary}}"),
-      P("{{/each}}"),
+      cellP("{{ row.summary }}"),
+      P("{% endfor %}"),
     ),
   ),
 );

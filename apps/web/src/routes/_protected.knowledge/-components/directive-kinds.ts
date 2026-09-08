@@ -16,13 +16,30 @@ type BlockDirectiveLayout =
 
 export const BLOCK_DIRECTIVE_LAYOUT = {
   if: { type: "opener", family: "conditional" },
-  elseif: { type: "branch", family: "conditional" },
+  elif: { type: "branch", family: "conditional" },
   else: { type: "branch", family: "conditional" },
   endif: { type: "closer", family: "conditional" },
-  each: { type: "opener", family: "iteration" },
-  endeach: { type: "closer", family: "iteration" },
+  for: { type: "opener", family: "iteration" },
+  endfor: { type: "closer", family: "iteration" },
 } as const satisfies Record<BlockDirectiveKind, BlockDirectiveLayout>;
 
 export const CONDITIONAL_KINDS = BLOCK_DIRECTIVE_KINDS.filter(
   (kind) => BLOCK_DIRECTIVE_LAYOUT[kind].family === "conditional",
 );
+
+/** The two blocks a selection can be wrapped in from the gesture bar, the
+ *  context menu, or the insert menu. Both are grammar opener kinds. */
+export type BlockGestureKind = {
+  [TKind in BlockDirectiveKind]: (typeof BLOCK_DIRECTIVE_LAYOUT)[TKind]["type"] extends "opener"
+    ? TKind
+    : never;
+}[BlockDirectiveKind];
+
+/** Block directives that own the content after them — an opener and every
+ *  branch that continues it. Derived from the layout map, so a new directive
+ *  joins or stays out of this set by the disposition declared there. */
+export type GroupDirectiveKind = {
+  [TKind in BlockDirectiveKind]: (typeof BLOCK_DIRECTIVE_LAYOUT)[TKind]["type"] extends "closer"
+    ? never
+    : TKind;
+}[BlockDirectiveKind];

@@ -5,7 +5,7 @@
  *
  * Boolean conditions are evaluated through the canonical `@stll/conditions`
  * AST and its single evaluator, so view filters, AI-extraction gating, and
- * template `{{#if ...}}` conditionals share one set of operators and semantics
+ * template `{% if ... %}` conditionals share one set of operators and semantics
  * and never drift apart. This module owns the template surface: the string
  * parser (`./parse`), the named-condition resolver, and the no-code builder
  * serializer (`./condition-builder`).
@@ -28,11 +28,11 @@ export { resolvePath };
 
 export type NamedCondition = {
   name: string;
-  /** The `{{#if}}` expression string. Authoritative unless `node` is set. */
+  /** The `{% if %}` expression string. Authoritative unless `node` is set. */
   expression: string;
   /**
    * The canonical AST, set when the condition cannot round-trip through the
-   * expression string — i.e. it uses a `formula` operand the `{{#if}}` grammar
+   * expression string — i.e. it uses a `formula` operand the `{% if %}` grammar
    * has no syntax for. When present it is evaluated directly and `expression`
    * is ignored.
    */
@@ -52,7 +52,7 @@ export const MAX_CONDITION_DEPTH = 50;
 /**
  * Normalize a fill-bag value into a `ConditionValue` the shared evaluator
  * accepts: arrays become string arrays (multi-select fields hold their options
- * as strings, so membership tests like `parties contains "guarantor"` work
+ * as strings, so membership tests like `"guarantor" in parties` work
  * even when an element is numeric), primitives pass through, anything else is
  * stringified.
  */
@@ -78,7 +78,7 @@ const toConditionValue = (raw: unknown): ConditionValue => {
  * Build the operand resolver for one evaluation. Only `path` operands need
  * resolving (the evaluator handles literals). A path is first matched against
  * the named conditions: a hit evaluates that condition's expression — so
- * `{{#if isCompany}}` and `{{#if isCompany and signed}}` both work — guarded
+ * `{% if isCompany %}` and `{% if isCompany and signed %}` both work — guarded
  * against cycles (`resolved`) and runaway chains (`MAX_CONDITION_DEPTH`).
  * Otherwise the path resolves against the fill data.
  */
@@ -127,12 +127,13 @@ const makeResolver = (
 };
 
 /**
- * Evaluate a template `{{#if ...}}` condition. The expression is parsed into
+ * Evaluate a template `{% if ... %}` condition. The expression is parsed into
  * the canonical `@stll/conditions` AST and evaluated by the shared evaluator.
  *
- * Supports comparisons (`==`, `!=`, `>`, `<`, `>=`, `<=`), `contains`,
- * truthiness, negation (`!`), logical operators (`and`, `or`), parentheses,
- * dotted paths, numeric underscores, and named-condition references.
+ * Supports comparisons (`==`, `!=`, `>`, `<`, `>=`, `<=`), membership
+ * (`"x" in path`), presence (`is defined` / `is not defined`), truthiness,
+ * negation (`not`), logical operators (`and`, `or`), parentheses, dotted
+ * paths, numeric underscores, and named-condition references.
  *
  * An empty or unparseable expression is `false` ("no condition" never gates a
  * branch true).
@@ -155,6 +156,7 @@ export const evaluateCondition = (
 };
 
 export { parseCondition } from "./parse.js";
+export { referencedConditionPaths } from "./referenced-paths.js";
 
 // Value-returning arithmetic evaluator for computed fields. Kept separate
 // from the boolean condition engine above; re-exported here as the package's
@@ -183,7 +185,7 @@ export type {
 } from "./field-values.js";
 
 // The no-code condition builder edits the canonical `@stll/conditions` AST;
-// `serializeCondition` renders it to the `{{#if}}` expression `evaluateCondition`
+// `serializeCondition` renders it to the `{% if %}` expression `evaluateCondition`
 // parses. Re-export the AST surface so template consumers import from one place.
 export { serializeCondition } from "./condition-builder.js";
 export {
@@ -203,38 +205,56 @@ export type {
   PredicateOp,
 } from "@stll/conditions";
 
-// Canonical `{{...}}` marker grammar — the single source of truth for every
+// Canonical docxtpl-Jinja marker grammar — the single source of truth for every
 // directive recognizer (api fill pipeline, folio editor, web preview).
 export {
   assertNever,
   BLOCK_DIRECTIVE_KINDS,
   blockDirectiveLinePattern,
   classifyMarker,
+  clauseSlotKey,
   classifyMarkerDefect,
   clauseSlotPattern,
-  countPattern,
   DIRECTIVE_KINDS,
+  FILTER_NAMES,
   hasBlockDirectivePattern,
   hasNumberingPattern,
-  indexPattern,
   isBlockDirectiveKind,
   isClauseSlotName,
   isFieldPath,
   isSafeFieldPath,
+  legacyLoopAlias,
+  legacyMarkerReplacement,
+  LOOP_PROPERTIES,
+  loopPattern,
   MARKER_DEFECT_KINDS,
+  MARKER_OUTPUT_BODY,
+  MARKER_STATEMENT_BODY,
   markerPattern,
+  normalizeMarkerInner,
   numPattern,
   placeholderPattern,
   refPattern,
+  replaceOutputMarkers,
   scanInvalidMarkers,
   scanMarkers,
+  substitutionKey,
+  translateLegacyExpression,
 } from "./markers.js";
 export type {
   BlockDirectiveKind,
   DirectiveKind,
+  FilterArgument,
+  FilterCall,
+  FilterName,
   InvalidMarker,
+  LoopProperty,
+  MarkerDefect,
   MarkerDefectKind,
+  MarkerForm,
+  MarkerLiteral,
   MarkerMeta,
+  MarkerPrefix,
   ScannedMarker,
 } from "./markers.js";
 

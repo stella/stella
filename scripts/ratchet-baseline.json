@@ -429,7 +429,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 436,
+    "count": 435,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -503,7 +503,6 @@
       "apps/api/src/lib/docx-stamp.ts": 3,
       "apps/api/src/lib/docx/ai-field-generator.ts": 3,
       "apps/api/src/lib/docx/resolve-ai-fields.ts": 1,
-      "apps/api/src/lib/docx/types.ts": 1,
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,
       "apps/api/src/lib/entities/query-entities.ts": 1,
       "apps/api/src/lib/entities/window-cursor.ts": 1,

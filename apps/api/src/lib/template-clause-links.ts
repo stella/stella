@@ -518,7 +518,7 @@ type UpdateClauseSlotProps = {
 
 /**
  * Rename (or clear) a link's `slotName`. The slot name is validated against
- * the `{{@clause:NAME}}` marker grammar and must stay unique per template
+ * the `{{ clause("NAME") }}` marker grammar and must stay unique per template
  * (mirrors the partial unique index `template_clauses_template_slot_uidx`).
  */
 export const updateClauseSlotHandler = async ({

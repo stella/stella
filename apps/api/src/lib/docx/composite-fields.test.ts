@@ -24,19 +24,19 @@ const lawyerField: FieldMeta = {
 describe("resolveCompositeFields", () => {
   test("joins valid parts via the format", () => {
     const result = resolveCompositeFields({
-      values: { lawyer: { position: "rad. praw.", name: "Jan Kowalski" } },
+      values: { lawyer: { position: "rad. praw.", name: "Tomasz Nowicki" } },
       fields: [lawyerField],
     });
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.values["lawyer"]).toBe("rad. praw. Jan Kowalski");
+      expect(result.values["lawyer"]).toBe("rad. praw. Tomasz Nowicki");
     }
   });
 
   test("rejects a select part value outside its options", () => {
     const result = resolveCompositeFields({
-      values: { lawyer: { position: "dr hab.", name: "Jan Kowalski" } },
+      values: { lawyer: { position: "dr hab.", name: "Tomasz Nowicki" } },
       fields: [lawyerField],
     });
 
@@ -108,7 +108,7 @@ describe("resolveCompositeFields", () => {
   test("rejects unknown part keys", () => {
     const result = resolveCompositeFields({
       values: {
-        lawyer: { position: "adw.", name: "Jan Kowalski", extra: "x" },
+        lawyer: { position: "adw.", name: "Tomasz Nowicki", extra: "x" },
       },
       fields: [lawyerField],
     });
@@ -146,7 +146,7 @@ describe("resolveCompositeFields", () => {
     }
   });
 
-  test("assembles a composite field inside an {{#each}} loop per row", () => {
+  test("assembles a composite field inside an {% for %} loop per row", () => {
     // The loop value arrives as an array of rows under the container path while
     // the manifest keeps the dotted composite path `parties.signer`; each row's
     // signer object must be rendered in place so the loop expander flattens the
@@ -164,7 +164,7 @@ describe("resolveCompositeFields", () => {
       values: {
         parties: [
           { signer: { title: "adw.", name: "Anna Nowak" } },
-          { signer: { title: "rad. praw.", name: "Jan Kowalski" } },
+          { signer: { title: "rad. praw.", name: "Tomasz Nowicki" } },
         ],
       },
       fields: [field],
@@ -174,12 +174,12 @@ describe("resolveCompositeFields", () => {
     if (result.ok) {
       expect(result.values["parties"]).toEqual([
         { signer: "adw. Anna Nowak" },
-        { signer: "rad. praw. Jan Kowalski" },
+        { signer: "rad. praw. Tomasz Nowicki" },
       ]);
     }
   });
 
-  test("rejects an invalid part inside an {{#each}} row", () => {
+  test("rejects an invalid part inside an {% for %} row", () => {
     const field: FieldMeta = {
       path: "parties.signer",
       parts: [
@@ -190,7 +190,7 @@ describe("resolveCompositeFields", () => {
     };
     const result = resolveCompositeFields({
       values: {
-        parties: [{ signer: { title: "dr hab.", name: "Jan Kowalski" } }],
+        parties: [{ signer: { title: "dr hab.", name: "Tomasz Nowicki" } }],
       },
       fields: [field],
     });

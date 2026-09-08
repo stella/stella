@@ -22,7 +22,7 @@ const makeDocx = async (paragraphs: string[]): Promise<Buffer> => {
 describe("prepareTemplateFromDocument", () => {
   test("rewrites suggested literals as markers and embeds a manifest", async () => {
     const buffer = await makeDocx([
-      "Granted by ROKA NIERUCHOMOŚCI Sp. z o.o.",
+      "Granted by MODRZEW INWESTYCJE Sp. z o.o.",
       "Scope: registration matters",
     ]);
 
@@ -34,7 +34,7 @@ describe("prepareTemplateFromDocument", () => {
       buffer,
       suggest: async () => [
         {
-          literalText: "ROKA NIERUCHOMOŚCI Sp. z o.o.",
+          literalText: "MODRZEW INWESTYCJE Sp. z o.o.",
           fieldPath: "company.name",
         },
         {
@@ -62,7 +62,7 @@ describe("prepareTemplateFromDocument", () => {
     const xml = docEntry ? await docEntry.async("text") : "";
     expect(xml).toContain("{{company.name}}");
     expect(xml).toContain("{{scope}}");
-    expect(xml).not.toContain("ROKA NIERUCHOMOŚCI");
+    expect(xml).not.toContain("MODRZEW INWESTYCJE");
   });
 
   test("returns the original document untouched when nothing is suggested", async () => {

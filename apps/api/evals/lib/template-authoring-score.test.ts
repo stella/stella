@@ -6,6 +6,7 @@ import {
   cleanRoundTrip,
   comparePaths,
   detectGrammarTraps,
+  isEntryOverlayIssue,
   scoreAuthoringRun,
   scoreSyntaxQuiz,
 } from "./template-authoring-score";
@@ -29,64 +30,80 @@ const traps = (
 describe("detectGrammarTraps", () => {
   test("a correctly authored repeat trips nothing", () => {
     const counts = traps([
-      paragraph("{{#each attorneys}}"),
-      paragraph("{{attorneys.name}}, {{attorneys.role}}"),
-      paragraph("{{/each}}"),
+      paragraph("{% for attorney in attorneys %}"),
+      paragraph("{{ attorney.name }}, {{ attorney.role }}"),
+      paragraph("{% endfor %}"),
     ]);
     expect(Object.values(counts).every((count) => count === 0)).toBe(true);
   });
 
-  test("an item path without its array prefix is counted once per occurrence", () => {
+  test("an item path that misses the loop alias is counted once per occurrence", () => {
     const counts = traps([
-      paragraph("{{#each attorneys}}"),
+      paragraph("{% for attorney in attorneys %}"),
       paragraph("{{name}} — {{role}}"),
-      paragraph("{{/each}}"),
+      paragraph("{% endfor %}"),
     ]);
-    expect(counts.unprefixed_item_path).toBe(2);
-    expect(counts.this_prefix).toBe(0);
+    expect(counts.unaliased_item_path).toBe(2);
   });
 
-  test("a `this.` reference is its own trap, not an unprefixed path", () => {
+  test("the array path still resolves inside its own loop", () => {
     const counts = traps([
-      paragraph("{{#each attorneys}}"),
-      paragraph("{{this.name}}"),
-      paragraph("{{/each}}"),
+      paragraph("{% for attorney in attorneys %}"),
+      paragraph("{{ attorneys.name }}"),
+      paragraph("{% endfor %}"),
     ]);
-    expect(counts.this_prefix).toBe(1);
-    expect(counts.unprefixed_item_path).toBe(0);
+    expect(counts.unaliased_item_path).toBe(0);
   });
 
-  test("`{{#endeach}}` is an unknown directive, `{{attorneys[0].name}}` a bracket index", () => {
+  test("each rejected marker shape is counted as its own trap", () => {
     const counts = traps([
-      paragraph("{{#each attorneys}}"),
+      paragraph("{% for attorney in attorneys %}"),
       paragraph("{{attorneys[0].name}}"),
-      paragraph("{{#endeach}}"),
+      paragraph("{{#each attorneys}}"),
+      paragraph("{% set total = 1 %}"),
+      paragraph("{{ fee | upper }}"),
+      paragraph("{{ fee * 12 }}"),
     ]);
-    expect(counts.unknown_directive).toBe(1);
     expect(counts.bracket_index).toBe(1);
+    expect(counts.legacy_marker).toBe(1);
+    expect(counts.unsupported_tag).toBe(1);
+    expect(counts.unknown_filter).toBe(1);
+    expect(counts.python_expression).toBe(1);
   });
 
-  test("a block marker sharing its paragraph with text is counted once for that paragraph", () => {
+  test("an inline span the engine parses is a placement, not a trap", () => {
     const counts = traps([
-      paragraph("{{#if penalty}}A penalty applies.{{/if}}"),
-      paragraph("{{#each rows}}"),
-      paragraph("{{rows.name}}"),
-      paragraph("{{/each}}"),
+      paragraph("{% if penalty %}A penalty applies.{% endif %}"),
+      paragraph(
+        "The tenant{% if guarantor %}, with the guarantor,{% endif %} pays.",
+      ),
+      paragraph(
+        "{% for a in attorneys %}{{ a.name }}{% if not loop.last %}, {% endif %}{% endfor %}",
+      ),
+      paragraph("{% for row in rows %}"),
+      paragraph("{{ row.name }}"),
+      paragraph("{% endfor %}"),
     ]);
-    expect(counts.block_marker_inline).toBe(1);
+    expect(counts.block_marker_inline).toBe(0);
   });
 
-  test("two block directives in one paragraph share it, even with no other text", () => {
-    expect(
-      traps([paragraph("{{#if penalty}}{{/if}}")]).block_marker_inline,
-    ).toBe(1);
+  test("an opener alone in a paragraph is the block form", () => {
     expect(
       traps([
-        paragraph("{{#if penalty}}"),
+        paragraph("{% if penalty %}"),
         paragraph("A penalty applies."),
-        paragraph("{{/if}}"),
+        paragraph("{% endif %}"),
       ]).block_marker_inline,
     ).toBe(0);
+  });
+
+  test("an opener inline with text and no closer in the paragraph is a trap", () => {
+    expect(
+      traps([
+        paragraph("A penalty applies{% if waived %} unless waived."),
+        paragraph("{% endif %}"),
+      ]).block_marker_inline,
+    ).toBe(1);
   });
 
   test("a row block opened and closed across one row's cells is a placement, not a trap", () => {
@@ -94,27 +111,31 @@ describe("detectGrammarTraps", () => {
       table(
         ["Deliverable", "Fee"],
         [
-          "{{#each deliverables}}{{deliverables.item}}",
-          "{{deliverables.fee}}{{/each}}",
+          "{% for deliverable in deliverables %}{{ deliverable.item }}",
+          "{{ deliverable.fee }}{% endfor %}",
         ],
       ),
-      table(["{{#if penalty}}Late fee", "{{penalty_amount}}{{/if}}"]),
+      table(["{% if penalty %}Late fee", "{{penalty_amount}}{% endif %}"]),
     ]);
     expect(counts.block_marker_inline).toBe(0);
-    expect(counts.unprefixed_item_path).toBe(0);
+    expect(counts.unaliased_item_path).toBe(0);
   });
 
   test("an unclosed block marker in a plain paragraph is still a trap", () => {
     expect(
-      traps([paragraph("{{#if penalty}}A penalty applies.")])
+      traps([paragraph("{% if penalty %}A penalty applies.")])
         .block_marker_inline,
     ).toBe(1);
   });
 
   test("a row whose opener has no closer is still a trap", () => {
     expect(
-      traps([table(["{{#each deliverables}}{{deliverables.item}}", "Fee"])])
-        .block_marker_inline,
+      traps([
+        table([
+          "{% for deliverable in deliverables %}{{ deliverable.item }}",
+          "Fee",
+        ]),
+      ]).block_marker_inline,
     ).toBe(1);
   });
 
@@ -122,14 +143,15 @@ describe("detectGrammarTraps", () => {
     // Not a row block: only the opener and closer are ever hoisted, so this
     // placement loses the branch.
     expect(
-      traps([table(["{{#if paid}}Paid{{#else}}Unpaid", "Amount{{/if}}"])])
+      traps([table(["{% if paid %}Paid{% else %}Unpaid", "Amount{% endif %}"])])
         .block_marker_inline,
     ).toBe(2);
   });
 
   test("a pair wrapping one cell's own paragraphs is still a trap", () => {
     expect(
-      traps([table(["{{#each x}}Item\nFee{{/each}}"])]).block_marker_inline,
+      traps([table(["{% for item in x %}Item\nFee{% endfor %}"])])
+        .block_marker_inline,
     ).toBe(2);
   });
 
@@ -142,56 +164,27 @@ describe("detectGrammarTraps", () => {
     expect(counts.language_variant_path).toBe(1);
   });
 
-  test("a lookup on a leaf of another marker path is lookup_not_parent", () => {
-    const blocks = [paragraph("{{company}}, {{company.krs}}")];
+  test("a condition the engine drops is no longer counted", () => {
     expect(
       detectGrammarTraps({
-        blocks,
-        overlay: [{ path: "company.krs", lookup: { formats: [] } }],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(1);
-    expect(
-      detectGrammarTraps({
-        blocks,
-        overlay: [{ path: "company", lookup: { formats: [{ key: "krs" }] } }],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(0);
-  });
-
-  test("a lookup inside an {{#each}} keeps its dotted path without tripping", () => {
-    expect(
-      detectGrammarTraps({
-        blocks: [
-          paragraph("{{#each companies}}"),
-          paragraph("{{companies.krs}}"),
-          paragraph("{{/each}}"),
-        ],
-        overlay: [{ path: "companies.krs", lookup: { formats: [] } }],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(0);
-  });
-
-  test("a condition on a tick-box field, or one restating its own path, is condition_on_input", () => {
-    expect(
-      detectGrammarTraps({
-        blocks: [paragraph("{{#if penalty}}")],
+        blocks: [paragraph("{% if penalty %}")],
         overlay: [{ path: "penalty", condition: "penalty == true" }],
-        booleanInputPaths: [],
+        booleanInputPaths: ["penalty"],
       }).condition_on_input,
-    ).toBe(1);
+    ).toBe(0);
+  });
+
+  test("a condition on a tick-box field is condition_on_input", () => {
     expect(
       detectGrammarTraps({
-        blocks: [paragraph("{{#if penalty}}")],
+        blocks: [paragraph("{% if penalty %}")],
         overlay: [{ path: "penalty", condition: "amount > 0" }],
         booleanInputPaths: ["penalty"],
       }).condition_on_input,
     ).toBe(1);
     expect(
       detectGrammarTraps({
-        blocks: [paragraph("{{#if has_penalty}}")],
+        blocks: [paragraph("{% if has_penalty %}")],
         overlay: [{ path: "has_penalty", condition: "amount > 0" }],
         booleanInputPaths: [],
       }).condition_on_input,
@@ -233,6 +226,18 @@ describe("comparePaths", () => {
   });
 });
 
+describe("isEntryOverlayIssue", () => {
+  test("an entry path is the entry, a property path is one property of it", () => {
+    expect(isEntryOverlayIssue({ path: "fields.3" })).toBe(true);
+    expect(isEntryOverlayIssue({ path: "fields.12" })).toBe(true);
+    expect(isEntryOverlayIssue({ path: "fields.3.parts" })).toBe(false);
+    expect(isEntryOverlayIssue({ path: "fields.3.lookup.formats" })).toBe(
+      false,
+    );
+    expect(isEntryOverlayIssue({ path: "template_id" })).toBe(false);
+  });
+});
+
 describe("scoreAuthoringRun", () => {
   type SavedAttempt = Extract<SaveAttempt, { status: "saved" }>;
 
@@ -245,6 +250,7 @@ describe("scoreAuthoringRun", () => {
       booleanInputPaths: [],
     }),
     overlayIssues: [],
+    propertyDrops: [],
     configDefects: [],
     fidelity: [],
     roundTrip: cleanRoundTrip(),
@@ -288,6 +294,40 @@ describe("scoreAuthoringRun", () => {
         attempt: { ...savedAttempt(), fidelity: ['dropped "MIETVERTRAG"'] },
       }).outcome,
     ).toBe("partial");
+  });
+
+  test("a fill the engine refused fails the fill step, not the configure step", () => {
+    const filled = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: {
+        ...savedAttempt(),
+        roundTrip: {
+          ...cleanRoundTrip(),
+          fillError: 'Field "Deliverables": allows at most 0 item(s), got 3.',
+        },
+      },
+    });
+    expect(filled.outcome).toBe("partial");
+    expect(filled.steps.configured).toBe(true);
+    expect(filled.steps.filled).toBe(false);
+    expect(filled.overlayIssues).toEqual([]);
+  });
+
+  test("a property drop is reported without failing the configure step", () => {
+    const dropped = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: {
+        ...savedAttempt(),
+        propertyDrops: ["fields.3.parts: `parts` is not a property."],
+      },
+    });
+    expect(dropped.outcome).toBe("pass");
+    expect(dropped.steps.configured).toBe(true);
+    expect(dropped.propertyDrops).toEqual([
+      "fields.3.parts: `parts` is not a property.",
+    ]);
   });
 
   test("a provider error overrides the outcome without discarding saved diagnostics", () => {
@@ -344,7 +384,7 @@ describe("scoreAuthoringRun", () => {
       turnError: null,
       attempt: {
         ...savedAttempt(),
-        traps: { ...savedAttempt().traps, unprefixed_item_path: 1 },
+        traps: { ...savedAttempt().traps, unaliased_item_path: 1 },
       },
     });
     expect(trapped.steps.authored).toBe(false);
@@ -450,7 +490,10 @@ describe("scoreAuthoringRun", () => {
         status: "unsaved",
         paths: { missing: ["signing_date"], extra: [] },
         traps: detectGrammarTraps({
-          blocks: [paragraph("{{#each attorneys}}"), paragraph("{{name}}")],
+          blocks: [
+            paragraph("{% for attorney in attorneys %}"),
+            paragraph("{{name}}"),
+          ],
           overlay: [],
           booleanInputPaths: [],
         }),
@@ -462,18 +505,21 @@ describe("scoreAuthoringRun", () => {
     expect(score.outcome).toBe("error");
     expect(score.note).toBe("output token limit reached");
     expect(score.paths.missing).toEqual(["signing_date"]);
-    expect(score.traps.unprefixed_item_path).toBe(1);
+    expect(score.traps.unaliased_item_path).toBe(1);
     expect(score.fidelity).toEqual(['dropped "POWER OF ATTORNEY"']);
   });
 });
 
 describe("scoreSyntaxQuiz", () => {
-  const expected = { each_closer: "{{/each}}", this_prefix_supported: false };
+  const expected = {
+    each_closer: "{% endfor %}",
+    this_prefix_supported: false,
+  };
 
   test("whitespace inside a marker answer does not change it", () => {
     expect(
       scoreSyntaxQuiz(
-        { each_closer: "{{ /each }}", this_prefix_supported: false },
+        { each_closer: "{% endfor %}", this_prefix_supported: false },
         expected,
       ),
     ).toEqual({ correct: 2, total: 2, wrong: [] });
@@ -485,7 +531,7 @@ describe("scoreSyntaxQuiz", () => {
     ).toEqual(["each_closer", "this_prefix_supported"]);
     expect(
       scoreSyntaxQuiz(
-        { each_closer: "{{/each}}", this_prefix_supported: "no" },
+        { each_closer: "{% endfor %}", this_prefix_supported: "no" },
         expected,
       ).wrong,
     ).toEqual(["this_prefix_supported"]);

@@ -11,8 +11,8 @@
  * descriptions and input schemas, the source document, and a short brief
  * naming the field paths to use. The tools are backed in memory by the same
  * recipe the services run: decode, `validateDocxBuffer`, `discoverTemplate`,
- * `mergeManifestWithDiscovery`, `partitionFieldOverlay`, `applyFieldOverlay`,
- * `writeManifest`; minus the DB and S3 the eval has no business touching. The
+ * `resolveTemplateFieldOverlay`, `partitionFieldOverlay`, `writeManifest`;
+ * minus the DB and S3 the eval has no business touching. The
  * saved template is then filled with fixed values through the real
  * `fillTemplateDocx`, so the round trip is scored on rendered bytes.
  *
@@ -29,22 +29,26 @@
  *                 says WHICH one the model could not get through:
  *                 authored (the right markers, no grammar trap, the source
  *                 wording kept), created (create_template accepted the
- *                 document), configured (every configuration entry applied,
+ *                 document), configured (every configuration ENTRY landed,
  *                 and the brief's configuration present), filled (the fill
  *                 round trip rendered cleanly)
  *   outcome       pass / partial / invalid-docx / no-call / error
  *   missing/extra discovered field paths against the set the brief names
- *   traps         named grammar mistakes (see GRAMMAR_TRAP_CODES):
- *                 unprefixed_item_path, this_prefix, unknown_directive,
- *                 bracket_index, language_variant_path, block_marker_inline,
- *                 lookup_not_parent, condition_on_input
- *   overlay       production validation issues: the per-entry `issues[]` a
- *                 best-effort configure reports, schema rejections, and a
- *                 `path` matching no marker
+ *   traps         named grammar mistakes, one column per code in
+ *                 GRAMMAR_TRAP_CODES, which is where they are documented; a
+ *                 second list here would only drift from it
+ *   overlay       entry-level production validation issues: the entries a
+ *                 best-effort configure refused, schema rejections, and a
+ *                 `path` matching no marker. These fail `configured`.
+ *   dropped       properties the tool site dropped out of entries that
+ *                 otherwise applied (a retired key such as `parts`). The
+ *                 entry landed, so a drop is reported and fails no step.
  *   config        field configuration the brief asked for and did not get
  *   fidelity      source wording the template dropped instead of keeping
  *   round trip    leftover `{{`, blank repeated rows, a conditional row that
- *                 was not dropped, a date outside its requested locale
+ *                 was not dropped, a date outside its requested locale, and
+ *                 a fill the engine refused outright. These fail `filled`,
+ *                 never `configured`: the entries had already landed.
  *   error         exact provider or stream error for the run, including the
  *                 turn deadline: a turn the timer aborts says so instead of
  *                 looking like a model that stopped calling tools
@@ -58,7 +62,7 @@
  * when the turn ends before `create_template`; it remains a partial outcome
  * because configuration and the fill round trip never completed.
  *
- * The `syntax-quiz` task has no DOCX: eight grammar questions answered as one
+ * The `syntax-quiz` task has no DOCX: the grammar questions answered as one
  * JSON object, scored exactly. Its wrong answers are reported in the
  * `missing` column, and it reaches none of the four workflow steps.
  *
@@ -70,12 +74,20 @@
  *   bun run eval:template-authoring
  *   bun run eval:template-authoring -- --models anthropic::claude-haiku-4-5-20251001
  *   bun run eval:template-authoring -- --task cs-nda --runs 3 --json out.json
+ *   bun run eval:template-authoring -- --rescore out.json --json rescored.json
+ *
+ * `--rescore` replays a previous run's recorded tool calls — the authored
+ * document, the create call, every configure call, in order — through the
+ * save, configure and fill path a live run takes, with no model turn, and
+ * prints the same tables. It is how a harness or engine change is measured
+ * against runs already paid for; `--task` narrows it the same way it narrows
+ * a live run.
  */
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import JSZip from "jszip";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
@@ -109,19 +121,20 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  applyFieldOverlay,
+  type FieldOverlayIssue,
   partitionFieldOverlay,
+  resolveTemplateFieldOverlay,
 } from "@/api/lib/templates/field-overlay";
 import {
   fillTemplateDocx,
   type FillTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
-import { toFieldMetaToolInput } from "@/api/mcp/template-field-input";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import {
   CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
   CREATE_TEMPLATE_TOOL_DEFINITION,
+  parseConfigureEntries,
 } from "@/api/mcp/template-tools";
 import type { McpToolInputSchema } from "@/api/mcp/tool-types";
 import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
@@ -143,6 +156,7 @@ import {
   comparePaths,
   detectGrammarTraps,
   GRAMMAR_TRAP_CODES,
+  isEntryOverlayIssue,
   scoreAuthoringRun,
   scoreSyntaxQuiz,
 } from "./lib/template-authoring-score";
@@ -178,16 +192,16 @@ const ANSWER_SYNTAX_TOOL_NAME = "answer_syntax_questions";
 const AUTHORING_SYSTEM_PROMPT = [
   "You are stella, a drafting assistant for lawyers. The user gives you a",
   "source document and asks for a reusable template. Work in three steps.",
-  "First mark the fillable values with {{markers}} and write the file with",
+  "First mark the fillable values with {{ markers }} and write the file with",
   `${WRITE_DOCX_TOOL_NAME}. Second call ${CREATE_TEMPLATE_TOOL_NAME} with a`,
   "name and, as docx_base64, the exact string write_docx returned; send no",
   "template_id. It answers with the field paths the document",
   `declares and the configure call to make next. Third call`,
   `${CONFIGURE_FIELDS_TOOL_NAME} with that template_id and one fields entry`,
-  "per path. Keep the document's",
-  "wording exactly as given; only replace the values that become fields. The",
-  "two reference resources below are the complete grammar and configuration",
-  "contract; follow them literally.",
+  "per path — for anything the marker's own filters did not already say. Keep",
+  "the document's wording exactly as given; only replace the values that",
+  "become fields. The two reference resources below are the complete grammar",
+  "and configuration contract; follow them literally.",
 ].join(" ");
 
 // The quiz executes no authoring tool, so it must not be told to call them:
@@ -221,7 +235,7 @@ const P = (text: string): string =>
   `<w:p><w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
 
 // A newline inside a cell starts a new paragraph, so a row-repeat can put its
-// `{{#each}}` opener in a paragraph of its own inside the first cell.
+// `{% for %}` opener in a paragraph of its own inside the first cell.
 const TC = (text: string): string =>
   `<w:tc>${text.split("\n").map(P).join("")}</w:tc>`;
 
@@ -392,12 +406,18 @@ const advertisedWithoutUnservedInputs = (
 };
 
 /**
- * The tool schema the model sees. `toTanStackToolSchema` gives the same
- * Standard Schema validation `fill_template`'s eval uses, but these inputs
- * carry `check` / `partial_check` actions that have no JSON Schema
- * projection; each definition already declares that waiver and derives the
- * wire schema every MCP client is served, so the projection is taken from
- * there instead of re-derived.
+ * The tool schema the model sees: the exact wire schema every MCP client is
+ * served for this tool (each definition declares the projection waiver its
+ * `check` / `partial_check` actions need, so the projection is taken from
+ * there rather than re-derived).
+ *
+ * Validation is deliberately NOT done here. Production parses the input inside
+ * the tool site and hands the parsed value to the handler, which is best
+ * effort for some calls — an overlay entry it cannot apply comes back in
+ * `issues[]` while the entries beside it still apply. A transport that
+ * pre-validated would turn such a call into a refusal the production server
+ * never makes, and the handler would never run to record the attempt. One
+ * validation, in the one place production does it.
  */
 const productionToolSchema = (definition: {
   name: string;
@@ -414,6 +434,7 @@ const productionToolSchema = (definition: {
     ...schema,
     "~standard": {
       ...schema["~standard"],
+      validate: (value: unknown) => ({ value }),
       jsonSchema: { input: wireSchema, output: wireSchema },
     },
   };
@@ -443,9 +464,11 @@ type SaveOutcome =
       status: "saved";
       buffer: Buffer;
       manifest: TemplateManifest;
-      /** Entries the configuration could not apply. The rest were applied, so
-       *  this is a defect list, not a rejection. */
-      overlayIssues: readonly string[];
+      /** What the configuration could not apply, unformatted, as the engine
+       *  and the tool site reported it: an entry that did not land, or one
+       *  property dropped out of an entry that did. The rest were applied,
+       *  so this is a defect list, not a rejection. */
+      issues: readonly FieldOverlayIssue[];
       /** Field paths after the overlay is folded back into discovery: a
        *  lookup parent's named-format markers disappear here exactly as they
        *  do for a stored template. */
@@ -503,9 +526,13 @@ const configurableTemplatePaths = (
  */
 const saveTemplateInMemory = async ({
   docxBase64,
+  manifest: storedManifest,
   overlay,
 }: {
   docxBase64: string;
+  /** The manifest the template already carries, which a configure call
+   *  refines. Null on the create call, which has none yet. */
+  manifest: TemplateManifest | null;
   overlay: readonly FieldMeta[] | undefined;
 }): Promise<SaveOutcome> => {
   const buffer = Buffer.from(docxBase64, "base64");
@@ -526,29 +553,15 @@ const saveTemplateInMemory = async ({
   }
 
   const discovered = await discoverTemplate(buffer);
-  const baseFields: FieldMeta[] = mergeManifestWithDiscovery(
-    null,
+  // The manifest this call starts from: the document layer a marker's own
+  // filters declare (`{{ landlord_name | contact("displayName") }}`) under
+  // whatever the template already stored. `resolveTemplateFieldOverlay` is
+  // the function and the layer order production resolves it with.
+  const base = resolveTemplateFieldOverlay({
     discovered,
-  ).map((field) => ({
-    path: field.path,
-    label: field.label,
-    hint: field.hint,
-    inputType: field.inputType,
-    options: field.options,
-    validation: field.validation,
-    required: field.required,
-    aiPrompt: field.aiPrompt,
-    aiAdapt: field.aiAdapt,
-    aiSeesDocument: field.aiSeesDocument,
-    parts: field.parts,
-    format: field.format,
-    optionsFrom: field.optionsFrom,
-    lookup: field.lookup,
-    formula: field.formula,
-    condition: field.condition,
-    conditionAst: field.conditionAst,
-    dateFormat: field.dateFormat,
-  }));
+    manifest: storedManifest,
+    overlay: undefined,
+  });
 
   const structureErrors = discovered.structureErrors.map(
     (error) => `${error.directive}: ${error.message}`,
@@ -558,21 +571,19 @@ const saveTemplateInMemory = async ({
   // the DOCX's own markers, apply the ones that hold, report the rest. The
   // eval used to keep a second, stricter rule here (an overlay path had to be
   // one of the merged manifest paths), which refused a loop's item path -
-  // `attorneys.name` inside `{{#each attorneys}}` - that the service accepts.
+  // `attorneys.name` inside `{% for a in attorneys %}` - that the service accepts.
   // Measuring the contract means running the contract's own validator.
   const { applied, issues } = partitionFieldOverlay({
-    configured: baseFields,
+    configured: base.fields,
     discovered,
     overlay: overlay ?? [],
   });
-  const manifest = applyFieldOverlay(
-    { version: 1, fields: baseFields },
-    applied,
-  );
+  const manifest = resolveTemplateFieldOverlay({
+    discovered,
+    manifest: base,
+    overlay: applied,
+  });
   const withManifest = await writeManifest(buffer, manifest);
-  const overlayIssues = issues.map(
-    (issue) => `${issue.path}: ${issue.message} ${issue.hint}`,
-  );
   const resolvedPaths = mergeManifestWithDiscovery(manifest, discovered).map(
     (field) => field.path,
   );
@@ -580,7 +591,7 @@ const saveTemplateInMemory = async ({
     status: "saved",
     buffer: withManifest,
     manifest,
-    overlayIssues,
+    issues,
     resolvedPaths,
     configurablePaths: configurableTemplatePaths(discovered),
     structureErrors,
@@ -607,7 +618,6 @@ const neutralizeExternalSources = (
 type RoundTripResult = {
   defects: RoundTripDefects;
   text: string;
-  error: string | null;
 };
 
 const runRoundTrip = async ({
@@ -630,7 +640,9 @@ const runRoundTrip = async ({
   };
   const filled = await fillTemplateDocx({
     source,
-    values: { ...task.fillValues },
+    // The engine formats in place (a loop row's date is written back into
+    // the row object), so the shared task fixture must not reach it.
+    values: structuredClone(task.fillValues),
     scopedDb: buildStubScopedDb(),
     organizationId,
     requiredFields: "allow-partial",
@@ -639,22 +651,33 @@ const runRoundTrip = async ({
     return panic("allow-partial fill returned a rejection");
   }
   if ("error" in filled) {
-    // The fill never rendered, so there is nothing to inspect; the caller
-    // reports the rejection itself, which is what makes the run partial.
-    return { defects: cleanRoundTrip(), text: "", error: filled.error };
+    // The fill never rendered, so there is nothing to inspect. It is the
+    // round trip that failed: the entries the call carried had all landed.
+    return {
+      defects: { ...cleanRoundTrip(), fillError: filled.error },
+      text: "",
+    };
   }
   const document = await readFilledDocument(filled.buffer);
   const leftoverMarkers = [...document.text.matchAll(/\{\{/gu)].length;
   return {
-    defects: { ...task.checkRoundTrip(document), leftoverMarkers },
+    defects: {
+      ...task.checkRoundTrip(document),
+      leftoverMarkers,
+      fillError: null,
+    },
     text: document.text,
-    error: null,
   };
 };
 
 // ── Tasks ─────────────────────────────────────────────────
 
-type TaskRoundTripCheck = Omit<RoundTripDefects, "leftoverMarkers">;
+/** A task inspects what rendered, so the defects only the fill itself can
+ *  report are not its to return. */
+type TaskRoundTripCheck = Omit<
+  RoundTripDefects,
+  "leftoverMarkers" | "fillError"
+>;
 
 type EvalTask = {
   id: string;
@@ -734,7 +757,7 @@ const POA_SOURCE: AuthoredBlock[] = [
   { type: "paragraph", text: "Warszawa, dnia 12 marca 2026 r." },
   {
     type: "paragraph",
-    text: "Jan Kowalski, Prezes Zarządu / President of the Management Board",
+    text: "Tomasz Nowicki, Prezes Zarządu / President of the Management Board",
   },
 ];
 
@@ -853,7 +876,7 @@ const TASKS: EvalTask[] = [
       "company.krs": "0000123456",
       attorneys: POA_ATTORNEYS.map((name) => ({ name })),
       signing_date: POA_SIGNING_DATE,
-      signatory_name: "Jan Kowalski",
+      signatory_name: "Tomasz Nowicki",
       signatory_role: "Prezes Zarządu",
       scope:
         "reprezentowanie Mocodawcy przed sądami powszechnymi i organami administracji",
@@ -938,7 +961,7 @@ const TASKS: EvalTask[] = [
       strana_b: "Bohemia Data a.s.",
       ucinnost_od: "2026-04-01",
       rozhodne_pravo: "České republiky",
-      // Filled false on purpose: a penalty clause left outside an `{{#if}}`
+      // Filled false on purpose: a penalty clause left outside an `{% if %}`
       // survives the fill, which is the only way to tell a real conditional
       // from an ordinary paragraph the model happened not to touch.
       smluvni_pokuta: false,
@@ -969,7 +992,7 @@ const TASKS: EvalTask[] = [
     },
     checkRoundTrip: ({ text }) => ({
       blankRepeatedRows: 0,
-      // The flag is false, so an `{{#if}}`-wrapped clause is gone; an
+      // The flag is false, so an `{% if %}`-wrapped clause is gone; an
       // unconditional paragraph is still here.
       conditionalRowKept: digitsOf(text).includes("100000"),
       dateLocaleMismatch: false,
@@ -1041,7 +1064,7 @@ const TASKS: EvalTask[] = [
       // The flag is false, so nothing but the header and the three
       // deliverables may remain. A row emptied of its text but left in the
       // table counts as kept: today's engine strips the paragraphs of a
-      // row-mode `{{#if}}` without removing the row.
+      // row-mode `{% if %}` without removing the row.
       return {
         blankRepeatedRows,
         conditionalRowKept: rows.slice(1).some((row) => !isDeliverableRow(row)),
@@ -1060,16 +1083,19 @@ const TASKS: EvalTask[] = [
       "- `landlord_name` kommt aus dem Mandantenkontakt (Anzeigename), nicht",
       "  aus einer Eingabe.",
       "- `tenant_name` ist ein einfacher Wert.",
-      "- `property_address` ist ein zusammengesetztes Feld mit den Teilen",
-      "  `street`, `postal_code` und `city`, zusammengefügt als",
-      "  `{{street}}, {{postal_code}} {{city}}`.",
+      "- Die Anschrift des Mietobjekts steht als drei Felder im Dokument:",
+      "  `property_address.street`, `property_address.postal_code` und",
+      "  `property_address.city`. Die Interpunktion dazwischen schreibst du",
+      "  als Dokumenttext.",
       "- `base_rent` ist eine Zahl (die monatliche Kaltmiete).",
       "- `annual_rent` wird aus `base_rent` berechnet: `base_rent * 12`.",
     ].join("\n"),
     expectedPaths: [
       "landlord_name",
       "tenant_name",
-      "property_address",
+      "property_address.street",
+      "property_address.postal_code",
+      "property_address.city",
       "base_rent",
       "annual_rent",
     ],
@@ -1101,20 +1127,13 @@ const TASKS: EvalTask[] = [
       } else if (source.kind !== "contact" || source.field !== "displayName") {
         defects.push(`landlord_name binding is ${source.kind}/${source.field}`);
       }
-      const address = fieldAt(fields, "property_address");
-      const partKeys = new Set((address?.parts ?? []).map((part) => part.key));
+      // The address is three fields with the punctuation between them written
+      // as document text: composites are configuration a marker cannot carry,
+      // and they go with the overlay.
       for (const key of ["street", "postal_code", "city"]) {
-        if (!partKeys.has(key)) {
-          defects.push(`property_address has no "${key}" part`);
+        if (fieldAt(fields, `property_address.${key}`) === undefined) {
+          defects.push(`property_address.${key} is not a field`);
         }
-      }
-      const format = address?.format ?? "";
-      if (
-        !["street", "postal_code", "city"].every((key) =>
-          format.includes(`{{${key}}}`),
-        )
-      ) {
-        defects.push("property_address format does not join all three parts");
       }
       if (fieldAt(fields, "base_rent")?.inputType !== "number") {
         defects.push("base_rent is not a number");
@@ -1128,9 +1147,10 @@ const TASKS: EvalTask[] = [
       return defects;
     },
     checkRoundTrip: ({ text }) => ({
-      // The composite address and the derived annual rent must both render.
+      // The address parts and the derived annual rent must all render, with
+      // the document's own punctuation joining the three.
       blankRepeatedRows:
-        (text.includes("Hauptstraße 14") ? 0 : 1) +
+        (text.includes("Hauptstraße 14, 80331 München") ? 0 : 1) +
         (digitsOf(text).includes("15000") ? 0 : 1),
       conditionalRowKept: false,
       dateLocaleMismatch: false,
@@ -1141,33 +1161,33 @@ const TASKS: EvalTask[] = [
 // ── Syntax quiz ───────────────────────────────────────────
 
 const SYNTAX_QUIZ_QUESTIONS = {
-  each_closer: {
-    question: "Which marker closes a `{{#each attorneys}}` block?",
-    expected: "{{/each}}",
+  loop_closer: {
+    question: "Which tag closes a `{% for attorney in attorneys %}` block?",
+    expected: "{% endfor %}",
   },
   item_reference: {
     question:
-      "Inside `{{#each attorneys}}`, which marker renders the current item's `name`?",
-    expected: "{{attorneys.name}}",
+      "Inside `{% for attorney in attorneys %}`, which marker renders the current item's `name`?",
+    expected: "{{ attorney.name }}",
   },
-  this_prefix_supported: {
+  legacy_marker_supported: {
     question:
-      "Is a `this.` prefix (`{{this.name}}`) a supported way to reference the current item? true or false.",
+      "Is `{{#each attorneys}}` still a supported way to open a loop? true or false.",
     expected: false,
   },
   first_item_reference: {
     question:
       "Outside any loop, which marker renders the FIRST attorney's `name`?",
-    expected: "{{attorneys.0.name}}",
+    expected: "{{ attorneys.0.name }}",
   },
   condition_for_tick_box: {
     question:
-      "A person ticks a yes/no box that drives `{{#if penalty_applies}}`. Does `penalty_applies` need a `condition` in the fields overlay? true or false.",
+      "A person ticks a yes/no box that drives `{% if penalty_applies %}`. Does `penalty_applies` need a `condition(...)` filter? true or false.",
     expected: false,
   },
   block_marker_own_paragraph: {
     question:
-      "Outside a table row, must a block marker (`{{#each}}`, `{{#if}}`, `{{/each}}`, `{{/if}}`) occupy a paragraph of its own? true or false.",
+      "Outside a table row, must a block tag (`{% for %}`, `{% if %}`, `{% endfor %}`, `{% endif %}`) occupy a paragraph of its own? true or false.",
     expected: true,
   },
   bilingual_same_path: {
@@ -1178,16 +1198,16 @@ const SYNTAX_QUIZ_QUESTIONS = {
   lookup_format_marker: {
     question:
       "A lookup field at path `company` declares a named format with key `address`. Which marker renders that format?",
-    expected: "{{company.address}}",
+    expected: "{{ company.address }}",
   },
 } as const;
 
 type QuizKey = keyof typeof SYNTAX_QUIZ_QUESTIONS;
 
 const SYNTAX_QUIZ_ANSWER_SCHEMA = v.strictObject({
-  each_closer: v.string(),
+  loop_closer: v.string(),
   item_reference: v.string(),
-  this_prefix_supported: v.boolean(),
+  legacy_marker_supported: v.boolean(),
   first_item_reference: v.string(),
   condition_for_tick_box: v.boolean(),
   block_marker_own_paragraph: v.boolean(),
@@ -1210,9 +1230,10 @@ true satisfies [
  *  reading each question's `expected`, so a new question carries its answer
  *  with it. */
 const SYNTAX_QUIZ_EXPECTED: Record<QuizKey, string | boolean> = {
-  each_closer: SYNTAX_QUIZ_QUESTIONS.each_closer.expected,
+  loop_closer: SYNTAX_QUIZ_QUESTIONS.loop_closer.expected,
   item_reference: SYNTAX_QUIZ_QUESTIONS.item_reference.expected,
-  this_prefix_supported: SYNTAX_QUIZ_QUESTIONS.this_prefix_supported.expected,
+  legacy_marker_supported:
+    SYNTAX_QUIZ_QUESTIONS.legacy_marker_supported.expected,
   first_item_reference: SYNTAX_QUIZ_QUESTIONS.first_item_reference.expected,
   condition_for_tick_box: SYNTAX_QUIZ_QUESTIONS.condition_for_tick_box.expected,
   block_marker_own_paragraph:
@@ -1221,10 +1242,12 @@ const SYNTAX_QUIZ_EXPECTED: Record<QuizKey, string | boolean> = {
   lookup_format_marker: SYNTAX_QUIZ_QUESTIONS.lookup_format_marker.expected,
 };
 
+const SYNTAX_QUIZ_QUESTION_COUNT = Object.keys(SYNTAX_QUIZ_QUESTIONS).length;
+
 const SYNTAX_QUIZ_PROMPT = [
-  "Answer these eight questions about the stella template marker grammar by",
-  `calling ${ANSWER_SYNTAX_TOOL_NAME} exactly once. Give each marker answer`,
-  "as the complete marker including its braces.",
+  `Answer these ${SYNTAX_QUIZ_QUESTION_COUNT} questions about the stella`,
+  `template marker grammar by calling ${ANSWER_SYNTAX_TOOL_NAME} exactly`,
+  "once. Give each marker answer as the complete marker including its braces.",
   "",
   ...Object.entries(SYNTAX_QUIZ_QUESTIONS).map(
     ([key, { question }]) => `- ${key}: ${question}`,
@@ -1248,6 +1271,14 @@ const authoredBlockSchema = v.variant("type", [
   }),
 ]);
 
+const WRITE_DOCX_INPUT_SCHEMA = v.strictObject({
+  blocks: v.pipe(
+    v.array(authoredBlockSchema),
+    v.minLength(1),
+    v.description("The document in order: paragraphs and tables."),
+  ),
+});
+
 const WRITE_DOCX_DESCRIPTION =
   "Write the marked-up document to a .docx file. This stands in for the DOCX " +
   "writer an MCP client runs locally. Pass `blocks` in document order, one " +
@@ -1259,9 +1290,32 @@ const WRITE_DOCX_DESCRIPTION =
   "is the only way the document reaches the tool.";
 
 type ToolTrace = { name: string; input: unknown };
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The message inside a refused tool result, for the trace. */
+const toolErrorText = (result: unknown): string => {
+  const content = isPlainRecord(result) ? result["content"] : undefined;
+  const [first] = Array.isArray(content) ? content : [];
+  return isPlainRecord(first) && typeof first["text"] === "string"
+    ? first["text"]
+    : "validation_error";
+};
 type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
 
 const EVAL_TEMPLATE_ID = "00000000-0000-4000-8000-00000000e7a1";
+
+/**
+ * The tools of one run, plus the replay entry point a recorded trace goes
+ * through. A model turn calls the handlers through `tools`; `--rescore` calls
+ * the same handlers with the same inputs through `replay`. One
+ * implementation, so a rescored run and a live one cannot drift.
+ */
+type AuthoringToolSet = {
+  tools: AnyServerTool[];
+  replay: (call: ToolTrace) => Promise<void>;
+};
 
 const createAuthoringTools = ({
   trace,
@@ -1271,26 +1325,22 @@ const createAuthoringTools = ({
   trace: ToolTrace[];
   saveCalls: SaveCall[];
   writeCalls: WrittenDocx[];
-}): AnyServerTool[] => {
+}): AuthoringToolSet => {
   const written = new Map<string, Buffer>();
-  // The one template this run may create, kept as the bytes the create call
-  // accepted so the configure call overlays the same document, beside the
-  // display name configure echoes back the way production describes it.
-  let stored: { docxBase64: string; name: string | undefined } | null = null;
+  // The one template this run may create: the bytes the create call accepted,
+  // so a configure call overlays the same document, the display name configure
+  // echoes back the way production describes it, and the manifest the last
+  // accepted call left on it. A second configure refines the first one's
+  // result exactly as it does against a stored template.
+  let stored: {
+    docxBase64: string;
+    name: string | undefined;
+    manifest: TemplateManifest;
+  } | null = null;
 
-  const writeDocxTool = toolDefinition({
-    name: WRITE_DOCX_TOOL_NAME,
-    description: WRITE_DOCX_DESCRIPTION,
-    inputSchema: toTanStackToolSchema(
-      v.strictObject({
-        blocks: v.pipe(
-          v.array(authoredBlockSchema),
-          v.minLength(1),
-          v.description("The document in order: paragraphs and tables."),
-        ),
-      }),
-    ),
-  }).server(async ({ blocks }) => {
+  const handleWriteDocx = async ({
+    blocks,
+  }: v.InferOutput<typeof WRITE_DOCX_INPUT_SCHEMA>) => {
     trace.push({ name: WRITE_DOCX_TOOL_NAME, input: { blocks } });
     const ref = `docx#${String(written.size + 1)}`;
     const authored: AuthoredBlock[] = blocks.map((block) =>
@@ -1304,7 +1354,7 @@ const createAuthoringTools = ({
     // Named after the parameter it feeds: copying a value into a property of
     // the same name is one step, inferring the mapping is a guess.
     return { docx_base64: ref, bytes: buffer.byteLength };
-  });
+  };
 
   /** Record one attempt at the create/configure pair, in the shape scoring
    *  reads: the saved document's blocks, the overlay it carried, the outcome. */
@@ -1328,11 +1378,7 @@ const createAuthoringTools = ({
     });
   };
 
-  const createTemplateTool = toolDefinition({
-    name: CREATE_TEMPLATE_TOOL_NAME,
-    description: CREATE_TEMPLATE_TOOL_DEFINITION.description,
-    inputSchema: productionToolSchema(CREATE_TEMPLATE_TOOL_DEFINITION),
-  }).server(async (input: unknown) => {
+  const handleCreateTemplate = async (input: unknown) => {
     trace.push({ name: CREATE_TEMPLATE_TOOL_NAME, input });
     const parsed = v.safeParse(
       CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
@@ -1365,6 +1411,7 @@ const createAuthoringTools = ({
     const docxBase64 = writtenDocx?.toString("base64") ?? ref;
     const outcome = await saveTemplateInMemory({
       docxBase64,
+      manifest: null,
       overlay: undefined,
     });
     await recordAttempt({ outcome, overlay: [], step: "create" });
@@ -1374,7 +1421,11 @@ const createAuthoringTools = ({
     if (outcome.status === "rejected") {
       return { error: "validation_error", issues: outcome.issues };
     }
-    stored = { docxBase64, name: parsed.output.name };
+    stored = {
+      docxBase64,
+      name: parsed.output.name,
+      manifest: outcome.manifest,
+    };
     return {
       templateId: EVAL_TEMPLATE_ID,
       name: parsed.output.name,
@@ -1388,22 +1439,18 @@ const createAuthoringTools = ({
         })),
       },
     };
-  });
+  };
 
-  const configureFieldsTool = toolDefinition({
-    name: CONFIGURE_FIELDS_TOOL_NAME,
-    description: CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.description,
-    inputSchema: productionToolSchema(
-      CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
-    ),
-  }).server(async (input: unknown) => {
+  const handleConfigureFields = async (input: unknown) => {
     trace.push({ name: CONFIGURE_FIELDS_TOOL_NAME, input });
-    const parsed = v.safeParse(
-      CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource,
-      input,
+    // The tool site's own reader, not a second one: it is best effort per
+    // property and per entry, so what the eval counts as a contract rejection
+    // is what the production server returns.
+    const parsed = parseConfigureEntries(
+      isPlainRecord(input) ? input : { fields: input },
     );
-    if (!parsed.success) {
-      const issues = validationIssues(parsed.issues);
+    if (parsed.type === "rejected") {
+      const issues = [`the call was refused: ${toolErrorText(parsed.result)}`];
       await recordAttempt({
         outcome: { status: "rejected", issues },
         overlay: [],
@@ -1411,7 +1458,7 @@ const createAuthoringTools = ({
       });
       return { error: "validation_error", issues };
     }
-    const overlay = parsed.output.fields.map(toFieldMetaToolInput);
+    const overlay = parsed.fields;
     if (stored === null) {
       const issues = [
         `template_id: no template exists yet; call ${CREATE_TEMPLATE_TOOL_NAME} first`,
@@ -1425,9 +1472,9 @@ const createAuthoringTools = ({
     }
     // The run holds one template. Any other id names a template production
     // would not find, so the overlay must not reach the stored document.
-    if (parsed.output.template_id !== EVAL_TEMPLATE_ID) {
+    if (parsed.templateId !== EVAL_TEMPLATE_ID) {
       const issues = [
-        `template_id: no template ${parsed.output.template_id} exists; pass the template_id ${CREATE_TEMPLATE_TOOL_NAME} returned`,
+        `template_id: no template ${parsed.templateId} exists; pass the template_id ${CREATE_TEMPLATE_TOOL_NAME} returned`,
       ];
       await recordAttempt({
         outcome: { status: "rejected", issues },
@@ -1438,9 +1485,22 @@ const createAuthoringTools = ({
     }
     const outcome = await saveTemplateInMemory({
       docxBase64: stored.docxBase64,
+      manifest: stored.manifest,
       overlay,
     });
-    await recordAttempt({ outcome, overlay, step: "configure" });
+    if (outcome.status === "saved") {
+      stored = { ...stored, manifest: outcome.manifest };
+    }
+    // The properties and entries the tool site dropped are part of what the
+    // call reported, so they are part of what the run is scored on.
+    await recordAttempt({
+      outcome:
+        outcome.status === "saved" && parsed.issues.length > 0
+          ? { ...outcome, issues: [...outcome.issues, ...parsed.issues] }
+          : outcome,
+      overlay,
+      step: "configure",
+    });
     if (outcome.status === "invalid-docx") {
       return { error: "validation_error", issues: [outcome.reason] };
     }
@@ -1449,11 +1509,52 @@ const createAuthoringTools = ({
     }
     return {
       name: stored.name,
+      issues: parsed.issues.map(({ message, path }) => `${path}: ${message}`),
       fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
-  });
+  };
 
-  return [writeDocxTool, createTemplateTool, configureFieldsTool];
+  const tools = [
+    toolDefinition({
+      name: WRITE_DOCX_TOOL_NAME,
+      description: WRITE_DOCX_DESCRIPTION,
+      inputSchema: toTanStackToolSchema(WRITE_DOCX_INPUT_SCHEMA),
+    }).server(handleWriteDocx),
+    toolDefinition({
+      name: CREATE_TEMPLATE_TOOL_NAME,
+      description: CREATE_TEMPLATE_TOOL_DEFINITION.description,
+      inputSchema: productionToolSchema(CREATE_TEMPLATE_TOOL_DEFINITION),
+    }).server(handleCreateTemplate),
+    toolDefinition({
+      name: CONFIGURE_FIELDS_TOOL_NAME,
+      description: CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.description,
+      inputSchema: productionToolSchema(
+        CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
+      ),
+    }).server(handleConfigureFields),
+  ];
+
+  const replay = async ({ input, name }: ToolTrace): Promise<void> => {
+    if (name === WRITE_DOCX_TOOL_NAME) {
+      const parsed = v.safeParse(WRITE_DOCX_INPUT_SCHEMA, input);
+      // A recorded write_docx input passed this schema before the handler ran
+      // live; anything else authored no document then either.
+      if (parsed.success) {
+        await handleWriteDocx(parsed.output);
+      }
+      return;
+    }
+    if (name === CREATE_TEMPLATE_TOOL_NAME) {
+      await handleCreateTemplate(input);
+      return;
+    }
+    if (name === CONFIGURE_FIELDS_TOOL_NAME) {
+      await handleConfigureFields(input);
+    }
+    // Anything else is a `(raw)` entry, which never reached a handler live.
+  };
+
+  return { tools, replay };
 };
 
 const createQuizTool = ({
@@ -1462,18 +1563,30 @@ const createQuizTool = ({
 }: {
   trace: ToolTrace[];
   answers: Record<string, unknown>[];
-}): AnyServerTool[] => [
-  toolDefinition({
-    name: ANSWER_SYNTAX_TOOL_NAME,
-    description:
-      "Answer the eight marker-grammar questions. Every property is required.",
-    inputSchema: toTanStackToolSchema(SYNTAX_QUIZ_ANSWER_SCHEMA),
-  }).server(async (input) => {
+}): AuthoringToolSet => {
+  const handleAnswer = async (input: Record<string, unknown>) => {
     trace.push({ name: ANSWER_SYNTAX_TOOL_NAME, input });
     answers.push({ ...input });
     return await Promise.resolve({ received: true });
-  }),
-];
+  };
+  return {
+    tools: [
+      toolDefinition({
+        name: ANSWER_SYNTAX_TOOL_NAME,
+        description: `Answer the ${SYNTAX_QUIZ_QUESTION_COUNT} marker-grammar questions. Every property is required.`,
+        inputSchema: toTanStackToolSchema(SYNTAX_QUIZ_ANSWER_SCHEMA),
+      }).server(handleAnswer),
+    ],
+    // A recorded answer is what the handler already stored, so it replays as
+    // it stands: re-validating it here would refuse an answer the live turn
+    // scored.
+    replay: async ({ input, name }) => {
+      if (name === ANSWER_SYNTAX_TOOL_NAME && isPlainRecord(input)) {
+        await handleAnswer(input);
+      }
+    },
+  };
+};
 
 // ── CLI ───────────────────────────────────────────────────
 
@@ -1482,6 +1595,8 @@ type CliOptions = {
   runs: number;
   taskFilter: string | null;
   jsonPath: string | null;
+  /** A previous run's JSON to replay instead of calling any model. */
+  rescorePath: string | null;
 };
 
 const parseArgs = (argv: readonly string[]): CliOptions => {
@@ -1490,6 +1605,7 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
     runs: DEFAULT_RUNS,
     taskFilter: null,
     jsonPath: null,
+    rescorePath: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv.at(index);
@@ -1515,6 +1631,10 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
         break;
       case "--json":
         options.jsonPath = value;
+        index += 1;
+        break;
+      case "--rescore":
+        options.rescorePath = value;
         index += 1;
         break;
       default:
@@ -1656,11 +1776,17 @@ const buildAttempt = async ({
         booleanInputPaths: task.booleanInputPaths,
       }),
       overlayIssues: [
-        ...outcome.overlayIssues,
+        ...outcome.issues
+          .filter(isEntryOverlayIssue)
+          .map((issue) => `${issue.path}: ${issue.message} ${issue.hint}`),
         ...extraIssues,
         ...outcome.structureErrors,
-        ...(roundTrip.error === null ? [] : [`fill: ${roundTrip.error}`]),
       ],
+      // The hint every property drop carries is the same sentence; the column
+      // names the property, which is the part that differs.
+      propertyDrops: outcome.issues
+        .filter((issue) => !isEntryOverlayIssue(issue))
+        .map((issue) => `${issue.path}: ${issue.message}`),
       configDefects: task.checkConfig(outcome.manifest.fields),
       fidelity: checkSourceFidelity({
         authored: authoredParagraphs(call.blocks),
@@ -1708,36 +1834,30 @@ const buildUnsavedAttempt = async ({
   };
 };
 
-const runAuthoringTask = async ({
-  model,
+/**
+ * Score one authoring turn: the tool calls a model made, or the tool calls a
+ * recorded trace replayed. Everything past the turn — which save attempt
+ * counts, the fill round trip, the run's diagnostics — lives here so a
+ * rescored run cannot be scored by a second implementation.
+ */
+const scoreAuthoringTurn = async ({
   modelId,
-  task,
   repeat,
+  saveCalls,
+  task,
+  trace,
+  turn,
+  writeCalls,
 }: {
-  model: ResolvedTanStackTextModel;
   modelId: string;
-  task: EvalTask;
   repeat: number;
+  saveCalls: readonly SaveCall[];
+  task: EvalTask;
+  trace: ToolTrace[];
+  turn: ModelTurn;
+  writeCalls: readonly WrittenDocx[];
 }): Promise<EvalRun> => {
   const organizationId = mintAuthProviderId<"organization">();
-  const trace: ToolTrace[] = [];
-  const saveCalls: SaveCall[] = [];
-  const writeCalls: WrittenDocx[] = [];
-  const tools = createAuthoringTools({ trace, saveCalls, writeCalls });
-  const sourceDocx = await buildDocx(task.source);
-  const prompt = [
-    task.brief,
-    "",
-    "Source document:",
-    renderBlocks(await readDocxBlocks(sourceDocx)),
-  ].join("\n");
-
-  const turn = await runModelTurn({
-    model,
-    prompt,
-    systemPrompt: AUTHORING_SYSTEM_PROMPT,
-    tools,
-  });
   // Every call the advertised schema rejected before the handler ran, kept in
   // the trace: a pass rate without the payload the model actually sent cannot
   // say whether the model or the contract failed.
@@ -1869,26 +1989,62 @@ const runAuthoringTask = async ({
   };
 };
 
-const SYNTAX_QUIZ_TASK_ID = "syntax-quiz";
-
-const runSyntaxQuiz = async ({
+const runAuthoringTask = async ({
   model,
   modelId,
+  task,
   repeat,
 }: {
   model: ResolvedTanStackTextModel;
   modelId: string;
+  task: EvalTask;
   repeat: number;
 }): Promise<EvalRun> => {
   const trace: ToolTrace[] = [];
-  const answers: Record<string, unknown>[] = [];
-  const tools = createQuizTool({ trace, answers });
+  const saveCalls: SaveCall[] = [];
+  const writeCalls: WrittenDocx[] = [];
+  const { tools } = createAuthoringTools({ trace, saveCalls, writeCalls });
+  const sourceDocx = await buildDocx(task.source);
+  const prompt = [
+    task.brief,
+    "",
+    "Source document:",
+    renderBlocks(await readDocxBlocks(sourceDocx)),
+  ].join("\n");
+
   const turn = await runModelTurn({
     model,
-    prompt: SYNTAX_QUIZ_PROMPT,
-    systemPrompt: QUIZ_SYSTEM_PROMPT,
+    prompt,
+    systemPrompt: AUTHORING_SYSTEM_PROMPT,
     tools,
   });
+  return await scoreAuthoringTurn({
+    modelId,
+    repeat,
+    saveCalls,
+    task,
+    trace,
+    turn,
+    writeCalls,
+  });
+};
+
+const SYNTAX_QUIZ_TASK_ID = "syntax-quiz";
+
+/** Score one quiz turn, model-driven or replayed, from the answer it left. */
+const scoreQuizTurn = ({
+  answers,
+  modelId,
+  repeat,
+  trace,
+  turn,
+}: {
+  answers: readonly Record<string, unknown>[];
+  modelId: string;
+  repeat: number;
+  trace: ToolTrace[];
+  turn: ModelTurn;
+}): EvalRun => {
   const quiz = scoreSyntaxQuiz(answers.at(-1) ?? null, SYNTAX_QUIZ_EXPECTED);
   const quizOutcome = (): AuthoringRunScore["outcome"] => {
     if (turn.error !== null) {
@@ -1917,6 +2073,7 @@ const runSyntaxQuiz = async ({
       booleanInputPaths: [],
     }),
     overlayIssues: [],
+    propertyDrops: [],
     configDefects: [],
     fidelity: [],
     roundTrip: cleanRoundTrip(),
@@ -1936,6 +2093,160 @@ const runSyntaxQuiz = async ({
     trace,
     renderedText: null,
   };
+};
+
+const runSyntaxQuiz = async ({
+  model,
+  modelId,
+  repeat,
+}: {
+  model: ResolvedTanStackTextModel;
+  modelId: string;
+  repeat: number;
+}): Promise<EvalRun> => {
+  const trace: ToolTrace[] = [];
+  const answers: Record<string, unknown>[] = [];
+  const { tools } = createQuizTool({ trace, answers });
+  const turn = await runModelTurn({
+    model,
+    prompt: SYNTAX_QUIZ_PROMPT,
+    systemPrompt: QUIZ_SYSTEM_PROMPT,
+    tools,
+  });
+  return scoreQuizTurn({ answers, modelId, repeat, trace, turn });
+};
+
+// ── Rescoring a recorded run ──────────────────────────────
+
+/**
+ * The fields `--rescore` reads back out of a previous run's JSON. Only the
+ * turn's own record and its tool calls: everything else in the file is a
+ * score, which is exactly what this mode recomputes. Unknown properties are
+ * ignored, so a file written by a later version still replays.
+ */
+const RECORDED_RUN_SCHEMA = v.object({
+  modelId: v.string(),
+  taskId: v.string(),
+  repeat: v.number(),
+  error: v.nullable(v.string()),
+  finalText: v.string(),
+  latencyMs: v.number(),
+  // The per-category token breakdowns a provider may add are not read by
+  // anything the report prints, so they are not carried back.
+  usage: v.nullable(
+    v.object({
+      promptTokens: v.number(),
+      completionTokens: v.number(),
+      totalTokens: v.number(),
+    }),
+  ),
+  trace: v.array(v.object({ name: v.string(), input: v.unknown() })),
+});
+
+const RECORDED_EVAL_SCHEMA = v.object({
+  runs: v.array(RECORDED_RUN_SCHEMA),
+});
+
+type RecordedRun = v.InferOutput<typeof RECORDED_RUN_SCHEMA>;
+
+/** The suffix the live loop appends to a call that never reached a handler. */
+const RAW_CALL_SUFFIX = "(raw)";
+
+/**
+ * The turn a recorded run stands for. `rawCalls` is reconstructed from the
+ * trace, which holds every create/configure call the run made — the ones a
+ * handler ran and the `(raw)` ones it did not — so a replayed turn reaches the
+ * same branch of scoring the live one did.
+ */
+const recordedTurn = (run: RecordedRun): ModelTurn => ({
+  error: run.error,
+  finalText: run.finalText,
+  latencyMs: run.latencyMs,
+  usage: run.usage,
+  rawCalls: run.trace.flatMap(({ input, name }) => {
+    const called = name.endsWith(RAW_CALL_SUFFIX)
+      ? name.slice(0, -RAW_CALL_SUFFIX.length)
+      : name;
+    return called === CREATE_TEMPLATE_TOOL_NAME ||
+      called === CONFIGURE_FIELDS_TOOL_NAME
+      ? [{ name: called, input }]
+      : [];
+  }),
+});
+
+const rescoreAuthoringRun = async (
+  run: RecordedRun,
+  task: EvalTask,
+): Promise<EvalRun> => {
+  const trace: ToolTrace[] = [];
+  const saveCalls: SaveCall[] = [];
+  const writeCalls: WrittenDocx[] = [];
+  const { replay } = createAuthoringTools({ trace, saveCalls, writeCalls });
+  for (const call of run.trace) {
+    await replay(call);
+  }
+  return await scoreAuthoringTurn({
+    modelId: run.modelId,
+    repeat: run.repeat,
+    saveCalls,
+    task,
+    trace,
+    turn: recordedTurn(run),
+    writeCalls,
+  });
+};
+
+const rescoreQuizRun = async (run: RecordedRun): Promise<EvalRun> => {
+  const trace: ToolTrace[] = [];
+  const answers: Record<string, unknown>[] = [];
+  const { replay } = createQuizTool({ trace, answers });
+  for (const call of run.trace) {
+    await replay(call);
+  }
+  return scoreQuizTurn({
+    answers,
+    modelId: run.modelId,
+    repeat: run.repeat,
+    trace,
+    turn: recordedTurn(run),
+  });
+};
+
+/**
+ * Replay a recorded eval's tool calls through the save, configure and fill
+ * path a live run takes, with no model turn. What a harness or engine change
+ * does to the same authored bytes is then measurable without paying for the
+ * turns again.
+ */
+const rescoreRuns = async ({
+  path,
+  taskFilter,
+}: {
+  path: string;
+  taskFilter: string | null;
+}): Promise<EvalRun[]> => {
+  const recorded = v.parse(
+    RECORDED_EVAL_SCHEMA,
+    JSON.parse(await readFile(path, "utf-8")),
+  );
+  const runs: EvalRun[] = [];
+  for (const run of recorded.runs) {
+    if (taskFilter !== null && run.taskId !== taskFilter) {
+      continue;
+    }
+    process.stderr.write(
+      `rescore · ${run.modelId} · ${run.taskId} · run ${String(run.repeat)}\n`,
+    );
+    if (run.taskId === SYNTAX_QUIZ_TASK_ID) {
+      runs.push(await rescoreQuizRun(run));
+      continue;
+    }
+    const task =
+      TASKS.find((candidate) => candidate.id === run.taskId) ??
+      panic(`Recorded run names unknown task ${run.taskId}`);
+    runs.push(await rescoreAuthoringRun(run, task));
+  }
+  return runs;
 };
 
 // ── Report ────────────────────────────────────────────────
@@ -1965,6 +2276,7 @@ const roundTripCell = (roundTrip: RoundTripDefects): string =>
       : []),
     ...(roundTrip.conditionalRowKept ? ["row-not-dropped"] : []),
     ...(roundTrip.dateLocaleMismatch ? ["date-locale"] : []),
+    ...(roundTrip.fillError === null ? [] : [`fill: ${roundTrip.fillError}`]),
   ]);
 
 /** The four steps as the initials of the ones that were reached, so the
@@ -1984,8 +2296,8 @@ const renderReport = (runs: readonly EvalRun[]): string => {
     const modelRuns = runs.filter((run) => run.modelId === modelId);
     lines.push(`\n### ${modelId}\n`);
     lines.push(
-      "| task | run | outcome | steps | error | calls | missing | extra | traps | overlay | config | fidelity | round trip | tokens | ms |",
-      "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
+      "| task | run | outcome | steps | error | calls | missing | extra | traps | overlay | dropped | config | fidelity | round trip | tokens | ms |",
+      "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
     );
     for (const run of modelRuns) {
       const { score } = run;
@@ -2001,6 +2313,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           cell(score.paths.extra),
           trapsCell(score.traps),
           cell(score.overlayIssues),
+          cell(score.propertyDrops),
           cell(score.configDefects),
           cell(score.fidelity),
           roundTripCell(score.roundTrip),
@@ -2028,6 +2341,10 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           authoringRuns.filter((run) => run.score.steps[name]).length,
         )}/${String(authoringRuns.length)}`,
     ).join(", ");
+    const propertyDrops = modelRuns.reduce(
+      (total, run) => total + run.score.propertyDrops.length,
+      0,
+    );
     const quiz = modelRuns.find((run) => run.quiz !== null)?.quiz ?? null;
     const quizSummary =
       quiz === null
@@ -2035,7 +2352,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
         : `, syntax quiz ${String(quiz.correct)}/${String(quiz.total)}`;
     lines.push(
       "",
-      `passed ${String(passed)}/${String(modelRuns.length)}, ${stepTotals}, grammar traps ${String(traps)}${quizSummary}`,
+      `passed ${String(passed)}/${String(modelRuns.length)}, ${stepTotals}, grammar traps ${String(traps)}, property drops ${String(propertyDrops)}${quizSummary}`,
     );
   }
   return lines.join("\n");
@@ -2060,8 +2377,7 @@ const resolveModels = async (
   }));
 };
 
-const main = async () => {
-  const options = parseArgs(process.argv.slice(2));
+const runEval = async (options: CliOptions): Promise<EvalRun[]> => {
   const tasks = TASKS.filter(
     (task) => options.taskFilter === null || task.id === options.taskFilter,
   );
@@ -2088,6 +2404,18 @@ const main = async () => {
       }
     }
   }
+  return runs;
+};
+
+const main = async () => {
+  const options = parseArgs(process.argv.slice(2));
+  const runs =
+    options.rescorePath === null
+      ? await runEval(options)
+      : await rescoreRuns({
+          path: options.rescorePath,
+          taskFilter: options.taskFilter,
+        });
 
   process.stdout.write(`${renderReport(runs)}\n`);
   if (options.jsonPath !== null) {

@@ -611,7 +611,7 @@
       "singleReadWhen": "template_id"
     },
     "name": "list_templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. `arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -803,7 +803,7 @@
       "scope": "templates"
     },
     "name": "create_template",
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters configure the field. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields sets what the filters did not.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -864,7 +864,7 @@
       "scope": "templates"
     },
     "name": "configure_template_fields",
-    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The document's {{markers}} are untouched. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
+    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting. The document is untouched, and a filter written on a marker says the same thing. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
     "inputSchema": {
       "type": "object",
       "required": ["template_id", "fields"],
@@ -882,7 +882,7 @@
             "properties": {
               "path": {
                 "type": "string",
-                "description": "Field path; must match a {{marker}}"
+                "description": "Field path; must match a {{ marker }}"
               },
               "label": {
                 "type": "string",
@@ -917,7 +917,8 @@
                   },
                   "max_length": {
                     "type": "number",
-                    "description": "Maximum string length"
+                    "minimum": 1,
+                    "description": "Maximum string length, at least 1"
                   },
                   "min": {
                     "type": "number",
@@ -929,6 +930,7 @@
                   },
                   "pattern": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Regex for the whole value"
                   },
                   "min_items": {
@@ -937,7 +939,8 @@
                   },
                   "max_items": {
                     "type": "number",
-                    "description": "Maximum repeated items"
+                    "minimum": 1,
+                    "description": "Maximum repeated items, at least 1"
                   }
                 },
                 "required": [],
@@ -947,46 +950,6 @@
               "required": {
                 "type": "boolean",
                 "description": "Value is required"
-              },
-              "parts": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "key": {
-                      "type": "string",
-                      "description": "Part key used in format"
-                    },
-                    "label": {
-                      "type": "string",
-                      "description": "Part label"
-                    },
-                    "input_type": {
-                      "enum": ["text", "select"],
-                      "type": "string",
-                      "description": "Part input control"
-                    },
-                    "options": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "Allowed values for a select part"
-                    },
-                    "pattern": {
-                      "type": "string",
-                      "description": "Regex for the whole part value"
-                    }
-                  },
-                  "required": ["key", "input_type"],
-                  "additionalProperties": false
-                },
-                "minItems": 1,
-                "description": "Composite field parts"
-              },
-              "format": {
-                "type": "string",
-                "description": "Join template over the part keys"
               },
               "options_from": {
                 "type": "string",
@@ -2408,7 +2371,7 @@
                 "description": "Whether the paragraph is a template directive marker"
               },
               "directive_kind": {
-                "enum": ["if", "elseif", "else", "endif", "each", "endeach"],
+                "enum": ["if", "elif", "else", "endif", "for", "endfor"],
                 "type": "string",
                 "description": "Directive kind when is_directive is set"
               },

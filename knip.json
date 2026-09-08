@@ -17,6 +17,9 @@
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },
+    "packages/agent-input": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },
