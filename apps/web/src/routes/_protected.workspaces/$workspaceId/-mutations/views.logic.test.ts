@@ -35,16 +35,16 @@ const CACHED_VIEWS = ["overview", "table", "files", "kanban"].map(view);
 const CACHED_IDS = CACHED_VIEWS.map((cached) => cached.id);
 
 const seededClient = async () => {
-  const { viewsKeys } = await import("@/lib/workspaces/queries/views");
+  const { viewsOptions } = await import("@/lib/workspaces/queries/views");
   const queryClient = new QueryClient();
-  queryClient.setQueryData(viewsKeys.localized(WORKSPACE_ID), CACHED_VIEWS);
+  queryClient.setQueryData(viewsOptions(WORKSPACE_ID).queryKey, CACHED_VIEWS);
   return queryClient;
 };
 
 const cachedOrder = async (queryClient: QueryClient) => {
-  const { viewsKeys } = await import("@/lib/workspaces/queries/views");
+  const { viewsOptions } = await import("@/lib/workspaces/queries/views");
   return queryClient
-    .getQueryData<WorkspaceView[]>(viewsKeys.localized(WORKSPACE_ID))
+    .getQueryData(viewsOptions(WORKSPACE_ID).queryKey)
     ?.map((cached) => cached.id);
 };
 
@@ -146,7 +146,8 @@ describe("view reorder cache path", () => {
 
   test("invalidates every cached locale variant and navigation projection on settle", async () => {
     const { workspacesKeys } = await import("@/lib/workspaces/queries.logic");
-    const { viewsKeys } = await import("@/lib/workspaces/queries/views");
+    const { viewsKeys, viewsOptions } =
+      await import("@/lib/workspaces/queries/views");
     const { viewOrderCache } = await import("./views.logic");
     const queryClient = await seededClient();
 
@@ -162,7 +163,7 @@ describe("view reorder cache path", () => {
 
     await viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID }).settle();
 
-    for (const key of [viewsKeys.localized(WORKSPACE_ID), otherLocaleKey]) {
+    for (const key of [viewsOptions(WORKSPACE_ID).queryKey, otherLocaleKey]) {
       expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
     }
     expect(queryClient.getQueryState(navigationKey)?.isInvalidated).toBe(true);

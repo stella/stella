@@ -36,7 +36,7 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/lib/workspaces/queries";
+import { workspaceActivityOptions } from "@/lib/workspaces/queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,
@@ -507,14 +507,15 @@ describe("mergeGroupedChatThreadPages", () => {
 describe("invalidateChatThreadLists", () => {
   test("invalidates grouped threads and workspace activity together", async () => {
     const queryClient = new QueryClient();
-    const groupedKey = chatKeys.groupedThreads({
+    const groupedKey = groupedChatThreadsOptions({
       activeOrganizationId: "organization-a",
-    });
-    const activityKey = workspacesKeys.activity("organization-a", {
-      workspaceId: "workspace-a",
-    });
-    queryClient.setQueryData(groupedKey, { pages: [] });
-    queryClient.setQueryData(activityKey, { pages: [] });
+    }).queryKey;
+    const activityKey = workspaceActivityOptions({
+      activeOrganizationId: "organization-a",
+      key: { workspaceId: "workspace-a" },
+    }).queryKey;
+    queryClient.setQueryData(groupedKey, { pageParams: [], pages: [] });
+    queryClient.setQueryData(activityKey, { pageParams: [], pages: [] });
 
     await invalidateChatThreadLists({
       queryClient,

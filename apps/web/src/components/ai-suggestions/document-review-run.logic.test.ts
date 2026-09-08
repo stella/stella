@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   documentReviewRunDetailSeeds,
-  documentReviewRunKeys,
+  documentReviewRunOptions,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
   DecidedReviewFinding,
@@ -451,18 +451,17 @@ const SEEDED_WORKSPACE_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5ec0";
 describe("seeding a run's detail from the history answer", () => {
   test("pairs the latest run with the key the run panel reads", () => {
     const latest = cachedRun([finding(FIRST_FINDING_ID, "open")]);
+    const [seed] = documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, {
+      latest,
+    });
 
-    expect(
-      documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, { latest }),
-    ).toEqual([
-      [
-        documentReviewRunKeys.detail({
-          workspaceId: SEEDED_WORKSPACE_ID,
-          runId: COMPLETED_RUN_ID,
-        }),
-        latest,
-      ],
-    ]);
+    expect(seed?.[0].queryKey).toEqual(
+      documentReviewRunOptions({
+        workspaceId: SEEDED_WORKSPACE_ID,
+        runId: COMPLETED_RUN_ID,
+      }).queryKey,
+    );
+    expect(seed?.[1]).toBe(latest);
   });
 
   test("seeds nothing for a document with no runs", () => {
@@ -477,11 +476,11 @@ describe("seeding a run's detail from the history answer", () => {
       latest: { ...latest, run: { ...latest.run, id: OTHER_RUN_ID } },
     });
 
-    expect(seed?.[0]).toEqual(
-      documentReviewRunKeys.detail({
+    expect(seed?.[0].queryKey).toEqual(
+      documentReviewRunOptions({
         workspaceId: SEEDED_WORKSPACE_ID,
         runId: OTHER_RUN_ID,
-      }),
+      }).queryKey,
     );
   });
 });

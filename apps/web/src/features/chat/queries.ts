@@ -576,8 +576,9 @@ export const fileChatThreadOptions = ({
       // must reuse the draft id already bound for this key: the composer
       // keys its unsent draft on the thread id, so minting a fresh one here
       // would remount the overlay and orphan typed-but-unsent text.
-      const previous = client.getQueryData<FileChatThreadBinding>(
-        chatKeys.fileThread(activeOrganizationId, key),
+      const previous = client.getQueryData(
+        fileChatThreadOptions({ activeOrganizationId, key, hasDocxEditSurface })
+          .queryKey,
       );
       const threadId =
         fetched.threadId ??

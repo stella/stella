@@ -21,7 +21,7 @@ export type DecisionListFilters = {
   sourceId?: string;
 };
 
-export const caseLawDecisionKeys = {
+const caseLawDecisionKeys = {
   all: ["case-law-decisions"],
   facets: (country: string | undefined) => [
     ...caseLawDecisionKeys.all,

@@ -17,7 +17,7 @@ const STATUTE_LOOKUP_PAGE_SIZE = 5;
  */
 const STATUTE_VERSIONS_PAGE_SIZE = 200;
 
-export const decisionProvisionKeys = {
+const decisionProvisionKeys = {
   all: ["case-law-decisions", "provisions"],
   forDecision: (decisionId: string) => [
     ...decisionProvisionKeys.all,

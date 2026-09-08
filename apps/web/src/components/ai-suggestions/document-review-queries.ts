@@ -38,7 +38,7 @@ type DocumentReviewRunRef = {
 // Both members take the whole key object the query function reads, so the key
 // expression names exactly the value the fetch closes over rather than a
 // hand-listed subset of its fields.
-export const documentReviewRunKeys = {
+const documentReviewRunKeys = {
   all: (workspaceId: string) => ["document-review-runs", workspaceId] as const,
   history: (target: DocumentReviewRunTarget) =>
     [
@@ -173,8 +173,8 @@ export type DocumentReviewRunStatus = DocumentReviewRunSummary["status"];
 
 /**
  * The run-detail cache entries a history page can fill on its own: one pair
- * per run the page answered in full, keyed the way `documentReviewRunOptions`
- * reads it.
+ * per run the page answered in full, carrying the same options the run panel
+ * reads.
  *
  * The return type is stated rather than inferred, and that is the point: the
  * second member is the *point read's* type, so a `latest` projection that
@@ -182,7 +182,7 @@ export type DocumentReviewRunStatus = DocumentReviewRunSummary["status"];
  * shape the panel cannot read.
  */
 export type DocumentReviewRunDetailSeed = readonly [
-  ReturnType<typeof documentReviewRunKeys.detail>,
+  ReturnType<typeof documentReviewRunOptions>,
   DocumentReviewRunDetail,
 ];
 
@@ -195,10 +195,7 @@ export const documentReviewRunDetailSeeds = (
     return [];
   }
   return [
-    [
-      documentReviewRunKeys.detail({ workspaceId, runId: latest.run.id }),
-      latest,
-    ],
+    [documentReviewRunOptions({ workspaceId, runId: latest.run.id }), latest],
   ];
 };
 
@@ -214,11 +211,11 @@ export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
       // that mounts on this answer finds its run already there. Done here
       // rather than at a call site because the route loader starts this read
       // too, and the seed has to land whoever asked.
-      for (const [key, detail] of documentReviewRunDetailSeeds(
+      for (const [options, detail] of documentReviewRunDetailSeeds(
         target.workspaceId,
         page,
       )) {
-        client.setQueryData(key, detail);
+        client.setQueryData(options.queryKey, detail);
       }
       return page;
     },

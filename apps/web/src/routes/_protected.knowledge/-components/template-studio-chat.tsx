@@ -86,10 +86,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
-import {
-  chatKeys,
-  SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
-} from "@/features/chat/chat-query-contract";
+import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "@/features/chat/chat-query-contract";
 import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -227,9 +224,10 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       return false;
     }
     queryClient.setQueryData(
-      chatKeys.templateThread(activeOrganizationId, {
-        templateId: props.templateId,
-      }),
+      templateChatThreadOptions({
+        activeOrganizationId,
+        key: { templateId: props.templateId },
+      }).queryKey,
       toChatThreadId(rotated.value.threadId),
     );
     return true;
@@ -1455,7 +1453,10 @@ const TemplateStudioChatInner = ({
                   return;
                 }
                 const currentThreadId = queryClient.getQueryData(
-                  chatKeys.templateThread(activeOrganizationId, { templateId }),
+                  templateChatThreadOptions({
+                    activeOrganizationId,
+                    key: { templateId },
+                  }).queryKey,
                 );
                 if (currentThreadId !== submittingThreadId) {
                   return;

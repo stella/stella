@@ -17,7 +17,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //
 // Allowed:
 //   queryClient.invalidateQueries({ queryKey: contactsKeys.lists(orgId) })
-//   queryClient.setQueryData(chatKeys.thread(orgId, threadRef), next)
+//   queryClient.setQueryData(chatThreadOptions(input).queryKey, next)
 //   queryClient.invalidateQueries({
 //     predicate: (query) => matchesChatThread(query.queryKey, threadRef),
 //   })
@@ -241,7 +241,11 @@ export default eslintCompatPlugin({
                 ) {
                   continue;
                 }
-                const key = literalOf(property.value, "ArrayExpression", context);
+                const key = literalOf(
+                  property.value,
+                  "ArrayExpression",
+                  context,
+                );
                 if (!key) {
                   continue;
                 }

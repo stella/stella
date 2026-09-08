@@ -12,3 +12,14 @@
 
 - Web code returns `Result`; `try`/`catch` belongs only to the boundary modules
   listed in `scripts/result-boundary-globs.ts`.
+
+## Typed Query Cache Access
+
+- Use the owning query options' `.queryKey` for `getQueryData` and `setQueryData`;
+  infer data from that key instead of passing explicit type arguments. An inferred
+  `const` alias preserves the tag; a standalone key factory or `QueryKey` annotation
+  does not. `require-query-options-key` enforces this in production web code.
+- Keep named `*Options` exports and `*Keys` prefixes for family invalidation.
+  Shared cache helpers may accept a TanStack `DataTag` parameter when their contract
+  genuinely spans multiple query producers. Do not manufacture options or cast a
+  bare key to satisfy the rule.

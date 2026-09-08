@@ -289,6 +289,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-query-key-factory.fixture.ts", [
     "require-query-key-factory/require-query-key-factory",
   ]),
+  fixtureRuleOverride("require-query-options-key.fixture.ts", [
+    "require-query-options-key/require-query-options-key",
+  ]),
   fixtureRuleOverride("stella-toast.fixture.ts", ["stella-toast/stella-toast"]),
   fixtureRuleOverride("suppression-hygiene.fixture.ts", [
     "suppression-hygiene/no-foreign-directive",
@@ -1077,6 +1080,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
+    "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
@@ -1975,14 +1979,15 @@ export default defineConfig({
       },
     },
     {
-      // Cache invalidation must go through the per-feature key factories:
-      // a hand-typed key or an inline positional predicate keeps compiling
-      // after the factory's shape moves, and silently matches nothing.
+      // Prefix invalidation uses per-feature key factories; exact cache
+      // reads/writes use options-derived keys to retain the data tag.
+      // Hand-typed keys and predicates drift when the factory's shape moves.
       // Tests may pin a key's wire shape, so they state literals directly.
       files: ["apps/web/src/**/*.{ts,tsx}"],
       excludeFiles: ["apps/web/src/**/*.{test,spec}.{ts,tsx}"],
       rules: {
         "require-query-key-factory/require-query-key-factory": "error",
+        "require-query-options-key/require-query-options-key": "error",
       },
     },
     {
