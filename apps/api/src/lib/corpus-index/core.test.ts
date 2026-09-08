@@ -30,6 +30,9 @@ import { isRecord } from "@/api/lib/type-guards";
  * boundary it must never cut across.
  */
 
+/** The metastore stamps a delete task's creation in whole seconds. */
+const DELETE_TASK_SECONDS = 1_787_000_000;
+
 const utf8Bytes = (value: string): number => Buffer.byteLength(value, "utf-8");
 
 const builtRow = (id: string, passages: number, filler: string) => ({
@@ -342,9 +345,15 @@ describe("idempotent corpus removals", () => {
     globalThis.fetch = Object.assign(
       async () => {
         nextDeleteOpstamp += 1;
-        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({
+            opstamp: nextDeleteOpstamp,
+            create_timestamp: DELETE_TASK_SECONDS,
+          }),
+          {
+            status: 200,
+          },
+        );
       },
       { preconnect: originalFetch.preconnect },
     );
@@ -388,7 +397,10 @@ describe("idempotent corpus removals", () => {
       async (input: Parameters<typeof fetch>[0]) => {
         const url = requestUrl(input);
         requestHost = new URL(url).host;
-        return new Response(JSON.stringify({ opstamp: 7 }), { status: 200 });
+        return new Response(
+          JSON.stringify({ opstamp: 7, create_timestamp: DELETE_TASK_SECONDS }),
+          { status: 200 },
+        );
       },
       { preconnect: originalFetch.preconnect },
     );
@@ -458,9 +470,15 @@ describe("idempotent corpus removals", () => {
     globalThis.fetch = Object.assign(
       async () => {
         nextDeleteOpstamp += 1;
-        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({
+            opstamp: nextDeleteOpstamp,
+            create_timestamp: DELETE_TASK_SECONDS,
+          }),
+          {
+            status: 200,
+          },
+        );
       },
       { preconnect: originalFetch.preconnect },
     );
@@ -644,9 +662,15 @@ describe("fenced serving-generation appends", () => {
         events.push(url.includes("/ingest") ? "ingest" : "remote");
         if (url.includes("/delete-tasks")) {
           nextDeleteOpstamp += 1;
-          return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-            status: 200,
-          });
+          return new Response(
+            JSON.stringify({
+              opstamp: nextDeleteOpstamp,
+              create_timestamp: DELETE_TASK_SECONDS,
+            }),
+            {
+              status: 200,
+            },
+          );
         }
         return new Response(
           url.includes("/ingest")
@@ -787,9 +811,15 @@ describe("failed index jobs always reach the audit trail", () => {
       }
       if (url.includes("/delete-tasks")) {
         nextDeleteOpstamp += 1;
-        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({
+            opstamp: nextDeleteOpstamp,
+            create_timestamp: DELETE_TASK_SECONDS,
+          }),
+          {
+            status: 200,
+          },
+        );
       }
       return new Response(JSON.stringify({}), { status: 200 });
     };
@@ -869,7 +899,10 @@ describe("failed index jobs always reach the audit trail", () => {
         });
       }
       if (lastUrl.includes("/delete-tasks")) {
-        return new Response(JSON.stringify({ opstamp: 1 }), { status: 200 });
+        return new Response(
+          JSON.stringify({ opstamp: 1, create_timestamp: DELETE_TASK_SECONDS }),
+          { status: 200 },
+        );
       }
       return new Response(JSON.stringify({}), { status: 200 });
     };
@@ -975,9 +1008,15 @@ describe("failed index jobs always reach the audit trail", () => {
       }
       if (url.includes("/delete-tasks")) {
         nextDeleteOpstamp += 1;
-        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({
+            opstamp: nextDeleteOpstamp,
+            create_timestamp: DELETE_TASK_SECONDS,
+          }),
+          {
+            status: 200,
+          },
+        );
       }
       return new Response(JSON.stringify({}), { status: 200 });
     };
@@ -1401,7 +1440,10 @@ describe("first-ever fenced appends", () => {
   ) => {
     const url = requestUrl(input);
     if (url.includes("/delete-tasks")) {
-      return new Response(JSON.stringify({ opstamp: 1 }), { status: 200 });
+      return new Response(
+        JSON.stringify({ opstamp: 1, create_timestamp: DELETE_TASK_SECONDS }),
+        { status: 200 },
+      );
     }
     if (!url.includes("/ingest")) {
       return new Response(JSON.stringify({}), { status: 200 });
@@ -1682,9 +1724,15 @@ describe("delete-task amplification", () => {
             : "";
         deletes.push({ url, query });
         nextDeleteOpstamp += 1;
-        return new Response(JSON.stringify({ opstamp: nextDeleteOpstamp }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({
+            opstamp: nextDeleteOpstamp,
+            create_timestamp: DELETE_TASK_SECONDS,
+          }),
+          {
+            status: 200,
+          },
+        );
       }
       if (url.includes("/ingest")) {
         const sent = body.split("\n").filter((line) => line.length > 0).length;

@@ -333,7 +333,8 @@ export type IndexCensus = {
   disposition: CensusDisposition;
   deleteSettlement: {
     requiredOpstamp: number;
-    publishedSplits: number;
+    provingSplits: number;
+    excludedSplits: number;
     laggingSplits: number;
     minAppliedOpstamp: number | null;
     pendingDocuments: number;
@@ -379,12 +380,19 @@ const readDeleteSettlement = async (
   }
   const settlement = await getCorpusIndexClient(
     corpusIndexClusterForGeneration("case_law", generation),
-  ).readDeleteSettlement(indexId, watermark.opstamp);
+  ).readDeleteSettlement({
+    indexId,
+    requiredOpstamp: watermark.opstamp,
+    // The watermark keeps an opstamp, not the metastore instant that issued
+    // it, so no split can be ruled out of the proof and the pruning below
+    // stays behind every split the engine still holds.
+    deleteCreatedAt: null,
+  });
   if (Result.isError(settlement)) {
     return Result.err(settlement.error);
   }
   const appliedOpstamp =
-    settlement.value.publishedSplits === 0
+    settlement.value.provingSplits === 0
       ? watermark.opstamp
       : settlement.value.minAppliedOpstamp;
   const pending = await scopedDb(async (tx) => {

@@ -8,7 +8,6 @@ import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   CorpusIndexError,
   type CorpusIndexClient,
-  type CorpusIndexDeleteSettlement,
   type CorpusIndexDeleteTask,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -399,20 +398,6 @@ export const deleteCorpusProjectionRevisions = async ({
     indexId,
     corpusProjectionRevisionsQuery(revisions),
   );
-
-type ReadCorpusProjectionDeleteSettlementOptions = {
-  client: Pick<CorpusIndexClient, "readDeleteSettlement">;
-  indexId: string;
-  requiredOpstamp: number;
-};
-
-export const readCorpusProjectionDeleteSettlement = async ({
-  client,
-  indexId,
-  requiredOpstamp,
-}: ReadCorpusProjectionDeleteSettlementOptions): Promise<
-  Result<CorpusIndexDeleteSettlement, CorpusIndexError>
-> => await client.readDeleteSettlement(indexId, requiredOpstamp);
 
 type CountCorpusProjectionRevisionsOptions = {
   client: Pick<CorpusIndexClient, "search">;

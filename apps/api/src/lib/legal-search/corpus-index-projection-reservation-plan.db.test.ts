@@ -56,7 +56,8 @@ const appendSettledHistory = async (depth: number): Promise<void> => {
         (id, family, generation, entity_id, epoch, fingerprint, index_id, status,
          expected_document_count, append_started_at, append_committed_at,
          append_publish_barrier_at, cleanup_not_before, cleanup_started_at,
-         delete_opstamp, settled_at, created_at, updated_at)
+         delete_opstamp, delete_task_created_at, settled_at, created_at,
+         updated_at)
       SELECT
         ${settledRevision("i", String(depth))},
         'case_law', '${GENERATION}', ${entity("i")}, ${depth},
@@ -64,7 +65,8 @@ const appendSettledHistory = async (depth: number): Promise<void> => {
         '2026-07-01'::timestamptz, '2026-07-01'::timestamptz,
         '2026-07-01'::timestamptz, '2026-07-01'::timestamptz,
         '2026-07-01'::timestamptz, 1, '2026-07-01'::timestamptz,
-        '2026-07-01'::timestamptz, '2026-07-01'::timestamptz
+        '2026-07-01'::timestamptz, '2026-07-01'::timestamptz,
+        '2026-07-01'::timestamptz
       FROM generate_series(1, ${CONVERGED + IN_FLIGHT + RESERVABLE}) AS i
     `),
   );

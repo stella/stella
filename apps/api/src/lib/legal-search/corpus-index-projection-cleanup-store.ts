@@ -1,5 +1,18 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  min,
+  or,
+  sql,
+} from "drizzle-orm";
+
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -22,7 +35,6 @@ import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
   countCorpusProjectionRevisions,
-  readCorpusProjectionDeleteSettlement,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { lockCorpusIndexProjectionIntentMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
@@ -206,6 +218,8 @@ type RecordCorpusProjectionDeleteOptions = {
   indexId: string;
   leaseToken: string;
   deleteOpstamp: number;
+  /** The metastore's creation instant for the delete task, from its receipt. */
+  deleteTaskCreatedAt: Temporal.Instant;
   testNow?: Date;
 };
 
@@ -216,6 +230,7 @@ export const recordCorpusProjectionDeleteTx = async (
     indexId,
     leaseToken,
     deleteOpstamp,
+    deleteTaskCreatedAt,
     testNow,
   }: RecordCorpusProjectionDeleteOptions,
 ): Promise<number> => {
@@ -237,6 +252,7 @@ export const recordCorpusProjectionDeleteTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       deleteOpstamp: BigInt(deleteOpstamp),
+      deleteTaskCreatedAt: new Date(deleteTaskCreatedAt.epochMilliseconds),
       lastError: null,
       updatedAt: transitionAt,
     })
@@ -311,7 +327,37 @@ export type CorpusProjectionCleanupSettlementLease = {
   indexId: string;
   intentIds: readonly ProjectionIntentId[];
   deleteOpstamp: number;
+  /** The metastore's creation instant for that delete task. */
+  deleteTaskCreatedAt: Temporal.Instant;
   leaseToken: string;
+};
+
+/**
+ * Delete tasks one settlement turn may lease.
+ *
+ * Cleanup issues one delete task per turn per index, so a turn that could
+ * prove only one of them can never drain a backlog: settlement throughput has
+ * to exceed the issue rate, not match it.
+ */
+const CORPUS_PROJECTION_SETTLEMENT_MAX_TASKS = 32;
+
+type SettlementTaskGroup = {
+  deleteOpstamp: number;
+  deleteTaskCreatedAt: Temporal.Instant;
+  intentIds: ProjectionIntentId[];
+};
+
+const validateSettlementTaskLimit = (taskLimit: number): number => {
+  if (
+    !Number.isSafeInteger(taskLimit) ||
+    taskLimit < 1 ||
+    taskLimit > CORPUS_PROJECTION_SETTLEMENT_MAX_TASKS
+  ) {
+    return panic(
+      `Corpus projection settlement must lease 1 to ${CORPUS_PROJECTION_SETTLEMENT_MAX_TASKS} delete tasks per turn`,
+    );
+  }
+  return taskLimit;
 };
 
 type ClaimCorpusProjectionCleanupSettlementOptions<
@@ -319,7 +365,10 @@ type ClaimCorpusProjectionCleanupSettlementOptions<
 > = CorpusProjectionScopedWorkOptions<Family> & {
   generation: string;
   indexId: string;
+  /** Revisions leased from one delete task. */
   limit: number;
+  /** Delete tasks leased in this turn. */
+  taskLimit: number;
   leaseMs: number;
   /** Deterministic database-test clock; production expiry uses PostgreSQL. */
   testNow?: Date;
@@ -335,13 +384,15 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
     generation,
     indexId,
     limit: requestedLimit,
+    taskLimit: requestedTaskLimit,
     leaseMs: requestedLeaseMs,
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupSettlementOptions<Family>,
-): Promise<CorpusProjectionCleanupSettlementLease | null> => {
+): Promise<CorpusProjectionCleanupSettlementLease[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
+  const taskLimit = validateSettlementTaskLimit(requestedTaskLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await lockRegisteredCorpusProjectionManifestForMutation(
@@ -349,61 +400,103 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
     family,
     generation,
   );
-  const first = await tx
-    .select({ deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp })
+  const settleable = and(
+    eq(corpusIndexProjectionIntents.family, family),
+    eq(corpusIndexProjectionIntents.generation, generation),
+    eq(corpusIndexProjectionIntents.indexId, indexId),
+    scopedEntityIds === null
+      ? undefined
+      : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+    eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+    // A receipt written before the delete instant was persisted cannot be
+    // proved against the splits that could hold its revisions. The online
+    // repair behind the paired-receipt constraint fills those rows in, and
+    // they become settleable again with no further transition.
+    isNotNull(corpusIndexProjectionIntents.deleteTaskCreatedAt),
+    or(
+      isNull(corpusIndexProjectionIntents.leaseExpiresAt),
+      sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+    ),
+  );
+  // Grouping cannot take row locks, so these identities are only a plan: the
+  // rows behind them are re-read under lock below, and a task another turn
+  // claimed in between simply yields no lease.
+  const tasks = await tx
+    .select({
+      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
+      // One instant per task: the opstamp identifies the task inside this
+      // index, and its receipt wrote both columns in one transition.
+      deleteTaskCreatedAt: min(
+        corpusIndexProjectionIntents.deleteTaskCreatedAt,
+      ),
+    })
     .from(corpusIndexProjectionIntents)
-    .where(
+    .where(settleable)
+    .groupBy(corpusIndexProjectionIntents.deleteOpstamp)
+    .orderBy(
+      asc(min(corpusIndexProjectionIntents.cleanupStartedAt)),
+      asc(corpusIndexProjectionIntents.deleteOpstamp),
+    )
+    .limit(taskLimit);
+  const taskInstants = new Map<string, Temporal.Instant>();
+  const leasedOpstamps = tasks.map(({ deleteOpstamp, deleteTaskCreatedAt }) => {
+    if (deleteOpstamp === null || deleteTaskCreatedAt === null) {
+      return panic("Committed corpus projection cleanup has no delete receipt");
+    }
+    taskInstants.set(
+      deleteOpstamp.toString(),
+      Temporal.Instant.fromEpochMilliseconds(deleteTaskCreatedAt.getTime()),
+    );
+    return deleteOpstamp;
+  });
+  if (leasedOpstamps.length === 0) {
+    return [];
+  }
+  const leasedTasks = inArray(
+    corpusIndexProjectionIntents.deleteOpstamp,
+    leasedOpstamps,
+  );
+  // Rank inside each delete task so one long task cannot spend the whole
+  // turn's row budget. The ranking cannot lock (a window function and a
+  // locking clause are exclusive), so the outer statement locks the intent
+  // rows the ranking picked.
+  const rankedRevisions = tx.$with("ranked_revisions").as(
+    tx
+      .select({
+        id: corpusIndexProjectionIntents.id,
+        taskRank: sql<number>`row_number() OVER (
+          PARTITION BY ${corpusIndexProjectionIntents.deleteOpstamp}
+          ORDER BY ${corpusIndexProjectionIntents.createdAt}, ${corpusIndexProjectionIntents.id}
+        )`.as("task_rank"),
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(and(settleable, leasedTasks)),
+  );
+  const candidates = await tx
+    .with(rankedRevisions)
+    .select({
+      id: corpusIndexProjectionIntents.id,
+      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
+    })
+    .from(corpusIndexProjectionIntents)
+    .innerJoin(
+      rankedRevisions,
       and(
-        eq(corpusIndexProjectionIntents.family, family),
-        eq(corpusIndexProjectionIntents.generation, generation),
-        eq(corpusIndexProjectionIntents.indexId, indexId),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
-        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
-        or(
-          isNull(corpusIndexProjectionIntents.leaseExpiresAt),
-          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
-        ),
+        eq(rankedRevisions.id, corpusIndexProjectionIntents.id),
+        lte(rankedRevisions.taskRank, limit),
       ),
     )
     .orderBy(
       asc(corpusIndexProjectionIntents.cleanupStartedAt),
       asc(corpusIndexProjectionIntents.createdAt),
     )
-    .limit(1)
-    .for("update", { skipLocked: true });
-  const deleteOpstamp = first.at(0)?.deleteOpstamp;
-  if (deleteOpstamp === undefined) {
-    return null;
-  }
-  if (deleteOpstamp === null) {
-    return panic("Committed corpus projection cleanup has no delete opstamp");
-  }
-  const candidates = await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.family, family),
-        eq(corpusIndexProjectionIntents.generation, generation),
-        eq(corpusIndexProjectionIntents.indexId, indexId),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
-        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
-        eq(corpusIndexProjectionIntents.deleteOpstamp, deleteOpstamp),
-        or(
-          isNull(corpusIndexProjectionIntents.leaseExpiresAt),
-          sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
-        ),
-      ),
-    )
-    .orderBy(asc(corpusIndexProjectionIntents.createdAt))
-    .limit(limit)
-    .for("update", { skipLocked: true });
+    .limit(limit * leasedOpstamps.length)
+    .for("update", {
+      of: corpusIndexProjectionIntents,
+      skipLocked: true,
+    });
   if (candidates.length === 0) {
-    return null;
+    return [];
   }
   const leaseToken = newLeaseToken();
   const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
@@ -411,15 +504,14 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
     testNow === undefined
       ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
       : new Date(testNow.getTime() + leaseMs);
-  const intentIds = candidates.map(({ id }) => id);
+  const candidateIds = candidates.map(({ id }) => id);
   const claimed = await tx
     .update(corpusIndexProjectionIntents)
     .set({ leaseToken, leaseExpiresAt, updatedAt: claimAt })
     .where(
       and(
-        inArray(corpusIndexProjectionIntents.id, intentIds),
+        inArray(corpusIndexProjectionIntents.id, candidateIds),
         eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
-        eq(corpusIndexProjectionIntents.deleteOpstamp, deleteOpstamp),
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
@@ -428,18 +520,45 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
       `Corpus projection settlement claimed ${claimed.length} of ${candidates.length} revisions`,
     );
   }
-  const numericOpstamp = Number(deleteOpstamp);
-  if (!Number.isSafeInteger(numericOpstamp) || numericOpstamp < 0) {
-    return panic("Corpus projection delete opstamp exceeds safe integer range");
+  // One token for the turn: each lease settles or releases its own revisions,
+  // and the identity sets behind two delete tasks are disjoint.
+  const grouped = new Map<string, SettlementTaskGroup>();
+  for (const { id, deleteOpstamp } of candidates) {
+    if (deleteOpstamp === null) {
+      return panic("Committed corpus projection cleanup has no delete receipt");
+    }
+    const numericOpstamp = Number(deleteOpstamp);
+    if (!Number.isSafeInteger(numericOpstamp) || numericOpstamp < 0) {
+      return panic(
+        "Corpus projection delete opstamp exceeds safe integer range",
+      );
+    }
+    const group = grouped.get(numericOpstamp.toString());
+    if (group === undefined) {
+      const deleteTaskCreatedAt = taskInstants.get(deleteOpstamp.toString());
+      if (deleteTaskCreatedAt === undefined) {
+        return panic("Leased corpus projection delete task lost its instant");
+      }
+      grouped.set(numericOpstamp.toString(), {
+        deleteOpstamp: numericOpstamp,
+        deleteTaskCreatedAt,
+        intentIds: [id],
+      });
+      continue;
+    }
+    group.intentIds.push(id);
   }
-  return {
-    family,
-    generation,
-    indexId,
-    intentIds,
-    deleteOpstamp: numericOpstamp,
-    leaseToken,
-  };
+  return [...grouped.values()].map(
+    ({ deleteOpstamp, deleteTaskCreatedAt, intentIds }) => ({
+      family,
+      generation,
+      indexId,
+      intentIds,
+      deleteOpstamp,
+      deleteTaskCreatedAt,
+      leaseToken,
+    }),
+  );
 };
 
 export type CorpusProjectionCleanupSettlementResult =
@@ -454,8 +573,9 @@ export type CorpusProjectionCleanupSettlementResult =
     };
 
 /**
- * Opaque evidence that Quickwit's published splits crossed the delete opstamp
- * and an exact revision query observed zero remaining documents.
+ * Opaque evidence that every split that could hold the deleted revisions
+ * crossed the delete opstamp and that an exact revision query observed zero
+ * remaining documents.
  */
 export class CorpusProjectionCleanupSettlementProof {
   readonly indexId: string;
@@ -481,7 +601,13 @@ export class CorpusProjectionCleanupSettlementProof {
   }: VerifyCorpusProjectionCleanupSettlementOptions): Promise<
     Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>
   > {
-    const { indexId, intentIds, deleteOpstamp, leaseToken } = lease;
+    const {
+      indexId,
+      intentIds,
+      deleteOpstamp,
+      deleteTaskCreatedAt,
+      leaseToken,
+    } = lease;
     if (
       intentIds.length === 0 ||
       intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
@@ -490,10 +616,22 @@ export class CorpusProjectionCleanupSettlementProof {
     ) {
       return panic("Corpus projection settlement request is invalid");
     }
-    const settlement = await readCorpusProjectionDeleteSettlement({
-      client,
+    // Which splits the delete has to have reached, and why the rest are not
+    // evidence of anything. The cleanup fence issues a delete only after the
+    // append publish barrier, so every revision this task targets was already
+    // published when the metastore created the task; a document lives in
+    // exactly one split. A split first published after that instant therefore
+    // holds no targeted revision of its own, and the appends that keep
+    // arriving cannot hold the proof open. A split with no publish timestamp
+    // stays in the proof: the barrier schedules publication, it does not
+    // prove it. What the split scan cannot see is a merge output published
+    // after the task that inherited documents from an input published before
+    // it; the exact revision count below is what refuses to settle then, and
+    // it is the step that makes the proof exact rather than merely bounded.
+    const settlement = await client.readDeleteSettlement({
       indexId,
       requiredOpstamp: deleteOpstamp,
+      deleteCreatedAt: deleteTaskCreatedAt,
     });
     if (settlement.isErr()) {
       return Result.err(settlement.error);
@@ -719,6 +857,7 @@ export const reopenCorpusProjectionCleanupTx = async (
       cleanupNotBefore: transitionAt,
       cleanupStartedAt: null,
       deleteOpstamp: null,
+      deleteTaskCreatedAt: null,
       settledAt: null,
       lastError: errorMessage.slice(0, 2048),
       updatedAt: transitionAt,

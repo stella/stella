@@ -329,7 +329,8 @@ describe("index census", () => {
     );
     expect(census.isOk() && census.value.deleteSettlement).toEqual({
       requiredOpstamp: 42,
-      publishedSplits: 3,
+      provingSplits: 3,
+      excludedSplits: 0,
       laggingSplits: 1,
       minAppliedOpstamp: 41,
       pendingDocuments: 40_000,
@@ -509,7 +510,8 @@ describe("census reporting", () => {
         disposition: CENSUS_DISPOSITION.pendingDelete,
         deleteSettlement: {
           requiredOpstamp: 42,
-          publishedSplits: 3,
+          provingSplits: 3,
+          excludedSplits: 0,
           laggingSplits: 1,
           minAppliedOpstamp: 41,
           pendingDocuments: 2000,
@@ -535,7 +537,8 @@ describe("census reporting", () => {
         disposition: CENSUS_DISPOSITION.pendingDelete,
         deleteSettlement: {
           requiredOpstamp: 42,
-          publishedSplits: 3,
+          provingSplits: 3,
+          excludedSplits: 0,
           laggingSplits: 1,
           minAppliedOpstamp: 41,
           pendingDocuments: 2000,

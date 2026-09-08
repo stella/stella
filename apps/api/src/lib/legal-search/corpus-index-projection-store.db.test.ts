@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
@@ -56,6 +58,11 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+/** The metastore instant a delete task receipt carries in these tests. */
+const DELETE_TASK_CREATED_AT = Temporal.Instant.from("2026-08-25T12:00:00Z");
+const LATER_DELETE_TASK_CREATED_AT = Temporal.Instant.from(
+  "2026-08-25T12:05:00Z",
+);
 const SOURCE_ID = toSafeId<"caseLawSource">(
   "0198e331-e578-7000-8000-000000000201",
 );
@@ -157,10 +164,11 @@ const withDatabaseClock = async <T>(
   });
 
 const settledProjectionClient = {
-  readDeleteSettlement: async (_indexId, requiredOpstamp) =>
+  readDeleteSettlement: async ({ requiredOpstamp }) =>
     Result.ok({
       requiredOpstamp,
-      publishedSplits: 1,
+      provingSplits: 1,
+      excludedSplits: 0,
       laggingSplits: 0,
       minAppliedOpstamp: requiredOpstamp,
       settled: true,
@@ -175,20 +183,23 @@ const verifySettlement = async ({
   intentIds: readonly SafeId<"corpusIndexProjectionIntent">[];
   deleteOpstamp: number;
 }) => {
-  const lease = await db.transaction(
-    async (tx) =>
-      await claimCorpusProjectionCleanupSettlementTx(
-        asTestRaw<Transaction>(tx),
-        {
-          family: "case_law",
-          generation: "case_law_v5",
-          indexId: INDEX_ID,
-          limit: 10,
-          leaseMs: 60_000,
-        },
-      ),
-  );
-  if (lease === null) {
+  const lease = (
+    await db.transaction(
+      async (tx) =>
+        await claimCorpusProjectionCleanupSettlementTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            indexId: INDEX_ID,
+            limit: 10,
+            taskLimit: 1,
+            leaseMs: 60_000,
+          },
+        ),
+    )
+  ).at(0);
+  if (lease === undefined) {
     return panic("Expected a projection settlement lease");
   }
   expect(lease.intentIds).toEqual(intentIds);
@@ -599,6 +610,7 @@ test("subject-scoped cleanup and settlement cannot claim another revision", asyn
         indexId: INDEX_ID,
         leaseToken: CLEANUP_LEASE_TOKEN,
         deleteOpstamp: 42,
+        deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
       }),
   );
 
@@ -612,12 +624,13 @@ test("subject-scoped cleanup and settlement cannot claim another revision", asyn
           indexId: INDEX_ID,
           scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
           limit: 10,
+          taskLimit: 1,
           leaseMs: 60_000,
           newLeaseToken: () => ERASE_CLEANUP_TOKEN,
         },
       ),
   );
-  expect(settlement?.intentIds).toEqual([SECOND_INTENT_ID]);
+  expect(settlement.at(0)?.intentIds).toEqual([SECOND_INTENT_ID]);
   expect(
     await db
       .select({
@@ -1637,6 +1650,7 @@ test("replacement deletes and settles the old revision before reserving the new 
           indexId: INDEX_ID,
           leaseToken: CLEANUP_LEASE_TOKEN,
           deleteOpstamp: 42,
+          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
         }),
     ),
   ).toBe(1);
@@ -1649,11 +1663,13 @@ test("replacement deletes and settles the old revision before reserving the new 
           generation: "case_law_v5",
           indexId: INDEX_ID,
           limit: 10,
+          taskLimit: 1,
           leaseMs: 60_000,
         },
       ),
   );
-  if (releasedSettlementLease === null) {
+  const releasedLease = releasedSettlementLease.at(0);
+  if (releasedLease === undefined) {
     panic("Expected a releasable projection settlement lease");
   }
   expect(
@@ -1661,7 +1677,7 @@ test("replacement deletes and settles the old revision before reserving the new 
       async (tx) =>
         await releaseCorpusProjectionCleanupSettlementTx(
           asTestRaw<Transaction>(tx),
-          { lease: releasedSettlementLease },
+          { lease: releasedLease },
         ),
     ),
   ).toBe(1);
@@ -1751,6 +1767,7 @@ test("replacement deletes and settles the old revision before reserving the new 
           indexId: INDEX_ID,
           leaseToken: REOPEN_CLEANUP_LEASE_TOKEN,
           deleteOpstamp: 43,
+          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
         }),
     ),
   ).toBe(1);
@@ -2036,6 +2053,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
           indexId: INDEX_ID,
           leaseToken: CLEANUP_LEASE_TOKEN,
           deleteOpstamp: 60,
+          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
         }),
     ),
   ).toBe(1);
@@ -2046,18 +2064,20 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
         generation: "case_law_v5",
         indexId: INDEX_ID,
         limit: 1,
+        taskLimit: 1,
         leaseMs: 60_000,
         newLeaseToken: () => SECOND_LEASE_TOKEN,
       }),
   );
-  if (firstSettlement === null) {
+  const firstSettlementLease = firstSettlement.at(0);
+  if (firstSettlementLease === undefined) {
     panic("Expected first settlement lease");
   }
   expect(
     await withDatabaseClock(
       async (tx) =>
         await releaseCorpusProjectionCleanupSettlementTx(tx, {
-          lease: firstSettlement,
+          lease: firstSettlementLease,
         }),
     ),
   ).toBe(1);
@@ -2068,16 +2088,18 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
         generation: "case_law_v5",
         indexId: INDEX_ID,
         limit: 1,
+        taskLimit: 1,
         leaseMs: 60_000,
         newLeaseToken: () => REOPEN_CLEANUP_LEASE_TOKEN,
       }),
   );
-  if (settlement === null) {
+  const settlementLease = settlement.at(0);
+  if (settlementLease === undefined) {
     panic("Expected settlement lease");
   }
   const verified = await CorpusProjectionCleanupSettlementProof.verify({
     client: settledProjectionClient,
-    lease: settlement,
+    lease: settlementLease,
   });
   if (verified.isErr()) {
     panic("Expected successful settlement verification");
@@ -2223,6 +2245,7 @@ test("a settled same-epoch attempt reopens after its retry is applied", async ()
         indexId: INDEX_ID,
         leaseToken: CLEANUP_LEASE_TOKEN,
         deleteOpstamp: 50,
+        deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
       }),
   );
   const firstProof = await verifySettlement({
@@ -2417,6 +2440,7 @@ test("erasure fences an unknown append and applies only after cleanup settlement
           indexId: INDEX_ID,
           leaseToken: ERASE_CLEANUP_TOKEN,
           deleteOpstamp: 43,
+          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
         }),
     ),
   ).toBe(1);
@@ -2660,4 +2684,232 @@ test("cleanup claim and settlement phases have bounded partial access paths", as
     expect(definition).toContain("WHERE (status = 'cleanup_committed'::text)");
   }
   expect(definitions.size).toBe(3);
+});
+
+const seedCommittedCleanupPair = async (): Promise<void> => {
+  const cleanupAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents DISABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
+  await db.insert(corpusIndexProjectionIntents).values([
+    {
+      id: FIRST_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: DECISION_ID,
+      epoch: 1n,
+      fingerprint: FIRST_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "cleanup_pending",
+      appendStartedAt: cleanupAt,
+      appendPublishBarrierAt: cleanupAt,
+      cleanupNotBefore: cleanupAt,
+    },
+    {
+      id: SECOND_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_DECISION_ID,
+      epoch: 1n,
+      fingerprint: SECOND_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "cleanup_pending",
+      appendStartedAt: cleanupAt,
+      appendPublishBarrierAt: cleanupAt,
+      cleanupNotBefore: cleanupAt,
+    },
+  ]);
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
+  await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        indexId: INDEX_ID,
+        limit: 10,
+        leaseMs: 60_000,
+        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+      }),
+  );
+  // Two delete tasks, one per revision, as cleanup issues them: one task per
+  // turn per index.
+  await db.transaction(
+    async (tx) =>
+      await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
+        intentIds: [FIRST_INTENT_ID],
+        indexId: INDEX_ID,
+        leaseToken: CLEANUP_LEASE_TOKEN,
+        deleteOpstamp: 42,
+        deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
+      }),
+  );
+  await db.transaction(
+    async (tx) =>
+      await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
+        intentIds: [SECOND_INTENT_ID],
+        indexId: INDEX_ID,
+        leaseToken: CLEANUP_LEASE_TOKEN,
+        deleteOpstamp: 43,
+        deleteTaskCreatedAt: LATER_DELETE_TASK_CREATED_AT,
+      }),
+  );
+};
+
+test("one settlement turn leases every delete task it is asked for", async () => {
+  await seedCommittedCleanupPair();
+
+  const leases = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          taskLimit: 2,
+          leaseMs: 60_000,
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        },
+      ),
+  );
+
+  expect(
+    leases.map(({ deleteOpstamp, deleteTaskCreatedAt, intentIds }) => ({
+      deleteOpstamp,
+      deleteTaskCreatedAt: deleteTaskCreatedAt.toString(),
+      intentIds,
+    })),
+  ).toEqual([
+    {
+      deleteOpstamp: 42,
+      deleteTaskCreatedAt: DELETE_TASK_CREATED_AT.toString(),
+      intentIds: [FIRST_INTENT_ID],
+    },
+    {
+      deleteOpstamp: 43,
+      deleteTaskCreatedAt: LATER_DELETE_TASK_CREATED_AT.toString(),
+      intentIds: [SECOND_INTENT_ID],
+    },
+  ]);
+});
+
+test("a settlement turn asked for one delete task leases one", async () => {
+  await seedCommittedCleanupPair();
+
+  const leases = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          taskLimit: 1,
+          leaseMs: 60_000,
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        },
+      ),
+  );
+
+  expect(leases.map(({ deleteOpstamp }) => deleteOpstamp)).toEqual([42]);
+});
+
+test("settlement proves the lease against the instant its delete task carries", async () => {
+  await seedCommittedCleanupPair();
+  const leases = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          taskLimit: 1,
+          leaseMs: 60_000,
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        },
+      ),
+  );
+  const lease = leases.at(0);
+  if (lease === undefined) {
+    panic("Expected a projection settlement lease");
+  }
+  // Stands in for an index taking continuous appends: the one split still
+  // below the opstamp was published after the delete task, so it holds none
+  // of its revisions. Which splits that rule keeps is pinned in
+  // `corpus-index-client.test.ts`; what this asserts is that the instant the
+  // receipt carries reaches the engine at all, and that a lease can settle.
+  const excludingClient = {
+    readDeleteSettlement: async ({
+      requiredOpstamp,
+      deleteCreatedAt,
+    }: {
+      requiredOpstamp: number;
+      deleteCreatedAt: Temporal.Instant | null;
+    }) => {
+      const excluded =
+        deleteCreatedAt !== null &&
+        Temporal.Instant.compare(deleteCreatedAt, DELETE_TASK_CREATED_AT) === 0;
+      return Result.ok({
+        requiredOpstamp,
+        provingSplits: excluded ? 1 : 2,
+        excludedSplits: excluded ? 1 : 0,
+        laggingSplits: excluded ? 0 : 1,
+        minAppliedOpstamp: excluded ? requiredOpstamp : requiredOpstamp - 1,
+        settled: excluded,
+      });
+    },
+    search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
+  } satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+
+  const verified = await CorpusProjectionCleanupSettlementProof.verify({
+    client: excludingClient,
+    lease,
+  });
+  if (verified.isErr()) {
+    panic("Projection settlement verification failed", verified.error);
+  }
+  if (verified.value.status !== "verified") {
+    panic("Projection settlement unexpectedly remained pending");
+  }
+  const proof = verified.value.proof;
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          proof,
+        }),
+    ),
+  ).toBe(1);
+  expect(
+    await db
+      .select({ status: corpusIndexProjectionIntents.status })
+      .from(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID)),
+  ).toEqual([{ status: "settled" }]);
 });

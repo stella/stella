@@ -61,6 +61,13 @@ export const corpusIndexProjectionIntents = p.pgTable(
     cleanupNotBefore: timestamptz("cleanup_not_before"),
     cleanupStartedAt: timestamptz("cleanup_started_at"),
     deleteOpstamp: p.bigint("delete_opstamp", { mode: "bigint" }),
+    /**
+     * The metastore's creation instant for the delete task the opstamp
+     * identifies. Settlement proves the delete against the splits that were
+     * published no later than this, so it is engine-issued state, not a local
+     * transition timestamp, and it is paired with the opstamp by a check.
+     */
+    deleteTaskCreatedAt: timestamptz("delete_task_created_at"),
     settledAt: timestamptz("settled_at"),
     cancelledAt: timestamptz("cancelled_at"),
     cleanupAttempts: p.integer("cleanup_attempts").default(0).notNull(),
@@ -192,6 +199,13 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p.check(
       "corpus_index_projection_intents_delete_opstamp_nonnegative",
       sql`${t.deleteOpstamp} IS NULL OR ${t.deleteOpstamp} >= 0`,
+    ),
+    // The status shape decides per status whether a delete receipt is on the
+    // row; pairing the two receipt columns here keeps that one decision total
+    // instead of restating it for the second column.
+    p.check(
+      "corpus_index_projection_intents_delete_receipt_paired",
+      sql`(${t.deleteOpstamp} IS NULL) = (${t.deleteTaskCreatedAt} IS NULL)`,
     ),
     p.check(
       "corpus_index_projection_intents_expected_document_count_shape",
