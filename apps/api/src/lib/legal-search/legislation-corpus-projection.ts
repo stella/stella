@@ -9,18 +9,10 @@ import {
   type CorpusFamily,
   corpusIndexProjectionStore,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusIndexIdSqlFromManifest } from "@/api/lib/legal-search/corpus-index-route-sql";
 
 const LEGISLATION_FAMILY = "legislation" satisfies CorpusFamily;
-
-/**
- * The physical index this generation projects a document's current
- * jurisdiction into, as SQL: `corpusIndexId` renders no group for the
- * legislation route, so the id is the generation and the lowercased country.
- * Declared once here because the read predicate and the queue scans both
- * compare against it.
- */
-export const legislationDocumentCorpusIndexIdSql = (generation: string): SQL =>
-  sql`${generation} || '_' || lower(${legislationDocuments.country})`;
 
 /**
  * The state row a final-projection generation keeps for the document, in the
@@ -34,11 +26,20 @@ export const legislationDocumentCorpusIndexIdSql = (generation: string): SQL =>
  * document: there is no marker on the document to fall back to, and one would
  * answer for a pipeline that never wrote it.
  *
+ * The index the applied revision has to sit in is the manifest's own route
+ * rendered as SQL, the expression the projection writer derives
+ * `desired_index_id` from. Only a declared final generation reaches here, so
+ * the manifest is always there to read.
+ *
  * The lookup is the states table's primary key, `(family, generation,
  * entity_id)`, once per candidate row.
  */
-const currentLegislationProjectionState = (generation: string): SQL =>
-  sql`EXISTS (
+const currentLegislationProjectionState = (generation: string): SQL => {
+  const routedIndexId = corpusIndexIdSqlFromManifest(
+    requireCorpusIndexManifest(LEGISLATION_FAMILY, generation),
+    legislationDocuments.country,
+  );
+  return sql`EXISTS (
       SELECT 1
       FROM ${corpusIndexProjectionStates}
       WHERE ${corpusIndexProjectionStates.family} = ${LEGISLATION_FAMILY}
@@ -49,8 +50,9 @@ const currentLegislationProjectionState = (generation: string): SQL =>
         AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}
         AND ${corpusIndexProjectionStates.appliedFingerprint} = ${corpusIndexProjectionStates.desiredFingerprint}
         AND ${corpusIndexProjectionStates.appliedIndexId} = ${corpusIndexProjectionStates.desiredIndexId}
-        AND ${corpusIndexProjectionStates.appliedIndexId} = (${legislationDocumentCorpusIndexIdSql(generation)})
+        AND ${corpusIndexProjectionStates.appliedIndexId} = (${routedIndexId})
     )`;
+};
 
 /**
  * Accept a physical hit only when this generation holds the current document
