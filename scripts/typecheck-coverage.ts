@@ -57,6 +57,10 @@ type ProjectBuildInfo = {
 // covers. Root-only projects have no source subtree suitable for a proxy.
 const OXC_PROJECT_PROXIES = [
   {
+    config: ".claude/mcp/tsconfig.json",
+    target: "tsconfig.tooling.json",
+  },
+  {
     config: "apps/api/contracts/tsconfig.json",
     target: "apps/api/tsconfig.contracts.json",
   },

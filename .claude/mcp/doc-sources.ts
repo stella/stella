@@ -1,5 +1,9 @@
 export type DocSource = {
   dependencies: readonly [string, ...string[]];
+  markdownPages?: {
+    pathIncludes: string;
+    rewrite: "append-md" | "replace-html-with-md";
+  };
   url: string;
 };
 
@@ -37,26 +41,43 @@ export const DOC_SOURCES = {
       "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
       "@tanstack/devtools-vite",
-      "@tanstack/eslint-plugin-query",
       "@tanstack/eslint-plugin-router",
       "@tanstack/react-devtools",
       "@tanstack/react-form",
       "@tanstack/react-hotkeys",
-      "@tanstack/react-query",
-      "@tanstack/react-query-devtools",
       "@tanstack/react-router",
       "@tanstack/react-router-devtools",
-      "@tanstack/react-router-ssr-query",
       "@tanstack/react-store",
       "@tanstack/react-table",
       "@tanstack/react-table-devtools",
       "@tanstack/react-virtual",
       "@tanstack/table-core",
     ],
+    markdownPages: {
+      pathIncludes: "/docs/",
+      rewrite: "append-md",
+    },
     url: "https://tanstack.com/llms.txt",
+  },
+  TanStackQuery: {
+    dependencies: [
+      "@tanstack/eslint-plugin-query",
+      "@tanstack/react-query",
+      "@tanstack/react-query-devtools",
+      "@tanstack/react-router-ssr-query",
+    ],
+    markdownPages: {
+      pathIncludes: "/docs/",
+      rewrite: "append-md",
+    },
+    url: "https://tanstack.com/query/latest/llms.txt",
   },
   TanStackStart: {
     dependencies: ["@tanstack/react-start"],
+    markdownPages: {
+      pathIncludes: "/docs/",
+      rewrite: "append-md",
+    },
     url: "https://tanstack.com/start/latest/llms.txt",
   },
   React: {
@@ -190,6 +211,10 @@ export const DOC_SOURCES = {
       "oxfmt",
       "oxlint-tsgolint",
     ],
+    markdownPages: {
+      pathIncludes: "/docs/",
+      rewrite: "replace-html-with-md",
+    },
     url: "https://oxc.rs/llms.txt",
   },
   Streamdown: {

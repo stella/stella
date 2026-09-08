@@ -1,6 +1,14 @@
 const DOC_FETCH_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
+const DOC_ACCEPT_HEADER =
+  "text/markdown, text/plain;q=0.9, text/html;q=0.5, */*;q=0.1";
+
+export type FetchedAllowedUrl = {
+  contentType: string | null;
+  text: string;
+  url: string;
+};
 
 type FetchAllowedUrlProps = {
   allowedHosts: ReadonlySet<string>;
@@ -29,7 +37,7 @@ export const fetchAllowedUrl = async ({
   maxResponseBytes = MAX_RESPONSE_BYTES,
   timeoutMs = DOC_FETCH_TIMEOUT_MS,
   url,
-}: FetchAllowedUrlProps): Promise<string> => {
+}: FetchAllowedUrlProps): Promise<FetchedAllowedUrl> => {
   let currentUrl = new URL(url);
   const signal = AbortSignal.timeout(timeoutMs);
 
@@ -37,6 +45,7 @@ export const fetchAllowedUrl = async ({
     validateAllowedUrl(currentUrl, allowedHosts);
 
     const response = await fetchImpl(currentUrl, {
+      headers: { Accept: DOC_ACCEPT_HEADER },
       redirect: "manual",
       signal,
     });
@@ -45,10 +54,14 @@ export const fetchAllowedUrl = async ({
       if (!response.ok) {
         throw new Error(`${response.status} ${response.statusText}`);
       }
-      return await readLimitedText({
-        maxBytes: maxResponseBytes,
-        response,
-      });
+      return {
+        contentType: response.headers.get("content-type"),
+        text: await readLimitedText({
+          maxBytes: maxResponseBytes,
+          response,
+        }),
+        url: currentUrl.toString(),
+      };
     }
 
     const location = response.headers.get("location");
@@ -103,9 +116,15 @@ const readLimitedText = async ({
   let totalBytes = 0;
 
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
+    const result = await reader.read();
+    if (result.done) {
       break;
+    }
+    const value: unknown = result.value;
+    if (!(value instanceof Uint8Array)) {
+      throw new TypeError(
+        "Documentation response returned an invalid byte chunk",
+      );
     }
 
     totalBytes += value.byteLength;

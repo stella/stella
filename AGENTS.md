@@ -315,8 +315,10 @@ check. Run the bar as soon as the PR is ready; it is idempotent. Raw
 ## Documentation Access
 
 The `stella-docs` MCP server provides on-demand access to library documentation via
-`llms.txt`. When implementing features, fetch the relevant docs first using
-`list_doc_sources` and `fetch_docs` tools.
+`llms.txt`. When implementing features, call `search_docs` for the relevant topic,
+then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select or
+narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
+index or page.
 
 **Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
 `WebSearch` directly.

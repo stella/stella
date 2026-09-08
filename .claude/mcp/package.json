@@ -2,6 +2,10 @@
   "name": "stella-docs-mcp",
   "private": true,
   "type": "module",
+  "scripts": {
+    "eval:retrieval": "bun build docs-retrieval.eval.ts --target=node --packages=external --outfile=.cache/docs-retrieval.eval.mjs 1>&2 && node .cache/docs-retrieval.eval.mjs",
+    "test": "bun test *.test.ts"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "zod": "^4.4.3"

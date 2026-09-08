@@ -996,6 +996,7 @@ jobs:
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
         run: |
+          bun --cwd .claude/mcp test
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run test -- --concurrency=2 "${args[@]}"

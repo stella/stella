@@ -1,0 +1,5 @@
+{
+  // Oxlint's type-aware pass resolves compiler options from the nearest
+  // tsconfig.json. Keep MCP tooling on the same project as typecheck:repo.
+  "extends": "../../tsconfig.tooling.json"
+}
