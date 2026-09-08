@@ -251,29 +251,34 @@ describe("version 3 layers", () => {
 
   test("reads significance as stale unless it names the current graph", () => {
     const withSignificance = { ...v3, significance };
-    expect(
+    const current = (
+      graphFingerprint: string,
+      promptVersion = significance.promptVersion,
+    ) =>
       isSignificanceCurrent({
         analysis: withSignificance,
-        graphFingerprint: significance.graphFingerprint,
-      }),
-    ).toBe(true);
-    expect(
-      isSignificanceCurrent({
-        analysis: withSignificance,
-        graphFingerprint: "h".repeat(64),
-      }),
-    ).toBe(false);
-    // Absent and stale are the same answer: write it again.
+        graphFingerprint,
+        promptVersion,
+      });
+
+    expect(current(significance.graphFingerprint)).toBe(true);
+    expect(current("h".repeat(64))).toBe(false);
+    // A reworded prompt is a reason to write it again: the graph
+    // fingerprint digests the graph, so nothing else would notice.
+    expect(current(significance.graphFingerprint, 2)).toBe(false);
+    // Absent and stale are the same answer.
     expect(
       isSignificanceCurrent({
         analysis: v3,
         graphFingerprint: significance.graphFingerprint,
+        promptVersion: significance.promptVersion,
       }),
     ).toBe(false);
     expect(
       isSignificanceCurrent({
         analysis,
         graphFingerprint: significance.graphFingerprint,
+        promptVersion: significance.promptVersion,
       }),
     ).toBe(false);
   });

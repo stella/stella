@@ -119,6 +119,7 @@ for (const parsed of parsedRecords) {
   }
 
   const outcome = await applyAnalysisUpdate({
+    anchorIds: resolved.ast.blocks.map((block) => block.anchorId),
     decision: row,
     decisionId,
     input: resolved.input,

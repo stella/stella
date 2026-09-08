@@ -98,7 +98,13 @@ export const refreshSignificance = async ({
     return;
   }
   const graphFingerprint = graphFingerprintOf(facts);
-  if (isSignificanceCurrent({ analysis: current, graphFingerprint })) {
+  if (
+    isSignificanceCurrent({
+      analysis: current,
+      graphFingerprint,
+      promptVersion: SIGNIFICANCE_PROMPT_VERSION,
+    })
+  ) {
     return;
   }
 
@@ -149,6 +155,13 @@ export const refreshSignificance = async ({
 
     // The document layers are carried over untouched: this run read the
     // graph, not the text, and has nothing to say about them.
+    //
+    // Fenced on the exact value this run started from. Two runs over the
+    // same document differ only in the graph they saw, which the store's
+    // fingerprint and content-hash fences cannot tell apart, so a run that
+    // began on an older graph and finished last would otherwise overwrite
+    // the newer statement and put the decision back in the queue. Here it
+    // simply loses.
     await analysisStore().save({
       analysis: {
         ...current,
@@ -163,6 +176,7 @@ export const refreshSignificance = async ({
       },
       contentHash,
       decisionId,
+      expected: analysis,
     });
   });
 

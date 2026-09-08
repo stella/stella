@@ -49,12 +49,17 @@ const memoryAnalysisStore: AnalysisStore = {
   },
   // The document behind a memory entry is a read-only row this process
   // never re-parses, so the fingerprint alone identifies the run here.
-  save: async ({ analysis, decisionId }) => {
-    const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
-    if (held?.inputFingerprint === analysis.inputFingerprint) {
+  // `expected` still applies: it separates two runs over one document.
+  save: async ({ analysis, decisionId, expected }) => {
+    const stored = memoryAnalyses.get(decisionId);
+    const held = parsePersistedDecisionAnalysis(stored);
+    const wrote =
+      held?.inputFingerprint === analysis.inputFingerprint &&
+      (expected === undefined || stored === expected);
+    if (wrote) {
       memoryAnalyses.set(decisionId, analysis);
     }
-    await Promise.resolve();
+    return await Promise.resolve(wrote);
   },
   clear: async ({ decisionId, sentinel }) => {
     if (memoryAnalyses.get(decisionId) === sentinel) {

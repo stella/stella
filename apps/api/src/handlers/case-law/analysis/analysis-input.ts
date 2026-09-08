@@ -34,7 +34,13 @@ type DecisionAnalysisRow = NonNullable<
 >;
 
 export type AnalysisInputResolution =
-  | { kind: "resolved"; decision: DecisionAnalysisRow; input: AnalysisInput }
+  | {
+      kind: "resolved";
+      decision: DecisionAnalysisRow;
+      input: AnalysisInput;
+      /** Anchor ids of the parse the input was built over, in reading order. */
+      anchorIds: string[];
+    }
   | { kind: "decision-not-found" }
   | { kind: "unparseable-document" };
 
@@ -82,6 +88,7 @@ export const resolveAnalysisInput = async ({
   return {
     kind: "resolved",
     decision,
+    anchorIds: ast.blocks.map((block) => block.anchorId),
     input: analysisInputOf({
       blocks: ast.blocks,
       decision,

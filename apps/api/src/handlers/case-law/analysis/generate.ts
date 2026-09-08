@@ -52,6 +52,8 @@ import { storedAnalysisState } from "./stored-analysis";
 type RunGenerationOptions = {
   decisionId: SafeId<"caseLawDecision">;
   input: AnalysisInput;
+  /** Anchor ids of the parse the input was built over, in reading order. */
+  anchorIds: readonly string[];
   country: string;
   /** The row's `contentHash` at claim time; the save is fenced on it. */
   contentHash: string | null;
@@ -63,6 +65,7 @@ type RunGenerationOptions = {
 };
 
 const runGeneration = async ({
+  anchorIds,
   contentHash,
   country,
   decisionId,
@@ -112,6 +115,7 @@ const runGeneration = async ({
     });
 
     const analysis = buildDecisionAnalysis({
+      anchorIds,
       output: result,
       language: input.language,
       model: modelId,
@@ -171,7 +175,7 @@ export const generateAnalysis = async (
       return panic(`Unhandled resolution: ${String(resolution)}`);
     }
   }
-  const { decision, input } = resolution;
+  const { anchorIds, decision, input } = resolution;
 
   const observed = analysisStore().peek(decisionId) ?? decision.analysis;
   const stored = storedAnalysisState({
@@ -254,6 +258,7 @@ export const generateAnalysis = async (
   // Fire-and-forget generation
   detached(
     runGeneration({
+      anchorIds,
       contentHash: decision.contentHash,
       country: decision.country,
       decisionId,

@@ -181,24 +181,41 @@ export const readCitationGraphFacts = async ({
 };
 
 /**
- * A digest of the neighbourhood, stable under row order and under anything
- * the model is not shown. Each citing decision contributes its id and its
- * treatment, so a citation whose polarity is later reclassified moves the
- * fingerprint even though the id set did not change; the reporter flag
- * joins them because the model is shown it too.
+ * A digest of the neighbourhood: every fact the model is shown, and nothing
+ * else. Stable under row order, and it moves whenever the model's input
+ * would.
+ *
+ * Every field of the user message takes part, which is the point. A
+ * citation reclassified from neutral to negative moves it though the id set
+ * did not; so does a court whose tier changed in the weight registry, and a
+ * corrected decision date that turns a citation into a later one. Leaving
+ * either of the last two out would freeze an obsolete statement as current
+ * for as long as the id set held still.
  */
 export const graphFingerprintOf = (
   facts: Pick<
     CitationGraphFacts,
-    "citingDecisionIds" | "reportedInCollection" | "treatmentCounts"
+    | "citingDecisionIds"
+    | "countsByCourtTier"
+    | "laterNegativeCount"
+    | "reportedInCollection"
+    | "treatmentCounts"
   >,
 ): AnalysisGraphFingerprint => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(facts.reportedInCollection ? "reported" : "unreported");
+  hasher.update(`\nlater-negative=${String(facts.laterNegativeCount)}`);
   // The corpus's own vocabulary, in its own order: a fixed list rather than
   // a sort, so the digest cannot move because a key order did.
   for (const treatment of CITATION_TREATMENTS) {
     hasher.update(`\n${treatment}=${String(facts.treatmentCounts[treatment])}`);
+  }
+  // `readCitationGraphFacts` returns these tier-ascending; sorted again here
+  // so the digest is a property of the counts, not of the caller's order.
+  for (const { count, tier } of [...facts.countsByCourtTier].toSorted(
+    (a, b) => a.tier - b.tier,
+  )) {
+    hasher.update(`\ntier${String(tier)}=${String(count)}`);
   }
   for (const id of facts.citingDecisionIds) {
     hasher.update(`\n${id}`);

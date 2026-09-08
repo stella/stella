@@ -127,11 +127,24 @@ export type CandidateRow = {
   source: DecisionAnalysisRow["source"];
 };
 
+/**
+ * Where the previous page stopped: the ordering key of its last row. The
+ * next page resumes strictly after it, so a run that keeps excluding rows
+ * keeps descending the ranking instead of running out of scan window.
+ */
+export type CandidateCursor = {
+  citationAuthority: number | null;
+  citationCount: number;
+  id: SafeId<"caseLawDecision">;
+};
+
 type ListCandidatesOptions = {
   country?: string | undefined;
   minCitations: number;
-  /** Rows to read: more than the wanted count, because some are excluded. */
+  /** Rows to read in this page. */
   scan: number;
+  /** Resume strictly after this row; absent for the first page. */
+  after?: CandidateCursor | undefined;
 };
 
 /**
@@ -147,7 +160,7 @@ type ListCandidatesOptions = {
  */
 export const listCandidateRows = async (
   db: AnalysisDatabase,
-  { country, minCitations, scan }: ListCandidatesOptions,
+  { after, country, minCitations, scan }: ListCandidatesOptions,
 ): Promise<CandidateRow[]> => {
   const filters: SqlFragment[] = [
     isNull(caseLawDecisions.redactedAt),
@@ -155,6 +168,21 @@ export const listCandidateRows = async (
   ];
   if (country !== undefined) {
     filters.push(eq(caseLawDecisions.country, country));
+  }
+  if (after !== undefined) {
+    // The ordering key as one tuple comparison. `NULLS LAST` on the leading
+    // term means an unscored row sorts after every scored one, so the
+    // cursor's null case resumes inside the unscored tail by (count, id).
+    const authority = after.citationAuthority;
+    filters.push(
+      authority === null
+        ? sql`(${caseLawDecisions.citationAuthority} IS NULL
+              AND (${caseLawDecisions.citationCount}, ${caseLawDecisions.id})
+                  < (${after.citationCount}, ${after.id}))`
+        : sql`(${caseLawDecisions.citationAuthority} IS NULL
+              OR (${caseLawDecisions.citationAuthority}, ${caseLawDecisions.citationCount}, ${caseLawDecisions.id})
+                 < (${authority}, ${after.citationCount}, ${after.id}))`,
+    );
   }
 
   const rows = await db
@@ -167,8 +195,11 @@ export const listCandidateRows = async (
     .from(caseLawDecisions)
     .leftJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(and(...filters))
+    // `NULLS LAST` explicitly: Postgres puts nulls FIRST under `DESC`, so an
+    // unscored decision would otherwise outrank every scored one and a
+    // bounded scan would never reach the top of the ranking.
     .orderBy(
-      desc(caseLawDecisions.citationAuthority),
+      sql`${caseLawDecisions.citationAuthority} DESC NULLS LAST`,
       desc(caseLawDecisions.citationCount),
       caseLawDecisions.id,
     )

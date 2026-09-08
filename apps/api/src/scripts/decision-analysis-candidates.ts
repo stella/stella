@@ -37,6 +37,7 @@ import {
   candidateAsRow,
   listCandidateRows,
   openAnalysisDatabase,
+  type CandidateCursor,
 } from "./decision-analysis.db";
 import {
   flagValue,
@@ -51,10 +52,9 @@ import {
 const DEFAULT_LIMIT = 100;
 const DEFAULT_MIN_CITATIONS = 1;
 /**
- * How many rows to read per wanted candidate. Exclusions are decided in this
- * process (a current analysis, a refused source, an unreachable parse), so
- * the scan has to over-read; three is generous for a corpus where most
- * decisions carry no analysis yet.
+ * How many rows one page reads per wanted candidate. Exclusions are decided
+ * in this process, so a page over-reads; the loop below pages on when a page
+ * does not fill the list.
  */
 const SCAN_FACTOR = 3;
 
@@ -89,54 +89,82 @@ if (Result.isError(url)) {
 
 const db = openAnalysisDatabase(url.value);
 
-const rows = await listCandidateRows(db, {
-  country,
-  minCitations,
-  scan: limit * SCAN_FACTOR,
-});
-
 await prepareCorpusReads();
 
 const outcomes: string[] = [];
 let printed = 0;
-for (const candidate of rows) {
-  if (printed === limit) {
+let cursor: CandidateCursor | undefined;
+
+/**
+ * One page of the ranking: a cursor walk, not a per-row lookup. Each call is
+ * one statement returning `limit * SCAN_FACTOR` rows, and the loop advances
+ * the cursor only when a page did not fill the list. A single bounded window
+ * would report "no candidates" while eligible decisions sat one row past its
+ * edge, because the exclusions are decided in this process rather than in
+ * the query.
+ */
+const readCandidatePage = async (after: CandidateCursor | undefined) =>
+  await listCandidateRows(db, {
+    after,
+    country,
+    minCitations,
+    scan: limit * SCAN_FACTOR,
+  });
+
+while (printed < limit) {
+  const rows = await readCandidatePage(cursor);
+  if (rows.length === 0) {
     break;
   }
-  const row = candidateAsRow(candidate);
-  const ast = await readRowAst(row);
-  const resolved = resolveRowAnalysisInput({ ast, row });
-  if (resolved.status === "rejected") {
-    outcomes.push(`skipped:${resolved.reason}`);
-    continue;
-  }
-  const stored = parsePersistedDecisionAnalysis(candidate.analysis);
-  const isCurrent =
-    stored !== null &&
-    !("status" in stored) &&
-    stored.version === 3 &&
-    stored.inputFingerprint === resolved.input.fingerprint;
-  if (isCurrent) {
-    outcomes.push("skipped:already-current");
-    continue;
-  }
+  const last = rows.at(-1);
+  cursor =
+    last === undefined
+      ? undefined
+      : {
+          citationAuthority: last.citationAuthority,
+          citationCount: last.citationCount,
+          id: last.id,
+        };
 
-  outcomes.push("candidate");
-  printed += 1;
-  if (idsOnly) {
-    console.log(candidate.id);
-    continue;
+  for (const candidate of rows) {
+    if (printed === limit) {
+      break;
+    }
+    const row = candidateAsRow(candidate);
+    const ast = await readRowAst(row);
+    const resolved = resolveRowAnalysisInput({ ast, row });
+    if (resolved.status === "rejected") {
+      outcomes.push(`skipped:${resolved.reason}`);
+      continue;
+    }
+    const stored = parsePersistedDecisionAnalysis(candidate.analysis);
+    const isCurrent =
+      stored !== null &&
+      !("status" in stored) &&
+      stored.version === 3 &&
+      stored.inputFingerprint === resolved.input.fingerprint;
+    if (isCurrent) {
+      outcomes.push("skipped:already-current");
+      continue;
+    }
+
+    outcomes.push("candidate");
+    printed += 1;
+    if (idsOnly) {
+      console.log(candidate.id);
+      continue;
+    }
+    console.log(
+      [
+        candidate.id,
+        candidate.court,
+        candidate.country,
+        `citations=${String(candidate.citationCount)}`,
+        `authority=${candidate.citationAuthority?.toFixed(3) ?? "0.000"}`,
+        `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
+      ].join("\t"),
+    );
   }
-  console.log(
-    [
-      candidate.id,
-      candidate.court,
-      candidate.country,
-      `citations=${String(candidate.citationCount)}`,
-      `authority=${candidate.citationAuthority?.toFixed(3) ?? "0.000"}`,
-      `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
-    ].join("\t"),
-  );
 }
 
 // The tally goes to stderr, so `--ids-only` output stays pipeable.

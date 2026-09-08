@@ -70,12 +70,15 @@ type ApplyAnalysisUpdateOptions = {
   decision: AnalysisSubject;
   /** The input the decision resolves to right now, not the one submitted. */
   input: AnalysisInput;
+  /** Anchor ids of the parse behind that input, in reading order. */
+  anchorIds: readonly string[];
   submission: AnalysisUpdateFences & AnalysisOutput;
   store: AnalysisStore;
   now: Date;
 };
 
 export const applyAnalysisUpdate = async ({
+  anchorIds,
   decision,
   decisionId,
   input,
@@ -129,16 +132,20 @@ export const applyAnalysisUpdate = async ({
   }
 
   const analysis = buildDecisionAnalysis({
+    anchorIds,
     output: submission,
     language: input.language,
     model: submission.model,
     inputFingerprint: input.fingerprint,
     generatedAt: now,
   });
-  await store.save({
+  // The fences are `WHERE` clauses, so a row that moved between the claim
+  // and this statement is a no-op, not an error. Reporting `saved` on a
+  // write that touched nothing would hand the caller a false receipt.
+  const wrote = await store.save({
     analysis,
     contentHash: decision.contentHash,
     decisionId,
   });
-  return { kind: "saved", analysis };
+  return wrote ? { kind: "saved", analysis } : { kind: "claim-lost" };
 };

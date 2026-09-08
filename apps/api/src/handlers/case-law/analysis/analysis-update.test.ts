@@ -66,6 +66,9 @@ const FENCES: AnalysisUpdateFences = {
   model: "some-provider/some-model",
 };
 
+/** The parse the submission's anchors are checked against. */
+const ANCHOR_IDS = ["b3", "b4", "b5", "b9"];
+
 const input: AnalysisInput = {
   language: "cs",
   systemPrompt: "system",
@@ -106,7 +109,8 @@ type StoreCalls = {
 const createStore = ({
   claimWins = true,
   held = null,
-}: { claimWins?: boolean; held?: unknown } = {}) => {
+  saveWrites = true,
+}: { claimWins?: boolean; held?: unknown; saveWrites?: boolean } = {}) => {
   const calls: StoreCalls = { claims: 0, saves: [] };
   const store: AnalysisStore = {
     claim: async ({ fingerprint }) => {
@@ -117,7 +121,7 @@ const createStore = ({
     },
     save: async ({ analysis, contentHash }) => {
       calls.saves.push({ analysis, contentHash });
-      await Promise.resolve();
+      return await Promise.resolve(saveWrites);
     },
     clear: async () => {
       await Promise.resolve();
@@ -137,6 +141,7 @@ const apply = async ({
   submission?: AnalysisUpdateFences & AnalysisOutput;
 }) =>
   await applyAnalysisUpdate({
+    anchorIds: ANCHOR_IDS,
     decision,
     decisionId: DECISION_ID,
     input,
@@ -270,6 +275,50 @@ describe("applyAnalysisUpdate", () => {
 
     expect(outcome.kind).toBe("saved");
     expect(calls.claims).toBe(1);
+  });
+
+  // A producer can name a paragraph that is not in this parse, or run a
+  // range backwards. Either would give the reader a holding link that
+  // scrolls nowhere, so neither is stored.
+  test("keeps only the holding anchors this parse actually carries", async () => {
+    const { store } = createStore();
+
+    const outcome = await apply({
+      store,
+      submission: {
+        ...FENCES,
+        ...OUTPUT,
+        holding: {
+          text: OUTPUT.holding.text,
+          anchors: [
+            { startAnchorId: "b4", endAnchorId: "b5" },
+            { startAnchorId: "b4", endAnchorId: "nope" },
+            { startAnchorId: "nope", endAnchorId: "b5" },
+            { startAnchorId: "b9", endAnchorId: "b3" },
+          ],
+        },
+      },
+    });
+
+    expect(outcome.kind).toBe("saved");
+    if (outcome.kind !== "saved") {
+      return;
+    }
+    expect(outcome.analysis.holding.anchors).toEqual([
+      { startAnchorId: "b4", endAnchorId: "b5" },
+    ]);
+  });
+
+  // The fences are `WHERE` clauses, so a row that moved between the claim
+  // and the save is written by nothing. Reporting success there would hand
+  // the operator a receipt for a write that never happened.
+  test("does not report a save the database did not make", async () => {
+    const { calls, store } = createStore({ saveWrites: false });
+
+    const outcome = await apply({ store });
+
+    expect(outcome.kind).toBe("claim-lost");
+    expect(calls.saves).toHaveLength(1);
   });
 
   test("reports a lost claim rather than writing over the winner", async () => {

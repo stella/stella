@@ -30,6 +30,9 @@ const FINGERPRINT = "f".repeat(64);
 const CONTENT_HASH = "c".repeat(64);
 const NOW = new Date("2026-09-01T12:00:00.000Z");
 
+/** The parse the submission's anchors are checked against. */
+const ANCHOR_IDS = ["b1", "b2"];
+
 const input: AnalysisInput = {
   language: "cs",
   systemPrompt: "system",
@@ -142,6 +145,7 @@ describe("storing an analysis against the decision row", () => {
   const save = async (decisionId: SafeId<"caseLawDecision">) =>
     await applyAnalysisUpdate({
       decision: await subjectFor(decisionId),
+      anchorIds: ANCHOR_IDS,
       decisionId,
       input,
       now: NOW,
@@ -205,6 +209,7 @@ describe("storing an analysis against the decision row", () => {
 
     const outcome = await applyAnalysisUpdate({
       decision,
+      anchorIds: ANCHOR_IDS,
       decisionId,
       input,
       now: NOW,

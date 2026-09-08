@@ -349,19 +349,29 @@ export const analysisLayersOf = (
 };
 
 /**
- * Whether a stored significance still describes the decision's current
- * cited-by neighbourhood. Absent significance and significance over an
- * older graph are the same answer: it must be written again.
+ * Whether a stored significance still stands. Absent significance,
+ * significance over an older graph, and significance from an older revision
+ * of the prompt are one answer: it must be written again.
+ *
+ * The prompt version is part of the question because the graph fingerprint
+ * digests the graph and nothing else, so a reworded prompt would otherwise
+ * leave every already-analysed decision on the old wording indefinitely.
  */
 export const isSignificanceCurrent = ({
   analysis,
   graphFingerprint,
+  promptVersion,
 }: {
   analysis: DecisionAnalysis;
   graphFingerprint: AnalysisGraphFingerprint;
-}): boolean =>
-  analysisLayersOf(analysis).significance?.graphFingerprint ===
-  graphFingerprint;
+  promptVersion: number;
+}): boolean => {
+  const significance = analysisLayersOf(analysis).significance;
+  return (
+    significance?.graphFingerprint === graphFingerprint &&
+    significance.promptVersion === promptVersion
+  );
+};
 
 export const parsePersistedDecisionAnalysis = (
   val: unknown,

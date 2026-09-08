@@ -64,6 +64,33 @@ type BuildAnalysisOptions = {
   model: string;
   inputFingerprint: string;
   generatedAt: Date;
+  /**
+   * Every anchor id the parse the analysis was computed over carries, in
+   * reading order. The holding's anchors are checked against it.
+   */
+  anchorIds: readonly string[];
+};
+
+/**
+ * The holding's anchors, reduced to the ranges that name real paragraphs of
+ * this parse, in reading order.
+ *
+ * A producer can return an id that does not exist, or a range that runs
+ * backwards. Persisting one gives the reader a button that scrolls nowhere,
+ * and no amount of care at the call site prevents it: the check belongs
+ * here, where the parse is known, so a dead holding link is unrepresentable
+ * rather than merely unlikely.
+ */
+const usableAnchors = (
+  anchors: AnalysisOutput["holding"]["anchors"],
+  anchorIds: readonly string[],
+): AnalysisOutput["holding"]["anchors"] => {
+  const positions = new Map(anchorIds.map((id, index) => [id, index]));
+  return anchors.filter((anchor) => {
+    const start = positions.get(anchor.startAnchorId);
+    const end = positions.get(anchor.endAnchorId);
+    return start !== undefined && end !== undefined && start <= end;
+  });
 };
 
 /**
@@ -104,6 +131,7 @@ const createAnalysisHeading = ({
  * from the producer, so no caller can claim a run it did not make.
  */
 export const buildDecisionAnalysis = ({
+  anchorIds,
   generatedAt,
   inputFingerprint,
   language,
@@ -120,7 +148,7 @@ export const buildDecisionAnalysis = ({
   holding: {
     text: output.holding.text,
     language,
-    anchors: output.holding.anchors,
+    anchors: usableAnchors(output.holding.anchors, anchorIds),
   },
   abstract: { text: output.abstract, language },
   topics: output.topics,

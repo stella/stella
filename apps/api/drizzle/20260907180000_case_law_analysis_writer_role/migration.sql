@@ -24,7 +24,11 @@ GRANT SELECT (
   citation_count
 ) ON TABLE "case_law_decisions" TO stella_case_law_analysis_writer;--> statement-breakpoint
 
-GRANT UPDATE (analysis)
+-- `updated_at` rides every write: the column carries `$onUpdate`, so the
+-- ORM assigns it in the same statement that sets `analysis`. Without the
+-- grant the whole statement is refused, which is the only reason a row's
+-- timestamp is writable here.
+GRANT UPDATE (analysis, updated_at)
   ON TABLE "case_law_decisions"
   TO stella_case_law_analysis_writer;--> statement-breakpoint
 

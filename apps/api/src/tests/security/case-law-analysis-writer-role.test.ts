@@ -5,6 +5,7 @@ import nodePath from "node:path";
 
 import { stellaCaseLawAnalysisWriter } from "@/api/db/rls";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { createDbAnalysisStore } from "@/api/handlers/case-law/analysis/analysis-store-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS,
@@ -231,6 +232,73 @@ describe("case-law analysis writer role", () => {
       expect(error).toBeInstanceOf(Error);
       expect(errorMessageChain(error)).toContain("permission denied");
     }
+  });
+
+  // Raw SQL proves the grant; it does not prove the statements the code
+  // actually issues. The ORM assigns `updated_at` alongside `analysis`
+  // because that column carries `$onUpdate`, and a statement touching an
+  // ungranted column is refused whole, so the store is driven here as
+  // itself rather than transcribed into SQL the store never sends.
+  test("SET ROLE runs the real store's claim, save and clear", async () => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const decisionId = createSafeId<"caseLawDecision">();
+    const fingerprint = "f".repeat(64);
+    let outcome = "not run";
+
+    try {
+      await testDb.transaction(async (tx) => {
+        await tx.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `analysis-writer-store-${sourceId}`,
+          name: "Analysis writer role",
+        });
+        await tx.insert(caseLawDecisions).values({
+          id: decisionId,
+          sourceId,
+          caseNumber: `CASE-${decisionId}`,
+          court: "Test Court",
+          country: "CZE",
+          language: "cs",
+        });
+
+        await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(WRITER_ROLE)}`));
+        const store = createDbAnalysisStore(tx);
+        const sentinel = await store.claim({
+          decisionId,
+          fingerprint,
+          observed: null,
+        });
+        if (sentinel === null) {
+          outcome = "claim lost";
+          tx.rollback();
+          return;
+        }
+        const wrote = await store.save({
+          decisionId,
+          contentHash: null,
+          analysis: {
+            version: 3,
+            generatedAt: "2026-09-01T12:00:00.000Z",
+            model: "test-model",
+            inputFingerprint: fingerprint,
+            tree: [],
+            holding: { text: "A holding.", language: "cs", anchors: [] },
+            abstract: { text: "An abstract.", language: "cs" },
+            topics: [],
+          },
+        });
+        await store.clear({ decisionId, sentinel });
+        outcome = wrote ? "claimed and saved" : "save wrote nothing";
+
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        outcome = `refused: ${errorMessageChain(error)}`;
+      }
+    }
+
+    expect(outcome).toBe("claimed and saved");
   });
 
   test("SET ROLE updates analysis on a live row and is refused any other column", async () => {

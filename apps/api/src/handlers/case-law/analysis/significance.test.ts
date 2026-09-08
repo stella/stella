@@ -71,6 +71,58 @@ describe("graphFingerprintOf", () => {
     ).not.toBe(graphFingerprintOf(facts));
   });
 
+  // The same citations from courts the weight registry now tiers
+  // differently: the model is shown the tiers, so the digest must see them.
+  test("moves when a citing court's tier changes", () => {
+    expect(
+      graphFingerprintOf({
+        ...facts,
+        countsByCourtTier: [
+          { tier: 1, count: 1 },
+          { tier: 2, count: 2 },
+        ],
+      }),
+    ).not.toBe(graphFingerprintOf(facts));
+  });
+
+  // A corrected decision date can turn a negative citation into a later
+  // one, which changes what the statement should say.
+  test("moves when a negative reading becomes a later one", () => {
+    expect(graphFingerprintOf({ ...facts, laterNegativeCount: 0 })).not.toBe(
+      graphFingerprintOf(facts),
+    );
+  });
+
+  test("is unmoved by the order the tier counts arrive in", () => {
+    expect(
+      graphFingerprintOf({
+        ...facts,
+        countsByCourtTier: [...facts.countsByCourtTier].toReversed(),
+      }),
+    ).toBe(graphFingerprintOf(facts));
+  });
+
+  // Every fact the user message carries takes part in the digest. A field
+  // added to one and not the other is the drift this guards.
+  test("covers every fact the model is shown", () => {
+    const message = significanceUserMessage(facts);
+    const moved = (next: CitationGraphFacts) =>
+      significanceUserMessage(next) !== message &&
+      graphFingerprintOf(next) !== graphFingerprintOf(facts);
+
+    expect(moved({ ...facts, laterNegativeCount: 9 })).toBe(true);
+    expect(moved({ ...facts, reportedInCollection: false })).toBe(true);
+    expect(
+      moved({ ...facts, countsByCourtTier: [{ tier: 3, count: 7 }] }),
+    ).toBe(true);
+    expect(
+      moved({
+        ...facts,
+        treatmentCounts: { ...facts.treatmentCounts, neutral: 5 },
+      }),
+    ).toBe(true);
+  });
+
   test("is a hex digest, so it can be compared as a plain string", () => {
     expect(graphFingerprintOf(facts)).toMatch(/^[0-9a-f]{64}$/u);
   });

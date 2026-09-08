@@ -64,8 +64,13 @@ export const CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS = {
   case_law_sources: ["id", "descriptor"],
 } as const;
 
+/**
+ * `updated_at` is writable only because it rides every write: the column
+ * carries `$onUpdate`, so the ORM assigns it in the same statement that sets
+ * `analysis`, and a statement touching an ungranted column is refused whole.
+ */
 export const CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS = {
-  case_law_decisions: ["analysis"],
+  case_law_decisions: ["analysis", "updated_at"],
 } as const;
 
 /**

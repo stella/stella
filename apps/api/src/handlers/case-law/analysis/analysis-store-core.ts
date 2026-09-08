@@ -44,6 +44,14 @@ type AnalysisSave = {
   analysis: DecisionAnalysis;
   /** The row's `contentHash` when the run was claimed. */
   contentHash: string | null;
+  /**
+   * The `analysis` value this run read, when the write must replace that
+   * exact value and no other. The fingerprint fence alone cannot separate
+   * two runs over the same document, so a writer that computed from
+   * something beside the document (the citation graph) passes what it saw
+   * and loses the race rather than overwriting a fresher result.
+   */
+  expected?: unknown;
 };
 
 type AnalysisRelease = {
@@ -64,8 +72,12 @@ export type AnalysisStore = {
    * fingerprint and the document it was claimed under. A re-parse during
    * the run changes `contentHash`; the result would then be rejected by
    * the next read anyway, so it is not worth the write.
+   *
+   * Answers whether a row was actually written. A caller that reports its
+   * own success must ask: the fences are `WHERE` clauses, so a row that
+   * moved between the claim and the save is a silent no-op otherwise.
    */
-  save: (save: AnalysisSave) => Promise<void>;
+  save: (save: AnalysisSave) => Promise<boolean>;
   /**
    * Releases this run's sentinel, and only this run's: the exact value
    * `claim` wrote. A replacement run that took over this one's stale
@@ -93,9 +105,9 @@ export const createDbAnalysisStore = (
       .returning({ id: caseLawDecisions.id });
     return updated === undefined ? null : sentinel;
   },
-  save: async ({ analysis, contentHash, decisionId }) => {
+  save: async ({ analysis, contentHash, decisionId, expected }) => {
     // audit: skip — the caller audits the analysis it saves
-    await db
+    const written = await db
       .update(caseLawDecisions)
       .set({ analysis })
       .where(
@@ -103,8 +115,16 @@ export const createDbAnalysisStore = (
           eq(caseLawDecisions.id, decisionId),
           sql`${storedAnalysisFingerprint} = ${analysis.inputFingerprint}`,
           sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${contentHash}`,
+          ...(expected === undefined
+            ? []
+            : // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
+              [
+                sql`${caseLawDecisions.analysis} = ${JSON.stringify(expected)}::text::jsonb`,
+              ]),
         ),
-      );
+      )
+      .returning({ id: caseLawDecisions.id });
+    return written.length > 0;
   },
   clear: async ({ decisionId, sentinel }) => {
     // audit: skip — analysis sentinel cleanup; no user-facing state change
