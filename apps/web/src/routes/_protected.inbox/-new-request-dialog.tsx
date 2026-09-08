@@ -45,7 +45,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   getRequestWorkspacePolicy,
@@ -114,49 +114,51 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
     matterRequiredMessage: t("billing.matterRequired"),
   });
 
-  const form = useForm({
-    defaultValues: requestDefaultValues(defaultWorkspaceId),
-    validators: { onDynamic: schema },
-    onSubmit: async ({ value, formApi }) => {
-      setSubmitError(null);
-      const parsed = v.safeParse(schema, value);
-      if (!parsed.success) {
-        return;
-      }
-      const { title, description, workspaceId, assigneeUserId, severity } =
-        parsed.output;
-      const created = await Result.tryPromise(async () =>
-        unwrapEden(
-          await api.signals.requests.post({
-            title,
-            description,
-            matterId:
-              workspaceId === UNSCOPED_REQUEST
-                ? null
-                : toSafeId<"workspace">(workspaceId),
-            assigneeUserId:
-              assigneeUserId === UNSCOPED_REQUEST
-                ? null
-                : toSafeId<"user">(assigneeUserId),
-            severity,
-          }),
-        ),
-      );
-      if (Result.isError(created)) {
-        analytics.captureError(created.error);
-        setSubmitError(
-          userErrorFromThrown(created.error, t("errors.actionFailed")),
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      defaultValues: requestDefaultValues(defaultWorkspaceId),
+      submitValues: "schema-output",
+      onSubmit: async ({ value, formApi }) => {
+        setSubmitError(null);
+        const { title, description, workspaceId, assigneeUserId, severity } =
+          value;
+        const created = await Result.tryPromise(async () =>
+          unwrapEden(
+            await api.signals.requests.post({
+              title,
+              description,
+              matterId:
+                workspaceId === UNSCOPED_REQUEST
+                  ? null
+                  : toSafeId<"workspace">(workspaceId),
+              assigneeUserId:
+                assigneeUserId === UNSCOPED_REQUEST
+                  ? null
+                  : toSafeId<"user">(assigneeUserId),
+              severity,
+            }),
+          ),
         );
-        return;
-      }
-      await queryClient.invalidateQueries({
-        queryKey: inboxKeys.all(organizationId),
-      });
-      stellaToast.add({ title: t("inbox.request.created"), type: "success" });
-      formApi.reset();
-      setIsOpen(false);
-    },
-  });
+        if (Result.isError(created)) {
+          analytics.captureError(created.error);
+          setSubmitError(
+            userErrorFromThrown(created.error, t("errors.actionFailed")),
+          );
+          return;
+        }
+        await queryClient.invalidateQueries({
+          queryKey: inboxKeys.all(organizationId),
+        });
+        stellaToast.add({
+          title: t("inbox.request.created"),
+          type: "success",
+        });
+        formApi.reset();
+        setIsOpen(false);
+      },
+    }),
+  );
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 
   const severityItems = SIGNAL_SEVERITIES.map((severity) => ({

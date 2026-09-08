@@ -33,7 +33,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { emailSchema, toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 import { resolveSignInOptions } from "./sign-in-panel.logic";
@@ -162,39 +162,35 @@ export const SignInPanel = ({
     setSocialLoading(null);
   };
 
-  const form = useForm({
-    defaultValues: { email: "" },
-    validators: {
-      onDynamic: formSchema,
-    },
-    onSubmit: async ({ value }) => {
-      const parseResult = v.safeParse(formSchema, value);
-      if (!parseResult.success) {
-        return;
-      }
-      const parsedValue = parseResult.output;
-      const { error } = await authClient.emailOtp.sendVerificationOtp({
-        email: parsedValue.email,
-        type: "sign-in",
-      });
+  const form = useForm(
+    schemaFormOptions({
+      schema: formSchema,
+      defaultValues: { email: "" },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        const { error } = await authClient.emailOtp.sendVerificationOtp({
+          email: value.email,
+          type: "sign-in",
+        });
 
-      if (error) {
-        analytics.captureError(toAuthClientError(error));
-        if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-          stellaToast.add({
-            title: userErrorFromThrown(
-              toAuthClientError(error),
-              t("errors.actionFailed"),
-            ),
-            type: "error",
-          });
+        if (error) {
+          analytics.captureError(toAuthClientError(error));
+          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+            stellaToast.add({
+              title: userErrorFromThrown(
+                toAuthClientError(error),
+                t("errors.actionFailed"),
+              ),
+              type: "error",
+            });
+          }
+          return;
         }
-        return;
-      }
 
-      await handleOtpSent(parsedValue.email);
-    },
-  });
+        await handleOtpSent(value.email);
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 
@@ -336,54 +332,51 @@ const PasswordSignInForm = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
-  const form = useForm({
-    defaultValues: { email: "", password: "" },
-    validators: {
-      onDynamic: passwordFormSchema,
-    },
-    onSubmit: async ({ value }) => {
-      const parseResult = v.safeParse(passwordFormSchema, value);
-      if (!parseResult.success) {
-        return;
-      }
-      const { data, error } = await authClient.signIn.email({
-        email: parseResult.output.email,
-        password: parseResult.output.password,
-        callbackURL: getOrganizationCallbackUrl(redirectTo),
-      });
+  const form = useForm(
+    schemaFormOptions({
+      schema: passwordFormSchema,
+      defaultValues: { email: "", password: "" },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        const { data, error } = await authClient.signIn.email({
+          email: value.email,
+          password: value.password,
+          callbackURL: getOrganizationCallbackUrl(redirectTo),
+        });
 
-      if (error) {
-        analytics.captureError(toAuthClientError(error));
-        if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-          stellaToast.add({
-            title: userErrorFromThrown(
-              toAuthClientError(error),
-              t("errors.actionFailed"),
-            ),
-            type: "error",
-          });
+        if (error) {
+          analytics.captureError(toAuthClientError(error));
+          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+            stellaToast.add({
+              title: userErrorFromThrown(
+                toAuthClientError(error),
+                t("errors.actionFailed"),
+              ),
+              type: "error",
+            });
+          }
+          return;
         }
-        return;
-      }
 
-      // An enrolled user's password is correct but the session is still
-      // pending a second factor; send them to the same challenge page the
-      // email-OTP flow uses instead of treating this as a completed sign-in.
-      if (isTwoFactorRedirect(data)) {
+        // An enrolled user's password is correct but the session is still
+        // pending a second factor; send them to the same challenge page the
+        // email-OTP flow uses instead of treating this as a completed sign-in.
+        if (isTwoFactorRedirect(data)) {
+          await navigate({
+            to: "/auth/two-factor",
+            search: { redirectTo },
+          });
+          return;
+        }
+
+        await invalidateSession.mutateAsync();
         await navigate({
-          to: "/auth/two-factor",
+          to: "/auth/organization",
           search: { redirectTo },
         });
-        return;
-      }
-
-      await invalidateSession.mutateAsync();
-      await navigate({
-        to: "/auth/organization",
-        search: { redirectTo },
-      });
-    },
-  });
+      },
+    }),
+  );
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (
@@ -464,46 +457,43 @@ const BootstrapSignUpForm = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
-  const form = useForm({
-    defaultValues: { email: "", password: "", bootstrapToken: "" },
-    validators: {
-      onDynamic: bootstrapFormSchema,
-    },
-    onSubmit: async ({ value }) => {
-      const parseResult = v.safeParse(bootstrapFormSchema, value);
-      if (!parseResult.success) {
-        return;
-      }
-      const email = parseResult.output.email;
-      const { error } = await signUpWithSelfhostBootstrap({
-        email,
-        password: parseResult.output.password,
-        name: getFallbackName(email),
-        bootstrapToken: parseResult.output.bootstrapToken,
-        callbackURL: getOrganizationCallbackUrl(redirectTo),
-      });
+  const form = useForm(
+    schemaFormOptions({
+      schema: bootstrapFormSchema,
+      defaultValues: { email: "", password: "", bootstrapToken: "" },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        const { email, password, bootstrapToken } = value;
+        const { error } = await signUpWithSelfhostBootstrap({
+          email,
+          password,
+          name: getFallbackName(email),
+          bootstrapToken,
+          callbackURL: getOrganizationCallbackUrl(redirectTo),
+        });
 
-      if (error) {
-        analytics.captureError(toAuthClientError(error));
-        if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-          stellaToast.add({
-            title: userErrorFromThrown(
-              toAuthClientError(error),
-              t("errors.actionFailed"),
-            ),
-            type: "error",
-          });
+        if (error) {
+          analytics.captureError(toAuthClientError(error));
+          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+            stellaToast.add({
+              title: userErrorFromThrown(
+                toAuthClientError(error),
+                t("errors.actionFailed"),
+              ),
+              type: "error",
+            });
+          }
+          return;
         }
-        return;
-      }
 
-      await invalidateSession.mutateAsync();
-      await navigate({
-        to: "/auth/organization",
-        search: { redirectTo },
-      });
-    },
-  });
+        await invalidateSession.mutateAsync();
+        await navigate({
+          to: "/auth/organization",
+          search: { redirectTo },
+        });
+      },
+    }),
+  );
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (

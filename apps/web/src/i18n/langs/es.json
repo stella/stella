@@ -250,6 +250,7 @@
   "billing": {
     "addEntry": "Añadir entrada",
     "amount": "Importe",
+    "amountMustBePositive": "El importe debe ser mayor que cero",
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
     "batchActions": "Acciones en lote",
@@ -296,6 +297,7 @@
     "failedToStartTimer": "No se pudo iniciar el temporizador",
     "failedToStopTimer": "No se pudo detener el temporizador",
     "filterStatus": "Filtrar por estado",
+    "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "hours": "Horas",
     "invoiceNarrative": "Descripción de factura",
     "invoiceNarrativePlaceholder": "Descripción para el cliente (opcional)",

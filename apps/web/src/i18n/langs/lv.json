@@ -250,6 +250,7 @@
   "billing": {
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",
+    "amountMustBePositive": "Summai jābūt lielākai par nulli",
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
     "batchActions": "Grupas darbības",
@@ -296,6 +297,7 @@
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",
+    "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
     "invoiceNarrative": "Rēķina apraksts",
     "invoiceNarrativePlaceholder": "Klientam paredzēts apraksts (neobligāti)",

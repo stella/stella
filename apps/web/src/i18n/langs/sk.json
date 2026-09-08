@@ -250,6 +250,7 @@
   "billing": {
     "addEntry": "Pridať záznam",
     "amount": "Čiastka",
+    "amountMustBePositive": "Suma musí byť vyššia ako nula",
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
     "batchActions": "Hromadné akcie",
@@ -296,6 +297,7 @@
     "failedToStartTimer": "Nepodarilo sa spustiť časovač",
     "failedToStopTimer": "Nepodarilo sa zastaviť časovač",
     "filterStatus": "Filtrovať podľa stavu",
+    "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktúry",
     "invoiceNarrativePlaceholder": "Popis pre klienta (nepovinné)",

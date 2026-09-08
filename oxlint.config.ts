@@ -269,6 +269,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
   ]),
+  fixtureRuleOverride("require-schema-form-options.fixture.tsx", [
+    "require-schema-form-options/require-schema-form-options",
+  ]),
   fixtureRuleOverride("require-router-select.fixture.ts", [
     "require-router-select/require-router-select",
   ]),
@@ -1022,6 +1025,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
+    "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
@@ -1985,6 +1989,13 @@ export default defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-legacy-entity-route/no-legacy-entity-route": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "require-schema-form-options/require-schema-form-options": "error",
       },
     },
     {

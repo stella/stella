@@ -2,14 +2,18 @@ import { useState } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useSelector } from "@tanstack/react-store";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
@@ -32,6 +36,11 @@ import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  schemaFormOptions,
+  requiredTrimmedStringSchema,
+  toFormErrors,
+} from "@/lib/schema";
 import {
   rateEntriesOptions,
   rateTablesOptions,
@@ -305,24 +314,34 @@ const CreateRateTableForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
-
-  const form = useForm({
-    defaultValues: {
-      name: "",
-      currency: "USD",
-      isDefault: false,
-    },
-    onSubmit: ({ value }) => {
-      if (!value.name.trim()) {
-        return;
-      }
-      onSubmit(value);
-    },
+  const schema = v.strictObject({
+    name: requiredTrimmedStringSchema(t("common.required")),
+    currency: v.string(),
+    isDefault: v.boolean(),
   });
 
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      submitValues: "schema-output",
+      defaultValues: {
+        name: "",
+        currency: "USD",
+        isDefault: false,
+      },
+      onSubmit: ({ value }) => {
+        onSubmit(value);
+      },
+    }),
+  );
+  const formErrors = useSelector(form.store, (state) =>
+    toFormErrors(state.fieldMeta),
+  );
+
   return (
-    <form
+    <Form
       className="flex flex-col gap-3 rounded-md border p-3"
+      errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -331,15 +350,19 @@ const CreateRateTableForm = ({
     >
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("common.name")}</Label>
           <form.Field name="name">
             {(field) => (
-              <Input
-                autoFocus
-                onChange={(e) => field.handleChange(e.currentTarget.value)}
-                placeholder={t("billing.rates.tableNamePlaceholder")}
-                value={field.state.value}
-              />
+              <Field className="w-full gap-1.5" name={field.name}>
+                <FieldLabel>{t("common.name")}</FieldLabel>
+                <Input
+                  autoFocus
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.currentTarget.value)}
+                  placeholder={t("billing.rates.tableNamePlaceholder")}
+                  value={field.state.value}
+                />
+                <FieldError />
+              </Field>
             )}
           </form.Field>
         </div>
@@ -380,7 +403,7 @@ const CreateRateTableForm = ({
           {t("common.save")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };
 
@@ -634,38 +657,57 @@ const CreateRateEntryForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
-
-  const form = useForm({
-    defaultValues: {
-      userId: "",
-      hourlyRate: "",
-      effectiveFrom: today,
-      effectiveTo: "",
-    },
-    onSubmit: ({ value }) => {
-      // The typed text is scaled, not a float parsed from it: 1.005 times a
-      // hundred is 100.49999999999999 in binary floating point.
-      const hourlyRate = tryToMinorUnits({
-        amount: value.hourlyRate,
-        currency,
-      });
-
-      if (hourlyRate === null || hourlyRate < 0) {
-        return;
-      }
-
-      onSubmit({
-        userId: value.userId || null,
-        hourlyRate,
-        effectiveFrom: value.effectiveFrom,
-        effectiveTo: value.effectiveTo || null,
-      });
-    },
+  const schema = v.strictObject({
+    userId: v.pipe(
+      v.string(),
+      v.transform((value) => value || null),
+    ),
+    // The typed text is scaled directly rather than through a parsed float,
+    // which would lose the cent that 1.005 should round to in USD.
+    hourlyRate: v.pipe(
+      v.string(),
+      v.rawTransform(({ addIssue, dataset, NEVER }) => {
+        const hourlyRate = tryToMinorUnits({
+          amount: dataset.value,
+          currency,
+        });
+        if (hourlyRate === null || hourlyRate < 0) {
+          addIssue({ message: t("billing.hourlyRateMustBeNonNegative") });
+          return NEVER;
+        }
+        return hourlyRate;
+      }),
+    ),
+    effectiveFrom: v.string(),
+    effectiveTo: v.pipe(
+      v.string(),
+      v.transform((value) => value || null),
+    ),
   });
 
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      submitValues: "schema-output",
+      defaultValues: {
+        userId: "",
+        hourlyRate: "",
+        effectiveFrom: today,
+        effectiveTo: "",
+      },
+      onSubmit: ({ value }) => {
+        onSubmit(value);
+      },
+    }),
+  );
+  const formErrors = useSelector(form.store, (state) =>
+    toFormErrors(state.fieldMeta),
+  );
+
   return (
-    <form
+    <Form
       className="flex flex-col gap-3 rounded-md border p-3"
+      errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -730,16 +772,20 @@ const CreateRateEntryForm = ({
 
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{`${t("billing.rates.hourlyRate")} (${currency})`}</Label>
           <form.Field name="hourlyRate">
             {(field) => (
-              <Input
-                dir="ltr"
-                inputMode="decimal"
-                onChange={(e) => field.handleChange(e.currentTarget.value)}
-                placeholder="350.00"
-                value={field.state.value}
-              />
+              <Field className="w-full gap-1.5" name={field.name}>
+                <FieldLabel>{`${t("billing.rates.hourlyRate")} (${currency})`}</FieldLabel>
+                <Input
+                  dir="ltr"
+                  inputMode="decimal"
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.currentTarget.value)}
+                  placeholder="350.00"
+                  value={field.state.value}
+                />
+                <FieldError />
+              </Field>
             )}
           </form.Field>
         </div>
@@ -751,7 +797,7 @@ const CreateRateEntryForm = ({
           <form.Field name="effectiveFrom">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}
@@ -762,7 +808,7 @@ const CreateRateEntryForm = ({
           <form.Field name="effectiveTo">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}
@@ -778,6 +824,6 @@ const CreateRateEntryForm = ({
           {t("common.save")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

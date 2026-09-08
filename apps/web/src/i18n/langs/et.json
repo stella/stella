@@ -250,6 +250,7 @@
   "billing": {
     "addEntry": "Lisa kanne",
     "amount": "Summa",
+    "amountMustBePositive": "Summa peab olema suurem kui null",
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
     "batchActions": "Partiiaktsioonid",
@@ -296,6 +297,7 @@
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
     "filterStatus": "Filtreeri oleku järgi",
+    "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
     "invoiceNarrative": "Arve selgitus",
     "invoiceNarrativePlaceholder": "Kliendile nähtav kirjeldus (vabatahtlik)",

@@ -53,6 +53,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
+  schemaFormOptions,
   requiredTrimmedStringSchema,
   toFormErrors,
   trimmedStringSchema,
@@ -766,49 +767,45 @@ const EditInvoiceForm = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
 
-  const form = useForm({
-    defaultValues: {
-      invoiceNumber: initialNumber,
-      invoiceDate: initialDate,
-      dueDate: initialDueDate,
-      reference: initialReference,
-      currency: initialCurrency,
-      notes: initialNotes,
-    },
-    validators: {
-      onDynamic: editInvoiceSchema,
-    },
-    onSubmit: async ({ value }) => {
-      const parseResult = v.safeParse(editInvoiceSchema, value);
-      if (!parseResult.success) {
-        return;
-      }
-      const parsedValue = parseResult.output;
-      const response = await api
-        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
-          invoiceId: toSafeId<"invoice">(invoiceId),
-        })
-        .patch({
-          invoiceNumber: parsedValue.invoiceNumber,
-          invoiceDate: parsedValue.invoiceDate,
-          dueDate: parsedValue.dueDate || null,
-          reference: parsedValue.reference || null,
-          currency: parsedValue.currency,
-          notes: parsedValue.notes || null,
-        });
-      if (response.error) {
-        showErrorToast(t("billing.failedToSave"));
-        return;
-      }
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        }),
-        "invoices.invalidate",
-      );
-      onClose();
-    },
-  });
+  const form = useForm(
+    schemaFormOptions({
+      schema: editInvoiceSchema,
+      defaultValues: {
+        invoiceNumber: initialNumber,
+        invoiceDate: initialDate,
+        dueDate: initialDueDate,
+        reference: initialReference,
+        currency: initialCurrency,
+        notes: initialNotes,
+      },
+      submitValues: "schema-output",
+      onSubmit: async ({ value }) => {
+        const response = await api
+          .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+            invoiceId: toSafeId<"invoice">(invoiceId),
+          })
+          .patch({
+            invoiceNumber: value.invoiceNumber,
+            invoiceDate: value.invoiceDate,
+            dueDate: value.dueDate || null,
+            reference: value.reference || null,
+            currency: value.currency,
+            notes: value.notes || null,
+          });
+        if (response.error) {
+          showErrorToast(t("billing.failedToSave"));
+          return;
+        }
+        detached(
+          queryClient.invalidateQueries({
+            queryKey: invoicesKeys.all(workspaceId),
+          }),
+          "invoices.invalidate",
+        );
+        onClose();
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 

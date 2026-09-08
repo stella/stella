@@ -54,7 +54,7 @@ import {
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
 } from "@/lib/redirect";
-import { toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const searchSchema = v.object({
   devQuickStart: v.optional(v.boolean()),
@@ -333,87 +333,80 @@ const CreateOrganizationForm = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const form = useForm({
-    defaultValues: { name: "", slug: "" },
-    validators: {
-      onDynamic: getOrganizationSchema(),
-    },
-    onSubmit: async ({ value, formApi }) => {
-      const parseResult = v.safeParse(getOrganizationSchema(), value);
-      if (!parseResult.success) {
-        return;
-      }
+  const form = useForm(
+    schemaFormOptions({
+      schema: getOrganizationSchema(),
+      defaultValues: { name: "", slug: "" },
+      submitValues: "schema-output",
+      onSubmit: async ({ value, formApi }) => {
+        const { data: slugCheckData, error: slugCheckError } =
+          await authClient.organization.checkSlug({
+            slug: value.slug,
+          });
 
-      const parsedValue = parseResult.output;
-      const { data: slugCheckData, error: slugCheckError } =
-        await authClient.organization.checkSlug({
-          slug: parsedValue.slug,
-        });
+        if (slugCheckError) {
+          analytics.captureError(toAuthClientError(slugCheckError));
+          stellaToast.add({
+            title: slugCheckError.message ?? t("errors.actionFailed"),
+            type: "error",
+          });
+          return;
+        }
 
-      if (slugCheckError) {
-        analytics.captureError(toAuthClientError(slugCheckError));
-        stellaToast.add({
-          title: slugCheckError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
+        if (!slugCheckData.status) {
+          formApi.setErrorMap({
+            onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
+          });
+          return;
+        }
 
-      if (!slugCheckData.status) {
-        formApi.setErrorMap({
-          onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
-        });
-        return;
-      }
+        const { data, error: createError } =
+          await authClient.organization.create({
+            name: value.name,
+            slug: value.slug,
+          });
 
-      const { data, error: createError } = await authClient.organization.create(
-        {
-          name: parsedValue.name,
-          slug: parsedValue.slug,
-        },
-      );
+        if (createError) {
+          analytics.captureError(toAuthClientError(createError));
+          stellaToast.add({
+            title: createError.message ?? t("errors.actionFailed"),
+            type: "error",
+          });
+          return;
+        }
 
-      if (createError) {
-        analytics.captureError(toAuthClientError(createError));
-        stellaToast.add({
-          title: createError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
+        const { error: setActiveError } =
+          await authClient.organization.setActive({
+            organizationId: data.id,
+          });
 
-      const { error: setActiveError } = await authClient.organization.setActive(
-        {
-          organizationId: data.id,
-        },
-      );
+        if (setActiveError) {
+          analytics.captureError(toAuthClientError(setActiveError));
+          stellaToast.add({
+            title: setActiveError.message ?? t("errors.actionFailed"),
+            type: "error",
+          });
+          return;
+        }
 
-      if (setActiveError) {
-        analytics.captureError(toAuthClientError(setActiveError));
-        stellaToast.add({
-          title: setActiveError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
-
-      try {
-        await completeOrganizationFlow({
-          isOauthPostLogin,
-          navigate,
-          queryClient,
-          redirectTo,
-          status: "created",
-        });
-      } catch (error) {
-        analytics.captureError(error);
-        stellaToast.add({
-          title: userErrorFromThrown(error, t("errors.actionFailed")),
-          type: "error",
-        });
-      }
-    },
-  });
+        try {
+          await completeOrganizationFlow({
+            isOauthPostLogin,
+            navigate,
+            queryClient,
+            redirectTo,
+            status: "created",
+          });
+        } catch (error) {
+          analytics.captureError(error);
+          stellaToast.add({
+            title: userErrorFromThrown(error, t("errors.actionFailed")),
+            type: "error",
+          });
+        }
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 

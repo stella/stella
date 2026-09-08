@@ -250,6 +250,7 @@
   "billing": {
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
+    "amountMustBePositive": "Le montant doit être supérieur à zéro",
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",
@@ -296,6 +297,7 @@
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",
+    "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
     "invoiceNarrative": "Description de la facture",
     "invoiceNarrativePlaceholder": "Description destinée au client (facultatif)",

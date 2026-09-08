@@ -4,10 +4,13 @@ import { useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
@@ -18,12 +21,12 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import {
@@ -89,43 +92,52 @@ export const TimeEntryForm = ({
   );
 
   const today = localISODate();
-
-  const form = useForm({
-    defaultValues: {
-      matterId: defaultValues?.matterId ?? "",
-      dateWorked: defaultValues?.dateWorked ?? today,
-      durationMinutes: defaultValues?.durationMinutes ?? 6,
-      narrative: defaultValues?.narrative ?? "",
-      invoiceNarrative: defaultValues?.invoiceNarrative ?? "",
-      billable: defaultValues?.billable ?? true,
-      taskCode: defaultValues?.taskCode ?? "",
-      activityCode: defaultValues?.activityCode ?? "",
-      rateAtEntry: defaultValues?.rateAtEntry ?? 0,
-      currency: defaultValues?.currency ?? DEFAULT_CURRENCY,
-    },
-    onSubmit: async ({ value }) => {
-      if (!value.matterId) {
-        stellaToast.add({
-          title: t("billing.matterRequired"),
-          type: "error",
-        });
-        return;
-      }
-      // The rate input holds MAJOR units and the currency input sits beside
-      // it, so an overridden rate is scaled here, against the currency the
-      // form actually submits: 100 typed under USD and submitted under JPY is
-      // 100 yen. A rate that was never overridden already carries its rate
-      // table's currency, in that currency's minor units.
-      await onSubmit({
-        ...value,
-        rateAtEntry: submittedRateCents({
-          draft: rateOverride ? rateInputValue : null,
-          currency: value.currency,
-          resolvedRateCents: value.rateAtEntry,
-        }),
-      });
-    },
+  const schema = v.strictObject({
+    matterId: v.pipe(v.string(), v.nonEmpty(t("billing.matterRequired"))),
+    dateWorked: v.string(),
+    durationMinutes: v.number(),
+    narrative: v.string(),
+    invoiceNarrative: v.string(),
+    billable: v.boolean(),
+    taskCode: v.string(),
+    activityCode: v.string(),
+    rateAtEntry: v.number(),
+    currency: v.string(),
   });
+
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      submitValues: "raw",
+      defaultValues: {
+        matterId: defaultValues?.matterId ?? "",
+        dateWorked: defaultValues?.dateWorked ?? today,
+        durationMinutes: defaultValues?.durationMinutes ?? 6,
+        narrative: defaultValues?.narrative ?? "",
+        invoiceNarrative: defaultValues?.invoiceNarrative ?? "",
+        billable: defaultValues?.billable ?? true,
+        taskCode: defaultValues?.taskCode ?? "",
+        activityCode: defaultValues?.activityCode ?? "",
+        rateAtEntry: defaultValues?.rateAtEntry ?? 0,
+        currency: defaultValues?.currency ?? DEFAULT_CURRENCY,
+      },
+      onSubmit: async ({ value }) => {
+        // The rate input holds MAJOR units and the currency input sits beside
+        // it, so an overridden rate is scaled here, against the currency the
+        // form actually submits: 100 typed under USD and submitted under JPY is
+        // 100 yen. A rate that was never overridden already carries its rate
+        // table's currency, in that currency's minor units.
+        await onSubmit({
+          ...value,
+          rateAtEntry: submittedRateCents({
+            draft: rateOverride ? rateInputValue : null,
+            currency: value.currency,
+            resolvedRateCents: value.rateAtEntry,
+          }),
+        });
+      },
+    }),
+  );
 
   const dateWorked = useSelector(form.store, (s) => s.values.dateWorked);
 
@@ -149,10 +161,14 @@ export const TimeEntryForm = ({
 
   const currentRate = useSelector(form.store, (s) => s.values.rateAtEntry);
   const currentCurrency = useSelector(form.store, (s) => s.values.currency);
+  const formErrors = useSelector(form.store, (state) =>
+    toFormErrors(state.fieldMeta),
+  );
 
   return (
-    <form
+    <Form
       className="flex flex-col gap-4"
+      errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -160,14 +176,17 @@ export const TimeEntryForm = ({
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label>{t("common.matter")}</Label>
         <form.Field name="matterId">
           {(field) => (
-            <MatterCombobox
-              onChange={field.handleChange}
-              value={field.state.value}
-              workspaceId={workspaceId}
-            />
+            <Field className="w-full gap-1.5" name={field.name}>
+              <FieldLabel>{t("common.matter")}</FieldLabel>
+              <MatterCombobox
+                onChange={field.handleChange}
+                value={field.state.value}
+                workspaceId={workspaceId}
+              />
+              <FieldError />
+            </Field>
           )}
         </form.Field>
       </div>
@@ -178,7 +197,7 @@ export const TimeEntryForm = ({
           <form.Field name="dateWorked">
             {(field) => (
               <DatePickerPopover
-                onChange={(v) => field.handleChange(v ?? "")}
+                onChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value}
               />
             )}
@@ -294,7 +313,7 @@ export const TimeEntryForm = ({
           <form.Field name="taskCode">
             {(field) => (
               <Select
-                onValueChange={(v) => field.handleChange(v ?? "")}
+                onValueChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value || null}
               >
                 <SelectTrigger size="sm">
@@ -319,7 +338,7 @@ export const TimeEntryForm = ({
           <form.Field name="activityCode">
             {(field) => (
               <Select
-                onValueChange={(v) => field.handleChange(v ?? "")}
+                onValueChange={(value) => field.handleChange(value ?? "")}
                 value={field.state.value || null}
               >
                 <SelectTrigger size="sm">
@@ -358,6 +377,6 @@ export const TimeEntryForm = ({
         )}
         <Button type="submit">{submitLabel ?? t("common.save")}</Button>
       </div>
-    </form>
+    </Form>
   );
 };

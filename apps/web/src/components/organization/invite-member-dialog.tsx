@@ -42,7 +42,7 @@ import {
   roleTranslationKeys,
 } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
-import { emailSchema, toFormErrors } from "@/lib/schema";
+import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -95,43 +95,40 @@ export const InviteMemberDialog = ({
     }),
   );
 
-  const form = useForm({
-    defaultValues,
-    validators: { onDynamic: inviteSchema },
-    onSubmit: async ({ value, formApi }) => {
-      const parseResult = v.safeParse(inviteSchema, value);
-      if (!parseResult.success) {
-        return;
-      }
-
-      const parsedValue = parseResult.output;
-      const inviteResult = await Result.tryPromise(
-        async () =>
-          await inviteMember.mutateAsync({
-            email: parsedValue.email,
-            role: parsedValue.role,
-          }),
-      );
-
-      if (Result.isError(inviteResult)) {
-        const message = userErrorFromThrown(
-          inviteResult.error,
-          t("errors.actionFailed"),
+  const form = useForm(
+    schemaFormOptions({
+      schema: inviteSchema,
+      defaultValues,
+      submitValues: "schema-output",
+      onSubmit: async ({ value, formApi }) => {
+        const inviteResult = await Result.tryPromise(
+          async () =>
+            await inviteMember.mutateAsync({
+              email: value.email,
+              role: value.role,
+            }),
         );
-        formApi.setErrorMap({
-          onSubmit: { fields: { email: message } },
-        });
-        return;
-      }
 
-      stellaToast.add({
-        title: t("success.invitationSent"),
-        type: "success",
-      });
-      setIsOpen(false);
-      onInvited?.();
-    },
-  });
+        if (Result.isError(inviteResult)) {
+          const message = userErrorFromThrown(
+            inviteResult.error,
+            t("errors.actionFailed"),
+          );
+          formApi.setErrorMap({
+            onSubmit: { fields: { email: message } },
+          });
+          return;
+        }
+
+        stellaToast.add({
+          title: t("success.invitationSent"),
+          type: "success",
+        });
+        setIsOpen(false);
+        onInvited?.();
+      },
+    }),
+  );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 

@@ -250,6 +250,7 @@
   "billing": {
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
+    "amountMustBePositive": "Der Betrag muss größer als null sein",
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",
@@ -296,6 +297,7 @@
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",
+    "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
     "invoiceNarrative": "Rechnungstext",
     "invoiceNarrativePlaceholder": "Beschreibung für den Mandanten (optional)",

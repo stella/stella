@@ -2,14 +2,17 @@ import { useState } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useSelector } from "@tanstack/react-store";
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
-import { Label } from "@stll/ui/label";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -19,6 +22,11 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  schemaFormOptions,
+  requiredTrimmedStringSchema,
+  toFormErrors,
+} from "@/lib/schema";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 
 type BillingCodesDialogProps = {
@@ -151,8 +159,8 @@ export const BillingCodesDialog = ({
           </div>
 
           <Tabs
-            onValueChange={(v: typeof activeTab) => {
-              setActiveTab(v);
+            onValueChange={(value: typeof activeTab) => {
+              setActiveTab(value);
               setShowForm(false);
             }}
             value={activeTab}
@@ -263,20 +271,29 @@ const CreateCodeForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
-
-  const form = useForm({
-    defaultValues: { code: "", label: "" },
-    onSubmit: ({ value }) => {
-      if (!value.code.trim() || !value.label.trim()) {
-        return;
-      }
-      onSubmit(value);
-    },
+  const schema = v.strictObject({
+    code: requiredTrimmedStringSchema(t("common.required")),
+    label: requiredTrimmedStringSchema(t("common.required")),
   });
 
+  const form = useForm(
+    schemaFormOptions({
+      schema,
+      submitValues: "schema-output",
+      defaultValues: { code: "", label: "" },
+      onSubmit: ({ value }) => {
+        onSubmit(value);
+      },
+    }),
+  );
+  const formErrors = useSelector(form.store, (state) =>
+    toFormErrors(state.fieldMeta),
+  );
+
   return (
-    <form
+    <Form
       className="flex flex-col gap-3 rounded-md border p-3"
+      errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -284,30 +301,36 @@ const CreateCodeForm = ({
       }}
     >
       <div className="flex gap-3">
-        <div className="w-24">
-          <Label>{t("billing.codes.codeLabel")}</Label>
-          <form.Field name="code">
-            {(field) => (
+        <form.Field name="code">
+          {(field) => (
+            <Field className="w-24" name={field.name}>
+              <FieldLabel>{t("billing.codes.codeLabel")}</FieldLabel>
               <Input
                 autoFocus
                 maxLength={20}
+                onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder={t("billing.codes.codePlaceholder")}
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
         <div className="flex-1">
-          <Label>{t("billing.codes.codeLabelField")}</Label>
           <form.Field name="label">
             {(field) => (
-              <Input
-                maxLength={256}
-                onChange={(e) => field.handleChange(e.currentTarget.value)}
-                placeholder={t("billing.codes.labelPlaceholder")}
-                value={field.state.value}
-              />
+              <Field name={field.name}>
+                <FieldLabel>{t("billing.codes.codeLabelField")}</FieldLabel>
+                <Input
+                  maxLength={256}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.currentTarget.value)}
+                  placeholder={t("billing.codes.labelPlaceholder")}
+                  value={field.state.value}
+                />
+                <FieldError />
+              </Field>
             )}
           </form.Field>
         </div>
@@ -320,6 +343,6 @@ const CreateCodeForm = ({
           {t("common.save")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

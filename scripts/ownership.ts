@@ -57,6 +57,16 @@ export type OwnershipEntry = {
 
 export const OWNERSHIP = [
   {
+    id: "schema-form-options",
+    capability: "Web form validation and submission normalization",
+    owner: ["apps/web/src/lib/schema.ts"],
+    summary:
+      "schemaFormOptions wires dynamic validation and requires a schema-output or raw submission choice. " +
+      "Valibot owns field transformations; callbacks receive the selected input or output type. " +
+      "require-schema-form-options routes every production web form through this contract.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "redis-client",
     capability: "Valkey/Redis connections for ephemeral coordination",
     owner: ["apps/api/src/lib/redis-client.ts"],
