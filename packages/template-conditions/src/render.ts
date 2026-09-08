@@ -6,36 +6,49 @@
  * only way it can (as marker text) through the same vocabulary the scanner
  * accepts, and so a round-trip property can pin the two halves together.
  *
- * Not every value can be written: the marker span is delimited by braces and
- * the grammar reserves them, so a string carrying `{` or `}` has no spelling.
- * That is reported rather than escaped, because an escape the scanner does not
- * know would come back as different text.
+ * What can be written depends on the brace pair. A `{{ }}` marker's quoted
+ * argument holds anything (`pattern("^[0-9]{5}$")` is a regex, not a nested
+ * marker), because the scanner reads a quoted run whole. A `{% %}` tag has no
+ * such run, so a brace inside one would end the tag early. A number is refused
+ * in either, because its spelling is not the writer's to choose: `1e21` is what
+ * JavaScript prints and not what the scanner reads.
+ *
+ * Those are reported rather than escaped, because an escape the scanner does
+ * not know would come back as different text.
  */
 
 import type {
   FilterArgument,
   FilterCall,
+  MarkerForm,
   MarkerLiteral,
   MarkerPrefix,
 } from "./markers.js";
 
-/** Characters a marker's text cannot carry: they end the marker span. */
-const RESERVED_IN_MARKER = /[{}]/u;
-
 /** The number literals the scanner reads: no exponent, no `Infinity`. */
 const WRITABLE_NUMBER = /^-?\d+(?:\.\d+)?$/u;
 
-/** True when a string can be written inside a marker at all. */
-export const isWritableMarkerText = (value: string): boolean =>
-  !RESERVED_IN_MARKER.test(value);
+/** What a tag's body cannot carry: it has no quoted-run escape hatch, so a
+ *  brace or a tag closer inside one would end the tag early. */
+const RESERVED_IN_TAG = /[{}]|%\}/u;
 
-/** True when a literal has a spelling the scanner reads back as itself. A
- *  boolean has exactly two, both of them writable. */
-export const isWritableMarkerLiteral = (value: MarkerLiteral): boolean => {
-  if (typeof value === "string") {
-    return isWritableMarkerText(value);
+/** Why a value has no spelling the scanner reads back as itself. */
+export type UnwritableReason = "tag-delimiter" | "number-spelling";
+
+/** The reason this literal cannot be written in a marker of this form, or
+ *  `null` when it can. A boolean always can; a string can in a `{{ }}` marker,
+ *  because the writer quotes and escapes it. */
+export const unwritableMarkerLiteral = (
+  value: MarkerLiteral,
+  form: MarkerForm = "output",
+): UnwritableReason | null => {
+  if (typeof value === "number") {
+    return WRITABLE_NUMBER.test(String(value)) ? null : "number-spelling";
   }
-  return typeof value !== "number" || WRITABLE_NUMBER.test(String(value));
+  if (typeof value === "string" && form === "statement") {
+    return RESERVED_IN_TAG.test(value) ? "tag-delimiter" : null;
+  }
+  return null;
 };
 
 /** One string literal, double-quoted, with backslashes and quotes escaped the
@@ -52,17 +65,20 @@ const renderArgument = (arg: FilterArgument): string =>
     : `${arg.name}=${renderLiteral(arg.value)}`;
 
 /** Every value in a chain the grammar has no spelling for, with the filter it
- *  was written on, so a caller can refuse a configuration before it rewrites a
- *  document into something the scanner would read differently. */
+ *  was written on and why, so a caller can refuse a configuration before it
+ *  rewrites a document into something the scanner would read differently. A
+ *  repeat's chain goes in a tag, so pass `"statement"` for one. */
 export const unwritableFilterValues = (
   filters: readonly FilterCall[],
-): { filter: string; value: MarkerLiteral }[] =>
+  form: MarkerForm = "output",
+): { filter: string; value: MarkerLiteral; reason: UnwritableReason }[] =>
   filters.flatMap(({ args, name }) =>
-    args.flatMap((arg) =>
-      isWritableMarkerLiteral(arg.value)
+    args.flatMap((arg) => {
+      const reason = unwritableMarkerLiteral(arg.value, form);
+      return reason === null
         ? []
-        : [{ filter: name, value: arg.value }],
-    ),
+        : [{ filter: name, value: arg.value, reason }];
+    }),
   );
 
 /**

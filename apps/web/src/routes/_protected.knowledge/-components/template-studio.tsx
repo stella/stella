@@ -52,10 +52,8 @@ import { forceReflow } from "@/lib/utils";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
 import { inputTypeValueKind } from "@/lib/value-types";
 import type { BlockGestureKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
-import {
-  markerConfigRewrites,
-  unwritableFieldValues,
-} from "@/routes/_protected.knowledge/-components/template-field-filters";
+import { markerConfigRewrites } from "@/routes/_protected.knowledge/-components/template-field-filters";
+import type { UnplacedField } from "@/routes/_protected.knowledge/-components/template-field-filters";
 import {
   clauseSlotMarker,
   conditionBranchTag,
@@ -256,12 +254,11 @@ const enclosingDirectivePair = (
 };
 
 /** What writing the session's configuration into the document produced: the
- *  markers now carry it, there was no editable view to write into, or a field's
- *  configuration has no spelling the marker grammar reads back. */
+ *  markers now carry it (with whatever the document could not hold), or there
+ *  was no editable view to write into. */
 type MarkerProjectionResult =
-  | { status: "written" }
-  | { status: "noEditor" }
-  | { status: "unwritable"; path: string };
+  | { status: "written"; unplaced: readonly UnplacedField[] }
+  | { status: "noEditor" };
 
 /**
  * Template Studio page: the document (Folio) fills the surface, with a slim
@@ -1054,29 +1051,21 @@ export const TemplateStudioPage = ({
         return { status: "noEditor" };
       }
       const { fields } = useTemplateStudioStore.getState();
-      // A brace would end the marker span, so a configuration carrying one has
-      // no spelling the scanner reads back: refuse rather than write a document
-      // that means something else.
-      const unwritable = unwritableFieldValues(fields).at(0);
-      if (unwritable !== undefined) {
-        return { status: "unwritable", path: unwritable.path };
-      }
-      const rewrites = markerConfigRewrites({
+      const { rewrites, unplaced } = markerConfigRewrites({
         directives: getTemplateDirectives(view.state),
         fields,
         markerText: ({ from, to }) => view.state.doc.textBetween(from, to),
       });
-      if (rewrites.length === 0) {
-        return { status: "written" };
+      if (rewrites.length > 0) {
+        const tr = view.state.tr;
+        // Highest position first so the earlier ranges stay valid as the
+        // transaction accumulates.
+        for (const range of rewrites.toSorted((a, b) => b.from - a.from)) {
+          tr.insertText(range.text, range.from, range.to);
+        }
+        view.dispatch(tr);
       }
-      const tr = view.state.tr;
-      // Highest position first so the earlier ranges stay valid as the
-      // transaction accumulates.
-      for (const range of rewrites.toSorted((a, b) => b.from - a.from)) {
-        tr.insertText(range.text, range.from, range.to);
-      }
-      view.dispatch(tr);
-      return { status: "written" };
+      return { status: "written", unplaced };
     };
 
   const handleSave = async (): Promise<boolean> => {
@@ -1095,19 +1084,27 @@ export const TemplateStudioPage = ({
       const pendingAtSave =
         useTemplateStudioStore.getState().pendingSlotRenames;
       const projected = await projectSessionIntoDocument();
-      if (projected.status !== "written") {
-        stellaToast.add(
-          projected.status === "unwritable"
-            ? {
-                title: t("templates.saveFailed"),
-                description: t("templates.studio.fieldSettingBrackets", {
-                  fieldPath: projected.path,
-                }),
-                type: "error",
-              }
-            : { title: t("templates.saveFailed"), type: "error" },
-        );
+      if (projected.status === "noEditor") {
+        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
         return false;
+      }
+      // The document is the only store, so a setting no marker can carry does
+      // not survive this save. The bytes are still worth storing; the author
+      // hears which field lost what rather than finding out at fill time.
+      const unplaced = projected.unplaced.at(0);
+      if (unplaced !== undefined) {
+        stellaToast.add({
+          title: t("templates.templateSaved"),
+          description:
+            unplaced.reason === "unwritable"
+              ? t("templates.studio.fieldSettingBrackets", {
+                  fieldPath: unplaced.path,
+                })
+              : t("templates.studio.fieldWithoutMarker", {
+                  fieldPath: unplaced.path,
+                }),
+          type: "warning",
+        });
       }
       const bytes = await editor.save();
       if (!bytes) {

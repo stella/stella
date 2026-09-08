@@ -11,8 +11,10 @@
 
 import {
   arrayFiltersFromFieldConfig,
+  assertNever,
   filtersFromFieldConfig,
   unwritableFilterValues,
+  type UnwritableReason,
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -67,26 +69,44 @@ const arrayPaths = (discovered: DiscoveredTemplate): Set<string> => {
   return paths;
 };
 
+/** What to do about a value the grammar cannot spell. A `{{ }}` marker quotes
+ *  its arguments, so only a repeat's `{% for %}` tag is delimiter-sensitive;
+ *  a number's spelling is not the writer's to choose in either. */
+const unwritableHint = (reason: UnwritableReason): string => {
+  switch (reason) {
+    case "tag-delimiter":
+      return (
+        "A {% for %} tag carries no quoted text, so take { and } out of the " +
+        "repeat's label or hint. A value field's own marker holds them fine."
+      );
+    case "number-spelling":
+      return "Write the number in full: an exponent is not a number a marker can carry.";
+    default:
+      return assertNever(reason);
+  }
+};
+
 /** The issue an entry gets when the grammar has no spelling for one of its
- *  values. Braces delimit a marker, so a label carrying one would end the
- *  marker early and take the rest of the chain with it. */
+ *  values, so writing it would come back as different text. */
 const unwritableValueIssue = ({
   filter,
   index,
   path,
+  reason,
   value,
 }: {
   filter: string;
   index: number;
   path: string;
+  reason: UnwritableReason;
   value: string;
 }): FieldConfigurationIssue => ({
   path: fieldConfigurationIssuePath(index),
   index,
   message:
-    `"${path}" cannot be written into the document: ${filter}("${value}") ` +
-    "holds a character a marker reserves.",
-  hint: "Remove { and } from the value; a marker's braces end the marker.",
+    `"${path}" cannot be written into the document: ${filter}(${value}) has ` +
+    "no spelling the marker grammar reads back.",
+  hint: unwritableHint(reason),
 });
 
 /** The issue an entry gets when the document has no marker to carry it. The
@@ -155,14 +175,18 @@ export const configureTemplateDocument = async ({
 
   const refused = new Set<string>();
   for (const candidate of candidates) {
-    for (const { filter, value } of unwritableFilterValues(candidate.filters)) {
+    for (const { filter, reason, value } of unwritableFilterValues(
+      candidate.filters,
+      arrays.has(candidate.path) ? "statement" : "output",
+    )) {
       refused.add(candidate.path);
       issues.push(
         unwritableValueIssue({
           filter,
           index: candidate.index,
           path: candidate.path,
-          value: String(value),
+          reason,
+          value: JSON.stringify(value),
         }),
       );
     }

@@ -4273,6 +4273,7 @@
       "expressionPlaceholder": "expressão",
       "fieldHelp": "Quando alguém preencher este modelo, este valor será solicitado. Aqui você decide como essa pergunta vai aparecer.",
       "fieldSettingBrackets": "Um marcador de modelo não pode conter chaves. Remova-as das configurações de “{fieldPath}”.",
+      "fieldWithoutMarker": "“{fieldPath}” não tem marcador no documento, portanto suas configurações não foram salvas.",
       "fillFormPreview": "Como aparece no formulário",
       "fillStale": "Alterações não salvas — salve para preencher com os campos mais recentes.",
       "filledByPerson": "Pessoa",

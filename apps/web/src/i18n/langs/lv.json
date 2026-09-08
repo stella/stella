@@ -4273,6 +4273,7 @@
       "expressionPlaceholder": "izteiksme",
       "fieldHelp": "Kad kāds aizpildīs šo veidni, viņam tiks prasīta šī vērtība. Šeit jūs nosakāt, kā šis jautājums izskatīsies.",
       "fieldSettingBrackets": "Šablona marķieris nedrīkst saturēt figūriekavas. Noņemiet tās no lauka „{fieldPath}“ iestatījumiem.",
+      "fieldWithoutMarker": "Laukam „{fieldPath}“ dokumentā nav marķiera, tāpēc tā iestatījumi netika saglabāti.",
       "fillFormPreview": "Tā tas izskatīsies formā",
       "fillStale": "Nesaglabātas izmaiņas — saglabājiet, lai aizpildītu jaunākos laukus.",
       "filledByPerson": "Persona",

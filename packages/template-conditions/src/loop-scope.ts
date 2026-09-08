@@ -4,9 +4,9 @@
  * `{% for attorney in attorneys %}{{ attorney.name }}{% endfor %}` writes one
  * field, and the manifest calls it `attorneys.name`: the loop's alias is the
  * body's name for the item, the array path is the manifest's. Discovery reads
- * that mapping and the marker writer has to reverse it, so the rule lives here
- * rather than in each of them; two readings of one loop are two different
- * documents.
+ * that mapping, and every writer that puts a configuration back into a marker
+ * has to reverse it, so the rule lives beside the grammar rather than in each
+ * of them; two readings of one loop are two different documents.
  */
 
 /** One enclosing `{% for %}`, as the body sees it and as the manifest does. */
@@ -25,7 +25,7 @@ export const rowScopePaths = (rowScopes: readonly RowScope[]): string[] =>
 
 /** A path already under the innermost repeat is left alone; anything else is
  *  read as a name relative to it. */
-const qualifyRowScopedPath = (
+export const qualifyRowScopedPath = (
   path: string,
   rowPaths: readonly string[] = [],
 ): string => {

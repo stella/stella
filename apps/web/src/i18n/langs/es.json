@@ -4273,6 +4273,7 @@
       "expressionPlaceholder": "expresión",
       "fieldHelp": "Cuando alguien rellene esta plantilla, se le pedirá este valor. Aquí decides cómo se verá esa pregunta.",
       "fieldSettingBrackets": "Un marcador de plantilla no puede contener llaves. Elíminalas de la configuración de «{fieldPath}».",
+      "fieldWithoutMarker": "«{fieldPath}» no tiene ningún marcador en el documento, así que su configuración no se guardó.",
       "fillFormPreview": "Así aparece en el formulario",
       "fillStale": "Cambios sin guardar: guarda para rellenar con los campos actuales.",
       "filledByPerson": "Persona",

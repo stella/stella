@@ -147,6 +147,9 @@ const writeInputType = (field: MarkerFieldConfig): FilterCall[] => {
     case "date":
       return [filterCall("date", positionalArg("iso"))];
     case "select":
+      // A dependent select carries no options of its own: `options_from` says
+      // where they come from, and the reader reads the whole chain before it
+      // decides whether the field has any.
       return [
         filterCall(
           "select",
@@ -155,6 +158,9 @@ const writeInputType = (field: MarkerFieldConfig): FilterCall[] => {
       ];
     case "number":
     case "text":
+      // `text` is written even though a marker with no input filter already
+      // asks for text: the template check reads an absent input type as a
+      // decision nobody made, and a configured field has made it.
       return [filterCall(inputType)];
     default:
       return assertNever(inputType);

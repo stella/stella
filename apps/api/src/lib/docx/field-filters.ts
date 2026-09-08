@@ -398,25 +398,19 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
   switch (call.name) {
     case "text":
     case "number":
-    case "select":
+    case "select": {
       draft.meta["inputType"] = call.name;
-      if (call.name === "select") {
-        const options = positional(call).filter(
-          (value): value is string => typeof value === "string",
-        );
-        if (options.length === 0) {
-          draft.issues.push(
-            issue(
-              call.name,
-              "select() needs the allowed values.",
-              'Write select("a", "b").',
-            ),
-          );
-          return;
-        }
+      if (call.name !== "select") {
+        return;
+      }
+      const options = positional(call).filter(
+        (value): value is string => typeof value === "string",
+      );
+      if (options.length > 0) {
         draft.meta["options"] = options;
       }
       return;
+    }
     case "checkbox":
       draft.meta["inputType"] = "boolean";
       return;
@@ -592,6 +586,29 @@ export const fieldMetaFromFilters = (
     // Every step was rejected, so the marker configures nothing beyond its own
     // path: report the rejections and leave the field to plain discovery.
     return { field: null, issues: draft.issues };
+  }
+
+  // A select's options come from the filter or from another field, and the
+  // whole chain decides which: `select() | options_from("kind")` is a dependent
+  // select, `select()` alone is a list nobody can pick from. The check waits
+  // for the chain to finish, so the order the author wrote the two in cannot
+  // change the answer.
+  if (
+    draft.meta["inputType"] === "select" &&
+    draft.meta["options"] === undefined &&
+    draft.meta["optionsFrom"] === undefined
+  ) {
+    return {
+      field: null,
+      issues: [
+        ...draft.issues,
+        issue(
+          "select",
+          "select() offers no values to pick from.",
+          'Write select("a", "b"), or options_from("other_field") to take them from another field.',
+        ),
+      ],
+    };
   }
 
   const parsed = v.safeParse(fieldMetaSchema, draft.meta);

@@ -14,11 +14,17 @@ import type { DirectiveRange } from "@stll/folio-react";
 import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
+  qualifyLoopPath,
+  qualifyRowScopedPlaceholder,
   renderForOpener,
   scanMarkers,
   unwritableFilterValues,
 } from "@stll/template-conditions";
-import type { FilterCall, MarkerMeta } from "@stll/template-conditions";
+import type {
+  FilterCall,
+  MarkerMeta,
+  RowScope,
+} from "@stll/template-conditions";
 
 import { formatMarker } from "@/routes/_protected.knowledge/-components/template-markers";
 import { studioFieldToManifestField } from "@/routes/_protected.knowledge/-components/template-studio-model";
@@ -40,6 +46,20 @@ const arrayFieldFilters = (field: StudioField): FilterCall[] =>
  *  highest-first within a single transaction. */
 export type MarkerConfigRewrite = { from: number; to: number; text: string };
 
+/** One field the document cannot carry, and why. `unplaced` is a configuration
+ *  with no marker to live in; `unwritable` is one whose value the marker
+ *  grammar has no spelling for. */
+export type UnplacedField =
+  | { reason: "no-marker"; path: string }
+  | { reason: "unwritable"; path: string; filter: string };
+
+/** What projecting the session onto the document produced: the marker edits to
+ *  apply, and the configuration that has nowhere to go. */
+export type MarkerProjection = {
+  rewrites: MarkerConfigRewrite[];
+  unplaced: UnplacedField[];
+};
+
 /** The rewrite one marker needs, or none when its text already reads that way. */
 const rewriteTo = (
   range: { from: number; to: number },
@@ -55,44 +75,77 @@ type MarkerConfigRewriteOptions = {
   markerText: (range: { from: number; to: number }) => string;
 };
 
+/** A field says something worth reporting when it carries any filter beyond the
+ *  plain text input every field has by default. */
+const carriesConfiguration = (field: StudioField): boolean =>
+  fieldFilters(field).some(({ name }) => name !== "text");
+
 /**
  * The edits that put the session's field configuration into the document's
  * markers: the value marker of every configured path, and the `{% for %}`
  * opener of every configured repeat. Markers whose text is unchanged are
  * skipped, so a save that changed nothing rewrites nothing.
  *
- * A field with no marker of its own has nowhere to be written and is dropped;
- * the document is the only store, so a configuration the markers cannot hold
- * does not survive a save.
+ * A marker inside a loop is addressed by the path the manifest speaks: the
+ * body writes `{{ attorney.name }}` and the session calls the field
+ * `attorneys.name`, so the alias resolves through the same scoping the server
+ * applies when it reads the document back.
+ *
+ * The document is the only store, so a configuration no marker can carry is
+ * reported rather than dropped: the caller decides what to tell the author.
  */
 export const markerConfigRewrites = ({
   directives,
   fields,
   markerText,
-}: MarkerConfigRewriteOptions): MarkerConfigRewrite[] => {
+}: MarkerConfigRewriteOptions): MarkerProjection => {
   const byPath = new Map(fields.map((field) => [field.path, field]));
-  return directives.flatMap(({ from, to }) => {
+  const placed = new Set<string>();
+  const unplaced: UnplacedField[] = [];
+  const scopes: RowScope[] = [];
+
+  /** The chain a field writes into this marker, or the first value the grammar
+   *  cannot spell there. A repeat's chain goes in a tag, which carries no
+   *  quoted text; a value marker's arguments carry anything. */
+  const chainFor = (
+    field: StudioField,
+    form: "output" | "statement",
+  ): FilterCall[] | null => {
+    const filters =
+      form === "statement" ? arrayFieldFilters(field) : fieldFilters(field);
+    const refused = unwritableFilterValues(filters, form).at(0);
+    if (refused === undefined) {
+      return filters;
+    }
+    unplaced.push({
+      reason: "unwritable",
+      path: field.path,
+      filter: refused.filter,
+    });
+    return null;
+  };
+
+  const rewrites = directives.flatMap(({ from, to }) => {
     const raw = markerText({ from, to });
     const [scanned, ...rest] = scanMarkers(raw);
     if (scanned === undefined || rest.length > 0) {
       return [];
     }
     const { meta } = scanned;
-    if (meta.kind === "placeholder") {
-      const field = byPath.get(meta.expr);
+    if (meta.kind === "endfor") {
+      scopes.pop();
+      return [];
+    }
+    if (meta.kind === "for") {
+      const scopedPath = qualifyLoopPath(meta.path, scopes);
+      scopes.push({ alias: meta.alias, declaredPath: meta.path, scopedPath });
+      const field = byPath.get(scopedPath);
       if (field === undefined) {
         return [];
       }
-      const next: MarkerMeta = {
-        kind: "placeholder",
-        expr: meta.expr,
-        filters: fieldFilters(field),
-      };
-      return rewriteTo({ from, to }, raw, formatMarker(next));
-    }
-    if (meta.kind === "for") {
-      const field = byPath.get(meta.path);
-      if (field === undefined) {
+      placed.add(scopedPath);
+      const filters = chainFor(field, "statement");
+      if (filters === null) {
         return [];
       }
       // Rendered through the package's own writer rather than `formatMarker`:
@@ -104,26 +157,36 @@ export const markerConfigRewrites = ({
         renderForOpener({
           alias: meta.alias,
           path: meta.path,
-          filters: arrayFieldFilters(field),
+          filters,
           prefix: scanned.prefix,
         }),
       );
     }
-    return [];
+    if (meta.kind !== "placeholder") {
+      return [];
+    }
+    const scopedPath = qualifyRowScopedPlaceholder(meta.expr, scopes);
+    const field = byPath.get(scopedPath);
+    if (field === undefined) {
+      return [];
+    }
+    placed.add(scopedPath);
+    const filters = chainFor(field, "output");
+    if (filters === null) {
+      return [];
+    }
+    // The marker keeps the spelling the author gave it: rewriting
+    // `{{ attorney.name }}` to `{{ attorneys.name }}` would move the field out
+    // of its loop.
+    const next: MarkerMeta = { kind: "placeholder", expr: meta.expr, filters };
+    return rewriteTo({ from, to }, raw, formatMarker(next));
   });
-};
 
-/**
- * Every configured value the marker grammar has no spelling for, with the
- * field that carries it. A brace inside a label would end the marker span, so
- * writing it would read back as different text: the save refuses instead.
- */
-export const unwritableFieldValues = (
-  fields: readonly StudioField[],
-): { path: string; filter: string }[] =>
-  fields.flatMap((field) =>
-    unwritableFilterValues(fieldFilters(field)).map(({ filter }) => ({
-      path: field.path,
-      filter,
-    })),
-  );
+  for (const field of fields) {
+    if (!placed.has(field.path) && carriesConfiguration(field)) {
+      unplaced.push({ reason: "no-marker", path: field.path });
+    }
+  }
+
+  return { rewrites, unplaced };
+};

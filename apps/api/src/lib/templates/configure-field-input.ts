@@ -679,8 +679,10 @@ export const validateFieldConfiguration = ({
             `groups ${children.map((child) => `{{${child}}}`).join(", ")} ` +
             "under it.",
           hint:
-            "Configure those paths instead, or give " +
-            `"${field.path}" a lookup source whose format keys are those markers.`,
+            "Configure those paths instead. To fill them from one registry " +
+            `hit, put a {{ ${field.path} }} marker in the document too and ` +
+            "give it a lookup source whose format keys are those markers: " +
+            "the lookup lives on that marker's own filter chain.",
         });
         continue;
       }

@@ -78,6 +78,24 @@ describe("fieldMetaFromFilters", () => {
     });
   });
 
+  test("a dependent select takes its options from the other field", () => {
+    expect(
+      fieldFrom("city", 'city | select | options_from("country")').field,
+    ).toEqual({
+      path: "city",
+      inputType: "select",
+      optionsFrom: "country",
+    });
+  });
+
+  test("a select with nowhere to get its options is refused", () => {
+    const { field, issues } = fieldFrom("city", "city | select");
+    expect(field).toBeNull();
+    expect(issues.map(({ message }) => message)).toEqual([
+      "select() offers no values to pick from.",
+    ]);
+  });
+
   test("checkbox is the boolean input", () => {
     expect(fieldFrom("signed", "signed | checkbox").field).toEqual({
       path: "signed",

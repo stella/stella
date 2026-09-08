@@ -17,8 +17,12 @@ import * as slimdom from "slimdom";
 import { compareCodeUnit } from "@stll/collation";
 import {
   parseCondition,
+  qualifyLoopPath,
+  qualifyRowScopedPlaceholder,
+  rowScopePaths,
   type ConditionNode,
   type FilterCall,
+  type RowScope,
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -33,12 +37,6 @@ import {
 } from "./field-filters";
 import { parseInlineConditions } from "./inline-conditions";
 import type { InlineGroup } from "./inline-conditions";
-import {
-  qualifyLoopPath,
-  qualifyRowScopedPlaceholder,
-  rowScopePaths,
-  type RowScope,
-} from "./loop-scope";
 import {
   MAIN_DOCUMENT_PART_PATH,
   paragraphText,

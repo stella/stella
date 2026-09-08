@@ -87,9 +87,9 @@ const BYPASS_RULES = {
         reason: "A clause version suffix from our own slot marker.",
       },
       {
-        path: "apps/api/src/lib/docx/template-manifest.ts",
+        path: "apps/api/src/lib/docx/strip-custom-xml-manifest.ts",
         reason:
-          "Attributes of the manifest part we serialize ourselves; the agent-facing spelling is read before it is written there.",
+          "A custom XML slot index out of a zip entry name, which Word and we wrote; nobody spells it.",
       },
     ],
   },
@@ -98,11 +98,6 @@ const BYPASS_RULES = {
     include: AGENT_VALUE_SURFACES,
     pattern: /[=]==\s*"(?:true|false|yes|no)"/u,
     allowed: [
-      {
-        path: "apps/api/src/lib/docx/template-manifest.ts",
-        reason:
-          "Attributes of the manifest part we serialize ourselves, which are written as the canonical spelling.",
-      },
       {
         path: "apps/api/src/handlers/templates/check-template.ts",
         reason:

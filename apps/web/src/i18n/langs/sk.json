@@ -4273,6 +4273,7 @@
       "expressionPlaceholder": "výraz",
       "fieldHelp": "Keď niekto vzor vypĺňa, bude požiadaný o túto hodnotu. Tu určíte, ako bude otázka vyzerať.",
       "fieldSettingBrackets": "Značka vo vzore nemôže obsahovať zložené zátvorky. Odstráňte ich z nastavenia poľa „{fieldPath}“.",
+      "fieldWithoutMarker": "Pole „{fieldPath}“ nemá v dokumente žiadnu značku, jeho nastavenie sa preto neuložilo.",
       "fillFormPreview": "Ako sa zobrazí vo formulári",
       "fillStale": "Neuložené zmeny — uložte, aby sa vypĺňali aktuálne polia.",
       "filledByPerson": "Osoba",

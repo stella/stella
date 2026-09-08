@@ -9,19 +9,21 @@ import {
   scanMarkers,
   type FilterArgument,
   type FilterCall,
+  type MarkerForm,
   type MarkerPrefix,
 } from "./markers.js";
 import {
-  isWritableMarkerLiteral,
-  isWritableMarkerText,
   renderForOpener,
   renderValueMarker,
+  unwritableMarkerLiteral,
 } from "./render.js";
 
-// Text a caller may put in a label, a hint or a prompt: quotes of both shapes,
+// Text a caller may put in a label, a hint or a prompt. Quotes of both shapes,
 // backslashes, commas, pipes and parentheses are what the chain's own syntax is
-// made of, so they are exactly the strings the escaping has to survive.
-const literalText = fc.stringMatching(/^[- ,.|()'"\\a-zA-Zá-ž0-9]{0,24}$/u);
+// made of, and braces are what the marker's own delimiters are made of
+// (`pattern("^[0-9]{5}$")` is a regex): these are exactly the strings a quoted
+// argument has to survive.
+const literalText = fc.stringMatching(/^[-{} ,.|()'"\\a-zA-Zá-ž0-9]{0,24}$/u);
 
 const literal = fc.oneof(
   literalText,
@@ -50,11 +52,14 @@ const path = fc
   })
   .map((segments) => segments.join("."));
 
-/** Only chains whose strings the grammar can hold are writable at all; the
- *  rest are refused at the boundary, which is what this filter stands for. */
-const writable = (filters: readonly FilterCall[]): boolean =>
+/** Only chains the grammar can hold in this brace pair are writable at all;
+ *  the rest are refused at the boundary, which is what this filter stands for. */
+const writable = (
+  filters: readonly FilterCall[],
+  form: MarkerForm = "output",
+): boolean =>
   filters.every(({ args }) =>
-    args.every((arg) => isWritableMarkerLiteral(arg.value)),
+    args.every((arg) => unwritableMarkerLiteral(arg.value, form) === null),
   );
 
 describe("rendering a marker the scanner reads back", () => {
@@ -99,7 +104,7 @@ describe("rendering a marker the scanner reads back", () => {
         chain,
         fc.constantFrom(...prefixes),
         (alias, arrayPath, filters, prefix) => {
-          fc.pre(writable(filters));
+          fc.pre(writable(filters, "statement"));
           const text = renderForOpener({
             alias,
             path: arrayPath,
@@ -121,9 +126,34 @@ describe("rendering a marker the scanner reads back", () => {
     );
   });
 
-  test("a brace has no spelling inside a marker", () => {
-    expect(isWritableMarkerText("a { b")).toBe(false);
-    expect(isWritableMarkerText("a } b")).toBe(false);
-    expect(isWritableMarkerText('a "quoted" \\ b')).toBe(true);
+  test("a quoted argument carries the marker's own delimiters as content", () => {
+    const marker = renderValueMarker("zip", [
+      {
+        name: "pattern",
+        args: [{ kind: "positional", value: "^[0-9]{5}$" }],
+      },
+    ]);
+    expect(scanMarkers(`Postcode ${marker}.`)).toHaveLength(1);
+    expect(classifyMarker(marker.slice(2, -2), "output")).toEqual({
+      kind: "placeholder",
+      expr: "zip",
+      filters: [
+        {
+          name: "pattern",
+          args: [{ kind: "positional", value: "^[0-9]{5}$" }],
+        },
+      ],
+    });
+  });
+
+  test("a number the writer cannot spell is named", () => {
+    expect(unwritableMarkerLiteral(1e21)).toBe("number-spelling");
+    expect(unwritableMarkerLiteral(1024)).toBeNull();
+    expect(unwritableMarkerLiteral("^[0-9]{5}$")).toBeNull();
+  });
+
+  test("a tag has no quoted run, so a brace in one is named", () => {
+    expect(unwritableMarkerLiteral("a { b", "statement")).toBe("tag-delimiter");
+    expect(unwritableMarkerLiteral("Attorneys", "statement")).toBeNull();
   });
 });

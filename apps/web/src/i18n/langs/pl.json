@@ -4273,6 +4273,7 @@
       "expressionPlaceholder": "wyrażenie",
       "fieldHelp": "Gdy ktoś będzie wypełniać ten szablon, zostanie poproszony o tę wartość. Tutaj decydujesz, jak to pytanie będzie wyglądać.",
       "fieldSettingBrackets": "Znacznik szablonu nie może zawierać nawiasów klamrowych. Usuń je z ustawień pola „{fieldPath}”.",
+      "fieldWithoutMarker": "Pole „{fieldPath}” nie ma znacznika w dokumencie, więc jego ustawienia nie zostały zapisane.",
       "fillFormPreview": "Tak pojawi się w formularzu",
       "fillStale": "Niezapisane zmiany — zapisz, aby wypełniać najnowsze pola.",
       "filledByPerson": "Osoba",

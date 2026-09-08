@@ -18,15 +18,16 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import {
+  qualifyLoopPath,
+  qualifyRowScopedPlaceholder,
   renderForOpener,
   renderValueMarker,
   scanMarkers,
   type FilterCall,
+  type RowScope,
   type ScannedMarker,
 } from "@stll/template-conditions";
 
-import { qualifyLoopPath, qualifyRowScopedPlaceholder } from "./loop-scope";
-import type { RowScope } from "./loop-scope";
 import { templateContentPartPaths, W_NS } from "./ooxml";
 import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 

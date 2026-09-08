@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { filtersFromFieldConfig, scanMarkers } from "@stll/template-conditions";
+import type { DirectiveKind } from "@stll/template-conditions";
 
-import {
-  markerConfigRewrites,
-  unwritableFieldValues,
-} from "@/routes/_protected.knowledge/-components/template-field-filters";
+import { markerConfigRewrites } from "@/routes/_protected.knowledge/-components/template-field-filters";
 import { formatMarker } from "@/routes/_protected.knowledge/-components/template-markers";
 import { studioFieldToManifestField } from "@/routes/_protected.knowledge/-components/template-studio-model";
 import {
@@ -193,31 +191,29 @@ describe("field configuration as a filter chain", () => {
   test("a field with nothing configured still names its input type", () => {
     expect(asMarker(defaultStudioField("plain"))).toBe("{{ plain | text }}");
   });
-
-  test("reports a value the marker grammar cannot spell", () => {
-    expect(
-      unwritableFieldValues([studioField({ path: "fee", label: "a { b" })]),
-    ).toEqual([{ path: "fee", filter: "label" }]);
-    expect(
-      unwritableFieldValues(CONFIGURED_FIELDS.map(([field]) => field)),
-    ).toEqual([]);
-  });
 });
 
 describe("writing the session into the document", () => {
-  /** A document of markers, with the ranges the directive scan reports. */
+  /** A document of markers, with the ranges the directive scan reports. Each
+   *  directive carries the kind the studio's scan would report for it, so a
+   *  loop opener opens a scope the way it does in the editor. */
   const documentWith = (markers: readonly string[]) => {
-    const directives: { from: number; to: number }[] = [];
+    const directives: { from: number; to: number; kind: DirectiveKind }[] = [];
     let text = "";
     for (const marker of markers) {
-      directives.push({ from: text.length, to: text.length + marker.length });
+      const meta = scanMarkers(marker).at(0)?.meta;
+      directives.push({
+        from: text.length,
+        to: text.length + marker.length,
+        kind: meta?.kind ?? "placeholder",
+      });
       text += `${marker} `;
     }
     return {
-      directives: directives.map(({ from, to }) => ({
+      directives: directives.map(({ from, kind, to }) => ({
         from,
         to,
-        kind: "placeholder" as const,
+        kind,
         expr: "",
         block: false,
       })),
@@ -228,7 +224,7 @@ describe("writing the session into the document", () => {
 
   test("puts a field's configuration into its own marker", () => {
     const doc = documentWith(["{{ rent }}", "{{ other }}"]);
-    const rewrites = markerConfigRewrites({
+    const { rewrites, unplaced } = markerConfigRewrites({
       ...doc,
       fields: [
         studioField({ path: "rent", inputType: "number", label: "Rent" }),
@@ -238,6 +234,7 @@ describe("writing the session into the document", () => {
     expect(rewrites).toEqual([
       { from: 0, to: 10, text: '{{ rent | number | label("Rent") }}' },
     ]);
+    expect(unplaced).toEqual([]);
   });
 
   test("leaves a marker whose text already reads that way", () => {
@@ -248,7 +245,7 @@ describe("writing the session into the document", () => {
         fields: [
           studioField({ path: "rent", inputType: "number", label: "Rent" }),
         ],
-      }),
+      }).rewrites,
     ).toEqual([]);
   });
 
@@ -263,11 +260,94 @@ describe("writing the session into the document", () => {
           validation: { minItems: 2 },
         }),
       ],
-    });
+    }).rewrites;
 
     expect(rewrite?.text).toBe(
       '{%tr for person in people | label("People") | min_items(2) %}',
     );
     expect(scanMarkers(rewrite?.text ?? "").at(0)?.prefix).toBe("row");
+  });
+
+  test("an item marker is addressed by the path the manifest speaks", () => {
+    // The body writes the loop's alias; the session field is `people.name`,
+    // the way the server reads it back out of the document.
+    const doc = documentWith([
+      "{% for person in people %}",
+      "{{ person.name }}",
+      "{% endfor %}",
+    ]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [studioField({ path: "people.name", label: "Full name" })],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{{ person.name | text | label("Full name") }}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("a marker the loop already closed is not an item of it", () => {
+    const doc = documentWith([
+      "{% for person in people %}",
+      "{% endfor %}",
+      "{{ person.name }}",
+    ]);
+
+    expect(
+      markerConfigRewrites({
+        ...doc,
+        fields: [studioField({ path: "people.name", label: "Full name" })],
+      }).rewrites,
+    ).toEqual([]);
+  });
+
+  test("a configuration with no marker to carry it is reported, not dropped", () => {
+    const doc = documentWith(["{{ rent }}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({ path: "rent" }),
+        studioField({
+          path: "is_company",
+          inputType: "boolean",
+          valueSource: {
+            type: "condition",
+            condition: "kind == 'company'",
+          },
+        }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual(["{{ rent | text }}"]);
+    expect(unplaced).toEqual([{ reason: "no-marker", path: "is_company" }]);
+  });
+
+  test("a repeat's label cannot carry a brace, because a tag has no quoted text", () => {
+    const doc = documentWith(["{%p for person in people %}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [studioField({ path: "people", label: "People {A}" })],
+    });
+
+    expect(rewrites).toEqual([]);
+    expect(unplaced).toEqual([
+      { reason: "unwritable", path: "people", filter: "label" },
+    ]);
+  });
+
+  test("a value marker's own argument carries a brace fine", () => {
+    const doc = documentWith(["{{ zip }}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({ path: "zip", validation: { pattern: "^[0-9]{5}$" } }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{{ zip | text | pattern("^[0-9]{5}$") }}',
+    ]);
+    expect(unplaced).toEqual([]);
   });
 });
