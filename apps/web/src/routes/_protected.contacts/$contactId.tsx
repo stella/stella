@@ -448,7 +448,9 @@ function ContactDetailPage() {
                     </BidiText>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
-                        date: format.dateTime(matter.createdAt.getTime()),
+                        date: format.dateTime(
+                          new Date(matter.createdAt).getTime(),
+                        ),
                       })}
                     </span>
                   </MatterRefLink>

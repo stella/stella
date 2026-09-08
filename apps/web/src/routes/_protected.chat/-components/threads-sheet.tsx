@@ -436,7 +436,7 @@ const ThreadRow = ({
                     {" · "}
                   </>
                 ) : null}
-                {format.dateTime(thread.updatedAt.getTime())}
+                {format.dateTime(new Date(thread.updatedAt).getTime())}
               </span>
             </Link>
             <ChatTitleSuggestButton

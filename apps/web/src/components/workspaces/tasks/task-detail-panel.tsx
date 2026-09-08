@@ -863,7 +863,7 @@ const TaskDetailPanelContent = ({
                     </div>
                     <time className="text-muted-foreground shrink-0">
                       {format.dateTime(
-                        event.occurredAt.getTime(),
+                        new Date(event.occurredAt).getTime(),
                         DAY_AND_MONTH_FORMAT,
                       )}
                     </time>

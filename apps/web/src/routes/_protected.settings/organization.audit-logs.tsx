@@ -427,7 +427,7 @@ function AuditLogsTableBody({
       {data.items.map((log) => (
         <TableRow key={log.id}>
           <TableCell className="text-xs whitespace-nowrap">
-            {format.dateTime(log.createdAt.getTime(), {
+            {format.dateTime(new Date(log.createdAt).getTime(), {
               year: "numeric",
               month: "numeric",
               day: "numeric",
