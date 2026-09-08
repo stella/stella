@@ -1,14 +1,14 @@
 /**
- * Shared template-creation recipe: discover fields from a DOCX buffer, merge
- * any embedded manifest (optionally overlaid with client field metadata),
- * write the manifest back into the DOCX, upload to S3, and insert the template
- * + first version rows under an advisory lock that enforces the per-org limit.
- * A caller may instead supply a pre-built `manifest` to embed verbatim
- * (skipping discovery + merge), used by built-in report clones that must fill
- * identically to their source.
+ * Shared template-creation recipe: derive the manifest from the DOCX buffer's
+ * markers, upload the bytes to S3, and insert the template + first version
+ * rows under an advisory lock that enforces the per-org limit.
+ *
+ * The document is the template, so creation configures nothing: whatever its
+ * markers declare is what the new template has, and `configure_template_fields`
+ * is how it changes afterwards.
  *
  * Backs the REST create handler (`create.ts`) and the MCP `create_template`
- * tool so both paths embed the manifest and count fields identically.
+ * tool so both paths record the manifest and count fields identically.
  */
 
 import { Result } from "better-result";
@@ -23,23 +23,15 @@ import {
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
-import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import {
-  resolveTemplateFieldOverlay,
-  fieldOverlayError,
-  validateFieldOverlay,
-} from "@/api/lib/templates/field-overlay";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
 
@@ -53,12 +45,6 @@ export type CreatedTemplate = {
   createdAt: Date;
 };
 
-/** Optional client field metadata to overlay onto the discovered fields (from
- *  the configure step). */
-export type ClientTemplateManifest = {
-  fields: FieldMeta[];
-};
-
 export type CreateStoredTemplateOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -67,14 +53,6 @@ export type CreateStoredTemplateOptions = {
   name: string;
   fileName: string;
   categoryId?: SafeId<"templateCategory"> | undefined;
-  clientManifest?: ClientTemplateManifest | null | undefined;
-  /** Pre-built manifest embedded verbatim, skipping discovery + merge. Used by
-   *  built-in report clones: their manifests carry per-item AI fields under an
-   *  array path (e.g. `contracts.summary`) that the discovery merge folds into
-   *  the array root and drops, and a clone must fill identically to the
-   *  built-in. Mutually exclusive with `clientManifest` (an overlay onto
-   *  discovered fields), which is ignored when this is set. */
-  manifest?: TemplateManifest | undefined;
   /** Template kind; defaults to `document`. Report templates (cloned from a
    *  built-in report layout) set `report` so the report picker can filter. */
   kind?: TemplateKind | undefined;
@@ -93,8 +71,6 @@ export const createStoredTemplate = async function* ({
   name,
   fileName,
   categoryId,
-  clientManifest,
-  manifest,
   kind = "document",
   origin = AUTHORED_TEMPLATE_ORIGIN,
   recordAuditEvent,
@@ -123,50 +99,15 @@ export const createStoredTemplate = async function* ({
   // one; users can correct the result via the update endpoint.
   const detectedLanguages = await detectTemplateLanguagesFromDocx(buffer);
 
-  // A caller-supplied manifest is authoritative: it is embedded verbatim and
-  // discovery/merge is skipped entirely, so nested per-item fields survive.
-  // Otherwise the manifest is built from discovery, optionally overlaid with
-  // the client field configuration.
-  let resolvedManifest: TemplateManifest;
-  if (manifest) {
-    resolvedManifest = manifest;
-  } else {
-    const [discovered, existingManifest] = await Promise.all([
-      discoverTemplate(buffer),
-      readManifest(buffer),
-    ]);
-
-    // The overlay is folded into the manifest BEFORE the merge: whether a
-    // dotted path is a field or a lookup's rendered output is decided by the
-    // configuration, so a lookup the caller declares in this same request must
-    // be visible to the merge that classifies those paths.
-    if (clientManifest) {
-      const issues = validateFieldOverlay({
-        configured: arrayOrEmpty(existingManifest?.fields),
-        discovered,
-        overlay: clientManifest.fields,
-      });
-      if (issues.length > 0) {
-        return Result.err(fieldOverlayError(issues));
-      }
-    }
-
-    resolvedManifest = resolveTemplateFieldOverlay({
-      discovered,
-      manifest: existingManifest,
-      overlay: clientManifest?.fields,
-    });
-  }
-
+  const resolvedManifest = await deriveManifestFromDocx(buffer);
   const fieldCount = resolvedManifest.fields.length;
-  const docxWithManifest = await writeManifest(buffer, resolvedManifest);
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   await writeS3ObjectWithRetry({
-    data: new Uint8Array(docxWithManifest),
+    data: new Uint8Array(buffer),
     key: s3Key,
   });
 
@@ -217,7 +158,7 @@ export const createStoredTemplate = async function* ({
           kind,
           fileName: sanitizeFilename(fileName),
           s3Key,
-          sizeBytes: docxWithManifest.byteLength,
+          sizeBytes: buffer.byteLength,
           manifest: resolvedManifest,
           fieldCount,
           currentVersion: 1,

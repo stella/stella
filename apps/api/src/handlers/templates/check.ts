@@ -7,10 +7,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractText } from "@/api/lib/docx/extract-text";
-import { readManifest } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { listTemplateClausesHandler } from "@/api/lib/template-clause-links";
@@ -52,12 +52,12 @@ const checkTemplateHandler = async function* ({
 
   const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
 
-  const [discovered, manifest, clauseSlots, extracted] = await Promise.all([
+  const [discovered, clauseSlots, extracted] = await Promise.all([
     discoverTemplate(buffer),
-    readManifest(buffer),
     discoverClauseSlots(buffer),
     extractText(buffer),
   ]);
+  const manifest = deriveManifest(discovered);
 
   const linksResult = yield* Result.await(
     Result.tryPromise({

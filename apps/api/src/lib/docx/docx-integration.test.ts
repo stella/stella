@@ -13,8 +13,6 @@ import JSZip from "jszip";
 import { discoverTemplate } from "./discover-template";
 import { extractText } from "./extract-text";
 import { fillTemplate } from "./patch-template";
-import { readManifest, writeManifest } from "./template-manifest";
-import type { TemplateManifest } from "./types";
 
 setDefaultTimeout(15_000);
 
@@ -313,60 +311,42 @@ describe("idempotent operations", () => {
   });
 });
 
-// ── Manifest does not leak into filled documents ─────────
+// ── Legacy custom XML manifest ───────────────────────────
 
-describe("manifest stripped from filled output", () => {
-  test("manifest is removed after fill", async () => {
-    const xml = WRAP(P("Client: {{clientName}}"));
-    let buf = await makeDocx(xml);
+/**
+ * Templates authored before the markers carried the configuration still hold
+ * the field metadata in a custom XML part. A filled document goes to a
+ * counterparty, so it must never carry that part out with it.
+ */
+describe("a legacy custom XML manifest never leaves in a filled document", () => {
+  const LEGACY_MANIFEST_PART =
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<template xmlns="urn:stella:template:v1" version="1">' +
+    '<fields><field path="name" label="Full Name"/></fields>' +
+    "</template>";
 
-    const manifest: TemplateManifest = {
-      version: 1,
-      fields: [
-        {
-          path: "clientName",
-          label: "Client Name",
-          inputType: "text",
-          required: true,
-        },
-      ],
-    };
-    buf = await writeManifest(buf, manifest);
+  const withLegacyManifest = async (docx: Buffer): Promise<Buffer> => {
+    const zip = await JSZip.loadAsync(docx);
+    zip.file("customXml/item1.xml", LEGACY_MANIFEST_PART);
+    return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  };
 
-    // Verify manifest exists before fill
-    const before = await readManifest(buf);
-    expect(before).not.toBeNull();
-
-    // Fill the template
-    const result = await fillTemplate(buf, {
-      clientName: "Acme Corp",
-    });
-
-    // Manifest must be gone from output
-    const after = await readManifest(result.buffer);
-    expect(after).toBeNull();
-
-    // Custom XML part file should not exist
-    const zip = await JSZip.loadAsync(result.buffer);
-    expect(zip.file("customXml/item1.xml")).toBeNull();
-  });
-
-  test("filled content is correct despite manifest stripping", async () => {
+  test("the part is gone from the output and the fill is unaffected", async () => {
     const xml = WRAP([P("Name: {{name}}"), P("Date: {{date}}")].join(""));
-    let buf = await makeDocx(xml);
-    buf = await writeManifest(buf, {
-      version: 1,
-      fields: [
-        { path: "name", label: "Full Name" },
-        { path: "date", label: "Contract Date" },
-      ],
-    });
+    const buf = await withLegacyManifest(await makeDocx(xml));
+    // The fixture has to reach the stripper for the assertion below to mean
+    // anything.
+    expect(
+      (await JSZip.loadAsync(buf)).file("customXml/item1.xml"),
+    ).not.toBeNull();
 
     const result = await fillTemplate(buf, {
       name: "Bob",
       date: "2026-06-01",
     });
 
+    const filledZip = await JSZip.loadAsync(result.buffer);
+    expect(filledZip.file("customXml/item1.xml")).toBeNull();
     const extracted = await extractText(result.buffer);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
     expect(allText).toContain("Bob");

@@ -53,6 +53,11 @@ import "@/routes/_protected.knowledge/-components/template-studio-inspector";
 import { inputTypeValueKind } from "@/lib/value-types";
 import type { BlockGestureKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import {
+  markerConfigRewrites,
+  refusesSave,
+} from "@/routes/_protected.knowledge/-components/template-field-filters";
+import type { UnplacedField } from "@/routes/_protected.knowledge/-components/template-field-filters";
+import {
   clauseSlotMarker,
   conditionBranchTag,
   conditionOpenTag,
@@ -71,7 +76,6 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-studio-constants";
 import { hasUnsavedEditorChanges } from "@/routes/_protected.knowledge/-components/template-studio-dirty";
 import {
-  buildManifest,
   nextFreePath,
   parseFields,
   prepareRecipeInsert,
@@ -252,14 +256,24 @@ const enclosingDirectivePair = (
   return null;
 };
 
+/** What writing the session's configuration into the document produced: the
+ *  markers now carry it (with whatever the document could not hold), a setting
+ *  the document has no spelling for stopped the save, or there was no editable
+ *  view to write into. */
+type MarkerProjectionResult =
+  | { status: "written"; unplaced: readonly UnplacedField[] }
+  | { status: "refused"; refused: UnplacedField }
+  | { status: "noEditor" };
+
 /**
  * Template Studio page: the document (Folio) fills the surface, with a slim
  * action bar above it. The whole-template / per-field settings live in a single
  * tab in the global right-side Inspector (registered below), so the document
  * gets the full width. The page seeds a module-level session store the inspector
  * tab reads from, and opens/closes that tab over its own lifetime. Field
- * metadata lives in the manifest; on save the edited manifest is re-embedded
- * (/document) and the bytes stored as a new version.
+ * configuration lives in the markers: the session seeds from the served
+ * manifest (a cache the server derives from those markers) and is written back
+ * into the document text on save, which stores the bytes as a new version.
  */
 export const TemplateStudioPage = ({
   templateId,
@@ -605,8 +619,8 @@ export const TemplateStudioPage = ({
         },
         onAccepted: () => {
           // One field now fills two languages, so AI adapts the wording
-          // per occurrence — unless the value is structural (lookup /
-          // formula / composite) or not prose (no letters: IDs, amounts).
+          // per occurrence: unless the value is structural (lookup, formula)
+          // or not prose (no letters: IDs, amounts).
           const current = useTemplateStudioStore
             .getState()
             .fields.find((f) => f.path === path);
@@ -614,9 +628,7 @@ export const TemplateStudioPage = ({
             return;
           }
           const structural =
-            current.lookup !== undefined ||
-            current.formula !== undefined ||
-            current.parts !== undefined;
+            current.lookup !== undefined || current.formula !== undefined;
           if (structural || !/\p{L}/u.test(sourceText)) {
             return;
           }
@@ -1024,6 +1036,52 @@ export const TemplateStudioPage = ({
     }
   };
 
+  /**
+   * Write the session's field configuration into the document's markers, so
+   * the bytes Folio is about to export carry it: the DOCX is the only store.
+   *
+   * Runs once per save rather than on every inspector keystroke, which keeps
+   * one transaction (and one undo step) per save instead of one per character.
+   */
+  const projectSessionIntoDocument =
+    async (): Promise<MarkerProjectionResult> => {
+      // The editable view is created lazily, so a session where the author only
+      // touched the inspector has none yet; without it the configuration would
+      // silently never reach the bytes.
+      const view = await awaitEditorViewWithin({
+        editor: editorRef,
+        view: editorViewRef,
+      });
+      if (!view) {
+        return { status: "noEditor" };
+      }
+      const { fields } = useTemplateStudioStore.getState();
+      const { rewrites, unplaced } = markerConfigRewrites({
+        directives: getTemplateDirectives(view.state),
+        fields,
+        markerText: ({ from, to }) => view.state.doc.textBetween(from, to),
+      });
+      // A setting the document has no spelling for stops the save before the
+      // document is touched. The MCP tool reports the same shapes as issues and
+      // still applies the rest, because its caller still holds what did not
+      // land; here the session is reseeded from the saved bytes, so saving
+      // around it would be the only copy of that setting going away.
+      const refused = unplaced.find(refusesSave);
+      if (refused !== undefined) {
+        return { status: "refused", refused };
+      }
+      if (rewrites.length > 0) {
+        const tr = view.state.tr;
+        // Highest position first so the earlier ranges stay valid as the
+        // transaction accumulates.
+        for (const range of rewrites.toSorted((a, b) => b.from - a.from)) {
+          tr.insertText(range.text, range.from, range.to);
+        }
+        view.dispatch(tr);
+      }
+      return { status: "written", unplaced };
+    };
+
   const handleSave = async (): Promise<boolean> => {
     const editor = editorRef.current;
     if (!editor) {
@@ -1039,6 +1097,26 @@ export const TemplateStudioPage = ({
       // appended mid-save stay pending for the next save.
       const pendingAtSave =
         useTemplateStudioStore.getState().pendingSlotRenames;
+      const projected = await projectSessionIntoDocument();
+      if (projected.status === "noEditor") {
+        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        return false;
+      }
+      if (projected.status === "refused") {
+        stellaToast.add({
+          title: t("templates.saveFailed"),
+          description:
+            projected.refused.reason === "unwritable"
+              ? t("templates.studio.fieldSettingBrackets", {
+                  fieldPath: projected.refused.path,
+                })
+              : t("templates.studio.ruleWithCalculation", {
+                  fieldPath: projected.refused.path,
+                }),
+          type: "error",
+        });
+        return false;
+      }
       const bytes = await editor.save();
       if (!bytes) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -1046,16 +1124,12 @@ export const TemplateStudioPage = ({
       }
       const file = new File([bytes], fileName, { type: DOCX_MIME });
 
-      // Persist the edited manifest alongside the bytes in one call; the server
-      // re-embeds it (avoids a binary re-embed round-trip that Eden would parse
-      // as text and corrupt).
-      const { fields } = useTemplateStudioStore.getState();
+      // The bytes are the whole record: the markers they carry were just
+      // rewritten with the session's configuration, so the server derives the
+      // field list from the document it stores.
       const stored = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
-        .document.post({
-          file,
-          manifest: JSON.stringify(buildManifest(manifest, fields)),
-        });
+        .document.post({ file });
       if (stored.error) {
         stellaToast.add({
           title: t("templates.saveFailed"),
@@ -1069,6 +1143,20 @@ export const TemplateStudioPage = ({
       }
 
       markSaved();
+
+      // A field whose marker the author deleted has nothing left to configure,
+      // so it goes with the marker. The bytes were still worth storing; the
+      // author hears which field went rather than finding out at fill time.
+      const unplaced = projected.unplaced.at(0);
+      if (unplaced !== undefined) {
+        stellaToast.add({
+          title: t("templates.templateSaved"),
+          description: t("templates.studio.fieldWithoutMarker", {
+            fieldPath: unplaced.path,
+          }),
+          type: "warning",
+        });
+      }
 
       // Flush deferred link-row slot renames now that the document (with its
       // already-rewritten clause markers) is persisted, so the row

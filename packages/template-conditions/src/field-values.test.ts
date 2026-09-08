@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   type DeterministicFieldConfig,
   formatDate,
-  renderComposite,
   renderDeterministicFieldValue,
 } from "./field-values.js";
 
@@ -21,41 +20,7 @@ describe("formatDate", () => {
   });
 });
 
-describe("renderComposite", () => {
-  const parts = [{ key: "position" }, { key: "name" }];
-
-  test("leaves a marker as-is when its key has no part value", () => {
-    expect(
-      renderComposite(parts, "{{position}} {{name}}", { name: "Jan" }),
-    ).toBe("{{position}} Jan");
-  });
-});
-
 describe("renderDeterministicFieldValue", () => {
-  test("composite: joins via the format template, not a space-join", () => {
-    const field: DeterministicFieldConfig = {
-      path: "lawyer",
-      parts: [{ key: "position" }, { key: "name" }],
-      format: "{{position}} {{name}}",
-    };
-    expect(
-      renderDeterministicFieldValue(field, {
-        lawyer: { position: "rad. praw.", name: "Tomasz Nowicki" },
-      }),
-    ).toBe("rad. praw. Tomasz Nowicki");
-  });
-
-  test("composite: a non-object value yields null (caller's scalar path)", () => {
-    const field: DeterministicFieldConfig = {
-      path: "lawyer",
-      parts: [{ key: "name" }],
-      format: "{{name}}",
-    };
-    expect(
-      renderDeterministicFieldValue(field, { lawyer: "plain" }),
-    ).toBeNull();
-  });
-
   test("formula: computes arithmetic and stringifies", () => {
     const field: DeterministicFieldConfig = {
       path: "total",
@@ -103,15 +68,13 @@ describe("renderDeterministicFieldValue", () => {
     expect(renderDeterministicFieldValue(field, { name: "Anna" })).toBeNull();
   });
 
-  test("dispatch order: composite wins over formula when both present", () => {
+  test("dispatch order: formula wins over a date rendering", () => {
     const field: DeterministicFieldConfig = {
       path: "x",
-      parts: [{ key: "a" }],
-      format: "{{a}}",
+      inputType: "date",
+      dateFormat: { locale: "cs", style: "long" },
       formula: "1 + 1",
     };
-    expect(
-      renderDeterministicFieldValue(field, { x: { a: "composite" } }),
-    ).toBe("composite");
+    expect(renderDeterministicFieldValue(field, { x: "2028-06-13" })).toBe("2");
   });
 });

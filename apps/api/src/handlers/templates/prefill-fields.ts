@@ -6,7 +6,7 @@
  *
  * Formula (derived) fields and `{% for %}` array fields are skipped: the
  * former are computed at fill time, the latter have no single value to
- * propose. Composite fields are flattened to one target per part.
+ * propose.
  */
 
 import {
@@ -23,8 +23,6 @@ export type PrefillTarget = {
   id: string;
   /** The field's path in the template (fill-values key). */
   path: string;
-  /** Composite part key when the target is one part of a composite field. */
-  partKey: string | null;
   label: string | null;
   /** The field's fill hint (FieldMeta.hint); helps the model map source
    *  text to the right field. */
@@ -52,40 +50,10 @@ export const buildPrefillTargets = (
       continue;
     }
 
-    const parts =
-      field.parts !== undefined &&
-      field.parts.length > 0 &&
-      field.format !== undefined
-        ? field.parts
-        : null;
-
-    if (parts) {
-      for (const part of parts) {
-        targets.push({
-          id: allocateId(),
-          path: field.path,
-          partKey: part.key,
-          label: part.label ?? `${field.label ?? field.path} (${part.key})`,
-          hint: field.hint ?? null,
-          inputType: part.inputType,
-          options:
-            part.inputType === "select" &&
-            part.options &&
-            part.options.length > 0
-              ? part.options
-              : null,
-          // A part is text or a select; only the whole field carries a date.
-          dateFormat: null,
-        });
-      }
-      continue;
-    }
-
     const inputType = targetInputType(field);
     targets.push({
       id: allocateId(),
       path: field.path,
-      partKey: null,
       label: field.label ?? null,
       hint: field.hint ?? null,
       inputType,
@@ -122,12 +90,9 @@ export const renderPrefillTargets = (
 ): string =>
   targets
     .map((target) => {
-      const pathLabel = target.partKey
-        ? `${target.path} [part ${target.partKey}]`
-        : target.path;
       const label = target.label ? ` — "${target.label}"` : "";
       const hint = target.hint ? ` — hint: ${JSON.stringify(target.hint)}` : "";
-      return `${target.id}: ${pathLabel}${label} (${targetFormatHint(target)})${hint}`;
+      return `${target.id}: ${target.path}${label} (${targetFormatHint(target)})${hint}`;
     })
     .join("\n");
 
@@ -139,7 +104,6 @@ export type PrefillModelField = {
 
 export type PrefillSuggestion = {
   path: string;
-  partKey: string | null;
   value: string;
   sourceSnippet: string | null;
 };
@@ -204,7 +168,6 @@ export const mapPrefillResults = (
     const snippet = field.sourceSnippet?.trim() ?? "";
     suggestions.push({
       path: target.path,
-      partKey: target.partKey,
       value,
       sourceSnippet:
         snippet === "" ? null : snippet.slice(0, MAX_SNIPPET_CHARS),

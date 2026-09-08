@@ -803,7 +803,7 @@
       "scope": "templates"
     },
     "name": "create_template",
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters configure the field. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields sets what the filters did not.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -864,7 +864,7 @@
       "scope": "templates"
     },
     "name": "configure_template_fields",
-    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting. The document is untouched, and a filter written on a marker says the same thing. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
+    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The configuration lives in the document, so this rewrites what carries each field (its markers at every occurrence, the {% if %} tags a rule replaces, the keyed markers that render a registry hit) and publishes the result. Pass template_id and one entry per field path; every path must be one the document already carries, and a property you leave out keeps what the marker says. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards, plus the entries that could not be applied.",
     "inputSchema": {
       "type": "object",
       "required": ["template_id", "fields"],

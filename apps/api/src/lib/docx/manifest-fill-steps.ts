@@ -1,10 +1,10 @@
 /**
  * Shared pre-fill value pipeline for every fill boundary (web fill,
  * fill-by-id, fill-preview, and the stored-template fill service): resolve
- * registry lookups, assemble composite (multipart) values, evaluate formula
+ * registry lookups, evaluate formula
  * (derived) fields, check dependent (optionsFrom) selects, and format date
  * fields — in that order, before any AI step or substitution sees the
- * values. Formulas run after lookup and composite so they can reference
+ * values. Formulas run after lookup so they can reference
  * those results, and before the dependent check so it sees the final
  * values. Date formatting runs last so the AI-adaptation step (which every
  * boundary applies after this pipeline) receives the locale-rendered date
@@ -27,7 +27,6 @@ import {
 
 import { checkArrayBounds } from "./array-bounds";
 import { CONDITION_RAW_VALUES } from "./block-directives";
-import { applyCompositeFields } from "./composite-fields";
 import { applyDateFields, normalizeDateFieldValue } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
@@ -107,8 +106,8 @@ export const applyManifestFillSteps = async ({
   resolveLookup: LookupResolver;
   bindingContext?: BindingContext | null | undefined;
 }): Promise<string | null> => {
-  // Data-bound fields resolve first so the composite, formula, dependent
-  // select, condition, and date-format steps below all see the filled values.
+  // Data-bound fields resolve first so the formula, dependent select,
+  // condition, and date-format steps below all see the filled values.
   applySourceFields(values, manifest, bindingContext ?? EMPTY_BINDING_CONTEXT);
 
   const lookupError = await applyLookupFields(values, manifest, {
@@ -116,11 +115,6 @@ export const applyManifestFillSteps = async ({
   });
   if (lookupError !== null) {
     return lookupError;
-  }
-
-  const compositeError = applyCompositeFields(values, manifest);
-  if (compositeError !== null) {
-    return compositeError;
   }
 
   applyFormulaFields(values, manifest);

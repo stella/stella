@@ -12,16 +12,6 @@ export type TemplateRecipeDefinition = {
     aiPrompt?: string | undefined;
     aiAdapt?: boolean | undefined;
     aiSeesDocument?: boolean | undefined;
-    parts?:
-      | {
-          key: string;
-          label?: string | undefined;
-          inputType: "text" | "select";
-          options?: string[] | undefined;
-          pattern?: string | undefined;
-        }[]
-      | undefined;
-    format?: string | undefined;
     optionsFrom?: string | undefined;
     lookup?:
       | {

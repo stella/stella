@@ -4,8 +4,11 @@
  * `describe_template`, convert prose into the field paths and types the
  * manifest declares, and either fill or ask when a required fact is missing?
  *
- * Each task builds a fixture DOCX (a Custom XML manifest over `{{marker}}`,
- * `{% if %}` and `{% for %}` placeholders) in memory, then gives the model the
+ * Each task builds a fixture DOCX in memory: `{{marker}}`, `{% if %}` and
+ * `{% for %}` placeholders, with each field's configuration written into its
+ * own marker's filter chain, exactly as an authored template carries it. The
+ * manifest the task then describes is derived from those bytes, so the field
+ * list the model reads is the one the fill engine reads. The model gets the
  * SAME tool name, description and input schema `fill_template` and
  * `describe_template` register in chat, backed by the DB-free
  * `fillTemplateDocx` service instead of a stored template. Scoring compares
@@ -39,7 +42,7 @@ import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
-import { formatDate } from "@stll/template-conditions";
+import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -50,9 +53,10 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { extractText } from "@/api/lib/docx/extract-text";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -143,15 +147,43 @@ type TemplateFixture = {
   manifest: TemplateManifest;
 };
 
+/**
+ * The fixture template: each field's configuration written into the marker
+ * that carries it, and the manifest read back out of the result.
+ *
+ * A declared field whose marker the document does not hold would silently
+ * configure nothing, so it panics here rather than shipping a fixture whose
+ * field list and body disagree.
+ */
 const buildFixture = async (
   templateId: string,
   name: string,
   paragraphs: readonly string[],
-  manifest: TemplateManifest,
+  fields: readonly FieldMeta[],
 ): Promise<TemplateFixture> => {
   const raw = await makeDocx(WRAP(paragraphs));
-  const buffer = await writeManifest(raw, manifest);
-  return { templateId, name, fileName: `${templateId}.docx`, buffer, manifest };
+  const { buffer, written } = await writeFieldFilters(
+    raw,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  const unwritten = fields.filter((field) => !written.has(field.path));
+  if (unwritten.length > 0) {
+    return panic(
+      `${templateId} declares ${unwritten
+        .map((field) => field.path)
+        .join(", ")} with no {{ marker }} to carry the configuration`,
+    );
+  }
+  return {
+    templateId,
+    name,
+    fileName: `${templateId}.docx`,
+    buffer,
+    manifest: await deriveManifestFromDocx(buffer),
+  };
 };
 
 // ── describe_template, mirrored from `describeStoredTemplate`'s manifest
@@ -376,11 +408,6 @@ const CONFIDENTIALITY_FIELDS: FieldMeta[] = [
   },
 ];
 
-const CONFIDENTIALITY_MANIFEST: TemplateManifest = {
-  version: 1,
-  fields: CONFIDENTIALITY_FIELDS,
-};
-
 const CONFIDENTIALITY_PARAGRAPHS = [
   P("CONFIDENTIALITY AGREEMENT"),
   P(
@@ -432,11 +459,6 @@ const WORK_CONTRACT_FIELDS: FieldMeta[] = [
   },
 ];
 
-const WORK_CONTRACT_MANIFEST: TemplateManifest = {
-  version: 1,
-  fields: WORK_CONTRACT_FIELDS,
-};
-
 const WORK_CONTRACT_PARAGRAPHS = [
   P("SMLOUVA O DÍLO"),
   P("Objednatel: {{objednatel}}"),
@@ -449,15 +471,11 @@ const SOW_FIELDS: FieldMeta[] = [
   { path: "client_name", label: "Client", inputType: "text", required: true },
   { path: "deliverables.name", label: "Deliverable name", inputType: "text" },
   { path: "deliverables.due_date", label: "Due date", inputType: "date" },
-  {
-    path: "rush_fee_applies",
-    label: "Rush fee applies",
-    inputType: "boolean",
-    required: false,
-  },
+  // `rush_fee_applies` is deliberately absent: the document reads it only in
+  // `{% if rush_fee_applies %}`, and a condition is not a marker, so there is
+  // nowhere to write a configuration for it. Discovery still reports the path,
+  // which is what the model has to work from.
 ];
-
-const SOW_MANIFEST: TemplateManifest = { version: 1, fields: SOW_FIELDS };
 
 const SOW_PARAGRAPHS = [
   P("STATEMENT OF WORK"),
@@ -520,19 +538,19 @@ const buildTasks = async (): Promise<EvalTask[]> => {
     "confidentiality-agreement",
     "Confidentiality Agreement",
     CONFIDENTIALITY_PARAGRAPHS,
-    CONFIDENTIALITY_MANIFEST,
+    CONFIDENTIALITY_FIELDS,
   );
   const workContract = await buildFixture(
     "smlouva-o-dilo",
     "Smlouva o dílo",
     WORK_CONTRACT_PARAGRAPHS,
-    WORK_CONTRACT_MANIFEST,
+    WORK_CONTRACT_FIELDS,
   );
   const sow = await buildFixture(
     "statement-of-work",
     "Statement of Work",
     SOW_PARAGRAPHS,
-    SOW_MANIFEST,
+    SOW_FIELDS,
   );
 
   const expectedTermin = formatDate("2027-06-30", TERMIN_DATE_FORMAT);

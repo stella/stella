@@ -43,18 +43,6 @@ type ParityCase = {
 
 const cases: ParityCase[] = [
   {
-    name: "composite (parts + format)",
-    field: {
-      path: "lawyer",
-      parts: [
-        { key: "position", inputType: "select", options: ["rad. praw."] },
-        { key: "name", inputType: "text" },
-      ],
-      format: "{{position}} {{name}}",
-    },
-    values: { lawyer: { position: "rad. praw.", name: "Tomasz Nowicki" } },
-  },
-  {
     name: "formula (arithmetic)",
     field: {
       path: "total",

@@ -2,14 +2,16 @@
  * AI template preparation: turn a finished document into a template.
  *
  * Ask the injected suggester which literal values should become fields, rewrite
- * those literals as `{{markers}}` in the document body, and embed a manifest of
- * the resulting fields (including AI-fillable ones). Pure aside from the
+ * those literals as `{{markers}}` in the document body, each carrying the
+ * filters that configure it (including the AI-fillable ones). Pure aside from the
  * injected `suggest` (the model call), so the assembly is unit-testable with a
  * stub. The model half lives in suggest-template-fields.ts; the deterministic
  * rewrite in apply-field-suggestions.ts.
  */
 
 import JSZip from "jszip";
+
+import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import {
   applyFieldSuggestions,
@@ -20,15 +22,15 @@ import {
   MAIN_DOCUMENT_PART_PATH,
   templateContentPartPaths,
 } from "@/api/lib/docx/ooxml";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 
 export type SuggestFields = (
   documentText: string,
 ) => Promise<FieldSuggestion[]>;
 
 export type PrepareTemplateResult = {
-  /** The prepared docx: literals rewritten as markers, manifest embedded. */
+  /** The prepared docx: literals rewritten as configured markers. */
   buffer: Buffer;
   fields: FieldMeta[];
   /** Suggestions whose literal text spanned runs and could not be applied. */
@@ -106,10 +108,13 @@ export const prepareTemplateFromDocument = async ({
     await zip.generateAsync({ type: "nodebuffer" }),
   );
 
-  const withManifest = await writeManifest(rewritten, {
-    version: 1,
-    fields,
-  });
+  const { buffer: configured } = await writeFieldFilters(
+    rewritten,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
 
-  return { buffer: withManifest, fields, unapplied };
+  return { buffer: configured, fields, unapplied };
 };

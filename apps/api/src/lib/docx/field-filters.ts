@@ -8,10 +8,14 @@
  * keep in step.
  *
  * The catalogue below is total in both directions: every manifest property
- * names the filters that write it (or says why it deliberately has none), and
+ * names the filters that carry it (or says why it deliberately has none), and
  * every filter the grammar accepts is named by at least one property. A new
  * manifest key or a new filter is a compile error until someone decides how
  * the two meet.
+ *
+ * The chain itself is WRITTEN by `filtersFromFieldConfig` in
+ * `@stll/template-conditions`, which the Studio writes through too; this
+ * module owns reading one back into the manifest shape.
  */
 
 import * as v from "valibot";
@@ -20,11 +24,16 @@ import {
   DATE_FORMAT_SPEC_HINT,
   normalizeDateFormatSpec,
 } from "@stll/agent-input";
-import { assertNever } from "@stll/template-conditions";
+import {
+  ARRAY_FILTER_NAMES,
+  assertNever,
+  isArrayFilterName,
+} from "@stll/template-conditions";
 import type {
   FilterArgument,
   FilterCall,
   FilterName,
+  MarkerFieldConfig,
   MarkerLiteral,
 } from "@stll/template-conditions";
 
@@ -49,22 +58,29 @@ import {
 
 // ── The catalogue ────────────────────────────────────────
 
-/** How a manifest property is written: by these filters, or deliberately not
- *  at all. */
+/** How a manifest property reaches a marker: through these filters, or
+ *  deliberately not at all. */
 type FilterDisposition = { via: readonly FilterName[] } | { excluded: string };
 
 /**
- * Every key of {@link FieldMeta}, and the filters that write it. Total over
- * the manifest shape, so a property added to `fieldMetaSchema` cannot ship
- * without a decision about how an author expresses it in the document.
+ * Every key of {@link FieldMeta} and the filters that carry it. Total over the
+ * manifest shape, so a property added to `fieldMetaSchema` cannot ship without
+ * a decision about how an author expresses it in the document.
+ *
+ * The code that WRITES a chain lives in `@stll/template-conditions`, beside
+ * the grammar, because the Studio writes the same chains when it saves a
+ * document; the assertions below pin this list to the shape that writer
+ * covers, so neither side can gain a property the other has not decided.
  */
 export const FIELD_META_FILTERS = {
   path: { excluded: "the marker's own path is the field path" },
-  label: { via: ["label"] },
-  hint: { via: ["hint"] },
   inputType: { via: ["text", "number", "date", "checkbox", "select"] },
   options: { via: ["select"] },
+  dateFormat: { via: ["date"] },
   optionsFrom: { via: ["options_from"] },
+  label: { via: ["label"] },
+  hint: { via: ["hint"] },
+  required: { via: ["required"] },
   validation: {
     via: [
       "required",
@@ -77,7 +93,6 @@ export const FIELD_META_FILTERS = {
       "max_items",
     ],
   },
-  required: { via: ["required"] },
   aiPrompt: { via: ["ai"] },
   aiAdapt: { via: ["ai"] },
   aiSeesDocument: { via: ["ai"] },
@@ -85,22 +100,34 @@ export const FIELD_META_FILTERS = {
   source: { via: ["matter", "contact", "party", "attorney", "firm"] },
   formula: { via: ["formula"] },
   condition: { via: ["condition"] },
-  dateFormat: { via: ["date"] },
-  parts: {
-    excluded:
-      "a composite is written as document text around its part markers, so the format needs no filter",
-  },
-  format: {
-    excluded: "the document text between the part markers is the format",
-  },
   conditionAst: {
     excluded: "the canonical AST is derived from `condition` when it is saved",
   },
-  sourceLayer: {
-    excluded:
-      "the record that a configure call decided the source, which is what a filter is not",
-  },
 } as const satisfies Record<keyof FieldMeta, FilterDisposition>;
+
+/** The manifest keys a marker actually carries: everything the catalogue does
+ *  not deliberately exclude. */
+type WrittenFieldMetaKey = {
+  [TKey in keyof typeof FIELD_META_FILTERS]: (typeof FIELD_META_FILTERS)[TKey] extends {
+    via: readonly FilterName[];
+  }
+    ? TKey
+    : never;
+}[keyof typeof FIELD_META_FILTERS];
+
+// The shared writer's shape and this catalogue describe the same field. A key
+// on either side the other does not know about would be a configuration one
+// surface writes and the other silently drops.
+true satisfies Exclude<
+  WrittenFieldMetaKey,
+  keyof MarkerFieldConfig
+> extends never
+  ? true
+  : never;
+true satisfies Exclude<keyof MarkerFieldConfig, keyof FieldMeta> extends never
+  ? true
+  : never;
+true satisfies FieldMeta extends MarkerFieldConfig ? true : never;
 
 type CoveredFilter = {
   [TKey in keyof typeof FIELD_META_FILTERS]: (typeof FIELD_META_FILTERS)[TKey] extends {
@@ -371,25 +398,19 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
   switch (call.name) {
     case "text":
     case "number":
-    case "select":
+    case "select": {
       draft.meta["inputType"] = call.name;
-      if (call.name === "select") {
-        const options = positional(call).filter(
-          (value): value is string => typeof value === "string",
-        );
-        if (options.length === 0) {
-          draft.issues.push(
-            issue(
-              call.name,
-              "select() needs the allowed values.",
-              'Write select("a", "b").',
-            ),
-          );
-          return;
-        }
+      if (call.name !== "select") {
+        return;
+      }
+      const options = positional(call).filter(
+        (value): value is string => typeof value === "string",
+      );
+      if (options.length > 0) {
         draft.meta["options"] = options;
       }
       return;
+    }
     case "checkbox":
       draft.meta["inputType"] = "boolean";
       return;
@@ -567,6 +588,29 @@ export const fieldMetaFromFilters = (
     return { field: null, issues: draft.issues };
   }
 
+  // A select's options come from the filter or from another field, and the
+  // whole chain decides which: `select() | options_from("kind")` is a dependent
+  // select, `select()` alone is a list nobody can pick from. The check waits
+  // for the chain to finish, so the order the author wrote the two in cannot
+  // change the answer.
+  if (
+    draft.meta["inputType"] === "select" &&
+    draft.meta["options"] === undefined &&
+    draft.meta["optionsFrom"] === undefined
+  ) {
+    return {
+      field: null,
+      issues: [
+        ...draft.issues,
+        issue(
+          "select",
+          "select() offers no values to pick from.",
+          'Write select("a", "b"), or options_from("other_field") to take them from another field.',
+        ),
+      ],
+    };
+  }
+
   const parsed = v.safeParse(fieldMetaSchema, draft.meta);
   if (!parsed.success) {
     const first = parsed.issues.at(0);
@@ -586,22 +630,6 @@ export const fieldMetaFromFilters = (
 };
 
 /**
- * The filters that describe a REPEAT rather than a value: how many rows it
- * takes, and what to call the group. These are the ones a `{% for %}` tag may
- * carry, since the loop path names the array, not one of its values.
- */
-const ARRAY_FILTERS = [
-  "label",
-  "hint",
-  "required",
-  "min_items",
-  "max_items",
-] as const satisfies readonly FilterName[];
-
-const isArrayFilter = (name: FilterName): boolean =>
-  ARRAY_FILTERS.some((candidate) => candidate === name);
-
-/**
  * The manifest field a loop's own filters declare. A value filter on a loop
  * path configures nothing — there is no single value there — so it is reported
  * against the set that does apply, and the rest of the chain still lands.
@@ -610,14 +638,14 @@ export const arrayFieldFromFilters = (
   path: string,
   filters: readonly FilterCall[],
 ): FieldFilterResult => {
-  const applicable = filters.filter(({ name }) => isArrayFilter(name));
+  const applicable = filters.filter(({ name }) => isArrayFilterName(name));
   const issues = filters
-    .filter(({ name }) => !isArrayFilter(name))
+    .filter(({ name }) => !isArrayFilterName(name))
     .map(({ name }) =>
       issue(
         name,
         `${name}() configures a value, and {% for ${path} %} names the repeat itself.`,
-        `On a loop the filters are ${ARRAY_FILTERS.join(", ")}; put a value filter on the item's own marker.`,
+        `On a loop the filters are ${ARRAY_FILTER_NAMES.join(", ")}; put a value filter on the item's own marker.`,
       ),
     );
   const applied = fieldMetaFromFilters(path, applicable);

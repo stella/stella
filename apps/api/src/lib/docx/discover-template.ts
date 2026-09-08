@@ -17,11 +17,16 @@ import * as slimdom from "slimdom";
 import { compareCodeUnit } from "@stll/collation";
 import {
   parseCondition,
+  qualifyLoopPath,
+  qualifyRowScopedPlaceholder,
+  rowScopePaths,
   type ConditionNode,
   type FilterCall,
+  type RowScope,
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { isLookupFormatKey } from "@/api/lib/docx/types";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
@@ -179,74 +184,6 @@ const registerConditionFields = ({
 
   visit(root);
 };
-
-const qualifyRowScopedPath = (
-  path: string,
-  rowPaths: readonly string[] = [],
-): string => {
-  if (
-    rowPaths.some(
-      (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
-    )
-  ) {
-    return path;
-  }
-  const innermostRowPath = rowPaths.at(-1);
-  return innermostRowPath === undefined ? path : `${innermostRowPath}.${path}`;
-};
-
-type RowScope = {
-  /** The loop variable the body addresses items through. */
-  alias: string;
-  declaredPath: string;
-  scopedPath: string;
-};
-
-const rowScopePaths = (rowScopes: readonly RowScope[]): string[] =>
-  rowScopes.map(({ scopedPath }) => scopedPath);
-
-const qualifyRowScopedPlaceholder = (
-  path: string,
-  rowScopes: readonly RowScope[],
-): string => {
-  if (
-    rowScopes.some(
-      ({ scopedPath }) =>
-        path === scopedPath || path.startsWith(`${scopedPath}.`),
-    )
-  ) {
-    return path;
-  }
-  for (const { alias, declaredPath, scopedPath } of rowScopes.toReversed()) {
-    // The alias is the authored form; the declared path still resolves so a
-    // template that reaches for the loop's own path is discovered the same way
-    // it fills (`unaliased_item_path` names it as a warning).
-    for (const head of [alias, declaredPath]) {
-      if (path === head) {
-        return scopedPath;
-      }
-      if (path.startsWith(`${head}.`)) {
-        return `${scopedPath}.${path.slice(head.length + 1)}`;
-      }
-    }
-  }
-  return path;
-};
-
-/**
- * The manifest path of a loop declared inside other loops. A nested loop names
- * its array through the enclosing alias (`{% for i in group.items %}`), so the
- * alias resolves first; a loop that names a bare path inherits the innermost
- * row scope, as it always has.
- */
-const qualifyLoopPath = (
-  declaredPath: string,
-  rowScopes: readonly RowScope[],
-): string =>
-  qualifyRowScopedPath(
-    qualifyRowScopedPlaceholder(declaredPath, rowScopes),
-    rowScopePaths(rowScopes),
-  );
 
 const requireRowScopes = (
   arrayScopes: ReadonlyMap<number, readonly RowScope[]>,
@@ -1230,6 +1167,58 @@ type DocumentLayerOptions = {
 };
 
 /**
+ * The declarations, with every one a rendering carries moved onto the field it
+ * renders.
+ *
+ * A registry lookup fills ONE input and prints its hit through the dotted
+ * markers under it, so `{{ company.name | lookup("krs", name="[name]") }}`
+ * declares `company`: the `name` segment says which rendering this marker is,
+ * not that the rendering is a field of its own. That is the only home a lookup
+ * has when the document never prints the bare `{{ company }}`.
+ *
+ * Two renderings that declare the same field differently have no resolution an
+ * author would recognize, so both paragraphs are named and neither wins.
+ */
+const foldRenderedLookups = (
+  declarations: ReadonlyMap<string, DocumentFieldDeclaration>,
+  errors: TemplateStructureError[],
+): [string, DocumentFieldDeclaration][] => {
+  const folded = new Map<string, DocumentFieldDeclaration>();
+  for (const [path, declaration] of declarations) {
+    const cut = path.lastIndexOf(".");
+    const parent = path.slice(0, cut);
+    const declaresParent =
+      cut > 0 &&
+      declaration.scope === "value" &&
+      isLookupFormatKey(path.slice(cut + 1)) &&
+      declaration.filters.some((filter) => filter.name === "lookup");
+    if (!declaresParent) {
+      folded.set(path, declaration);
+      continue;
+    }
+    const existing = folded.get(parent);
+    if (existing === undefined) {
+      folded.set(parent, declaration);
+      continue;
+    }
+    if (existing.signature === declaration.signature) {
+      continue;
+    }
+    errors.push({
+      message:
+        `"${parent}" is configured twice by the markers that render it: ` +
+        `paragraph ${existing.paragraphIndex + 1} says ${existing.signature} ` +
+        `and paragraph ${declaration.paragraphIndex + 1} says ` +
+        `${declaration.signature}. Every marker that renders the field has to ` +
+        "carry the same lookup, because they are all printing one hit.",
+      paragraphIndex: declaration.paragraphIndex,
+      directive: `{{ ${path} | lookup(…) }}`,
+    });
+  }
+  return [...folded].toSorted(([a], [b]) => compareCodeUnit(a, b));
+};
+
+/**
  * The manifest the markers themselves declare, in path order. A filter the
  * marker cannot act on becomes a structure error against the paragraph it was
  * written in, so the author is told what to change rather than getting a field
@@ -1241,9 +1230,10 @@ const documentLayerFields = ({
   errors,
 }: DocumentLayerOptions): FieldMeta[] => {
   const fields: FieldMeta[] = [];
-  for (const [path, { filters, paragraphIndex, scope }] of [
-    ...declarations,
-  ].toSorted(([a], [b]) => compareCodeUnit(a, b))) {
+  for (const [path, { filters, paragraphIndex, scope }] of foldRenderedLookups(
+    declarations,
+    errors,
+  )) {
     const { field, issues } =
       scope === "array"
         ? arrayFieldFromFilters(path, filters)

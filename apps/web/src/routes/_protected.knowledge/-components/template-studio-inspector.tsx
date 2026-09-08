@@ -510,9 +510,9 @@ export const TemplateFillFacet = ({
 
 /** Typed fill values become the live in-document preview, each field rendered
  *  through the SAME deterministic dispatcher the API fill engine uses
- *  (`renderDeterministicFieldValue`): composite joins via its `format`
- *  template, a formula is computed, a date is rendered in its locale/style —
- *  so the preview is byte-identical to the generated document. A lookup
+ *  (`renderDeterministicFieldValue`): a formula is computed, a date is
+ *  rendered in its locale/style, so the preview is byte-identical to the
+ *  generated document. A lookup
  *  field's value is resolved server-side, so it previews the raw registry
  *  number until the debounced lookup-preview response lands (and on a miss the
  *  raw number stays); that async overlay is the one exception to the shared
@@ -634,14 +634,14 @@ const lookupPreviewValue = (rendered: string): TemplatePreviewValue => {
 type StudioLookup = NonNullable<StudioField["lookup"]>;
 
 /** A field as the live preview needs it: the deterministic-transform config
- *  the shared dispatcher reads (composite/formula/date), plus the lookup
+ *  the shared dispatcher reads (formula/date), plus the lookup
  *  config the async overlay handles itself. */
 type LookupPreviewField = DeterministicFieldConfig & {
   lookup?: StudioLookup | undefined;
 };
 
-/** A single field's live preview string. A deterministic field (composite /
- *  formula / date) renders through the shared dispatcher, so it matches the
+/** A single field's live preview string. A deterministic field (formula or
+ *  date) renders through the shared dispatcher, so it matches the
  *  generated document exactly; everything else (a scalar, or a lookup field
  *  whose value the async overlay later replaces) falls back to the raw
  *  string/number/boolean. Returns null when there is nothing to preview. */

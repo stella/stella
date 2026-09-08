@@ -70,6 +70,7 @@ import type {
 } from "@/components/templates/template-discover-types";
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
 import {
+  groupFieldsByPrefix,
   readAiFieldErrorPaths,
   runLeadingSingleFlight,
 } from "@/components/templates/template-form.logic";
@@ -96,8 +97,6 @@ type FillFormat = "docx" | "pdf";
 const DOCX_EXT_RE = /\.docx$/iu;
 
 const REQUIRED_MARKER = "*";
-
-type CompositePart = NonNullable<ResolvedField["parts"]>[number];
 
 const addFormulaFieldReferences = (
   expr: string,
@@ -144,28 +143,6 @@ const addConditionAstReferences = (
   }
 };
 
-/** The field's parts when it is composite (parts + format), else null. */
-const compositeParts = (field: ResolvedField): CompositePart[] | null =>
-  field.parts !== undefined &&
-  field.parts.length > 0 &&
-  field.format !== undefined
-    ? field.parts
-    : null;
-
-/** Read a composite field's form value into a part-key → string map. */
-const readPartValues = (value: unknown): Record<string, string> => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return {};
-  }
-  const out: Record<string, string> = {};
-  for (const [key, partValue] of Object.entries(value)) {
-    if (typeof partValue === "string") {
-      out[key] = partValue;
-    }
-  }
-  return out;
-};
-
 /** Mirrors `validateKrsNumber` from the business-registries package (not
  *  exposed to the web workspace): exactly 10 digits, whitespace-tolerant. */
 const KRS_NUMBER_RE = /^\d{10}$/u;
@@ -187,42 +164,6 @@ type ValidationError =
   | { kind: "lookupNumber" }
   | { kind: "minItems"; min: number };
 
-/** Validate a composite field's part values. */
-const validateCompositeField = (
-  parts: CompositePart[],
-  value: unknown,
-  required: boolean,
-): ValidationError | undefined => {
-  const partValues = readPartValues(value);
-  const isFilled = (part: CompositePart) =>
-    (partValues[part.key] ?? "").trim() !== "";
-  const filledCount = parts.filter(isFilled).length;
-  if (filledCount === 0) {
-    return required ? { kind: "required" } : undefined;
-  }
-  // A partially filled composite cannot be assembled: once any part is
-  // entered, every part is required (required field = all parts required).
-  if (filledCount < parts.length) {
-    return { kind: "required" };
-  }
-  for (const part of parts) {
-    if (part.pattern === undefined || part.pattern === "") {
-      continue;
-    }
-    try {
-      // Anchored: the pattern must describe the whole part value (same
-      // rule the server applies at fill time).
-      const re = new RegExp(`^(?:${part.pattern})$`, "u");
-      if (!re.test(partValues[part.key] ?? "")) {
-        return { kind: "pattern" };
-      }
-    } catch {
-      // Invalid regex in manifest; skip the check
-    }
-  }
-  return undefined;
-};
-
 /** Validate a single field value against its manifest
  *  rules. Returns a validation error or undefined. */
 const validateField = (
@@ -230,11 +171,6 @@ const validateField = (
   value: unknown,
 ): ValidationError | undefined => {
   const required = field.required ?? field.validation?.required ?? false;
-
-  const parts = compositeParts(field);
-  if (parts) {
-    return validateCompositeField(parts, value, required);
-  }
 
   const str = typeof value === "string" ? value : "";
 
@@ -492,27 +428,10 @@ const validateDependentSelection = (
   };
 };
 
-const groupFieldsByPrefix = (fields: readonly ResolvedField[]) => {
-  const groups = new Map<string, ResolvedField[]>();
-
-  for (const field of fields) {
-    const dotIndex = field.path.indexOf(".");
-    const prefix = dotIndex > 0 ? field.path.slice(0, dotIndex) : "";
-    const existing = groups.get(prefix);
-    if (existing) {
-      existing.push(field);
-    } else {
-      groups.set(prefix, [field]);
-    }
-  }
-
-  return groups;
-};
-
+/** How one row of the form's field list is boxed. A dotted path is how a
+ *  template author says "these belong together", so a `named` group renders
+ *  as one bordered block under a heading; `ungrouped` fields render bare. */
 const getDefaultValue = (field: ResolvedField): unknown => {
-  if (compositeParts(field)) {
-    return {};
-  }
   if (field.kind === "boolean") {
     return false;
   }
@@ -722,99 +641,6 @@ const LookupHint = ({ lookup }: { lookup: ResolvedField["lookup"] }) => {
   );
 };
 
-/** One visual row for a composite field: one input per part (select or
- *  text), labelled by the field's label; the form value is the object of
- *  part values, assembled by the server at fill time. */
-const CompositeFieldRow = ({
-  field,
-  parts,
-  label,
-  required,
-  value,
-  onChange,
-  onBlur,
-  error,
-  prefillSnippet,
-  onEdit,
-}: {
-  field: ResolvedField;
-  parts: CompositePart[];
-  label: string;
-  required: boolean;
-  value: unknown;
-  onChange: (path: string, value?: unknown) => void;
-  onBlur?: ((path: string) => void) | undefined;
-  error?: string | undefined;
-  prefillSnippet?: string | null | undefined;
-  onEdit?: (() => void) | undefined;
-}) => {
-  const partValues = readPartValues(value);
-  const setPart = (key: string, partValue: string) =>
-    onChange(field.path, { ...partValues, [key]: partValue });
-
-  return (
-    <Field>
-      <FieldLabelRow
-        label={label}
-        onEdit={onEdit}
-        prefillSnippet={prefillSnippet}
-        required={required}
-      />
-      <div className="flex flex-wrap items-start gap-2">
-        {parts.map((part) => {
-          const partLabel = part.label ?? part.key;
-          if (
-            part.inputType === "select" &&
-            part.options &&
-            part.options.length > 0
-          ) {
-            const selected = partValues[part.key];
-            return (
-              <Select
-                key={part.key}
-                name={`${field.path}.${part.key}`}
-                onValueChange={(val) => {
-                  setPart(part.key, typeof val === "string" ? val : "");
-                  onBlur?.(field.path);
-                }}
-                value={selected === "" ? undefined : selected}
-              >
-                <SelectTrigger
-                  aria-label={partLabel}
-                  className="w-auto min-w-36"
-                >
-                  <SelectValue placeholder={partLabel} />
-                </SelectTrigger>
-                <SelectPopup>
-                  {part.options.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            );
-          }
-          return (
-            <Input
-              aria-label={partLabel}
-              className="min-w-36 flex-1"
-              key={part.key}
-              name={`${field.path}.${part.key}`}
-              onBlur={() => onBlur?.(field.path)}
-              onChange={(e) => setPart(part.key, e.target.value)}
-              placeholder={partLabel}
-              type="text"
-              value={partValues[part.key] ?? ""}
-            />
-          );
-        })}
-      </div>
-      <FieldError message={error} />
-    </Field>
-  );
-};
-
 const FieldRenderer = ({
   field,
   value,
@@ -847,26 +673,6 @@ const FieldRenderer = ({
   const required = field.required ?? field.validation?.required ?? false;
   const handleBlur = () => onBlur?.(field.path);
   const onEdit = onEditField ? () => onEditField(field.path) : undefined;
-
-  // A composite field renders one input per part on a single row; its form
-  // value is the object of part values, assembled by the server at fill time.
-  const parts = compositeParts(field);
-  if (parts) {
-    return (
-      <CompositeFieldRow
-        error={error}
-        field={field}
-        label={label}
-        onBlur={onBlur}
-        onChange={onChange}
-        onEdit={onEdit}
-        parts={parts}
-        prefillSnippet={prefillSnippet}
-        required={required}
-        value={value}
-      />
-    );
-  }
 
   if (inputType === "boolean" || field.kind === "boolean") {
     return (
@@ -1212,24 +1018,6 @@ const buildSubmitValues = (
       continue;
     }
 
-    const parts = compositeParts(field);
-    if (parts) {
-      const partValues = readPartValues(values[field.path]);
-      const anyFilled = parts.some(
-        (part) => (partValues[part.key] ?? "").trim() !== "",
-      );
-      if (anyFilled) {
-        // Submit every part key (validation guarantees all are filled); the
-        // server assembles them via the field's format.
-        const submitParts: Record<string, string> = {};
-        for (const part of parts) {
-          submitParts[part.key] = partValues[part.key] ?? "";
-        }
-        setNestedValue(result, field.path, submitParts);
-      }
-      continue;
-    }
-
     const val = values[field.path];
     if (val !== undefined && val !== "") {
       setNestedValue(result, field.path, coerceValue(field, val));
@@ -1334,11 +1122,6 @@ type SubmitAction =
 const isFieldValueEmpty = (field: ResolvedField, value: unknown): boolean => {
   if (field.kind === "boolean" || field.inputType === "boolean") {
     return false;
-  }
-  const parts = compositeParts(field);
-  if (parts) {
-    const partValues = readPartValues(value);
-    return parts.every((part) => (partValues[part.key] ?? "").trim() === "");
   }
   return typeof value !== "string" || value.trim() === "";
 };
@@ -1729,19 +1512,11 @@ export const TemplateForm = ({
     [onValuesChange],
   );
 
-  /** Drop a field's prefill badge once its value is cleared (empty string,
-   *  unchecked boolean, or every composite part blank). Edits keep it. */
+  /** Drop a field's prefill badge once its value is cleared (empty string or
+   *  unchecked boolean). Edits keep it. */
   const clearPrefillSnippetIfEmptied = useCallback(
     (path: string, value: unknown) => {
-      const isEmpty =
-        value === "" ||
-        value === false ||
-        value === undefined ||
-        (typeof value === "object" &&
-          value !== null &&
-          Object.values(readPartValues(value)).every(
-            (part) => part.trim() === "",
-          ));
+      const isEmpty = value === "" || value === false || value === undefined;
       if (!isEmpty) {
         return;
       }
@@ -1854,21 +1629,7 @@ export const TemplateForm = ({
       if (!def || def.kind === "array") {
         continue;
       }
-      const parts = compositeParts(def);
-
-      if (suggestion.partKey !== null) {
-        if (!parts || !parts.some((part) => part.key === suggestion.partKey)) {
-          continue;
-        }
-        const current = readPartValues(valuesRef.current[suggestion.path]);
-        handleChangeWithValidation(suggestion.path, {
-          ...current,
-          [suggestion.partKey]: suggestion.value,
-        });
-      } else if (parts) {
-        // A composite field only accepts per-part proposals.
-        continue;
-      } else if (def.kind === "boolean" || def.inputType === "boolean") {
+      if (def.kind === "boolean" || def.inputType === "boolean") {
         handleChangeWithValidation(
           suggestion.path,
           suggestion.value === "true",
@@ -2483,27 +2244,30 @@ export const TemplateForm = ({
               />
             )}
 
-            {[...grouped.entries()].map(([prefix, groupFields]) => (
+            {grouped.map((group) => (
               <fieldset
                 className={cn(
                   "flex flex-col gap-4",
-                  prefix !== "" && "rounded-lg border p-4",
+                  group.kind === "named" && "rounded-lg border p-4",
                 )}
-                key={prefix || "__root"}
+                key={
+                  group.kind === "named" ? `named:${group.prefix}` : "ungrouped"
+                }
               >
-                {prefix !== "" && (
-                  <legend className="text-muted-foreground px-1 text-sm font-medium">
-                    {prefix}
-                  </legend>
+                {group.kind === "named" && (
+                  <>
+                    <legend className="text-muted-foreground px-1 text-sm font-medium">
+                      {group.legend}
+                    </legend>
+                    {groupSupportsRegistryAutofill(group.children) && (
+                      <RegistryAutofillControl
+                        groupFields={group.children}
+                        onApply={applyAutofill}
+                      />
+                    )}
+                  </>
                 )}
-                {prefix !== "" &&
-                  groupSupportsRegistryAutofill(groupFields) && (
-                    <RegistryAutofillControl
-                      groupFields={groupFields}
-                      onApply={applyAutofill}
-                    />
-                  )}
-                {groupFields.map((field) => (
+                {group.fields.map((field) => (
                   <FieldRenderer
                     derivedOptions={
                       dependentOptions(field, fields, values) ?? undefined

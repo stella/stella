@@ -2,14 +2,7 @@ import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import {
-  AlertTriangleIcon,
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  PlusIcon,
-  XIcon,
-} from "lucide-react";
+import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -22,7 +15,6 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 import {
@@ -33,7 +25,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -51,13 +42,7 @@ import {
   formatDateExample,
   type TemplateDateFormat,
 } from "@/components/templates/template-date-format";
-import type {
-  NamedCondition,
-  ResolvedField,
-  StructureError,
-} from "@/components/templates/template-discover-types";
 import {
-  defaultCompositeFormat,
   isInputType,
   type InputType,
   type LookupRegistry,
@@ -65,27 +50,17 @@ import {
 import Tooltip from "@/components/tooltip";
 import { useLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
-import { api } from "@/lib/api";
+import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
-import { detached } from "@/lib/detached";
-import { userErrorMessage } from "@/lib/errors/user-safe";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
-import {
-  templateValueSourcePatch,
-  templateValueSourceTransition,
-} from "@/routes/_protected.knowledge/-components/template-value-source";
 import type {
   EditableField,
   EditableLookup,
   EditableLookupFormat,
-  EditablePart,
   FieldSource,
   TemplateEditableField,
 } from "@/routes/_protected.knowledge/-components/template-value-source";
-
-const DOCX_EXTENSION_RE = /\.docx$/iu;
-const REQUIRED_MARKER = "*";
 
 /**
  * Input types offered when configuring a field. A UI-level list, not the
@@ -116,17 +91,9 @@ const fieldTypeChoice = (
 ): InputType | "company" =>
   field.lookup === undefined ? field.inputType : "company";
 
-const PART_INPUT_TYPES = ["text", "select"] as const;
-
-type PartInputType = (typeof PART_INPUT_TYPES)[number];
-
 /** Default key seeded for the first format of a freshly switched Company ID
  *  field; the author can rename it. */
 const LOOKUP_DEFAULT_FORMAT_KEY = "output_1";
-
-/** Marker segment grammar (letters, digits, underscore, dash; no dots) shared
- *  with the manifest's `isLookupFormatKey`. */
-const LOOKUP_FORMAT_KEY_RE = /^[\p{L}\p{N}_-]+$/u;
 
 /** Characters disallowed in a format key as the author types: anything outside
  *  the segment grammar, including the dot (the marker's path/key separator). */
@@ -152,451 +119,6 @@ export const ValueTypeLabel = ({
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
       <span className="truncate">{t(meta.labelKey)}</span>
     </span>
-  );
-};
-
-const inferInputType = (field: ResolvedField): InputType => {
-  if (field.inputType && isInputType(field.inputType)) {
-    return field.inputType;
-  }
-  if (field.kind === "boolean") {
-    return "boolean";
-  }
-  if (field.options && field.options.length > 0) {
-    return "select";
-  }
-  return "text";
-};
-
-const buildEditableFields = (
-  fields: readonly ResolvedField[],
-): TemplateEditableField[] =>
-  fields.map((f) => {
-    const parts = f.parts?.map((part) => ({
-      key: part.key,
-      inputType: part.inputType,
-      options: optionalArray(part.options),
-      label: part.label,
-      pattern: part.pattern,
-    }));
-    return {
-      path: f.path,
-      kind: f.kind,
-      label: f.label ?? "",
-      hint: f.hint,
-      inputType: inferInputType(f),
-      required: f.required ?? false,
-      options: optionalArray(f.options),
-      parts,
-      format: f.format,
-      optionsFrom: f.optionsFrom,
-      lookup: f.lookup,
-      formula: f.formula,
-      source: f.source,
-      dateFormat: f.dateFormat,
-      ...templateValueSourcePatch(
-        {
-          ...f,
-          inputType: inferInputType(f),
-          parts,
-        },
-        { preserveDraft: true },
-      ),
-    };
-  });
-
-type ManifestPart = {
-  key: string;
-  inputType: PartInputType;
-  options?: string[] | undefined;
-  label?: string | undefined;
-  pattern?: string | undefined;
-};
-
-type CompositeManifestProps = {
-  parts: ManifestPart[] | undefined;
-  format: string | undefined;
-};
-
-const compositeManifestProps = (
-  field: TemplateEditableField,
-): CompositeManifestProps => {
-  const fieldParts = optionalArray(field.parts);
-  const parts = fieldParts.filter((part) => part.key.trim() !== "");
-  // An untyped format defaults to all parts joined by spaces, so a composite
-  // never silently degrades to a plain field just because the author skipped
-  // the format input.
-  const trimmedFormat = field.format?.trim() ?? "";
-  const format =
-    trimmedFormat === ""
-      ? (defaultCompositeFormat(parts) ?? "")
-      : trimmedFormat;
-  if (parts.length === 0 || format === "") {
-    return { parts: undefined, format: undefined };
-  }
-  return {
-    parts: parts.map((part) => ({
-      key: part.key,
-      inputType: part.inputType,
-      options:
-        part.inputType === "select" && part.options.length > 0
-          ? part.options
-          : undefined,
-      label: part.label || undefined,
-      pattern: part.pattern || undefined,
-    })),
-    format,
-  };
-};
-
-/**
- * The manifest shape of a field's lookup configuration: only meaningful on a
- * plain text field (composite parts and other input types collect a different
- * value). The formats list is the whole config; the first format is the
- * default for the bare marker. Returns undefined when no valid format survives
- * normalization, so the field falls back to a plain text field rather than an
- * invalid empty lookup.
- */
-const lookupManifestProps = (
-  field: TemplateEditableField,
-): EditableLookup | undefined => {
-  if (
-    field.lookup === undefined ||
-    field.parts !== undefined ||
-    field.inputType !== "text"
-  ) {
-    return undefined;
-  }
-  // Drop rows with an empty key or template, enforce the segment grammar and
-  // caps. The order is preserved so the first surviving row stays the default.
-  const formats = field.lookup.formats
-    .flatMap((f) => {
-      const key = f.key.trim();
-      const template = f.template.trim();
-      return key !== "" &&
-        template !== "" &&
-        LOOKUP_FORMAT_KEY_RE.test(key) &&
-        template.length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH
-        ? [{ key, template }]
-        : [];
-    })
-    .slice(0, LOOKUP_FORMATS_MAX);
-  if (formats.length === 0) {
-    return undefined;
-  }
-  return { registry: field.lookup.registry, formats };
-};
-
-/**
- * The manifest shape of a field's fill hint: the trimmed text, with a blank
- * one normalized away. Kept short — the input enforces {@link HINT_MAX_LENGTH}.
- */
-const hintManifestProps = (
-  field: TemplateEditableField,
-): string | undefined => {
-  const hint = field.hint?.trim() ?? "";
-  return hint === "" ? undefined : hint;
-};
-
-/**
- * The manifest shape of a field's date format: only meaningful on a plain
- * "date" input (composite, formula, and lookup fields collect or derive a
- * different value).
- */
-const dateFormatManifestProps = (
-  field: TemplateEditableField,
-): TemplateDateFormat | undefined => {
-  if (
-    field.inputType !== "date" ||
-    field.parts !== undefined ||
-    field.formula !== undefined ||
-    field.lookup !== undefined
-  ) {
-    return undefined;
-  }
-  return field.dateFormat;
-};
-
-/**
- * The manifest shape of a field's formula: the trimmed expression, with a
- * blank one (the checkbox was ticked but no expression entered) normalized
- * away. A formula field's value is derived, never user-entered, so a
- * composite configuration takes precedence and suppresses the formula.
- */
-const formulaManifestProps = (
-  field: TemplateEditableField,
-): string | undefined => {
-  if (field.formula === undefined || field.parts !== undefined) {
-    return undefined;
-  }
-  const formula = field.formula.trim();
-  return formula === "" ? undefined : formula;
-};
-
-/**
- * The manifest shape of a field's binding source: emitted as-is when set. A
- * derived value resolved server-side at fill time, mutually exclusive with the
- * input sources — the config controls clear those when the source is enabled
- * (and clear the source when an input source is enabled), so a field never
- * carries both. Returns a spreadable object so the field map omits `source`
- * entirely when absent.
- */
-export const sourceManifestProps = (
-  field: EditableField,
-): { source: FieldSource } | Record<string, never> =>
-  field.source !== undefined ? { source: field.source } : {};
-
-type ConfigureStepProps = {
-  file: File;
-  fields: ResolvedField[];
-  conditions: NamedCondition[];
-  structureErrors: StructureError[];
-  onBack: () => void;
-  onSaved: () => void;
-};
-
-export const ConfigureStep = ({
-  file,
-  fields: discoveredFields,
-  conditions,
-  structureErrors,
-  onBack,
-  onSaved,
-}: ConfigureStepProps) => {
-  const t = useTranslations();
-  const [name, setName] = useState(() =>
-    file.name.replace(DOCX_EXTENSION_RE, ""),
-  );
-  const [fields, setFields] = useState(() =>
-    buildEditableFields(discoveredFields),
-  );
-  const [expandedField, setExpandedField] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const updateField = (path: string, patch: Partial<TemplateEditableField>) => {
-    setFields((prev) =>
-      prev.map((f) => {
-        if (f.path !== path) {
-          return f;
-        }
-        const next = { ...f, ...patch };
-        return {
-          ...next,
-          ...templateValueSourceTransition({
-            field: f,
-            patch,
-            preserveDraft: true,
-          }),
-        };
-      }),
-    );
-  };
-
-  // Source-field choices for a dependent select's "options from field"
-  // picker: every fillable path, with array fields contributing their item
-  // paths (`parties.name`) since the array itself holds objects, not values.
-  const fieldPathChoices = discoveredFields.flatMap((f) =>
-    f.kind === "array"
-      ? optionalArray(f.itemFields).map((sub) => `${f.path}.${sub.path}`)
-      : [f.path],
-  );
-
-  const handleSave = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    setSaving(true);
-
-    // Build manifest from editable field state
-    const manifest = {
-      version: 1,
-      fields: fields.map((f) => {
-        const formula = formulaManifestProps(f);
-        if (formula !== undefined) {
-          // Derived at fill time: no input is rendered, so the
-          // input-source configuration (options, parts, lookup,
-          // required) does not apply.
-          return {
-            path: f.path,
-            label: f.label || undefined,
-            hint: hintManifestProps(f),
-            inputType: f.inputType,
-            formula,
-          };
-        }
-        const composite = compositeManifestProps(f);
-        return {
-          path: f.path,
-          label: f.label || undefined,
-          hint: hintManifestProps(f),
-          inputType: f.inputType,
-          options:
-            f.inputType === "select" && f.options.length > 0
-              ? f.options
-              : undefined,
-          required: f.required || undefined,
-          parts: composite.parts,
-          format: composite.format,
-          optionsFrom:
-            f.inputType === "select" && f.optionsFrom
-              ? f.optionsFrom
-              : undefined,
-          lookup: lookupManifestProps(f),
-          dateFormat: dateFormatManifestProps(f),
-          ...sourceManifestProps(f),
-        };
-      }),
-      // Legacy named conditions from discovery are preserved read-only; new
-      // conditions are authored as boolean condition-fields in the Studio,
-      // not as standalone entries here.
-      conditions,
-    };
-
-    // Send the original DOCX + manifest to the create
-    // endpoint; the server handles embedding and storage.
-    const response = await api.templates.put({
-      file,
-      name: trimmed,
-      manifest: JSON.stringify(manifest),
-    });
-
-    setSaving(false);
-
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    stellaToast.add({
-      type: "success",
-      title: t("templates.templateSaved"),
-    });
-    onSaved();
-  };
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-2">
-        <Button onClick={onBack} size="sm" variant="ghost">
-          <DirectionalIcon icon={ArrowLeftIcon} />
-          {t("templates.backToList")}
-        </Button>
-      </div>
-      {/* Scroll on the full-width pane so the scrollbar tracks the right edge
-          (next to the inspector rail), not the centered max-w content column. */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl p-6">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold">
-              {t("templates.configureFields")}
-            </h2>
-          </div>
-
-          {structureErrors.length > 0 && (
-            <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
-              <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
-              <span className="text-warning-foreground text-sm">
-                {t("templates.structureWarnings", {
-                  count: structureErrors.length,
-                })}
-              </span>
-            </div>
-          )}
-
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={(...args) => {
-              detached(handleSave(...args), "template-wizard.save");
-            }}
-          >
-            <Field>
-              <FieldLabel>{t("templates.templateName")}</FieldLabel>
-              <FieldControl
-                render={
-                  <Input
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t("templates.templateNamePlaceholder")}
-                    value={name}
-                  />
-                }
-              />
-            </Field>
-
-            <div className="rounded-lg border">
-              <div className="border-b px-4 py-3">
-                <h3 className="text-muted-foreground text-sm font-medium">
-                  {t("templates.fieldCount", {
-                    count: fields.length,
-                  })}
-                </h3>
-              </div>
-              <ul className="divide-y">
-                {fields.map((field) => {
-                  const isExpanded = expandedField === field.path;
-                  return (
-                    <li key={field.path}>
-                      <button
-                        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
-                        onClick={() =>
-                          setExpandedField(isExpanded ? null : field.path)
-                        }
-                        type="button"
-                      >
-                        {isExpanded ? (
-                          <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
-                        ) : (
-                          <DirectionalIcon
-                            className="text-muted-foreground size-4 shrink-0"
-                            icon={ChevronRightIcon}
-                          />
-                        )}
-                        <span className="min-w-0 flex-1 font-medium">
-                          {field.label || field.path}
-                        </span>
-                        <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
-                          <ValueTypeLabel inputType={fieldTypeChoice(field)} />
-                        </span>
-                        {field.required && (
-                          <span className="text-muted-foreground shrink-0 text-xs">
-                            {REQUIRED_MARKER}
-                          </span>
-                        )}
-                      </button>
-                      {isExpanded && (
-                        <FieldConfigEditor
-                          field={field}
-                          onUpdate={(patch) => updateField(field.path, patch)}
-                          siblingPaths={fieldPathChoices.filter(
-                            (p) => p !== field.path,
-                          )}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button disabled={saving || !name.trim()} type="submit">
-                {t("common.save")}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
   );
 };
 
@@ -682,176 +204,9 @@ const OptionsTagInput = ({
   );
 };
 
-const PART_KEY_DISALLOWED_RE = /[^\p{L}\p{N}_.-]/gu;
-
-const emptyEditablePart = (): EditablePart => ({
-  key: "",
-  inputType: "text",
-  options: [],
-});
-
-/** Editor for a composite field's parts: key + type per row (options chips
- *  for selects), plus the join format over `{{key}}` markers. */
-const CompositePartsEditor = ({
-  field,
-  onUpdate,
-}: {
-  field: TemplateEditableField;
-  onUpdate: (patch: Partial<TemplateEditableField>) => void;
-}) => {
-  const t = useTranslations();
-  const parts = optionalArray(field.parts);
-
-  const updatePart = (index: number, patch: Partial<EditablePart>) => {
-    onUpdate({
-      parts: parts.map((part, i) =>
-        i === index ? { ...part, ...patch } : part,
-      ),
-    });
-  };
-
-  const formatPlaceholder = parts
-    .flatMap((part) => (part.key !== "" ? [`{{${part.key}}}`] : []))
-    .join(" ");
-
-  const formatInputRef = useRef<HTMLInputElement | null>(null);
-
-  /** Insert a part token at the format input's caret (appends when the
-   *  input has no focus memory) — nobody should need to type braces. */
-  const insertPartToken = (key: string) => {
-    const input = formatInputRef.current;
-    const current = field.format ?? defaultCompositeFormat(parts) ?? "";
-    const start = input?.selectionStart ?? current.length;
-    const end = input?.selectionEnd ?? current.length;
-    const token = `{{${key}}}`;
-    const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
-    onUpdate({ format: next });
-    requestAnimationFrame(() => {
-      input?.focus();
-      input?.setSelectionRange(start + token.length, start + token.length);
-    });
-  };
-
-  return (
-    <>
-      <div className="flex flex-col gap-2">
-        {parts.map((part, index) => (
-          <div
-            className="flex flex-col gap-2"
-            // Rows have no stable identity while their keys are edited.
-            key={`part-${String(index)}`}
-          >
-            <div className="flex items-center gap-2">
-              <Input
-                aria-label={t("templates.fieldPartKeyPlaceholder")}
-                className="flex-1"
-                onChange={(e) =>
-                  updatePart(index, {
-                    key: e.target.value.replace(PART_KEY_DISALLOWED_RE, ""),
-                  })
-                }
-                placeholder={t("templates.fieldPartKeyPlaceholder")}
-                value={part.key}
-              />
-              <Select
-                onValueChange={(val) => {
-                  if (val === "text" || val === "select") {
-                    updatePart(index, { inputType: val });
-                  }
-                }}
-                value={part.inputType}
-              >
-                <SelectTrigger
-                  aria-label={t("templates.fieldInputType")}
-                  className="w-auto min-w-28"
-                >
-                  <SelectValue>
-                    {() => <ValueTypeLabel inputType={part.inputType} />}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {PART_INPUT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      <ValueTypeLabel inputType={type} />
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <Button
-                aria-label={t("common.remove")}
-                onClick={() =>
-                  onUpdate({ parts: parts.filter((_, i) => i !== index) })
-                }
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon />
-              </Button>
-            </div>
-            {part.inputType === "select" && (
-              <div className="border-input ms-1.5 flex flex-col gap-1 border-s ps-3">
-                <span className="text-muted-foreground text-xs">
-                  {t("common.options")}
-                </span>
-                <OptionsTagInput
-                  onChange={(opts) => updatePart(index, { options: opts })}
-                  options={part.options}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-        <Button
-          className="self-start"
-          onClick={() => onUpdate({ parts: [...parts, emptyEditablePart()] })}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <PlusIcon />
-          {t("templates.addPart")}
-        </Button>
-      </div>
-
-      <Field>
-        <FieldLabel>{t("templates.fieldFormat")}</FieldLabel>
-        <FieldControl
-          render={
-            <Input
-              onChange={(e) => onUpdate({ format: e.target.value })}
-              placeholder={formatPlaceholder}
-              ref={formatInputRef}
-              value={field.format ?? defaultCompositeFormat(parts) ?? ""}
-            />
-          }
-        />
-        <div className="flex flex-wrap items-center gap-1">
-          {parts.flatMap((part) => {
-            const key = part.key.trim();
-            if (key === "") {
-              return [];
-            }
-            return [
-              <Button
-                key={key}
-                onClick={() => insertPartToken(key)}
-                size="xs"
-                type="button"
-                variant="outline"
-              >
-                {key}
-              </Button>,
-            ];
-          })}
-        </div>
-        <p className="text-muted-foreground text-xs">
-          {t("templates.fieldFormatHint")}
-        </p>
-      </Field>
-    </>
-  );
-};
+/** Field-path grammar (letters, digits, underscore, dash, dot) for the typed
+ *  source-field input, so a path the marker scanner refuses cannot be typed. */
+const FIELD_PATH_DISALLOWED_RE = /[^\p{L}\p{N}_.-]/gu;
 
 /** No-source choice in the dependent-select picker; "" never collides with a
  *  real path because the field-path grammar requires at least one character. */
@@ -881,7 +236,10 @@ const OptionsFromFieldControl = ({
           render={
             <Input
               onChange={(e) => {
-                const next = e.target.value.replace(PART_KEY_DISALLOWED_RE, "");
+                const next = e.target.value.replace(
+                  FIELD_PATH_DISALLOWED_RE,
+                  "",
+                );
                 onUpdate({ optionsFrom: next === "" ? undefined : next });
               }}
               value={field.optionsFrom ?? ""}
@@ -1497,8 +855,8 @@ const defaultSourceFor = (source: CatalogSource): FieldSource =>
 /** Binding-source affordance: the field's value is resolved server-side from a
  *  matter record at fill time, so the fill form asks for nothing. The pickable
  *  sources and fields come from the binding catalog. Mutually exclusive with the
- *  other value sources; enabling it clears the registry lookup, formula, and
- *  composite configuration. */
+ *  other value sources; enabling it clears the registry lookup and formula
+ *  configuration. */
 const BindingSourceConfigControl = ({
   field,
   onUpdate,
@@ -1520,8 +878,6 @@ const BindingSourceConfigControl = ({
       source,
       lookup: undefined,
       formula: undefined,
-      parts: undefined,
-      format: undefined,
       optionsFrom: undefined,
       dateFormat: undefined,
       condition: undefined,
@@ -1741,7 +1097,6 @@ export const FieldConfigEditor = ({
 }) => {
   const t = useTranslations();
   const appLocale = useLocale();
-  const isComposite = field.parts !== undefined;
   const isFormula = field.formula !== undefined;
   const typeChoice = fieldTypeChoice(field);
 
@@ -1800,7 +1155,7 @@ export const FieldConfigEditor = ({
         </Field>
       )}
 
-      {!isComposite && !isFormula && (
+      {!isFormula && (
         <Field>
           <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
           <Select
@@ -1846,45 +1201,19 @@ export const FieldConfigEditor = ({
         </Field>
       )}
 
-      {!isFormula && typeChoice !== "company" && (
-        <Field>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={isComposite}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  onUpdate({
-                    parts: field.parts ?? [emptyEditablePart()],
-                    format: field.format ?? "",
-                    source: undefined,
-                  });
-                  return;
-                }
-                onUpdate({ parts: undefined, format: undefined });
-              }}
-            />
-            <FieldLabel>{t("templates.fieldMultipleParts")}</FieldLabel>
-          </div>
-        </Field>
-      )}
-
-      {isComposite && (
-        <CompositePartsEditor field={field} onUpdate={onUpdate} />
-      )}
-
-      {!isComposite && !hideFormulaControl && typeChoice !== "company" && (
+      {!hideFormulaControl && typeChoice !== "company" && (
         <FormulaConfigControl field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && !hideSourceControl && typeChoice !== "company" && (
+      {!hideSourceControl && typeChoice !== "company" && (
         <BindingSourceConfigControl field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && !isFormula && typeChoice === "company" && (
+      {!isFormula && typeChoice === "company" && (
         <CompanyLookupConfig field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && !isFormula && typeChoice === "date" && (
+      {!isFormula && typeChoice === "date" && (
         <DateFormatConfigControl
           defaultLocale={defaultDateLocale ?? appLocale}
           field={field}
@@ -1892,7 +1221,7 @@ export const FieldConfigEditor = ({
         />
       )}
 
-      {!isComposite && !isFormula && field.inputType === "select" && (
+      {!isFormula && field.inputType === "select" && (
         <>
           <Field>
             <FieldLabel>{t("common.options")}</FieldLabel>

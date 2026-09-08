@@ -278,7 +278,6 @@ const fieldMetadataFindings = (
     }
     const rendersOwnInput =
       field.formula === undefined &&
-      field.parts === undefined &&
       field.condition === undefined &&
       field.conditionAst === undefined;
     if (rendersOwnInput && field.inputType === undefined) {

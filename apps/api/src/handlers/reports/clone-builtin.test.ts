@@ -3,22 +3,22 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { CreateStoredTemplateOptions } from "@/api/lib/templates/create-template";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   DD_REPORT_KEY,
-  DD_REPORT_MANIFEST,
   getBuiltinReportTemplate,
   initBuiltinReportTemplates,
 } from "./builtin-templates";
 import { createCloneBuiltinReportTemplate } from "./clone-builtin";
 import type { CloneBuiltinReportTemplateDependencies } from "./clone-builtin";
 
-// The manifest-fidelity regression this file guards (verbatim registry
-// manifest, no discovery merge) lives entirely in what the handler passes to
-// the storage service, so exercise it through the injected service seam.
+// The fidelity regression this file guards is that a clone of the built-in
+// fills the way the built-in does. The configuration travels in the bytes, so
+// the assertion is about the document the handler hands the storage service.
 const capturedOptions: CreateStoredTemplateOptions[] = [];
 const createStoredTemplateMock = mock(function* (
   options: CreateStoredTemplateOptions,
@@ -28,7 +28,7 @@ const createStoredTemplateMock = mock(function* (
     id: toSafeId<"template">("template_1"),
     name: options.name,
     fileName: options.fileName,
-    fieldCount: options.manifest?.fields.length ?? 0,
+    fieldCount: 0,
     currentVersion: 1,
     categoryId: null,
   });
@@ -92,19 +92,17 @@ describe("clone built-in report template", () => {
       throw new Error("expected createStoredTemplate to be called");
     }
     expect(options.kind).toBe("report");
-    // Verbatim: the registry manifest object itself, not a re-discovered or
-    // rebuilt copy — a discovery merge would fold the per-item
-    // `contracts.summary` AI field into the `contracts` array root and drop
-    // it, so the clone would stop drafting per-contract summaries.
-    expect(options.manifest).toBe(DD_REPORT_MANIFEST);
-    const contractSummary = options.manifest?.fields.find(
-      (field) => field.path === "contracts.summary",
+    // The built-in's own markers carry its two AI-drafted fields, including
+    // the per-item `contracts.summary` written through the loop's alias, so a
+    // clone drafts exactly what the built-in drafts.
+    const manifest = await deriveManifestFromDocx(options.buffer);
+    const aiFields = manifest.fields.filter(
+      (field) => field.aiPrompt !== undefined,
     );
-    expect(contractSummary?.aiPrompt).toBeDefined();
-    const execSummary = options.manifest?.fields.find(
-      (field) => field.path === "execSummary",
-    );
-    expect(execSummary?.aiPrompt).toBeDefined();
+    expect(aiFields.map(({ path }) => path).toSorted()).toEqual([
+      "contracts.summary",
+      "execSummary",
+    ]);
     const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
     expect(options.name).toBe(builtin?.name ?? "");
     expect(options.fileName).toBe(`${builtin?.name ?? ""}.docx`);

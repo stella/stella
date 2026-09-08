@@ -20,6 +20,7 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -34,7 +35,7 @@ const MAX_WRITE_ATTEMPTS = 3;
 
 type TemplateWriteSnapshot = Pick<
   typeof templates.$inferSelect,
-  "s3Key" | "currentVersion" | "manifest"
+  "s3Key" | "currentVersion"
 >;
 
 export type TemplateMetadataUpdate = Partial<
@@ -60,11 +61,14 @@ type WriteStoredTemplateOptions = {
     | { type: "new-version"; userId: SafeId<"user"> }
     | { type: "current-version" };
   metadata?: TemplateMetadataUpdate;
+  /** The document to publish. Only the bytes: the manifest this write records
+   *  is derived from them here, so no caller can store a field list that
+   *  disagrees with the document it stored beside it. */
   prepare: (
     snapshot: TemplateWriteSnapshot,
-  ) => Promise<
-    Result<{ manifest: TemplateManifest; bytes: Uint8Array }, HandlerError>
-  >;
+  ) =>
+    | Result<{ bytes: Uint8Array }, HandlerError>
+    | Promise<Result<{ bytes: Uint8Array }, HandlerError>>;
   recordAuditEvent: AuditRecorder;
   writeObject?: typeof writeS3ObjectWithRetry;
 };
@@ -92,7 +96,7 @@ const writeTemplateAttempt = async function* ({
             id: { eq: templateId },
             organizationId: { eq: organizationId },
           },
-          columns: { s3Key: true, currentVersion: true, manifest: true },
+          columns: { s3Key: true, currentVersion: true },
         }),
     );
 
@@ -119,7 +123,11 @@ const writeTemplateAttempt = async function* ({
     }
     return Result.err(prepared.error);
   }
-  const { manifest, bytes } = prepared.value;
+  const { bytes } = prepared.value;
+  // The manifest is what these bytes declare, read here rather than taken from
+  // the caller: `templates.manifest` is a cache of the stored document, and a
+  // cache a caller can fill by hand is a second source of truth.
+  const manifest = await deriveManifestFromDocx(Buffer.from(bytes));
   const s3Key = buildTemplateWriteS3Key({
     organizationId,
     templateId,

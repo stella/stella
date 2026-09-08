@@ -22,7 +22,6 @@ describe("buildPrefillTargets", () => {
       {
         id: "f1",
         path: "company.name",
-        partKey: null,
         label: "Company name",
         hint: null,
         inputType: "text",
@@ -32,7 +31,6 @@ describe("buildPrefillTargets", () => {
       {
         id: "f2",
         path: "signing_date",
-        partKey: null,
         label: null,
         hint: null,
         inputType: "date",
@@ -55,65 +53,6 @@ describe("buildPrefillTargets", () => {
 
     expect(targets).toHaveLength(1);
     expect(targets[0]).toMatchObject({ id: "f1", path: "place" });
-  });
-
-  test("flattens composite fields to one target per part", () => {
-    const targets = buildPrefillTargets([
-      field({
-        path: "seat",
-        label: "Registered seat",
-        parts: [
-          { key: "street", inputType: "text", label: "Street" },
-          { key: "city", inputType: "select", options: ["Praha", "Brno"] },
-        ],
-        format: "{{street}}, {{city}}",
-      }),
-    ]);
-
-    expect(targets).toEqual([
-      {
-        id: "f1",
-        path: "seat",
-        partKey: "street",
-        label: "Street",
-        hint: null,
-        inputType: "text",
-        options: null,
-        dateFormat: null,
-      },
-      {
-        id: "f2",
-        path: "seat",
-        partKey: "city",
-        label: "Registered seat (city)",
-        hint: null,
-        inputType: "select",
-        options: ["Praha", "Brno"],
-        dateFormat: null,
-      },
-    ]);
-  });
-
-  test("treats a half-configured composite (no format) as a plain field", () => {
-    const targets = buildPrefillTargets([
-      field({
-        path: "seat",
-        parts: [{ key: "street", inputType: "text" }],
-      }),
-    ]);
-
-    expect(targets).toEqual([
-      {
-        id: "f1",
-        path: "seat",
-        partKey: null,
-        label: null,
-        hint: null,
-        inputType: "text",
-        options: null,
-        dateFormat: null,
-      },
-    ]);
   });
 
   test("boolean kind without explicit inputType becomes a boolean target", () => {
@@ -147,19 +86,6 @@ describe("renderPrefillTargets", () => {
     );
   });
 
-  test("marks composite parts in the path label", () => {
-    const rendered = renderPrefillTargets(
-      buildPrefillTargets([
-        field({
-          path: "seat",
-          parts: [{ key: "street", inputType: "text" }],
-          format: "{{street}}",
-        }),
-      ]),
-    );
-    expect(rendered).toContain("seat [part street]");
-  });
-
   test("includes the field's fill hint when set", () => {
     const rendered = renderPrefillTargets(
       buildPrefillTargets([
@@ -181,14 +107,10 @@ describe("mapPrefillResults", () => {
     field({ path: "company.name" }),
     field({ path: "court", inputType: "select", options: ["Praha", "Brno"] }),
     field({ path: "is_signed", kind: "boolean" }),
-    field({
-      path: "seat",
-      parts: [{ key: "city", inputType: "text" }],
-      format: "{{city}}",
-    }),
+    field({ path: "seat" }),
   ]);
 
-  test("maps ids back to paths and part keys", () => {
+  test("maps ids back to the paths they stand for", () => {
     const suggestions = mapPrefillResults(targets, [
       { id: "f1", value: "Acme s.r.o.", sourceSnippet: "Acme s.r.o., IČO" },
       { id: "f4", value: "Praha", sourceSnippet: null },
@@ -197,11 +119,10 @@ describe("mapPrefillResults", () => {
     expect(suggestions).toEqual([
       {
         path: "company.name",
-        partKey: null,
         value: "Acme s.r.o.",
         sourceSnippet: "Acme s.r.o., IČO",
       },
-      { path: "seat", partKey: "city", value: "Praha", sourceSnippet: null },
+      { path: "seat", value: "Praha", sourceSnippet: null },
     ]);
   });
 
@@ -219,7 +140,7 @@ describe("mapPrefillResults", () => {
       { id: "f2", value: "praha", sourceSnippet: null },
     ]);
     expect(suggestions).toEqual([
-      { path: "court", partKey: null, value: "Praha", sourceSnippet: null },
+      { path: "court", value: "Praha", sourceSnippet: null },
     ]);
 
     expect(
@@ -234,9 +155,7 @@ describe("mapPrefillResults", () => {
       mapPrefillResults(targets, [
         { id: "f3", value: "Yes", sourceSnippet: null },
       ]),
-    ).toEqual([
-      { path: "is_signed", partKey: null, value: "true", sourceSnippet: null },
-    ]);
+    ).toEqual([{ path: "is_signed", value: "true", sourceSnippet: null }]);
 
     expect(
       mapPrefillResults(targets, [
@@ -262,7 +181,6 @@ describe("mapPrefillResults", () => {
     ).toEqual([
       {
         path: "signing_date",
-        partKey: null,
         value: "2026-10-01",
         sourceSnippet: null,
       },
@@ -285,7 +203,6 @@ describe("mapPrefillResults", () => {
     expect(suggestions).toEqual([
       {
         path: "company.name",
-        partKey: null,
         value: "First",
         sourceSnippet: null,
       },

@@ -168,20 +168,18 @@ export {
 export type { NumericFunctionName } from "./compute.js";
 
 // Single source of truth for the deterministic field-value transforms
-// (composite, formula, date). Both the api fill engine and the web live
-// preview render through renderDeterministicFieldValue so they cannot drift.
+// (formula, date). Both the api fill engine and the web live preview render
+// through renderDeterministicFieldValue so they cannot drift.
 export {
   DATE_FORMAT_EXAMPLE_ISO,
   DATE_FORMAT_STYLES,
   formatDate,
-  renderComposite,
   renderDeterministicFieldValue,
 } from "./field-values.js";
 export type {
   DateFormatStyle,
   DeterministicFieldConfig,
   FieldDateFormat,
-  PartConfig,
 } from "./field-values.js";
 
 // The no-code condition builder edits the canonical `@stll/conditions` AST;
@@ -257,6 +255,50 @@ export type {
   MarkerPrefix,
   ScannedMarker,
 } from "./markers.js";
+
+// The path a marker names once the loops around it are applied: discovery and
+// every marker writer resolve an alias the same way or they mean different
+// documents.
+export {
+  qualifyLoopPath,
+  qualifyRowScopedPath,
+  qualifyRowScopedPlaceholder,
+  rowScopePaths,
+} from "./loop-scope.js";
+export type { RowScope } from "./loop-scope.js";
+
+// A field's configuration as the chain that declares it. One writer, because
+// two would be two documents: the api rewrites markers through it when a
+// configure call lands, and the Studio writes the same chains when it saves.
+export {
+  ARRAY_FILTER_NAMES,
+  arrayFiltersFromFieldConfig,
+  filtersFromFieldConfig,
+  isArrayFilterName,
+} from "./field-config.js";
+export type {
+  MarkerFieldConfig,
+  MarkerFieldInputType,
+  MarkerFieldLookup,
+  MarkerFieldSource,
+  MarkerFieldValidation,
+} from "./field-config.js";
+
+// The writer half of the marker grammar: configuration reaches a document as
+// marker text, so the scanner and the renderer are one round trip.
+export {
+  renderConditionTag,
+  renderFilterChain,
+  renderForOpener,
+  renderValueMarker,
+  unwritableFilterValues,
+  unwritableMarkerLiteral,
+} from "./render.js";
+export type {
+  ConditionTagOptions,
+  ForOpenerOptions,
+  UnwritableReason,
+} from "./render.js";
 
 // Row-form block placement — shared by the fill/discovery pipeline and the
 // authoring eval so both agree on what a table row declares.

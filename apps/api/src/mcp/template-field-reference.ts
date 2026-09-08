@@ -27,9 +27,9 @@ import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-referen
  * per-property guidance lives here — pulled on demand — while the schema
  * carries the structure plus one short line per property.
  *
- * The same properties are writable in the document as marker filters, which is
- * where an author should put them; this tool is the way to set them without
- * rewriting the DOCX. The filter catalogue lives with the marker grammar.
+ * The properties ARE the marker's filters: this tool rewrites the marker in
+ * the document, so a template configured through it and one an author wrote by
+ * hand are the same bytes. The filter catalogue lives with the marker grammar.
  *
  * Both inventories below are keyed by their source of truth
  * ({@link templateFieldInputSchema}'s own keys, and the `source` union's own
@@ -156,7 +156,7 @@ const SOURCE_BRANCH_DOCS = {
   },
   condition: {
     detail:
-      "A boolean rule for a field a `{% if field_path %}` tag references. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
+      "A rule that decides whether a block shows. The expression is written into every `{% if field_path %}` and `{% elif field_path %}` tag that reads the path, so the tag then asks the rule directly and the field stops being a question. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
     properties: ["`expression`: for example `amount > 1000`"],
   },
 } as const satisfies Record<TemplateFieldSourceType, SourceBranchDoc>;
@@ -183,18 +183,22 @@ export const buildFieldReference = (): string => {
   return [
     "stella template field configuration (`configure_template_fields`)",
     "",
-    "A marker's filter chain is the primary way to configure a field, and it " +
-      "lives in the DOCX: " +
-      '`{{ deposit | number | label("Kaution") | required }}`. See ' +
-      `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool configures ` +
-      "the same properties from outside the document, for a template whose " +
-      "markers you are not rewriting; where both say something, this wins.",
+    "A field's configuration IS its marker's filter chain, and it lives in " +
+      'the DOCX: `{{ deposit | number | label("Kaution") | required }}`. See ' +
+      `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool writes that ` +
+      "chain for you: it rewrites the marker, at every occurrence, and " +
+      "publishes the document.",
     "",
-    "Send one entry per field path. Every entry's `path` must match a marker " +
-      "in the template, unknown properties are rejected, and an entry " +
-      "replaces the configuration of the path it names. An entry that cannot " +
-      "be applied is reported in `issues[]` on its own; the rest of the call " +
-      "still applies.",
+    "Send one entry per field path. Every entry's `path` must be something " +
+      "the template can carry — its own value marker, the `{% if %}` tag " +
+      "that reads it, or the keyed markers that render its registry hit — " +
+      "and unknown properties are rejected. A " +
+      "property you send replaces what the marker says; one you leave out " +
+      "keeps it, except that naming a `source` replaces the whole answer to " +
+      "who fills the field. A path with no marker to carry it, and a value " +
+      "the marker grammar cannot spell (a `{` or `}` in a label), are " +
+      "reported in `issues[]` on their own; the rest of the call still " +
+      "applies.",
     "",
     "Field properties:",
     propertyLines,
@@ -208,8 +212,10 @@ export const buildFieldReference = (): string => {
       "hit through its own `[token]` template. Every entry is addressed by " +
       "`{{path.key}}` in the document; the first entry is additionally the " +
       "default a bare `{{path}}` marker renders. A template may therefore " +
-      "carry only keyed markers, and `path` is then configured as the lookup " +
-      "even though no `{{path}}` marker exists. At most " +
+      "carry only keyed markers: the lookup then rides on the markers that " +
+      "render its hit, and every one of them declares `path`. A lookup none " +
+      "of whose formats matches a marker in the document has nowhere to be " +
+      "written and is reported in `issues[]`. At most " +
       `${LOOKUP_FORMATS_MAX} formats per field, each template at most ` +
       `${LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH} characters.`,
     "",

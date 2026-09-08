@@ -2,10 +2,10 @@
  * Array-aware resolution for dotted field paths inside `{% for %}` loops.
  *
  * A field placed inside a repeatable group keeps a flat manifest path like
- * `people.dob` (the date sub-field) or `parties.signer` (a composite), while
+ * `people.dob` (the date sub-field), while
  * the fill form submits the loop as an array of row objects, e.g.
  * `people: [{ dob }]` or `parties: [{ signer: { title, name } }]`. The
- * deterministic fill steps (date-fields, composite-fields) resolve the dotted
+ * deterministic fill steps (date-fields, lookup-fields) resolve the dotted
  * path directly against the top-level values map; that lookup walks into the
  * array and returns `undefined`, so the per-row value is never transformed and
  * the loop expander later substitutes the raw value.

@@ -56,32 +56,31 @@ On the catalog as of this writing: **20 of 313** entries are suppressed, and one
 `IN` = file input, `OUT` = file response. "Alternative" is the entry's declared
 alternative transport.
 
-| Capability                     | IN         | OUT | Alternative                                                        |
-| ------------------------------ | ---------- | --- | ------------------------------------------------------------------ |
-| `entities.upload`              | x          |     | complete: `uploads.create` + `uploads.update` (`entity_create`)     |
-| `entities.upload-version`      | x          |     | complete: `uploads.create` + `uploads.update` (`entity_version`)    |
-| `skills.upload`                | x          |     | complete: `uploads.create` + `uploads.update` (`agent_skill`)       |
-| `templates.fill-by-id`         |            | x   | complete: `templates.fill-to-matter`                             |
-| `clauses.import`               | x          |     | partial: `clauses.create` (one clause per call, no CSV bulk)        |
-| `clauses.export`               |            | x   | partial: `clauses.list` + `clauses.get` (no single export file)     |
-| `skills.resources.upload`      | x          |     | partial: `skills.resources.create` (text only, no binary resource)  |
-| `style-sets.create`            | x          |     | partial: `style-sets.create-from-editor` (settings, not a DOCX)     |
-| `style-sets.replace`           | x          |     | partial: `style-sets.update-from-editor` (settings, not a DOCX)     |
-| `templates.create-from-styles` | x          |     | partial: style set from editor, then `create-from-style-set`        |
-| `templates.fill`               | x          | x   | partial: `templates.fill-to-matter` (stored template, to matter) |
-| `time-entries.export-pdf`      |            | x   | partial: `export-csv` / `export-ledes` (no rendered PDF)            |
-| `entities.check-stamp`         | x          |     | none                                                                |
-| `entities.download-zip`        |            | x   | none                                                                |
-| `templates.create`             | x          |     | none                                                                |
-| `templates.discover`           | x          |     | none                                                                |
-| `templates.manifest`           | x          | x   | none                                                                |
-| `templates.prepare`            | x          |     | none                                                                |
-| `templates.save-document`      | x          |     | none                                                                |
-| `views.table-export`           |            | x   | none                                                                |
-| `templates.prefill`            | x (opt.)   |     | none (exposed: fileless mode)                                       |
+| Capability                     | IN       | OUT | Alternative                                                        |
+| ------------------------------ | -------- | --- | ------------------------------------------------------------------ |
+| `entities.upload`              | x        |     | complete: `uploads.create` + `uploads.update` (`entity_create`)    |
+| `entities.upload-version`      | x        |     | complete: `uploads.create` + `uploads.update` (`entity_version`)   |
+| `skills.upload`                | x        |     | complete: `uploads.create` + `uploads.update` (`agent_skill`)      |
+| `templates.fill-by-id`         |          | x   | complete: `templates.fill-to-matter`                               |
+| `clauses.import`               | x        |     | partial: `clauses.create` (one clause per call, no CSV bulk)       |
+| `clauses.export`               |          | x   | partial: `clauses.list` + `clauses.get` (no single export file)    |
+| `skills.resources.upload`      | x        |     | partial: `skills.resources.create` (text only, no binary resource) |
+| `style-sets.create`            | x        |     | partial: `style-sets.create-from-editor` (settings, not a DOCX)    |
+| `style-sets.replace`           | x        |     | partial: `style-sets.update-from-editor` (settings, not a DOCX)    |
+| `templates.create-from-styles` | x        |     | partial: style set from editor, then `create-from-style-set`       |
+| `templates.fill`               | x        | x   | partial: `templates.fill-to-matter` (stored template, to matter)   |
+| `time-entries.export-pdf`      |          | x   | partial: `export-csv` / `export-ledes` (no rendered PDF)           |
+| `entities.check-stamp`         | x        |     | none                                                               |
+| `entities.download-zip`        |          | x   | none                                                               |
+| `templates.create`             | x        |     | none                                                               |
+| `templates.discover`           | x        |     | none                                                               |
+| `templates.prepare`            | x        |     | none                                                               |
+| `templates.save-document`      | x        |     | none                                                               |
+| `views.table-export`           |          | x   | none                                                               |
+| `templates.prefill`            | x (opt.) |     | none (exposed: fileless mode)                                      |
 
-Four complete alternatives, eight partial alternatives, and nine entries with no
-alternative.
+Four complete alternatives, eight partial alternatives, and eight entries with
+no alternative.
 
 ## Fileless mode
 
@@ -139,8 +138,8 @@ sub-cases:
   persisted, so they want a real purpose variant (validation callback + finalize
   result) added to the presign union, exactly like `agent_skill`.
 - **Transient** (`entities.check-stamp`, `templates.discover`,
-  `templates.manifest`, `templates.prefill`, `templates.prepare`,
-  `templates.fill`): the bytes are consumed to compute an answer and never
+  `templates.prefill`, `templates.prepare`, `templates.fill`): the bytes are
+  consumed to compute an answer and never
   stored. These want a `scratch` purpose whose finalize hands the handler a
   staged object key rather than committing anything, plus a handler-side switch
   from `file: t.File()` to `uploadId: SafeId`.
@@ -163,8 +162,8 @@ C only for its text formats and class D otherwise.
 ### Class D — file-out that is genuinely binary
 
 `entities.download-zip` (streamed zip via `client-zip`), `templates.fill` /
-`templates.fill-by-id` (DOCX/PDF `Uint8Array`), `templates.manifest` (a
-rewritten DOCX), `time-entries.export-pdf` (`buildMinimalPdf`), and
+`templates.fill-by-id` (DOCX/PDF `Uint8Array`), `time-entries.export-pdf`
+(`buildMinimalPdf`), and
 `views.table-export` in `xlsx`/`docx`. None of these is a pre-existing S3 object,
 so there is no URL to presign without first materializing the bytes.
 

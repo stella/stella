@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { fillHandler } from "@/api/handlers/templates/fill";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -17,6 +19,30 @@ import { fillByIdLogic } from "./fill-by-id-logic";
 import { fillPreviewLogic } from "./fill-preview-logic";
 import type { MissingRequiredField } from "./template-fill-service";
 import { fillTemplateDocx } from "./template-fill-service";
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
 
 // Every fill boundary runs one pipeline (template-fill-service). This suite
 // pins what motivated collapsing the route copies into it: a template whose
@@ -95,9 +121,9 @@ const expectedMissingFields: MissingRequiredField[] = [
 ];
 
 const buildTemplate = async (): Promise<Buffer> =>
-  await writeManifest(
+  await authorFieldMarkers(
     await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
-    manifest,
+    manifest.fields,
   );
 
 const stubDb = () =>
@@ -233,17 +259,14 @@ describe("required-fields rejection is identical at every enforcing fill boundar
   });
 
   test("the preview keeps a partially filled document renderable field by field", async () => {
-    const buffer = await writeManifest(
+    const buffer = await authorFieldMarkers(
       await makeDocx(
         WRAP(P("Governed by {{governing_law}} law, signed {{signing_date}}.")),
       ),
-      {
-        version: 1,
-        fields: [
-          ...manifest.fields,
-          { path: "signing_date", label: "Signing date", required: true },
-        ],
-      },
+      [
+        ...manifest.fields,
+        { path: "signing_date", label: "Signing date", required: true },
+      ],
     );
     const { safeDb, scopedDb } = stubDb();
 

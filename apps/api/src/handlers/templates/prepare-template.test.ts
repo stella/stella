@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { readManifest } from "@/api/lib/docx/template-manifest";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 
 import { prepareTemplateFromDocument } from "./prepare-template";
 
@@ -20,7 +20,7 @@ const makeDocx = async (paragraphs: string[]): Promise<Buffer> => {
 };
 
 describe("prepareTemplateFromDocument", () => {
-  test("rewrites suggested literals as markers and embeds a manifest", async () => {
+  test("rewrites suggested literals as markers that carry their configuration", async () => {
     const buffer = await makeDocx([
       "Granted by MODRZEW INWESTYCJE Sp. z o.o.",
       "Scope: registration matters",
@@ -51,17 +51,23 @@ describe("prepareTemplateFromDocument", () => {
       "Draft the scope of this power of attorney",
     );
 
-    const manifest = await readManifest(out);
-    expect(manifest?.fields.map((f) => f.path)).toEqual([
+    // The prepared bytes are the only record of the configuration, so the
+    // manifest they declare has to name the same fields.
+    const declared = await deriveManifestFromDocx(out);
+    expect(declared.fields.map((field) => field.path)).toEqual([
       "company.name",
       "scope",
     ]);
+    expect(
+      declared.fields.find((field) => field.path === "scope")?.aiPrompt,
+    ).toBe("Draft the scope of this power of attorney");
 
     const zip = await JSZip.loadAsync(out);
     const docEntry = zip.file("word/document.xml");
     const xml = docEntry ? await docEntry.async("text") : "";
-    expect(xml).toContain("{{company.name}}");
-    expect(xml).toContain("{{scope}}");
+    expect(xml).toMatch(/\{\{\s*company\.name\s*\}\}/u);
+    // The instruction rides in the marker, which is the only store there is.
+    expect(xml).toContain('ai("Draft the scope of this power of attorney")');
     expect(xml).not.toContain("MODRZEW INWESTYCJE");
   });
 

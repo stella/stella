@@ -4275,6 +4275,8 @@ type Messages = {
       "existingField": "Existing field…";
       "expressionPlaceholder": "expression";
       "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
+      "fieldSettingBrackets": "A template marker cannot contain curly brackets. Remove them from the settings of “{fieldPath}”.";
+      "fieldWithoutMarker": "“{fieldPath}” has no marker in the document, so its settings were not saved.";
       "fillFormPreview": "How it appears in the fill form";
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
@@ -4332,6 +4334,7 @@ type Messages = {
       "repeatableNested": "This field already sits inside a repeating block.";
       "repeats": "Repeats: {item}";
       "repeatsUnlimited": "Unlimited";
+      "ruleWithCalculation": "The rule on “{fieldPath}” uses a calculation, which a template cannot store. Compare a field with a value instead.";
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";

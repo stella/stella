@@ -11,25 +11,17 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
-import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   MAX_TEMPLATE_LANGUAGES,
   normalizeTemplateLanguages,
 } from "@/api/lib/templates/template-languages";
-import {
-  type TemplateMetadataUpdate,
-  writeStoredTemplate,
-} from "@/api/lib/templates/write-template";
+import type { TemplateMetadataUpdate } from "@/api/lib/templates/write-template";
 
 const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   categoryId: t.Optional(t.Nullable(tSafeId("templateCategory"))),
-  manifest: t.Optional(t.String()),
   tags: t.Optional(
     t.Array(t.String({ minLength: 1, maxLength: 64 }), {
       maxItems: 32,
@@ -55,26 +47,14 @@ type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
 type UpdateTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
   templateId: SafeId<"template">;
   body: UpdateTemplateBody;
   recordAuditEvent: AuditRecorder;
 };
 
-const parseManifest = (json: string): TemplateManifest | null => {
-  const parseResult = Result.try((): unknown => JSON.parse(json));
-  if (Result.isError(parseResult)) {
-    return null;
-  }
-
-  const parsed = parseResult.value;
-  return isTemplateManifest(parsed) ? parsed : null;
-};
-
 const updateTemplateHandler = async function* ({
   safeDb,
   organizationId,
-  userId,
   templateId,
   body,
   recordAuditEvent,
@@ -150,45 +130,6 @@ const updateTemplateHandler = async function* ({
     updates.languages = normalized.languages;
   }
 
-  if (body.manifest !== undefined) {
-    const manifest = parseManifest(body.manifest);
-    if (!manifest) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Invalid manifest JSON",
-        }),
-      );
-    }
-
-    const { updatedAt: _, ...metadata } = updates;
-    const written = yield* Result.await(
-      Result.gen(() =>
-        writeStoredTemplate({
-          safeDb,
-          organizationId,
-          templateId,
-          mode: { type: "new-version", userId },
-          metadata,
-          recordAuditEvent,
-          async prepare({ s3Key }) {
-            const docxBuffer = await readS3ArrayBuffer(s3Key);
-            const updatedDocx = await writeManifest(
-              Buffer.from(docxBuffer),
-              manifest,
-            );
-            return Result.ok({
-              manifest,
-              bytes: new Uint8Array(updatedDocx),
-            });
-          },
-        }),
-      ),
-    );
-
-    return Result.ok(written.row);
-  }
-
   const updated = yield* Result.await(
     safeDb(async (tx) => {
       const [row] = await tx
@@ -237,10 +178,10 @@ const updateTemplateHandler = async function* ({
 const config = {
   description:
     "Change a template's record: name, category, tags, languages, whenToUse " +
-    "and whenNotToUse guidance, or the embedded manifest supplied as a JSON " +
-    "string. Only the fields you pass are written. A manifest update creates " +
-    "a new version with that manifest embedded; store a new document body with " +
-    "templates.save-document.",
+    "and whenNotToUse guidance. Only the fields you pass are written. The " +
+    "fields a template asks for live in its document, so change those by " +
+    "storing a new body with templates.save-document or by calling " +
+    "configure_template_fields.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: updateTemplateParamsSchema,
@@ -249,11 +190,10 @@ const config = {
 
 const updateTemplate = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, params, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     return yield* updateTemplateHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
-      userId: user.id,
       templateId: params.templateId,
       body,
       recordAuditEvent,

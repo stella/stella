@@ -23,30 +23,22 @@ const throwingScopedDb = (async () => {
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
-/** The owner's canonical example: a composite "member" field (select
- *  position + free-text name, joined by a format) inside a persons loop. */
+/** The owner's canonical example: a member's position and name, each its own
+ *  field, inside a persons loop. */
 const personsBlockDefinition = {
   loop: { path: "persons" },
   fields: [
     {
-      path: "persons.member",
-      label: "Member",
-      inputType: "text",
+      path: "persons.position",
+      label: "Position",
+      inputType: "select",
+      options: ["rad. praw.", "adw."],
       required: true,
-      parts: [
-        {
-          key: "position",
-          label: "Position",
-          inputType: "select",
-          options: ["rad. praw.", "adw."],
-        },
-        {
-          key: "name",
-          label: "Name",
-          inputType: "text",
-        },
-      ],
-      format: "{{position}} {{name}}",
+    },
+    {
+      path: "persons.name",
+      label: "Name",
+      inputType: "text",
     },
   ],
 };
@@ -62,7 +54,7 @@ describe("template recipe definition validation", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.output.loop?.path).toBe("persons");
-      expect(result.output.fields[0]?.parts).toHaveLength(2);
+      expect(result.output.fields).toHaveLength(2);
     }
   });
 
@@ -84,35 +76,8 @@ describe("template recipe definition validation", () => {
     expect(result.success).toBe(false);
   });
 
-  test("rejects a composite part key that is not a field path", () => {
-    const result = parse({
-      fields: [
-        {
-          path: "persons.member",
-          parts: [{ key: "{{bad}}", inputType: "text" }],
-          format: "{{bad}}",
-        },
-      ],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  test("rejects parts without format (half composite shape)", () => {
-    const result = parse({
-      fields: [
-        {
-          path: "persons.member",
-          parts: [{ key: "name", inputType: "text" }],
-        },
-      ],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  test("rejects format without parts (half composite shape)", () => {
-    const result = parse({
-      fields: [{ path: "persons.member", format: "{{name}}" }],
-    });
+  test("rejects a field path the marker grammar cannot spell", () => {
+    const result = parse({ fields: [{ path: "{{bad}}", inputType: "text" }] });
     expect(result.success).toBe(false);
   });
 
@@ -177,13 +142,7 @@ describe("create recipe handler validation", () => {
         name: "persons block",
         definition: {
           loop: { path: "persons" },
-          fields: [
-            {
-              path: "persons.member",
-              parts: [{ key: "bad key", inputType: "text" }],
-              format: "{{bad key}}",
-            },
-          ],
+          fields: [{ path: "persons.bad key", inputType: "text" }],
         },
       },
       recordAuditEvent: noopAuditRecorder,
@@ -192,7 +151,7 @@ describe("create recipe handler validation", () => {
     expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
     if (result instanceof ElysiaCustomStatusResponse) {
       expect(result.code).toBe(400);
-      expect(result.response.message).toContain("parts");
+      expect(result.response.message).toContain("path");
     }
   });
 });

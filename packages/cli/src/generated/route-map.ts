@@ -2778,7 +2778,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "configure-fields"],
             toolName: "configure_template_fields",
             description:
-              "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting.",
+              "Configure an existing template's fields: who fills each one, its input control, options and validation.",
             flags: [
               {
                 flag: "--template-id",
@@ -39095,7 +39095,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "templates", "update"],
                 capabilityId: "templates.update",
                 description:
-                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance, or the embedded manifest supplied as a JSON string. Only the fields you pass are written. A manifest update creates a new version with that manifest embedded; store a new document body with templates.save-document.",
+                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance. Only the fields you pass are written. The fields a template asks for live in its document, so change those by storing a new body with templates.save-document or by calling configure_template_fields.",
                 access: "write",
                 flags: [
                   {
@@ -39124,15 +39124,6 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "body",
                     partPath: "categoryId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--manifest",
-                    prop: "manifest",
-                    required: false,
-                    part: "body",
-                    partPath: "manifest",
                   },
                   {
                     kind: "string-array",
@@ -39201,9 +39192,6 @@ export const generatedRouteMap: RouteNode = {
                               type: "null",
                             },
                           ],
-                        },
-                        manifest: {
-                          type: "string",
                         },
                         tags: {
                           maxItems: 32,

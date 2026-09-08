@@ -121,22 +121,6 @@ describe("describe -> configure round trip", () => {
     },
   );
 
-  test("a stored composite survives a round trip it no longer travels in", () => {
-    // Composites are assembled by the engine, not authored through this
-    // surface, so an entry the agent sends back names neither `parts` nor
-    // `format` and the stored ones are left as they are.
-    const stored: FieldMeta = {
-      path: "property_address",
-      label: "Address",
-      parts: [{ key: "street", inputType: "text", label: "Street" }],
-      format: "{{street}}",
-    };
-    const wire = toTemplateFieldWireInput(stored);
-
-    expect(Object.keys(wire).sort()).toEqual(["label", "path", "source"]);
-    expect({ ...stored, ...toFieldMetaToolInput(wire) }).toEqual(stored);
-  });
-
   test("a field with no derived source describes as the person branch", () => {
     expect(toTemplateFieldWireInput({ path: "signatory_name" }).source).toEqual(
       {

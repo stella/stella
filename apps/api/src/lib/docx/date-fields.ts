@@ -9,7 +9,7 @@
  * "13. června 2028". The "iso" style passes the validated value through
  * unchanged.
  *
- * Runs last among the deterministic fill steps (after lookup, composite,
+ * Runs last among the deterministic fill steps (after lookup,
  * formula, and the dependent check; see manifest-fill-steps.ts) and before
  * any AI step, so a field that also sets `aiAdapt` hands the *formatted*
  * date to the per-occurrence adapter as the stub. Deeper inflection beyond
@@ -29,12 +29,12 @@ import {
   resolvePath,
 } from "@stll/template-conditions";
 
-import { replaceResolvedValue } from "./composite-fields";
 import {
   mapRepeatablePath,
   readRowSubPath,
   writeRowSubPath,
 } from "./repeatable-paths";
+import { replaceResolvedValue } from "./resolved-values";
 import type { FieldDateFormat, FieldMeta } from "./types";
 
 export type DateFieldError = {

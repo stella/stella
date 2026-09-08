@@ -2,13 +2,39 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { toSafeId } from "@/api/lib/branded-types";
-import { writeManifest } from "@/api/lib/docx/template-manifest";
-import type { TemplateManifest } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { fillPreviewLogic } from "./fill-preview-logic";
+
+/**
+ * The document with each field's configuration authored into the marker that
+ * declares it: the DOCX is the only place a template's fields are configured,
+ * so a fixture naming a path the document does not carry configures nothing.
+ */
+const authorFieldMarkers = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    fields.map((field) => ({
+      path: field.path,
+      filters: filtersFromFieldConfig(field),
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
 
 // fillPreviewLogic backs the live "as you type" fill-preview route: values
 // are typically still in progress, so it is the one deliberate exception to
@@ -77,7 +103,7 @@ const stubDb = () =>
 describe("fillPreviewLogic required fields (allow-partial)", () => {
   test("never rejects a preview omitting a required field", async () => {
     let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buffer = await writeManifest(buffer, requiredFieldManifest);
+    buffer = await authorFieldMarkers(buffer, requiredFieldManifest.fields);
 
     const fakeS3 = startFakeS3();
     try {
@@ -106,7 +132,7 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
 
   test("still renders correctly once the required field is provided", async () => {
     let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
-    buffer = await writeManifest(buffer, requiredFieldManifest);
+    buffer = await authorFieldMarkers(buffer, requiredFieldManifest.fields);
 
     const fakeS3 = startFakeS3();
     try {

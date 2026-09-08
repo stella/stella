@@ -1357,11 +1357,11 @@ describe("scanFileResponseReturns", () => {
     const scan = scanFileResponseReturns({
       entries: [
         {
-          id: "templates.manifest",
+          id: "templates.fill",
           source: "return secureDocumentResponse({ body });",
         },
       ],
-      flaggedIds: new Set(["templates.manifest"]),
+      flaggedIds: new Set(["templates.fill"]),
     });
     expect(scan.violations).toEqual([]);
     expect(scan.staleFlags).toEqual([]);

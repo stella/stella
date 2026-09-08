@@ -10,11 +10,16 @@
  * `buildFieldReference()`), both authoring tools with their production names,
  * descriptions and input schemas, the source document, and a short brief
  * naming the field paths to use. The tools are backed in memory by the same
- * recipe the services run: decode, `validateDocxBuffer`, `discoverTemplate`,
- * `resolveTemplateFieldOverlay`, `partitionFieldOverlay`, `writeManifest`;
- * minus the DB and S3 the eval has no business touching. The
- * saved template is then filled with fixed values through the real
- * `fillTemplateDocx`, so the round trip is scored on rendered bytes.
+ * code the services run: `create_template` decodes the bytes, validates them
+ * with `validateDocxBuffer` and reads the field list with
+ * `deriveManifestFromDocx`; `configure_template_fields` calls
+ * `configureTemplateDocument`, which writes each entry into the marker that
+ * carries it and derives the manifest back out of the rewritten document. The
+ * DB and S3 are the only steps left out. The document IS the template, so a
+ * configure call replaces the bytes the run holds and the manifest is never
+ * anything but what those bytes say. The saved template is then filled with
+ * fixed values through the real `fillTemplateDocx`, so the round trip is
+ * scored on rendered bytes.
  *
  * `write_docx` is NOT a stella tool. It stands in for the DOCX writer an MCP
  * client runs locally: a language model cannot emit zip bytes, and making it
@@ -38,8 +43,9 @@
  *                 GRAMMAR_TRAP_CODES, which is where they are documented; a
  *                 second list here would only drift from it
  *   overlay       entry-level production validation issues: the entries a
- *                 best-effort configure refused, schema rejections, and a
- *                 `path` matching no marker. These fail `configured`.
+ *                 best-effort configure refused, schema rejections, a `path`
+ *                 matching no marker, and a value no marker can spell. These
+ *                 fail `configured`.
  *   dropped       properties the tool site dropped out of entries that
  *                 otherwise applied (a retired key such as `parts`). The
  *                 entry landed, so a drop is reported and fails no step.
@@ -68,7 +74,8 @@
  *
  * Registry lookups and contact bindings are neutralized before the fill: the
  * eval has no matter and must not call a business registry, so those fields
- * are scored as configuration and filled with fixed values.
+ * are scored as configuration and their markers are then rewritten without the
+ * binding, which leaves the fill substituting the task's fixed values.
  *
  * Usage (from apps/api):
  *   bun run eval:template-authoring
@@ -91,7 +98,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
-import { formatDate } from "@stll/template-conditions";
+import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -102,6 +109,7 @@ import {
   toolCallEndInputOf,
   toolCallNameOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
   isElement,
@@ -109,11 +117,9 @@ import {
   paragraphText,
   W_NS,
 } from "@/api/lib/docx/ooxml";
-import {
-  mergeManifestWithDiscovery,
-  writeManifest,
-} from "@/api/lib/docx/template-manifest";
+import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import {
   mergeGenerationOptions,
@@ -121,10 +127,10 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  type FieldOverlayIssue,
-  partitionFieldOverlay,
-  resolveTemplateFieldOverlay,
-} from "@/api/lib/templates/field-overlay";
+  fieldConfigurationIssuePath,
+  type FieldConfigurationIssue,
+} from "@/api/lib/templates/configure-field-input";
+import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import {
   fillTemplateDocx,
   type FillTemplateSource,
@@ -468,10 +474,10 @@ type SaveOutcome =
        *  and the tool site reported it: an entry that did not land, or one
        *  property dropped out of an entry that did. The rest were applied,
        *  so this is a defect list, not a rejection. */
-      issues: readonly FieldOverlayIssue[];
-      /** Field paths after the overlay is folded back into discovery: a
-       *  lookup parent's named-format markers disappear here exactly as they
-       *  do for a stored template. */
+      issues: readonly FieldConfigurationIssue[];
+      /** Field paths after the document's own configuration is folded back
+       *  into discovery: a lookup parent's named-format markers disappear here
+       *  exactly as they do for a stored template. */
       resolvedPaths: string[];
       /** Every path a configuration may name, loop item paths included: what
        *  the production create response hands back as its `configure`
@@ -479,6 +485,11 @@ type SaveOutcome =
       configurablePaths: string[];
       structureErrors: string[];
     };
+
+/** A call that produced a document: what the round trip fills and the score
+ *  reads. A configure call always lands here, with the entries it could not
+ *  apply in `issues`. */
+type SavedTemplate = Extract<SaveOutcome, { status: "saved" }>;
 
 type SaveCall = {
   /** Which step of the workflow the call was. */
@@ -495,8 +506,8 @@ const validationIssues = (issues: readonly v.BaseIssue<unknown>[]): string[] =>
       `${issue.path?.map((part) => String(part.key)).join(".") ?? "<root>"}: ${issue.message}`,
   );
 
-/** Every path the overlay validator accepts: a marker of its own, a loop
- *  root, or a field of a loop's item. Mirrors what the production create
+/** Every path the configuration validator accepts: a marker of its own, a
+ *  loop root, or a field of a loop's item. Mirrors what the production create
  *  response spells out as its configure skeleton. */
 const configurableTemplatePaths = (
   discovered: Awaited<ReturnType<typeof discoverTemplate>>,
@@ -519,22 +530,47 @@ const configurableTemplatePaths = (
 };
 
 /**
- * The DB-free half of `createStoredTemplate`: everything from the base64
- * decode to the embedded manifest, in the same order, with the same
- * rejections. The DB insert, the S3 write and the per-org limit are the only
- * steps left out.
+ * One saved document, described the way the run scores it. Everything but the
+ * issue list is read back off the bytes, so nothing the eval reports can
+ * disagree with the document it holds.
  */
-const saveTemplateInMemory = async ({
-  docxBase64,
-  manifest: storedManifest,
-  overlay,
+const savedTemplate = async ({
+  buffer,
+  issues,
+  manifest,
 }: {
-  docxBase64: string;
-  /** The manifest the template already carries, which a configure call
-   *  refines. Null on the create call, which has none yet. */
-  manifest: TemplateManifest | null;
-  overlay: readonly FieldMeta[] | undefined;
-}): Promise<SaveOutcome> => {
+  buffer: Buffer;
+  issues: readonly FieldConfigurationIssue[];
+  manifest: TemplateManifest;
+}): Promise<SavedTemplate> => {
+  const discovered = await discoverTemplate(buffer);
+  return {
+    status: "saved",
+    buffer,
+    manifest,
+    issues,
+    resolvedPaths: mergeManifestWithDiscovery(manifest, discovered).map(
+      (field) => field.path,
+    ),
+    configurablePaths: configurableTemplatePaths(discovered),
+    structureErrors: discovered.structureErrors.map(
+      (error) => `${error.directive}: ${error.message}`,
+    ),
+  };
+};
+
+/**
+ * The DB-free half of `createStoredTemplate`: the base64 decode and
+ * `validateDocxBuffer` in the same order and with the same rejections, then
+ * the manifest the document's own markers declare. The DB insert, the S3
+ * write and the per-org limit are the only steps left out.
+ *
+ * Creation configures nothing: whatever the markers say is what the new
+ * template has, and `configure_template_fields` is how that changes.
+ */
+const createTemplateInMemory = async (
+  docxBase64: string,
+): Promise<SaveOutcome> => {
   const buffer = Buffer.from(docxBase64, "base64");
   if (buffer.byteLength === 0) {
     return {
@@ -551,69 +587,70 @@ const saveTemplateInMemory = async ({
   if (!validation.valid) {
     return { status: "invalid-docx", reason: validation.error };
   }
-
-  const discovered = await discoverTemplate(buffer);
-  // The manifest this call starts from: the document layer a marker's own
-  // filters declare (`{{ landlord_name | contact("displayName") }}`) under
-  // whatever the template already stored. `resolveTemplateFieldOverlay` is
-  // the function and the layer order production resolves it with.
-  const base = resolveTemplateFieldOverlay({
-    discovered,
-    manifest: storedManifest,
-    overlay: undefined,
+  return await savedTemplate({
+    buffer,
+    issues: [],
+    manifest: await deriveManifestFromDocx(buffer),
   });
-
-  const structureErrors = discovered.structureErrors.map(
-    (error) => `${error.directive}: ${error.message}`,
-  );
-
-  // Exactly what `configureTemplateFields` does: validate each entry against
-  // the DOCX's own markers, apply the ones that hold, report the rest. The
-  // eval used to keep a second, stricter rule here (an overlay path had to be
-  // one of the merged manifest paths), which refused a loop's item path -
-  // `attorneys.name` inside `{% for a in attorneys %}` - that the service accepts.
-  // Measuring the contract means running the contract's own validator.
-  const { applied, issues } = partitionFieldOverlay({
-    configured: base.fields,
-    discovered,
-    overlay: overlay ?? [],
-  });
-  const manifest = resolveTemplateFieldOverlay({
-    discovered,
-    manifest: base,
-    overlay: applied,
-  });
-  const withManifest = await writeManifest(buffer, manifest);
-  const resolvedPaths = mergeManifestWithDiscovery(manifest, discovered).map(
-    (field) => field.path,
-  );
-  return {
-    status: "saved",
-    buffer: withManifest,
-    manifest,
-    issues,
-    resolvedPaths,
-    configurablePaths: configurableTemplatePaths(discovered),
-    structureErrors,
-  };
 };
 
+/**
+ * The DB-free half of `configureTemplateFields`: the same
+ * `configureTemplateDocument` call the service makes between its S3 read and
+ * its republish, so the entries the eval counts as applied are the ones the
+ * production server would have written.
+ *
+ * The bytes it returns replace the run's document. There is no second store to
+ * refine: an entry that lands is an edit to a marker, and the next call reads
+ * the document that edit produced.
+ */
+const configureTemplateInMemory = async ({
+  buffer,
+  entries,
+}: {
+  buffer: Buffer;
+  entries: readonly FieldMeta[];
+}): Promise<SavedTemplate> =>
+  await savedTemplate(await configureTemplateDocument({ buffer, entries }));
+
 // ── The round trip ───────────────────────────────────────
+
+const withoutExternalSource = ({
+  lookup: _lookup,
+  source: _source,
+  ...field
+}: FieldMeta): FieldMeta => field;
 
 /**
  * A registry lookup would call a business registry and a `source` binding
  * needs a matter; neither belongs in a deterministic eval. Both are scored as
- * configuration, then stripped so the fill substitutes the fixed values the
- * task supplies for those markers.
+ * configuration, then taken off the markers that declare them, so the fill
+ * substitutes the fixed values the task supplies for those markers instead of
+ * resolving anything.
+ *
+ * The document is the only place a binding lives, so this is a rewrite of the
+ * document, and it is always a value marker's: a `{% for %}` opener carries
+ * the repeat's own filters and nothing else, so an array root can never reach
+ * here with a lookup or a binding on it.
  */
-const neutralizeExternalSources = (
-  manifest: TemplateManifest,
-): TemplateManifest => ({
-  version: manifest.version,
-  fields: manifest.fields.map(
-    ({ lookup: _lookup, source: _source, ...field }) => field,
-  ),
-});
+const neutralizeExternalSources = async (
+  saved: SavedTemplate,
+): Promise<Buffer> => {
+  const { buffer } = await writeFieldFilters(
+    saved.buffer,
+    saved.manifest.fields.flatMap((field) =>
+      field.lookup === undefined && field.source === undefined
+        ? []
+        : [
+            {
+              path: field.path,
+              filters: filtersFromFieldConfig(withoutExternalSource(field)),
+            },
+          ],
+    ),
+  );
+  return buffer;
+};
 
 type RoundTripResult = {
   defects: RoundTripDefects;
@@ -625,14 +662,11 @@ const runRoundTrip = async ({
   task,
   organizationId,
 }: {
-  saved: Extract<SaveOutcome, { status: "saved" }>;
+  saved: SavedTemplate;
   task: EvalTask;
   organizationId: SafeId<"organization">;
 }): Promise<RoundTripResult> => {
-  const buffer = await writeManifest(
-    saved.buffer,
-    neutralizeExternalSources(saved.manifest),
-  );
+  const buffer = await neutralizeExternalSources(saved);
   const source: FillTemplateSource = {
     name: task.name,
     fileName: `${task.id}.docx`,
@@ -1327,16 +1361,12 @@ const createAuthoringTools = ({
   writeCalls: WrittenDocx[];
 }): AuthoringToolSet => {
   const written = new Map<string, Buffer>();
-  // The one template this run may create: the bytes the create call accepted,
-  // so a configure call overlays the same document, the display name configure
-  // echoes back the way production describes it, and the manifest the last
-  // accepted call left on it. A second configure refines the first one's
-  // result exactly as it does against a stored template.
-  let stored: {
-    docxBase64: string;
-    name: string | undefined;
-    manifest: TemplateManifest;
-  } | null = null;
+  // The one template this run may create: the bytes the last accepted call
+  // left, plus the display name configure echoes back the way production
+  // describes it. Bytes are the whole template, so a configure call writes
+  // into these and the result becomes them; a second configure then refines
+  // the first one's document exactly as it does a stored one.
+  let stored: { buffer: Buffer; name: string | undefined } | null = null;
 
   const handleWriteDocx = async ({
     blocks,
@@ -1408,12 +1438,9 @@ const createAuthoringTools = ({
     // A reference expands to the bytes write_docx wrote; anything else is
     // taken as real base64, so a client that does hold the file still works.
     const writtenDocx = written.get(ref.trim());
-    const docxBase64 = writtenDocx?.toString("base64") ?? ref;
-    const outcome = await saveTemplateInMemory({
-      docxBase64,
-      manifest: null,
-      overlay: undefined,
-    });
+    const outcome = await createTemplateInMemory(
+      writtenDocx?.toString("base64") ?? ref,
+    );
     await recordAttempt({ outcome, overlay: [], step: "create" });
     if (outcome.status === "invalid-docx") {
       return { error: "validation_error", issues: [outcome.reason] };
@@ -1421,11 +1448,7 @@ const createAuthoringTools = ({
     if (outcome.status === "rejected") {
       return { error: "validation_error", issues: outcome.issues };
     }
-    stored = {
-      docxBase64,
-      name: parsed.output.name,
-      manifest: outcome.manifest,
-    };
+    stored = { buffer: outcome.buffer, name: parsed.output.name };
     return {
       templateId: EVAL_TEMPLATE_ID,
       name: parsed.output.name,
@@ -1483,33 +1506,44 @@ const createAuthoringTools = ({
       });
       return { error: "not_found", issues };
     }
-    const outcome = await saveTemplateInMemory({
-      docxBase64: stored.docxBase64,
-      manifest: stored.manifest,
-      overlay,
+    const outcome = await configureTemplateInMemory({
+      buffer: stored.buffer,
+      entries: overlay,
     });
-    if (outcome.status === "saved") {
-      stored = { ...stored, manifest: outcome.manifest };
-    }
-    // The properties and entries the tool site dropped are part of what the
-    // call reported, so they are part of what the run is scored on.
+    // The entries were written into the markers, so the document they produced
+    // IS the template from here on.
+    stored = { ...stored, buffer: outcome.buffer };
+    // `configureTemplateDocument` only saw the entries the schema accepted, so
+    // it counts positions in THAT list. The model counts positions in the list
+    // it sent, so the positions are translated back before the two lists meet,
+    // exactly as the tool site does it.
+    const documentIssues = outcome.issues.map((issue) => {
+      const index =
+        parsed.applied.at(issue.index) ??
+        panic(`configure issue names applied entry ${String(issue.index)}`);
+      return {
+        path: fieldConfigurationIssuePath(index, issue.property),
+        index,
+        message: issue.message,
+        hint: issue.hint,
+      };
+    });
+    const issues = [...parsed.issues, ...documentIssues].toSorted(
+      (left, right) => left.index - right.index,
+    );
+    // The properties and entries the tool site dropped, and the ones the
+    // document refused, are what the call reported, so they are what the run
+    // is scored on.
     await recordAttempt({
-      outcome:
-        outcome.status === "saved" && parsed.issues.length > 0
-          ? { ...outcome, issues: [...outcome.issues, ...parsed.issues] }
-          : outcome,
+      outcome: { ...outcome, issues },
       overlay,
       step: "configure",
     });
-    if (outcome.status === "invalid-docx") {
-      return { error: "validation_error", issues: [outcome.reason] };
-    }
-    if (outcome.status === "rejected") {
-      return { error: "validation_error", issues: outcome.issues };
-    }
     return {
       name: stored.name,
-      issues: parsed.issues.map(({ message, path }) => `${path}: ${message}`),
+      issues: issues.map(
+        ({ hint, message, path }) => `${path}: ${message} ${hint}`,
+      ),
       fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
   };

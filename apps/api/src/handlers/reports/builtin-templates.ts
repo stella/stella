@@ -13,9 +13,8 @@
  *   `spec/load-report-specs.ts`); they have no DOCX to clone, so they are not
  *   customizable in Template Studio.
  *
- * The manifest is embedded in the DOCX (customXml) by the generation script, so
- * the fill pipeline reads it from the buffer; it is also exported here for the
- * picker read surface and the generation script.
+ * The DOCX is the template: the AI-drafted fields are configured by the filters
+ * on their own markers, so a clone carries its configuration with its bytes.
  *
  * The asset is pulled in through a `with { type: "file" }` import rather than
  * resolved from `import.meta.url`. `bun build --compile` (see
@@ -38,7 +37,6 @@ import {
   parseS3SpecPrefix,
 } from "@/api/handlers/reports/spec/load-report-specs";
 import type { ReportSpec } from "@/api/handlers/reports/spec/report-spec";
-import type { TemplateManifest } from "@/api/lib/docx/types";
 import { listS3ObjectKeys, readS3ObjectBounded } from "@/api/lib/s3";
 
 import ddReportDocx from "./assets/dd-report.docx" with { type: "file" };
@@ -48,8 +46,7 @@ export type BuiltinReportTemplate =
       kind: "docx";
       key: string;
       name: string;
-      manifest: TemplateManifest;
-      /** Load the committed DOCX bytes (manifest already embedded). */
+      /** Load the committed DOCX bytes. */
       loadBuffer: () => Promise<Buffer>;
     }
   | {
@@ -77,48 +74,12 @@ export const isCloneableBuiltin = (
   }
 };
 
-const EXEC_SUMMARY_PROMPT =
-  "Write a concise executive summary (3-5 sentences) of this due-diligence " +
-  "review for a partner. Ground it strictly in the provided report data: the " +
-  "number of contracts reviewed, the count and severity of red flags, and the " +
-  "most material recurring issues. Do not invent facts not present in the data.";
-
-const CONTRACT_SUMMARY_PROMPT =
-  "Write a 2-3 sentence summary of this single contract for the report, using " +
-  "only its provided fields and risks: its document type, its overall risk " +
-  "level, and its most significant findings (if any). Do not invent facts.";
-
-/** Manifest for the Due Diligence Report built-in. Only the AI-drafted fields
- *  need entries; every other {{path}} is plain data substitution. */
-export const DD_REPORT_MANIFEST: TemplateManifest = {
-  version: 1,
-  fields: [
-    {
-      path: "execSummary",
-      label: "Executive summary",
-      inputType: "text",
-      // The generator receives the whole report data object as JSON context, so
-      // it does not need the rendered document text.
-      aiSeesDocument: false,
-      aiPrompt: EXEC_SUMMARY_PROMPT,
-    },
-    {
-      path: "contracts.summary",
-      label: "Contract summary",
-      inputType: "text",
-      aiSeesDocument: false,
-      aiPrompt: CONTRACT_SUMMARY_PROMPT,
-    },
-  ],
-};
-
 export const DD_REPORT_KEY = "dd-report";
 
 const ddReportTemplate: BuiltinReportTemplate = {
   kind: "docx",
   key: DD_REPORT_KEY,
   name: "Due Diligence Report",
-  manifest: DD_REPORT_MANIFEST,
   loadBuffer: async () =>
     Buffer.from(await Bun.file(ddReportDocx).arrayBuffer()),
 };

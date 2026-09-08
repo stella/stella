@@ -1366,8 +1366,6 @@ const CONTRACT_CORPUS = {
               aiAdapt: false,
               optionsFrom: null,
               dateFormat: null,
-              parts: null,
-              format: null,
             },
           ],
           conditions: [],

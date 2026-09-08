@@ -24,6 +24,10 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
+import {
+  deriveManifest,
+  deriveManifestFromDocx,
+} from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
@@ -44,7 +48,6 @@ import {
   resolveAiFields,
 } from "@/api/lib/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
-import { readManifest } from "@/api/lib/docx/template-manifest";
 import {
   boundTemplateWarnings,
   fieldOverlayWarnings,
@@ -55,7 +58,6 @@ import type {
   DiscoveredTemplate,
   FieldDateFormat,
   FieldMeta,
-  FieldPart,
   FieldSource,
   FieldValidation,
   InputType,
@@ -200,11 +202,6 @@ type DescribedField = {
   optionsFrom: string | null;
   /** Locale-aware date rendering for a date field; null when unset. */
   dateFormat: FieldDateFormat | null;
-  /** Composite parts joined by {@link DescribedField.format}; null when the
-   *  field is not composite. */
-  parts: FieldPart[] | null;
-  /** Join template over the composite part keys; null when not composite. */
-  format: string | null;
 };
 
 /**
@@ -330,98 +327,60 @@ export const describeStoredTemplate = async ({
     return { error: "Template not found." };
   }
 
-  const [manifest, discovered] = await Promise.all([
-    readManifest(loaded.buffer),
-    discoverTemplate(loaded.buffer),
-  ]);
+  const discovered = await discoverTemplate(loaded.buffer);
+  const manifest = deriveManifest(discovered);
   const arrays = collectDescribedArrayGroups(discovered.fields);
-  if (manifest) {
-    // Formula fields are derived at fill time, never user-submitted, so they
-    // are reported as computed values rather than fillable fields. A boolean
-    // condition-field is likewise derived (a rule, not a question), so it is
-    // reported in `conditions`, not as a fillable field.
-    return {
-      name: loaded.name,
-      arrays,
-      warnings: await describedWarnings({
-        discovered,
-        fields: manifest.fields,
-        organizationId,
-        scopedDb,
-      }),
-      fields: manifest.fields
-        .filter(isFillableTemplateInputField)
-        .map((field) => ({
-          path: field.path,
-          label: field.label ?? null,
-          inputType: field.inputType ?? "text",
-          required: isTemplateFieldRequired(field),
-          hint: field.hint ?? null,
-          options: field.options ?? null,
-          lookup:
-            field.lookup === undefined
-              ? null
-              : {
-                  registry: field.lookup.registry,
-                  formats: field.lookup.formats.map((format) => ({
-                    key: format.key,
-                    template: format.template,
-                  })),
-                },
-          validation: field.validation ?? null,
-          source: field.source ?? null,
-          aiSeesDocument: field.aiSeesDocument ?? false,
-          aiPrompt: field.aiPrompt ?? null,
-          aiAdapt: field.aiAdapt ?? false,
-          optionsFrom: field.optionsFrom ?? null,
-          dateFormat: field.dateFormat ?? null,
-          parts: field.parts ?? null,
-          format: field.format ?? null,
-        })),
-      // Synthesized so each boolean condition-field appears here as a rule
-      // rather than a fillable field.
-      conditions: manifestNamedConditions(manifest).map((c) => ({
-        path: c.name,
-        condition: c.expression,
-      })),
-      computed: manifest.fields.flatMap((field) =>
-        field.formula === undefined
-          ? []
-          : [{ path: field.path, formula: field.formula }],
-      ),
-    };
-  }
-
-  // No manifest (a raw upload): fall back to discovered field paths.
+  // Formula fields are derived at fill time, never user-submitted, so they
+  // are reported as computed values rather than fillable fields. A boolean
+  // condition-field is likewise derived (a rule, not a question), so it is
+  // reported in `conditions`, not as a fillable field.
   return {
     name: loaded.name,
     arrays,
     warnings: await describedWarnings({
       discovered,
-      fields: [],
+      fields: manifest.fields,
       organizationId,
       scopedDb,
     }),
-    fields: discovered.fields.map((field) => ({
-      path: field.path,
-      label: null,
-      inputType: "text",
-      required: false,
-      hint: null,
-      options: null,
-      lookup: null,
-      validation: null,
-      source: null,
-      aiSeesDocument: false,
-      aiPrompt: null,
-      aiAdapt: false,
-      optionsFrom: null,
-      dateFormat: null,
-      parts: null,
-      format: null,
+    fields: manifest.fields
+      .filter(isFillableTemplateInputField)
+      .map((field) => ({
+        path: field.path,
+        label: field.label ?? null,
+        inputType: field.inputType ?? "text",
+        required: isTemplateFieldRequired(field),
+        hint: field.hint ?? null,
+        options: field.options ?? null,
+        lookup:
+          field.lookup === undefined
+            ? null
+            : {
+                registry: field.lookup.registry,
+                formats: field.lookup.formats.map((format) => ({
+                  key: format.key,
+                  template: format.template,
+                })),
+              },
+        validation: field.validation ?? null,
+        source: field.source ?? null,
+        aiSeesDocument: field.aiSeesDocument ?? false,
+        aiPrompt: field.aiPrompt ?? null,
+        aiAdapt: field.aiAdapt ?? false,
+        optionsFrom: field.optionsFrom ?? null,
+        dateFormat: field.dateFormat ?? null,
+      })),
+    // Synthesized so each boolean condition-field appears here as a rule
+    // rather than a fillable field.
+    conditions: manifestNamedConditions(manifest).map((c) => ({
+      path: c.name,
+      condition: c.expression,
     })),
-    conditions: [],
-    computed: [],
+    computed: manifest.fields.flatMap((field) =>
+      field.formula === undefined
+        ? []
+        : [{ path: field.path, formula: field.formula }],
+    ),
   };
 };
 
@@ -537,7 +496,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 > => {
   const loaded = source;
   const { templateId } = source;
-  const manifest = await readManifest(loaded.buffer);
+  const manifest = await deriveManifestFromDocx(loaded.buffer);
   let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
@@ -551,32 +510,24 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
         (placeholder) => placeholder.name,
       ),
     });
-    const inputContract =
-      manifest === null
-        ? collectTemplateInputKeys({
-            type: "raw",
-            ...rawInputSources,
-          })
-        : collectTemplateInputKeys({
-            type: "manifest",
-            derivedOutputPaths: manifest.fields.flatMap((field) => {
-              const paths = isFillableTemplateInputField(field)
-                ? []
-                : [field.path];
-              if (field.lookup !== undefined) {
-                for (const format of field.lookup.formats) {
-                  paths.push(`${field.path}.${format.key}`);
-                }
-              }
-              return paths;
-            }),
-            fillableFieldPaths: manifest.fields
-              .filter(isFillableTemplateInputField)
-              .map((field) => field.path),
-            livePaths: rawInputSources.terminalPaths,
-            arrayPaths: rawInputSources.arrayPaths,
-            primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
-          });
+    const inputContract = collectTemplateInputKeys({
+      type: "manifest",
+      derivedOutputPaths: manifest.fields.flatMap((field) => {
+        const paths = isFillableTemplateInputField(field) ? [] : [field.path];
+        if (field.lookup !== undefined) {
+          for (const format of field.lookup.formats) {
+            paths.push(`${field.path}.${format.key}`);
+          }
+        }
+        return paths;
+      }),
+      fillableFieldPaths: manifest.fields
+        .filter(isFillableTemplateInputField)
+        .map((field) => field.path),
+      livePaths: rawInputSources.terminalPaths,
+      arrayPaths: rawInputSources.arrayPaths,
+      primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
+    });
     const unusedKeys = findUnusedTemplateValueKeys({
       contract: inputContract,
       values,
@@ -596,15 +547,13 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // `{{marker}}` in the output. Ask the caller for exactly these fields
   // instead of guessing. Every real fill passes "enforce" here; the live
   // fill-preview route names its exception with "allow-partial".
-  if (manifest) {
-    const missingRequiredFields = collectMissingRequiredFields({
-      fields: manifest.fields,
-      policy: requiredFields,
-      values: record,
-    });
-    if (missingRequiredFields.length > 0) {
-      return { requiredFieldsRejection: missingRequiredFields };
-    }
+  const missingRequiredFields = collectMissingRequiredFields({
+    fields: manifest.fields,
+    policy: requiredFields,
+    values: record,
+  });
+  if (missingRequiredFields.length > 0) {
+    return { requiredFieldsRejection: missingRequiredFields };
   }
 
   const slots =
@@ -633,94 +582,88 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
-  let fillBuffer = loaded.buffer;
-  let adaptedPaths: readonly string[] = [];
-  let aiFieldErrors: AiFieldError[] = [];
-  if (manifest) {
-    // Gate the AI usage preflight and the collaborator build on a model call
-    // actually running: both cost the caller quota or an org AI config read,
-    // and a deterministic fill must spend neither. Runs before the manifest
-    // fill steps so an over-quota fill rejects without first calling out to a
-    // registry for its lookup fields.
-    const hasAiFields = manifest.fields.some(
-      (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
-    );
-    if (assertUsageAvailable && hasAiFields) {
-      const usageRejection = await assertUsageAvailable();
-      if (usageRejection !== null) {
-        return { usageRejection };
-      }
+  // Gate the AI usage preflight and the collaborator build on a model call
+  // actually running: both cost the caller quota or an org AI config read,
+  // and a deterministic fill must spend neither. Runs before the manifest
+  // fill steps so an over-quota fill rejects without first calling out to a
+  // registry for its lookup fields.
+  const hasAiFields = manifest.fields.some(
+    (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
+  );
+  if (assertUsageAvailable && hasAiFields) {
+    const usageRejection = await assertUsageAvailable();
+    if (usageRejection !== null) {
+      return { usageRejection };
     }
-    const { generateAiValue, decideAiCondition, adaptAiValue } =
-      aiCollaborators && hasAiFields ? await aiCollaborators() : {};
+  }
+  const { generateAiValue, decideAiCondition, adaptAiValue } =
+    aiCollaborators && hasAiFields ? await aiCollaborators() : {};
 
-    // Resolve the data-binding context only when this fill targets a matter and
-    // the manifest actually declares a bound field, so a transient fill or a
-    // template with no bindings fires no extra queries.
-    const bindingContext =
-      workspaceId !== undefined &&
-      manifest.fields.some((field) => field.source !== undefined)
-        ? await buildBindingContext({
-            scopedDb,
-            organizationId,
-            workspaceId,
-            manifest,
-          })
-        : null;
-
-    // Resolve registry lookups, assemble composite (multipart) values,
-    // evaluate formula (derived) fields, and check dependent (optionsFrom)
-    // selects before any AI step or substitution sees them; a failing step
-    // rejects naming the field.
-    const stepError = await applyManifestFillSteps({
-      values: record,
-      manifest,
-      resolveLookup: createDispatchLookupResolver({
-        dispatch: await getOrganizationRegistryDispatch({
+  // Resolve the data-binding context only when this fill targets a matter and
+  // the manifest actually declares a bound field, so a transient fill or a
+  // template with no bindings fires no extra queries.
+  const bindingContext =
+    workspaceId !== undefined &&
+    manifest.fields.some((field) => field.source !== undefined)
+      ? await buildBindingContext({
           scopedDb,
           organizationId,
-        }),
-      }),
-      bindingContext,
-    });
-    if (stepError !== null) {
-      return { error: stepError };
-    }
+          workspaceId,
+          manifest,
+        })
+      : null;
 
-    const documentText = await documentTextForAiFields(
-      new Uint8Array(loaded.buffer),
-      manifest.fields,
-    );
-    const drafted = await resolveAiFields({
-      values: record,
-      fields: manifest.fields,
-      documentText,
-      generate: generateAiValue,
-    });
-    record = drafted.values;
-    aiFieldErrors = drafted.errors;
-    // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
-    // before substitution so its {% if field_path %} block resolves correctly.
-    record = await resolveAiConditions({
-      values: record,
-      fields: manifest.fields,
-      decide: decideAiCondition,
-    });
-    // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
-    // the stub stays in `record` so uncovered occurrences still get the
-    // plain global substitution below.
-    const adapted = await adaptAiFields({
-      buffer: loaded.buffer,
-      fields: manifest.fields,
-      values: record,
-      adapt: adaptAiValue,
-    });
-    fillBuffer = adapted.buffer;
-    adaptedPaths = adapted.adaptedPaths;
+  // Resolve registry lookups, evaluate formula (derived) fields, and check
+  // dependent (optionsFrom) selects before any AI step or substitution sees
+  // them; a failing step rejects naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: record,
+    manifest,
+    resolveLookup: createDispatchLookupResolver({
+      dispatch: await getOrganizationRegistryDispatch({
+        scopedDb,
+        organizationId,
+      }),
+    }),
+    bindingContext,
+  });
+  if (stepError !== null) {
+    return { error: stepError };
   }
 
+  const documentText = await documentTextForAiFields(
+    new Uint8Array(loaded.buffer),
+    manifest.fields,
+  );
+  const drafted = await resolveAiFields({
+    values: record,
+    fields: manifest.fields,
+    documentText,
+    generate: generateAiValue,
+  });
+  record = drafted.values;
+  const aiFieldErrors = drafted.errors;
+  // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+  // before substitution so its {% if field_path %} block resolves correctly.
+  record = await resolveAiConditions({
+    values: record,
+    fields: manifest.fields,
+    decide: decideAiCondition,
+  });
+  // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+  // the stub stays in `record` so uncovered occurrences still get the
+  // plain global substitution below.
+  const adapted = await adaptAiFields({
+    buffer: loaded.buffer,
+    fields: manifest.fields,
+    values: record,
+    adapt: adaptAiValue,
+  });
+  const fillBuffer = adapted.buffer;
+  const adaptedPaths = adapted.adaptedPaths;
+
   const optionalDefaults =
-    manifest === null || strictInputPlaceholders === null
+    strictInputPlaceholders === null
       ? { defaultedPaths: [], values: record }
       : applyOmittedOptionalPlaceholderDefaults({
           fields: manifest.fields,
