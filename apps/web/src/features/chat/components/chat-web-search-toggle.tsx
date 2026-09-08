@@ -20,6 +20,8 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
+import { restoreChatWebSearchQuerySnapshots } from "./chat-web-search-toggle.logic";
+
 type ChatWebSearchToggleProps = {
   enabled: boolean;
   threadRef: ChatThreadRef;
@@ -78,9 +80,7 @@ export const ChatWebSearchToggle = ({
     },
     onError: (error, _nextEnabled, context) => {
       if (context) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
+        restoreChatWebSearchQuerySnapshots(queryClient, context.previous);
       }
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),

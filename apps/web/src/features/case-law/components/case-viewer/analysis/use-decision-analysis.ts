@@ -15,7 +15,7 @@ import {
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
-import { caseLawDecisionKeys } from "@/features/case-law/queries/decisions";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
@@ -158,10 +158,8 @@ export const useDecisionAnalysis = (
       return;
     }
     const analysis = query.data.analysis;
-    queryClient.setQueryData(
-      caseLawDecisionKeys.byId(decisionId),
-      (old: Record<string, unknown> | undefined) =>
-        old ? { ...old, analysis } : old,
+    queryClient.setQueryData(decisionOptions(decisionId).queryKey, (old) =>
+      old ? { ...old, analysis } : old,
     );
   }, [query.data, decisionId, queryClient]);
 

@@ -81,7 +81,6 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
@@ -110,10 +109,6 @@ const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
-
-type EntityMentionPage = {
-  entities: WorkspaceEntity[];
-};
 
 type ChatDraftAttachmentBase = {
   file: File;
@@ -780,9 +775,7 @@ export const useChatEditor = ({
         ...(search && { search }),
         pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
       });
-      const cachedData = queryClient.getQueryData<EntityMentionPage>(
-        options.queryKey,
-      );
+      const cachedData = queryClient.getQueryData(options.queryKey);
       if (cachedData) {
         const sourceWorkspaceId =
           threadRef.scope === "workspace" &&

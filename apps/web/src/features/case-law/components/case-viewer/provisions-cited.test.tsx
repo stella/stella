@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
-import { decisionProvisionKeys } from "@/features/case-law/queries/provisions";
+import { decisionProvisionsInfiniteOptions } from "@/features/case-law/queries/provisions";
 import messages from "@/i18n/langs/en.json";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -15,7 +15,16 @@ const decisionId: SafeId<"caseLawDecision"> = toSafeId<"caseLawDecision">(
   "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
 );
 
-const provision = (overrides: Record<string, unknown>) => ({
+type DecisionProvisionsQueryFn = NonNullable<
+  ReturnType<typeof decisionProvisionsInfiniteOptions>["queryFn"]
+>;
+type DecisionProvision = Awaited<
+  ReturnType<DecisionProvisionsQueryFn>
+>["items"][number];
+
+const provision = (
+  overrides: Partial<DecisionProvision>,
+): DecisionProvision => ({
   anchor: "s265b",
   confidence: 0.9,
   jurisdiction: "CZE",
@@ -25,6 +34,7 @@ const provision = (overrides: Record<string, unknown>) => ({
   section: 265,
   sectionSuffix: "b",
   sentence: null,
+  sentenceText: "Dovolání se opírá o § 265b odst. 1 trestního řádu.",
   spanEnd: 60,
   spanStart: 40,
   subsection: "1",
@@ -32,6 +42,10 @@ const provision = (overrides: Record<string, unknown>) => ({
   workCollection: "Sb.",
   workEli: "/eli/cz/sb/1961/141",
   workIdentifier: "141/1961",
+  workNumber: 141,
+  workSource: "number",
+  workYear: 1961,
+  versionValidFrom: null,
   ...overrides,
 });
 
@@ -45,10 +59,13 @@ const renderPanel = (children: ReactNode, queryClient: QueryClient) =>
 const seed = (items: ReturnType<typeof provision>[]) => {
   const queryClient = new QueryClient();
 
-  queryClient.setQueryData(decisionProvisionKeys.forDecision(decisionId), {
-    pageParams: [null],
-    pages: [{ items, limit: 50, nextCursor: null }],
-  });
+  queryClient.setQueryData(
+    decisionProvisionsInfiniteOptions(decisionId).queryKey,
+    {
+      pageParams: [null],
+      pages: [{ items, limit: 50, nextCursor: null }],
+    },
+  );
 
   return queryClient;
 };

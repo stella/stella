@@ -35,7 +35,7 @@ export const collectAnnotationPages = async <T>(
 
 const ANNOTATIONS_PAGE_SIZE = 100;
 
-export const decisionAnnotationKeys = {
+const decisionAnnotationKeys = {
   all: ["case-law", "annotations"],
   forDecision: ({
     activeOrganizationId,

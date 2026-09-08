@@ -9,10 +9,9 @@ import type {
   ViewLayout,
   ViewLayoutType,
   ViewTemplateProperty,
-  WorkspaceView,
 } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
-import { viewsKeys } from "@/lib/workspaces/queries/views";
+import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 import { invalidateViewDerivedQueries, viewOrderCache } from "./views.logic";
@@ -71,7 +70,7 @@ export const useUpdateView = (workspaceId: string) => {
   // Optimistic reads/writes target the concrete locale-specific entry; the
   // final invalidation targets the locale-independent prefix so every cached
   // locale variant refetches.
-  const localizedKey = viewsKeys.localized(workspaceId);
+  const localizedKey = viewsOptions(workspaceId).queryKey;
 
   return useMutation({
     mutationFn: async ({ viewId, ...body }: UpdateViewVars) => {
@@ -83,26 +82,22 @@ export const useUpdateView = (workspaceId: string) => {
     },
     onMutate: async ({ viewId, ...body }) => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
-      const previousViews =
-        queryClient.getQueryData<WorkspaceView[]>(localizedKey);
+      const previousViews = queryClient.getQueryData(localizedKey);
 
-      queryClient.setQueryData<WorkspaceView[]>(
-        localizedKey,
-        (current): WorkspaceView[] | undefined => {
-          if (!current) {
-            return current;
-          }
-          return current.map((view) =>
-            view.id === viewId
-              ? {
-                  ...view,
-                  ...(body.name !== undefined && { name: body.name }),
-                  ...(body.layout !== undefined && { layout: body.layout }),
-                }
-              : view,
-          );
-        },
-      );
+      queryClient.setQueryData(localizedKey, (current) => {
+        if (!current) {
+          return current;
+        }
+        return current.map((view) =>
+          view.id === viewId
+            ? {
+                ...view,
+                ...(body.name !== undefined && { name: body.name }),
+                ...(body.layout !== undefined && { layout: body.layout }),
+              }
+            : view,
+        );
+      });
 
       return { previousViews };
     },

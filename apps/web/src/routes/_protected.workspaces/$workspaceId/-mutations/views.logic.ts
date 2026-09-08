@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import type { WorkspaceView } from "@/lib/types";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
-import { viewsKeys } from "@/lib/workspaces/queries/views";
+import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
 
 export const invalidateViewDerivedQueries = async ({
   queryClient,
@@ -72,15 +72,14 @@ export const viewOrderCache = ({
   // Optimistic reads/writes target the concrete locale-specific entry; the
   // final invalidation targets the locale-independent prefix so every cached
   // locale variant refetches.
-  const localizedKey = viewsKeys.localized(workspaceId);
+  const localizedKey = viewsOptions(workspaceId).queryKey;
 
   return {
     apply: async (viewIds: readonly string[]): Promise<ReorderViewsContext> => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
-      const previousViews =
-        queryClient.getQueryData<WorkspaceView[]>(localizedKey);
+      const previousViews = queryClient.getQueryData(localizedKey);
 
-      const optimisticViews = queryClient.setQueryData<WorkspaceView[]>(
+      const optimisticViews = queryClient.setQueryData(
         localizedKey,
         (current) => reorderCachedViews(current, viewIds),
       );

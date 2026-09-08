@@ -1,5 +1,5 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
-import type { InfiniteData, QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -52,18 +52,14 @@ export const refetchFirstNotificationsPage = async ({
   organizationId: string;
   queryClient: QueryClient;
 }): Promise<void> => {
-  const queryKey = notificationKeys.list({ organizationId });
-  queryClient.setQueryData(
-    queryKey,
-    (
-      cached: InfiniteData<NotificationsPage, string | undefined> | undefined,
-    ) =>
-      cached === undefined
-        ? cached
-        : {
-            pages: cached.pages.slice(0, 1),
-            pageParams: cached.pageParams.slice(0, 1),
-          },
+  const queryKey = notificationsOptions({ organizationId }).queryKey;
+  queryClient.setQueryData(queryKey, (cached) =>
+    cached === undefined
+      ? cached
+      : {
+          pages: cached.pages.slice(0, 1),
+          pageParams: cached.pageParams.slice(0, 1),
+        },
   );
   await queryClient.invalidateQueries({ queryKey, refetchType: "active" });
 };

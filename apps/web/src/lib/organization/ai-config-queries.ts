@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { InferDataFromTag } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -64,3 +65,43 @@ export const aiAvailabilityOptions = ({
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+type OrganizationAIAvailability = InferDataFromTag<
+  unknown,
+  ReturnType<typeof aiAvailabilityOptions>["queryKey"]
+>;
+
+type UpdateCachedAIAvailabilityOptions = {
+  current: OrganizationAIAvailability | undefined;
+  instanceProvisioned?: boolean;
+  orgConfigured: boolean;
+};
+
+/**
+ * Reflect an AI config mutation without guessing server-derived availability.
+ *
+ * The deferred tier depends on the effective provider, model, and region. The
+ * config mutations do not return that decision, so this transition preserves
+ * the last server answer until the caller's invalidation refetches it. An
+ * absent entry stays absent for the same reason.
+ */
+export const updateCachedAIAvailability = ({
+  current,
+  instanceProvisioned,
+  orgConfigured,
+}: UpdateCachedAIAvailabilityOptions):
+  | OrganizationAIAvailability
+  | undefined => {
+  if (current === undefined) {
+    return current;
+  }
+  const nextInstanceProvisioned =
+    instanceProvisioned ?? current.instanceProvisioned;
+
+  return {
+    ...current,
+    available: nextInstanceProvisioned || orgConfigured,
+    instanceProvisioned: nextInstanceProvisioned,
+    orgConfigured,
+  };
+};

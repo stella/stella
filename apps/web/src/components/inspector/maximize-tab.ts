@@ -7,9 +7,10 @@ import {
 } from "@/components/inspector/case-decision-view";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { chatKeys } from "@/features/chat/chat-query-contract";
-import type { ChatThreadFetched } from "@/features/chat/queries";
-import { invalidateChatThreadAcrossScopes } from "@/features/chat/queries";
+import {
+  chatThreadOptions,
+  invalidateChatThreadAcrossScopes,
+} from "@/features/chat/queries";
 import { detached } from "@/lib/detached";
 
 type MaximizeContext = {
@@ -52,26 +53,24 @@ export const buildMaximizeTabAction = (
   return () => {
     // The destination route shares this cache key with the inspector
     // tab — same scope, same threadId, same allowMissingThread — so
-    // re-seeding here lets the destination's `useSuspenseQuery` read
-    // the inspector's `Chat` instance and the picker's latest
-    // `contextMatterIds` without going through the server. Without
-    // this, an unsent chat moved to main loses its picked scope
+    // re-seeding here lets the destination's `useSuspenseQuery` read the
+    // picker's latest `contextMatterIds` without going through the server.
+    // Without this, an unsent chat moved to main loses its picked scope
     // because the server hasn't persisted the thread row yet and
     // would respond with an empty `contextMatterIds`.
-    const threadKey =
-      tabWorkspaceId === undefined
-        ? chatKeys.thread(activeOrganizationId, {
-            scope: "global",
-            threadId: tab.id,
-            allowMissingThread: true,
-          })
-        : chatKeys.thread(activeOrganizationId, {
-            scope: "workspace",
-            threadId: tab.id,
-            workspaceId: tabWorkspaceId,
-            allowMissingThread: true,
-          });
-    queryClient.setQueryData<ChatThreadFetched>(threadKey, (existing) =>
+    const threadOptions = chatThreadOptions({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      key:
+        tabWorkspaceId === undefined
+          ? { scope: "global", threadId: tab.id }
+          : {
+              scope: "workspace",
+              threadId: tab.id,
+              workspaceId: tabWorkspaceId,
+            },
+    });
+    queryClient.setQueryData(threadOptions.queryKey, (existing) =>
       existing
         ? { ...existing, contextMatterIds: tab.contextMatterIds }
         : existing,

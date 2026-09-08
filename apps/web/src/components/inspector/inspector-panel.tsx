@@ -59,7 +59,7 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
-import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
@@ -139,7 +139,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       return undefined;
     }
     const cachedWorkspace = panelQueryClient.getQueryData(
-      workspacesKeys.byId(workspaceId),
+      workspaceOptions(workspaceId).queryKey,
     );
     return isInspectorWorkspaceOrigin(cachedWorkspace)
       ? cachedWorkspace

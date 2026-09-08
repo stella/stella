@@ -5,10 +5,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
-import {
-  decisionAnnotationKeys,
-  decisionAnnotationsOptions,
-} from "@/features/case-law/queries/annotations";
+import { decisionAnnotationsOptions } from "@/features/case-law/queries/annotations";
 import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -164,17 +161,16 @@ export const useDecisionAnnotations = (
     name,
   } = useAuthenticatedUser();
   const key = { activeOrganizationId, decisionId };
-  const queryKey = decisionAnnotationKeys.forDecision(key);
-  const { data } = useQuery(decisionAnnotationsOptions(key));
+  const annotationsQuery = decisionAnnotationsOptions(key);
+  const queryKey = annotationsQuery.queryKey;
+  const { data } = useQuery(annotationsQuery);
 
   const patchCache = async (
     patch: (rows: readonly DecisionAnnotation[]) => DecisionAnnotation[],
   ): Promise<{ previous: DecisionAnnotation[] | undefined }> => {
     await queryClient.cancelQueries({ queryKey });
-    const previous = queryClient.getQueryData<DecisionAnnotation[]>(queryKey);
-    queryClient.setQueryData<DecisionAnnotation[]>(queryKey, (rows) =>
-      patch(optionalArray(rows)),
-    );
+    const previous = queryClient.getQueryData(queryKey);
+    queryClient.setQueryData(queryKey, (rows) => patch(optionalArray(rows)));
     return { previous };
   };
 

@@ -122,9 +122,7 @@ export const useWorkspaceChatMentionRegistration = (
       }
 
       const options = createSearchOptions(query);
-      const cachedData = queryClient.getQueryData<EntityMentionPage>(
-        options.queryKey,
-      );
+      const cachedData = queryClient.getQueryData(options.queryKey);
       if (cachedData) {
         return toEntityMentionOptions({ data: cachedData, workspaceId });
       }

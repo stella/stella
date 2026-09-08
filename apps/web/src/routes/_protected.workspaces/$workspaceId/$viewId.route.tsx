@@ -515,9 +515,7 @@ function ViewPendingComponent() {
   });
   const queryClient = useQueryClient();
   const viewsQueryOptions = viewsOptions(workspaceId);
-  const cachedViews = queryClient.getQueryData<WorkspaceView[]>(
-    viewsQueryOptions.queryKey,
-  );
+  const cachedViews = queryClient.getQueryData(viewsQueryOptions.queryKey);
   const layoutType = (
     cachedViews?.find((view) => view.id === viewId) ?? cachedViews?.at(0)
   )?.layout.type;

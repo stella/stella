@@ -4,6 +4,7 @@ import {
   queryOptions,
   replaceEqualDeep,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
@@ -35,8 +36,9 @@ import {
 } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { APIError } from "@/lib/errors/api";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/lib/workspaces/queries";
+import { workspaceActivityOptions } from "@/lib/workspaces/queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,
@@ -153,6 +155,71 @@ describe("chatKeys", () => {
 
     expect(draftOptions.queryKey).toEqual(routedOptions.queryKey);
   });
+});
+
+describe("chat thread fetch failures", () => {
+  const previousFetch = globalThis.fetch;
+  const createFetchMock = (
+    status: number,
+    body: Record<string, unknown>,
+  ): typeof fetch =>
+    Object.assign(
+      async () =>
+        new Response(JSON.stringify(body), {
+          headers: { "Content-Type": "application/json" },
+          status,
+        }),
+      { preconnect: previousFetch.preconnect },
+    );
+  const options = (allowMissingThread: boolean) =>
+    chatThreadOptions({
+      activeOrganizationId: "org_test",
+      context: { allowMissingThread },
+      key: {
+        scope: "global",
+        threadId: toChatThreadId("thread-fetch-failure"),
+      },
+    });
+  const queryClient = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  afterEach(() => {
+    globalThis.fetch = previousFetch;
+  });
+
+  test("returns an empty draft for an allowed missing thread", async () => {
+    globalThis.fetch = createFetchMock(404, { message: "Thread not found" });
+
+    const data = await queryClient().query(options(true));
+
+    expect(data).toMatchObject({
+      messages: [],
+      threadExists: false,
+    });
+  });
+
+  test.each([
+    { allowMissingThread: false, status: 404 },
+    { allowMissingThread: false, status: 500 },
+    { allowMissingThread: true, status: 500 },
+  ])(
+    "propagates status $status when allowMissingThread is $allowMissingThread",
+    async ({ allowMissingThread, status }) => {
+      globalThis.fetch = createFetchMock(status, { message: "Request failed" });
+      const result = await Result.tryPromise({
+        try: async () => await queryClient().query(options(allowMissingThread)),
+        catch: (cause) => cause,
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(APIError);
+        if (APIError.is(result.error)) {
+          expect(result.error.status).toBe(status);
+        }
+      }
+    },
+  );
 });
 
 describe("thread-scoped chat keys", () => {
@@ -507,14 +574,15 @@ describe("mergeGroupedChatThreadPages", () => {
 describe("invalidateChatThreadLists", () => {
   test("invalidates grouped threads and workspace activity together", async () => {
     const queryClient = new QueryClient();
-    const groupedKey = chatKeys.groupedThreads({
+    const groupedKey = groupedChatThreadsOptions({
       activeOrganizationId: "organization-a",
-    });
-    const activityKey = workspacesKeys.activity("organization-a", {
-      workspaceId: "workspace-a",
-    });
-    queryClient.setQueryData(groupedKey, { pages: [] });
-    queryClient.setQueryData(activityKey, { pages: [] });
+    }).queryKey;
+    const activityKey = workspaceActivityOptions({
+      activeOrganizationId: "organization-a",
+      key: { workspaceId: "workspace-a" },
+    }).queryKey;
+    queryClient.setQueryData(groupedKey, { pageParams: [], pages: [] });
+    queryClient.setQueryData(activityKey, { pageParams: [], pages: [] });
 
     await invalidateChatThreadLists({
       queryClient,
