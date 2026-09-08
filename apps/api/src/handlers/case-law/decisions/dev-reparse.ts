@@ -14,10 +14,10 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { courtFromEcli } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const FETCH_TIMEOUT_MS = 20_000;
@@ -72,7 +72,15 @@ const reparseNss = async (
   const ecli = decision.ecli ?? undefined;
   const { documentAst } = parseNssDecisionHtml({
     caseNumber: decision.caseNumber,
-    court: courtFromEcli(ecli) || decision.court,
+    court: czDecisionCourt({
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      ecli,
+      // The court the row already carries, rather than this portal's own: a
+      // stored decision states a court, and a development re-parse is not the
+      // place to overrule it.
+      publisherCourt: decision.court,
+      sourceDocumentId: documentId,
+    }),
     decisionDate: decision.decisionDate ?? undefined,
     decisionType: decision.decisionType ?? undefined,
     detailMetadata: decision.metadata ?? {},

@@ -136,6 +136,9 @@ const detailPageHtml = (
 ): string => {
   const rows = [
     legalSentenceRowHtml(legalSentence),
+    // The publisher states the deciding court on every detail page, because
+    // it is not always its own.
+    detailRowHtml("Soud", "Nejvyšší soud"),
     detailRowHtml("Datum rozhodnutí", "28. 5. 2026"),
     detailRowHtml("Spisová značka", docket),
     detailRowHtml("ECLI", "ECLI:CZ:NS:2026:30.CDO.3000.2025.1"),
@@ -717,14 +720,15 @@ describe("cz-ns buildDecision", () => {
     const decision = await crawledWithSummary({});
 
     // Every stored row's hash moved once when the publication day joined this
-    // literal, and that pass is what carries the day and the multi-part raw
-    // onto rows written before either existed: the refresh check skips a row
-    // whose hash stands still. The literal is here so the next such move is a
+    // literal, and again when the deciding court did; each pass is what
+    // carries the new field, and the multi-part raw beside it, onto rows
+    // written before it existed, because the refresh check skips a row whose
+    // hash stands still. The literal is here so the next such move is a
     // decision somebody makes rather than a side effect of editing the parser.
     expect(decision.metadata["zverejnenoNaWebu"]).toBe("2026-06-10");
     expect(decision.rawHash).toBe(
       hashContent(
-        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|28. 5. 2026|2026-06-10`,
+        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
       ),
     );
   });

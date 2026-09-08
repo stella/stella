@@ -1043,6 +1043,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
@@ -2503,6 +2504,14 @@ export default defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-literal-decision-court.fixture.ts",
+      ],
+      rules: {
+        "no-literal-decision-court/no-literal-decision-court": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-unowned-file-version-write.fixture.ts",
       ],
       rules: {
@@ -3006,6 +3015,20 @@ export default defineConfig({
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
+      },
+    },
+    {
+      // A publisher is not a court: every decision portal these adapters read
+      // carries decisions of courts other than its own, and the court name is
+      // what authority weighting is read off. The deciding court therefore
+      // comes from the record, through the shared resolver, never from a
+      // constant in the adapter.
+      files: ["apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.test.ts",
+      ],
+      rules: {
+        "no-literal-decision-court/no-literal-decision-court": "error",
       },
     },
     {

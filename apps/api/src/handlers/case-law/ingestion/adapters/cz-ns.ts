@@ -42,6 +42,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -69,6 +70,17 @@ const PAGE_SIZE = 40;
 
 /** The only language this court publishes. */
 const CZ_NS_LANGUAGE = "cs";
+
+/**
+ * The court a document is stored under when nothing about it names one.
+ *
+ * Not the label for everything this adapter fetches: the database is the
+ * Supreme Court's, but its contents are not. It publishes selected decisions
+ * of the high, regional, city and district courts too, naming the deciding
+ * court both in the `Soud` row of every detail page and in the ECLI's court
+ * code, so this constant covers only a document that states neither.
+ */
+const CZ_NS_PUBLISHER_COURT = "Nejvyšší soud";
 
 /** The two pages fetched for one decision, as the stored raw names them. */
 const CZ_NS_RAW_PART = {
@@ -160,6 +172,13 @@ const entryField = (
 
 /** Metadata label patterns on detail pages. */
 const LABEL_PATTERNS: Record<string, RegExp> = {
+  /**
+   * The deciding court, which this publisher states per decision because it
+   * is not always its own: the database carries selected judgments of the
+   * high, regional, city and district courts alongside the Supreme Court's.
+   */
+  court:
+    /Soud:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   decisionDate:
     /Datum rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   ecli: /ECLI:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
@@ -251,6 +270,12 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
   "Senátní značka": excludedSourceField(
     "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
   ),
+  /**
+   * The deciding court, which is not always this publisher's own. Stored as
+   * the row's court, through `czDecisionCourt`: where the decision's ECLI
+   * names a court too, its code decides, so the corpus spells one court one
+   * way whichever of the publisher's two spellings a page carries.
+   */
   Soud: { disposition: "stored", target: { type: "result", key: "court" } },
   "Spisová značka": {
     disposition: "stored",
@@ -573,13 +598,15 @@ export const buildCzNsDecision = async (
     meta["publishedOnWeb"] === undefined
       ? undefined
       : parseCeDate(meta["publishedOnWeb"]);
-  // The publication day is hashed for every decision, not only where the page
-  // states one, and that moves every stored row's hash once. It is the pass
-  // that carries the day itself, and the multi-part raw beside it, onto rows
-  // written before either existed: the refresh check skips a row whose hash
-  // stands still, so a field nothing hashes can never reach the corpus that is
-  // already stored.
-  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
+  // The publication day and the court are hashed for every decision, not only
+  // where the page states one, and that moves every stored row's hash once. It
+  // is the pass that carries them, and the multi-part raw beside them, onto
+  // rows written before any of it existed: the refresh check skips a row whose
+  // hash stands still, so a field nothing hashes can never reach the corpus
+  // that is already stored. For the court that is the whole point — a row
+  // stored under the publisher's name whose page states another court has an
+  // otherwise unchanged page, and would keep the wrong court for good.
+  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["court"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
 
   // Parse AST from the print page (rich HTML)
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
@@ -603,6 +630,14 @@ export const buildCzNsDecision = async (
   // Extract judge from fulltext signature block
   const judge = fulltext ? extractJudge(fulltext) : undefined;
 
+  const court = czDecisionCourt({
+    adapterKey: ADAPTER_KEYS.CZ_NS,
+    ecli: meta["ecli"],
+    publisherCourt: CZ_NS_PUBLISHER_COURT,
+    sourceDocumentId: unid,
+    statedCourt: meta["court"],
+  });
+
   return {
     type: "built",
     decision: {
@@ -617,7 +652,7 @@ export const buildCzNsDecision = async (
       // being undone.
       legacySourceUrls: [webUrl],
       ecli: meta["ecli"],
-      court: "Nejvyšší soud",
+      court,
       country: "CZE",
       language: CZ_NS_LANGUAGE,
       decisionDate: meta["decisionDate"]
@@ -630,7 +665,7 @@ export const buildCzNsDecision = async (
       metadata: {
         caseNumber,
         ecli: meta["ecli"],
-        court: "Nejvyšší soud" as const,
+        court,
         decisionDate: meta["decisionDate"]
           ? parseCeDate(meta["decisionDate"])
           : undefined,
