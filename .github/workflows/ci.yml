@@ -2544,6 +2544,9 @@ jobs:
       - name: Install scripts workspace dependencies
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
+          # Restored Windows global-store links can omit transitive dependency
+          # links. Rebuild the isolated graph locally from cached package files.
+          BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
       - name: Test dev runner
