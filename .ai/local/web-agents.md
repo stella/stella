@@ -18,7 +18,8 @@
 - Use the owning query options' `.queryKey` for `getQueryData` and `setQueryData`;
   infer data from that key instead of passing explicit type arguments. An inferred
   `const` alias preserves the tag; a standalone key factory or `QueryKey` annotation
-  does not. `require-query-options-key` enforces this in production web code.
+  does not. `require-query-options-key` enforces the syntax in production web code;
+  `check:query-cache-types` verifies the actual TanStack tag across imports.
 - Keep named `*Options` exports and `*Keys` prefixes for family invalidation.
   Shared cache helpers may accept a TanStack `DataTag` parameter when their contract
   genuinely spans multiple query producers. Do not manufacture options or cast a

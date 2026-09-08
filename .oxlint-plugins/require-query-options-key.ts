@@ -5,7 +5,8 @@
 // This is a syntax guard, not a TypeScript checker: it follows const aliases,
 // queryKey destructuring, and conditional branches within the file. Imported
 // options/factories and inferred iteration values are trusted at `.queryKey`;
-// their inferred types remain the compiler's responsibility. Local factories
+// check:query-cache-types verifies their actual TanStack tags across imports.
+// Local factories
 // must return options on every explicit return path. Bare objects, key assertions,
 // widened key aliases, and mutable aliases are rejected. Generic helpers may
 // accept a DataTag parameter from TanStack; that boundary requires a tagged

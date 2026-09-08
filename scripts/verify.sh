@@ -286,6 +286,7 @@ run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Typecheck coverage" run_typecheck_coverage
 run_step "Code quality" run_code_check
+run_step "Query cache types" bun run check:query-cache-types
 if [[ -n "$affected_flag" ]]; then
   run_step "Result consumption" bun run check:result-consumption -- --base "$base_ref"
 else

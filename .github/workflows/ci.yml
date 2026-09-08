@@ -1285,6 +1285,10 @@ jobs:
           fi
           bun run code-check:affected -- --base "origin/$BASE_REF"
 
+      - name: Query cache types
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun run check:query-cache-types
+
       - name: Dead columns
         run: bun run check:dead-columns
 
