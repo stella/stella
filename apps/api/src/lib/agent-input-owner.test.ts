@@ -96,7 +96,7 @@ const BYPASS_RULES = {
   boolean: {
     owner: "normalizeBoolean in @stll/agent-input",
     include: AGENT_VALUE_SURFACES,
-    pattern: /===\s*"(?:true|false|yes|no)"/u,
+    pattern: /[=]==\s*"(?:true|false|yes|no)"/u,
     allowed: [
       {
         path: "apps/api/src/lib/docx/template-manifest.ts",
