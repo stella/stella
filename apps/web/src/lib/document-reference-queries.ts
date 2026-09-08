@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { api } from "@/lib/api";
+import type { DocumentReferenceEvidence } from "@/lib/document-reference";
 import {
   couldCarryDocumentReference,
   readDocumentReference,
@@ -46,10 +47,20 @@ export type DocumentReferenceMatch = {
   currentVersionNumber: number;
 };
 
-/** A file that turned out to be a version of a document already in stella. */
-export type ReferencedFile = {
-  file: File;
+/**
+ * The document a file's reference names, together with what the file still
+ * carried that reference in. The evidence is the file's own, not the server's:
+ * two files can resolve to the same document and still deserve different
+ * offers, because only one of them kept its visible reference line.
+ */
+export type ResolvedDocumentReference = {
   match: DocumentReferenceMatch;
+  evidence: DocumentReferenceEvidence;
+};
+
+/** A file that turned out to be a version of a document already in stella. */
+export type ReferencedFile = ResolvedDocumentReference & {
+  file: File;
 };
 
 export const documentReferenceKeys = {
@@ -94,14 +105,15 @@ export const documentReferenceOptions = (verificationCode: string) =>
 export const resolveFileDocumentReference = async (
   queryClient: QueryClient,
   file: File,
-): Promise<DocumentReferenceMatch | null> => {
+): Promise<ResolvedDocumentReference | null> => {
   const reference = await readDocumentReference(file);
   if (reference === null) {
     return null;
   }
-  return await queryClient.fetchQuery(
+  const match = await queryClient.fetchQuery(
     documentReferenceOptions(reference.verificationCode),
   );
+  return match === null ? null : { match, evidence: reference.evidence };
 };
 
 type ResolveDocumentReferenceMatchesOptions = {
@@ -140,7 +152,9 @@ export const resolveDocumentReferenceMatches = async ({
         onError(result.error);
         return null;
       }
-      return result.value === null ? null : { file, match: result.value };
+      return result.value === null
+        ? null
+        : { file, match: result.value.match, evidence: result.value.evidence };
     },
   });
 

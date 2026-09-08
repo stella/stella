@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 
+import { REFERENCE_UPLOAD_ACTION } from "@/lib/document-reference";
 import type {
   VersionOrNewFileChoice,
   VersionOrNewFileDecision,
@@ -84,6 +85,7 @@ const VersionOrNewFileDialogBody = ({
           })}{" "}
           <DecisionNote decision={decision} />
         </DialogDescription>
+        <RemovedReferenceLineNote decision={decision} />
       </DialogHeader>
 
       <DialogFooter>
@@ -211,54 +213,123 @@ const DecisionActions = ({
         </>
       );
     }
-    case "reference-here": {
-      return (
-        <>
-          <Button
-            disabled={isUploadPending}
-            onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.newDocument)}
-            variant="outline"
-          >
-            {t("workspaces.files.versionOrNewFile.createNewOption")}
-          </Button>
-          <Button
-            disabled={isUploadPending}
-            loading={isUploadPending}
-            onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.versionHere)}
-          >
-            {t("workspaces.files.versionOrNewFile.addAsVersion", {
-              version: decision.document.nextVersionNumber,
-            })}
-          </Button>
-        </>
-      );
-    }
+    case "reference-here":
     case "reference-elsewhere": {
       return (
-        <>
-          <Button
-            disabled={isUploadPending}
-            onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.newDocument)}
-            variant="outline"
-          >
-            {t("workspaces.files.versionOrNewFile.uploadAsNewDocumentHere")}
-          </Button>
-          <Button
-            disabled={isUploadPending}
-            loading={isUploadPending}
-            onClick={() =>
-              onChoose(VERSION_OR_NEW_FILE_CHOICE.versionElsewhere)
-            }
-          >
-            {t("workspaces.files.versionOrNewFile.addAsVersionThere", {
-              version: decision.document.nextVersionNumber,
-            })}
-          </Button>
-        </>
+        <ReferenceActions
+          decision={decision}
+          isUploadPending={isUploadPending}
+          onChoose={onChoose}
+        />
       );
     }
     default: {
       return panic(`Unhandled decision: ${String(decision satisfies never)}`);
     }
   }
+};
+
+type ReferenceDecision = Extract<
+  VersionOrNewFileDecision,
+  { type: "reference-here" | "reference-elsewhere" }
+>;
+
+type ReferenceActionsProps = {
+  decision: ReferenceDecision;
+  onChoose: (choice: VersionOrNewFileChoice) => void;
+  isUploadPending: boolean;
+};
+
+/**
+ * Both offers, ordered by the one the file's own evidence argues for. The
+ * version upload carries the pending state either way: it is the only choice
+ * that sends bytes from this dialog.
+ */
+const ReferenceActions = ({
+  decision,
+  onChoose,
+  isUploadPending,
+}: ReferenceActionsProps): ReactNode => {
+  const t = useTranslations();
+  const isElsewhere = decision.type === "reference-elsewhere";
+  const leadsWithNewDocument =
+    decision.defaultAction === REFERENCE_UPLOAD_ACTION.newDocument;
+
+  const versionButton = (
+    <Button
+      disabled={isUploadPending}
+      loading={isUploadPending}
+      onClick={() =>
+        onChoose(
+          isElsewhere
+            ? VERSION_OR_NEW_FILE_CHOICE.versionElsewhere
+            : VERSION_OR_NEW_FILE_CHOICE.versionHere,
+        )
+      }
+      variant={leadsWithNewDocument ? "outline" : "default"}
+    >
+      {isElsewhere
+        ? t("workspaces.files.versionOrNewFile.addAsVersionThere", {
+            version: decision.document.nextVersionNumber,
+          })
+        : t("workspaces.files.versionOrNewFile.addAsVersion", {
+            version: decision.document.nextVersionNumber,
+          })}
+    </Button>
+  );
+
+  const newDocumentButton = (
+    <Button
+      disabled={isUploadPending}
+      onClick={() => onChoose(VERSION_OR_NEW_FILE_CHOICE.newDocument)}
+      variant={leadsWithNewDocument ? "default" : "outline"}
+    >
+      {isElsewhere
+        ? t("workspaces.files.versionOrNewFile.uploadAsNewDocumentHere")
+        : t("workspaces.files.versionOrNewFile.createNewOption")}
+    </Button>
+  );
+
+  if (leadsWithNewDocument) {
+    return (
+      <>
+        {versionButton}
+        {newDocumentButton}
+      </>
+    );
+  }
+  return (
+    <>
+      {newDocumentButton}
+      {versionButton}
+    </>
+  );
+};
+
+/**
+ * Why the dialog is steering towards a new document, and what that costs. It
+ * appears only for a file whose visible reference line is gone, the one case
+ * where the version upload is not the primary action.
+ */
+const RemovedReferenceLineNote = ({
+  decision,
+}: {
+  decision: VersionOrNewFileDecision | null;
+}): ReactNode => {
+  const t = useTranslations();
+
+  if (
+    decision === null ||
+    decision.type === "extension" ||
+    decision.defaultAction !== REFERENCE_UPLOAD_ACTION.newDocument
+  ) {
+    return null;
+  }
+
+  return (
+    <p className="text-muted-foreground text-sm">
+      {t("workspaces.files.versionOrNewFile.referenceLineRemoved")}{" "}
+      {t("workspaces.files.versionOrNewFile.newDocumentDropsReference")}
+    </p>
+  );
 };

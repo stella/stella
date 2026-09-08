@@ -6,8 +6,16 @@
  * matching extensions only ever meant "this could plausibly be a version of
  * that", while a reference means "this is version 3 of that". The extension
  * comparison stays as the answer for everything that carries no reference.
+ *
+ * How strong that evidence is decides which offer leads: a file that kept only
+ * the hidden property is offered as a new document first.
  */
-import type { DocumentReferenceMatch } from "@/lib/document-reference-queries";
+import type { ReferenceUploadAction } from "@/lib/document-reference";
+import { defaultReferenceUploadAction } from "@/lib/document-reference";
+import type {
+  DocumentReferenceMatch,
+  ResolvedDocumentReference,
+} from "@/lib/document-reference-queries";
 import {
   extensionMatches,
   getExtension,
@@ -58,12 +66,14 @@ export type VersionOrNewFileDecision =
       type: "reference-here";
       document: ReferencedDocument;
       supersededBase: SupersededBase | null;
+      defaultAction: ReferenceUploadAction;
     }
   | {
       /** The file belongs to another document, possibly in another matter. */
       type: "reference-elsewhere";
       document: ReferencedDocument;
       supersededBase: SupersededBase | null;
+      defaultAction: ReferenceUploadAction;
     }
   | {
       /** No reference: fall back to comparing file extensions. */
@@ -75,7 +85,7 @@ export type VersionOrNewFileDecision =
 
 type ResolveVersionOrNewFileDecisionOptions = {
   /** Resolved reference the dropped file carries, or null when it has none. */
-  match: DocumentReferenceMatch | null;
+  reference: ResolvedDocumentReference | null;
   /** The document the file was dropped on. */
   droppedOnEntityId: string;
   /** Filename of that document's current file. */
@@ -84,12 +94,12 @@ type ResolveVersionOrNewFileDecisionOptions = {
 };
 
 export const resolveVersionOrNewFileDecision = ({
-  match,
+  reference,
   droppedOnEntityId,
   entityFileName,
   droppedFileName,
 }: ResolveVersionOrNewFileDecisionOptions): VersionOrNewFileDecision => {
-  if (match === null) {
+  if (reference === null) {
     return {
       type: "extension",
       canReplace: extensionMatches({
@@ -101,6 +111,7 @@ export const resolveVersionOrNewFileDecision = ({
     };
   }
 
+  const { match, evidence } = reference;
   return {
     type:
       match.entityId === droppedOnEntityId
@@ -108,6 +119,7 @@ export const resolveVersionOrNewFileDecision = ({
         : "reference-elsewhere",
     document: toReferencedDocument(match),
     supersededBase: toSupersededBase(match),
+    defaultAction: defaultReferenceUploadAction(evidence),
   };
 };
 
