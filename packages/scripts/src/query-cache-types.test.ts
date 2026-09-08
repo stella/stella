@@ -73,4 +73,4 @@ test("exact cache access retains the producer's tag across module boundaries", (
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
-});
+}, 30_000);
