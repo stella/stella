@@ -587,6 +587,17 @@ describe("public-law reader role", () => {
     });
     expect(search.ranked).toEqual([]);
 
+    // A generation the final projection builds reads its projection state
+    // instead of the projection row, so the census covers both predicates.
+    const projectedSearch = await rehydrateCaseLawCandidates({
+      body: { query: "reader role census" },
+      candidates: [{ id: createSafeId<"caseLawDecision">(), score: 1 }],
+      caseLawDb,
+      courtWeights: new Map(),
+      generation: "case_law_v6",
+    });
+    expect(projectedSearch.ranked).toEqual([]);
+
     // Search reads twice: narrow rows for every candidate it blends, wide
     // rows for the ids the page emits. Both have to clear the reader role.
     const pageRows = await readCaseLawPageDecisionRows({
@@ -596,6 +607,14 @@ describe("public-law reader role", () => {
       ids: [createSafeId<"caseLawDecision">()],
     });
     expect(pageRows.size).toBe(0);
+
+    const projectedPageRows = await readCaseLawPageDecisionRows({
+      body: { query: "reader role census" },
+      caseLawDb,
+      generation: "case_law_v6",
+      ids: [createSafeId<"caseLawDecision">()],
+    });
+    expect(projectedPageRows.size).toBe(0);
 
     const byDocket = await findDecisionIdsByIdentity({
       caseLawDb,

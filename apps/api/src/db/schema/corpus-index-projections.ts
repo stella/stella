@@ -19,6 +19,7 @@ import {
 import {
   globalCaseLawPolicies,
   p,
+  publicLawReaderPolicies,
   pUuid,
   type SafeId,
   sql,
@@ -537,5 +538,9 @@ export const corpusIndexProjectionStates = p.pgTable(
       END`,
     ),
     ...globalCaseLawPolicies(),
+    // The public read path decides from this row whether a generation holds a
+    // decision, so the reader role sees it under the same column grants as
+    // every other public-law relation.
+    ...publicLawReaderPolicies(),
   ],
 );

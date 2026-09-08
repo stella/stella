@@ -14,6 +14,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawProvisionCitations: "case_law_provision_citations",
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
+  corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
   legislationSources: "legislation_sources",
 } as const;
@@ -111,6 +112,22 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "cluster",
     "manifest_digest",
     "status",
+  ],
+  // Exactly what deciding "this generation holds this decision now" reads.
+  // The applied revision, the work schedule and the failure detail are
+  // operator state and stay on the owning service side.
+  corpus_index_projection_states: [
+    "family",
+    "generation",
+    "entity_id",
+    "desired_action",
+    "desired_epoch",
+    "desired_fingerprint",
+    "desired_index_id",
+    "applied_action",
+    "applied_epoch",
+    "applied_fingerprint",
+    "applied_index_id",
   ],
   legislation_documents: [
     "id",
