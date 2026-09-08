@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isVerificationCode } from "@/routes/-verification-code";
+import { isVerificationCode } from "@/lib/document-reference";
 
 describe("verification code shape", () => {
   test("accepts a ten-character code from the printed alphabet", () => {
