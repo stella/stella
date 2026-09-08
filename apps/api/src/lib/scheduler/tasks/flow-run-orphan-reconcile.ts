@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -33,7 +35,9 @@ export const reconcileFlowRunOrphans: SchedulerTask = async ({
   // durable execution trail.
   await reconcileOrphanedFlowRuns({
     signal,
-    stalledBefore: new Date(Date.now() - STALL_WINDOW_MS),
+    stalledBefore: new Date(
+      Temporal.Now.instant().epochMilliseconds - STALL_WINDOW_MS,
+    ),
   });
 
   logger.debug("scheduler.flow_run_orphans_reconciled");

@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * Update adapter test fixtures from live APIs.
  *
@@ -76,7 +77,9 @@ const updateAdapter = async (
     );
     const record: FixtureRecord = {
       adapter: adapterKey,
-      recordedAt: new Date().toISOString(),
+      recordedAt: Temporal.Now.instant().toString({
+        fractionalSecondDigits: 3,
+      }),
       page: {
         decisions: page.decisions,
         nextCursor: page.nextCursor,

@@ -1,3 +1,4 @@
+import * as v from "valibot";
 /**
  * DeepL document-translation REST client.
  *
@@ -14,7 +15,7 @@
  * actionable HTTP responses.
  */
 
-import * as v from "valibot";
+import { Temporal } from "@stll/time";
 
 import {
   DeepLAuthError,
@@ -403,11 +404,11 @@ export const translateDocument = async (
   const handle = await uploadDocument(input);
 
   const budget = input.pollBudgetMs ?? DEFAULT_POLL_BUDGET_MS;
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   let pollDelay = POLL_INITIAL_DELAY_MS;
 
   while (true) {
-    const elapsed = Date.now() - startedAt;
+    const elapsed = Temporal.Now.instant().epochMilliseconds - startedAt;
     if (elapsed > budget) {
       throw new DeepLTimeoutError({
         message: "DeepL did not finish within the allotted time",

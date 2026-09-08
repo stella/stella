@@ -7,6 +7,8 @@ import { isIP } from "node:net";
 import type { LookupFunction, TcpSocketConnectOpts } from "node:net";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -650,12 +652,13 @@ export const safeOutboundFetchBytes = async ({
   timeoutMs: number;
   url: string | URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { timeoutMs });
   if (Result.isError(target)) {
     return Result.err(target.error);
   }
-  const remainingTimeoutMs = timeoutMs - (Date.now() - startedAt);
+  const remainingTimeoutMs =
+    timeoutMs - (Temporal.Now.instant().epochMilliseconds - startedAt);
   if (remainingTimeoutMs <= 0) {
     return Result.err(
       new SafeOutboundFetchError({ message: "Request timed out" }),
@@ -693,12 +696,13 @@ export const safeOutboundFetchStream = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
-  const startedAt = Date.now();
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { timeoutMs });
   if (Result.isError(target)) {
     return Result.err(target.error);
   }
-  const remainingTimeoutMs = timeoutMs - (Date.now() - startedAt);
+  const remainingTimeoutMs =
+    timeoutMs - (Temporal.Now.instant().epochMilliseconds - startedAt);
   if (remainingTimeoutMs <= 0) {
     return Result.err(
       new SafeOutboundFetchError({ message: "Request timed out" }),

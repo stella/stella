@@ -1,6 +1,8 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -43,9 +45,13 @@ export const assertUnchangedSince = ({
   expectedUpdatedAt,
   resource,
 }: AssertUnchangedSinceArgs): HandlerError<409> | null => {
+  if (expectedUpdatedAt === undefined) {
+    return null;
+  }
+  const expected = Result.try(() => Temporal.Instant.from(expectedUpdatedAt));
   if (
-    expectedUpdatedAt === undefined ||
-    storedUpdatedAt.getTime() === new Date(expectedUpdatedAt).getTime()
+    expected.isOk() &&
+    storedUpdatedAt.getTime() === expected.value.epochMilliseconds
   ) {
     return null;
   }

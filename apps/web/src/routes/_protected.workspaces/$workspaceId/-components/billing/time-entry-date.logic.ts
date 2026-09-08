@@ -1,4 +1,4 @@
-import { addDays, parseIsoDateLocal } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import { localISODate } from "@/lib/local-iso-date";
 
@@ -12,9 +12,9 @@ export type TimeEntryDateBounds = {
 export const getTimeEntryDateBounds = (
   today = localISODate(),
 ): TimeEntryDateBounds => ({
-  earliestDate: localISODate(
-    addDays(parseIsoDateLocal(today) ?? new Date(), -MAX_TIME_ENTRY_AGE_DAYS),
-  ),
+  earliestDate: Temporal.PlainDate.from(today)
+    .subtract({ days: MAX_TIME_ENTRY_AGE_DAYS })
+    .toString(),
   today,
 });
 

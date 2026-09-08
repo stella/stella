@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill/full";
 // Brreg "roles" endpoint — the entity's officer roster (CEO, board
 // members, deputy members, auditors, bankruptcy trustees, …) returned
 // from `/api/enheter/{orgnr}/roller`.
@@ -170,7 +171,7 @@ const parseBirthYear = (fodselsdato: string | undefined): number | null => {
   // otherwise parse to 95 AD, and a future year is not a valid birth
   // year for a current registry actor.
   const year = Number.parseInt(fodselsdato.slice(0, 4), 10);
-  const currentYear = new Date().getUTCFullYear();
+  const currentYear = Temporal.Now.plainDateISO("UTC").year;
   return year >= MIN_BIRTH_YEAR && year <= currentYear ? year : null;
 };
 

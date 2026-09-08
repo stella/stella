@@ -1,3 +1,4 @@
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 /**
  * Load the hand-written polarity rules into `case_law_polarity_rules`.
  *
@@ -10,10 +11,10 @@
  *
  *   bun apps/api/src/scripts/seed-polarity-rules.ts
  */
-
-import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { Temporal } from "@stll/time";
 
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
@@ -113,7 +114,10 @@ if (resetIds.length > 0) {
   // limit; the reset rows are old and would wait behind the backlog. Their
   // ids go to a file the classifier can be pointed at, so the pass that
   // follows consumes exactly this set.
-  const resetFile = path.join(tmpdir(), `polarity-reset-${Date.now()}.json`);
+  const resetFile = path.join(
+    tmpdir(),
+    `polarity-reset-${Temporal.Now.instant().epochMilliseconds}.json`,
+  );
   await Bun.write(resetFile, JSON.stringify(resetIds));
   console.log(
     `Next: bun apps/api/scripts/classify-citations.ts --ids ${resetFile}, then bun apps/api/src/scripts/backfill-citation-authority.ts.`,

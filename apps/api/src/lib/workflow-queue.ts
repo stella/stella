@@ -5,6 +5,7 @@ import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
@@ -870,7 +871,9 @@ export const reconcileOrphanedWorkflows = async ({
     : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
   const staleActiveWorkspaceIds =
     await extractionRunStore.listStaleActiveWorkspaceIds({
-      before: new Date(Date.now() - RUNNING_LOCK_TTL_SEC * 1000),
+      before: new Date(
+        Temporal.Now.instant().epochMilliseconds - RUNNING_LOCK_TTL_SEC * 1000,
+      ),
       limit: STALE_ACTIVE_RUN_SCAN_LIMIT,
     });
 
@@ -1101,7 +1104,7 @@ const createWorkflowWorker = ({
   worker.on("error", (error) => {
     if (isRecoverableRedisPollError(error)) {
       redisPollBlipsSinceWarn += 1;
-      const nowMs = Date.now();
+      const nowMs = Temporal.Now.instant().epochMilliseconds;
       if (nowMs - redisPollLastWarnAtMs < REDIS_POLL_WARN_INTERVAL_MS) {
         return;
       }
@@ -1423,7 +1426,7 @@ const createBatchPreviewPublisher = ({
       return;
     }
 
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     const previousSentAt = lastSentAt.get(propertyId);
     if (
       previousSentAt !== undefined &&

@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import {
   organizationSettings,
   sharepointConnections,
@@ -106,7 +108,9 @@ export const createSharepointOAuthCallback = (
         }
         const code = input.code;
         const state = input.state;
-        const cutoff = new Date(Date.now() - STATE_TTL_MS);
+        const cutoff = new Date(
+          Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS,
+        );
 
         // A DB failure here is a Result.err, not a thrown exception: `yield*` on
         // an Err closes this generator via `.return()`, which skips `catch`

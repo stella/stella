@@ -1,4 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+
+import { parsePlainDate, Temporal } from "@stll/time";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
@@ -10,23 +12,34 @@ import type {
   Workspace,
 } from "@/lib/workspaces/types";
 
-export const parseLocalISODateMs = (value: string): number => {
-  const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u.exec(value);
-  if (!match) {
-    return Number.NaN;
-  }
-  const { year, month, day } = match.groups ?? {};
-  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
-};
+export const parseLocalISODateMs = (value: string): number =>
+  parsePlainDate(value)?.toZonedDateTime(Temporal.Now.timeZoneId())
+    .epochMilliseconds ?? Number.NaN;
 
 const addLocalCalendarDaysMs = (value: number, days: number): number => {
-  const date = new Date(value);
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate() + days,
-  ).getTime();
+  return Result.try(
+    () =>
+      Temporal.Instant.fromEpochMilliseconds(value)
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .add({ days })
+        .toInstant().epochMilliseconds,
+  ).unwrapOr(Number.NaN);
 };
+
+const toEpochMilliseconds = (value: Date | string): number =>
+  value instanceof Date
+    ? value.getTime()
+    : Result.try(() => {
+        if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+          return Temporal.PlainDate.from(value)
+            .toZonedDateTime({
+              plainTime: Temporal.PlainTime.from("00:00"),
+              timeZone: "UTC",
+            })
+            .toInstant().epochMilliseconds;
+        }
+        return Temporal.Instant.from(value).epochMilliseconds;
+      }).unwrapOr(Number.NaN);
 
 type FilterableWorkspace = {
   client: Pick<NonNullable<Workspace["client"]>, "id"> | null;
@@ -40,14 +53,26 @@ type FilterableWorkspace = {
 /** Resolve a DateFilter to a closed-open `[from, to)` epoch range. */
 const resolveDateRange = (
   filter: DateFilter,
-  now: Date = new Date(),
+  now: Date | Temporal.Instant = Temporal.Now.instant(),
 ): { fromMs: number; toMs: number } | null => {
-  const startOfDay = (d: Date): number => {
-    const clone = new Date(d);
-    clone.setHours(0, 0, 0, 0);
-    return clone.getTime();
-  };
-  const todayStart = startOfDay(now);
+  const timeZone = Temporal.Now.timeZoneId();
+  const nowZoned = (
+    now instanceof Date
+      ? Temporal.Instant.fromEpochMilliseconds(now.getTime())
+      : now
+  ).toZonedDateTimeISO(timeZone);
+  const startOfDay = (d: Temporal.ZonedDateTime): number =>
+    d
+      .with({
+        hour: 0,
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+        microsecond: 0,
+        nanosecond: 0,
+      })
+      .toInstant().epochMilliseconds;
+  const todayStart = startOfDay(nowZoned);
 
   switch (filter.preset) {
     case "today":
@@ -67,7 +92,7 @@ const resolveDateRange = (
       };
     case "thisWeek": {
       // Week start follows the active locale's first weekday.
-      const day = now.getDay(); // 0=Sun..6=Sat
+      const day = nowZoned.dayOfWeek % 7; // 0=Sun..6=Sat
       const firstWeekday = getFirstWeekday(getFormattingLocale());
       const sinceStart = (day - firstWeekday + 7) % 7;
       return {
@@ -76,16 +101,20 @@ const resolveDateRange = (
       };
     }
     case "thisMonth": {
-      const monthStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1,
-      ).getTime();
-      const monthEnd = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        1,
-      ).getTime();
+      const monthStartDate = nowZoned.toPlainDate().with({ day: 1 });
+      const monthStart = monthStartDate
+        .toZonedDateTime({
+          plainTime: Temporal.PlainTime.from("00:00"),
+          timeZone,
+        })
+        .toInstant().epochMilliseconds;
+      const monthEnd = monthStartDate
+        .add({ months: 1 })
+        .toZonedDateTime({
+          plainTime: Temporal.PlainTime.from("00:00"),
+          timeZone,
+        })
+        .toInstant().epochMilliseconds;
       return { fromMs: monthStart, toMs: monthEnd };
     }
     case "custom": {
@@ -111,13 +140,13 @@ const resolveDateRange = (
 const passesDateFilter = (
   value: Date | string,
   filter: DateFilter,
-  now: Date,
+  now: Date | Temporal.Instant,
 ): boolean => {
   const range = resolveDateRange(filter, now);
   if (!range) {
     return true;
   }
-  const ts = new Date(value).getTime();
+  const ts = toEpochMilliseconds(value);
   return ts >= range.fromMs && ts < range.toMs;
 };
 
@@ -160,7 +189,7 @@ export const isMattersFiltersActive = (filters: MattersFilters): boolean =>
 export const applyMattersFilters = <TWorkspace extends FilterableWorkspace>(
   workspaces: readonly TWorkspace[],
   filters: MattersFilters,
-  now: Date = new Date(),
+  now: Date | Temporal.Instant = Temporal.Now.instant(),
 ): TWorkspace[] => {
   if (!isMattersFiltersActive(filters)) {
     return [...workspaces];

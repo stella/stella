@@ -3,6 +3,7 @@ import { appendFile, mkdir, stat, truncate } from "node:fs/promises";
 import path from "node:path";
 
 import { createDevErrorLogger } from "@stll/errors";
+import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
 import { errorClassName, errorTag } from "@/api/lib/errors/error-tag";
@@ -475,7 +476,7 @@ const appendDevErrorJsonl = async ({
     }
 
     const record = {
-      when: new Date().toISOString(),
+      when: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
       tag: errorTag(error),
       ...(context && Object.keys(context).length > 0 ? { context } : {}),
       error: serializeError(error),

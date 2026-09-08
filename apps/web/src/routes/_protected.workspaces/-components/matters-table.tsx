@@ -5,6 +5,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Frame } from "@stll/ui/frame";
@@ -236,14 +237,6 @@ const LastActivityCell = ({ workspace }: CellProps) => (
   </Tooltip>
 );
 
-/** Format a Date as `YYYY-MM-DD` in local time (locale-neutral, ISO-style). */
-const toLocalISODate = (date: Date): string => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-};
-
 const TeamCell = ({ workspace }: CellProps) => (
   <div className="flex min-w-0 justify-end sm:justify-start">
     <TeamAvatars
@@ -257,13 +250,15 @@ const TeamCell = ({ workspace }: CellProps) => (
 );
 
 const CreatedAtCell = ({ workspace }: CellProps) => {
-  const date = new Date(workspace.createdAt);
+  const date = Temporal.Instant.from(workspace.createdAt)
+    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+    .toPlainDate();
   return (
     <Tooltip
       content={formatFullTimestamp(workspace.createdAt)}
       render={<span className="text-muted-foreground tabular-nums" />}
     >
-      {toLocalISODate(date)}
+      {date.toString()}
     </Tooltip>
   );
 };

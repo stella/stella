@@ -9,6 +9,7 @@ import {
   RELATION_TYPES,
   searchConsolidatedLegislation,
 } from "@stll/boe";
+import { parsePlainDate } from "@stll/time";
 
 import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
 import {
@@ -89,22 +90,8 @@ const DATE_ONLY_BOUND = /^\d{4}-\d{2}-\d{2}$/u;
 const ISO_TIMESTAMP_BOUND =
   /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
 
-/**
- * Calendar validity from the components themselves: `Date` silently normalizes
- * `2026-02-31` to March, so a parsed instant proves nothing about the input.
- */
-const isRealCalendarDate = (value: string): boolean => {
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  if (year === undefined || month === undefined || day === undefined) {
-    return false;
-  }
-  const utc = new Date(Date.UTC(year, month - 1, day));
-  return (
-    utc.getUTCFullYear() === year &&
-    utc.getUTCMonth() === month - 1 &&
-    utc.getUTCDate() === day
-  );
-};
+const isRealCalendarDate = (value: string): boolean =>
+  parsePlainDate(value.slice(0, 10)) !== null;
 
 const isRangeBound = (value: string): boolean =>
   DATE_ONLY_BOUND.test(value)

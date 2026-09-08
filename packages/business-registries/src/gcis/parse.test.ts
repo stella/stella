@@ -222,6 +222,15 @@ describe("ROC date parsing (via parseCompany)", () => {
       parseCompany({ ...baseRaw, Company_Setup_Date: "1150231" }).setupDate,
     ).toBeNull();
   });
+
+  test("applies Gregorian leap-year rules after converting the ROC year", () => {
+    expect(
+      parseCompany({ ...baseRaw, Company_Setup_Date: "1130229" }).setupDate,
+    ).toBe("2024-02-29");
+    expect(
+      parseCompany({ ...baseRaw, Company_Setup_Date: "1120229" }).setupDate,
+    ).toBeNull();
+  });
 });
 
 describe("parseSearchEntry", () => {

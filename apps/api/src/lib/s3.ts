@@ -9,6 +9,8 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
 
+import { Temporal } from "@stll/time";
+
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { errorTag, safeErrorCode } from "@/api/lib/errors/utils";
@@ -386,7 +388,7 @@ export const refreshS3 = async (): Promise<void> => {
   const credentials = await resolveS3Credentials();
   _client = buildS3Client(envBase.S3_BUCKET, credentials);
   _abortableClient = buildAbortableS3Client(credentials);
-  _clientCreatedAt = Date.now();
+  _clientCreatedAt = Temporal.Now.instant().epochMilliseconds;
 };
 
 const CREDENTIAL_MAX_AGE_MS = 50 * 60 * 1000;
@@ -417,7 +419,9 @@ const getAbortableS3 = (): AwsS3Client => {
 
 /** True when credentials are older than 50 minutes (or not yet built). */
 export const isS3Stale = (): boolean =>
-  !_client || Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+  !_client ||
+  Temporal.Now.instant().epochMilliseconds - _clientCreatedAt >
+    CREDENTIAL_MAX_AGE_MS;
 
 // Separate client for the legal-corpus bucket. Shares the credential
 // resolver but targets a different bucket, with its own staleness clock
@@ -430,7 +434,7 @@ export const refreshCorpusS3 = async (): Promise<void> => {
   const credentials = await resolveS3Credentials();
   _corpusClient = buildS3Client(corpusBucket(), credentials);
   _abortableCorpusClient = buildAbortableS3Client(credentials);
-  _corpusClientCreatedAt = Date.now();
+  _corpusClientCreatedAt = Temporal.Now.instant().epochMilliseconds;
 };
 
 export const getCorpusS3 = (): S3Client => {
@@ -444,7 +448,9 @@ const getAbortableCorpusS3 = (): AwsS3Client => {
 };
 
 export const isCorpusS3Stale = (): boolean =>
-  !_corpusClient || Date.now() - _corpusClientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+  !_corpusClient ||
+  Temporal.Now.instant().epochMilliseconds - _corpusClientCreatedAt >
+    CREDENTIAL_MAX_AGE_MS;
 
 const documentsCredentials = createS3CredentialGuard({
   isStale: () => isS3Stale(),
@@ -1248,8 +1254,8 @@ export const configureS3ForTesting = ({
   _abortableClient = buildAbortableS3Client(credentials);
   _corpusClient = buildS3Client(corpusBucket(), credentials);
   _abortableCorpusClient = buildAbortableS3Client(credentials);
-  _clientCreatedAt = Date.now();
-  _corpusClientCreatedAt = Date.now();
+  _clientCreatedAt = Temporal.Now.instant().epochMilliseconds;
+  _corpusClientCreatedAt = Temporal.Now.instant().epochMilliseconds;
 };
 
 export const resetS3ForTesting = (): void => {

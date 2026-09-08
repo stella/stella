@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Morphological query expansion for the case-law corpus index.
  *
@@ -20,7 +21,7 @@
  * allowed to add recall and is never allowed to remove it or to fail a search.
  */
 
-import { panic, Result } from "better-result";
+import { Temporal } from "@stll/time";
 
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { detached } from "@/api/lib/detached";
@@ -371,7 +372,9 @@ const beginRefresh = async (
       if (entry !== undefined) {
         cache.set(language, {
           load: entry.load,
-          expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
+          expiresAt:
+            Temporal.Now.instant().epochMilliseconds +
+            DICTIONARY_UNAVAILABLE_TTL_MS,
         });
       }
       return result;
@@ -385,7 +388,8 @@ const beginRefresh = async (
   // Set before anyone awaits, so concurrent callers share this one read.
   cache.set(language, {
     load,
-    expiresAt: Date.now() + DICTIONARY_REFRESH_TTL_MS,
+    expiresAt:
+      Temporal.Now.instant().epochMilliseconds + DICTIONARY_REFRESH_TTL_MS,
   });
   return load;
 };
@@ -403,7 +407,7 @@ const dictionaryFor = async (
   }
 
   const cached = cache.get(language);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (cached && cached.expiresAt > Temporal.Now.instant().epochMilliseconds) {
     return await cached.load;
   }
 

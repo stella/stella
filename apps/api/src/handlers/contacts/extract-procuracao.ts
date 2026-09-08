@@ -3,6 +3,8 @@ import { and, eq, gt, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -131,7 +133,10 @@ const extractProcuracao = createSafeRootHandler(
                   eq(contactExtractionUploads.status, "processing"),
                   lt(
                     contactExtractionUploads.processingStartedAt,
-                    new Date(Date.now() - PROCESSING_LEASE_MS),
+                    new Date(
+                      Temporal.Now.instant().epochMilliseconds -
+                        PROCESSING_LEASE_MS,
+                    ),
                   ),
                 ),
               ),

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 /**
  * Hosted usage webhook signature verification.
  *
@@ -25,7 +26,7 @@
  * a bug in the verifier can never crash the request thread.
  */
 
-import { timingSafeEqual } from "node:crypto";
+import { Temporal } from "@stll/time";
 
 const SIGNATURE_SCHEME = "v1";
 const STANDARD_WEBHOOK_SECRET_PREFIX = "whsec_";
@@ -66,7 +67,7 @@ export const verifyWebhookSignature = ({
   secrets,
   rawBody,
   headers,
-  nowSeconds = Math.floor(Date.now() / 1000),
+  nowSeconds = Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
 }: VerifyInput): VerifyResult => {
   if (!headers.id || !headers.timestamp || !headers.signature) {
     return { ok: false, reason: "missing_headers" };

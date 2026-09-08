@@ -6,6 +6,7 @@ import type {
   CaseLawResearchAnswerValue,
 } from "@stll/api-contract";
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -285,7 +286,9 @@ const answerDecision = async (
   const brandedColumnIds = new Map<string, SafeId<"caseLawResearchColumn">>(
     questions.map((question) => [question.columnId, question.columnId]),
   );
-  const completedAt = new Date().toISOString();
+  const completedAt = Temporal.Now.instant().toString({
+    fractionalSecondDigits: 3,
+  });
   const outcomes: ColumnOutcome[] = [];
   for (const entry of parsed) {
     const columnId = brandedColumnIds.get(entry.columnId);

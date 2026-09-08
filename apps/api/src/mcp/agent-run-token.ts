@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -143,7 +145,9 @@ export type MintedAgentRunToken = {
 export const mintAgentRunToken = async (
   input: MintAgentRunTokenInput,
 ): Promise<MintedAgentRunToken> => {
-  const nowSeconds = Math.floor(Date.now() / 1000);
+  const nowSeconds = Math.floor(
+    Temporal.Now.instant().epochMilliseconds / 1000,
+  );
   const claims = buildAgentRunTokenClaims({
     userId: input.userId,
     organizationId: input.organizationId,

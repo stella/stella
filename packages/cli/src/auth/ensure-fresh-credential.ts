@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 // Token refresh state machine: called proactively (context/whoami resolution)
 // and reactively (a future Phase 3+ HTTP client on a 401) to keep a stored
 // credential usable without forcing a full re-login.
@@ -8,8 +9,7 @@
 // still lack a `refreshToken` when the server does not grant that scope; it
 // then simply expires after `ACCESS_TOKEN_EXPIRES_IN` and the next command
 // asks for a re-login.
-
-import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import { getMcpResourceUrl } from "./constants.js";
 import {
@@ -179,7 +179,7 @@ const checkForNewerStoredGeneration = async (
 export const ensureFreshCredential = async (
   input: EnsureFreshCredentialInput,
 ): Promise<Result<EnsureFreshCredentialOutcome, CliAuthError>> => {
-  const now = input.now ?? Date.now();
+  const now = input.now ?? Temporal.Now.instant().epochMilliseconds;
   if (!credentialNeedsRefresh(input.credential, now)) {
     return Result.ok({ credential: input.credential });
   }

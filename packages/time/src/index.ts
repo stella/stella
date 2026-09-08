@@ -11,13 +11,17 @@
 // (`24 * 60 * 60 * 1000`, `86_400_000`) and date-only `new Date("...")`
 // parsing, and points here; this package is the one home for both.
 
+// Use the runtime's native implementation when it exists and the same
+// side-effect-free implementation everywhere else. Consumers import this value
+// explicitly; no application entrypoint installs an ambient Temporal global.
+export { Temporal } from "temporal-polyfill/full";
+
 /** 24 hours in milliseconds. A duration, not a calendar day. */
 export const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 export {
   addDays,
   isIsoDateString,
-  isoDateParts,
-  type IsoDateParts,
   parseIsoDateLocal,
+  parsePlainDate,
 } from "./dates";

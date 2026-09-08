@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { env } from "@/api/env";
 
 /**
@@ -70,7 +72,7 @@ export const emitRequestDurationMetric = (
 
   const record = buildRequestDurationRecord({
     ...input,
-    timestamp: Date.now(),
+    timestamp: Temporal.Now.instant().epochMilliseconds,
   });
 
   process.stdout.write(`${JSON.stringify(record)}\n`);

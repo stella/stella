@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PlayIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -47,8 +48,11 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
       return undefined;
     }
 
-    const startedAt = new Date(activeTimer.timerStartedAt).getTime();
-    const tick = () => setElapsed(Date.now() - startedAt);
+    const startedAt = Temporal.Instant.from(
+      activeTimer.timerStartedAt,
+    ).epochMilliseconds;
+    const tick = () =>
+      setElapsed(Temporal.Now.instant().epochMilliseconds - startedAt);
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);

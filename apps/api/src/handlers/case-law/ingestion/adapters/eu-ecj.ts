@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -1331,11 +1333,8 @@ export const buildDecision = async (
 const toIsoDate = (d: Date): string =>
   d.toISOString().split("T")[0] ?? "1970-01-01";
 
-const addDays = (date: string, days: number): string => {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toIsoDate(d);
-};
+const addDays = (date: string, days: number): string =>
+  Temporal.PlainDate.from(date).add({ days }).toString();
 
 // -- Reconciliation --
 //
@@ -1418,11 +1417,10 @@ const ecjSlicePageRange = (slice: string, page: number): EcjSliceRange => {
     panic(`eu-ecj slice page out of range: ${page}`);
   }
   const year = ecjSliceYear(slice);
-  const monthIndex = page;
+  const month = Temporal.PlainYearMonth.from({ year, month: page + 1 });
   return {
-    dateFrom: toIsoDate(new Date(Date.UTC(year, monthIndex, 1))),
-    // Day 0 of the following month is the last day of this one.
-    dateTo: toIsoDate(new Date(Date.UTC(year, monthIndex + 1, 0))),
+    dateFrom: month.toPlainDate({ day: 1 }).toString(),
+    dateTo: month.toPlainDate({ day: month.daysInMonth }).toString(),
   };
 };
 

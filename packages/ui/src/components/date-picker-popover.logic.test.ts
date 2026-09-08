@@ -5,6 +5,7 @@ import {
   localDateFromTimestamp,
   millisecondsUntilNextLocalDate,
   resolveCalendarViewMonth,
+  shiftCalendarDate,
 } from "./date-picker-popover.logic";
 
 describe("date picker clock", () => {
@@ -85,5 +86,10 @@ describe("date picker clock", () => {
         value: "",
       }),
     ).toEqual(override);
+  });
+
+  test("constrains keyboard month navigation to the target month", () => {
+    expect(shiftCalendarDate("2026-01-31", { months: 1 })).toBe("2026-02-28");
+    expect(shiftCalendarDate("2024-02-29", { years: 1 })).toBe("2025-02-28");
   });
 });

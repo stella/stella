@@ -5,6 +5,8 @@ import type { MCPClient } from "@tanstack/ai-mcp";
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   mcpConnectors,
@@ -616,7 +618,8 @@ const resolveAuthorizationToken = async ({
 
   if (
     !row.expiresAt ||
-    row.expiresAt.getTime() > Date.now() + TOKEN_REFRESH_SKEW_MS
+    row.expiresAt.getTime() >
+      Temporal.Now.instant().epochMilliseconds + TOKEN_REFRESH_SKEW_MS
   ) {
     return {
       type: "ok",

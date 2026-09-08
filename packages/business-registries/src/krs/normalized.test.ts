@@ -49,4 +49,17 @@ describe("KRS normalized projection", () => {
       ).toEqual({ availability: "available", value: null });
     }
   });
+
+  test("normalizes real leap days and rejects false century leap days", () => {
+    const source = parseEntity(raw, "0000006865");
+
+    expect(
+      toNormalizedEntity({ ...source, registeredAt: "29.02.2000" })
+        .registrationDate,
+    ).toEqual({ availability: "available", value: "2000-02-29" });
+    expect(
+      toNormalizedEntity({ ...source, registeredAt: "29.02.1900" })
+        .registrationDate,
+    ).toEqual({ availability: "available", value: null });
+  });
 });

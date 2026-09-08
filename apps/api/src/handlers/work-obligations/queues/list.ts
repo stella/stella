@@ -3,6 +3,7 @@ import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
+import { Temporal } from "@stll/time";
 
 import {
   entities,
@@ -98,7 +99,11 @@ const myWork = createSafeRootHandler(
     // No queue is a superset of the others any more, so the default is the one
     // that needs an answer from the owner rather than the widest slice.
     const queue = query.queue ?? MY_WORK_QUEUE.TO_ACKNOWLEDGE;
-    const asOf = query.asOf ?? new Date().toISOString().slice(0, 10);
+    const asOf =
+      query.asOf ??
+      Temporal.Now.instant()
+        .toString({ fractionalSecondDigits: 3 })
+        .slice(0, 10);
     const limit = query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT;
     const conditions = [eq(workObligations.ownerUserId, user.id)];
 

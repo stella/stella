@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
 import { guideAnchorSelector } from "@/features/guides/guide-anchor";
@@ -69,7 +70,7 @@ const waitForAnchor = async (
     if (element) {
       return element;
     }
-    if (Date.now() >= deadline) {
+    if (Temporal.Now.instant().epochMilliseconds >= deadline) {
       return null;
     }
     const elapsedNormally = await delay(STEP_POLL_INTERVAL_MS, signal);
@@ -285,9 +286,13 @@ export const useGuideRunner = ({
       // One navigation attempt gets one bounded resolution budget. Without a
       // shared deadline, a diverged tour could spend the full timeout on every
       // remaining step and hold the user in a frozen run for minutes.
-      const deadline = Date.now() + STEP_POLL_TIMEOUT_MS;
+      const deadline =
+        Temporal.Now.instant().epochMilliseconds + STEP_POLL_TIMEOUT_MS;
       for (let index = from; index >= 0 && index < total; index += direction) {
-        if (isRunAborted() || Date.now() >= deadline) {
+        if (
+          isRunAborted() ||
+          Temporal.Now.instant().epochMilliseconds >= deadline
+        ) {
           return null;
         }
         const step = tour.steps.at(index);

@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
+import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import type { CitationYearCounts } from "@/features/case-law/citation-treatment";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { parseDeterministicDate } from "@/lib/deterministic-date";
 import type { SafeId } from "@/lib/safe-id";
 
 type CitationHeaderProps = {
@@ -64,6 +65,7 @@ export const CitationHeader = ({
   decisionId,
 }: CitationHeaderProps) => {
   const t = useTranslations();
+  const now = useNow();
   const { data: summary } = useQuery(
     decisionCitationSummaryOptions(decisionId),
   );
@@ -79,13 +81,12 @@ export const CitationHeader = ({
     return null;
   }
 
-  const decided =
-    decisionDate === null ? null : parseDeterministicDate(decisionDate);
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
+  const currentYear = Temporal.Instant.fromEpochMilliseconds(
+    now.getTime(),
+  ).toZonedDateTimeISO("UTC").year;
   const fromYear = citationStripFromYear({
     currentYear,
-    decidedYear: decided === null ? null : decided.getUTCFullYear(),
+    decidedYear: decisionYear(decisionDate),
     firstCitedYear: summary.incomingByYear.at(0)?.year ?? null,
   });
   const negative = summary.incoming.negative;

@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import {
   KanbanCardShell,
   registerKanbanCardDrag,
@@ -399,12 +400,18 @@ const KanbanEntityMetadataBadges = ({
         <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
           <CalendarIcon className="size-3 shrink-0" />
           <span className="truncate">
-            {format.dateTime(new Date(dueDate), {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-              timeZone: "UTC",
-            })}
+            {format.dateTime(
+              Temporal.PlainDate.from(dueDate).toZonedDateTime({
+                plainTime: Temporal.PlainTime.from("00:00"),
+                timeZone: "UTC",
+              }).epochMilliseconds,
+              {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                timeZone: "UTC",
+              },
+            )}
           </span>
         </span>
       )}

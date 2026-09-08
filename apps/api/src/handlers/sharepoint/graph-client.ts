@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Minimal delegated Microsoft Graph client for the SharePoint connection.
  *
@@ -13,10 +14,10 @@
  *
  * There is no import pipeline, no write path, and no background sync here.
  */
-
-import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { sharepointConnections } from "@/api/db/schema";
@@ -102,7 +103,9 @@ export const ensureSharepointAccessToken = async ({
     const stillValid =
       connection.status === "connected" &&
       connection.expiresAt !== null &&
-      connection.expiresAt.getTime() - Date.now() > TOKEN_EXPIRY_BUFFER_MS;
+      connection.expiresAt.getTime() -
+        Temporal.Now.instant().epochMilliseconds >
+        TOKEN_EXPIRY_BUFFER_MS;
 
     if (stillValid) {
       const accessToken = await decryptSharepointSecret({

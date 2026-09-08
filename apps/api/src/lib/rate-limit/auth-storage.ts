@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 /**
  * Redis-backed storage for better-auth's rate limiter.
  *
@@ -132,7 +134,7 @@ export const createAuthRateLimitStorage = (
   type FallbackEntry = { count: number; expiresAt: number };
   const fallback = new Map<string, FallbackEntry>();
   const cleanup = setInterval(() => {
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     for (const [key, entry] of fallback) {
       if (entry.expiresAt <= now) {
         fallback.delete(key);
@@ -145,7 +147,7 @@ export const createAuthRateLimitStorage = (
     key: string,
     rule: { max: number; window: number },
   ): { allowed: boolean; retryAfter: number | null } => {
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     const entry = fallback.get(key);
     if (!entry || entry.expiresAt <= now) {
       fallback.set(key, {

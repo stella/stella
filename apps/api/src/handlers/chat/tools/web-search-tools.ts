@@ -1,6 +1,8 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -211,7 +213,9 @@ const createFetchUrlTool = (
         ...result,
         content: fenceUntrustedContent({
           content: result.content,
-          fetchedAt: new Date().toISOString(),
+          fetchedAt: Temporal.Now.instant().toString({
+            fractionalSecondDigits: 3,
+          }),
           url: result.url,
         }),
       };

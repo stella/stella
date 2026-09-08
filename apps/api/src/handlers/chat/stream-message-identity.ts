@@ -1,5 +1,7 @@
 import { EventType } from "@tanstack/ai";
 
+import { Temporal } from "@stll/time";
+
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessage,
@@ -91,7 +93,7 @@ export const ensureAssistantMessageStart = async function* ({
           type: EventType.TEXT_MESSAGE_START,
           messageId,
           role: "assistant",
-          timestamp: Date.now(),
+          timestamp: Temporal.Now.instant().epochMilliseconds,
         };
       }
     }

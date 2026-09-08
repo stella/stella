@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon, CircleHelpIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
@@ -397,7 +398,11 @@ export const ToolCallCard = ({
   const isLoading = isRunningToolPart(part);
   const activityState = isLoading ? getChatToolActivityState(name) : null;
   const [timing, setTiming] = useState(() =>
-    createToolCallTiming({ durationMs, isRunning: isLoading, now: Date.now() }),
+    createToolCallTiming({
+      durationMs,
+      isRunning: isLoading,
+      now: Temporal.Now.instant().epochMilliseconds,
+    }),
   );
   useExternalSyncEffect(() => {
     setTiming((current) =>
@@ -405,7 +410,7 @@ export const ToolCallCard = ({
         current,
         durationMs,
         isRunning: isLoading,
-        now: Date.now(),
+        now: Temporal.Now.instant().epochMilliseconds,
       }),
     );
   }, [durationMs, isLoading]);

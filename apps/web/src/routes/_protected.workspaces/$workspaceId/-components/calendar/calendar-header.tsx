@@ -1,6 +1,7 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -16,7 +17,7 @@ type CalendarHeaderProps = {
   onNavigatePrev: () => void;
   onNavigateNext: () => void;
   onNavigateToday: () => void;
-  onSetViewDate: (date: Date) => void;
+  onSetViewDate: (date: Temporal.PlainDate) => void;
 };
 
 export const CalendarHeader = ({
@@ -73,7 +74,13 @@ export const CalendarHeader = ({
             <Button
               aria-label={t("common.previous")}
               onClick={() =>
-                onSetViewDate(new Date(Date.UTC(year - 1, month, 1)))
+                onSetViewDate(
+                  Temporal.PlainDate.from({
+                    year: year - 1,
+                    month: month + 1,
+                    day: 1,
+                  }),
+                )
               }
               size="icon-xs"
               variant="ghost"
@@ -84,7 +91,13 @@ export const CalendarHeader = ({
             <Button
               aria-label={t("common.next")}
               onClick={() =>
-                onSetViewDate(new Date(Date.UTC(year + 1, month, 1)))
+                onSetViewDate(
+                  Temporal.PlainDate.from({
+                    year: year + 1,
+                    month: month + 1,
+                    day: 1,
+                  }),
+                )
               }
               size="icon-xs"
               variant="ghost"
@@ -97,7 +110,11 @@ export const CalendarHeader = ({
               <Button
                 data-pressed={i === month ? true : undefined}
                 key={label}
-                onClick={() => onSetViewDate(new Date(Date.UTC(year, i, 1)))}
+                onClick={() =>
+                  onSetViewDate(
+                    Temporal.PlainDate.from({ year, month: i + 1, day: 1 }),
+                  )
+                }
                 size="xs"
                 variant={i === month ? "secondary" : "ghost"}
               >

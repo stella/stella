@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * Spec-drift sentinel: the auth.md protocol we implement must not move
  * out from under us without someone noticing.
@@ -185,7 +186,9 @@ const update = async (): Promise<void> => {
   const lockfile: Lockfile = {
     version,
     commit: commitSha,
-    capturedAt: new Date().toISOString().slice(0, 10),
+    capturedAt: Temporal.Now.instant()
+      .toString({ fractionalSecondDigits: 3 })
+      .slice(0, 10),
     files,
   };
   await Bun.write(LOCKFILE_URL, `${JSON.stringify(lockfile, null, 2)}\n`);

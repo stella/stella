@@ -6,6 +6,7 @@ import {
   createBilingualDocx,
   readBilingualDocx,
 } from "@stll/folio-core/server";
+import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -1258,7 +1259,9 @@ type ReconcileDocumentTranslationRunsResult = {
 
 export const reconcileDocumentTranslationRuns =
   async (): Promise<ReconcileDocumentTranslationRunsResult> => {
-    const runningCutoff = new Date(Date.now() - STUCK_RUNNING_MS);
+    const runningCutoff = new Date(
+      Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
+    );
     const cancelled = await rootDb
       .update(documentTranslationRuns)
       .set({ status: "cancelled", errorCode: null, finishedAt: new Date() })

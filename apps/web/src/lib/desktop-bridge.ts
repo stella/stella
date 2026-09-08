@@ -1,5 +1,6 @@
 import type { LinkAccountRequest } from "@stll/api-contract/desktop-rpc";
 import { FetchBoundaryError } from "@stll/errors";
+import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import { api } from "@/lib/api";
@@ -196,10 +197,15 @@ const wakeDesktopAndReadBridgeHealth =
   async (): Promise<BridgeHealth | null> => {
     signalDesktopUpdateCheck();
 
-    const deadline = Date.now() + DESKTOP_BRIDGE_START_TIMEOUT_MS;
-    while (Date.now() < deadline) {
+    const deadline =
+      Temporal.Now.instant().epochMilliseconds +
+      DESKTOP_BRIDGE_START_TIMEOUT_MS;
+    while (Temporal.Now.instant().epochMilliseconds < deadline) {
       await wait(
-        Math.min(DESKTOP_BRIDGE_START_POLL_INTERVAL_MS, deadline - Date.now()),
+        Math.min(
+          DESKTOP_BRIDGE_START_POLL_INTERVAL_MS,
+          deadline - Temporal.Now.instant().epochMilliseconds,
+        ),
       );
 
       const health = await readBridgeHealth(1000);
@@ -304,9 +310,9 @@ const waitForDesktopEditHandoffOpened = async ({
   const parsedDeadline = new Date(expiresAt).getTime();
   let deadline = Number.isFinite(parsedDeadline)
     ? parsedDeadline
-    : Date.now() + 30_000;
+    : Temporal.Now.instant().epochMilliseconds + 30_000;
 
-  while (Date.now() < deadline) {
+  while (Temporal.Now.instant().epochMilliseconds < deadline) {
     const handoffStatus = await readDesktopEditHandoffStatus({
       handoffId,
       workspaceId,
@@ -328,7 +334,10 @@ const waitForDesktopEditHandoffOpened = async ({
     await wait(
       Math.max(
         0,
-        Math.min(DESKTOP_HANDOFF_POLL_INTERVAL_MS, deadline - Date.now()),
+        Math.min(
+          DESKTOP_HANDOFF_POLL_INTERVAL_MS,
+          deadline - Temporal.Now.instant().epochMilliseconds,
+        ),
       ),
     );
   }
@@ -386,8 +395,10 @@ export const connectSelfHostedDesktop = async ({
 }) => {
   launchSelfHostConnect({ apiBaseUrl, webOrigin });
 
-  const deadline = Date.now() + DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS;
-  while (Date.now() < deadline) {
+  const deadline =
+    Temporal.Now.instant().epochMilliseconds +
+    DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS;
+  while (Temporal.Now.instant().epochMilliseconds < deadline) {
     const status = await readSelfHostedDesktopConnection({ apiBaseUrl });
     if (status?.trusted) {
       return;
@@ -398,7 +409,7 @@ export const connectSelfHostedDesktop = async ({
         0,
         Math.min(
           DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS,
-          deadline - Date.now(),
+          deadline - Temporal.Now.instant().epochMilliseconds,
         ),
       ),
     );

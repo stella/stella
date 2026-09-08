@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type {
   LegalBrowseFacets,
@@ -54,7 +56,7 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
 
   return async (query: TQuery): Promise<Result<TValue, TError>> => {
     const key = keyOf(query);
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
 
     const cached = entries.get(key);
     if (cached && cached.expiresAt > now) {

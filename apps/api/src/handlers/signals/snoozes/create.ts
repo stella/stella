@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { SIGNAL_STATUS } from "@stll/api-contract/signals";
+import { Temporal } from "@stll/time";
 
 import {
   loadVisibleSignal,
@@ -44,7 +45,7 @@ const snoozeSignal = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
     const canTriage = canTriageSignals(memberRole);
     const until = new Date(body.until);
-    if (until.getTime() <= Date.now()) {
+    if (until.getTime() <= Temporal.Now.instant().epochMilliseconds) {
       return Result.err(
         new HandlerError({
           status: 400,

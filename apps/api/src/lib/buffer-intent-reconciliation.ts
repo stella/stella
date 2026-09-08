@@ -1,6 +1,8 @@
 import { Result, TaggedError, panic } from "better-result";
 import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -215,7 +217,10 @@ export const reserveObjectCleanupIntents = async ({
       intents.map(({ id, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
-        nextAttemptAt: new Date(Date.now() + OBJECT_WRITE_RECOVERY_DELAY_MS),
+        nextAttemptAt: new Date(
+          Temporal.Now.instant().epochMilliseconds +
+            OBJECT_WRITE_RECOVERY_DELAY_MS,
+        ),
         objectKey,
         organizationId,
         status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,

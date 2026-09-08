@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import { ENTITY_KINDS } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,7 +35,14 @@ const mimeTypeSchema = v.pipe(
 const timestampSchema = v.pipe(
   v.string(),
   v.isoTimestamp(),
-  v.transform((timestamp) => new Date(timestamp).toISOString()),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    const instant = Result.try(() => Temporal.Instant.from(dataset.value));
+    if (instant.isErr()) {
+      addIssue({ message: "Invalid timestamp" });
+      return NEVER;
+    }
+    return instant.value.toString({ fractionalSecondDigits: 3 });
+  }),
 );
 
 const customTimeFilterSchema = v.strictObject({
@@ -93,7 +102,10 @@ const hasValidCustomTimeRange = (
   time?.type !== "custom" ||
   time.updatedFrom === undefined ||
   time.updatedTo === undefined ||
-  new Date(time.updatedFrom).getTime() <= new Date(time.updatedTo).getTime();
+  Temporal.Instant.compare(
+    Temporal.Instant.from(time.updatedFrom),
+    Temporal.Instant.from(time.updatedTo),
+  ) <= 0;
 
 const normalizeSavedSearchTime = (
   time: v.InferOutput<typeof savedSearchTimeFilterSchema> | undefined,

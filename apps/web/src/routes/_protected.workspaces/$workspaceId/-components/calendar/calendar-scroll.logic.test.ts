@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import {
   getCenteredMonthWindowStart,
   getMonthAnchors,
@@ -10,8 +12,8 @@ import {
 
 describe("scrollable calendar month window", () => {
   test("keeps an existing window when the target month is already rendered", () => {
-    const windowStart = new Date(Date.UTC(2026, 0, 1));
-    const targetMonth = new Date(Date.UTC(2026, 4, 1));
+    const windowStart = Temporal.PlainDate.from("2026-01-01");
+    const targetMonth = Temporal.PlainDate.from("2026-05-01");
 
     expect(getMonthWindowStartContaining(windowStart, targetMonth)).toBe(
       windowStart,
@@ -19,9 +21,9 @@ describe("scrollable calendar month window", () => {
   });
 
   test("recenters around a distant target month before scrolling", () => {
-    const targetMonth = new Date(Date.UTC(2027, 10, 1));
+    const targetMonth = Temporal.PlainDate.from("2027-11-01");
     const nextStart = getMonthWindowStartContaining(
-      new Date(Date.UTC(2026, 0, 1)),
+      Temporal.PlainDate.from("2026-01-01"),
       targetMonth,
     );
 
@@ -32,7 +34,7 @@ describe("scrollable calendar month window", () => {
   });
 
   test("renders anchors for every month in the window", () => {
-    const windowStart = new Date(Date.UTC(2026, 0, 1));
+    const windowStart = Temporal.PlainDate.from("2026-01-01");
     const anchors = getMonthAnchors("en", windowStart);
     const rows = getMonthWeekRows("en", windowStart);
 

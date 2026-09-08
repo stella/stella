@@ -507,6 +507,32 @@ describe("pl-courts buildDecision", () => {
     );
   });
 
+  test("does not emit nonexistent dates from source fields or content", async () => {
+    const item = {
+      ...COMMON_COURT_ITEM,
+      judgmentDate: "2015-02-30",
+    } as const satisfies SaosItem;
+    mockFetchWithBodies([
+      {
+        pattern: DETAIL_PATTERN,
+        body: JSON.stringify({
+          data: {
+            ...item,
+            textContent: "<p>POSTANOWIENIE z dnia 30 lutego 2015 r.</p>",
+          },
+        }),
+      },
+    ]);
+
+    const built = await reconciliation.buildDecision(item);
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.decisionDate).toBeUndefined();
+  });
+
   test("a detail nothing came back for is unavailable, never built empty", async () => {
     mockFetchWithBodies([
       { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },

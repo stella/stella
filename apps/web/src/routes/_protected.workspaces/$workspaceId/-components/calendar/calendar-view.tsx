@@ -7,6 +7,7 @@ import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -54,6 +55,7 @@ import {
 import {
   getCalendarQueryRange,
   groupCalendarTasksByDate,
+  toDayStartDateTime,
 } from "./calendar-view.logic";
 import { CalendarWeekHeader } from "./calendar-week-header";
 import type { YearDot } from "./calendar-year-grid";
@@ -70,8 +72,8 @@ type HandleDropParams = {
   kind: string;
 };
 
-const toAllDayAgendaDateTime = (date: string): string =>
-  new Date(`${date}T00:00:00.000Z`).toISOString();
+const getTodayUTCDate = (): Temporal.PlainDate =>
+  Temporal.Now.instant().toZonedDateTimeISO("UTC").toPlainDate();
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
@@ -104,7 +106,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     const dueDate = datePropertyId === TASK_DATE_IDS[0] ? date : undefined;
     const startAt =
       datePropertyId === TASK_DATE_IDS[1]
-        ? toAllDayAgendaDateTime(date)
+        ? toDayStartDateTime(date)
         : undefined;
     const { data: taskData, error: taskError } = await api
       .tasks({ workspaceId })
@@ -155,9 +157,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   // Current viewport date (month/week navigation state)
-  const [viewDate, setViewDate] = useState(() => new Date());
+  const [viewDate, setViewDate] = useState(getTodayUTCDate);
   const [monthWindowStart, setMonthWindowStart] = useState(() =>
-    getCenteredMonthWindowStart(new Date()),
+    getCenteredMonthWindowStart(getTodayUTCDate()),
   );
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef<Map<string, HTMLElement> | null>(null);
@@ -170,8 +172,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   } | null>(null);
   const isShiftingMonthWindow = useRef(false);
 
-  const year = viewDate.getUTCFullYear();
-  const month = viewDate.getUTCMonth();
+  const year = viewDate.year;
+  const month = viewDate.month - 1;
   const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
   const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
@@ -259,13 +261,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
 
     setViewDate((d) => {
-      const next = new Date(d);
       if (mode === "year") {
-        next.setUTCFullYear(next.getUTCFullYear() - 1);
-      } else {
-        next.setUTCDate(next.getUTCDate() - 7);
+        return d.subtract({ years: 1 });
       }
-      return next;
+      return d.subtract({ days: 7 });
     });
   };
 
@@ -276,18 +275,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
 
     setViewDate((d) => {
-      const next = new Date(d);
       if (mode === "year") {
-        next.setUTCFullYear(next.getUTCFullYear() + 1);
-      } else {
-        next.setUTCDate(next.getUTCDate() + 7);
+        return d.add({ years: 1 });
       }
-      return next;
+      return d.add({ days: 7 });
     });
   };
 
   const navigateToday = () => {
-    const today = new Date();
+    const today = getTodayUTCDate();
     if (mode === "month") {
       scrollToMonth(today);
       return;
@@ -333,7 +329,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return;
     }
 
-    setViewDate(new Date(Date.UTC(anchor.anchor.year, anchor.anchor.month, 1)));
+    setViewDate(
+      Temporal.PlainDate.from({
+        year: anchor.anchor.year,
+        month: anchor.anchor.month + 1,
+        day: 1,
+      }),
+    );
   };
 
   const shiftMonthWindow = (amount: number) => {
@@ -367,7 +369,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
   };
 
-  const scrollToMonth = (date: Date) => {
+  const scrollToMonth = (date: Temporal.PlainDate) => {
     const target = startOfUTCMonth(date);
     const targetKey = getUTCMonthKey(target);
     pendingScrollMonthKey.current = targetKey;
@@ -470,7 +472,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                 .patch({
                   taskId: toSafeId<"entity">(entityId),
                   allDay: true,
-                  startAt: toAllDayAgendaDateTime(date),
+                  startAt: toDayStartDateTime(date),
                 }),
             ),
           );
@@ -587,7 +589,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             <CalendarYearGrid
               dots={yearDots}
               onMonthClick={(m) => {
-                setViewDate(new Date(Date.UTC(year, m, 1)));
+                setViewDate(
+                  Temporal.PlainDate.from({ year, month: m + 1, day: 1 }),
+                );
                 // Year grid doesn't set mode; the mode is controlled
                 // by the view layout. Clicking a month navigates but
                 // stays in year view.

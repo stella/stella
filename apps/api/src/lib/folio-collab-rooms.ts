@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
+import { Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -788,7 +789,10 @@ export const storeFolioCollabSnapshot = async ({
     // after PUT therefore leaves a durable exact-key tombstone for recovery.
     await tx.insert(bufferObjectCleanupIntents).values({
       id: nextCleanupIntentId,
-      nextAttemptAt: new Date(Date.now() + OBJECT_WRITE_RECOVERY_DELAY_MS),
+      nextAttemptAt: new Date(
+        Temporal.Now.instant().epochMilliseconds +
+          OBJECT_WRITE_RECOVERY_DELAY_MS,
+      ),
       objectKey: nextKey,
       organizationId: value.organizationId,
       status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,

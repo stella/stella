@@ -4,6 +4,8 @@ import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { FetchImplementation, JWTPayload, JWTVerifyGetKey } from "jose";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import {
   AGENT_AUTH_ID_JAG_ALLOWED_ALGS,
   AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS,
@@ -254,7 +256,9 @@ export const validateIdJag = async (
   }
 
   const { payload } = verifyResult.value;
-  const nowSeconds = Math.floor(Date.now() / 1000);
+  const nowSeconds = Math.floor(
+    Temporal.Now.instant().epochMilliseconds / 1000,
+  );
 
   const sub = payload.sub;
   const jti = payload.jti;

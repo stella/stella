@@ -1,6 +1,12 @@
-export const localISODate = (date = new Date()): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+import { Temporal } from "@stll/time";
+
+export const localISODate = (date?: Date): string => {
+  const instant =
+    date === undefined
+      ? Temporal.Now.instant()
+      : Temporal.Instant.fromEpochMilliseconds(date.getTime());
+  return instant
+    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+    .toPlainDate()
+    .toString();
 };

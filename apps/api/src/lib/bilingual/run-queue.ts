@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Durable bilingual translation runs.
  *
@@ -10,12 +11,10 @@
  * One-shot semantics: `attempts: 1`. A retry would re-run metered model calls;
  * an abandoned run is flipped to `failed` by the reconciler instead.
  */
-
-import { Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -135,8 +134,12 @@ export const enqueueBilingualRun = async (
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
  *  as in flight. */
 export const reconcileStuckBilingualRuns = async (): Promise<number> => {
-  const runningCutoff = new Date(Date.now() - STUCK_RUNNING_MS);
-  const queuedCutoff = new Date(Date.now() - STUCK_QUEUED_MS);
+  const runningCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
+  );
+  const queuedCutoff = new Date(
+    Temporal.Now.instant().epochMilliseconds - STUCK_QUEUED_MS,
+  );
   // audit: skip — janitor bookkeeping on already-audited run rows.
   const recovered = await rootDb
     .update(bilingualTranslationRuns)

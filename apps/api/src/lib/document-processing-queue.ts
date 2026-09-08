@@ -21,6 +21,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -1171,7 +1172,8 @@ const markRunFailed = async ({
           errorCode: failureCode,
           nextAttemptAt: retryScheduled
             ? new Date(
-                Date.now() + automaticOcrRetryDelayMs(owned.attemptCount),
+                Temporal.Now.instant().epochMilliseconds +
+                  automaticOcrRetryDelayMs(owned.attemptCount),
               )
             : null,
           status: "failed",
@@ -1619,7 +1621,9 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   database = rootDb,
   enqueueDocumentDeadlineScout: enqueueScout = enqueueDocumentDeadlineScout,
 }: RecoverDocumentDeadlineScoutDispatchesOptions = {}): Promise<ReconciliationPhaseResult> => {
-  const staleBefore = new Date(Date.now() - DEADLINE_SCOUT_LEASE_TIMEOUT_MS);
+  const staleBefore = new Date(
+    Temporal.Now.instant().epochMilliseconds - DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
+  );
   const staleDispatches = await database
     .select({ id: documentProcessingRuns.id })
     .from(documentProcessingRuns)
@@ -1806,7 +1810,9 @@ const recoverMissingNativeExtractionRuns = async (
   // which is the only phase that needs Redis at all; the rest of the tick
   // runs on the database alone and is not held to this.
   await dependencies.readyRepairCursor();
-  const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
+  const settledBefore = new Date(
+    Temporal.Now.instant().epochMilliseconds - REPAIR_SETTLE_DELAY_MS,
+  );
   const cursor = await dependencies.readRepairScanCursor();
   const candidates = await dependencies.database
     .select({
@@ -2199,7 +2205,8 @@ const recoverFailedSearchIndex = async (
           errorAt: new Date(),
           errorCode: SEARCH_INDEX_FAILURE_CODE,
           nextAttemptAt: new Date(
-            Date.now() + automaticOcrRetryDelayMs(attemptCount + 1),
+            Temporal.Now.instant().epochMilliseconds +
+              automaticOcrRetryDelayMs(attemptCount + 1),
           ),
           status: "failed",
           updatedAt: new Date(),
@@ -2438,7 +2445,9 @@ const recoverFailedOcrSearchIndexes = async (
 const recoverStaleDocumentProcessingRuns = async (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) => {
-  const staleBefore = new Date(Date.now() - WORKER_LEASE_TIMEOUT_MS);
+  const staleBefore = new Date(
+    Temporal.Now.instant().epochMilliseconds - WORKER_LEASE_TIMEOUT_MS,
+  );
   const recoveredAt = new Date();
   const staleRuns = await dependencies.database
     .select({

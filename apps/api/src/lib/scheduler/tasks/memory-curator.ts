@@ -1,5 +1,7 @@
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
@@ -44,7 +46,7 @@ export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
     return;
   }
 
-  const now = Date.now();
+  const now = Temporal.Now.instant().epochMilliseconds;
   const staleCutoff = new Date(
     now - STALE_AFTER_DAYS * MEMORY_LIFECYCLE_DAY_MS,
   );

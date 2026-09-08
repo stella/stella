@@ -1,3 +1,7 @@
+import { Result } from "better-result";
+
+import { Temporal } from "@stll/time";
+
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 
 const MINUTE = 60;
@@ -6,6 +10,29 @@ const DAY = 86_400;
 const WEEK = 604_800;
 const MONTH = 2_592_000;
 const YEAR = 31_536_000;
+
+const toInstant = (
+  value: Date | string | Temporal.Instant,
+): Temporal.Instant | null => {
+  if (value instanceof Temporal.Instant) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return Result.try(() =>
+      Temporal.Instant.fromEpochMilliseconds(value.getTime()),
+    ).unwrapOr(null);
+  }
+  return Result.try(() =>
+    /^\d{4}-\d{2}-\d{2}$/u.test(value)
+      ? Temporal.PlainDate.from(value)
+          .toZonedDateTime({
+            plainTime: Temporal.PlainTime.from("00:00"),
+            timeZone: "UTC",
+          })
+          .toInstant()
+      : Temporal.Instant.from(value),
+  ).unwrapOr(null);
+};
 
 export const MEDIUM_DATE_SHORT_TIME_FORMAT = {
   dateStyle: "medium",
@@ -88,11 +115,12 @@ export const getRelativeTimeFormatter = (
  * `Intl.RelativeTimeFormat`. Returns short forms like
  * "2h ago", "yesterday", "3d ago".
  */
-export const formatRelativeTime = (date: Date | string): string => {
-  const now = Date.now();
-  const then =
-    typeof date === "string" ? new Date(date).getTime() : date.getTime();
-  if (Number.isNaN(then)) {
+export const formatRelativeTime = (
+  date: Date | string | Temporal.Instant,
+): string => {
+  const now = Temporal.Now.instant().epochMilliseconds;
+  const then = toInstant(date)?.epochMilliseconds;
+  if (then === undefined) {
     return "";
   }
   const diff = Math.round((then - now) / 1000);
@@ -123,12 +151,12 @@ export const formatRelativeTime = (date: Date | string): string => {
 };
 
 export const formatFullTimestamp = (date: Date | string): string => {
-  const resolvedDate = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(resolvedDate.getTime())) {
+  const resolvedDate = toInstant(date);
+  if (resolvedDate === null) {
     return "";
   }
 
-  return getFormatter().dateTime(resolvedDate, {
+  return getFormatter().dateTime(resolvedDate.epochMilliseconds, {
     dateStyle: "full",
     timeStyle: "medium",
   });
@@ -136,39 +164,46 @@ export const formatFullTimestamp = (date: Date | string): string => {
 
 type FormatContextualTimestampOptions = {
   date: Date | string;
-  now?: Date;
+  now?: Date | Temporal.Instant;
   today: (time: string) => string;
 };
 
 export const formatContextualTimestamp = ({
   date,
-  now = new Date(),
+  now = Temporal.Now.instant(),
   today,
 }: FormatContextualTimestampOptions): string => {
-  const resolvedDate = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(resolvedDate.getTime())) {
+  const resolvedDate = toInstant(date);
+  const resolvedNow = toInstant(now);
+  if (resolvedDate === null || resolvedNow === null) {
     return "";
   }
 
   const formatter = getFormatter();
-  const isToday =
-    resolvedDate.getFullYear() === now.getFullYear() &&
-    resolvedDate.getMonth() === now.getMonth() &&
-    resolvedDate.getDate() === now.getDate();
+  const timeZone = Temporal.Now.timeZoneId();
+  const localDate = resolvedDate.toZonedDateTimeISO(timeZone).toPlainDate();
+  const localNowDate = resolvedNow.toZonedDateTimeISO(timeZone).toPlainDate();
+  const isToday = Temporal.PlainDate.compare(localDate, localNowDate) === 0;
 
   if (isToday) {
-    return today(formatter.dateTime(resolvedDate, { timeStyle: "short" }));
+    return today(
+      formatter.dateTime(resolvedDate.epochMilliseconds, {
+        timeStyle: "short",
+      }),
+    );
   }
 
-  return formatter.dateTime(resolvedDate, MEDIUM_DATE_SHORT_TIME_FORMAT);
+  return formatter.dateTime(
+    resolvedDate.epochMilliseconds,
+    MEDIUM_DATE_SHORT_TIME_FORMAT,
+  );
 };
 
 /** Whether `date` lies within the last `seconds`; false for an unparsable date. */
 export const isWithinLast = (date: Date | string, seconds: number): boolean => {
-  const then =
-    typeof date === "string" ? new Date(date).getTime() : date.getTime();
-  if (Number.isNaN(then)) {
+  const then = toInstant(date)?.epochMilliseconds;
+  if (then === undefined) {
     return false;
   }
-  return Date.now() - then <= seconds * 1000;
+  return Temporal.Now.instant().epochMilliseconds - then <= seconds * 1000;
 };

@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -566,7 +568,9 @@ export const tokenExpiresAt = (token: TokenResponse): Date | null => {
     return null;
   }
 
-  return new Date(Date.now() + token.expires_in * 1000);
+  return new Date(
+    Temporal.Now.instant().epochMilliseconds + token.expires_in * 1000,
+  );
 };
 
 export const pickRequestedScopes = ({

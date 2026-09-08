@@ -9,6 +9,7 @@ import {
 } from "@stll/skills";
 import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import { Temporal } from "@stll/time";
 
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -291,7 +292,9 @@ export const discoverSkillPackagesFromUrl = async (
   await Result.tryPromise({
     try: async () => {
       const budget = {
-        deadlineAt: Date.now() + GITHUB_DISCOVERY_TIMEOUT_MS,
+        deadlineAt:
+          Temporal.Now.instant().epochMilliseconds +
+          GITHUB_DISCOVERY_TIMEOUT_MS,
         fetchBytes,
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
@@ -1230,7 +1233,8 @@ const githubRequestTimeoutMs = (
   if (!budget) {
     return GITHUB_API_TIMEOUT_MS;
   }
-  const remainingMs = budget.deadlineAt - Date.now();
+  const remainingMs =
+    budget.deadlineAt - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
     throw new HandlerError({
       status: 400,

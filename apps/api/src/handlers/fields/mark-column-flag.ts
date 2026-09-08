@@ -14,6 +14,7 @@ import { t } from "elysia";
 
 import { REVIEW_FLAG } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
+import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
@@ -279,7 +280,9 @@ const markColumnFlag = createSafeHandler(
 
     let updatedCount = 0;
     let cursor: SafeId<"entity"> | null = null;
-    const addedAt = new Date().toISOString();
+    const addedAt = Temporal.Now.instant().toString({
+      fractionalSecondDigits: 3,
+    });
 
     while (true) {
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- cursor page loop: each batch's nextCursor is the next iteration's input

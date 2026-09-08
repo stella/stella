@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 // Interpreted JSON-Schema validator for the `--input` escape hatch (spec 051
 // S5.5 rule 1): it walks the schema and the data recursively, with NO
 // `Function`/`eval`/dynamic code generation. Scoped to exactly the shapes the
@@ -114,16 +116,9 @@ const rfc3339TimeFields = (value: string): RFC3339TimeFields | undefined => {
   return { hour, minute, second, offset };
 };
 
-/**
- * Whether a `YYYY-MM-DD` names a day the calendar has. `Date.parse` rolls an
- * impossible day over ("2026-02-30" becomes March 2nd), so the parsed instant
- * has to print back as the same day. Every date-bearing format goes through
- * this one check so no format can trust the lenient parser on its own.
- */
-const isCalendarDay = (day: string): boolean => {
-  const time = Date.parse(`${day}T00:00:00Z`);
-  return !Number.isNaN(time) && new Date(time).toISOString().startsWith(day);
-};
+/** Check calendar validity after the caller validates the wire format. */
+const isCalendarDay = (day: string): boolean =>
+  Result.try(() => Temporal.PlainDate.from(day)).isOk();
 
 /**
  * The `format` values the executor asserts. JSON Schema treats `format` as an

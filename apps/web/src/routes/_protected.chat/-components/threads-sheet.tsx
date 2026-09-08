@@ -16,6 +16,7 @@ import { MessageSquareIcon, SearchIcon, TrashIcon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -46,7 +47,7 @@ import {
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
 import type { ChatHistoryItem } from "@/features/chat/queries";
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -71,6 +72,7 @@ export const ThreadsSheet = ({
 }: ThreadsSheetProps) => {
   const t = useTranslations();
   const commonT = useTranslations("common");
+  const format = useFormatter();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 250);
@@ -435,8 +437,8 @@ const ThreadRow = ({
                     {" · "}
                   </>
                 ) : null}
-                {new Date(thread.updatedAt).toLocaleDateString(
-                  getFormattingLocale(),
+                {format.dateTime(
+                  Temporal.Instant.from(thread.updatedAt).epochMilliseconds,
                 )}
               </span>
             </Link>

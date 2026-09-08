@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Temporal } from "temporal-polyfill/full";
 
 import type { OverlayLayer } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
@@ -19,6 +20,7 @@ import {
   localDateFromTimestamp,
   millisecondsUntilNextLocalDate,
   resolveCalendarViewMonth,
+  shiftCalendarDate,
   type CalendarMonth,
 } from "./date-picker-popover.logic";
 import { DirectionalIcon } from "./directional-icon";
@@ -40,12 +42,18 @@ type CalendarWeekday = {
   label: string;
 };
 
-const toISODate = (date: Date): string => date.toISOString().slice(0, 10);
+const toISODate = (date: Temporal.PlainDate): string => date.toString();
+const toUTCDateTime = (date: Temporal.PlainDate): number =>
+  date.toZonedDateTime({
+    plainTime: Temporal.PlainTime.from("00:00"),
+    timeZone: "UTC",
+  }).epochMilliseconds;
 const HYDRATION_DATE = "1970-01-01";
 const HYDRATION_LOCALE = "en";
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
-const getLocalToday = (): string => localDateFromTimestamp(Date.now());
+const getLocalToday = (): string =>
+  localDateFromTimestamp(Temporal.Now.instant().epochMilliseconds);
 
 const localDateListeners = new Set<() => void>();
 let localDateTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -65,7 +73,7 @@ const scheduleNextLocalDate = () => {
     if (localDateListeners.size > 0) {
       scheduleNextLocalDate();
     }
-  }, millisecondsUntilNextLocalDate(Date.now()));
+  }, millisecondsUntilNextLocalDate(Temporal.Now.instant().epochMilliseconds));
 };
 
 const refreshLocalDateEnvironment = () => {
@@ -132,22 +140,18 @@ const getMonthDays = (
   today: string,
 ): CalendarDay[] => {
   const days: CalendarDay[] = [];
-  const first = new Date(Date.UTC(year, month, 1));
-  const rawDow = first.getUTCDay();
-  const mondayBased = (rawDow + 6) % 7;
-  const startOffset = (mondayBased - firstDow + 7) % 7;
-  const start = new Date(first);
-  start.setUTCDate(start.getUTCDate() - startOffset);
+  const first = Temporal.PlainDate.from({ year, month: month + 1, day: 1 });
+  const startOffset = (first.dayOfWeek - 1 - firstDow + 7) % 7;
+  const start = first.subtract({ days: startOffset });
 
   for (let i = 0; i < 42; i++) {
-    const d = new Date(start);
-    d.setUTCDate(d.getUTCDate() + i);
+    const d = start.add({ days: i });
     const iso = toISODate(d);
     days.push({
       date: iso,
-      isCurrentMonth: d.getUTCMonth() === month,
+      isCurrentMonth: d.month === month + 1,
       isToday: iso === today,
-      isWeekend: weekendDays.has(d.getUTCDay()),
+      isWeekend: weekendDays.has(d.dayOfWeek % 7),
     });
   }
   return days;
@@ -170,10 +174,12 @@ const getWeekdayLabels = (
 ): CalendarWeekday[] => {
   const fmt = getWeekdayFormatter(locale);
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.UTC(2024, 0, 1 + ((i + firstDow) % 7)));
+    const d = Temporal.PlainDate.from("2024-01-01").add({
+      days: (i + firstDow) % 7,
+    });
     return {
-      isWeekend: weekendDays.has(d.getUTCDay()),
-      label: fmt.format(d),
+      isWeekend: weekendDays.has(d.dayOfWeek % 7),
+      label: fmt.format(toUTCDateTime(d)),
     };
   });
 };
@@ -204,7 +210,11 @@ const getMonthLabels = (
 ): string[] => {
   const fmt = getMonthFormatter(locale, format);
   return Array.from({ length: 12 }, (_, i) =>
-    fmt.format(new Date(Date.UTC(2024, i, 1))),
+    fmt.format(
+      toUTCDateTime(
+        Temporal.PlainDate.from({ year: 2024, month: i + 1, day: 1 }),
+      ),
+    ),
   );
 };
 
@@ -224,7 +234,9 @@ const getMonthYearFormatter = (locale: string): Intl.DateTimeFormat => {
 };
 
 const formatMonthYear = (locale: string, year: number, month: number): string =>
-  getMonthYearFormatter(locale).format(new Date(Date.UTC(year, month, 1)));
+  getMonthYearFormatter(locale).format(
+    toUTCDateTime(Temporal.PlainDate.from({ year, month: month + 1, day: 1 })),
+  );
 
 const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
 
@@ -247,15 +259,16 @@ const normalizeDate = (v: string | Date | null | undefined): string => {
     return "";
   }
   if (v instanceof Date) {
-    return v.toISOString().slice(0, 10);
+    return Temporal.Instant.fromEpochMilliseconds(v.getTime())
+      .toZonedDateTimeISO("UTC")
+      .toPlainDate()
+      .toString();
   }
   return v.length >= 10 ? v.slice(0, 10) : v;
 };
 
 const addDays = (iso: string, n: number): string => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return toISODate(d);
+  return Temporal.PlainDate.from(iso).add({ days: n }).toString();
 };
 
 const isBefore = (a: string, b: string): boolean => a < b;
@@ -374,25 +387,25 @@ const DatePickerPopoverContent = ({
   );
 
   const displayLabel = value
-    ? new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, {
+    ? getDateFormatter(locale, {
         month: "short",
         day: "numeric",
         year: "numeric",
         calendar: "gregory",
         timeZone: "UTC",
-      })
+      }).format(toUTCDateTime(Temporal.PlainDate.from(value)))
     : (placeholderLabel ?? "\u2014");
 
   const formatDayLabel = useCallback(
     (iso: string): string =>
-      new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale, {
+      getDateFormatter(locale, {
         weekday: "long",
         month: "long",
         day: "numeric",
         year: "numeric",
         calendar: "gregory",
         timeZone: "UTC",
-      }),
+      }).format(toUTCDateTime(Temporal.PlainDate.from(iso))),
     [locale],
   );
 
@@ -426,29 +439,23 @@ const DatePickerPopoverContent = ({
       } else if (e.key === "ArrowUp") {
         next = addDays(current, -7);
       } else if (e.key === "Home") {
-        const dow = (new Date(`${current}T00:00:00Z`).getUTCDay() + 6) % 7;
+        const dow = Temporal.PlainDate.from(current).dayOfWeek - 1;
         const offset = (dow - firstDow + 7) % 7;
         next = addDays(current, -offset);
       } else if (e.key === "End") {
-        const dow = (new Date(`${current}T00:00:00Z`).getUTCDay() + 6) % 7;
+        const dow = Temporal.PlainDate.from(current).dayOfWeek - 1;
         const offset = (dow - firstDow + 7) % 7;
         next = addDays(current, 6 - offset);
       } else if (e.key === "PageUp") {
-        const d = new Date(`${current}T00:00:00Z`);
-        if (e.shiftKey) {
-          d.setUTCFullYear(d.getUTCFullYear() - 1);
-        } else {
-          d.setUTCMonth(d.getUTCMonth() - 1);
-        }
-        next = toISODate(d);
+        next = shiftCalendarDate(
+          current,
+          e.shiftKey ? { years: -1 } : { months: -1 },
+        );
       } else if (e.key === "PageDown") {
-        const d = new Date(`${current}T00:00:00Z`);
-        if (e.shiftKey) {
-          d.setUTCFullYear(d.getUTCFullYear() + 1);
-        } else {
-          d.setUTCMonth(d.getUTCMonth() + 1);
-        }
-        next = toISODate(d);
+        next = shiftCalendarDate(
+          current,
+          e.shiftKey ? { years: 1 } : { months: 1 },
+        );
       } else {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -462,9 +469,9 @@ const DatePickerPopoverContent = ({
       e.preventDefault();
       if (next) {
         setFocusedDate(next);
-        const nextDate = new Date(`${next}T00:00:00Z`);
-        const nextMonth = nextDate.getUTCMonth();
-        const nextYear = nextDate.getUTCFullYear();
+        const nextDate = Temporal.PlainDate.from(next);
+        const nextMonth = nextDate.month - 1;
+        const nextYear = nextDate.year;
         if (nextMonth !== viewMonth || nextYear !== viewYear) {
           setViewMonthOverride({ month: nextMonth, year: nextYear });
         }
@@ -552,12 +559,8 @@ const DatePickerPopoverContent = ({
   };
 
   // Current selection context for the sub-grids (null when no date selected)
-  const selectedYear = value
-    ? new Date(`${value}T00:00:00Z`).getUTCFullYear()
-    : null;
-  const selectedMonth = value
-    ? new Date(`${value}T00:00:00Z`).getUTCMonth()
-    : null;
+  const selectedYear = value ? Temporal.PlainDate.from(value).year : null;
+  const selectedMonth = value ? Temporal.PlainDate.from(value).month - 1 : null;
 
   // Reset view state when the popover closes so reopening always shows the day grid
   const handleOpenChange = (open: boolean) => {
@@ -776,10 +779,10 @@ const DatePickerPopoverContent = ({
             <Button
               className="flex-1"
               onClick={() => {
-                const todayDate = new Date(`${today}T00:00:00Z`);
+                const todayDate = Temporal.PlainDate.from(today);
                 setViewMonthOverride({
-                  month: todayDate.getUTCMonth(),
-                  year: todayDate.getUTCFullYear(),
+                  month: todayDate.month - 1,
+                  year: todayDate.year,
                 });
                 setView("days");
               }}
@@ -840,9 +843,9 @@ const MonthGrid = ({
   today: string;
 }) => {
   const labels = useMemo(() => getMonthLabels(locale, "short"), [locale]);
-  const now = new Date(`${today}T00:00:00Z`);
-  const todayMonth = now.getUTCMonth();
-  const todayYear = now.getUTCFullYear();
+  const now = Temporal.PlainDate.from(today);
+  const todayMonth = now.month - 1;
+  const todayYear = now.year;
 
   // Group months into rows of 3 for proper role="row" semantics
   const rows: number[][] = [];
@@ -913,7 +916,7 @@ const YearGrid = ({
   onSelect: (year: number) => void;
   today: string;
 }) => {
-  const todayYear = new Date(`${today}T00:00:00Z`).getUTCFullYear();
+  const todayYear = Temporal.PlainDate.from(today).year;
   // Show decade - 1 through decade + 10 (12 items)
   const startYear = decadeBase - 1;
 

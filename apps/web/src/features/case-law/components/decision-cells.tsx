@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
+import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public-decision";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
@@ -15,7 +16,8 @@ import {
   createCaseLawDecisionRouteParams,
   normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
-import { parseDeterministicDate } from "@/lib/deterministic-date";
+
+export { decisionYear } from "@/features/case-law/citation-format";
 
 /** One decision as the public list, search and research tables show it. */
 export type Decision = {
@@ -228,25 +230,14 @@ export const formatDecisionDate = (
   if (value === null) {
     return "—";
   }
-  const date = parseDeterministicDate(value);
+  const date = parseDecisionDate(value);
   if (date === null) {
     return "—";
   }
-  return format.dateTime(date, {
+  return format.dateTime(date.toZonedDateTime("UTC").epochMilliseconds, {
     dateStyle: "medium",
     timeZone: "UTC",
   });
-};
-
-/** The year a decision was handed down, for grouping; null when undated. */
-export const decisionYear = (
-  value: Decision["decisionDate"],
-): number | null => {
-  if (value === null) {
-    return null;
-  }
-  const date = parseDeterministicDate(value);
-  return date === null ? null : date.getUTCFullYear();
 };
 
 export const DecisionDateCell = ({ decision }: { decision: Decision }) => {

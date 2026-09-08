@@ -3,6 +3,8 @@ import { useSyncExternalStore } from "react";
 import * as v from "valibot";
 import { createStore } from "zustand/vanilla";
 
+import { Temporal } from "@stll/time";
+
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const STORAGE_KEY = "law_search_history";
@@ -60,7 +62,10 @@ export const recordLawSearch = (query: string): void => {
   }
   hydrate();
   const next = [
-    { query: trimmed, at: new Date().toISOString() },
+    {
+      query: trimmed,
+      at: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+    },
     ...historyStore
       .getState()
       .entries.filter((entry) => entry.query !== trimmed),

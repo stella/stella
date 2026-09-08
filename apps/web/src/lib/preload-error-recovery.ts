@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 // Recover from a failed dynamic route-chunk import. Vite dispatches
 // `vite:preloadError` on the window when a lazily imported module fails to
 // load — typically a stale chunk after a deploy, or a dev HMR / dep-reoptimize
@@ -43,7 +44,7 @@ export const installPreloadErrorRecovery = (): void => {
       // error boundary handle it instead of risking a reload loop.
       return;
     }
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     if (now - last < RELOAD_COOLDOWN_MS) {
       // Already reloaded recently; the chunk is genuinely failing. Let the
       // error boundary take over instead of looping.

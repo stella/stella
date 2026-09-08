@@ -6,6 +6,8 @@ import type { AstroIntegration } from "astro";
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 
+import { Temporal } from "@stll/time";
+
 const SRC = "apps/landing/src";
 const MESSAGES = `${SRC}/i18n/messages`;
 const DOCS = `${SRC}/content/docs/docs`;
@@ -110,7 +112,7 @@ export const lastmodFromDates = (
       if (candidate === undefined) {
         continue;
       }
-      const instant = Date.parse(candidate);
+      const instant = Temporal.Instant.from(candidate).epochMilliseconds;
       if (latest === undefined || instant > latest) {
         latest = instant;
       }
@@ -121,7 +123,9 @@ export const lastmodFromDates = (
       `sitemap lastmod: none of the sources exist in history: ${sources.join(", ")}`,
     );
   }
-  return new Date(latest).toISOString();
+  return Temporal.Instant.fromEpochMilliseconds(latest).toString({
+    fractionalSecondDigits: 3,
+  });
 };
 
 // ASCII record separator: cannot occur in a path, so it marks the date lines.

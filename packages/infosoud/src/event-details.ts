@@ -1,3 +1,5 @@
+import { Temporal } from "temporal-polyfill/full";
+
 import {
   collectUnknownEventAttributeTypes,
   getEventAttributeLabelScopeForOrganizationType,
@@ -399,7 +401,7 @@ export const getNextHearingCaseEvent = (
     if (options.now instanceof Date) {
       return options.now.getTime();
     }
-    return Date.now();
+    return Temporal.Now.instant().epochMilliseconds;
   })();
 
   const futureHearingCandidates: {

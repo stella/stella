@@ -56,7 +56,8 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

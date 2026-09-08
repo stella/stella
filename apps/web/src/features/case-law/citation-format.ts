@@ -1,3 +1,7 @@
+import { parsePlainDate, Temporal } from "@stll/time";
+
+import { parseDeterministicDate } from "@/lib/deterministic-date";
+
 /**
  * Jurisdiction-conventional citation of one decision, for the reader's
  * legal copy modes. The convention follows the COURT's jurisdiction, never
@@ -24,32 +28,33 @@ export type CitationInput = {
   pincite: string | null;
 };
 
-const DATE_ONLY_RE = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/u;
-
-const dateOf = (value: Date | string | null): Date | null => {
+export const parseDecisionDate = (
+  value: Date | string | null,
+): Temporal.PlainDate | null => {
   if (value === null) {
     return null;
   }
   if (typeof value === "string") {
-    // A date-only string parsed by `new Date` lands on midnight UTC, which
-    // is the previous day in west-of-UTC zones; build it in local time so
-    // the printed day, month and year match the document.
-    const parts = DATE_ONLY_RE.exec(value)?.groups;
-    if (parts?.["year"] !== undefined) {
-      return new Date(
-        Number(parts["year"]),
-        Number(parts["month"]) - 1,
-        Number(parts["day"]),
-      );
+    const plainDate = parsePlainDate(value);
+    if (plainDate !== null) {
+      return plainDate;
     }
   }
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const instantDate = parseDeterministicDate(value);
+  return instantDate === null
+    ? null
+    : Temporal.Instant.fromEpochMilliseconds(instantDate.getTime())
+        .toZonedDateTimeISO("UTC")
+        .toPlainDate();
 };
 
+/** The calendar year a decision was handed down; null when undated. */
+export const decisionYear = (value: Date | string | null): number | null =>
+  parseDecisionDate(value)?.year ?? null;
+
 /** "17. 5. 1954" — Czech and Slovak legal writing. */
-const dottedDate = (date: Date): string =>
-  `${String(date.getDate())}. ${String(date.getMonth() + 1)}. ${String(date.getFullYear())}`;
+const dottedDate = (date: Temporal.PlainDate): string =>
+  `${String(date.day)}. ${String(date.month)}. ${String(date.year)}`;
 
 /**
  * Czech/Slovak genitive of a court name: leading adjectives take the
@@ -101,7 +106,7 @@ const genitiveCourt = (court: string, language: "cs" | "sk"): string => {
 const czechCitation = (input: CitationInput): string => {
   const type = input.decisionType ?? "rozhodnutí";
   const court = genitiveCourt(input.court, "cs");
-  const date = dateOf(input.decisionDate);
+  const date = parseDecisionDate(input.decisionDate);
   const dated = date === null ? "" : ` ze dne ${dottedDate(date)}`;
   return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}`;
 };
@@ -109,7 +114,7 @@ const czechCitation = (input: CitationInput): string => {
 const slovakCitation = (input: CitationInput): string => {
   const type = input.decisionType ?? "rozhodnutie";
   const court = genitiveCourt(input.court, "sk");
-  const date = dateOf(input.decisionDate);
+  const date = parseDecisionDate(input.decisionDate);
   const dated = date === null ? "" : ` zo dňa ${dottedDate(date)}`;
   return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}`;
 };
@@ -178,21 +183,21 @@ const polishGenitiveCourt = (court: string): string => {
 
 const polishCitation = (input: CitationInput): string => {
   const type = input.decisionType ?? "orzeczenie";
-  const date = dateOf(input.decisionDate);
-  const month = date === null ? null : POLISH_GENITIVE_MONTHS[date.getMonth()];
+  const date = parseDecisionDate(input.decisionDate);
+  const month = date === null ? null : POLISH_GENITIVE_MONTHS[date.month - 1];
   const dated =
     date === null || month === undefined || month === null
       ? ""
-      : ` z dnia ${String(date.getDate())} ${month} ${String(date.getFullYear())} r.`;
+      : ` z dnia ${String(date.day)} ${month} ${String(date.year)} r.`;
   return `${type} ${polishGenitiveCourt(input.court)}${dated}, sygn. akt ${input.caseNumber}`;
 };
 
 const austrianCitation = (input: CitationInput): string => {
-  const date = dateOf(input.decisionDate);
+  const date = parseDecisionDate(input.decisionDate);
   const dated =
     date === null
       ? ""
-      : ` ${String(date.getDate())}. ${String(date.getMonth() + 1)}. ${String(date.getFullYear())},`;
+      : ` ${String(date.day)}. ${String(date.month)}. ${String(date.year)},`;
   return `${input.court}${dated} ${input.caseNumber}`;
 };
 
@@ -208,14 +213,14 @@ const usCitation = (input: CitationInput): string => {
       ? input.caseNumber
       : `${input.caseNumber}, ${input.pincite}`;
   const named = input.name === null ? cite : `${input.name}, ${cite}`;
-  const date = dateOf(input.decisionDate);
-  return date === null ? named : `${named} (${String(date.getFullYear())})`;
+  const date = parseDecisionDate(input.decisionDate);
+  return date === null ? named : `${named} (${String(date.year)})`;
 };
 
 const genericCitation = (input: CitationInput): string => {
   const named = input.name === null ? "" : `${input.name}, `;
-  const date = dateOf(input.decisionDate);
-  const dated = date === null ? "" : ` (${String(date.getFullYear())})`;
+  const date = parseDecisionDate(input.decisionDate);
+  const dated = date === null ? "" : ` (${String(date.year)})`;
   return `${named}${input.court}, ${input.caseNumber}${dated}`;
 };
 

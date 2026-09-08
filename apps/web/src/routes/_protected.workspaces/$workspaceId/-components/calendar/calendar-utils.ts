@@ -7,6 +7,7 @@
  */
 
 import type { TaskStatus } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { getFirstWeekday } from "@/i18n/week";
 import type { WorkspaceFieldContent } from "@/lib/types";
@@ -26,9 +27,14 @@ export type CalendarDay = {
   isWeekend: boolean;
 };
 
-const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
+const toISODate = (date: Temporal.PlainDate): string => date.toString();
+const toUTCDateTime = (date: Temporal.PlainDate): number =>
+  date.toZonedDateTime({
+    plainTime: Temporal.PlainTime.from("00:00"),
+    timeZone: "UTC",
+  }).epochMilliseconds;
 
-const todayISO = (): string => toISODate(new Date());
+const todayISO = (): string => Temporal.Now.plainDateISO("UTC").toString();
 
 /**
  * Returns all days to display in a month grid (6 weeks max).
@@ -44,23 +50,21 @@ export const getMonthDays = (
   const days: CalendarDay[] = [];
 
   // First day of the month
-  const first = new Date(Date.UTC(year, month, 1));
+  const first = Temporal.PlainDate.from({ year, month: month + 1, day: 1 });
   // Column within the week, rotated to the locale's first weekday.
-  const startDow = (first.getUTCDay() - firstWeekday + 7) % 7;
+  const startDow = ((first.dayOfWeek % 7) - firstWeekday + 7) % 7;
 
   // Go back to the first weekday of the first week
-  const start = new Date(first);
-  start.setUTCDate(start.getUTCDate() - startDow);
+  const start = first.subtract({ days: startDow });
 
   // Always render 6 weeks (42 days) for consistent grid height
   for (let i = 0; i < 42; i++) {
-    const d = new Date(start);
-    d.setUTCDate(d.getUTCDate() + i);
+    const d = start.add({ days: i });
     const iso = toISODate(d);
-    const dayOfWeek = d.getUTCDay();
+    const dayOfWeek = d.dayOfWeek % 7;
     days.push({
       date: iso,
-      isCurrentMonth: d.getUTCMonth() === month,
+      isCurrentMonth: d.month === month + 1,
       isToday: iso === today,
       isWeekend: weekend.has(dayOfWeek),
     });
@@ -75,21 +79,19 @@ export const getMonthDays = (
  * first weekday.
  */
 export const getWeekDays = (
-  referenceDate: Date,
+  referenceDate: Temporal.PlainDate,
   firstWeekday: number,
   weekend: ReadonlySet<number>,
 ): CalendarDay[] => {
   const today = todayISO();
-  const dow = (referenceDate.getUTCDay() - firstWeekday + 7) % 7;
-  const weekStart = new Date(referenceDate);
-  weekStart.setUTCDate(weekStart.getUTCDate() - dow);
+  const dow = ((referenceDate.dayOfWeek % 7) - firstWeekday + 7) % 7;
+  const weekStart = referenceDate.subtract({ days: dow });
 
   const days: CalendarDay[] = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart);
-    d.setUTCDate(d.getUTCDate() + i);
+    const d = weekStart.add({ days: i });
     const iso = toISODate(d);
-    const dayOfWeek = d.getUTCDay();
+    const dayOfWeek = d.dayOfWeek % 7;
     days.push({
       date: iso,
       isCurrentMonth: true,
@@ -130,8 +132,8 @@ export const getMonthLabels = (
   });
 
   return Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(Date.UTC(year, i, 1));
-    return fmt.format(d);
+    const d = Temporal.PlainDate.from({ year, month: i + 1, day: 1 });
+    return fmt.format(toUTCDateTime(d));
   });
 };
 
@@ -146,7 +148,9 @@ export const formatMonthYearLabel = (
     // Gregorian grid; keep the header on the Gregorian calendar.
     calendar: "gregory",
     timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month, 1)));
+  }).format(
+    toUTCDateTime(Temporal.PlainDate.from({ year, month: month + 1, day: 1 })),
+  );
 
 export const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
   const bucket = map.get(key);
@@ -165,7 +169,10 @@ export const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
 /** Coerce a Date or ISO string to YYYY-MM-DD. */
 const toDateString = (value: string | Date): string => {
   if (value instanceof Date) {
-    return toISODate(value);
+    return Temporal.Instant.fromEpochMilliseconds(value.getTime())
+      .toZonedDateTimeISO("UTC")
+      .toPlainDate()
+      .toString();
   }
   return value.slice(0, 10);
 };
@@ -228,7 +235,7 @@ export const isTaskDateProperty = (id: string) =>
 /**
  * Localized weekday header labels, starting at the locale's first
  * weekday. Uses `Intl.DateTimeFormat` so labels follow the active locale.
- * 2024-01-07 is a Sunday (getUTCDay() === 0); offsetting by the first
+ * 2024-01-07 is a Sunday (day-of-week 0); offsetting by the first
  * weekday yields labels starting from that day.
  */
 export const TASK_STATUS_DOT_COLORS = {
@@ -249,7 +256,9 @@ export const getWeekdayLabels = (
     timeZone: "UTC",
   });
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.UTC(2024, 0, 7 + firstWeekday + i));
-    return fmt.format(d);
+    const d = Temporal.PlainDate.from("2024-01-07").add({
+      days: firstWeekday + i,
+    });
+    return fmt.format(toUTCDateTime(d));
   });
 };

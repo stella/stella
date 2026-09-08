@@ -5,6 +5,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import {
   caseLawCitations,
@@ -346,7 +347,7 @@ type SummaryRow = {
  */
 export const summarizeDecisionCitationsHandler = async ({
   subject: { id: decisionId, tx },
-  currentYear = new Date().getUTCFullYear(),
+  currentYear = Temporal.Now.plainDateISO("UTC").year,
 }: SummarizeDecisionCitationsOptions) => {
   const scopeFor = (direction: CitationDirection) => {
     const spec = DIRECTION_SPECS[direction];

@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors/auth";
 
@@ -20,6 +22,6 @@ export const getFreshLinkedAccount = async () => {
   return {
     email: user.email,
     name: user.name,
-    verifiedAt: new Date().toISOString(),
+    verifiedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
   };
 };

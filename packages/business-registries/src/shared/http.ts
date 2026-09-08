@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill/full";
 // Shared HTTP scaffold for registry adapters.
 //
 // Every adapter's client hand-rolled the same three mechanical steps:
@@ -190,11 +191,14 @@ export const parseRetryAfterMs = (response: Response): number | null => {
   if (/^\d+$/u.test(trimmed)) {
     return Number(trimmed) * 1000;
   }
+  // HTTP-date is IMF-fixdate rather than an ISO Temporal grammar. Date.parse
+  // is the platform parser for this legacy HTTP header form.
+  // oxlint-disable-next-line prefer-temporal/prefer-temporal -- Temporal intentionally has no parser for the IMF-fixdate HTTP protocol grammar
   const dateMs = Date.parse(trimmed);
   if (Number.isNaN(dateMs)) {
     return null;
   }
-  return Math.max(dateMs - Date.now(), 0);
+  return Math.max(dateMs - Temporal.Now.instant().epochMilliseconds, 0);
 };
 
 export type RateLimitedErrorOptions = {

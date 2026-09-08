@@ -2,6 +2,7 @@ import type { JSONContent } from "@tiptap/react";
 import type { Transaction } from "prosemirror-state";
 
 import { diffWordSegments } from "@stll/folio-react";
+import { Temporal } from "@stll/time";
 
 import type {
   ClauseParagraph,
@@ -405,7 +406,7 @@ export const buildTrackedChangeDoc = (
   baseline: readonly ClauseParagraph[],
   revised: readonly ClauseParagraph[],
 ): TrackedChangeDoc => {
-  const now = Date.now();
+  const now = Temporal.Now.instant().epochMilliseconds;
   const date = new Date(now).toISOString();
   const revisionIds: number[] = [];
   const idByIndex = new Map<number, number>();

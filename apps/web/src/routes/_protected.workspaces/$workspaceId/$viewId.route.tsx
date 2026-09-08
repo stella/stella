@@ -128,12 +128,9 @@ export const Route = createFileRoute(
       });
 
       const weekStart = getWeekStart(getFormattingLocale());
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      const prevWeekStart = new Date(weekStart);
-      prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-      const prevWeekEnd = new Date(weekStart);
-      prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
+      const weekEnd = weekStart.add({ days: 6 });
+      const prevWeekStart = weekStart.subtract({ days: 7 });
+      const prevWeekEnd = weekStart.subtract({ days: 1 });
 
       if (canReviewTimeEntries) {
         detached(

@@ -2,8 +2,9 @@ import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -19,7 +20,6 @@ import {
   DAY_AND_MONTH_FORMAT,
 } from "@/lib/relative-time";
 import {
-  addDays,
   expensesOptions,
   getExpensesWeekRange,
 } from "@/lib/workspaces/queries/expenses";
@@ -43,7 +43,9 @@ export const Route = createFileRoute(
     // starts during navigation instead of after the component mounts and
     // suspends.
     const { dateFrom, dateTo } = getExpensesWeekRange(
-      new Date(),
+      Temporal.Now.instant()
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .toPlainDate(),
       getFormattingLocale(),
     );
     detached(
@@ -96,12 +98,17 @@ const ExpenseListSkeleton = () => (
 
 function ExpensesPage() {
   const t = useTranslations();
+  const format = useFormatter();
   const locale = useLocale();
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
 
-  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [currentDate, setCurrentDate] = useState(() =>
+    Temporal.Now.instant()
+      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+      .toPlainDate(),
+  );
 
   // Show expenses for the current week. Shared with the route `loader`'s
   // prefetch (see `getExpensesWeekRange`) so a cold navigation's initial
@@ -112,14 +119,30 @@ function ExpensesPage() {
   );
 
   const navigateWeek = (delta: number) => {
-    setCurrentDate((d) => addDays(d, delta * 7));
+    setCurrentDate((d) => d.add({ days: delta * 7 }));
   };
 
   const goToToday = () => {
-    setCurrentDate(new Date());
+    setCurrentDate(
+      Temporal.Now.instant()
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .toPlainDate(),
+    );
   };
 
-  const dateLabel = `${monday.toLocaleDateString(locale, DAY_AND_MONTH_FORMAT)} – ${sunday.toLocaleDateString(locale, CALENDAR_DATE_FORMAT)}`;
+  const dateLabel = `${format.dateTime(
+    monday.toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds,
+    { ...DAY_AND_MONTH_FORMAT, timeZone: "UTC" },
+  )} – ${format.dateTime(
+    sunday.toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds,
+    { ...CALENDAR_DATE_FORMAT, timeZone: "UTC" },
+  )}`;
 
   return (
     <div className="flex h-full flex-col">

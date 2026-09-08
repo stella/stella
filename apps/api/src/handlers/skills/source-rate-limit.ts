@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import type {
@@ -54,7 +56,11 @@ export const consumeSkillSourceRateLimit = async ({
     ok: counter.count <= API_RATE_LIMITS.skillSource.max,
     retryAfterSeconds: Math.max(
       1,
-      Math.ceil((counter.nextReset.getTime() - Date.now()) / 1000),
+      Math.ceil(
+        (counter.nextReset.getTime() -
+          Temporal.Now.instant().epochMilliseconds) /
+          1000,
+      ),
     ),
   };
 };

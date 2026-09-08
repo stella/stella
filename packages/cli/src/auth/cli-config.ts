@@ -1,12 +1,12 @@
+import { Result } from "better-result";
 // Non-secret CLI configuration: the default server origin and, per server,
 // the dynamically-registered OAuth client id (a public client id is not a
 // secret; there is no client_secret for `token_endpoint_auth_method: "none"`
 // clients). Stored separately from `credential-store.ts`'s file, which holds
 // tokens and is mode 0600.
-
-import { Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 // Hand-written rather than `v.InferOutput<typeof schema>`: this package
@@ -106,7 +106,11 @@ export const setRegisteredClient = async (
     ...config,
     oauthClients: {
       ...config.oauthClients,
-      [serverUrl]: { clientId, registeredAt: Date.now(), registeredScopes },
+      [serverUrl]: {
+        clientId,
+        registeredAt: Temporal.Now.instant().epochMilliseconds,
+        registeredScopes,
+      },
     },
   });
 };

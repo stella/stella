@@ -1,3 +1,7 @@
+import { Result } from "better-result";
+
+import { Temporal } from "@stll/time";
+
 const DATE_PATTERNS = [
   /(?:^|[\s._-])(?<year>20\d{2}|19\d{2})[._-]?(?<month>0[1-9]|1[0-2])[._-]?(?<day>0[1-9]|[12]\d|3[01])(?:$|[\s._-])/u,
   /(?:^|[\s._-])(?<day>0?[1-9]|[12]\d|3[01])[._-](?<month>0?[1-9]|1[0-2])[._-](?<year>20\d{2}|19\d{2})(?:$|[\s._-])/u,
@@ -126,13 +130,15 @@ const extractIsoDate = (value: string): string | null => {
       continue;
     }
 
-    const date = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
-    if (
-      date.getUTCFullYear() === Number(year) &&
-      date.getUTCMonth() + 1 === Number(month) &&
-      date.getUTCDate() === Number(day)
-    ) {
-      return `${year}-${month}-${day}`;
+    const date = Result.try(() =>
+      Temporal.PlainDate.from({
+        year: Number(year),
+        month: Number(month),
+        day: Number(day),
+      }),
+    ).unwrapOr(null);
+    if (date) {
+      return date.toString();
     }
   }
   return null;

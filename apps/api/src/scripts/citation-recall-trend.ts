@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 /**
  * Publisher-citation recall trend: how much of the publishers' own
  * cited-decision lists the extractor reproduced over a recent window.
@@ -87,7 +89,8 @@ const runAwsJson = async (awsArgs: readonly string[]): Promise<unknown> => {
   return payload;
 };
 
-const startTime = Date.now() - hours * 60 * 60 * 1000;
+const startTime =
+  Temporal.Now.instant().epochMilliseconds - hours * 60 * 60 * 1000;
 const response = await runAwsJson([
   "logs",
   "filter-log-events",

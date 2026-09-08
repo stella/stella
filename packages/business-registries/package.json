@@ -86,7 +86,8 @@
   "dependencies": {
     "@stll/country-codes": "workspace:*",
     "@stll/stdnum": "^2.3.2",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "temporal-polyfill": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

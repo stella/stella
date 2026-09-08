@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -495,7 +496,8 @@ const publishFolioCollabVersion = createSafeHandler(
               ),
             );
           const activeContributorCutoff =
-            Date.now() - FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS;
+            Temporal.Now.instant().epochMilliseconds -
+            FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS;
           const connectedContributorRows = contributorRows.filter(
             (contributor) =>
               contributor.updatedAt.getTime() > activeContributorCutoff,
@@ -517,7 +519,10 @@ const publishFolioCollabVersion = createSafeHandler(
           // publication and canonical entity/version mutations are audited.
           await tx.insert(bufferObjectCleanupIntents).values({
             id: createSafeId<"pendingUpload">(),
-            nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
+            nextAttemptAt: new Date(
+              Temporal.Now.instant().epochMilliseconds +
+                CHECKPOINT_CLEANUP_GRACE_MS,
+            ),
             objectKey: checkpointKey,
             organizationId: session.activeOrganizationId,
             status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,

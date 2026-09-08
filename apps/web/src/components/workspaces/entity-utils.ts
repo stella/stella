@@ -1,4 +1,7 @@
+import { Result } from "better-result";
+
 import { formatMoneyCents } from "@stll/money";
+import { Temporal } from "@stll/time";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
@@ -10,6 +13,20 @@ import type {
 } from "@/lib/types";
 
 const DOCUMENT_ROUTE_SUFFIX = "/document";
+
+const dateOnlyEpoch = (value: string): number =>
+  Temporal.PlainDate.from(value).toZonedDateTime({
+    plainTime: Temporal.PlainTime.from("00:00"),
+    timeZone: "UTC",
+  }).epochMilliseconds;
+
+const instantEpoch = (value: string | Date): number =>
+  Result.try(() =>
+    value instanceof Date
+      ? Temporal.Instant.fromEpochMilliseconds(value.getTime())
+          .epochMilliseconds
+      : Temporal.Instant.from(value).epochMilliseconds,
+  ).unwrapOr(0);
 
 type InternalColId = "select" | "add-property";
 
@@ -56,7 +73,7 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
       return field.content.value.join(", ");
     case "date":
       return field.content.value
-        ? getFormatter().dateTime(new Date(field.content.value), {
+        ? getFormatter().dateTime(dateOnlyEpoch(field.content.value), {
             year: "numeric",
             month: "short",
             day: "numeric",
@@ -142,16 +159,26 @@ export const getFirstFile = (entity: WorkspaceEntity) => {
 };
 
 /** Start of the current week (local time), per the locale's first weekday. */
-export const getWeekStart = (locale: string, date = new Date()): Date =>
-  startOfWeek(date, locale);
+export const getWeekStart = (
+  locale: string,
+  date?: Date | Temporal.PlainDate,
+): Temporal.PlainDate =>
+  startOfWeek(
+    date ??
+      Temporal.Now.instant()
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .toPlainDate(),
+    locale,
+  );
 
-/** Format a Date as `YYYY-MM-DD` in local time (not UTC). */
-export const toISODate = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
+/** Format a calendar date as `YYYY-MM-DD`. */
+export const toISODate = (date: Date | Temporal.PlainDate): string =>
+  date instanceof Date
+    ? Temporal.Instant.fromEpochMilliseconds(date.getTime())
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .toPlainDate()
+        .toString()
+    : date.toString();
 
 // -- Tree utilities (shared between filesystem and table views) --
 
@@ -340,10 +367,7 @@ export const resolveKanbanGroupBy = (
 
   const latest = eligible
     .filter((p) => p.tool.type === "manual-input")
-    .toSorted(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )
+    .toSorted((a, b) => instantEpoch(b.createdAt) - instantEpoch(a.createdAt))
     .at(0);
 
   return latest?.id ?? "";

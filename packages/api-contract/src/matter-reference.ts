@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 export const MATTER_REFERENCE_TOKENS = [
   "{SEQ}",
   "{YYYY}",
@@ -46,12 +47,15 @@ export const renderMatterReferencePattern = ({
   pattern,
   sequence,
 }: RenderMatterReferencePatternOptions): string => {
-  const year = String(now.getFullYear());
+  const date = Temporal.Instant.fromEpochMilliseconds(
+    now.getTime(),
+  ).toZonedDateTimeISO(Temporal.Now.timeZoneId());
+  const year = String(date.year);
   const values = {
     "{SEQ}": sequence,
     "{YYYY}": year,
     "{YY}": year.slice(2),
-    "{MM}": String(now.getMonth() + 1).padStart(2, "0"),
+    "{MM}": String(date.month).padStart(2, "0"),
   } as const satisfies Record<MatterReferenceToken, string>;
 
   let rendered = pattern;

@@ -1,3 +1,4 @@
+import { parsePlainDate, Temporal } from "@stll/time";
 /**
  * Calendar dates on the agent wire.
  *
@@ -55,25 +56,11 @@ const MAX_MONTH = 12;
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
-/**
- * The ISO spelling of a real calendar date, or null. `Date` rolls out-of-range
- * components over (2026-02-30 becomes March 2), so the round trip is what
- * rejects a day that does not exist.
- */
-const isoDate = (year: number, month: number, day: number): string | null => {
-  if (month < 1 || month > MAX_MONTH || day < 1 || day > 31) {
-    return null;
-  }
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return null;
-  }
-  return `${String(year).padStart(4, "0")}-${pad(month)}-${pad(day)}`;
-};
+/** The ISO spelling of a real calendar date, or null. */
+const isoDate = (year: number, month: number, day: number): string | null =>
+  parsePlainDate(
+    `${String(year).padStart(4, "0")}-${pad(month)}-${pad(day)}`,
+  )?.toString() ?? null;
 
 /** A month name folded to the form the tables below are keyed by: lowercase,
  *  no trailing abbreviation dot, diacritics kept (they distinguish nothing a
@@ -106,7 +93,11 @@ const monthNamesFor = (locale: string): ReadonlyMap<string, number> => {
       timeZone: "UTC",
     });
     for (let month = 1; month <= MAX_MONTH; month += 1) {
-      const instant = new Date(Date.UTC(2026, month - 1, 15));
+      const instant = Temporal.PlainDate.from({
+        year: 2026,
+        month,
+        day: 15,
+      }).toZonedDateTime("UTC").epochMilliseconds;
       record(standalone.format(instant), month);
       record(
         inDate.formatToParts(instant).find((part) => part.type === "month")
@@ -172,7 +163,10 @@ const READ_MONTH_STYLES = ["long", "short"] as const;
 /** The instant every locale probe is formatted at: a two-digit day and a
  *  two-digit month, so no part of the layout is a single character by
  *  accident. */
-const LAYOUT_PROBE = new Date(Date.UTC(2026, 9, 15));
+const LAYOUT_PROBE =
+  Temporal.PlainDate.from("2026-10-15").toZonedDateTime(
+    "UTC",
+  ).epochMilliseconds;
 
 /** Separators alone. A layout whose month is numeric and whose literals are
  *  only these is `01/02/2026` with one locale's ordering imposed on it, which

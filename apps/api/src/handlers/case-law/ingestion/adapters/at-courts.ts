@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -189,8 +191,12 @@ const previousMonth = (firstSlice: string, slice: string): string | null => {
 export const atRisPreviousMonth = (slice: string): string | null =>
   previousMonth(JUSTIZ_SOURCE.firstSlice, slice);
 
-export const atRisMonthOf = (date: Date): string =>
-  formatMonth(date.getUTCFullYear(), date.getUTCMonth() + 1);
+export const atRisMonthOf = (date: Date): string => {
+  const day = Temporal.Instant.fromEpochMilliseconds(
+    date.getTime(),
+  ).toZonedDateTimeISO("UTC");
+  return formatMonth(day.year, day.month);
+};
 
 export const atRisLastCompleteMonth = (date: Date): string =>
   previousMonth("0001-01", atRisMonthOf(date)) ?? "0001-01";
@@ -209,10 +215,9 @@ const monthDateRange = (
   if (parts === undefined) {
     return undefined;
   }
-  const lastDay = new Date(Date.UTC(parts.year, parts.month, 0))
-    .getUTCDate()
-    .toString()
-    .padStart(2, "0");
+  const lastDay = String(
+    Temporal.PlainYearMonth.from(parts).daysInMonth,
+  ).padStart(2, "0");
   return {
     from: `${slice}-01`,
     to: `${slice}-${lastDay}`,

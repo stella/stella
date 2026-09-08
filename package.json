@@ -225,6 +225,7 @@
     "sherif": "1.13.0",
     "ssf": "0.11.2",
     "tailwindcss": "4.3.3",
+    "temporal-polyfill": "1.0.4",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
     "ultracite": "7.10.7",

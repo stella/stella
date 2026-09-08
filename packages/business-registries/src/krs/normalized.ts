@@ -1,4 +1,5 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import {
   availableField,
@@ -58,18 +59,16 @@ const normalizePolishDate = (value: string | null): string | null => {
   if (!daySource || !monthSource || !yearSource) {
     return null;
   }
-  const year = Number(yearSource);
-  const month = Number(monthSource);
-  const day = Number(daySource);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return null;
-  }
-  return `${yearSource}-${monthSource}-${daySource}`;
+  return Result.try(() =>
+    Temporal.PlainDate.from(
+      {
+        day: Number(daySource),
+        month: Number(monthSource),
+        year: Number(yearSource),
+      },
+      { overflow: "reject" },
+    ).toString(),
+  ).unwrapOr(null);
 };
 
 export const toNormalizedEntity = (

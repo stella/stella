@@ -2,6 +2,8 @@ import { Result, panic } from "better-result";
 import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import {
   entities,
@@ -266,7 +268,10 @@ const selectRepairPage = async (
     .where(
       and(
         cursor === null ? undefined : gt(fields.id, cursor),
-        lt(entityVersions.createdAt, new Date(Date.now() - SETTLE_MS)),
+        lt(
+          entityVersions.createdAt,
+          new Date(Temporal.Now.instant().epochMilliseconds - SETTLE_MS),
+        ),
         eq(workspaces.status, "active"),
         sql`${fields.content}->>'type' = 'file'`,
         DERIVATIVE_UNSETTLED,

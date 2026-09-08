@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import { legalListSections } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -61,7 +63,9 @@ const createSection = createSafeHandler(
           workspaceId,
           listId: body.listId,
           name: body.name,
-          position: body.position ?? `~${Date.now()}:${id}`,
+          position:
+            body.position ??
+            `~${Temporal.Now.instant().epochMilliseconds}:${id}`,
         });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import {
@@ -228,7 +229,7 @@ export const checkpointDesktopEditSessionHandler = async ({
       return {
         checkpointedAt:
           existingSession.checkpointUpdatedAt?.toISOString() ??
-          new Date().toISOString(),
+          Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
         noop: true,
       };
     }

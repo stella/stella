@@ -21,6 +21,7 @@
   "dependencies": {
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
+    "@stll/time": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

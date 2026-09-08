@@ -55,15 +55,12 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
     if (filter.preset === "thisMonth") {
       return t("workspaces.filters.date.thisMonth");
     }
+    const dateFormatter = new Intl.DateTimeFormat(getFormattingLocale());
     const fromLabel = filter.from
-      ? new Date(parseLocalISODateMs(filter.from)).toLocaleDateString(
-          getFormattingLocale(),
-        )
+      ? dateFormatter.format(parseLocalISODateMs(filter.from))
       : null;
     const toLabel = filter.to
-      ? new Date(parseLocalISODateMs(filter.to)).toLocaleDateString(
-          getFormattingLocale(),
-        )
+      ? dateFormatter.format(parseLocalISODateMs(filter.to))
       : null;
     if (fromLabel && toLabel) {
       return t("workspaces.filters.date.customRange", {

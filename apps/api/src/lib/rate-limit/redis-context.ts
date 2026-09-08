@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { detached } from "@/api/lib/detached";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
@@ -195,7 +197,7 @@ export class RedisRateLimitContext implements RateLimitContext {
   ): Promise<RateLimitCounter> {
     const { counterKey, requestId } = parseRequestScopedKey(key);
     const effectiveDuration = duration ?? this.durationMs;
-    const now = requestTime ?? Date.now();
+    const now = requestTime ?? Temporal.Now.instant().epochMilliseconds;
     const fallbackCounter = this.fallback.increment(
       counterKey,
       effectiveDuration,
@@ -314,7 +316,7 @@ export class RedisRateLimitContext implements RateLimitContext {
   }
 
   private evictExpiredRefundProvenance(): void {
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     for (const [requestId, provenance] of this.refundProvenanceByRequest) {
       if (provenance.expiresAt <= now) {
         this.refundProvenanceByRequest.delete(requestId);

@@ -1,7 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
-// Disallow the three classic date/timezone footguns in app source.
+// Disallow raw date-only parsing and calendar-day millisecond arithmetic.
 //
 // 1. `new Date("YYYY-MM-DD")` (string or template argument without a "T")
 //    parses as UTC midnight per the ECMAScript spec; rendered in any
@@ -10,11 +10,7 @@ import type { ESTree } from "@oxlint/plugins";
 //    top-severity bug. A date-only string must go through
 //    `parseIsoDateLocal` from `@stll/time`.
 //
-// 2. `Date.parse(...)` of a non-ISO string is engine-dependent
-//    (unspecified by the spec), and for ISO strings it is exactly
-//    `new Date(...).getTime()` — so the call carries risk with no upside.
-//
-// 3. Day-length millisecond arithmetic (`24 * 60 * 60 * 1000`,
+// 2. Day-length millisecond arithmetic (`24 * 60 * 60 * 1000`,
 //    `86_400_000`) used as calendar math breaks across a DST transition:
 //    the clocks-change day is 23 or 25 hours, not 24. Calendar math must
 //    use `addDays` from `@stll/time`; a genuine 24-hour DURATION (TTL,
@@ -25,7 +21,6 @@ import type { ESTree } from "@oxlint/plugins";
 // Flagged:
 //   new Date("2024-01-01")
 //   new Date(`${year}-${month}-${day}`)
-//   Date.parse(anything)
 //   const TTL = 24 * 60 * 60 * 1000;
 //   const cutoff = Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 //   const day = 86_400_000;
@@ -128,10 +123,6 @@ export default eslintCompatPlugin({
             "new Date() on a date-only string parses as UTC midnight and " +
             "renders as the previous day west of UTC. Use " +
             "parseIsoDateLocal() from @stll/time.",
-          dateParse:
-            "Date.parse() is engine-dependent for non-ISO strings. Use " +
-            "parseIsoDateLocal() from @stll/time for calendar dates, or " +
-            "new Date(fullIsoTimestamp).getTime() for timestamps.",
           dayMsArithmetic:
             "Raw day-length ms arithmetic breaks across DST (a calendar " +
             "day is 23-25 hours). Use addDays() from @stll/time for " +
@@ -149,18 +140,6 @@ export default eslintCompatPlugin({
               isDateOnlyStringArg(node.arguments.at(0))
             ) {
               context.report({ node, messageId: "dateOnlyString" });
-            }
-          },
-          CallExpression(node) {
-            const callee = node.callee;
-            if (
-              callee.type === "MemberExpression" &&
-              callee.object.type === "Identifier" &&
-              callee.object.name === "Date" &&
-              callee.property.type === "Identifier" &&
-              callee.property.name === "parse"
-            ) {
-              context.report({ node, messageId: "dateParse" });
             }
           },
           Literal(node) {

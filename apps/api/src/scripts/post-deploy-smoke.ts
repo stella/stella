@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 /**
  * Post-deploy chat smoke against a *deployed* API.
  *
@@ -21,10 +22,10 @@
  * client, no env module) so it can run as a standalone `bun` invocation
  * from a deploy job without booting the server or opening a connection.
  */
-
-import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import type {
   agUiSendMessageBodySchema,
@@ -428,7 +429,8 @@ const waitForApiRevision = async (baseUrl: string): Promise<void> => {
     return;
   }
 
-  const deadline = Date.now() + REVISION_READINESS_TIMEOUT_MS;
+  const deadline =
+    Temporal.Now.instant().epochMilliseconds + REVISION_READINESS_TIMEOUT_MS;
   let consecutive = 0;
   let lastDetail = "no readiness samples collected";
   let nextPeriodicLogAt = 0;
@@ -439,7 +441,7 @@ const waitForApiRevision = async (baseUrl: string): Promise<void> => {
     }s`,
   );
 
-  while (Date.now() < deadline) {
+  while (Temporal.Now.instant().epochMilliseconds < deadline) {
     let check: EvaluatedCheck;
     try {
       check = await readHealth(baseUrl);
@@ -451,7 +453,7 @@ const waitForApiRevision = async (baseUrl: string): Promise<void> => {
       };
     }
 
-    const now = Date.now();
+    const now = Temporal.Now.instant().epochMilliseconds;
     consecutive = check.ok ? consecutive + 1 : 0;
     if (check.detail !== lastDetail || now >= nextPeriodicLogAt) {
       writeReadinessLog(
@@ -498,7 +500,7 @@ const readWithDeadline = async (
   reader: StreamReader,
   deadline: number,
 ): Promise<StreamReadResult> => {
-  const remainingMs = deadline - Date.now();
+  const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
     throw new PostDeploySmokeError({
       message: "Chat stream did not produce a readable prefix before timeout",
@@ -538,7 +540,7 @@ export const readStreamPrefix = async (
     return "";
   }
   const decoder = new TextDecoder();
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Temporal.Now.instant().epochMilliseconds + timeoutMs;
   let buffered = "";
   const reader = response.body.getReader();
   try {

@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -137,7 +138,8 @@ export const ReportExportHistory = ({
                 {t(REPORT_EXPORT_MODE_KEYS[reportExport.mode])}
                 {" · "}
                 {format.dateTime(
-                  new Date(reportExport.createdAt),
+                  Temporal.Instant.from(reportExport.createdAt)
+                    .epochMilliseconds,
                   MEDIUM_DATE_SHORT_TIME_FORMAT,
                 )}
               </p>

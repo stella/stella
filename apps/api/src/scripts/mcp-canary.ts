@@ -1,3 +1,9 @@
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  LATEST_PROTOCOL_VERSION,
+  PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
 /**
  * Canary for the MCP transport of a *deployed* API.
  *
@@ -17,14 +23,9 @@
  * reported as skipped and the run stays green on the public surface alone;
  * skips are always named so a credential-less run never reads as full coverage.
  */
-
-import {
-  CLIENT_CAPABILITIES_META_KEY,
-  CLIENT_INFO_META_KEY,
-  LATEST_PROTOCOL_VERSION,
-  PROTOCOL_VERSION_META_KEY,
-} from "@modelcontextprotocol/server";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
@@ -373,9 +374,10 @@ const inspectNotificationStream = async (
 ): Promise<StreamObservation> => {
   const reader = body.getReader();
   try {
-    const deadline = Date.now() + STREAM_OPEN_OBSERVATION_MS;
+    const deadline =
+      Temporal.Now.instant().epochMilliseconds + STREAM_OPEN_OBSERVATION_MS;
     const observeUntilDeadline = async (): Promise<StreamObservation> => {
-      const remainingMs = deadline - Date.now();
+      const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
       if (remainingMs <= 0) {
         return "open";
       }

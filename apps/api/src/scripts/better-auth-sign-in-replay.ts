@@ -1,3 +1,4 @@
+import { betterAuth } from "better-auth";
 /**
  * Usage:
  *   bun src/scripts/better-auth-sign-in-replay.ts --oauth-base-url <https-origin> --session-sample <n>
@@ -11,8 +12,6 @@
  * every sampled session must resolve to its stored user. Output is counts
  * only.
  */
-
-import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
 import { Result, TaggedError } from "better-result";
@@ -20,6 +19,8 @@ import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
@@ -346,7 +347,7 @@ const run = async (
         );
         const state = authorizeUrl.searchParams.get("state") ?? "";
         const nonce = authorizeUrl.searchParams.get("nonce");
-        const now = Math.floor(Date.now() / 1000);
+        const now = Math.floor(Temporal.Now.instant().epochMilliseconds / 1000);
         const tid =
           typeof claims["tid"] === "string" ? claims["tid"] : tenantId;
         currentIdToken = await new SignJWT({

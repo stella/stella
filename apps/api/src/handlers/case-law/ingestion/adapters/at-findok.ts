@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { Temporal, parsePlainDate } from "@stll/time";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -144,12 +146,9 @@ const parseDate = (value: string): string | undefined => {
   ) {
     return undefined;
   }
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-    ? `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-    : undefined;
+  return parsePlainDate(
+    `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+  )?.toString();
 };
 
 const manifestItem = (value: unknown): FindokManifestItem | undefined => {
@@ -390,7 +389,8 @@ const sliceParts = (
   return { collection, year };
 };
 
-const tipSlice = (now: Date): string => `${now.getUTCFullYear()}-bfg`;
+const tipSlice = (now: Date): string =>
+  `${Temporal.Instant.fromEpochMilliseconds(now.getTime()).toZonedDateTimeISO("UTC").year}-bfg`;
 
 export const atFindokNextSlice = (
   slice: string,

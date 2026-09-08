@@ -1,5 +1,7 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -32,7 +34,11 @@ import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
 const FLOW_RUN_CAP_LOCK_NAMESPACE = 0x0f_10_cc_a9;
 
 const startOfUtcDay = (now: Date): Date =>
-  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  new Date(
+    Temporal.Instant.fromEpochMilliseconds(now.getTime())
+      .toZonedDateTimeISO("UTC")
+      .startOfDay().epochMilliseconds,
+  );
 
 export type InsertAutomatedFlowRunWithinCapInput = {
   definitionId: SafeId<"flowDefinition">;

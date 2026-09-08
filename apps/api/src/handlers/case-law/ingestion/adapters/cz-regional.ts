@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   ADAPTER_KEYS,
@@ -591,18 +593,8 @@ const makeCursor = (state: CursorState): string =>
     : `${state.date}:${state.page}`;
 
 /** Advance a YYYY-MM-DD string by N days (default 1). */
-const advanceDate = (dateStr: string, days: number = 1): string => {
-  const parts = dateStr.split("-").map(Number);
-  const year = parts[0] ?? 0;
-  const month = parts[1] ?? 1;
-  const day = parts[2] ?? 1;
-  const date = new Date(Date.UTC(year, month - 1, day + days));
-  const iso = date.toISOString().split("T")[0];
-  if (!iso) {
-    panic(`Failed to format date from ${dateStr}`);
-  }
-  return iso;
-};
+const advanceDate = (date: string, days: number = 1): string =>
+  Temporal.PlainDate.from(date).add({ days }).toString();
 
 /**
  * Calculate how many days to skip forward based on
@@ -633,7 +625,9 @@ const gapSkipDays = (consecutiveEmpty: number): number => {
 };
 
 const todayIso = (): string =>
-  new Date().toISOString().split("T")[0] ?? "1970-01-01";
+  Temporal.Now.instant()
+    .toString({ fractionalSecondDigits: 3 })
+    .split("T")[0] ?? "1970-01-01";
 
 const defaultDate = (): string =>
   addUtcDays(new Date(), -30).toISOString().split("T")[0] ?? "1970-01-01";
@@ -904,7 +898,7 @@ export const czRegionalAdapter = defineSourceAdapter({
   async getTotalCount(signal) {
     try {
       const FIRST_PUBLICATION_YEAR = 2020;
-      const currentYear = new Date().getFullYear();
+      const currentYear = Temporal.Now.plainDateISO().year;
       const years = Array.from(
         { length: currentYear - FIRST_PUBLICATION_YEAR + 1 },
         (_, i) => FIRST_PUBLICATION_YEAR + i,

@@ -3,6 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -181,7 +183,7 @@ export const exportHandler = async function* ({
 
   const payload: ClauseExportPayload = {
     version: 1,
-    exportedAt: new Date().toISOString(),
+    exportedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
     clauses: items,
   };
 

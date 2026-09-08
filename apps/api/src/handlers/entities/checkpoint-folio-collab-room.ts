@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { materializeYjsDocx } from "@stll/folio-core/server";
+import { Temporal } from "@stll/time";
 
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -373,7 +374,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
       if (room.checkpointUpdatedAt !== null) {
         await tx.insert(bufferObjectCleanupIntents).values({
           id: createSafeId<"pendingUpload">(),
-          nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
+          nextAttemptAt: new Date(
+            Temporal.Now.instant().epochMilliseconds +
+              CHECKPOINT_CLEANUP_GRACE_MS,
+          ),
           objectKey: createFileKey({
             fileId: room.checkpointFileId,
             mimeType: DOCX_MIME_TYPE,

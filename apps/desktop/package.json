@@ -24,6 +24,7 @@
     "@stll/api-contract": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
+    "@stll/time": "workspace:*",
     "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.11.1",
     "better-result": "catalog:",

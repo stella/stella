@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -179,7 +181,9 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
   cleanupQueue = getQueue(),
   db = rootDb,
 }: ReconcilePendingStyleSetPackageCleanupsOptions = {}): Promise<ReconcileScanResult> => {
-  const settledBefore = new Date(Date.now() - RECONCILE_SETTLE_MS);
+  const settledBefore = new Date(
+    Temporal.Now.instant().epochMilliseconds - RECONCILE_SETTLE_MS,
+  );
 
   const after = (cursor: PendingCleanupRow | null) => {
     if (cursor === null) {
@@ -237,7 +241,7 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
               delayMs:
                 updatedAt.getTime() +
                 STYLE_SET_DOWNLOAD_TTL_SECONDS * 1000 -
-                Date.now(),
+                Temporal.Now.instant().epochMilliseconds,
               s3Key: cleanupS3Key,
               styleSetId: id,
             }),

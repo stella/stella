@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { Temporal } from "@stll/time";
+
 import { useMountEffect } from "@/hooks/use-effect";
 
 /**
@@ -12,8 +14,8 @@ export const CurrentTimeIndicator = () => {
 
   useMountEffect(() => {
     const update = () => {
-      const now = new Date();
-      const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+      const now = Temporal.Now.zonedDateTimeISO();
+      const minutesSinceMidnight = now.hour * 60 + now.minute;
       const pct = (minutesSinceMidnight / 1440) * 100;
       setTop(pct);
     };

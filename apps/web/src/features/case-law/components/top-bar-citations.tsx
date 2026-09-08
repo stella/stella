@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
+
+import { Temporal } from "@stll/time";
 
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import { citationStripFromYear } from "@/features/case-law/components/case-viewer/citation-header";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
@@ -11,7 +14,6 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
-import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 /**
  * The reception of the decision on the main view, in the title row: the
@@ -39,6 +41,7 @@ const TopBarCitationsFor = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const now = useNow();
   const { data: summary } = useQuery(
     decisionCitationSummaryOptions(decision.id),
   );
@@ -54,14 +57,12 @@ const TopBarCitationsFor = ({
   }
   const positive = summary.incoming.positive + summary.incoming.supportive;
   const negative = summary.incoming.negative;
-  const decided =
-    decision.decisionDate === null
-      ? null
-      : parseDeterministicDate(decision.decisionDate);
-  const currentYear = new Date().getUTCFullYear();
+  const currentYear = Temporal.Instant.fromEpochMilliseconds(
+    now.getTime(),
+  ).toZonedDateTimeISO("UTC").year;
   const fromYear = citationStripFromYear({
     currentYear,
-    decidedYear: decided === null ? null : decided.getUTCFullYear(),
+    decidedYear: decisionYear(decision.decisionDate),
     firstCitedYear: summary.incomingByYear.at(0)?.year ?? null,
   });
   const label = [

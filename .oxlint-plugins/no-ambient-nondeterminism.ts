@@ -9,6 +9,7 @@
 //   Date.now()
 //   Date(...)
 //   new Date()
+//   Temporal.Now.instant()
 //   Math.random()
 //   crypto.randomUUID()
 //   crypto.getRandomValues(...)
@@ -42,6 +43,12 @@ import {
 
 const RULE_NAME = "no-ambient-nondeterminism";
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
+const TEMPORAL_MODULES = new Set([
+  "@stll/time",
+  "temporal-polyfill",
+  "temporal-polyfill/full",
+  "temporal-polyfill/full/implementation",
+]);
 const NODE_CRYPTO_ENTROPY_METHODS = new Set([
   "randomBytes",
   "randomFill",
@@ -1375,6 +1382,127 @@ const globalObjectName = (
   return staticMemberName(context, expression, visitedBindings);
 };
 
+const isTemporalImport = (context: unknown, node: unknown): boolean => {
+  if (
+    !isIdentifier(node) ||
+    typeof context !== "object" ||
+    context === null ||
+    !("sourceCode" in context) ||
+    typeof context.sourceCode !== "object" ||
+    context.sourceCode === null ||
+    !("getScope" in context.sourceCode) ||
+    typeof context.sourceCode.getScope !== "function"
+  ) {
+    return false;
+  }
+  const binding = bindingFromScope(
+    context.sourceCode.getScope(node),
+    node.name,
+  );
+  if (
+    typeof binding !== "object" ||
+    binding === null ||
+    !("defs" in binding) ||
+    !Array.isArray(binding.defs)
+  ) {
+    return false;
+  }
+  return binding.defs.some(
+    (definition) =>
+      typeof definition === "object" &&
+      definition !== null &&
+      "type" in definition &&
+      definition.type === "ImportBinding" &&
+      "node" in definition &&
+      isAstNode(definition.node) &&
+      definition.node.type === "ImportSpecifier" &&
+      getImportedName(definition.node) === "Temporal" &&
+      "parent" in definition &&
+      isAstNode(definition.parent) &&
+      definition.parent.type === "ImportDeclaration" &&
+      isAstNode(definition.parent.source) &&
+      typeof definition.parent.source.value === "string" &&
+      TEMPORAL_MODULES.has(definition.parent.source.value),
+  );
+};
+
+const isTemporalNamespace = (
+  context: unknown,
+  node: unknown,
+  visitedBindings = new Set<unknown>(),
+): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return false;
+  }
+  if (isIdentifier(expression)) {
+    if (isTemporalImport(context, expression)) {
+      return true;
+    }
+    if (
+      expression.name === "Temporal" &&
+      isGlobalReference(context, expression)
+    ) {
+      return true;
+    }
+    const alias = constAlias(context, expression, visitedBindings);
+    return (
+      alias?.type === "value" &&
+      isTemporalNamespace(context, alias.value, visitedBindings)
+    );
+  }
+  return (
+    expression.type === "MemberExpression" &&
+    staticMemberName(context, expression) === "Temporal" &&
+    globalObjectName(context, expression.object, visitedBindings) ===
+      "globalThis"
+  );
+};
+
+const isTemporalNowObject = (
+  context: unknown,
+  node: unknown,
+  visitedBindings = new Set<unknown>(),
+): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return false;
+  }
+  if (isIdentifier(expression)) {
+    const alias = constAlias(context, expression, visitedBindings);
+    if (alias?.type === "value") {
+      return isTemporalNowObject(context, alias.value, visitedBindings);
+    }
+    return (
+      alias?.type === "property" &&
+      alias.propertyPath.length === 1 &&
+      alias.propertyPath.at(0) === "Now" &&
+      isTemporalNamespace(context, alias.object, visitedBindings)
+    );
+  }
+  return (
+    expression.type === "MemberExpression" &&
+    staticMemberName(context, expression) === "Now" &&
+    isTemporalNamespace(context, expression.object, visitedBindings)
+  );
+};
+
+const temporalNowMemberKind = (
+  context: unknown,
+  node: unknown,
+  visitedBindings: Set<unknown>,
+): string | null => {
+  const expression = unwrapExpression(node);
+  if (expression?.type !== "MemberExpression") {
+    return null;
+  }
+  const propertyName = staticMemberName(context, expression);
+  return propertyName !== null &&
+    isTemporalNowObject(context, expression.object, visitedBindings)
+    ? `Temporal.Now.${propertyName}()`
+    : null;
+};
+
 const ambientMemberKind = (
   object: string | null,
   property: string | null,
@@ -1580,6 +1708,19 @@ const ambientPropertyPathKind = (
   beforePosition: number,
   defaults: readonly DestructuredDefault[] = [],
 ): string | null => {
+  if (
+    propertyPath.length === 1 &&
+    isTemporalNowObject(context, object, new Set(visitedBindings))
+  ) {
+    return `Temporal.Now.${propertyPath.at(0)}()`;
+  }
+  if (
+    propertyPath.length === 2 &&
+    propertyPath.at(0) === "Now" &&
+    isTemporalNamespace(context, object, new Set(visitedBindings))
+  ) {
+    return `Temporal.Now.${propertyPath.at(1)}()`;
+  }
   const importedObjectKind = cryptoObjectKind(
     context,
     object,
@@ -1675,6 +1816,14 @@ const ambientCallKind = (
     beforePosition === Number.POSITIVE_INFINITY
       ? expression.range[0]
       : beforePosition;
+  const temporalKind = temporalNowMemberKind(
+    context,
+    expression,
+    new Set(visitedBindings),
+  );
+  if (temporalKind !== null) {
+    return temporalKind;
+  }
   if (cryptoImportKind(context, expression) === "entropy") {
     return "entropy API from crypto";
   }

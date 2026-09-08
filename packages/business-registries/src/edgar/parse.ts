@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
+
 import { trimToNull } from "../shared/strings.js";
 import type {
   EdgarAddress,
@@ -109,11 +112,15 @@ const deriveStatus = (
   if (!mostRecent) {
     return { type: "unknown" };
   }
-  const filedAt = Date.parse(mostRecent.filingDate);
-  if (Number.isNaN(filedAt)) {
+  const filedAt = Result.try(
+    () =>
+      Temporal.PlainDate.from(mostRecent.filingDate).toZonedDateTime("UTC")
+        .epochMilliseconds,
+  );
+  if (filedAt.isErr()) {
     return { type: "unknown" };
   }
-  if (now - filedAt > STALE_FILING_AGE_MS) {
+  if (now - filedAt.value > STALE_FILING_AGE_MS) {
     return { type: "stale", lastFilingDate: mostRecent.filingDate };
   }
   if (entityType === "operating") {
@@ -139,7 +146,7 @@ export const parseSubmission = (
   const status = deriveStatus(
     raw.entityType,
     recentFilings,
-    options?.now ?? Date.now(),
+    options?.now ?? Temporal.Now.instant().epochMilliseconds,
   );
   const cik = raw.cik;
 

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
@@ -58,7 +59,7 @@ import {
 import { SubtasksSection } from "@/components/workspaces/tasks/task-subtasks";
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -97,6 +98,7 @@ const TaskDetailPanelContent = ({
 }: TaskDetailPanelProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
+  const format = useFormatter();
   const closeTab = useInspectorTabsStore((s) => s.closeTab);
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const isNewTask = useInspectorTabsStore((s) => {
@@ -861,8 +863,9 @@ const TaskDetailPanelContent = ({
                       )}
                     </div>
                     <time className="text-muted-foreground shrink-0">
-                      {new Date(event.occurredAt).toLocaleDateString(
-                        getFormattingLocale(),
+                      {format.dateTime(
+                        Temporal.Instant.from(event.occurredAt)
+                          .epochMilliseconds,
                         DAY_AND_MONTH_FORMAT,
                       )}
                     </time>

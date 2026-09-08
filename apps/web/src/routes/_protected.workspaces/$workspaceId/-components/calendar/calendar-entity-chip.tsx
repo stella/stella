@@ -17,8 +17,8 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
-import { UTC_MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
+import { useFormatter } from "@/i18n/formatting-context";
+import { formatDecisionDate } from "@/lib/decision-date";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
@@ -44,7 +44,7 @@ export const CalendarEntityChip = ({
   workspaceId,
 }: CalendarEntityChipProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const name = entity.name || t("tasks.untitled");
   const openTask = useInspectorTabsStore((s) => s.openTask);
   const status = isTaskStatus(entity.status) ? entity.status : null;
@@ -98,10 +98,7 @@ export const CalendarEntityChip = ({
     openTask({ taskId: entity.taskId, workspaceId, label: name });
   };
 
-  const createdLabel = new Date(entity.createdAt).toLocaleDateString(
-    locale,
-    UTC_MEDIUM_DATE_FORMAT,
-  );
+  const createdLabel = formatDecisionDate(entity.createdAt, format) ?? "";
 
   const card = (
     <CalendarEntryButton

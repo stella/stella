@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The only two doors through which an operator script reaches the case-law
  * tables.
@@ -34,11 +35,11 @@
  * advisory lock when that session ends, and every script ends with
  * `process.exit`, so there is nothing to unlock by hand.
  */
-
-import { panic } from "better-result";
 import { SQL } from "bun";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+
+import { Temporal } from "@stll/time";
 
 import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
@@ -168,7 +169,7 @@ const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
  */
 export const holdCaseLawMaintenanceLane = async ({
   sql: providedSql,
-  now = Date.now,
+  now = () => Temporal.Now.instant().epochMilliseconds,
 }: HoldLaneOptions = {}): Promise<MaintenanceLaneHold> => {
   const lock = providedSql ?? (await openLaneConnection());
   const startedAt = now();

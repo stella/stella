@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type FirmKnowledgeSeedStatus =
@@ -57,7 +59,7 @@ const DEFAULT_RETENTION_MS = 60 * 60 * 1000;
 const defaultOptions = {
   createId: () => Bun.randomUUIDv7(),
   maxRetainedJobs: DEFAULT_MAX_RETAINED_JOBS,
-  now: () => Date.now(),
+  now: () => Temporal.Now.instant().epochMilliseconds,
   retentionMs: DEFAULT_RETENTION_MS,
 } satisfies FirmKnowledgeJobStoreOptions;
 

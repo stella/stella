@@ -23,6 +23,7 @@
     "@formatjs/icu-messageformat-parser": "^3.5.17",
     "@stll/ai-catalog": "workspace:*",
     "@stll/locales": "workspace:*",
+    "@stll/time": "workspace:*",
     "better-result": "catalog:",
     "typescript": "catalog:"
   },

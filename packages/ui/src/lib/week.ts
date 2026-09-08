@@ -23,25 +23,25 @@ export const getLocaleWeekInfo = (
 };
 
 /**
- * First weekday as a `Date.getDay()` value (0 = Sunday … 6 = Saturday): Monday
+ * First weekday as a day-of-week value (0 = Sunday … 6 = Saturday): Monday
  * across most of Europe, Sunday in the US, Saturday across much of the Gulf.
  * Falls back to Monday when the runtime lacks week info.
  */
 export const getFirstWeekday = (locale: string): number => {
   const firstDay = getLocaleWeekInfo(locale)?.firstDay;
-  // Intl reports firstDay as 1 = Monday … 7 = Sunday; map to Date.getDay.
+  // Intl reports firstDay as 1 = Monday … 7 = Sunday; map to Sunday-based days.
   return typeof firstDay === "number" ? firstDay % 7 : 1;
 };
 
 /**
- * Weekend weekdays as `Date.getDay()` values (0 = Sunday … 6 = Saturday):
+ * Weekend weekdays as day-of-week values (0 = Sunday … 6 = Saturday):
  * Saturday/Sunday across the West, Friday/Saturday across much of the Gulf.
  * Falls back to Saturday/Sunday when the runtime lacks week info.
  */
 export const getWeekendDays = (locale: string): ReadonlySet<number> => {
   const weekend = getLocaleWeekInfo(locale)?.weekend;
   if (weekend && weekend.length > 0) {
-    // Intl reports 1 = Monday … 7 = Sunday; map to Date.getDay (0 = Sunday).
+    // Intl reports 1 = Monday … 7 = Sunday; map to Sunday-based days.
     return new Set(weekend.map((day) => day % 7));
   }
   return new Set([0, 6]);

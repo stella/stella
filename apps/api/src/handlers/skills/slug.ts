@@ -1,4 +1,5 @@
 import { slugify as slugifyText } from "@stll/text-normalize";
+import { Temporal } from "@stll/time";
 
 // Authored skills don't ship with a pre-validated slug — derive one from the
 // name so the rest of the skills surface (uniqueness, references) keeps working
@@ -15,7 +16,8 @@ export const slugify = (name: string): string =>
 // Stable-ish suffix to break (org, scope, slug) collisions without requiring a
 // server-side counter. Date-encoded so users can spot the authored-on
 // timestamp at a glance in the URL.
-export const collisionSuffix = (): string => Date.now().toString(36).slice(-7);
+export const collisionSuffix = (): string =>
+  Temporal.Now.instant().epochMilliseconds.toString(36).slice(-7);
 
 // Compose a unique slug from a display name, clipped to the slug column width.
 export const uniqueSlug = (name: string): string =>

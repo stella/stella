@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, parsePlainDate, Temporal } from "@stll/time";
 
 export const DEADLINE_TEXT_CAP_CHARS = 60_000;
 export const DEADLINE_TEXT_MIN_CHARS = 200;
@@ -54,11 +54,14 @@ export const quoteOccursInText = (quote: string, text: string): boolean => {
 };
 
 const isKeptDate = (dueDate: string, now: Date): boolean => {
-  const due = new Date(`${dueDate}T00:00:00.000Z`).getTime();
-  if (Number.isNaN(due)) {
+  const due = parsePlainDate(dueDate);
+  if (due === null) {
     return false;
   }
-  return due >= now.getTime() - DEADLINE_PAST_GRACE_MS;
+  return (
+    due.toZonedDateTime("UTC").epochMilliseconds >=
+    now.getTime() - DEADLINE_PAST_GRACE_MS
+  );
 };
 
 /**
@@ -81,7 +84,8 @@ export const deadlineSeverity = (
   dueDate: string,
   now: Date,
 ): SignalSeverity => {
-  const due = new Date(`${dueDate}T00:00:00.000Z`).getTime();
+  const due =
+    Temporal.PlainDate.from(dueDate).toZonedDateTime("UTC").epochMilliseconds;
   const daysLeft = (due - now.getTime()) / DAY_IN_MS;
   if (daysLeft <= 7) {
     return SIGNAL_SEVERITY.CRITICAL;

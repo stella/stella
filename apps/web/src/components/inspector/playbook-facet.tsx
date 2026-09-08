@@ -1,6 +1,5 @@
-/** Composable document review: playbook, reference documents, or both. */
-
 import { useRef, useState } from "react";
+/** Composable document review: playbook, reference documents, or both. */
 import type { ComponentType, ReactNode, RefObject } from "react";
 
 import {
@@ -35,6 +34,7 @@ import { useShallow } from "zustand/react/shallow";
 import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import type { DocxEditorRef } from "@stll/folio-react";
+import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -2283,7 +2283,8 @@ const useElapsedClock = (startedAt: string | null): number | null => {
       return undefined;
     }
     const startedAtMs = new Date(startedAt).getTime();
-    const tick = () => setElapsedMs(Date.now() - startedAtMs);
+    const tick = () =>
+      setElapsedMs(Temporal.Now.instant().epochMilliseconds - startedAtMs);
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);

@@ -1,3 +1,4 @@
+import { Temporal } from "@stll/time";
 /**
  * Pure helpers shared by the chat message export handler, kept DB-free so the
  * markdown assembly, citation composition, and download-response shape are
@@ -160,5 +161,7 @@ export const buildChatExportDownload = ({
 }: BuildChatExportDownloadArgs): ChatExportDownload => ({
   downloadUrl,
   fileName,
-  expiresAt: new Date(now.getTime() + expiresInSeconds * 1000).toISOString(),
+  expiresAt: Temporal.Instant.fromEpochMilliseconds(now.getTime())
+    .add({ seconds: expiresInSeconds })
+    .toString({ fractionalSecondDigits: 3 }),
 });
