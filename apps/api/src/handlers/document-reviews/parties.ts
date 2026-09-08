@@ -46,168 +46,177 @@ const config = {
   body: documentReviewPartiesBodySchema,
 } satisfies HandlerConfig;
 
-const reviewParties = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    workspaceId,
-    body,
-    session,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    user,
-  }) {
-    const organizationId = session.activeOrganizationId;
-    const targetRef = { ...body.target, workspaceId };
+export const createReviewParties = ({
+  detectParties = detectReviewParties,
+  prepareReviewFiles = fetchAndPrepareReviewFiles,
+}: {
+  /** External model-dispatch boundary; supplied by focused handler tests. */
+  detectParties?: typeof detectReviewParties | undefined;
+  /** External file-store boundary; supplied by focused handler tests. */
+  prepareReviewFiles?: typeof fetchAndPrepareReviewFiles | undefined;
+} = {}) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      safeDb,
+      workspaceId,
+      body,
+      session,
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      user,
+    }) {
+      const organizationId = session.activeOrganizationId;
+      const targetRef = { ...body.target, workspaceId };
 
-    const loadedEntities = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findMany({
-          where: { id: { in: [targetRef.entityId] } },
-          columns: { id: true, workspaceId: true },
-          limit: 1,
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: { columns: { id: true, content: true } },
+      const loadedEntities = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.entities.findMany({
+            where: { id: { in: [targetRef.entityId] } },
+            columns: { id: true, workspaceId: true },
+            limit: 1,
+            with: {
+              currentVersion: {
+                columns: { id: true },
+                with: {
+                  fields: { columns: { id: true, content: true } },
+                },
               },
             },
-          },
-        }),
-      ),
-    );
-    const selection = resolveReviewSelection({
-      target: targetRef,
-      references: [],
-      entities: loadedEntities,
-    });
-    if (Result.isError(selection)) {
-      return Result.err(selection.error);
-    }
-    const { entityId, entityVersionId, file } = selection.value.target;
+          }),
+        ),
+      );
+      const selection = resolveReviewSelection({
+        target: targetRef,
+        references: [],
+        entities: loadedEntities,
+      });
+      if (Result.isError(selection)) {
+        return Result.err(selection.error);
+      }
+      const { entityId, entityVersionId, file } = selection.value.target;
 
-    const cached = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ parties: documentReviewParties.parties })
-          .from(documentReviewParties)
-          .where(
-            and(
-              eq(documentReviewParties.workspaceId, workspaceId),
-              eq(documentReviewParties.entityVersionId, entityVersionId),
-              eq(
-                documentReviewParties.promptVersion,
-                REVIEW_PARTIES_PROMPT_VERSION,
+      const cached = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({ parties: documentReviewParties.parties })
+            .from(documentReviewParties)
+            .where(
+              and(
+                eq(documentReviewParties.workspaceId, workspaceId),
+                eq(documentReviewParties.entityVersionId, entityVersionId),
+                eq(
+                  documentReviewParties.promptVersion,
+                  REVIEW_PARTIES_PROMPT_VERSION,
+                ),
               ),
-            ),
-          )
-          .limit(1),
-      ),
-    );
-    const cachedRow = cached.at(0);
-    if (cachedRow !== undefined) {
-      return Result.ok({ entityVersionId, parties: cachedRow.parties });
-    }
+            )
+            .limit(1),
+        ),
+      );
+      const cachedRow = cached.at(0);
+      if (cachedRow !== undefined) {
+        return Result.ok({ entityVersionId, parties: cachedRow.parties });
+      }
 
-    yield* requireTanStackAIAvailableForRole({
-      configStatus: orgAIConfigStatus,
-      orgConfig: orgAIConfig,
-      role: "pdf",
-    });
+      yield* requireTanStackAIAvailableForRole({
+        configStatus: orgAIConfigStatus,
+        orgConfig: orgAIConfig,
+        role: "pdf",
+      });
 
-    const preflightError = await assertUsageAvailableForHandler({
-      metering: { actionType: "chat", modelRole: "pdf" },
-      organizationId,
-      orgAIConfig,
-      workspaceId,
-      userId: user.id,
-      safeDb,
-    });
-    if (preflightError) {
-      return Result.err(preflightError);
-    }
-
-    const preparedResult = await Result.tryPromise({
-      try: async () => await fetchAndPrepareReviewFiles([file], organizationId),
-      catch: (cause) =>
-        new HandlerError({
-          status: 500,
-          message: "Internal server error",
-          cause,
-        }),
-    });
-    if (Result.isError(preparedResult)) {
-      return Result.err(preparedResult.error);
-    }
-    const target = preparedResult.value.at(0);
-    if (target?.kind !== "docx") {
-      return panic("DOCX review target was not prepared as DOCX blocks");
-    }
-
-    const serviceTier = "standard" as const;
-    const detected = await detectReviewParties({
-      target,
-      targetEntityVersionId: entityVersionId,
-      organizationId,
-      workspaceId,
-      orgAIConfig,
-      promptCachingEnabled,
-      serviceTier,
-      usageMetering: {
-        actionType: "chat",
+      const preflightError = await assertUsageAvailableForHandler({
+        metering: { actionType: "chat", modelRole: "pdf" },
         organizationId,
-        safeDb,
-        serviceTier,
-        userId: user.id,
+        orgAIConfig,
         workspaceId,
-      },
-      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (Result.isError(detected)) {
-      // `WorkflowIntegrationError.cause` carries the provider's own failure —
-      // classify against that so an exhausted quota or a rejected key answers
-      // with the status that names it instead of an opaque 500.
-      return Result.err(
-        aiHandlerError(detected.error.cause, {
-          status: 502,
-          message: "Party detection failed",
+        userId: user.id,
+        safeDb,
+      });
+      if (preflightError) {
+        return Result.err(preflightError);
+      }
+
+      const preparedResult = await Result.tryPromise({
+        try: async () => await prepareReviewFiles([file], organizationId),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      });
+      if (Result.isError(preparedResult)) {
+        return Result.err(preparedResult.error);
+      }
+      const target = preparedResult.value.at(0);
+      if (target?.kind !== "docx") {
+        return panic("DOCX review target was not prepared as DOCX blocks");
+      }
+
+      const serviceTier = "standard" as const;
+      const detected = await detectParties({
+        target,
+        targetEntityVersionId: entityVersionId,
+        organizationId,
+        workspaceId,
+        orgAIConfig,
+        promptCachingEnabled,
+        serviceTier,
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier,
+          userId: user.id,
+          workspaceId,
+        },
+        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (Result.isError(detected)) {
+        // `WorkflowIntegrationError.cause` carries the provider's own failure —
+        // classify against that so an exhausted quota or a rejected key answers
+        // with the status that names it instead of an opaque 500.
+        return Result.err(
+          aiHandlerError(detected.error.cause, {
+            status: 502,
+            message: "Party detection failed",
+          }),
+        );
+      }
+      const parties = detected.value;
+
+      yield* Result.await(
+        safeDb(async (tx) => {
+          // audit: skip — derived AI cache keyed by entity version;
+          // recomputable from the document's current content, never surfaces
+          // as an audited mutation on its own.
+          await tx
+            .insert(documentReviewParties)
+            .values({
+              id: createSafeId<"documentReviewParty">(),
+              organizationId,
+              workspaceId,
+              entityId,
+              entityVersionId,
+              promptVersion: REVIEW_PARTIES_PROMPT_VERSION,
+              parties,
+              createdAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: documentReviewParties.entityVersionId,
+              set: {
+                promptVersion: sql`excluded.prompt_version`,
+                parties: sql`excluded.parties`,
+                createdAt: sql`excluded.created_at`,
+              },
+            });
         }),
       );
-    }
-    const parties = detected.value;
 
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — derived AI cache keyed by entity version;
-        // recomputable from the document's current content, never surfaces
-        // as an audited mutation on its own.
-        await tx
-          .insert(documentReviewParties)
-          .values({
-            id: createSafeId<"documentReviewParty">(),
-            organizationId,
-            workspaceId,
-            entityId,
-            entityVersionId,
-            promptVersion: REVIEW_PARTIES_PROMPT_VERSION,
-            parties,
-            createdAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: documentReviewParties.entityVersionId,
-            set: {
-              promptVersion: sql`excluded.prompt_version`,
-              parties: sql`excluded.parties`,
-              createdAt: sql`excluded.created_at`,
-            },
-          });
-      }),
-    );
+      return Result.ok({ entityVersionId, parties });
+    },
+  );
 
-    return Result.ok({ entityVersionId, parties });
-  },
-);
-
-export default reviewParties;
+export default createReviewParties();
