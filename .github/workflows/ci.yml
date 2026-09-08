@@ -1910,9 +1910,23 @@ jobs:
         env:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
-          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-${{ matrix.shard }}.zip
         run: >-
           bun --filter @stll/web test:e2e --
+          --grep-invert='route-smoke'
+          --shard=${{ matrix.shard }}/2
+
+      - name: Run route-smoke Playwright shard
+        if: >-
+          always()
+          && !cancelled()
+          && steps.e2e-stack.outputs.status == 'ready'
+        env:
+          E2E_EXECUTION_PROFILE: standard
+          E2E_EXPECT_DEV_ROUTES: "false"
+          E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
+        run: >-
+          bun --filter @stll/web test:e2e --
+          --project=route-smoke
           --shard=${{ matrix.shard }}/2
 
       - name: Upload Playwright blob report
@@ -1921,6 +1935,14 @@ jobs:
         with:
           name: playwright-blob-${{ matrix.shard }}
           path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
+      - name: Upload route-smoke Playwright blob report
+        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-blob-route-smoke-${{ matrix.shard }}
+          path: apps/web/e2e/test-results/route-smoke-${{ matrix.shard }}/blob-report/
           retention-days: 7
 
       - name: Upload server logs
