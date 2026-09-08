@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
+import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 
 const MACOS_USER_AGENT =
@@ -112,7 +113,7 @@ test.describe("public hydration", () => {
     const expectedToday = new Date(fixedBrowserDate.getTime() - 86_400_000)
       .toISOString()
       .slice(0, 10);
-    await page.clock.setFixedTime(fixedBrowserDate);
+    await setFixedBrowserTime(page, fixedBrowserDate);
 
     // A persisted non-English locale is the harder hydration case: the
     // client holds translated messages before hydrating against the

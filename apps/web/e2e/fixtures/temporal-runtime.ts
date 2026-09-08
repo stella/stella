@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 const mode = new URLSearchParams(globalThis.location.search).get("mode");
 
 if (mode === "native") {
@@ -7,8 +9,8 @@ if (mode === "native") {
     value: nativeTemporal,
     writable: true,
   });
-  const runtime = await import("temporal-polyfill/full");
-  document.body.dataset.result =
+  const runtime = await import("@stll/time");
+  document.body.dataset["result"] =
     Object.is(runtime.Temporal, nativeTemporal) &&
     runtime.Intl === globalThis.Intl &&
     runtime.toTemporalInstant ===
@@ -21,16 +23,12 @@ if (mode === "native") {
     value: undefined,
     writable: true,
   });
-  const runtime = await import("temporal-polyfill/full");
+  const runtime = await import("@stll/time");
   const date = runtime.Temporal.PlainDate.from("2026-09-08")
     .withCalendar("hebrew")
     .withCalendar("iso8601")
     .toString();
-  document.body.dataset.result =
-    typeof runtime.Intl.DateTimeFormat === "function" &&
-    typeof runtime.toTemporalInstant === "function"
-      ? date
-      : "unexpected";
+  document.body.dataset["result"] = date;
 }
 
 export {};

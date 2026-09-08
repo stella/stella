@@ -1,3 +1,4 @@
+import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
@@ -44,7 +45,7 @@ test.describe("public law hydration", () => {
     const expectedToday = new Date(fixedBrowserDate.getTime() - 86_400_000)
       .toISOString()
       .slice(0, 10);
-    await page.clock.setFixedTime(fixedBrowserDate);
+    await setFixedBrowserTime(page, fixedBrowserDate);
     await page.addInitScript({
       content: `window.localStorage.setItem(
         "stella-i18n",
