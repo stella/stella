@@ -11,6 +11,7 @@ import {
 
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
@@ -300,6 +301,43 @@ const noCaching = {
   enabled: false,
   reason: "org-disabled",
 } satisfies CachingDecision;
+
+/**
+ * A provider answer whose only surviving detail is its response body: the
+ * adapter reported the status as a plain field on its SDK exception and
+ * stringified the body into the message, and the engine rebuilt the run error
+ * from the message alone.
+ */
+const providerBodyError = (status: number): Error =>
+  new Error(
+    JSON.stringify({
+      error: {
+        code: status,
+        message: `The provider answered ${status}.`,
+      },
+    }),
+  );
+
+// The statuses a body-only failure can name, and whether each justifies a
+// second attempt on the standard tier. A permanent answer (rejected
+// credentials, the upstream account's billing, a model the provider retired)
+// says the same thing however it is asked, so re-asking only costs a request.
+const PROVIDER_BODY_SERVICE_TIER_FALLBACK_MATRIX = [
+  {
+    kind: "provider_credentials_rejected",
+    retriesOnStandardTier: false,
+    status: 401,
+  },
+  { kind: "provider_billing", retriesOnStandardTier: false, status: 402 },
+  { kind: "model_unavailable", retriesOnStandardTier: false, status: 404 },
+  { kind: "quota_exhausted", retriesOnStandardTier: true, status: 429 },
+  { kind: "provider_unavailable", retriesOnStandardTier: true, status: 500 },
+  { kind: "provider_unavailable", retriesOnStandardTier: true, status: 503 },
+] as const satisfies readonly {
+  kind: AIErrorKind;
+  retriesOnStandardTier: boolean;
+  status: number;
+}[];
 
 let analytics: RecordingAnalytics;
 let logs: RecordingLogger;
@@ -847,6 +885,51 @@ describe("TanStack AI structured output generation", () => {
     expect(caught).toHaveProperty("cause", providerError);
     expect(classifyAIError(caught)).toBe("unknown");
   });
+
+  // A body-only failure reaches the service-tier retry predicate wrapped in
+  // the 502 `HandlerError` the recovery above built for it. That 502 is this
+  // service's own wrapper, not the provider's answer, so a predicate reading
+  // it grades every permanent failure as a server error and spends a second
+  // provider call on the standard tier to be told the same thing. The
+  // provider's status is one `cause` down; the retry is decided on that, which
+  // makes the decision agree with the name the same failure is given.
+  for (const {
+    kind,
+    retriesOnStandardTier,
+    status,
+  } of PROVIDER_BODY_SERVICE_TIER_FALLBACK_MATRIX) {
+    test(`${retriesOnStandardTier ? "retries" : "does not retry"} a deferred OpenAI object generation whose provider body is ${status}`, async () => {
+      // Queued twice so the retried and non-retried rows differ only in how
+      // many provider calls happened, never in whether the run failed.
+      queueRun(throwingRun(providerBodyError(status)));
+      queueRun(throwingRun(providerBodyError(status)));
+
+      const caught = await generateObjectForTestModel({
+        caching: noCaching,
+        organizationId: null,
+        orgAIConfig: null,
+        outputSchema: v.strictObject({ answer: v.string() }),
+        prompt: "Extract the answer.",
+        role: "chat",
+        serviceTier: "flex",
+        tenantWorkspaceIds: [],
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+
+      expect(classifyAIError(caught)).toBe(kind);
+      expect(providerRequests).toHaveLength(retriesOnStandardTier ? 2 : 1);
+      expect(providerRequests).toMatchObject(
+        retriesOnStandardTier
+          ? [
+              { modelOptions: { service_tier: "flex" } },
+              { modelOptions: { service_tier: "default" } },
+            ]
+          : [{ modelOptions: { service_tier: "flex" } }],
+      );
+    });
+  }
 
   test("retries deferred structured streams after control-only chunks", async () => {
     queueRun(

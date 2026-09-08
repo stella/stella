@@ -26,7 +26,11 @@ import type {
   CachingDecision,
   OrgAIConfig,
 } from "@/api/lib/ai-config";
-import { classifyAIError, providerErrorBody } from "@/api/lib/ai-error";
+import {
+  classifyAIError,
+  providerErrorBody,
+  providerStatusCode,
+} from "@/api/lib/ai-error";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -673,9 +677,12 @@ const shouldRetryWithStandardServiceTier = ({
 // `chat({ outputSchema })` does not rethrow the adapter's error: it records
 // the failure and throws `new Error(message, { cause: providerError })`, so
 // the status and retry hints live one `cause` down. The streaming paths throw
-// the provider error itself. Walk the chain to the first link that carries a
-// provider status and judge that link; the depth bound keeps a cyclic cause
-// from hanging the request.
+// the provider error itself, and a body-only failure arrives inside the
+// `HandlerError` `withRecoveredProviderStatus` built for it, whose own 502 is
+// this service's, not the provider's. Walk the chain to the first link that
+// carries a provider status, using the classifier's own reader so the status
+// the retry is decided on is the status the failure is named by; the depth
+// bound keeps a cyclic cause from hanging the request.
 const MAX_CAUSE_DEPTH = 8;
 
 const providerErrorInCauseChain = (
@@ -695,10 +702,27 @@ const providerErrorInCauseChain = (
   return null;
 };
 
+/**
+ * A run error the provider's own answer does not account for.
+ *
+ * The streaming seam's `RUN_ERROR` carries the provider's message and nothing
+ * else: the engine drops the status the adapter's exception held, so a flex or
+ * batch tier that was merely unavailable reaches this predicate with nothing
+ * to judge. That run still failed at the provider, which is the case the
+ * deferred-tier fallback exists for, so it retries once on the standard tier.
+ *
+ * The classifier decides "unaccounted for", not the absence of a number: an
+ * adapter can name a permanent answer through a provider-owned marker that
+ * carries no status at all (a rejected key), and a named answer is the
+ * provider's verdict however it was spelled.
+ */
+const isUnattributedRunError = (error: unknown): boolean =>
+  HandlerError.is(error) && classifyAIError(error) === "unknown";
+
 const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
   const provider = providerErrorInCauseChain(error);
   if (provider === null) {
-    return false;
+    return isUnattributedRunError(error);
   }
 
   const isRetryable = provider.record["isRetryable"];
@@ -710,20 +734,6 @@ const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
   }
 
   return provider.statusCode === 429 || provider.statusCode >= 500;
-};
-
-const providerStatusCode = (error: Record<string, unknown>): number | null => {
-  const statusCode = error["statusCode"];
-  if (typeof statusCode === "number" && Number.isInteger(statusCode)) {
-    return statusCode;
-  }
-
-  const status = error["status"];
-  if (typeof status === "number" && Number.isInteger(status)) {
-    return status;
-  }
-
-  return null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
