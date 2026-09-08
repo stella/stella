@@ -1082,7 +1082,7 @@
     "@expo/cli": "57.0.21",
     "@expo/router-server": "57.0.9",
     "@expo/ui": "57.0.15",
-    "@stll/folio-core": "0.35.0",
+    "@stll/folio-core": "0.35.1",
     "adm-zip": "0.6.0",
     "brace-expansion": "5.0.9",
     "expo-constants": "57.0.17",
@@ -1115,7 +1115,7 @@
     "@stll/anonymize-wasm": "3.0.0",
     "@stll/docx-core": "0.19.2",
     "@stll/folio-agents": "0.11.2",
-    "@stll/folio-core": "0.35.0",
+    "@stll/folio-core": "0.35.1",
     "@stll/folio-react": "0.18.0",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
@@ -2583,7 +2583,7 @@
 
     "@stll/folio-agents": ["@stll/folio-agents@0.11.2", "", { "dependencies": { "@stll/folio-core": "^0.35.0", "better-result": "3.0.1" } }, "sha512-ppsx29eYRkrBVZ2REAsJIy7dYo/tbw3VGCRZ5UweDG6owGoJ6l30MBKho6xNGo2wDzw0oG0R97+sImuQyBJhBA=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.35.0", "", { "dependencies": { "@stll/docx-core": "^0.19.2", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.4.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.13", "fast-xml-parser": "^5.10.1", "hyphen": "1.14.1", "jszip": "3.10.1", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-2Bf0nXvlYWr9mEs3R9Tse4Hg+GN3Tqh0bC3E20mxT4sAWvyTAYKwZ0dDgzSKS6sjcVcVb4JHbFg7NXl8mHWaeQ=="],
+    "@stll/folio-core": ["@stll/folio-core@0.35.1", "", { "dependencies": { "@stll/docx-core": "^0.19.2", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": ">=0.4.0 <1.0.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.13", "fast-xml-parser": "^5.10.1", "hyphen": "1.14.1", "jszip": "3.10.1", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-WYly7YzhK91o2NRQfkYDNfV29VxROxIsVbSbuWlpUGcI8NOvL6r+Wx9gjf9KpGKoJTeFgBla1wpFK54oXRyXmg=="],
 
     "@stll/folio-react": ["@stll/folio-react@0.18.0", "", { "dependencies": { "@base-ui/react": "1.6.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.35.0", "better-result": "3.0.1", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-YxrYKtJf7Boo02wHtXKyVVQdBH/PpNFZKtGaqoLcimEuuXMEdGSVFy9gW620/iX68R+54axwmJeSUZdU8n+5ww=="],
 
