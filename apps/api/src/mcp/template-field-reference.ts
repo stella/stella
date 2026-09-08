@@ -27,9 +27,9 @@ import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-referen
  * per-property guidance lives here — pulled on demand — while the schema
  * carries the structure plus one short line per property.
  *
- * The same properties are writable in the document as marker filters, which is
- * where an author should put them; this tool is the way to set them without
- * rewriting the DOCX. The filter catalogue lives with the marker grammar.
+ * The properties ARE the marker's filters: this tool rewrites the marker in
+ * the document, so a template configured through it and one an author wrote by
+ * hand are the same bytes. The filter catalogue lives with the marker grammar.
  *
  * Both inventories below are keyed by their source of truth
  * ({@link templateFieldInputSchema}'s own keys, and the `source` union's own
@@ -183,18 +183,20 @@ export const buildFieldReference = (): string => {
   return [
     "stella template field configuration (`configure_template_fields`)",
     "",
-    "A marker's filter chain is the primary way to configure a field, and it " +
-      "lives in the DOCX: " +
-      '`{{ deposit | number | label("Kaution") | required }}`. See ' +
-      `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool configures ` +
-      "the same properties from outside the document, for a template whose " +
-      "markers you are not rewriting; where both say something, this wins.",
+    "A field's configuration IS its marker's filter chain, and it lives in " +
+      'the DOCX: `{{ deposit | number | label("Kaution") | required }}`. See ' +
+      `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool writes that ` +
+      "chain for you: it rewrites the marker, at every occurrence, and " +
+      "publishes the document.",
     "",
-    "Send one entry per field path. Every entry's `path` must match a marker " +
-      "in the template, unknown properties are rejected, and an entry " +
-      "replaces the configuration of the path it names. An entry that cannot " +
-      "be applied is reported in `issues[]` on its own; the rest of the call " +
-      "still applies.",
+    "Send one entry per field path. Every entry's `path` must match a value " +
+      "marker in the template, and unknown properties are rejected. A " +
+      "property you send replaces what the marker says; one you leave out " +
+      "keeps it, except that naming a `source` replaces the whole answer to " +
+      "who fills the field. A path with no marker to carry it, and a value " +
+      "the marker grammar cannot spell (a `{` or `}` in a label), are " +
+      "reported in `issues[]` on their own; the rest of the call still " +
+      "applies.",
     "",
     "Field properties:",
     propertyLines,

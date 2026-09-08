@@ -6,7 +6,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -78,7 +77,6 @@ const saveTemplateDocument = createSafeRootHandler(
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const manifest = await deriveManifestFromDocx(buffer);
 
     const written = yield* Result.await(
       Result.gen(() =>
@@ -88,8 +86,7 @@ const saveTemplateDocument = createSafeRootHandler(
           templateId,
           mode: { type: "new-version", userId: user.id },
           recordAuditEvent,
-          prepare: async () =>
-            Result.ok({ manifest, bytes: new Uint8Array(buffer) }),
+          prepare: async () => Result.ok({ bytes: new Uint8Array(buffer) }),
         }),
       ),
     );

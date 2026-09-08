@@ -67,10 +67,7 @@ export const configureTemplateFields = async function* ({
           // `prepare` re-runs when a concurrent write moves the template's
           // pointer, so the issue list is replaced, never appended to.
           rejected = configured.issues;
-          return Result.ok({
-            manifest: configured.manifest,
-            bytes: new Uint8Array(configured.buffer),
-          });
+          return Result.ok({ bytes: new Uint8Array(configured.buffer) });
         },
       }),
     ),

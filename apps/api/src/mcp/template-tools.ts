@@ -50,7 +50,6 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
-import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
 import {
   conditionReferencesOnlySelf,
@@ -549,9 +548,9 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
     `file or strip parts out to fit. Read ${TEMPLATE_MARKER_REFERENCE_URI} ` +
     "before authoring: markers are the docxtpl dialect of Jinja, and a value " +
-    "marker's filters configure the field. Returns the template id, its " +
-    "fields, arrays, conditions, computed values and warnings; " +
-    "configure_template_fields sets what the filters did not.",
+    "marker's filters ARE the field's configuration. Returns the template " +
+    "id, its fields, arrays, conditions, computed values and warnings; " +
+    "configure_template_fields writes those filters for you afterwards.",
   inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
@@ -571,12 +570,14 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Configure an existing template's fields: who fills each one, its input " +
-    "control, options and validation, for a template whose markers you are " +
-    "not rewriting. The document is untouched, and a filter written on a " +
-    "marker says the same thing. Pass template_id and one entry per field " +
-    "path; every path " +
-    `must already exist as a marker. Read ${TEMPLATE_FIELD_REFERENCE_URI} ` +
-    "first. Returns the template's full field configuration afterwards.",
+    "control, options and validation. The configuration lives in the " +
+    "document, so this rewrites each named marker's filter chain, at every " +
+    "occurrence, and publishes the result. Pass template_id and one entry " +
+    "per field path; every path must already have a value marker, and a " +
+    "property you leave out keeps what the marker says. Read " +
+    `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full ` +
+    "field configuration afterwards, plus the entries that could not be " +
+    "applied.",
   inputSchema: configureTemplateFieldsArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite"],
@@ -2088,7 +2089,6 @@ const upsertStoredTemplate = async ({
       : { fieldCount: renamed.value.fieldCount };
   }
 
-  const manifest = await deriveManifestFromDocx(buffer);
   const written = await Result.gen(() =>
     (context.testDependencies?.writeStoredTemplate ?? writeStoredTemplate)({
       safeDb: context.safeDb,
@@ -2099,8 +2099,7 @@ const upsertStoredTemplate = async ({
       recordAuditEvent: context.recordAuditEvent,
       // The new document decides everything: the fields it carries are the
       // ones its markers declare.
-      prepare: async () =>
-        Result.ok({ manifest, bytes: new Uint8Array(buffer) }),
+      prepare: async () => Result.ok({ bytes: new Uint8Array(buffer) }),
     }),
   );
   return Result.isError(written)

@@ -1562,7 +1562,7 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       ),
     }),
   ),
-  // Derived fields, named the way the `fields` overlay names them, so a
+  // Derived fields, named the way a configure entry names them, so a
   // caller can edit an expression and send it straight back.
   conditions: v.array(
     v.strictObject({ path: v.string(), condition: v.string() }),

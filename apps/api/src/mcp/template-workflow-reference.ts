@@ -67,11 +67,11 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
   {
     title: "Read the grammar",
     detail:
-      `${TEMPLATE_MARKER_REFERENCE_URI} is the marker grammar — the docxtpl ` +
+      `${TEMPLATE_MARKER_REFERENCE_URI} is the marker grammar: the docxtpl ` +
       "dialect of Jinja, including the filters that configure a field in the " +
-      `document; ${TEMPLATE_FIELD_REFERENCE_URI} is the same configuration ` +
-      "from outside the document. Read both before authoring or configuring " +
-      "anything.",
+      `document. ${TEMPLATE_FIELD_REFERENCE_URI} is what each of those ` +
+      "filters means, in the shape the configure tool writes them. Read both " +
+      "before authoring or configuring anything.",
   },
   {
     title: "Author markers in the ORIGINAL document",
@@ -103,8 +103,8 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`configure`: the " +
       `exact ${CONFIGURE_TEMPLATE_FIELDS} call for this template, one entry ` +
       "per configurable path (loop item paths included) with the source each " +
-      "field already has, filters in the document included. Copy it and edit " +
-      "the entries that should differ; do not spell the paths yourself.",
+      "field already has, read off the markers. Copy it and edit the entries " +
+      "that should differ; do not spell the paths yourself.",
   },
   {
     title: "Read the discovered paths back",
@@ -121,8 +121,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "(each `path` + its `condition` or `formula`) and the same " +
       "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +
       "path you expected and do not see was not discovered. Fix the document " +
-      `and send it back to ${CREATE_TEMPLATE} with this \`template_id\` — ` +
-      "configuration cannot add a field the DOCX does not contain.",
+      `and send it back to ${CREATE_TEMPLATE} with this \`template_id\`: ` +
+      "configuration cannot add a field the DOCX does not contain, because " +
+      "the configuration is written into the marker itself.",
   },
   {
     title: "Configure the fields",
@@ -136,12 +137,16 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
       `configuration in the ${LIST_TEMPLATES} detail shape, plus ` +
       "`issues[]` (`path`, `index`, `message`, `hint`): one entry per " +
-      "configuration that could NOT be applied. The call is best effort — an " +
-      "entry naming a path the DOCX does not carry, or a property the schema " +
-      "refuses, is reported on its own and the entries beside it are still " +
-      "applied, so read `issues[]` and resend only the entries it names. Only " +
-      "a template-level problem (not found, no permission, an unreadable " +
-      "manifest) fails the whole call. `warnings[]` comes back too: the " +
+      "configuration that could NOT be applied. The call rewrites each named " +
+      "marker in the document and publishes it, so a property you send " +
+      "replaces what the marker said and one you leave out keeps it; naming " +
+      "a `source` replaces the whole answer to who fills the field. The call " +
+      "is best effort: an entry naming a path with no value marker, a value " +
+      "the marker grammar cannot spell (a `{` or `}` in a label), or a " +
+      "property the schema refuses is reported on its own and the entries " +
+      "beside it are still applied, so read `issues[]` and resend only the " +
+      "entries it names. Only a template-level problem (not found, no " +
+      "permission, an unreadable document) fails the whole call. `warnings[]` comes back too: the " +
       "change recomputes them, so a condition that removes " +
       "its own input or a lookup on a disabled registry shows up here. A " +
       "`lookup` " +
@@ -247,9 +252,10 @@ export const buildWorkflowReference = (): string => {
   return [
     "stella template workflow (author, configure, fill, save)",
     "",
-    "The order to call things in. A template is created from a DOCX first " +
-      "and configured second, because configuration can only name paths the " +
-      "DOCX already contains.",
+    "The order to call things in. The DOCX is the template: a field's " +
+      "configuration lives in its marker's filter chain, so a template is " +
+      "created from a document first and configured second, and configuring " +
+      "it publishes a document with the new filters written in.",
     "",
     "Procedure:",
     stepLines,
