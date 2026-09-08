@@ -397,7 +397,9 @@ describe("a page the origin never answered does not move the cursor", () => {
   beforeEach(() => {
     // Every refused page exhausts its retry budget, and the backoff between
     // attempts is randomized wall-clock time. Nothing here is about waiting.
-    Bun.sleep = () => Promise.resolve();
+    Bun.sleep = async () => {
+      // no-op
+    };
   });
 
   afterEach(() => {
