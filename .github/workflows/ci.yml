@@ -1146,6 +1146,7 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
+          scripts/release-pr-workflow.test.ts
           scripts/dependabot-empty-changeset.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it

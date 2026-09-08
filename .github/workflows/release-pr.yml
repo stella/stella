@@ -3,6 +3,9 @@ name: Release PR
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
 
 concurrency:
   # Let the active release mutation finish; newer main pushes replace obsolete
@@ -14,13 +17,17 @@ permissions: {}
 
 jobs:
   version:
+    if: github.ref == 'refs/heads/main'
     name: Maintain Version Packages PR
     permissions:
       contents: read
+      pull-requests: read
+      checks: read
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/changeset-release-pr.yml@9e1915536efc226c5ec9d3ca0f2192be5aa6ec7e
+    uses: stella/.github/.github/workflows/changeset-release-pr.yml@92db66a41a2f9f9930bde9e835823af4e24436a9
     with:
       bun-version-file: package.json
+      auto-merge-command: bun scripts/merge-bar.ts "$RELEASE_PR_NUMBER"
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
