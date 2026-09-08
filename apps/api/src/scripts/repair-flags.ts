@@ -27,17 +27,35 @@ type FlagIntegerOptions = {
   usage: string;
 };
 
+/**
+ * The value an operator wrote for `--<name>`, in either spelling: the
+ * separate argument the usage texts document, and the `--<name>=<value>` form
+ * a shell user reaches for anyway. Both are read, because the alternative is
+ * the dangerous one — an unrecognised `--limit=10` leaves the flag absent, and
+ * a repair that was asked to change ten rows would change its default of
+ * thousands.
+ */
+const flagValue = (name: string): string | undefined => {
+  const inline = process.argv.find((argument) =>
+    argument.startsWith(`--${name}=`),
+  );
+  if (inline !== undefined) {
+    return inline.slice(`--${name}=`.length);
+  }
+  const index = process.argv.indexOf(`--${name}`);
+  return index === -1 ? undefined : process.argv[index + 1];
+};
+
 /** A positive integer flag, or its fallback. */
 export const flagInteger = ({
   fallback,
   name,
   usage,
 }: FlagIntegerOptions): number => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
+  const raw = flagValue(name);
+  if (raw === undefined && !hasFlag(name)) {
     return fallback;
   }
-  const raw = process.argv[index + 1];
   const parsed =
     raw !== undefined && DECIMAL_INTEGER.test(raw)
       ? Number.parseInt(raw, 10)
