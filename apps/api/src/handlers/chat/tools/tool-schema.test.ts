@@ -577,11 +577,12 @@ describe("chat tool schemas", () => {
     ]) {
       entityLookups = 0;
       const rejection: unknown = await Promise.resolve()
-        .then(() =>
-          execute(
-            { entityRef, matterRef, propertyRef, value },
-            executionContext,
-          ),
+        .then(
+          async () =>
+            await execute(
+              { entityRef, matterRef, propertyRef, value },
+              executionContext,
+            ),
         )
         .then(
           () => null,
@@ -603,11 +604,12 @@ describe("chat tool schemas", () => {
     for (const value of ["2024-02-29", null]) {
       entityLookups = 0;
       const rejection: unknown = await Promise.resolve()
-        .then(() =>
-          execute(
-            { entityRef, matterRef, propertyRef, value },
-            executionContext,
-          ),
+        .then(
+          async () =>
+            await execute(
+              { entityRef, matterRef, propertyRef, value },
+              executionContext,
+            ),
         )
         .then(
           () => null,
