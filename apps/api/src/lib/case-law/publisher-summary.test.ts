@@ -104,6 +104,25 @@ test("nothing publisher-authored is no summary", () => {
   ).toBeNull();
 });
 
+test("a key an adapter left absent falls through to the next source", () => {
+  // What an adapter writes for a field its source published nothing in: no
+  // key at all. The reading must pass it over, so a decision the publisher
+  // wrote no legal sentence for is read from whatever it did publish, and one
+  // it published nothing for shows no line rather than an empty one.
+  expect(
+    publisherHeadnoteOf({
+      documentAst: null,
+      metadata: { abstract: "Abstrakt rozhodnutí" },
+    }),
+  ).toBe("Abstrakt rozhodnutí");
+  expect(
+    publisherHeadnoteOf({
+      documentAst: null,
+      metadata: { keywords: ["Daně"] },
+    }),
+  ).toBeNull();
+});
+
 test("a value of the wrong JSON shape is skipped, not coerced", () => {
   expect(
     publisherSummaryOf({

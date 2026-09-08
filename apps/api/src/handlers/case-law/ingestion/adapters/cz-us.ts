@@ -26,6 +26,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { sourceTextOrAbsent } from "@/api/handlers/case-law/ingestion/adapters/absent-source-text";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -357,7 +358,17 @@ const extractJudge = (bodyText: string): string | undefined => {
   return tokens.length > 0 ? tokens.join(" ") : undefined;
 };
 
-/** Extract abstract and legal sentence from GetAbstract.aspx. */
+/** Below this a cell holds a stub or a label, not a publisher's own text. */
+const ABSTRACT_MIN_CHARS = 20;
+
+/**
+ * Extract abstract and legal sentence from GetAbstract.aspx.
+ *
+ * The court fills both cells whether or not it holds the text, so the read
+ * goes through `sourceTextOrAbsent`: its "not available" sentences are longer
+ * than any length threshold and would otherwise be stored, indexed and
+ * displayed as the decision's headnote.
+ */
 const extractAbstract = (
   html: string,
 ): {
@@ -365,14 +376,20 @@ const extractAbstract = (
   legalSentence?: string;
 } => {
   const $ = cheerio.load(html);
-  const abstractText = $("table.abstractContent td").text().trim();
-  const legalText = $("table.legalSentenceContent td").text().trim();
+  const abstractText = sourceTextOrAbsent(
+    ADAPTER_KEYS.CZ_US,
+    $("table.abstractContent td").text(),
+  );
+  const legalText = sourceTextOrAbsent(
+    ADAPTER_KEYS.CZ_US,
+    $("table.legalSentenceContent td").text(),
+  );
 
   const result: { abstract?: string; legalSentence?: string } = {};
-  if (abstractText.length > 20) {
+  if (abstractText !== undefined && abstractText.length > ABSTRACT_MIN_CHARS) {
     result.abstract = abstractText;
   }
-  if (legalText.length > 20) {
+  if (legalText !== undefined && legalText.length > ABSTRACT_MIN_CHARS) {
     result.legalSentence = legalText;
   }
   return result;

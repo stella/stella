@@ -706,6 +706,36 @@ describe("czUsAdapter.fetchPage", () => {
     });
   });
 
+  test("stores no headnote where the court prints that it has none", async () => {
+    // Both cells are always filled: with the text, or with a sentence saying
+    // there is none. The second is longer than any length threshold, so before
+    // the markers were declared it was stored, indexed and shown as the
+    // decision's headnote.
+    installSearchMock({
+      rows: [
+        {
+          id: "5002",
+          sz: "2-11-24_1",
+          caseNumber: "II.ÚS 11/24",
+          date: "2. 2. 2024",
+        },
+      ],
+      abstract: "Abstrakt není k dispozici.",
+      legalSentence: "Právní věta není k dispozici.",
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+    expect(page.decisions[0]?.metadata).not.toHaveProperty("abstract");
+    expect(page.decisions[0]?.metadata).not.toHaveProperty("legalSentence");
+    // The page the sentences came from is still stored, so a later reading
+    // can recover whatever the court served.
+    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
+      abstractHtml: expect.stringContaining("Právní věta není k dispozici."),
+    });
+  });
+
   test("preserves decision-page metadata while taking identity from search", async () => {
     const row = {
       id: "6001",
