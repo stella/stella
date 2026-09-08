@@ -106,7 +106,6 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import { toSafeId } from "@/lib/safe-id";
-import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
 const OfficeFileViewer = lazy(async () => {
@@ -302,25 +301,24 @@ const DOWNLOAD_LABEL_KEY = {
 } as const satisfies Record<PrimaryDownloadVariant, TranslationKey>;
 
 /**
- * Which copy the header's Download hands over. The entity read is what
- * resolves the field's encryption, and a matter with a reference is what
- * gives its document versions one; the policy itself belongs to
+ * Which copy the header's Download hands over. The entity read resolves both
+ * inputs the policy needs: the field's encryption and the reference frozen
+ * onto the current version. The policy itself belongs to
  * `resolvePrimaryDownloadVariant`, shared with the matter row menu.
  */
 const getFileTabDownloadVariant = ({
   entityData,
-  matter,
   tab,
 }: {
   entityData:
     | {
+        currentVersionReference: string | null;
         fields: {
           content: { encrypted?: boolean | undefined; type: string };
           id: string;
         }[];
       }
     | undefined;
-  matter: { reference: string } | undefined;
   tab: FileTabPanelProps["tab"];
 }): PrimaryDownloadVariant => {
   const field = entityData?.fields.find((candidate) => candidate.id === tab.id);
@@ -328,8 +326,8 @@ const getFileTabDownloadVariant = ({
   return resolvePrimaryDownloadVariant({
     encrypted:
       field?.content.type === "file" ? field.content.encrypted : undefined,
-    hasReference: Boolean(matter?.reference),
     mimeType: tab.mimeType,
+    reference: entityData?.currentVersionReference,
   });
 };
 
@@ -585,11 +583,8 @@ export const FileTabPanel = ({
     needsPropertyResolution,
     tab,
   });
-  // Reading the matter is a cache hit inside it: the matter route primes it.
-  const { data: matter } = useQuery(workspaceOptions(tab.workspaceId));
   const downloadVariant = getFileTabDownloadVariant({
     entityData: entityQuery.data,
-    matter,
     tab,
   });
   const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<

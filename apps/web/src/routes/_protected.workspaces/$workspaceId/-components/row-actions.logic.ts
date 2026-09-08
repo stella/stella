@@ -30,14 +30,13 @@ export type OcrExportFormat = "searchable-pdf" | "text";
 
 type RowDownloadMenuInput = {
   canScrub: boolean;
+  /** The reference frozen onto the row's current version, null without one. */
+  currentVersionReference: string | null;
   exportableOcrSourceCount: number;
   /** The row's file, or null for a folder, a task, or an empty row. */
   file: { encrypted: boolean; mimeType: string } | null;
   hasPdfConversion: boolean;
   isBulk: boolean;
-  /** The matter the row lives in: its documents carry a reference only when
-   *  the matter itself has one. */
-  matter: { reference: string } | undefined;
 };
 
 type RowDownloadMenu = {
@@ -55,19 +54,19 @@ type RowDownloadMenu = {
  */
 export const getRowDownloadMenu = ({
   canScrub,
+  currentVersionReference,
   exportableOcrSourceCount,
   file,
   hasPdfConversion,
   isBulk,
-  matter,
 }: RowDownloadMenuInput): RowDownloadMenu => {
   const primaryVariant =
     isBulk || file === null
       ? "original"
       : resolvePrimaryDownloadVariant({
           encrypted: file.encrypted,
-          hasReference: Boolean(matter?.reference),
           mimeType: file.mimeType,
+          reference: currentVersionReference,
         });
 
   return {
