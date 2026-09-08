@@ -25,7 +25,7 @@ export const rowScopePaths = (rowScopes: readonly RowScope[]): string[] =>
 
 /** A path already under the innermost repeat is left alone; anything else is
  *  read as a name relative to it. */
-export const qualifyRowScopedPath = (
+const qualifyRowScopedPath = (
   path: string,
   rowPaths: readonly string[] = [],
 ): string => {
