@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.26.0
+
+### Minor Changes
+
+- [#3134](https://github.com/stella/stella/pull/3134) [`8668780`](https://github.com/stella/stella/commit/8668780fbc7ba60ecf40806c79d2b5f6ef1a6b87) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add inline color swatches with an optional custom-color popover, and preserve Escape dismissal from the custom hex input.
+
 ## 0.25.2
 
 ### Patch Changes
