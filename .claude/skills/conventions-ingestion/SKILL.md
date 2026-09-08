@@ -67,6 +67,16 @@ protection from stale work.
     repair path before allowing later progress.
 14. **Accounted-for source fields.** Every field a source states on a page the
     adapter already fetches is stored, or excluded with the reason. See below.
+15. **A publisher is not a court.** The deciding court comes from the record:
+    the court code in its ECLI first, then the record's own court field,
+    resolved through the shared resolver
+    (`apps/api/src/lib/case-law/cz-ecli-courts.ts` for Czech sources). Never a
+    per-adapter constant, even where the portal is believed to serve one
+    court's decisions: portals republish other courts, and the court name is
+    what authority weighting is read off. An inventory declaration must name
+    the field the value is read from, and a value produced from a literal
+    satisfies no declaration. `no-literal-decision-court` rejects a literal
+    `court` in a case-law adapter.
 
 ## Checkpoint Boundary
 
