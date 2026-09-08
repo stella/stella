@@ -146,6 +146,20 @@ describe("writing a configuration into the document", () => {
     );
   });
 
+  test("asking for what the markers already say returns the same bytes", async () => {
+    const docx = await makeDocx([P('{{ deposit | number | label("Kaution") }}')]);
+    const field: FieldMeta = {
+      path: "deposit",
+      inputType: "number",
+      label: "Kaution",
+    };
+
+    const { buffer, written } = await writeFieldFilters(docx, [rewrite(field)]);
+
+    expect(written).toEqual(new Set(["deposit"]));
+    expect(buffer).toBe(docx);
+  });
+
   test("a path the document does not carry is not reported as written", async () => {
     const docx = await makeDocx([P("{{ deposit }}")]);
     const { written } = await writeFieldFilters(docx, [

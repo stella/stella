@@ -21,7 +21,7 @@ import type { DiscoveredTemplate, TemplateManifest } from "./types";
 
 /** The manifest shape this build derives. One number, because a derived cache
  *  has no history to migrate: an older one is recomputed, not upgraded. */
-export const MANIFEST_VERSION = 1;
+const MANIFEST_VERSION = 1;
 
 /**
  * The manifest this document declares. The marker filters are the fields;

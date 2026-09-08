@@ -37,7 +37,6 @@ import {
   type FieldLookupFormat,
   type FieldMeta,
 } from "@/api/lib/docx/types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** One rejected entry. `path` is the dot path of the offending entry in
  *  the tool input (`fields.2`), matching the schema-derived issue paths, so an
@@ -584,7 +583,7 @@ const canonicalizeEntries = ({
  *  writes the whole cluster, clearing the keys its own branch does not use, so
  *  an own key is the signal: reading the values alone cannot tell a cleared
  *  property from an absent one. */
-export const decidesSource = (field: FieldMeta): boolean =>
+const decidesSource = (field: FieldMeta): boolean =>
   FIELD_SOURCE_KEYS.some((key) => Object.hasOwn(field, key));
 
 /**
@@ -611,7 +610,7 @@ export const mergeFieldConfiguration = (
 
 /** The configuration each named path ends up with, entries merged onto what
  *  the document already declares. */
-export const effectiveConfiguration = (
+const effectiveConfiguration = (
   declared: readonly FieldMeta[],
   entries: readonly FieldMeta[],
 ): Map<string, FieldMeta> => {
@@ -968,22 +967,4 @@ const foldFieldIntoFormat = (
     formats,
     drops: [...drops.values()],
   };
-};
-
-/**
- * The 400 the configure boundary returns. The summary message stays readable
- * for a plain HTTP client while `issues` carries every offending entry by its
- * input path, which is what the structured MCP envelope surfaces.
- */
-export const fieldConfigurationError = (
-  issues: readonly FieldConfigurationIssue[],
-): HandlerError<400> => {
-  const first = issues.at(0) ?? panic("field configuration rejected with no issue");
-  const others = issues.length - 1;
-  const summary = `${first.message} ${first.hint}`;
-  return new HandlerError({
-    status: 400,
-    message: others > 0 ? `${summary} (${others} more)` : summary,
-    issues: [...issues],
-  });
 };

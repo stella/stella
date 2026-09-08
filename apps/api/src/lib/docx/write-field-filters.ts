@@ -76,6 +76,14 @@ const rewriteParagraph = (
   written: Set<string>,
 ): TextRange[] => {
   const ranges: TextRange[] = [];
+  /** A marker whose text is already what the rewrite would write is left
+   *  alone: a configure call that changes nothing must not republish the
+   *  document under a new key. */
+  const rewriteTo = (marker: ScannedMarker, value: string): void => {
+    if (value !== marker.raw) {
+      ranges.push({ start: marker.start, end: marker.end, value });
+    }
+  };
   for (const marker of markers) {
     const { meta } = marker;
     if (meta.kind === "endfor") {
@@ -87,16 +95,15 @@ const rewriteParagraph = (
       const filters = rewrites.get(scopedPath);
       if (filters !== undefined) {
         written.add(scopedPath);
-        ranges.push({
-          start: marker.start,
-          end: marker.end,
-          value: renderForOpener({
+        rewriteTo(
+          marker,
+          renderForOpener({
             alias: meta.alias,
             path: meta.path,
             filters,
             prefix: marker.prefix,
           }),
-        });
+        );
       }
       scopes.push({
         alias: meta.alias,
@@ -114,14 +121,10 @@ const rewriteParagraph = (
       continue;
     }
     written.add(scopedPath);
-    ranges.push({
-      start: marker.start,
-      end: marker.end,
-      // The marker keeps the spelling the author gave it: rewriting
-      // `{{ attorney.name }}` to `{{ attorneys.name }}` would move the field
-      // out of its loop.
-      value: renderValueMarker(meta.expr, filters),
-    });
+    // The marker keeps the spelling the author gave it: rewriting
+    // `{{ attorney.name }}` to `{{ attorneys.name }}` would move the field out
+    // of its loop.
+    rewriteTo(marker, renderValueMarker(meta.expr, filters));
   }
   return ranges;
 };
@@ -183,6 +186,7 @@ export const writeFieldFilters = async (
   }
   const byPath = new Map(rewrites.map(({ filters, path }) => [path, filters]));
   const zip = await JSZip.loadAsync(docxBuffer);
+  let changed = false;
   // Headers and footers hold markers of their own, and a loop never spans two
   // parts, so each part walks with a stack of its own.
   for (const path of templateContentPartPaths(Object.keys(zip.files))) {
@@ -198,7 +202,13 @@ export const writeFieldFilters = async (
     );
     if (rewritten.changed) {
       zip.file(path, rewritten.xml);
+      changed = true;
     }
+  }
+  // A configuration that asks for what the markers already say is not a new
+  // document: re-zipping would republish identical content under a new key.
+  if (!changed) {
+    return { buffer: docxBuffer, written };
   }
   const output = await zip.generateAsync({
     compression: "DEFLATE",
