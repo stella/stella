@@ -132,6 +132,12 @@ test.describe("Temporal browser runtime", () => {
   test("loads the implementation only when native Temporal is absent", async ({
     page,
   }) => {
+    await page.route("**/e2e/temporal-runtime?*", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
+      }),
+    );
     const implementationRequests: string[] = [];
     page.on("request", (request) => {
       if (isTemporalImplementationRequest(request.url())) {
@@ -139,11 +145,23 @@ test.describe("Temporal browser runtime", () => {
       }
     });
 
-    await page.goto("/e2e/fixtures/temporal-runtime.html?mode=native");
+    await page.goto("/e2e/temporal-runtime?mode=native", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.addScriptTag({
+      type: "module",
+      url: "/e2e/fixtures/temporal-runtime.ts",
+    });
     await expect(page.locator("body")).toHaveAttribute("data-result", "native");
     expect(implementationRequests).toEqual([]);
 
-    await page.goto("/e2e/fixtures/temporal-runtime.html?mode=polyfill");
+    await page.goto("/e2e/temporal-runtime?mode=polyfill", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.addScriptTag({
+      type: "module",
+      url: "/e2e/fixtures/temporal-runtime.ts",
+    });
     await expect(page.locator("body")).toHaveAttribute(
       "data-result",
       "2026-09-08",

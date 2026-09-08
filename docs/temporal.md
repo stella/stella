@@ -46,7 +46,10 @@ construction, immediate non-boundary methods on a constructed Date, and calendar
 getters or setters on typed or locally inferred Dates. Single-argument and
 unchained zero-argument construction remain available for library boundaries;
 `getTime`, `toISOString`, `toJSON`, and `toUTCString` remain available on an
-immediately constructed Date for ingress and serialization. The rule deliberately
+immediately constructed single-argument Date for ingress and serialization.
+Zero-argument clock reads such as `new Date().getTime()` and
+`new Date().toISOString()` are banned; `new Date().toUTCString()` remains valid
+for a current HTTP-date header. The rule deliberately
 does not guess the type of opaque object properties or function results, which
 avoids matching unrelated APIs that also have names such as `setDate`.
 These allowed constructor shapes are syntax limits, not proof that a call site is

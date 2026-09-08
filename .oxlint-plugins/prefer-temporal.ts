@@ -225,8 +225,7 @@ export default eslintCompatPlugin({
           }
           const definition = constantDefinition(expression, visited);
           return (
-            definition !== null &&
-            definition.path.length === 0 &&
+            definition?.path.length === 0 &&
             isGlobalObject(definition.init, visited)
           );
         };
@@ -460,7 +459,8 @@ export default eslintCompatPlugin({
               isGlobalDate(receiver.callee) &&
               Array.isArray(receiver.arguments) &&
               receiver.arguments.length <= 1 &&
-              !IMMEDIATE_DATE_BOUNDARY_METHODS.has(method)
+              (!IMMEDIATE_DATE_BOUNDARY_METHODS.has(method) ||
+                (receiver.arguments.length === 0 && method !== "toUTCString"))
             ) {
               context.report({
                 node,

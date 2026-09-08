@@ -446,7 +446,7 @@ const staticMemberName = (
   visitedBindings = new Set<unknown>(),
 ): string | null => {
   const expression = unwrapExpression(node);
-  if (expression === null || expression.type !== "MemberExpression") {
+  if (expression?.type !== "MemberExpression") {
     return null;
   }
   if (expression.computed === false && isIdentifier(expression.property)) {
@@ -525,8 +525,8 @@ const caughtTryHasPriorPotentialThrow = (
   while (isAstNode(statement.parent) && statement.parent !== block) {
     statement = statement.parent;
   }
-  const statementIndex = block.body.findIndex((item) => item === statement);
-  return statementIndex < 0
+  const statementIndex = block.body.indexOf(statement);
+  return statementIndex === -1
     ? true
     : block.body.slice(0, statementIndex).some((item) => astMayThrow(item));
 };
@@ -552,7 +552,7 @@ const writeIsConditional = (
       (parent.type === "LogicalExpression" && current === parent.right) ||
       (parent.type === "TryStatement" &&
         current === parent.block &&
-        parent.handler != null &&
+        isAstNode(parent.handler) &&
         caughtTryHasPriorPotentialThrow(parent.block, identifier)) ||
       parent.type === "ForStatement" ||
       parent.type === "ForInStatement" ||
@@ -599,7 +599,7 @@ const immediateHelperCallContexts = (
   functionNode: unknown,
   boundary: unknown,
   beforePosition: number,
-): Array<{ conditional: boolean; position: number }> => {
+): { conditional: boolean; position: number }[] => {
   if (
     !isAstNode(functionNode) ||
     typeof context !== "object" ||
@@ -636,7 +636,7 @@ const immediateHelperCallContexts = (
   ) {
     return [];
   }
-  const calls: Array<{ conditional: boolean; position: number }> = [];
+  const calls: { conditional: boolean; position: number }[] = [];
   for (const reference of binding.references) {
     if (
       typeof reference !== "object" ||
@@ -774,6 +774,97 @@ const stablePatternSelections = (
   });
 };
 
+type DirectStaticPropertyWritesOptions = {
+  beforePosition: number;
+  boundary: unknown;
+  context: unknown;
+  identifier: unknown;
+  propertyPath: readonly string[];
+  selectedMember: {
+    member: unknown;
+    propertyPath: readonly string[];
+  } | null;
+};
+
+const directStaticPropertyWrites = ({
+  beforePosition,
+  boundary,
+  context,
+  identifier,
+  propertyPath,
+  selectedMember,
+}: DirectStaticPropertyWritesOptions): StaticPropertyWrite[] => {
+  if (
+    selectedMember === null ||
+    selectedMember.propertyPath.length !== propertyPath.length ||
+    !selectedMember.propertyPath.every(
+      (propertyName, index) => propertyName === propertyPath.at(index),
+    )
+  ) {
+    return [];
+  }
+  const write = isAstNode(selectedMember.member)
+    ? selectedMember.member.parent
+    : null;
+  if (
+    !isAstNode(write) ||
+    !(
+      (write.type === "AssignmentExpression" &&
+        write.left === selectedMember.member) ||
+      (write.type === "UpdateExpression" &&
+        write.argument === selectedMember.member) ||
+      (write.type === "UnaryExpression" &&
+        write.operator === "delete" &&
+        write.argument === selectedMember.member)
+    )
+  ) {
+    return [];
+  }
+  const directConditional =
+    write.range[0] < beforePosition
+      ? writeIsConditional(identifier, boundary)
+      : null;
+  const helperCandidate =
+    directConditional === null
+      ? enclosingZeroArgumentFunction(identifier)
+      : null;
+  const helper =
+    isAstNode(helperCandidate) &&
+    !Object.is(helperCandidate, boundary) &&
+    !Object.is(helperCandidate.body, boundary)
+      ? helperCandidate
+      : null;
+  const helperBody =
+    isAstNode(helper) && isAstNode(helper.body) ? helper.body : null;
+  const helperWriteConditional =
+    helperBody === null ? null : writeIsConditional(identifier, helperBody);
+  const executionContexts =
+    directConditional === null
+      ? helperWriteConditional === null
+        ? []
+        : immediateHelperCallContexts(
+            context,
+            helper,
+            boundary,
+            beforePosition,
+          ).map((call) => ({
+            conditional: call.conditional || helperWriteConditional,
+            position: call.position,
+          }))
+      : [
+          {
+            conditional: directConditional,
+            position: write.range[0],
+          },
+        ];
+  return executionContexts.map((execution) => ({
+    conditional: execution.conditional,
+    opaque: write.type !== "AssignmentExpression" || write.operator !== "=",
+    position: execution.position,
+    value: write.type === "AssignmentExpression" ? write.right : null,
+  }));
+};
+
 const staticPropertyWrites = (
   context: unknown,
   binding: unknown,
@@ -804,75 +895,15 @@ const staticPropertyWrites = (
     }
     const identifier = reference.identifier;
     const selectedMember = staticMemberPathFromRoot(context, identifier);
-    if (
-      selectedMember !== null &&
-      selectedMember.propertyPath.length === propertyPath.length &&
-      selectedMember.propertyPath.every(
-        (propertyName, index) => propertyName === propertyPath.at(index),
-      )
-    ) {
-      const write = isAstNode(selectedMember.member)
-        ? selectedMember.member.parent
-        : null;
-      if (
-        isAstNode(write) &&
-        ((write.type === "AssignmentExpression" &&
-          write.left === selectedMember.member) ||
-          (write.type === "UpdateExpression" &&
-            write.argument === selectedMember.member) ||
-          (write.type === "UnaryExpression" &&
-            write.operator === "delete" &&
-            write.argument === selectedMember.member))
-      ) {
-        const directConditional =
-          write.range[0] < beforePosition
-            ? writeIsConditional(identifier, boundary)
-            : null;
-        const helperCandidate =
-          directConditional === null
-            ? enclosingZeroArgumentFunction(identifier)
-            : null;
-        const helper =
-          isAstNode(helperCandidate) &&
-          !Object.is(helperCandidate, boundary) &&
-          !Object.is(helperCandidate.body, boundary)
-            ? helperCandidate
-            : null;
-        const helperBody =
-          isAstNode(helper) && isAstNode(helper.body) ? helper.body : null;
-        const helperWriteConditional =
-          helperBody === null
-            ? null
-            : writeIsConditional(identifier, helperBody);
-        const executionContexts =
-          directConditional === null
-            ? helperWriteConditional === null
-              ? []
-              : immediateHelperCallContexts(
-                  context,
-                  helper,
-                  boundary,
-                  beforePosition,
-                ).map((call) => ({
-                  conditional: call.conditional || helperWriteConditional,
-                  position: call.position,
-                }))
-            : [
-                {
-                  conditional: directConditional,
-                  position: write.range[0],
-                },
-              ];
-        for (const execution of executionContexts) {
-          writes.push({
-            conditional: execution.conditional,
-            opaque:
-              write.type !== "AssignmentExpression" || write.operator !== "=",
-            position: execution.position,
-            value: write.type === "AssignmentExpression" ? write.right : null,
-          });
-        }
-      }
+    for (const write of directStaticPropertyWrites({
+      beforePosition,
+      boundary,
+      context,
+      identifier,
+      propertyPath,
+      selectedMember,
+    })) {
+      writes.push(write);
     }
     const aliasSource = aliasInitializerExpression(
       selectedMember?.member ?? identifier,
@@ -921,16 +952,19 @@ const staticPropertyWrites = (
           visitedBindings,
           boundary,
         );
-        writes.push(
-          ...aliasWrites.map((write) =>
+        for (const write of aliasWrites) {
+          writes.push(
             combinedPrefix.length === 0
               ? write
               : {
-                  ...write,
                   aliasCapturePosition: aliasParent.range[0],
+                  conditional: write.conditional,
+                  opaque: write.opaque,
+                  position: write.position,
+                  value: write.value,
                 },
-          ),
-        );
+          );
+        }
       }
     }
   }
@@ -951,6 +985,69 @@ const STATIC_ABSENT_VALUE: StaticAbsentValue = {
 };
 const STATIC_OPAQUE_VALUE: StaticOpaqueValue = {
   type: "StaticOpaqueValue",
+};
+
+const latestUnconditionalWritePosition = (
+  writes: readonly StaticPropertyWrite[],
+): number => {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const write of writes) {
+    if (!write.conditional) {
+      latest = Math.max(latest, write.position);
+    }
+  }
+  return latest;
+};
+
+type DescendantWritesAfterAncestorsOptions = {
+  ancestorCutoff: number;
+  ancestorWrites: readonly StaticPropertyWrite[];
+  writes: readonly StaticPropertyWrite[];
+};
+
+const descendantWritesAfterAncestors = ({
+  ancestorCutoff,
+  ancestorWrites,
+  writes,
+}: DescendantWritesAfterAncestorsOptions): StaticPropertyWrite[] => {
+  const descendants: StaticPropertyWrite[] = [];
+  for (const write of writes) {
+    if (write.position <= ancestorCutoff) {
+      continue;
+    }
+    const aliasCapturePosition = write.aliasCapturePosition;
+    if (
+      aliasCapturePosition !== undefined &&
+      ancestorWrites.some(
+        (ancestorWrite) =>
+          !ancestorWrite.conditional &&
+          ancestorWrite.position > aliasCapturePosition &&
+          ancestorWrite.position < write.position,
+      )
+    ) {
+      continue;
+    }
+    const descendant: StaticPropertyWrite = {
+      conditional:
+        write.conditional ||
+        ancestorWrites.some(
+          (ancestorWrite) =>
+            ancestorWrite.conditional &&
+            (ancestorWrite.position > write.position ||
+              (aliasCapturePosition !== undefined &&
+                ancestorWrite.position > aliasCapturePosition &&
+                ancestorWrite.position < write.position)),
+        ),
+      opaque: write.opaque,
+      position: write.position,
+      value: write.value,
+    };
+    if (aliasCapturePosition !== undefined) {
+      descendant.aliasCapturePosition = aliasCapturePosition;
+    }
+    descendants.push(descendant);
+  }
+  return descendants;
 };
 
 const isStaticAbsentValue = (value: unknown): value is StaticAbsentValue =>
@@ -1255,44 +1352,17 @@ const resolveStaticObjectPath = (
         .flatMap((ancestorPath) =>
           staticPropertyWrites(context, binding, ancestorPath, beforePosition),
         );
-      const ancestorCutoff = ancestorWrites
-        .filter((write) => !write.conditional)
-        .reduce(
-          (latest, write) => Math.max(latest, write.position),
-          Number.NEGATIVE_INFINITY,
-        );
-      const descendantWrites = staticPropertyWrites(
-        context,
-        binding,
-        propertyPath,
-        beforePosition,
-      )
-        .filter((write) => write.position > ancestorCutoff)
-        .filter((write) => {
-          const aliasCapturePosition = write.aliasCapturePosition;
-          return (
-            aliasCapturePosition === undefined ||
-            !ancestorWrites.some(
-              (ancestorWrite) =>
-                !ancestorWrite.conditional &&
-                ancestorWrite.position > aliasCapturePosition &&
-                ancestorWrite.position < write.position,
-            )
-          );
-        })
-        .map((write) => ({
-          ...write,
-          conditional:
-            write.conditional ||
-            ancestorWrites.some(
-              (ancestorWrite) =>
-                ancestorWrite.conditional &&
-                (ancestorWrite.position > write.position ||
-                  (write.aliasCapturePosition !== undefined &&
-                    ancestorWrite.position > write.aliasCapturePosition &&
-                    ancestorWrite.position < write.position)),
-            ),
-        }));
+      const ancestorCutoff = latestUnconditionalWritePosition(ancestorWrites);
+      const descendantWrites = descendantWritesAfterAncestors({
+        ancestorCutoff,
+        ancestorWrites,
+        writes: staticPropertyWrites(
+          context,
+          binding,
+          propertyPath,
+          beforePosition,
+        ),
+      });
       return applyStaticPropertyWrites(baseResolution, descendantWrites);
     }
   }

@@ -50,7 +50,14 @@ inferredDateAlias.setMonth(8);
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: immediate legacy formatting is not a boundary
 export const localeDate = new Date(isoTimestamp).toLocaleDateString();
 
+// oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: Date clock reads cannot hide behind immediate serialization
+export const serializedDateClock = new Date().toISOString();
+// oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: constructor clock reads cannot bypass the Date.now ban
+export const constructedDateClock = new Date().getTime();
+
 // Approved database, protocol, and third-party boundary shapes.
+export const currentDatabaseDate = new Date();
+export const currentHttpDate = new Date().toUTCString();
 export const databaseDate = new Date(epochMilliseconds);
 export const timestampEpoch = new Date(isoTimestamp).getTime();
 export const isoSerialization = new Date(epochMilliseconds).toISOString();
