@@ -73,6 +73,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
+  "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/smoke-session/**/*.ts",
   "apps/api/src/lib/template-binding/**/*.ts",
   "apps/api/src/lib/uploads/**/*.ts",

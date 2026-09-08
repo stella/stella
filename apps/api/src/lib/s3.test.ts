@@ -5,6 +5,7 @@ import {
   isMissingCorpusObjectError,
   isMissingS3ObjectError,
   isS3Stale,
+  readCorpusS3Bytes,
   readCorpusS3BytesBounded,
   readCorpusS3Range,
   S3ObjectBudgetError,
@@ -13,7 +14,8 @@ import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
-import { credentialsFromEnvValues } from "@/api/lib/s3-credentials";
+import { isExpiredCredentialsError } from "@/api/lib/s3/credential-guard";
+import { credentialsFromEnvValues } from "@/api/lib/s3/credentials";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
@@ -651,5 +653,117 @@ describe("readS3ArrayBuffer", () => {
 
     expect(requestSignal).toBeInstanceOf(AbortSignal);
     expect(bytes).toEqual(new Uint8Array([1, 2, 3]));
+  });
+});
+
+/**
+ * The presigned read path learns about a refused credential from a response
+ * rather than from a thrown request failure, so the response's error code has
+ * to survive into the raised error: that code is the only thing the credential
+ * guard can classify an expiry by.
+ */
+describe("presigned reads and expired credentials", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const installFetch = (
+    stub: (input: string | URL | Request) => Promise<Response>,
+  ) => {
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+  };
+
+  const expiredTokenResponse = (): Response =>
+    new Response(
+      "<Error><Code>ExpiredToken</Code><Message>The provided token has expired.</Message></Error>",
+      { status: 400, headers: { "content-type": "application/xml" } },
+    );
+
+  test("a 400 ExpiredToken is refreshed and replayed once", async () => {
+    // Static env credentials resolve without a request, so every fetch counted
+    // here is the object read itself: one refused, one replayed.
+    let reads = 0;
+    installFetch(async () => {
+      reads += 1;
+      if (reads === 1) {
+        return await Promise.resolve(expiredTokenResponse());
+      }
+      return await Promise.resolve(new Response(new Uint8Array([7, 8, 9])));
+    });
+
+    const bytes = new Uint8Array(await readS3ArrayBuffer("documents/rotated"));
+
+    expect(reads).toBe(2);
+    expect(bytes).toEqual(new Uint8Array([7, 8, 9]));
+  });
+
+  test("the code survives onto the error when the replay also fails", async () => {
+    installFetch(async () => await Promise.resolve(expiredTokenResponse()));
+
+    const rejection = await readCorpusS3Bytes(
+      "legal-corpus/rotated.zst",
+      new AbortController().signal,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    // Without the code the guard cannot tell this from any other 400, and the
+    // read never gets its replay.
+    expect(rejection).toMatchObject({ status: 400, code: "ExpiredToken" });
+    expect(isExpiredCredentialsError(rejection)).toBe(true);
+  });
+
+  test("a 400 that is not an expiry is raised without a replay", async () => {
+    let reads = 0;
+    installFetch(async () => {
+      reads += 1;
+      return await Promise.resolve(
+        new Response(
+          "<Error><Code>InvalidArgument</Code><Message>bad</Message></Error>",
+          { status: 400, headers: { "content-type": "application/xml" } },
+        ),
+      );
+    });
+
+    const rejection = await readCorpusS3Bytes(
+      "legal-corpus/bad-request.zst",
+      new AbortController().signal,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(reads).toBe(1);
+    expect(rejection).toMatchObject({ status: 400, code: "InvalidArgument" });
+  });
+
+  test("absence stays a 404-only conclusion", async () => {
+    // `NotFound` carried on any other status says something about the request,
+    // not about the key, so it must not read as an absent object.
+    installFetch(
+      async () =>
+        await Promise.resolve(
+          new Response(
+            "<Error><Code>NotFound</Code><Message>nope</Message></Error>",
+            { status: 403, headers: { "content-type": "application/xml" } },
+          ),
+        ),
+    );
+
+    const rejection = await readCorpusS3Bytes(
+      "legal-corpus/forbidden.zst",
+      new AbortController().signal,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(isMissingCorpusObjectError(rejection)).toBe(false);
+    expect(rejection).toMatchObject({ status: 403, code: "NotFound" });
   });
 });

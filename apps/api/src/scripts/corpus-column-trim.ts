@@ -76,7 +76,7 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
-import { getCorpusS3, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+import { corpusS3ObjectExists, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type {
@@ -194,7 +194,7 @@ const candidateFilter = and(
 );
 
 const corpusObjectExists = async (key: string): Promise<boolean> =>
-  await withTimeout(async () => await getCorpusS3().file(key).exists(), {
+  await withTimeout(async () => await corpusS3ObjectExists(key), {
     label: "corpus-column-trim-exists",
     timeoutMs: LIMITS.corpusObjectIoTimeoutMs,
   });
