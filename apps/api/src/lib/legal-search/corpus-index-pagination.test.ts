@@ -98,13 +98,13 @@ afterEach(() => {
 const scanRequestCount = (): number =>
   requestBodies.filter((body) => body["snippet_fields"] === undefined).length;
 
-const readPage = async (limit = 10) =>
+const readPage = async (limit = 10, parsedCursor: SearchCursor | null = null) =>
   await readCorpusIndexSearchPage({
     cluster: "q08",
     indexId: "case_law_v2_cze",
     query: "text:promlčení",
     limit,
-    parsedCursor: null,
+    parsedCursor,
     snippetFields: ["text"],
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
@@ -738,6 +738,34 @@ describe("only the passages a page emits are highlighted", () => {
     expect(snippetRequest?.["query"]).toBe(
       '(text:promlčení) AND (chunk_id:"doc-0:0" OR chunk_id:"doc-1:0" OR chunk_id:"doc-2:0")',
     );
+  });
+
+  test("a cursor page highlights its own passages, not the previous page's", async () => {
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      chunk_id: `doc-${index}:0`,
+      document_id: `doc-${index}`,
+    }));
+
+    const first = await readPage(3);
+    requestBodies = [];
+    const second = await readPage(3, first.nextCursor);
+
+    // Snippets travel with the page, not with the scan, so a continuation
+    // cuts its own: the round names the passages this page emits and none of
+    // the ones the reader already has.
+    expect(second.pageRanked.map((hit) => hit.id)).toEqual([
+      "doc-3",
+      "doc-4",
+      "doc-5",
+    ]);
+    expect(snippetRequests()).toHaveLength(1);
+    expect(second.scan.highlightRounds).toBe(1);
+    expect(snippetRequests().at(0)?.["query"]).toBe(
+      '(text:promlčení) AND (chunk_id:"doc-3:0" OR chunk_id:"doc-4:0" OR chunk_id:"doc-5:0")',
+    );
+    for (const hit of second.pageRanked) {
+      expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
+    }
   });
 
   test("a document-granular generation is addressed by document", async () => {
