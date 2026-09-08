@@ -1,9 +1,36 @@
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
+import type {
+  CorpusIndexError,
+  CorpusIndexHit,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+
+/**
+ * The client answers a failed search with a typed `CorpusIndexError` so its
+ * caller can say what the failure was. Re-throwing that value raw spends the
+ * classification: no search handler catches `CorpusIndexError`, so the handler
+ * boundary grades it `UnhandledException` and answers 500, telling a reader
+ * the API broke when the engine is the thing that could not answer.
+ *
+ * The engine reports its own overload as a 5xx rather than a 429, so status
+ * alone cannot separate "busy" from "broken". Both are the caller's cue to
+ * retry, which is what 503 says; a 4xx means this module built a request the
+ * engine refused, which no retry fixes and 502 reports. Mapping matches
+ * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
+ */
+const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
+  new HandlerError({
+    status:
+      error.status === undefined || error.status === 429 || error.status >= 500
+        ? 503
+        : 502,
+    message: "Search is temporarily unavailable",
+    cause: error,
+  });
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -223,7 +250,7 @@ const readPageSnippets = async ({
   });
   const indexMs = performance.now() - startedAt;
   if (result.isErr()) {
-    throw result.error;
+    throw corpusIndexSearchFailure(result.error);
   }
 
   // Best-first, so the first snippet a document gets is its best-scoring
@@ -373,7 +400,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     });
     indexMs += performance.now() - roundStartedAt;
     if (result.isErr()) {
-      throw result.error;
+      throw corpusIndexSearchFailure(result.error);
     }
 
     const hits = result.value.hits;
