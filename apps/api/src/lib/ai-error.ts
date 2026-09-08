@@ -56,7 +56,19 @@ const httpStatusFromString = (value: unknown): number | null => {
   return isHttpStatus(status) ? status : null;
 };
 
-const providerStatusCode = (error: unknown): number | null => {
+/**
+ * The provider HTTP status one link of an error chain carries, or `null` when
+ * that link carries none of its own.
+ *
+ * Exported because every decision taken on a provider status has to read it
+ * the same way: naming the failure here, and the service-tier retry predicate
+ * in `tanstack-ai-generate`. A second reader drifts, and it drifts silently,
+ * because both agree on the shape the tests happen to use and disagree on the
+ * one production sends. The `HandlerError` exclusion below is exactly such a
+ * disagreement: a reader without it names every wrapped failure 502 and reads
+ * a permanent credential, billing or retired-model answer as a server error.
+ */
+export const providerStatusCode = (error: unknown): number | null => {
   if (!isRecord(error)) {
     return null;
   }

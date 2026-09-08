@@ -26,7 +26,11 @@ import type {
   CachingDecision,
   OrgAIConfig,
 } from "@/api/lib/ai-config";
-import { providerErrorBody } from "@/api/lib/ai-error";
+import {
+  classifyAIError,
+  providerErrorBody,
+  providerStatusCode,
+} from "@/api/lib/ai-error";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -514,6 +518,13 @@ type StandardServiceTierFallbackOptions<TResult> = {
   run: (serviceTier: AIRequestServiceTier) => Promise<TResult>;
 };
 
+// The only exit a failed non-streaming run has, so it is where that run's
+// provider status is recovered. The retry decision reads the recovered error
+// too: a fallback the provider's own status justifies cannot be skipped for
+// want of a status the message still carries. The standard-tier attempt
+// answers through this same function (`isDeferredServiceTier("standard")` is
+// false, so it takes the throw), which leaves both attempts recovered without
+// a second exit to keep in step.
 const withStandardServiceTierFallback = async <TResult>({
   model,
   serviceTier,
@@ -522,11 +533,22 @@ const withStandardServiceTierFallback = async <TResult>({
   try {
     return await run(serviceTier);
   } catch (error) {
-    if (!shouldRetryWithStandardServiceTier({ error, model, serviceTier })) {
-      throw error;
+    const recovered = withRecoveredProviderStatus(error);
+    if (
+      !shouldRetryWithStandardServiceTier({
+        error: recovered,
+        model,
+        serviceTier,
+      })
+    ) {
+      throw recovered;
     }
 
-    return await run("standard");
+    return await withStandardServiceTierFallback({
+      model,
+      run,
+      serviceTier: "standard",
+    });
   }
 };
 
@@ -606,6 +628,39 @@ const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
   });
 };
 
+/**
+ * The same recovery as {@link tanStackRunError}, for the seam that does not
+ * stream.
+ *
+ * `chat({ outputSchema })` never yields the run error to its caller: it rebuilds
+ * it as `new Error(message)`, keeping the event's `code` only when the adapter
+ * set one and dropping its `rawEvent`. An adapter that reports the status as a
+ * plain field on its SDK exception and stringifies the response body into the
+ * message sets neither, so the rebuilt error reaches `classifyAIError` with no
+ * status at all and quota, billing, retired model and outage all read as one
+ * unnamed transport failure, while the identical provider answer classifies
+ * once streamed. Recover the body here so one answer is named one way
+ * whichever seam asked for it.
+ *
+ * The error passes through untouched unless the recovered body actually names
+ * the failure, so an engine-internal error keeps its own identity.
+ */
+const withRecoveredProviderStatus = (error: unknown): unknown => {
+  if (!(error instanceof Error) || classifyAIError(error) !== "unknown") {
+    return error;
+  }
+  const cause = providerErrorBody(error.message);
+  if (cause === undefined) {
+    return error;
+  }
+  const recovered = new HandlerError({
+    status: 502,
+    message: error.message,
+    cause,
+  });
+  return classifyAIError(recovered) === "unknown" ? error : recovered;
+};
+
 const shouldRetryWithStandardServiceTier = ({
   error,
   model,
@@ -622,9 +677,12 @@ const shouldRetryWithStandardServiceTier = ({
 // `chat({ outputSchema })` does not rethrow the adapter's error: it records
 // the failure and throws `new Error(message, { cause: providerError })`, so
 // the status and retry hints live one `cause` down. The streaming paths throw
-// the provider error itself. Walk the chain to the first link that carries a
-// provider status and judge that link; the depth bound keeps a cyclic cause
-// from hanging the request.
+// the provider error itself, and a body-only failure arrives inside the
+// `HandlerError` `withRecoveredProviderStatus` built for it, whose own 502 is
+// this service's, not the provider's. Walk the chain to the first link that
+// carries a provider status, using the classifier's own reader so the status
+// the retry is decided on is the status the failure is named by; the depth
+// bound keeps a cyclic cause from hanging the request.
 const MAX_CAUSE_DEPTH = 8;
 
 const providerErrorInCauseChain = (
@@ -644,10 +702,27 @@ const providerErrorInCauseChain = (
   return null;
 };
 
+/**
+ * A run error the provider's own answer does not account for.
+ *
+ * The streaming seam's `RUN_ERROR` carries the provider's message and nothing
+ * else: the engine drops the status the adapter's exception held, so a flex or
+ * batch tier that was merely unavailable reaches this predicate with nothing
+ * to judge. That run still failed at the provider, which is the case the
+ * deferred-tier fallback exists for, so it retries once on the standard tier.
+ *
+ * The classifier decides "unaccounted for", not the absence of a number: an
+ * adapter can name a permanent answer through a provider-owned marker that
+ * carries no status at all (a rejected key), and a named answer is the
+ * provider's verdict however it was spelled.
+ */
+const isUnattributedRunError = (error: unknown): boolean =>
+  HandlerError.is(error) && classifyAIError(error) === "unknown";
+
 const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
   const provider = providerErrorInCauseChain(error);
   if (provider === null) {
-    return false;
+    return isUnattributedRunError(error);
   }
 
   const isRetryable = provider.record["isRetryable"];
@@ -659,20 +734,6 @@ const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
   }
 
   return provider.statusCode === 429 || provider.statusCode >= 500;
-};
-
-const providerStatusCode = (error: Record<string, unknown>): number | null => {
-  const statusCode = error["statusCode"];
-  if (typeof statusCode === "number" && Number.isInteger(statusCode)) {
-    return statusCode;
-  }
-
-  const status = error["status"];
-  if (typeof status === "number" && Number.isInteger(status)) {
-    return status;
-  }
-
-  return null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
