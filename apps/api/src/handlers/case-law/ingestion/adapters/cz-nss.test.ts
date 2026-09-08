@@ -49,6 +49,9 @@ const reconciliation = requireReconciliation(czNssAdapter);
 
 const BASE_URL = "https://vyhledavac.nssoud.cz";
 
+/** One backslash, for fixtures that must carry a literal escape. */
+const BACKSLASH = String.fromCodePoint(92);
+
 // ── Portal-shaped fixtures ───────────────────────────────
 
 /**
@@ -131,9 +134,22 @@ const CURR_PARAMS_DECODED =
   '[{"Id":19,"TechnickyNazev":"datumvydanirozhodnuti","vyhledavaciPodminkaHodnota":[{"HodnotaDatumACasOd":"2026-06-10T00:00:00","HodnotaDatumACasDo":"2026-06-10T00:00:00"}]}]';
 const CURR_SORT = " order by  zvht38.Hodnota NOOR , zvhdt1.Hodnota DESC ";
 
-const scriptBlock = `<script type="text/javascript">
+/**
+ * The same state for a search whose condition comes from a codelist, captured
+ * verbatim from the portal. Its `ciselnikTreeData` states the condition's own
+ * options as JSON inside the JSON, so each title is wrapped in an escaped
+ * backslash followed by the escape for a double quote. Resolving the second
+ * without consuming the first leaves text that no longer parses as JSON, and
+ * the endpoint answers a body carrying it with 200 and nothing in it.
+ */
+const CURR_PARAMS_CODELIST_JSON =
+  "[{\\u0022Id\\u0022:308,\\u0022ZobrazovanyNazevSekce\\u0022:null,\\u0022TechnickyNazev\\u0022:\\u0022pravnivetaanv\\u0022,\\u0022ZobrazovanyNazev\\u0022:\\u0022Pr\\u00E1vn\\u00ED v\\u011Bta\\u0022,\\u0022DatovyTyp\\u0022:\\u0022FIELD_DIAL\\u0022,\\u0022VazbaKDotazu\\u0022:0,\\u0022vyhledavaciPodminkaHodnota\\u0022:[{\\u0022DatovyTyp\\u0022:\\u0022FIELD_DIAL\\u0022,\\u0022TechnickyNazev\\u0022:\\u0022pravnivetaanv\\u0022,\\u0022ZobrazovanyNazev\\u0022:\\u0022Pr\\u00E1vn\\u00ED v\\u011Bta\\u0022,\\u0022HodnotaText\\u0022:null,\\u0022HodnotaCislo\\u0022:null,\\u0022HodnotaDatumACasOd\\u0022:null,\\u0022HodnotaDatumACasDo\\u0022:null,\\u0022HodnotaCiselnikPolozky\\u0022:null,\\u0022HodnotaCiselnikPolozkySelected\\u0022:\\u00228240\\u0022,\\u0022ciselnikTreeData\\u0022:\\u0022[{id:8240,title:\\\\\\u0022ano\\\\\\u0022},{id:8241,title:\\\\\\u0022ne\\\\\\u0022}]\\u0022,\\u0022ciselnikPolozky\\u0022:[],\\u0022cisPolEnum\\u0022:[],\\u0022JeNastavena\\u0022:true,\\u0022NapovedaNazev\\u0022:null,\\u0022NapovedaHtml\\u0022:null}],\\u0022Visible\\u0022:true}]";
+const CURR_PARAMS_CODELIST_DECODED =
+  '[{"Id":308,"ZobrazovanyNazevSekce":null,"TechnickyNazev":"pravnivetaanv","ZobrazovanyNazev":"Pr\u00e1vn\u00ed v\u011bta","DatovyTyp":"FIELD_DIAL","VazbaKDotazu":0,"vyhledavaciPodminkaHodnota":[{"DatovyTyp":"FIELD_DIAL","TechnickyNazev":"pravnivetaanv","ZobrazovanyNazev":"Pr\u00e1vn\u00ed v\u011bta","HodnotaText":null,"HodnotaCislo":null,"HodnotaDatumACasOd":null,"HodnotaDatumACasDo":null,"HodnotaCiselnikPolozky":null,"HodnotaCiselnikPolozkySelected":"8240","ciselnikTreeData":"[{id:8240,title:\\"ano\\"},{id:8241,title:\\"ne\\"}]","ciselnikPolozky":[],"cisPolEnum":[],"JeNastavena":true,"NapovedaNazev":null,"NapovedaHtml":null}],"Visible":true}]';
+
+const scriptBlock = (params: string): string => `<script type="text/javascript">
     var moreRowsUrl = '/Home/MyResTRowsCont';
-    var currParams = '${CURR_PARAMS_JSON}';
+    var currParams = '${params}';
     var currViewId = '1';
     var currSort = '${CURR_SORT}';
 </script>`;
@@ -142,18 +158,21 @@ type SearchPageOptions = {
   statedCount: number;
   rows: readonly RowFixture[];
   withScript?: boolean;
+  /** The literal the page's own script hands its pagination state over in. */
+  scriptParams?: string;
 };
 
 const searchPage = ({
   rows,
   statedCount,
   withScript = true,
+  scriptParams = CURR_PARAMS_JSON,
 }: SearchPageOptions): string => `<html><body>
   <div id="contenttable"><div class="col-12"><div class="row justify-content-left">
     <h6>Počet nalezených záznamů: ${statedCount}</h6>
   </div></div></div>
   <table class="infinite-scroll">${rows.map(rowBlock).join("\n")}</table>
-  ${withScript ? scriptBlock : ""}
+  ${withScript ? scriptBlock(scriptParams) : ""}
 </body></html>`;
 
 /** The landing page, which only hands out an antiforgery token. */
@@ -808,11 +827,12 @@ describe("cz-nss listSlicePage", () => {
       continuation: [htmlResponse("")],
     });
 
-    expect(
-      await rejectionOf(
-        reconciliation.listSlicePage({ slice: SLICE, page: 1 }),
-      ),
-    ).toBeInstanceOf(Error);
+    const error = await rejectionOf(
+      reconciliation.listSlicePage({ slice: SLICE, page: 1 }),
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).toContain("answered no rows for page 1");
   });
 
   test("asks the portal's own continuation endpoint for a later page", async () => {
@@ -839,12 +859,67 @@ describe("cz-nss listSlicePage", () => {
     // The field names infiniteScroll.js posts, and the query decoded out of
     // the page's JavaScript string literal.
     expect(body.get("vyhledavaciPodminky")).toBe(CURR_PARAMS_DECODED);
+    // The date-range condition carries no nested quoting, so this is the byte
+    // string the endpoint has always been posted, unchanged.
     expect(body.get("zobrazeniVysledkuId")).toBe("1");
     expect(body.get("pageNum")).toBe("1");
     expect(body.get("resultOrder")).toBe(CURR_SORT);
     expect(listed.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: REGIONAL_ROW.documentId },
     ]);
+  });
+
+  test("a codelist condition reaches the endpoint as the JSON the portal wrote", async () => {
+    const { requests } = installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + 1,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+            scriptParams: CURR_PARAMS_CODELIST_JSON,
+          }),
+        ),
+      ],
+      continuation: [htmlResponse(rowBlock(REGIONAL_ROW))],
+    });
+
+    await reconciliation.listSlicePage({ slice: SLICE, page: 1 });
+
+    const posted = new URLSearchParams(requests.at(-1)?.body ?? "").get(
+      "vyhledavaciPodminky",
+    );
+    expect(posted).toBe(CURR_PARAMS_CODELIST_DECODED);
+    // The endpoint reconstructs the search by parsing this, so the assertion
+    // that matters is not the byte string but that it is still JSON: the
+    // escaped backslashes around each codelist title are exactly what a
+    // reader resolving `\\uXXXX` on its own destroys.
+    expect(() => JSON.parse(posted ?? "")).not.toThrow();
+  });
+
+  test("a literal ending at an escaped apostrophe is not truncated", async () => {
+    // The portal quotes these literals with apostrophes, so a value holding
+    // one escapes it. Ending the literal at any apostrophe posts a prefix of
+    // the query, which the endpoint does not recognise.
+    const { requests } = installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + 1,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+            scriptParams: `[{${BACKSLASH}u0022Nazev${BACKSLASH}u0022:${BACKSLASH}u0022d${BACKSLASH}'Artagnan${BACKSLASH}u0022}]`,
+          }),
+        ),
+      ],
+      continuation: [htmlResponse(rowBlock(REGIONAL_ROW))],
+    });
+
+    await reconciliation.listSlicePage({ slice: SLICE, page: 1 });
+
+    expect(
+      new URLSearchParams(requests.at(-1)?.body ?? "").get(
+        "vyhledavaciPodminky",
+      ),
+    ).toBe('[{"Nazev":"d\'Artagnan"}]');
   });
 
   test("a day the court states no records for is empty, not short", async () => {
@@ -972,6 +1047,50 @@ describe("cz-nss fetchPage", () => {
     expect(Result.isError(page) ? null : page.value.nextCursor).toBe(
       `${SLICE}:2`,
     );
+  }, 30_000);
+
+  test("an empty continuation body fails the page instead of ending the day", async () => {
+    // Case-law rule 14. The crawl read a 200 with no body as "no more rows",
+    // moved its cursor to the next day and never came back, so a query the
+    // endpoint refused cost the whole day past its first page. Failing holds
+    // the cursor and retries the page.
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 68,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+      ],
+      continuation: [htmlResponse("")],
+    });
+
+    const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
+
+    expect(Result.isError(page)).toBe(true);
+  }, 30_000);
+
+  test("a page past the day's last record is allowed to come back empty", async () => {
+    // The same empty body, and this time it is the answer: the day states
+    // sixty records, the first two pages carry all of them, and page two is
+    // past the end. Refusing this would wedge every day whose record count
+    // lands on a page boundary.
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + CZ_NSS_CONTINUATION_PAGE_ROWS,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+      ],
+      continuation: [htmlResponse("")],
+    });
+
+    const page = await czNssAdapter.fetchPage(`${SLICE}:2`, {});
+
+    expect(Result.isError(page)).toBe(false);
   }, 30_000);
 });
 
