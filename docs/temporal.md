@@ -4,9 +4,12 @@ Temporal owns clock and calendar logic in TypeScript. Private workspace packages
 and runnable apps import `Temporal` from `@stll/time`. Packages published to npm
 import it directly from `temporal-polyfill/full` and declare that runtime
 dependency themselves. Both entrypoints use the runtime's native implementation
-when available and the ponyfill otherwise. Do not install or read an ambient
+when available and the ponyfill otherwise. Application code must not install or read an ambient
 `globalThis.Temporal`; explicit imports also reach server rendering, web workers,
 desktop webviews, and mobile runtimes without entrypoint ordering assumptions.
+The web Vite build selects native Temporal before dynamically loading the fallback,
+so browsers with native support do not download the implementation. This preserves
+the same explicit imports and does not install an ambient global.
 
 Use the type that matches the value:
 
@@ -33,9 +36,9 @@ value directly from `instant.epochMilliseconds`; convert incoming Dates directly
 with `Temporal.Instant.fromEpochMilliseconds(date.getTime())`. Keep the conversion
 at the call site so a generic adapter cannot make Date convenient in domain logic.
 Temporal intentionally parses standardized Temporal strings rather than every
-legacy protocol date. A required RFC 7231 `Date` header parser may retain
-`Date.parse` with an inline `prefer-temporal/prefer-temporal` suppression that
-names the protocol and explains why Temporal cannot parse it.
+legacy protocol date. A required HTTP-date header parser uses
+`new Date(header).getTime()` at that protocol boundary, with a comment naming the
+grammar that Temporal cannot parse.
 
 The `prefer-temporal` Oxlint rule enforces the syntax it can prove safely. It bans
 the `Date` call form, `Date.now`, `Date.parse`, `Date.UTC`, multi-argument calendar

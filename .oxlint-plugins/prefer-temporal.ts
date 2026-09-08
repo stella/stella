@@ -154,6 +154,18 @@ export default eslintCompatPlugin({
             identifier.name,
           );
 
+        const isUnresolvedReference = (
+          identifier: ESTree.IdentifierReference,
+        ): boolean => {
+          let scope = context.sourceCode.getScope(identifier);
+          while (scope.upper !== null) {
+            scope = scope.upper;
+          }
+          return scope.through.some(
+            (reference) => reference.identifier === identifier,
+          );
+        };
+
         const isGlobalReference = (
           identifier: ESTree.IdentifierReference,
         ): boolean => {
@@ -387,7 +399,8 @@ export default eslintCompatPlugin({
             if (
               isIdentifierReference(node) &&
               node.name === "Temporal" &&
-              context.sourceCode.isGlobalReference(node)
+              (context.sourceCode.isGlobalReference(node) ||
+                isUnresolvedReference(node))
             ) {
               context.report({ node, messageId: "globalTemporal" });
             }

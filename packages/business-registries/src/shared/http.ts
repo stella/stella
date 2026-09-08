@@ -191,10 +191,9 @@ export const parseRetryAfterMs = (response: Response): number | null => {
   if (/^\d+$/u.test(trimmed)) {
     return Number(trimmed) * 1000;
   }
-  // HTTP-date is IMF-fixdate rather than an ISO Temporal grammar. Date.parse
-  // is the platform parser for this legacy HTTP header form.
-  // oxlint-disable-next-line prefer-temporal/prefer-temporal -- Temporal intentionally has no parser for the IMF-fixdate HTTP protocol grammar
-  const dateMs = Date.parse(trimmed);
+  // HTTP-date is IMF-fixdate rather than an ISO Temporal grammar. Date is the
+  // platform parser for this legacy protocol form.
+  const dateMs = new Date(trimmed).getTime();
   if (Number.isNaN(dateMs)) {
     return null;
   }

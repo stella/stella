@@ -1,5 +1,7 @@
 // Passive regression fixture for `prefer-temporal/prefer-temporal`.
 
+import { Temporal as ImportedTemporal } from "temporal-polyfill/full";
+
 declare const epochMilliseconds: number;
 declare const isoTimestamp: string;
 
@@ -7,6 +9,10 @@ declare const isoTimestamp: string;
 export const ambientTemporalInstant = Temporal.Now.instant();
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: global-object access cannot evade explicit Temporal imports
 export const globalTemporalInstant = globalThis.Temporal.Now.instant();
+
+export const importedTemporalInstant = ImportedTemporal.Now.instant();
+const localTemporalApi = { Temporal: { now: () => 0 } };
+export const localTemporalProperty = localTemporalApi.Temporal.now();
 
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: ambient clock statics must use Temporal
 export const ambientEpoch = Date.now();
@@ -18,6 +24,7 @@ export const localCalendarDate = new Date(2026, 8, 8);
 export const ambientDateString = Date();
 
 const DateAlias = Date;
+// oxlint-disable-next-line typescript/unbound-method -- fixture: intentionally extracts a Date static to verify provenance
 const { UTC: utcAlias } = DateAlias;
 // oxlint-disable-next-line prefer-temporal/prefer-temporal -- fixture: stable aliases retain Date provenance
 export const aliasedUtc = utcAlias(2026, 8, 8);

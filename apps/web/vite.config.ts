@@ -173,7 +173,51 @@ const anonymizeWasmDevAssetBasePlugin = (): Plugin => ({
   },
 });
 
+const TEMPORAL_FULL_ENTRYPOINT = "temporal-polyfill/full";
+const TEMPORAL_IMPLEMENTATION_ENTRYPOINT =
+  "temporal-polyfill/full/implementation";
+const VIRTUAL_TEMPORAL_RUNTIME_ID = "\0stella-temporal-runtime";
+
+/**
+ * Preserve the package's native-first ponyfill contract without eagerly
+ * bundling its implementation. The published `/full` entrypoint imports the
+ * implementation before selecting native Temporal, so browsers pay for both.
+ */
+const temporalRuntimePlugin = (): Plugin => ({
+  name: "stella-temporal-runtime",
+  enforce: "pre",
+  resolveId(source) {
+    return source === TEMPORAL_FULL_ENTRYPOINT
+      ? VIRTUAL_TEMPORAL_RUNTIME_ID
+      : null;
+  },
+  load(id) {
+    if (id !== VIRTUAL_TEMPORAL_RUNTIME_ID) {
+      return null;
+    }
+
+    return {
+      code: `
+const nativeTemporal = globalThis.Temporal;
+const implementation = nativeTemporal
+  ? null
+  : await import(${JSON.stringify(TEMPORAL_IMPLEMENTATION_ENTRYPOINT)});
+
+const Temporal = nativeTemporal || implementation.Temporal;
+const IntlExport = nativeTemporal ? globalThis.Intl : implementation.Intl;
+const toTemporalInstant = nativeTemporal
+  ? Date.prototype.toTemporalInstant
+  : implementation.toTemporalInstant;
+
+export { IntlExport as Intl, Temporal, toTemporalInstant };
+`,
+      map: null,
+    };
+  },
+});
+
 const runtimeAssetPlugins = (): PluginOption[] => [
+  temporalRuntimePlugin(),
   anonymizeWasmDevAssetBasePlugin(),
   ensurePluginOption(
     stllAnonymizeWasm({ packages: "none" }),
@@ -431,7 +475,7 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       // Pre-bundle deps that are only reached behind lazy/runtime imports so
       // Vite's dep optimizer handles them during the cold pass, before any
-      // navigation. Two graphs trip this:
+      // navigation. Four graphs trip this:
       //
       //   1. better-auth: src/lib/auth.ts statically imports the client
       //      entrypoints (better-auth/react + /client + /client/plugins,
@@ -472,6 +516,10 @@ export default defineConfig(({ mode }) => {
         "@tanstack/router-core/ssr/server",
         "h3-v2",
         "seroval",
+        // 4. The native-first Temporal adapter reaches this only when the
+        //    browser lacks Temporal. Pre-bundling is dev-server preparation;
+        //    the browser still requests it only on the fallback branch.
+        TEMPORAL_IMPLEMENTATION_ENTRYPOINT,
         "@better-auth/core/env",
         "@better-auth/core/error",
         "@better-auth/core/utils/error-codes",

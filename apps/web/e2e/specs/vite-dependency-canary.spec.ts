@@ -119,3 +119,35 @@ const mountAutocomplete = async (page: Page): Promise<void> => {
     }),
   ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
 };
+
+const isTemporalImplementationRequest = (url: string): boolean =>
+  url.includes("temporal-polyfill_full_implementation");
+
+test.describe("Temporal browser runtime", () => {
+  test.skip(
+    !EXPECTS_DEV_RUNTIME,
+    "The Vite virtual runtime is observable through development module URLs",
+  );
+
+  test("loads the implementation only when native Temporal is absent", async ({
+    page,
+  }) => {
+    const implementationRequests: string[] = [];
+    page.on("request", (request) => {
+      if (isTemporalImplementationRequest(request.url())) {
+        implementationRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/e2e/fixtures/temporal-runtime.html?mode=native");
+    await expect(page.locator("body")).toHaveAttribute("data-result", "native");
+    expect(implementationRequests).toEqual([]);
+
+    await page.goto("/e2e/fixtures/temporal-runtime.html?mode=polyfill");
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-result",
+      "2026-09-08",
+    );
+    expect(implementationRequests).toHaveLength(1);
+  });
+});
