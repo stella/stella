@@ -3,6 +3,8 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { parsePlainDate } from "@stll/time";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -315,7 +317,10 @@ export const createWorkspaceTools = ({
           break;
         }
         case "date": {
-          if (value !== null && typeof value !== "string") {
+          if (
+            value !== null &&
+            (typeof value !== "string" || parsePlainDate(value) === null)
+          ) {
             throw new ChatToolError({
               kind: "invalid-input",
               message:
