@@ -235,20 +235,29 @@ const expansionLeaves = (
  * a single left-to-right pass starves. The stem pass costs tokens × stem
  * fields, so it is bounded by what the reader typed.
  *
- * Dictionary expansion then spends what is left, left to right. Rarest first
- * would be the better order and no frequency signal reaches this builder to
- * give it: the dictionary payload carries a per-bucket document frequency,
- * but the loader keeps only the forms and `CorpusTermExpander` hands over
- * surface forms alone. Ordering by selectivity means retaining that column at
- * load and exposing it on the expander.
+ * Dictionary expansion and the other surface fields then spend what is left,
+ * left to right. Rarest first would be the better order and no frequency
+ * signal reaches this builder to give it: the dictionary payload carries a
+ * per-bucket document frequency, but the loader keeps only the forms and
+ * `CorpusTermExpander` hands over surface forms alone. Ordering by
+ * selectivity means retaining that column at load and exposing it on the
+ * expander.
+ *
+ * The classification field comes last, and being last is the point: it is a
+ * generation's newest field and the weakest match on it — the terms a
+ * publisher filed a decision under, not what the decision says — so it may
+ * only spend what every token's stems and existing alternatives left behind.
+ * A generation that maps no such field contributes an empty group, so its
+ * clause is what it was before the field existed, leaf for leaf.
  */
-const LEAF_BUDGET_PASSES = ["stem", "surface"] as const;
+const LEAF_BUDGET_PASSES = ["stem", "surface", "keywords"] as const;
 
 /**
  * How the budget pays for one token's alternatives. `stem` is the
  * generation's stem fields, one leaf each; `surface` is every alternative
  * spelling of the word as written — the dictionary's other inflections and
- * the extra surface fields.
+ * the extra surface fields; `keywords` is the publisher's classification
+ * field, a different kind of match and the one paid for last.
  *
  * Derived from the passes rather than declared beside them: a group exists
  * because a pass spends it, so there is no way to add one the budget never
@@ -263,11 +272,14 @@ type LeafGroup = (typeof LEAF_BUDGET_PASSES)[number];
  * which is not the order the budget is spent in. A rank per group keeps the
  * two orders independent without a second hand-listed sequence to drift from
  * the first: the map is total over `LeafGroup`, so a new group has to choose
- * its place rather than inherit one.
+ * its place rather than inherit one. The classification leaves are written
+ * after both, so the group a generation without that field writes stays a
+ * prefix of the one it writes with it.
  */
 const LEAF_EMIT_RANK = {
   stem: 1,
   surface: 0,
+  keywords: 2,
 } as const satisfies Record<LeafGroup, number>;
 
 const LEAF_EMIT_ORDER = [...LEAF_BUDGET_PASSES].sort(
@@ -296,7 +308,7 @@ type BudgetedToken = {
  */
 const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
   const budgeted: BudgetedToken[] = tokens.map((token) => ({
-    granted: { stem: [], surface: [] },
+    granted: { stem: [], surface: [], keywords: [] },
     token,
   }));
   let leaves = tokens.length;
@@ -327,6 +339,12 @@ export type CorpusFreeTextOptions = {
    * carries the terms.
    */
   surfaceFields?: readonly string[] | undefined;
+  /**
+   * Classification fields, matched the same way and last in line for the leaf
+   * budget, so naming one can never cost a token the alternatives it had
+   * without it.
+   */
+  keywordFields?: readonly string[] | undefined;
 };
 
 /**
@@ -343,11 +361,13 @@ export type CorpusFreeTextOptions = {
  * the grouping differs.
  *
  * A group mixes an unscoped leaf with field-scoped ones — `("slovo" OR
- * headnote:"slovo" OR text_stem:"slov")` — which the engine reads leaf by
- * leaf: the first is matched against the default fields and the rest against
- * the field each names. Every extra leaf is an alternative beside the surface
+ * headnote:"slovo" OR text_stem:"slov" OR keywords:"slovo")` — which the
+ * engine reads leaf by leaf: the first is matched against the default fields
+ * and the rest against the field each names. Every extra leaf is an alternative beside the surface
  * leaf, never instead of it, so a generation with more fields answers
- * everything the same query answered without them, plus the wider matches.
+ * everything the same query answered without them, plus the wider matches —
+ * a property the leaf budget has to preserve too, which is why its passes are
+ * ordered oldest alternative first.
  *
  * With no expander, no extra fields and no stemming this emits exactly what it
  * emitted before any of them existed, byte for byte; the wider forms differ
@@ -359,6 +379,7 @@ export const corpusFreeTextClause = (
     expand = noTermExpansion,
     stemming = null,
     surfaceFields = [],
+    keywordFields = [],
   }: CorpusFreeTextOptions = {},
 ): string | null => {
   const tokens = tokenizeCorpusFreeText(text);
@@ -374,6 +395,7 @@ export const corpusFreeTextClause = (
           ...expansionLeaves(token, expand),
           ...surfaceFieldLeaves(token.value, surfaceFields),
         ],
+        keywords: surfaceFieldLeaves(token.value, keywordFields),
       },
       typed: quoteCorpusValue(token.value),
     })),
@@ -414,6 +436,7 @@ export type CaseLawCorpusQueryOptions = {
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
   surfaceFields?: readonly string[] | undefined;
+  keywordFields?: readonly string[] | undefined;
 };
 
 /**
@@ -429,11 +452,13 @@ export const caseLawCorpusQuery = ({
   expand,
   stemming,
   surfaceFields,
+  keywordFields,
 }: CaseLawCorpusQueryOptions): string | null => {
   const freeText = corpusFreeTextClause(text, {
     expand,
     stemming,
     surfaceFields,
+    keywordFields,
   });
   if (freeText === null) {
     return null;

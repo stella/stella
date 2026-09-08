@@ -555,6 +555,7 @@ const buildCorpusIndexQuery = ({
     expand,
     stemming: fields.stemming,
     surfaceFields: fields.surfaceFields,
+    keywordFields: fields.keywordFields,
   });
 
 type ResolveCorpusIndexQueryOptions = {

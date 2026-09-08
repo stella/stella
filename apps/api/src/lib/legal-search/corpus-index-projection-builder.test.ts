@@ -230,6 +230,60 @@ test("v6 writes the publisher summary on the opening passage only", () => {
   }
 });
 
+test("v7 keeps a classification out of the headnote field", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
+    input: {
+      ...CASE_LAW_INPUT,
+      metadata: { keywords: ["nájem", "výpověď"], legalArea: "Daně" },
+    },
+    payload: {
+      text: `${"první ".repeat(400)}\n\n${"druhý ".repeat(400)}`,
+      ast: null,
+    },
+    revision: REVISION,
+  });
+
+  expect(documents.length).toBeGreaterThan(1);
+  // The publisher wrote no sentence about this decision, so it has no
+  // headnote: the terms it was indexed under are not one.
+  expect(documents.at(0)).toMatchObject({ keywords: "nájem · výpověď" });
+  for (const [index, document] of documents.entries()) {
+    expect("headnote" in document).toBe(false);
+    expect("headnote_stem" in document).toBe(false);
+    expect("keywords" in document).toBe(index === 0);
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("case_law_v7").has(key),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("v7 writes a headnote and a classification to their own fields", () => {
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
+    input: {
+      ...CASE_LAW_INPUT,
+      metadata: {
+        legalSentence: "Nájemního bytu se to netýká.",
+        legalAreas: ["Občanské právo", "Nájem"],
+      },
+    },
+    payload: { text: "Nájemního bytu se to netýká.", ast: null },
+    revision: REVISION,
+  });
+
+  expect(document).toMatchObject({
+    headnote: "Nájemního bytu se to netýká.",
+    keywords: "Občanské právo · Nájem",
+  });
+  // The headnote keeps its stem companion; the classification has none, so a
+  // field it could not fill is a field it does not emit.
+  expect("headnote_stem" in (document ?? {})).toBe(true);
+  expect("keywords_stem" in (document ?? {})).toBe(false);
+});
+
 test("v6 prefers a marked apparatus paragraph to a metadata key", () => {
   const [document] = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
@@ -239,6 +293,21 @@ test("v6 prefers a marked apparatus paragraph to a metadata key", () => {
   });
 
   expect(document).toMatchObject({ headnote: "Právní věta" });
+});
+
+test("the summary a v6 index already holds keeps its fallback", () => {
+  // v6 maps one field for everything a publisher wrote. Splitting the two
+  // readings under it would leave one index holding both, so the generation
+  // that maps a second field is the one that stops using the fallback.
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: { ...CASE_LAW_INPUT, metadata: { keywords: ["nájem"] } },
+    payload: { text: "Usnesení", ast: null },
+    revision: REVISION,
+  });
+
+  expect(document).toMatchObject({ headnote: "nájem" });
+  expect("keywords" in (document ?? {})).toBe(false);
 });
 
 test("v5 never emits a field its strict mapping does not declare", () => {

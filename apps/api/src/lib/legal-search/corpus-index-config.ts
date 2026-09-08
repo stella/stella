@@ -349,12 +349,12 @@ export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
 export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
 
 /**
- * The index field carrying a decision's publisher summary: the publisher's
- * own sentence about the case, from `publisher-summary.ts`. Its own field
- * rather than a prefix of `text`, so a term matching the summary is a
- * document-level hit that ranks and reads as one, and so `heading_path`'s
- * problem cannot recur: it is written to the opening passage only, exactly
- * like `title`, and therefore answers once per document.
+ * The index field carrying a decision's headnote: the publisher's own sentence
+ * about the case, from `publisher-summary.ts`. Its own field rather than a
+ * prefix of `text`, so a term matching the headnote is a document-level hit
+ * that ranks and reads as one, and so `heading_path`'s problem cannot recur:
+ * it is written to the opening passage only, exactly like `title`, and
+ * therefore answers once per document.
  *
  * Not stored: the line a reader sees is read from Postgres, so a copy in the
  * docstore would pay object-storage bytes for nothing.
@@ -365,6 +365,24 @@ export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
  * arrives with a generation and never before one.
  */
 export const PUBLISHER_SUMMARY_FIELD = "headnote";
+
+/**
+ * The index field carrying a decision's classification: the subject-index
+ * terms and areas of law the publisher filed it under, from
+ * `publisher-summary.ts`. A separate field because it is a different kind of
+ * text: a headnote is a sentence somebody wrote about this decision, a
+ * classification is a handful of terms shared with every other decision filed
+ * the same way, and a term matching one should not score as if it had matched
+ * the other.
+ *
+ * Written to the opening passage only and never a default search field, like
+ * the headnote. Unlike the headnote it carries no fieldnorms: fieldnorms are
+ * what make BM25 length normalization work, and against a field this short
+ * they are amplification — a two-word tag list would outscore a paragraph a
+ * publisher wrote for the same term. A classification is worth matching, not
+ * worth winning on.
+ */
+export const PUBLISHER_KEYWORDS_FIELD = "keywords";
 
 /**
  * The stem companions of the two full-text fields a reader's words reach.

@@ -2,14 +2,20 @@ import { panic } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { hasUsableAst } from "@/api/lib/case-law/document-ast";
-import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
+import {
+  publisherHeadnoteOf,
+  publisherKeywordsOf,
+  publisherSummaryOf,
+  type PublisherSummaryInput,
+} from "@/api/lib/case-law/publisher-summary";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
-  corpusIndexPublisherSummaryField,
+  corpusIndexPublisherFields,
   corpusIndexStemFields,
   type CorpusIndexManifest,
+  type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   caseLawProjectionTitle,
@@ -42,6 +48,7 @@ type CaseLawProjectionDocument = SharedProjectionDocument & {
   decision_year?: number;
   ecli?: string;
   headnote?: string;
+  keywords?: string;
   text_stem?: string;
   headnote_stem?: string;
 };
@@ -96,6 +103,63 @@ type BuildCaseLawOptions = ProjectionBuildBase & {
 
 const CASE_LAW_DECISION_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
+/** One index field and the text this decision fills it with. */
+type PublisherProjectionField = { field: string; value: string };
+
+type PublisherProjection = {
+  summary: PublisherProjectionField | null;
+  keywords: PublisherProjectionField | null;
+};
+
+const publisherField = (
+  field: string,
+  value: string | null,
+): PublisherProjectionField | null =>
+  value === null ? null : { field, value };
+
+/**
+ * What this decision writes into the generation's publisher fields. The full
+ * source list, AST roles included: this is the one place holding both a parsed
+ * document and its publisher metadata.
+ *
+ * Which reading fills the summary field is the generation's, not this
+ * function's: a generation with a field for the classification keeps sentences
+ * and tags apart, and one built before that field existed keeps the fallback
+ * its indexes already hold, because changing what a built generation writes
+ * would leave two readings of the same field inside one index.
+ */
+const publisherProjection = (
+  publisher: CorpusIndexPublisherFields,
+  input: PublisherSummaryInput,
+): PublisherProjection => {
+  switch (publisher.kind) {
+    case "none":
+      return { summary: null, keywords: null };
+    case "summary":
+      return {
+        summary: publisherField(
+          publisher.summaryField,
+          publisherSummaryOf(input),
+        ),
+        keywords: null,
+      };
+    case "summary_and_keywords":
+      return {
+        summary: publisherField(
+          publisher.summaryField,
+          publisherHeadnoteOf(input),
+        ),
+        keywords: publisherField(
+          publisher.keywordsField,
+          publisherKeywordsOf(input),
+        ),
+      };
+    default:
+      publisher satisfies never;
+      return panic(`Unhandled publisher fields: ${String(publisher)}`);
+  }
+};
+
 export const buildCaseLawProjectionDocuments = ({
   manifest,
   input,
@@ -122,15 +186,10 @@ export const buildCaseLawProjectionDocuments = ({
   const decisionYear =
     input.decisionDate === null ? null : Number(input.decisionDate.slice(0, 4));
   const ast = hasUsableAst(payload.ast) ? payload.ast : null;
-  // The full source list, AST roles included: this is the one place holding
-  // both a parsed document and its publisher metadata. The read path sees the
-  // metadata prefix of the same list, so the indexed line is never a different
-  // answer, only a better one.
-  const summaryField = corpusIndexPublisherSummaryField(manifest);
-  const summary =
-    summaryField === null
-      ? null
-      : publisherSummaryOf({ documentAst: ast, metadata: input.metadata });
+  const publisher = publisherProjection(corpusIndexPublisherFields(manifest), {
+    documentAst: ast,
+    metadata: input.metadata,
+  });
   // Stems come from the decision's own language, not its jurisdiction: an
   // index group spans several countries and a court may publish in more than
   // one language. A language with no stemmer writes no stem fields at all,
@@ -142,9 +201,9 @@ export const buildCaseLawProjectionDocuments = ({
       ? null
       : { fields: stemFields, language: stemLanguage };
   const summaryStem =
-    stemmed === null || summary === null
+    stemmed === null || publisher.summary === null
       ? null
-      : stemCorpusText(summary, stemmed.language);
+      : stemCorpusText(publisher.summary.value, stemmed.language);
   const chunks = chunkDocument({ ast, fallbackText: payload.text });
   const documents: CaseLawProjectionDocument[] = [];
   for (const chunk of chunks) {
@@ -161,9 +220,13 @@ export const buildCaseLawProjectionDocuments = ({
       // Opening passage only, like `title`: a document-level line repeated on
       // every passage would let one decision answer a broad query as many
       // times as it has passages. The summary's stem follows it, so the two
-      // are always written together or not at all.
-      ...(chunk.seq === 0 && summaryField !== null && summary !== null
-        ? { [summaryField]: summary }
+      // are always written together or not at all, and the classification
+      // sits beside them under the same rule.
+      ...(chunk.seq === 0 && publisher.summary !== null
+        ? { [publisher.summary.field]: publisher.summary.value }
+        : {}),
+      ...(chunk.seq === 0 && publisher.keywords !== null
+        ? { [publisher.keywords.field]: publisher.keywords.value }
         : {}),
       ...(chunk.seq === 0 && stemmed !== null && summaryStem !== null
         ? { [stemmed.fields.publisherSummary]: summaryStem }
