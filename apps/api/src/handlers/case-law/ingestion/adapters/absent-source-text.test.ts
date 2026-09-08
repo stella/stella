@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   SOURCE_ABSENT_TEXT,
   absentTextComparison,
@@ -7,9 +8,20 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/absent-source-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
 
-test("a declared marker reads as no text at all", () => {
-  for (const { text } of SOURCE_ABSENT_TEXT) {
-    expect(sourceTextOrAbsent(text)).toBeUndefined();
+test("a declared marker reads as no text at all, for the source that prints it", () => {
+  for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
+    expect(sourceTextOrAbsent(adapter, text)).toBeUndefined();
+  }
+});
+
+test("another source's rows keep the same words", () => {
+  // A marker is one publisher's way of saying a field is empty. Read as
+  // absence everywhere, it would strip a field another publisher means, and
+  // the repair over stored rows would undo what that publisher's own adapter
+  // writes back on the next crawl.
+  for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
+    expect(adapter).not.toBe(ADAPTER_KEYS.CZ_NS);
+    expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_NS, text)).toBe(text);
   }
 });
 
@@ -17,7 +29,10 @@ test("the markup around a marker does not make it text", () => {
   // What a cell reads back as: the newlines the page indents its rows with,
   // and the runs of space a browser would collapse.
   expect(
-    sourceTextOrAbsent("\r\n   Právní   věta\n není k dispozici.  \r\n"),
+    sourceTextOrAbsent(
+      ADAPTER_KEYS.CZ_US,
+      "\r\n   Právní   věta\n není k dispozici.  \r\n",
+    ),
   ).toBeUndefined();
 });
 
@@ -26,22 +41,22 @@ test("a publisher's own sentence is kept exactly as published", () => {
   // stored, indexed and displayed as the publisher wrote it, paragraphs and
   // all, so only the surrounding markup is trimmed away.
   const headnote = "Věta první.\n\n  Věta druhá.";
-  expect(sourceTextOrAbsent(`\n${headnote}\n`)).toBe(headnote);
+  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, `\n${headnote}\n`)).toBe(
+    headnote,
+  );
 });
 
 test("an empty cell is absence, not an empty headnote", () => {
-  expect(sourceTextOrAbsent("")).toBeUndefined();
-  expect(sourceTextOrAbsent("  \n\t ")).toBeUndefined();
+  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, "")).toBeUndefined();
+  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, "  \n\t ")).toBeUndefined();
 });
 
 test("a sentence that only starts like a marker is text", () => {
   // The comparison is exact: a decision whose headnote opens with the same
   // words is a headnote, and losing it would be worse than the defect.
-  expect(
-    sourceTextOrAbsent(
-      "Právní věta není k dispozici v jazyce, ve kterém byla vydána.",
-    ),
-  ).toBe("Právní věta není k dispozici v jazyce, ve kterém byla vydána.");
+  const headnote =
+    "Právní věta není k dispozici v jazyce, ve kterém byla vydána.";
+  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, headnote)).toBe(headnote);
 });
 
 test("every declared marker is a sentence its source is recorded printing", async () => {

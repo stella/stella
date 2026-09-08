@@ -12,19 +12,20 @@ import type { AdapterKey } from "@/api/handlers/case-law/consts";
  * boosts every row sharing its words, and shown to a reader as the sentence
  * the case is known by.
  *
- * The wording is the publisher's own, so a marker is declared per source, and
- * only ever as a sentence that source is observed to print — held to its
- * committed fixture by the test beside this module, never a sentence somebody
- * expects it to print.
+ * A marker belongs to the source that prints it, and reading it as absence is
+ * scoped to that source in both directions. The wording is one publisher's:
+ * another may put the same words in a field it means, and a source whose
+ * adapter does not read the list would have the sentence written straight back
+ * on the next crawl, so a repair that stripped it would never reach a fixed
+ * point. Declaring a marker for an adapter and reading that adapter's fields
+ * through {@link sourceTextOrAbsent} are therefore one step, not two.
  *
- * What a marker means is not per source: a sentence one court prints to say a
- * field is empty is not a headnote at any other court either, so
- * {@link sourceTextOrAbsent} compares against the whole list and is the only
- * place the mapping to absent happens. The operator repair for rows stored
- * before an adapter read the list reads the same declarations.
+ * A marker is only ever a sentence its source is observed to print — held to
+ * that source's committed fixture by the test beside this module, never a
+ * sentence somebody expects it to print.
  */
 type SourceAbsentText = {
-  /** The source observed to print it. */
+  /** The source observed to print it, and the only source it is read for. */
   readonly adapter: AdapterKey;
   /** The sentence, exactly as the source prints it. */
   readonly text: string;
@@ -53,24 +54,48 @@ export const SOURCE_ABSENT_TEXT = [
 export const absentTextComparison = (text: string): string =>
   text.replaceAll(/\s+/gu, " ").trim();
 
-/** Every declared marker, in comparison form, for a reader outside TypeScript. */
-export const SOURCE_ABSENT_TEXT_COMPARISONS = SOURCE_ABSENT_TEXT.map(
-  ({ text }) => absentTextComparison(text),
+/**
+ * One adapter's markers, in comparison form, for a reader outside TypeScript.
+ * Empty for an adapter that declares none, which is every adapter whose source
+ * fills an empty field with nothing.
+ */
+export const absentTextComparisonsFor = (
+  adapter: AdapterKey,
+): readonly string[] =>
+  SOURCE_ABSENT_TEXT.filter((marker) => marker.adapter === adapter).map(
+    ({ text }) => absentTextComparison(text),
+  );
+
+/** Every adapter that declares at least one marker. */
+export const ADAPTERS_DECLARING_ABSENT_TEXT: readonly AdapterKey[] = [
+  ...new Set(SOURCE_ABSENT_TEXT.map(({ adapter }) => adapter)),
+];
+
+const COMPARISONS_BY_ADAPTER = new Map<AdapterKey, ReadonlySet<string>>(
+  ADAPTERS_DECLARING_ABSENT_TEXT.map((adapter) => [
+    adapter,
+    new Set(absentTextComparisonsFor(adapter)),
+  ]),
 );
 
-const ABSENT_COMPARISONS = new Set(SOURCE_ABSENT_TEXT_COMPARISONS);
-
 /**
- * One publisher field as an adapter should store it: the text the source
- * printed, or nothing at all where what it printed was a declared marker or
- * no text. An adapter writes the result straight through, so a field the
- * source left empty and a field it filled with its own "not available"
- * sentence reach the row as the same absence.
+ * One publisher field as the adapter reading it should store it: the text the
+ * source printed, or nothing at all where what it printed was one of that
+ * source's markers or no text. The adapter writes the result straight through,
+ * so a field the source left empty and a field it filled with its own "not
+ * available" sentence reach the row as the same absence.
  */
-export const sourceTextOrAbsent = (raw: string): string | undefined => {
+export const sourceTextOrAbsent = (
+  adapter: AdapterKey,
+  raw: string,
+): string | undefined => {
   const text = raw.trim();
-  if (text.length === 0 || ABSENT_COMPARISONS.has(absentTextComparison(text))) {
+  if (text.length === 0) {
     return undefined;
   }
-  return text;
+  return COMPARISONS_BY_ADAPTER.get(adapter)?.has(
+    absentTextComparison(text),
+  ) === true
+    ? undefined
+    : text;
 };

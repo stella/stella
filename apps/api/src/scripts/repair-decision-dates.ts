@@ -84,6 +84,7 @@ import {
   repairDecisionDateBatch,
   selectCorruptDecisionDatesStatement,
 } from "@/api/scripts/repair-decision-dates-plan";
+import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
 
 /**
  * Rows per transaction. Small on purpose: the batch holds the citation-graph
@@ -106,43 +107,18 @@ const USAGE = `Usage: bun run src/scripts/repair-decision-dates.ts [options]
                  for a flag this script ignores; contradicts --apply.
   --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).`;
 
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
-
-const DECIMAL_INTEGER = /^\d+$/u;
-
-const flagInteger = (name: string, fallback: number): number => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return fallback;
-  }
-  const raw = process.argv[index + 1];
-  const parsed =
-    raw !== undefined && DECIMAL_INTEGER.test(raw)
-      ? Number.parseInt(raw, 10)
-      : Number.NaN;
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    console.error(
-      `--${name} must be a positive integer, got: ${raw ?? "(none)"}`,
-    );
-    console.error(USAGE);
-    process.exit(1);
-  }
-  return parsed;
-};
-
-const apply = hasFlag("apply");
-if (apply && hasFlag("dry-run")) {
-  console.error("--apply and --dry-run contradict each other; pass one.");
-  console.error(USAGE);
-  process.exit(1);
-}
+const apply = readApplyFlag(USAGE);
 
 // A report run only reads, so it takes no lane and cannot block a writer; the
 // read-only session makes that a property of the connection, not a promise.
 const { rootDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
-const limit = flagInteger("limit", DEFAULT_LIMIT);
+const limit = flagInteger({
+  fallback: DEFAULT_LIMIT,
+  name: "limit",
+  usage: USAGE,
+});
 
 const surveyNumber = (row: Record<string, unknown>, key: string): number => {
   const value = row[key];

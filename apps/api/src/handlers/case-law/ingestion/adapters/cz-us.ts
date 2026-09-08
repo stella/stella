@@ -376,8 +376,12 @@ const extractAbstract = (
   legalSentence?: string;
 } => {
   const $ = cheerio.load(html);
-  const abstractText = sourceTextOrAbsent($("table.abstractContent td").text());
+  const abstractText = sourceTextOrAbsent(
+    ADAPTER_KEYS.CZ_US,
+    $("table.abstractContent td").text(),
+  );
   const legalText = sourceTextOrAbsent(
+    ADAPTER_KEYS.CZ_US,
     $("table.legalSentenceContent td").text(),
   );
 
