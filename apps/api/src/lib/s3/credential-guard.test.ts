@@ -153,6 +153,33 @@ describe("createS3CredentialGuard", () => {
     expect(source.builds).toBe(1);
   });
 
+  test("concurrent expired-token failures share one forced rebuild", async () => {
+    const source = createFakeCredentialSource();
+    const guard = createS3CredentialGuard(source.lifecycle);
+    const failed = new Set<number>();
+
+    // A rotation retires the credentials for the whole process at once, so
+    // every operation in flight fails together. One endpoint request and one
+    // client swap must serve the whole burst; one per failure would hammer the
+    // container endpoint and race the replacements against each other.
+    const results = await Promise.all(
+      Array.from({ length: 5 }, async (_unused, index) =>
+        guard.run(async () => {
+          await Promise.resolve();
+          if (!failed.has(index)) {
+            failed.add(index);
+            throw expiredTokenError();
+          }
+          return index;
+        }),
+      ),
+    );
+
+    expect(results).toEqual([0, 1, 2, 3, 4]);
+    // The initial build plus exactly one rebuild for all five failures.
+    expect(source.builds).toBe(2);
+  });
+
   test("a failed rebuild is not cached", async () => {
     let attempts = 0;
     const guard = createS3CredentialGuard({

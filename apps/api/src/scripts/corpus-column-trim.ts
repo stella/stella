@@ -76,12 +76,7 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  getCorpusS3,
-  refreshCorpusS3,
-  refreshS3,
-  refreshStaleCorpusS3,
-} from "@/api/lib/s3";
+import { corpusS3ObjectExists, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type {
@@ -198,17 +193,11 @@ const candidateFilter = and(
   ),
 );
 
-// The only object-store call this script makes on the client handle itself
-// rather than through a helper in `@/api/lib/s3`, so it is also the only one
-// that has to ask for the credential refresh. A run over the whole corpus
-// outlives the task role's credentials several times over.
-const corpusObjectExists = async (key: string): Promise<boolean> => {
-  await refreshStaleCorpusS3();
-  return await withTimeout(async () => await getCorpusS3().file(key).exists(), {
+const corpusObjectExists = async (key: string): Promise<boolean> =>
+  await withTimeout(async () => await corpusS3ObjectExists(key), {
     label: "corpus-column-trim-exists",
     timeoutMs: LIMITS.corpusObjectIoTimeoutMs,
   });
-};
 
 type ObjectCheck = {
   key: string | null;

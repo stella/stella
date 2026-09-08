@@ -462,8 +462,9 @@ const corpusCredentials = createS3CredentialGuard({
 
 /**
  * Rebuild the documents-bucket clients when their credentials are past the
- * horizon. Every helper in this module does it already; a long-running script
- * that holds `getS3()` itself calls this at its own batch boundary.
+ * horizon. Every operation in this module already does it, so this exists for
+ * the server's periodic sweep, which refreshes while the process is idle
+ * rather than making the next request pay for it.
  */
 export const refreshStaleS3 = documentsCredentials.refreshStale;
 
@@ -946,9 +947,19 @@ const throwCorpusObjectResponseError = async ({
   key: string;
   message: string;
 }): Promise<never> => {
-  const code =
-    response.status === 404 ? await readS3ResponseErrorCode(response) : null;
-  if (code !== null && MISSING_CORPUS_OBJECT_CODES.has(code)) {
+  // Read on every rejection, not only on a 404. A presigned read signed with
+  // credentials the store has retired comes back as a 400 or 403 whose
+  // `<Code>ExpiredToken</Code>` is the only thing identifying it as an expiry,
+  // and the credential guard replays the read on that code alone. Dropping it
+  // for non-404 statuses left every fetch-based read outside the retry.
+  const code = await readS3ResponseErrorCode(response);
+  // Absence stays a 404-only conclusion: `NotFound` on any other status says
+  // something about the request, not about the key.
+  if (
+    response.status === 404 &&
+    code !== null &&
+    MISSING_CORPUS_OBJECT_CODES.has(code)
+  ) {
     throw new MissingCorpusObjectError({
       message: `Corpus object is absent: ${key}`,
       key,
@@ -1154,6 +1165,18 @@ export const readS3ArrayBuffer = async (
   signal?: AbortSignal,
 ): Promise<ArrayBuffer> =>
   await (await fetchObject(documentsStore, key, signal)).arrayBuffer();
+
+/**
+ * Whether the legal-corpus bucket holds `key`.
+ *
+ * Owned here rather than left as a `getCorpusS3().file(key).exists()` at the
+ * caller: a probe run once per row by a backfill has to survive a credential
+ * rotation the same way every other object-store call in this module does.
+ */
+export const corpusS3ObjectExists = async (key: string): Promise<boolean> =>
+  await corpusCredentials.run(
+    async () => await getCorpusS3().file(key).exists(),
+  );
 
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
 export const putCorpusS3ObjectWithSignal = async (

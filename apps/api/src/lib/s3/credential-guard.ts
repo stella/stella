@@ -96,14 +96,27 @@ export const createS3CredentialGuard = ({
   // failed rebuild is not cached: the next operation resolves again.
   let inFlight: Promise<void> | null = null;
 
-  const refreshStale = async (): Promise<void> => {
-    if (!isStale()) {
-      return;
-    }
+  // Every rebuild in this module goes through here, the staleness one and the
+  // forced one alike. Credentials rotate for the whole process at once, so a
+  // burst of operations that all discover the expiry together must cost one
+  // endpoint request and one client swap, not one per operation. Joining a
+  // rebuild already in flight is safe for a forced refresh too: it resolves
+  // against the endpoint as it runs, so it cannot hand back the credentials
+  // that just failed.
+  // The assignment runs before the first await, so callers arriving in the
+  // same tick all observe the one promise.
+  const refreshOnce = async (): Promise<void> => {
     inFlight ??= refresh().finally(() => {
       inFlight = null;
     });
     await inFlight;
+  };
+
+  const refreshStale = async (): Promise<void> => {
+    if (!isStale()) {
+      return;
+    }
+    await refreshOnce();
   };
 
   const run = async <T>(operation: () => Promise<T>): Promise<T> => {
@@ -120,7 +133,7 @@ export const createS3CredentialGuard = ({
       logger.warn("s3.credentials_expired_retry", {
         "error.type": errorTag(outcome.error),
       });
-      await refresh();
+      await refreshOnce();
       return await operation();
     }
     // The failure is the store's, and this module has nothing to add to it:

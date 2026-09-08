@@ -31,9 +31,8 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import {
-  getS3,
+  deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
-  refreshStaleS3,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import {
@@ -62,15 +61,19 @@ type EntityFieldRow = {
   organization_id: string;
 };
 
+/** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
+const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
+
 const deleteThumbnailBestEffort = async (thumbnailKey: string) => {
   const cleanup = await Result.tryPromise({
-    try: async () => {
-      // The one call this script makes on the client handle rather than
-      // through a helper in `@/api/lib/s3`, and a full backfill outlives the
-      // task role's credentials.
-      await refreshStaleS3();
-      await getS3().delete(thumbnailKey);
-    },
+    // Through the module helper rather than the client handle: a full backfill
+    // outlives the task role's credentials, and the helper carries the refresh
+    // and the one replay that a rotation mid-run needs.
+    try: async () =>
+      await deleteS3ObjectWithSignal(
+        thumbnailKey,
+        AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(cleanup)) {
