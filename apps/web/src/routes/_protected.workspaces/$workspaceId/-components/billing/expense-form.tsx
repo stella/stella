@@ -83,7 +83,7 @@ export const ExpenseForm = ({
       });
       if (amount === null || amount <= 0) {
         addIssue({
-          message: t("billing.failedToSave"),
+          message: t("billing.amountMustBePositive"),
           path: [
             {
               type: "object",

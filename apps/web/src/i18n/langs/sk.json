@@ -293,6 +293,8 @@
     "exportPDF": "Exportovať PDF",
     "failedToDelete": "Nepodarilo sa odstrániť položku",
     "failedToSave": "Nepodarilo sa uložiť položku",
+    "amountMustBePositive": "Suma musí byť vyššia ako nula",
+    "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "failedToStartTimer": "Nepodarilo sa spustiť časovač",
     "failedToStopTimer": "Nepodarilo sa zastaviť časovač",
     "filterStatus": "Filtrovať podľa stavu",

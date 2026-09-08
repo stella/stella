@@ -293,6 +293,8 @@
     "exportPDF": "Als PDF exportieren",
     "failedToDelete": "Eintrag konnte nicht gelöscht werden",
     "failedToSave": "Eintrag konnte nicht gespeichert werden",
+    "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",

@@ -293,6 +293,8 @@
     "exportPDF": "Exporter en PDF",
     "failedToDelete": "Échec de la suppression de l'entrée",
     "failedToSave": "Échec de l'enregistrement de l'entrée",
+    "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",

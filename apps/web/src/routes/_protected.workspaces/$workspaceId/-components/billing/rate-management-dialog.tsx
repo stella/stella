@@ -672,7 +672,7 @@ const CreateRateEntryForm = ({
           currency,
         });
         if (hourlyRate === null || hourlyRate < 0) {
-          addIssue({ message: t("billing.failedToSave") });
+          addIssue({ message: t("billing.hourlyRateMustBeNonNegative") });
           return NEVER;
         }
         return hourlyRate;

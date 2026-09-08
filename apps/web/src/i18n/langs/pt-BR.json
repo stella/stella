@@ -293,6 +293,8 @@
     "exportPDF": "Exportar PDF",
     "failedToDelete": "Falha ao excluir a entrada",
     "failedToSave": "Falha ao salvar a entrada",
+    "amountMustBePositive": "O valor deve ser maior que zero",
+    "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "failedToStartTimer": "Falha ao iniciar o cronômetro",
     "failedToStopTimer": "Falha ao parar o cronômetro",
     "filterStatus": "Filtrar por status",

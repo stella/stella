@@ -293,6 +293,8 @@
     "exportPDF": "Exportálás PDF-be",
     "failedToDelete": "A bejegyzés törlése sikertelen",
     "failedToSave": "A bejegyzés mentése sikertelen",
+    "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
+    "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "failedToStartTimer": "Nem sikerült elindítani az időmérőt",
     "failedToStopTimer": "Nem sikerült leállítani az időmérőt",
     "filterStatus": "Szűrés státusz szerint",

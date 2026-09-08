@@ -293,6 +293,8 @@
     "exportPDF": "Eksportēt PDF",
     "failedToDelete": "Neizdevās dzēst ierakstu",
     "failedToSave": "Neizdevās saglabāt ierakstu",
+    "amountMustBePositive": "Summai jābūt lielākai par nulli",
+    "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",

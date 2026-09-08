@@ -296,6 +296,8 @@ type Messages = {
     "exportPDF": "Export PDF";
     "failedToDelete": "Failed to delete entry";
     "failedToSave": "Failed to save entry";
+    "amountMustBePositive": "Amount must be greater than zero";
+    "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";

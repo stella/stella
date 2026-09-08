@@ -293,6 +293,8 @@
     "exportPDF": "Ekspordi PDF",
     "failedToDelete": "Kande kustutamine ebaõnnestus",
     "failedToSave": "Kande salvestamine ebaõnnestus",
+    "amountMustBePositive": "Summa peab olema suurem kui null",
+    "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
     "filterStatus": "Filtreeri oleku järgi",

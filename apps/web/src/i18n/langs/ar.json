@@ -293,6 +293,8 @@
     "exportPDF": "تصدير PDF",
     "failedToDelete": "تعذّر حذف الإدخال",
     "failedToSave": "تعذّر حفظ الإدخال",
+    "amountMustBePositive": "يجب أن يكون المبلغ أكبر من صفر",
+    "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "failedToStartTimer": "تعذّر بدء المؤقّت",
     "failedToStopTimer": "تعذّر إيقاف المؤقّت",
     "filterStatus": "التصفية حسب الحالة",

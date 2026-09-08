@@ -293,6 +293,8 @@
     "exportPDF": "Eksportuoti PDF",
     "failedToDelete": "Nepavyko ištrinti įrašo",
     "failedToSave": "Nepavyko išsaugoti įrašo",
+    "amountMustBePositive": "Suma turi būti didesnė už nulį",
+    "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "failedToStartTimer": "Nepavyko paleisti laikmačio",
     "failedToStopTimer": "Nepavyko sustabdyti laikmačio",
     "filterStatus": "Filtruoti pagal būseną",

@@ -14,6 +14,8 @@ import {
 } from "@/lib/schema";
 import * as formOwner from "@/lib/schema";
 
+import { schemaFormOptions as relativeOptions } from "../../apps/web/src/lib/schema";
+
 declare const config: unknown;
 declare const opaqueOptions: unknown;
 declare const condition: boolean;
@@ -25,6 +27,7 @@ const helperAlias = configure;
 
 export const useGoodForms = () => [
   useForm(schemaFormOptions(config)),
+  useForm(relativeOptions(config)),
   useAliasedForm(configure(config)),
   constructorAlias(helperAlias(config)),
   forms.useForm(formOwner.schemaFormOptions(config)),

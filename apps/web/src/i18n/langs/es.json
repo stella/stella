@@ -293,6 +293,8 @@
     "exportPDF": "Exportar PDF",
     "failedToDelete": "Error al eliminar la entrada",
     "failedToSave": "Error al guardar la entrada",
+    "amountMustBePositive": "El importe debe ser mayor que cero",
+    "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "failedToStartTimer": "No se pudo iniciar el temporizador",
     "failedToStopTimer": "No se pudo detener el temporizador",
     "filterStatus": "Filtrar por estado",

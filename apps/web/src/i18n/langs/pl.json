@@ -293,6 +293,8 @@
     "exportPDF": "Eksportuj PDF",
     "failedToDelete": "Nie udało się usunąć wpisu",
     "failedToSave": "Nie udało się zapisać wpisu",
+    "amountMustBePositive": "Kwota musi być większa od zera",
+    "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "failedToStartTimer": "Nie udało się uruchomić stopera",
     "failedToStopTimer": "Nie udało się zatrzymać stopera",
     "filterStatus": "Filtruj według statusu",

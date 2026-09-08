@@ -97,7 +97,9 @@ const isHelperSource = (source: string, context): boolean => {
     path.dirname(filenameForContext(context)),
     source,
   );
-  return /\/apps\/web\/src\/lib\/schema(?:\.[jt]s)?$/u.test(resolved);
+  return /\/apps\/web\/src\/lib\/schema(?:\.[jt]s)?$/u.test(
+    resolved.replaceAll("\\", "/"),
+  );
 };
 
 export default eslintCompatPlugin({
