@@ -118,7 +118,10 @@ type WrittenFieldMetaKey = {
 // The shared writer's shape and this catalogue describe the same field. A key
 // on either side the other does not know about would be a configuration one
 // surface writes and the other silently drops.
-true satisfies Exclude<WrittenFieldMetaKey, keyof MarkerFieldConfig> extends never
+true satisfies Exclude<
+  WrittenFieldMetaKey,
+  keyof MarkerFieldConfig
+> extends never
   ? true
   : never;
 true satisfies Exclude<keyof MarkerFieldConfig, keyof FieldMeta> extends never

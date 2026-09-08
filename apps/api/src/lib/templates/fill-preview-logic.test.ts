@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";

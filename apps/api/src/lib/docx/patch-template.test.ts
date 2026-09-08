@@ -2,9 +2,8 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
 import type { FieldMeta, TemplateData } from "./types";

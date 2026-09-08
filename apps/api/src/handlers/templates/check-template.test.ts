@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import type {
   TemplateCheckClauseLink,
   TemplateCheckFinding,
@@ -9,9 +11,6 @@ import {
   buildTemplateCheckFindings,
   MAX_CHECK_FINDINGS,
 } from "@/api/handlers/templates/check-template";
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";

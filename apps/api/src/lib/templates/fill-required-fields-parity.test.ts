@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { fillHandler } from "@/api/handlers/templates/fill";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";

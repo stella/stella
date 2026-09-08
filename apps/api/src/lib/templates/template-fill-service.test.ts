@@ -2,9 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";

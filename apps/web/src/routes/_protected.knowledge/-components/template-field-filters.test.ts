@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  filtersFromFieldConfig,
-  scanMarkers,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig, scanMarkers } from "@stll/template-conditions";
 
 import {
   markerConfigRewrites,

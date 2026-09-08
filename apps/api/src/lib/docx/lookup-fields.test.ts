@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
 import { parseResRecord } from "@stll/business-registries/ares";
 import { KrsValidationError } from "@stll/business-registries/krs";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type {
   BusinessRegistryHit,

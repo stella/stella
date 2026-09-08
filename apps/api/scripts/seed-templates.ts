@@ -1,6 +1,4 @@
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import JSZip from "jszip";
 /**
  * Seed templates & clauses (Knowledge section).
  *
@@ -20,8 +18,7 @@ import {
  *   - Test user seeded (bun run db:seed-test-user)
  */
 
-import JSZip from "jszip";
-
+import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
 import { rootDb } from "@/api/db/root";

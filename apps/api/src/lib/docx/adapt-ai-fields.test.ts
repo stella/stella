@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
 import { deriveManifestFromDocx } from "./derived-manifest";
 import { fillTemplate } from "./patch-template";

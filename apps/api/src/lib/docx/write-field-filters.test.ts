@@ -5,6 +5,7 @@ import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
 } from "@stll/template-conditions";
+
 import { discoverTemplate } from "./discover-template";
 import type { FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";

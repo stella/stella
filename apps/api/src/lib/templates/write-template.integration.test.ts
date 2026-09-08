@@ -21,8 +21,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
-import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -95,7 +95,10 @@ const fixture = async () => {
         : (await deriveManifestFromDocx(Buffer.from(current))).fields.map(
             ({ path }) => path,
           );
-    const next = await docxWithMarkers([...paths, `added_${String(paths.length)}`]);
+    const next = await docxWithMarkers([
+      ...paths,
+      `added_${String(paths.length)}`,
+    ]);
     return Result.ok({ bytes: new Uint8Array(next) });
   };
   const writeObject: NonNullable<

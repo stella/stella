@@ -14,11 +14,11 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import { propertyConfig } from "@stll/property-testing";
 import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
 } from "@stll/template-conditions";
-import { propertyConfig } from "@stll/property-testing";
 
 import { deriveManifestFromDocx } from "./derived-manifest";
 import { isFieldMeta, type FieldMeta } from "./types";

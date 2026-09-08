@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import {
-  filtersFromFieldConfig,
-} from "@stll/template-conditions";
+import { filtersFromFieldConfig } from "@stll/template-conditions";
+
 import { discoverHandler } from "@/api/handlers/templates/discover";
 import { fillHandler } from "@/api/handlers/templates/fill";
 import { toSafeId } from "@/api/lib/branded-types";
