@@ -333,7 +333,9 @@ describe("online migrations", () => {
   });
 
   test("startup validation rejects an unvalidated delete-receipt constraint without repairing", async () => {
-    const harness = createHarness({ constraintValidated: false });
+    const harness = createHarness({
+      unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
+    });
 
     const rejection: unknown = await assertOnlineMigrationsApplied(
       harness.pool,
@@ -343,7 +345,7 @@ describe("online migrations", () => {
     );
 
     expect(rejection).toMatchObject({
-      message: expect.stringContaining("is not complete: constraint"),
+      message: `Online repair corpus-projection-delete-receipt is not complete: constraint ${DELETE_RECEIPT_CONSTRAINT} is not validated`,
     });
     expect(
       indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
@@ -352,7 +354,9 @@ describe("online migrations", () => {
   });
 
   test("startup validation rejects an unvalidated decision-date constraint without repairing", async () => {
-    const harness = createHarness({ constraintValidated: false });
+    const harness = createHarness({
+      unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
+    });
 
     const rejection: unknown = await assertOnlineMigrationsApplied(
       harness.pool,
@@ -381,8 +385,8 @@ type Artifacts = Readonly<Record<string, Artifact[]>>;
 
 type HarnessOptions = {
   artifacts?: Artifacts;
-  /** What `pg_constraint` reports for the decision-date constraint. */
-  constraintValidated?: boolean;
+  /** Constraints `pg_constraint` reports as not validated; the rest are. */
+  unvalidatedConstraints?: readonly string[];
   indexStates?: IndexStates;
 };
 
@@ -393,7 +397,7 @@ const artifactPrefix = (name: string, suffix: "_ccnew" | "_ccold") =>
 
 const createHarness = ({
   artifacts = {},
-  constraintValidated = true,
+  unvalidatedConstraints = [],
   indexStates = {},
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
@@ -431,7 +435,13 @@ const createHarness = ({
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
           if (query.includes("pg_constraint")) {
-            return [{ isValidated: constraintValidated }];
+            const constraintName = params.at(2);
+            if (typeof constraintName !== "string") {
+              throw new TypeError("Expected constraint name query parameter");
+            }
+            return [
+              { isValidated: !unvalidatedConstraints.includes(constraintName) },
+            ];
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
