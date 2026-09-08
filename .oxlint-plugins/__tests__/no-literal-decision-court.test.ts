@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
-const RULE_ID = "no-literal-decision-court/no-literal-decision-court";
+const RULE_NAME = "no-literal-decision-court";
+const RULE_ID = `${RULE_NAME}/${RULE_NAME}`;
 const temporaryDirectories: string[] = [];
 
 setDefaultTimeout(20_000);
@@ -20,10 +21,21 @@ afterEach(async () => {
   );
 });
 
-type LintRun = { exitCode: number; output: string };
+/** One oxlint diagnostic, in the shape `--format=json` reports it. */
+type Diagnostic = {
+  code: string;
+  labels?: readonly { span?: { line?: number } | undefined }[] | undefined;
+};
 
-/** Lint one source through the rule alone, as the adapters glob enables it. */
-const lint = async (source: string): Promise<LintRun> => {
+/**
+ * The lines this rule reported, in order.
+ *
+ * Read out of oxlint's JSON report rather than its rendered output: the
+ * rendering is a presentation choice that varies with terminal and
+ * environment, and a test that parses it reads as a rule regression when it
+ * drifts.
+ */
+const lint = async (source: string): Promise<number[]> => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-oxlint-decision-court-"),
   );
@@ -33,11 +45,7 @@ const lint = async (source: string): Promise<LintRun> => {
     configPath,
     `export default ${JSON.stringify({
       jsPlugins: [
-        path.join(
-          REPOSITORY_ROOT,
-          ".oxlint-plugins",
-          "no-literal-decision-court.ts",
-        ),
+        path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${RULE_NAME}.ts`),
       ],
       rules: { [RULE_ID]: "error" },
     })};\n`,
@@ -46,24 +54,29 @@ const lint = async (source: string): Promise<LintRun> => {
   await Bun.write(sourcePath, source);
 
   const spawned = Bun.spawn(
-    [process.execPath, "--bun", "oxlint", "-c", configPath, sourcePath],
+    [
+      process.execPath,
+      "--bun",
+      "oxlint",
+      "-c",
+      configPath,
+      "-f",
+      "json",
+      sourcePath,
+    ],
     { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
   );
-  const [exitCode, stderr, stdout] = await Promise.all([
-    spawned.exited,
-    new Response(spawned.stderr).text(),
+  const [stdout] = await Promise.all([
     new Response(spawned.stdout).text(),
+    spawned.exited,
   ]);
-  return { exitCode, output: `${stdout}\n${stderr}` };
+  const { diagnostics } = JSON.parse(stdout) as {
+    diagnostics: readonly Diagnostic[];
+  };
+  return diagnostics
+    .filter(({ code }) => code.startsWith(`${RULE_NAME}(`))
+    .map(({ labels }) => labels?.at(0)?.span?.line ?? 0);
 };
-
-const reportedLines = (output: string): number[] =>
-  Array.from(
-    output.matchAll(
-      /adapter\.ts:(?<line>\d+):\d+: error no-literal-decision-court/gu,
-    ),
-    (match) => Number(match.groups?.line),
-  );
 
 describe.serial("no-literal-decision-court", () => {
   test("reports every court an adapter states for itself", async () => {
@@ -75,13 +88,10 @@ describe.serial("no-literal-decision-court", () => {
       "",
     ].join("\n");
 
-    const { exitCode, output } = await lint(source);
-
-    expect(exitCode).toBe(1);
     // One report per stated court: the row, the asserted literal, the
     // metadata mirror, and the parser argument that carries the same
     // attribution into the stored document.
-    expect(reportedLines(output)).toEqual([1, 2, 3, 4]);
+    expect(await lint(source)).toEqual([1, 2, 3, 4]);
   });
 
   test("accepts a court resolved from the decision's own record", async () => {
@@ -98,9 +108,6 @@ describe.serial("no-literal-decision-court", () => {
       "",
     ].join("\n");
 
-    const { exitCode, output } = await lint(source);
-
-    expect(output).not.toContain(RULE_ID);
-    expect(exitCode).toBe(0);
+    expect(await lint(source)).toEqual([]);
   });
 });
