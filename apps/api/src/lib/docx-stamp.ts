@@ -16,8 +16,13 @@ import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
+const STAMP_BOOKMARK_MARKER = `w:name="${STAMP_BOOKMARK}"`;
+const STAMP_HYPERLINK_REL_ID = "rId_stella_vcode";
+const STAMP_PROPERTY_NAMES = ["stella-ref", "stella-code"] as const;
 const CUSTOM_PROPS_PATH = "docProps/custom.xml";
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
+const ROOT_RELS_PATH = "_rels/.rels";
+const PARAGRAPH_CLOSE = "</w:p>";
 
 const CUSTOM_PROPS_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/" +
@@ -71,6 +76,18 @@ const FOOTER_REL_RE =
   /Id="(?<id>[^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="(?<target>[^"]+)"/gu;
 const DEFAULT_FOOTER_REF_RE =
   /w:footerReference[^>]*w:type="default"[^>]*r:id="(?<rid>[^"]+)"/u;
+const PARAGRAPH_OPEN_RE = /<w:p(?:\s[^>]*)?>/gu;
+const ANY_PROPERTY_RE = /<property[\s>]/u;
+const ANY_PARAGRAPH_RE = /<w:p[\s/>]/u;
+/**
+ * The footer line exactly as {@link buildStampParagraph} writes it: the
+ * reference, two spaces, then `stl:` and a verification code. The reference is
+ * a free-form matter reference, so only its surroundings can be pinned. Any
+ * other text means a human edited the line, and stripping then removes their
+ * words rather than ours.
+ */
+const STAMP_TEXT_RE =
+  /^\S(?:.*\S)? {2}stl:[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u;
 
 // ── Public API ──────────────────────────────────────────
 
@@ -140,6 +157,234 @@ export const extractStamp = async (
 
   // 2. Fallback: parse footer for bookmark
   return parseFooterStamp(archive);
+};
+
+/**
+ * Remove the document reference from a DOCX.
+ *
+ * The reference belongs on the way out, not in storage: it names one version,
+ * so bytes stored with it would carry the previous version's code forever, and
+ * a stamped download re-uploaded as a new document would keep resolving to the
+ * document it came from. Every path that stores document bytes runs this first
+ * (see `lib/files/stored-document-bytes.ts`).
+ *
+ * Returns null when the file carried nothing, so an unstamped upload keeps its
+ * exact bytes and hash; the rewritten archive otherwise. A corrupt archive
+ * yields null rather than an error: the scan and DOCX validation steps own that
+ * verdict, and this one must not turn their input away first.
+ */
+export const stripStamp = async (
+  docxBuffer: ArrayBuffer | Uint8Array,
+): Promise<ArrayBuffer | null> => {
+  let archive: DocxArchive;
+  try {
+    archive = await loadDocxArchive(docxBuffer);
+  } catch {
+    return null;
+  }
+
+  try {
+    const strippedProperties = await stripCustomProperties(archive);
+    const strippedFooter = await stripStampParagraph(archive);
+    if (!strippedProperties && !strippedFooter) {
+      return null;
+    }
+  } catch {
+    // A bounded-read cap tripped part-way through: the archive is out of
+    // bounds, so leave it to the validation step that reports that.
+    return null;
+  }
+
+  return archive.zip.generateAsync({
+    type: "arraybuffer",
+    compression: "DEFLATE",
+  });
+};
+
+// ── Reference Removal ───────────────────────────────────
+
+/**
+ * Drop `<tagName ... marker ... />`. Attribute values in an OOXML part are
+ * quoted and cannot contain `>`, so the first `>` after the marker closes the
+ * element carrying it.
+ */
+const removeSelfClosingElement = (
+  xml: string,
+  tagName: string,
+  marker: string,
+): string => {
+  const markerIndex = xml.indexOf(marker);
+  if (markerIndex === -1) {
+    return xml;
+  }
+  const start = xml.lastIndexOf(`<${tagName}`, markerIndex);
+  const end = xml.indexOf(">", markerIndex);
+  if (start === -1 || end === -1) {
+    return xml;
+  }
+  return xml.slice(0, start) + xml.slice(end + 1);
+};
+
+/** Drop `<tagName ... marker ...>…</tagName>`. */
+const removePairedElement = (
+  xml: string,
+  tagName: string,
+  marker: string,
+): string => {
+  const markerIndex = xml.indexOf(marker);
+  if (markerIndex === -1) {
+    return xml;
+  }
+  const closing = `</${tagName}>`;
+  const start = xml.lastIndexOf(`<${tagName}`, markerIndex);
+  const end = xml.indexOf(closing, markerIndex);
+  if (start === -1 || end === -1) {
+    return xml;
+  }
+  return xml.slice(0, start) + xml.slice(end + closing.length);
+};
+
+const removePartDeclaration = async (
+  archive: DocxArchive,
+  path: string,
+  tagName: string,
+  marker: string,
+): Promise<void> => {
+  const xml = await archive.readEntryString(path);
+  if (!xml) {
+    return;
+  }
+  const stripped = removeSelfClosingElement(xml, tagName, marker);
+  if (stripped !== xml) {
+    archive.zip.file(path, stripped);
+  }
+};
+
+/**
+ * Remove the two stella custom properties and leave any the author set. When
+ * they were the only ones the part goes too, along with its content-type
+ * override and package relationship: Word refuses a package that declares a
+ * part it does not contain.
+ */
+const stripCustomProperties = async (
+  archive: DocxArchive,
+): Promise<boolean> => {
+  const customXml = await archive.readEntryString(CUSTOM_PROPS_PATH);
+  if (!customXml) {
+    return false;
+  }
+
+  let stripped = customXml;
+  for (const name of STAMP_PROPERTY_NAMES) {
+    stripped = removePairedElement(stripped, "property", `name="${name}"`);
+  }
+  if (stripped === customXml) {
+    return false;
+  }
+
+  if (ANY_PROPERTY_RE.test(stripped)) {
+    archive.zip.file(CUSTOM_PROPS_PATH, stripped);
+    return true;
+  }
+
+  archive.zip.remove(CUSTOM_PROPS_PATH);
+  await removePartDeclaration(
+    archive,
+    CONTENT_TYPES_PATH,
+    "Override",
+    `PartName="/${CUSTOM_PROPS_PATH}"`,
+  );
+  await removePartDeclaration(
+    archive,
+    ROOT_RELS_PATH,
+    "Relationship",
+    `Target="${CUSTOM_PROPS_PATH}"`,
+  );
+  return true;
+};
+
+/**
+ * The bookmarked paragraph's span. The opening tag comes from scanning the
+ * paragraph starts before the bookmark rather than searching backwards for the
+ * literal `<w:p`, which `<w:pPr>` also matches.
+ */
+const stampParagraphRange = (
+  footerXml: string,
+): { start: number; end: number } | null => {
+  const bookmarkIndex = footerXml.indexOf(STAMP_BOOKMARK_MARKER);
+  if (bookmarkIndex === -1) {
+    return null;
+  }
+
+  let start = -1;
+  for (const match of footerXml.matchAll(PARAGRAPH_OPEN_RE)) {
+    if (match.index >= bookmarkIndex) {
+      break;
+    }
+    start = match.index;
+  }
+
+  const closeIndex = footerXml.indexOf(PARAGRAPH_CLOSE, bookmarkIndex);
+  if (start === -1 || closeIndex === -1) {
+    return null;
+  }
+  return { start, end: closeIndex + PARAGRAPH_CLOSE.length };
+};
+
+/** A footer Word writes always holds a paragraph; keep one when ours was the last. */
+const keepFooterBlockContent = (footerXml: string): string =>
+  ANY_PARAGRAPH_RE.test(footerXml)
+    ? footerXml
+    : footerXml.replace(CLOSING_FTR_RE, () => "<w:p/>\n</w:ftr>");
+
+const footerRelsPathFor = (footerPath: string): string =>
+  `word/_rels/${footerPath.replace(STRIP_PATH_RE, () => "")}.rels`;
+
+/**
+ * Remove the footer line and its verification hyperlink, but only where the
+ * text still reads exactly as stella wrote it. An edited line keeps its
+ * bookmark: the words are the author's by then, and the next stamped download
+ * rewrites that paragraph in place anyway.
+ */
+const stripStampParagraph = async (archive: DocxArchive): Promise<boolean> => {
+  const footerPaths = Object.keys(archive.zip.files).filter((path) =>
+    FOOTER_FILE_RE.test(path),
+  );
+
+  let stripped = false;
+  for (const path of footerPaths) {
+    const footerXml = await archive.readEntryString(path);
+    if (!footerXml?.includes(STAMP_BOOKMARK)) {
+      continue;
+    }
+    const range = stampParagraphRange(footerXml);
+    if (!range) {
+      continue;
+    }
+    if (
+      !STAMP_TEXT_RE.test(
+        collectRunText(footerXml.slice(range.start, range.end)),
+      )
+    ) {
+      continue;
+    }
+
+    archive.zip.file(
+      path,
+      keepFooterBlockContent(
+        footerXml.slice(0, range.start) + footerXml.slice(range.end),
+      ),
+    );
+    await removePartDeclaration(
+      archive,
+      footerRelsPathFor(path),
+      "Relationship",
+      `Id="${STAMP_HYPERLINK_REL_ID}"`,
+    );
+    stripped = true;
+  }
+
+  return stripped;
 };
 
 // ── Custom Properties ───────────────────────────────────
@@ -422,7 +667,7 @@ const updateExistingFooter = async (
   const footerXml = (await archive.readEntryString(footerPath)) ?? "";
   const footerRels = (await archive.readEntryString(footerRelsPath)) ?? "";
 
-  const hyperlinkRId = "rId_stella_vcode";
+  const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
 
   // Ensure hyperlink relationship exists
   archive.zip.file(
@@ -465,7 +710,7 @@ const createNewFooter = async (
   const footerPath = `word/${footerFileName}`;
   const footerRelsPath = `word/_rels/${footerFileName}.rels`;
   const footerRId = "rId_stella_footer";
-  const hyperlinkRId = "rId_stella_vcode";
+  const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
 
   // Derive bookmark ID from the document body to avoid
   // collisions with existing w:id values across the package
@@ -672,6 +917,18 @@ const parseFooterStamp = async (
   return { verificationCode: null, stamp: null };
 };
 
+/** Concatenated `<w:t>` text of a run-bearing region, in document order. */
+const collectRunText = (xml: string): string => {
+  const texts: string[] = [];
+  for (const match of xml.matchAll(WT_TEXT_RE)) {
+    const text = match.groups?.["text"];
+    if (text) {
+      texts.push(text);
+    }
+  }
+  return texts.join("");
+};
+
 const extractBookmarkText = (
   xml: string,
 ): {
@@ -688,18 +945,7 @@ const extractBookmarkText = (
     return null;
   }
 
-  const region = match[0];
-
-  // Extract all <w:t> text
-  const texts: string[] = [];
-  for (const tMatch of region.matchAll(WT_TEXT_RE)) {
-    const text = tMatch.groups?.["text"];
-    if (text) {
-      texts.push(text);
-    }
-  }
-
-  const fullText = texts.join("").trim();
+  const fullText = collectRunText(match[0]).trim();
   if (!fullText) {
     return null;
   }

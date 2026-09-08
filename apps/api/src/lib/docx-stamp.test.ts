@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
@@ -5,6 +6,7 @@ import {
   extractStamp,
   injectStamp,
   isStampableDocx,
+  stripStamp,
 } from "@/api/lib/docx-stamp";
 
 // ── Helpers ─────────────────────────────────────────────
@@ -389,5 +391,121 @@ describe("extractStamp", () => {
 
     const result = await extractStamp(docx);
     expect(result.verificationCode).toBe("propscode99");
+  });
+});
+
+describe("stripStamp", () => {
+  const stamp = "2026/001/015.v3";
+  const code = "kx8mq2n4p3";
+  const baseUrl = "https://stella.legal";
+  const fmtid = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
+  const propsNs =
+    "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+  const vtNs =
+    "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+  const stampedDocx = async (): Promise<ArrayBuffer> =>
+    await injectStamp(await makeDocx(), stamp, code, baseUrl);
+
+  const stripped = async (docx: ArrayBuffer): Promise<ArrayBuffer> =>
+    (await stripStamp(docx)) ??
+    panic("the stamped fixture carried no reference to strip");
+
+  test("round trip: a stamped DOCX comes back carrying nothing", async () => {
+    const result = await stripped(await stampedDocx());
+
+    expect(await extractStamp(result)).toEqual({
+      stamp: null,
+      verificationCode: null,
+    });
+    expect(await readZipFile(result, "docProps/custom.xml")).toBeNull();
+    expect(await readZipFile(result, "word/footer1.xml")).not.toContain(
+      "stella_dms_ref",
+    );
+  });
+
+  test("drops the part declarations with the last custom property", async () => {
+    const result = await stripped(await stampedDocx());
+
+    expect(await readZipFile(result, "[Content_Types].xml")).not.toContain(
+      "custom.xml",
+    );
+    expect(await readZipFile(result, "_rels/.rels")).not.toContain(
+      "custom.xml",
+    );
+  });
+
+  test("drops the verification hyperlink relationship", async () => {
+    const result = await stripped(await stampedDocx());
+
+    expect(
+      await readZipFile(result, "word/_rels/footer1.xml.rels"),
+    ).not.toContain("rId_stella_vcode");
+  });
+
+  test("keeps custom properties the author set", async () => {
+    const docx = await makeDocx({
+      customXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Properties xmlns="${propsNs}" xmlns:vt="${vtNs}">`,
+        `  <property fmtid="${fmtid}" pid="2" name="Matter partner">`,
+        "    <vt:lpwstr>Nováková</vt:lpwstr>",
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="3" name="stella-ref">`,
+        `    <vt:lpwstr>${stamp}</vt:lpwstr>`,
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="4" name="stella-code">`,
+        `    <vt:lpwstr>${code}</vt:lpwstr>`,
+        "  </property>",
+        "</Properties>",
+      ].join("\n"),
+    });
+
+    const customXml = await readZipFile(
+      await stripped(docx),
+      "docProps/custom.xml",
+    );
+    expect(customXml).toContain("Matter partner");
+    expect(customXml).toContain("Nováková");
+    expect(customXml).not.toContain("stella-ref");
+    expect(customXml).not.toContain("stella-code");
+  });
+
+  test("keeps a footer line the author edited", async () => {
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        "<w:p>",
+        '  <w:bookmarkStart w:id="0" w:name="stella_dms_ref"/>',
+        `  <w:r><w:t xml:space="preserve">Draft — ${stamp}  </w:t></w:r>`,
+        '  <w:hyperlink r:id="rId_stella_vcode">',
+        `    <w:r><w:t>stl:${code} (do not send)</w:t></w:r>`,
+        "  </w:hyperlink>",
+        '  <w:bookmarkEnd w:id="0"/>',
+        "</w:p>",
+        "</w:ftr>",
+      ].join("\n"),
+    });
+
+    expect(await stripStamp(docx)).toBeNull();
+  });
+
+  test("returns null for a DOCX that carries no reference", async () => {
+    expect(await stripStamp(await makeDocx())).toBeNull();
+  });
+
+  test("returns null for a corrupt archive", async () => {
+    expect(await stripStamp(new TextEncoder().encode("not a zip"))).toBeNull();
+  });
+
+  test("re-stamping a stripped file yields the same reference again", async () => {
+    const result = await stripped(await stampedDocx());
+    const restamped = await injectStamp(result, stamp, code, baseUrl);
+
+    expect(await extractStamp(restamped)).toEqual({
+      stamp,
+      verificationCode: code,
+    });
   });
 });

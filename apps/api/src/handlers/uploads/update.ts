@@ -39,7 +39,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
@@ -472,14 +473,40 @@ const runFinalize = async function* ({
     }
   }
 
+  // 4b. Reference removal, after the scan judged what the client actually
+  //     sent. Every presigned purpose promotes through the same object and
+  //     records the same size and hash, so this is where a stamped download
+  //     coming back stops being version N's bytes carrying version N-1's code.
+  const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes({
+    buffer: fileBuffer,
+    mimeType: claimed.declaredMime,
+  });
+  const storedSha256Hex =
+    strippedArchive === null
+      ? claimed.declaredSha256
+      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+
+  // A server-side copy is the cheap promotion, but it would publish the bytes
+  // the client staged. Stripped bytes exist only here, so they are written.
   const promoteTmpObject = async (finalKey: string) => {
-    const copyResult = await copyObject(tmpKey, finalKey);
-    if (Result.isError(copyResult)) {
+    const promoted =
+      strippedArchive === null
+        ? await copyObject(tmpKey, finalKey)
+        : await Result.tryPromise(
+            async () =>
+              await writeS3ObjectWithRetry({
+                contentType: claimed.declaredMime,
+                data: storedBytes,
+                key: finalKey,
+              }),
+          );
+    if (Result.isError(promoted)) {
       return Result.err(
         new UploadFinalizeError({
           status: 500,
           message: "Failed to promote tmp object",
-          rejectReason: "copy-failed",
+          rejectReason:
+            strippedArchive === null ? "copy-failed" : "write-failed",
         }),
       );
     }
@@ -495,11 +522,11 @@ const runFinalize = async function* ({
     organizationId,
     workspaceId,
     userId,
-    fileBuffer,
+    fileBuffer: strippedArchive ?? fileBuffer,
     declaredName: claimed.declaredName,
     declaredMime: claimed.declaredMime,
-    declaredSize: claimed.declaredSize,
-    declaredSha256Hex: claimed.declaredSha256,
+    declaredSize: storedBytes.byteLength,
+    declaredSha256Hex: storedSha256Hex,
     scanWarnings,
     promoteTmpObject,
     uploadId,
