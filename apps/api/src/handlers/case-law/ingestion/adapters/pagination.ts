@@ -170,6 +170,33 @@ type PagePaginationOptions<TResponse> = {
  */
 /** Max retries for transient 5xx / timeout errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
+
+/**
+ * The gateway got no usable answer from the origin: the upstream refused the
+ * connection, dropped it, or replied unintelligibly.
+ *
+ * The page-skip below rests on a 5xx being a fact about the page — the
+ * publisher ran the request and failed on it, so losing that one page beats
+ * stalling the source. 502 carries no such fact. Nothing was read, so the
+ * page's items are unknown rather than terminal, and advancing over them
+ * checkpoints past pages nobody looked at.
+ *
+ * The cost only shows at scale: a publisher whose gateway is down answers
+ * every page this way, so a skip that advances one page per refusal walks the
+ * entire collection at the speed of the failures and leaves the cursor far
+ * past the tip, where nothing new is ever listed again.
+ *
+ * Deliberately only 502. A 504 is the proxy's own read timeout, which the
+ * origin earns by being slow on this page — the same event the client-side
+ * timeout below skips, so holding it would decide identical situations
+ * opposite ways on whose stopwatch was shorter. A 503 can come from the
+ * origin itself. Both stay skippable.
+ *
+ * This puts 502 in the bucket 429 already occupies: hold, and ask again next
+ * cycle. It inherits that bucket's open question too — neither is bounded, so
+ * a page that answers this way forever holds its cursor forever.
+ */
+const BAD_GATEWAY_STATUS = 502;
 const OFFSET_CURSOR_PREFIX = "offset:";
 const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
@@ -432,11 +459,17 @@ export const createPagePaginatedFetch = <TResponse>(
         }
 
         if (!response.ok) {
-          // 5xx after all retries: skip this page and advance.
+          // A 5xx the origin itself produced, after all retries: skip this
+          // page and advance.
           // 429 is NOT skipped — it's transient throttling, not
           // a page error. The cursor stays put so the page is
-          // retried in the next cycle.
-          if (response.status >= 500) {
+          // retried in the next cycle. 502 joins it for the same reason
+          // (see BAD_GATEWAY_STATUS): nothing was read, so there is nothing
+          // to advance past.
+          if (
+            response.status >= 500 &&
+            response.status !== BAD_GATEWAY_STATUS
+          ) {
             // Same rule as the timeout skip above: a publisher-side 5xx
             // is operational, logged per page, and aggregated by the
             // coverage ledger rather than captured per attempt.

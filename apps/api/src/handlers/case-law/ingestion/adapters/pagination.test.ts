@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -359,6 +359,115 @@ const requestUrl = (input: string | URL | Request): string => {
   }
   return input instanceof URL ? input.href : input.url;
 };
+
+const mockFailingEndpoint = (
+  status: number,
+): { restore: () => void; requestedPages: number[] } => {
+  const originalFetch = globalThis.fetch;
+  const requestedPages: number[] = [];
+
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request): Promise<Response> => {
+      const url = new URL(requestUrl(input));
+      requestedPages.push(
+        Number.parseInt(url.searchParams.get("page") ?? "", 10),
+      );
+      return await Promise.resolve(new Response("", { status }));
+    },
+    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  );
+
+  return {
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+    requestedPages,
+  };
+};
+
+/**
+ * Cursor movement is what a refused page costs, and it is only affordable when
+ * the refusal is about that page. These pin which refusals are which, because
+ * the two look identical in a single call and differ only over a run of them.
+ */
+describe("a page the origin never answered does not move the cursor", () => {
+  let restore: (() => void) | undefined;
+  const realSleep = Bun.sleep;
+
+  beforeEach(() => {
+    // Every refused page exhausts its retry budget, and the backoff between
+    // attempts is randomized wall-clock time. Nothing here is about waiting.
+    Bun.sleep = async () => {
+      // no-op
+    };
+  });
+
+  afterEach(() => {
+    Bun.sleep = realSleep;
+    restore?.();
+    restore = undefined;
+  });
+
+  /**
+   * Drive the walk the way the pipeline does: a failed page leaves the cursor
+   * where it was, so only a successful page supplies the next one.
+   */
+  const walk = async (
+    fetchPage: ReturnType<typeof createTestFetch>,
+    from: string,
+    cycles: number,
+  ): Promise<string | null> => {
+    let cursor: string | null = from;
+    for (let cycle = 0; cycle < cycles; cycle++) {
+      const result = await fetchPage(cursor, {});
+      if (result.isOk()) {
+        cursor = result.unwrap().nextCursor;
+      }
+    }
+    return cursor;
+  };
+
+  test("a bad-gateway outage holds the cursor instead of consuming the collection", async () => {
+    // The gateway got nothing from the origin, so this page's items are
+    // unknown. Every page answers alike while it is down, so a skip that
+    // advanced would walk the whole collection one page per refusal and end
+    // far past the tip.
+    const endpoint = mockFailingEndpoint(502);
+    restore = endpoint.restore;
+
+    const cursor = await walk(
+      createTestFetch({ firstPage: 0 }),
+      "offset:30",
+      3,
+    );
+
+    expect(cursor).toBe("offset:30");
+    expect(new Set(endpoint.requestedPages)).toEqual(new Set([10]));
+  });
+
+  /**
+   * The origin answered, so the refusal is about this page and skipping it is
+   * what keeps one page from stalling a source. A 504 is the publisher proxy's
+   * own read timeout, which the origin earns by being slow on this page — the
+   * same event `page_skipped_timeout` skips when our timeout fires first.
+   */
+  test.each([500, 503, 504])(
+    "a %i still skips its own page",
+    async (status) => {
+      const endpoint = mockFailingEndpoint(status);
+      restore = endpoint.restore;
+
+      const cursor = await walk(
+        createTestFetch({ firstPage: 0 }),
+        "offset:30",
+        2,
+      );
+
+      expect(cursor).toBe("offset:36");
+      expect(endpoint.requestedPages).toContain(11);
+    },
+  );
+});
 
 /**
  * A publisher that numbers pages from one usually clamps below it — asking for
