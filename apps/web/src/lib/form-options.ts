@@ -56,7 +56,7 @@ type SchemaFormOptions<TSchema extends v.GenericSchema> =
 
 export const schemaFormOptions = <const TSchema extends v.GenericSchema>(
   options: SchemaFormOptions<TSchema>,
-): NativeSchemaFormOptions<TSchema> => {
+) => {
   if (options.submitValues === "raw") {
     return {
       defaultValues: options.defaultValues,
@@ -66,14 +66,16 @@ export const schemaFormOptions = <const TSchema extends v.GenericSchema>(
     };
   }
 
+  const onSubmit: NativeSubmit<TSchema> = ({ formApi, meta, value }) =>
+    options.onSubmit({
+      formApi,
+      meta,
+      value: v.parse(options.schema, value),
+    });
+
   return {
     defaultValues: options.defaultValues,
-    onSubmit: ({ formApi, meta, value }) =>
-      options.onSubmit({
-        formApi,
-        meta,
-        value: v.parse(options.schema, value),
-      }),
+    onSubmit,
     validationLogic: revalidateLogic(),
     validators: { onDynamic: options.schema },
   };

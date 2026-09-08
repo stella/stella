@@ -39,8 +39,9 @@ const createHarness = (
     onSubmit: ({ value }) => {
       submittedValues.push(value);
     },
-    validationLogic:
-      validationLogic === "revalidate" ? revalidateLogic() : undefined,
+    ...(validationLogic === "revalidate" && {
+      validationLogic: revalidateLogic(),
+    }),
     validators: {
       onDynamic: validator === "form-sync" ? formSchema : undefined,
       onDynamicAsync: validator === "form-async" ? asyncFormSchema : undefined,

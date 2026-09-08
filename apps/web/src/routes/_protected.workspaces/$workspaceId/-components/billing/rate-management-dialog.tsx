@@ -663,9 +663,17 @@ const CreateRateEntryForm = ({
     // which would lose the cent that 1.005 should round to in USD.
     hourlyRate: v.pipe(
       v.string(),
-      v.transform((value) => tryToMinorUnits({ amount: value, currency })),
-      v.number(t("common.validationPattern")),
-      v.minValue(0, t("common.validationNumberMin", { min: 0 })),
+      v.rawTransform(({ addIssue, dataset, NEVER }) => {
+        const hourlyRate = tryToMinorUnits({
+          amount: dataset.value,
+          currency,
+        });
+        if (hourlyRate === null || hourlyRate < 0) {
+          addIssue({ message: t("billing.failedToSave") });
+          return NEVER;
+        }
+        return hourlyRate;
+      }),
     ),
     effectiveFrom: v.string(),
     effectiveTo: v.pipe(

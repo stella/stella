@@ -13,7 +13,6 @@ import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
-import { Label } from "@stll/ui/label";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { stellaToast } from "@stll/ui/toast";
 

@@ -16,6 +16,7 @@ import * as formOwner from "@/lib/form-options";
 
 declare const config: unknown;
 declare const opaqueOptions: unknown;
+declare const condition: boolean;
 
 const constructorAlias = useAliasedForm;
 const namespaceAlias = forms;
@@ -27,6 +28,7 @@ export const useGoodForms = () => [
   useAliasedForm(configure(config)),
   constructorAlias(helperAlias(config)),
   forms.useForm(formOwner.schemaFormOptions(config)),
+  // oxlint-disable-next-line typescript/dot-notation -- fixture: static computed factory access must retain provenance
   namespaceAlias["useForm"](schemaFormOptions(config)),
   destructuredFactory(schemaFormOptions(config)),
   new FormApi(schemaFormOptions(config)),
@@ -49,14 +51,16 @@ export const useBadForms = () => {
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: namespace destructuring cannot bypass the owner
   destructuredFactory(opaqueOptions);
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: core constructors follow the same contract
-  new FormApi({});
+  const invalidCore = new FormApi({});
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: spreads can override helper invariants
   useForm({ ...schemaFormOptions(config), validationLogic: undefined });
   const options = schemaFormOptions(config);
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: stored options can be mutated before construction
   useForm(options);
   let mutableHelper = schemaFormOptions;
-  mutableHelper = unrelatedOptions;
+  if (condition) {
+    mutableHelper = unrelatedOptions;
+  }
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: reassigned helper aliases do not establish ownership
   useForm(mutableHelper(config));
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: a matching helper name from another module is not the owner
@@ -65,15 +69,18 @@ export const useBadForms = () => {
   useForm(forms.formOptions(config));
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: custom form factories must be integrated with the central owner
   createFormHook(config);
+  return invalidCore;
 };
 
 export const useShadowedHelper = (
+  // oxlint-disable-next-line typescript/no-shadow -- fixture: a parameter must shadow the imported helper to exercise scope resolution
   schemaFormOptions: (value: unknown) => unknown,
-) => {
+) =>
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: a parameter shadows the real helper
-  return useForm(schemaFormOptions(config));
-};
+  useForm(schemaFormOptions(config));
 
 // Unrelated functions and shadowed imports are outside the rule's scope.
-export const useUnrelatedForm = (useForm: (value: unknown) => unknown) =>
-  useForm(config);
+export const useUnrelatedForm = (
+  // oxlint-disable-next-line typescript/no-shadow -- fixture: a shadowed factory must not be mistaken for TanStack Form
+  useForm: (value: unknown) => unknown,
+) => useForm(config);
