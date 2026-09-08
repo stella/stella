@@ -1,5 +1,15 @@
 # @stll/template-conditions
 
+## 0.5.0
+
+### Minor Changes
+
+- [#3137](https://github.com/stella/stella/pull/3137) [`63f962b`](https://github.com/stella/stella/commit/63f962b5ae86e0cf6cd6abc3342e68785b0951d5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The package gains the writer half of the template language. `filtersFromFieldConfig` / `arrayFiltersFromFieldConfig` turn a field's configuration into the filter chain that declares it, over a structural `MarkerFieldConfig` both the api and the editor satisfy, so one mapping serves every surface that configures a field. `renderValueMarker`, `renderForOpener`, `renderConditionTag` and `renderFilterChain` produce the marker text the scanner reads, and `isWritableMarkerText` / `isWritableMarkerLiteral` / `unwritableFilterValues` name the values the grammar has no spelling for (braces, exponent notation).
+
+  Composite field values are gone: `renderComposite` and `PartConfig` are removed, and `DeterministicFieldConfig` no longer carries `parts` or `format`.
+
+  A quoted argument's `\`-escapes are now recognized by the span pattern as well as by the argument scanner, so `label("she said \"yes\"")` is one marker instead of three.
+
 ## 0.4.0
 
 ### Minor Changes

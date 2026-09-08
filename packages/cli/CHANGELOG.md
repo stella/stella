@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.2
+
+### Patch Changes
+
+- [#3137](https://github.com/stella/stella/pull/3137) [`63f962b`](https://github.com/stella/stella/commit/63f962b5ae86e0cf6cd6abc3342e68785b0951d5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The capability catalog follows the template surface: `templates.manifest` (embed a field manifest into an uploaded DOCX) is gone, and `templates.create`, `templates.save-document` and `templates.update` no longer take a `manifest` argument. A template's fields are what its markers declare.
+
 ## 1.2.1
 
 ### Patch Changes
