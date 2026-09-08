@@ -15,6 +15,10 @@ import { errorTag, safeErrorCode } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  createS3CredentialGuard,
+  type S3CredentialGuard,
+} from "@/api/lib/s3-credential-guard";
+import {
   credentialsFromEnvValues,
   type OptionalS3Credentials,
 } from "@/api/lib/s3-credentials";
@@ -406,6 +410,82 @@ export const getS3 = (): S3Client => {
   return _client;
 };
 
+const getAbortableS3 = (): AwsS3Client => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  return _abortableClient;
+};
+
+/** True when credentials are older than 50 minutes (or not yet built). */
+export const isS3Stale = (): boolean =>
+  !_client || Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+
+// Separate client for the legal-corpus bucket. Shares the credential
+// resolver but targets a different bucket, with its own staleness clock
+// so the long-running ingestion daemon refreshes both before STS expiry.
+let _corpusClient: S3Client | null = null;
+let _abortableCorpusClient: AwsS3Client | null = null;
+let _corpusClientCreatedAt = 0;
+
+export const refreshCorpusS3 = async (): Promise<void> => {
+  const credentials = await resolveS3Credentials();
+  _corpusClient = buildS3Client(corpusBucket(), credentials);
+  _abortableCorpusClient = buildAbortableS3Client(credentials);
+  _corpusClientCreatedAt = Date.now();
+};
+
+export const getCorpusS3 = (): S3Client => {
+  _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
+  return _corpusClient;
+};
+
+const getAbortableCorpusS3 = (): AwsS3Client => {
+  _abortableCorpusClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  return _abortableCorpusClient;
+};
+
+export const isCorpusS3Stale = (): boolean =>
+  !_corpusClient || Date.now() - _corpusClientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+
+const documentsCredentials = createS3CredentialGuard({
+  isStale: () => isS3Stale(),
+  refresh: async () => {
+    await refreshS3();
+  },
+});
+
+const corpusCredentials = createS3CredentialGuard({
+  isStale: () => isCorpusS3Stale(),
+  refresh: async () => {
+    await refreshCorpusS3();
+  },
+});
+
+/**
+ * Rebuild the documents-bucket clients when their credentials are past the
+ * horizon. Every helper in this module does it already; a long-running script
+ * that holds `getS3()` itself calls this at its own batch boundary.
+ */
+export const refreshStaleS3 = documentsCredentials.refreshStale;
+
+/** {@link refreshStaleS3} for the legal-corpus bucket. */
+export const refreshStaleCorpusS3 = corpusCredentials.refreshStale;
+
+/** One bucket's Bun client plus the guard that keeps its credentials live. */
+type ObjectStore = {
+  client: () => S3Client;
+  run: S3CredentialGuard["run"];
+};
+
+const documentsStore: ObjectStore = {
+  client: getS3,
+  run: documentsCredentials.run,
+};
+
+const corpusStore: ObjectStore = {
+  client: getCorpusS3,
+  run: corpusCredentials.run,
+};
+
 const S3_WRITE_TIMEOUT_MS = 15_000;
 const S3_WRITE_MAX_ATTEMPTS = 3;
 const S3_WRITE_RETRY_BASE_DELAY_MS = 100;
@@ -465,10 +545,13 @@ export type S3ObjectWriteCertainty =
   (typeof S3_OBJECT_WRITE_CERTAINTY)[keyof typeof S3_OBJECT_WRITE_CERTAINTY];
 
 const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
-  await getS3().write(
-    key,
-    data,
-    contentType === undefined ? undefined : { type: contentType },
+  await documentsCredentials.run(
+    async () =>
+      await getS3().write(
+        key,
+        data,
+        contentType === undefined ? undefined : { type: contentType },
+      ),
   );
 
 /**
@@ -551,41 +634,41 @@ export const isMissingCorpusObjectError = (
 export const getS3ObjectSizeWithSignal = async (
   key: string,
   signal: AbortSignal,
-): Promise<number | null> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  const response = await _abortableClient.send(
-    new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-    { abortSignal: signal },
-  );
-  return response.ContentLength ?? null;
-};
+): Promise<number | null> =>
+  await documentsCredentials.run(async () => {
+    const response = await getAbortableS3().send(
+      new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+      { abortSignal: signal },
+    );
+    return response.ContentLength ?? null;
+  });
 
 /** Read one object while allowing the caller to cancel the HTTP request. */
 export const getS3ObjectWithSignal = async (
   key: string,
   signal: AbortSignal,
-): Promise<ArrayBuffer> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  const response = await _abortableClient.send(
-    new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-    { abortSignal: signal },
-  );
-  if (!response.Body) {
-    throw new S3ObjectReadError({
-      message: "S3 returned an object without a response body",
-    });
-  }
-  const bytes = await response.Body.transformToByteArray();
-  if (bytes.buffer instanceof ArrayBuffer) {
-    return bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength,
+): Promise<ArrayBuffer> =>
+  await documentsCredentials.run(async () => {
+    const response = await getAbortableS3().send(
+      new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+      { abortSignal: signal },
     );
-  }
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
+    if (!response.Body) {
+      throw new S3ObjectReadError({
+        message: "S3 returned an object without a response body",
+      });
+    }
+    const bytes = await response.Body.transformToByteArray();
+    if (bytes.buffer instanceof ArrayBuffer) {
+      return bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      );
+    }
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    return buffer;
+  });
 
 /**
  * Whether the store confirmed the object is not there, as opposed to
@@ -635,10 +718,12 @@ export const deleteS3ObjectWithSignal = async (
   key: string,
   signal: AbortSignal,
 ): Promise<void> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  await _abortableClient.send(
-    new DeleteObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-    { abortSignal: signal },
+  await documentsCredentials.run(
+    async () =>
+      await getAbortableS3().send(
+        new DeleteObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+        { abortSignal: signal },
+      ),
   );
 };
 
@@ -649,15 +734,17 @@ export const putS3ObjectWithSignal = async (
   mimeType: string,
   signal: AbortSignal,
 ): Promise<void> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  await _abortableClient.send(
-    new PutObjectCommand({
-      Body: bytes,
-      Bucket: envBase.S3_BUCKET,
-      ContentType: mimeType,
-      Key: key,
-    }),
-    { abortSignal: signal },
+  await documentsCredentials.run(
+    async () =>
+      await getAbortableS3().send(
+        new PutObjectCommand({
+          Body: bytes,
+          Bucket: envBase.S3_BUCKET,
+          ContentType: mimeType,
+          Key: key,
+        }),
+        { abortSignal: signal },
+      ),
   );
 };
 
@@ -679,40 +766,43 @@ export const listS3ObjectKeys = async ({
   prefix,
   maxKeys,
   signal,
-}: ListS3ObjectKeysOptions): Promise<string[]> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  const client = _abortableClient;
-  const keys: string[] = [];
-  // Each page names the next one, so the walk recurses instead of looping;
-  // depth is bounded by the ceiling.
-  const collectFrom = async (
-    continuationToken: string | undefined,
-  ): Promise<string[]> => {
-    const page = await client.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
-        MaxKeys: maxKeys + 1 - keys.length,
-        ContinuationToken: continuationToken,
-      }),
-      { abortSignal: signal },
-    );
-    // The SDK omits `Contents` on an empty page.
-    if (page.Contents) {
-      for (const object of page.Contents) {
-        if (object.Key !== undefined) {
-          keys.push(object.Key);
+}: ListS3ObjectKeysOptions): Promise<string[]> =>
+  // The accumulator lives inside the operation: a credential retry replays the
+  // whole walk, and a list carried in from the failed attempt would report
+  // every key it had already collected twice.
+  await documentsCredentials.run(async () => {
+    const client = getAbortableS3();
+    const keys: string[] = [];
+    // Each page names the next one, so the walk recurses instead of looping;
+    // depth is bounded by the ceiling.
+    const collectFrom = async (
+      continuationToken: string | undefined,
+    ): Promise<string[]> => {
+      const page = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          MaxKeys: maxKeys + 1 - keys.length,
+          ContinuationToken: continuationToken,
+        }),
+        { abortSignal: signal },
+      );
+      // The SDK omits `Contents` on an empty page.
+      if (page.Contents) {
+        for (const object of page.Contents) {
+          if (object.Key !== undefined) {
+            keys.push(object.Key);
+          }
         }
       }
-    }
-    const next = page.IsTruncated ? page.NextContinuationToken : undefined;
-    if (next === undefined || keys.length > maxKeys) {
-      return keys;
-    }
-    return await collectFrom(next);
-  };
-  return await collectFrom(undefined);
-};
+      const next = page.IsTruncated ? page.NextContinuationToken : undefined;
+      if (next === undefined || keys.length > maxKeys) {
+        return keys;
+      }
+      return await collectFrom(next);
+    };
+    return await collectFrom(undefined);
+  });
 
 type BoundedS3ReadOptions = {
   bucket: string;
@@ -731,56 +821,33 @@ export const readS3ObjectBounded = async ({
   key,
   maxBytes,
   signal,
-}: BoundedS3ReadOptions): Promise<Uint8Array> => {
-  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  const response = await _abortableClient.send(
-    new GetObjectCommand({ Bucket: bucket, Key: key }),
-    { abortSignal: signal },
-  );
-  const declared = response.ContentLength;
-  if (declared === undefined) {
-    throw new S3ObjectReadError({
-      message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
-    });
-  }
-  if (declared > maxBytes) {
-    throw new S3ObjectBudgetError({
-      message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
-      key,
-      declaredBytes: declared,
-      maxBytes,
-    });
-  }
-  if (!response.Body) {
-    throw new S3ObjectReadError({
-      message: "S3 returned an object without a response body",
-    });
-  }
-  return await response.Body.transformToByteArray();
-};
-
-/** True when credentials are older than 50 minutes (or not yet built). */
-export const isS3Stale = (): boolean =>
-  !_client || Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
-
-// Separate client for the legal-corpus bucket. Shares the credential
-// resolver but targets a different bucket, with its own staleness clock
-// so the long-running ingestion daemon refreshes both before STS expiry.
-let _corpusClient: S3Client | null = null;
-let _abortableCorpusClient: AwsS3Client | null = null;
-let _corpusClientCreatedAt = 0;
-
-export const refreshCorpusS3 = async (): Promise<void> => {
-  const credentials = await resolveS3Credentials();
-  _corpusClient = buildS3Client(corpusBucket(), credentials);
-  _abortableCorpusClient = buildAbortableS3Client(credentials);
-  _corpusClientCreatedAt = Date.now();
-};
-
-export const getCorpusS3 = (): S3Client => {
-  _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
-  return _corpusClient;
-};
+}: BoundedS3ReadOptions): Promise<Uint8Array> =>
+  await documentsCredentials.run(async () => {
+    const response = await getAbortableS3().send(
+      new GetObjectCommand({ Bucket: bucket, Key: key }),
+      { abortSignal: signal },
+    );
+    const declared = response.ContentLength;
+    if (declared === undefined) {
+      throw new S3ObjectReadError({
+        message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
+      });
+    }
+    if (declared > maxBytes) {
+      throw new S3ObjectBudgetError({
+        message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
+        key,
+        declaredBytes: declared,
+        maxBytes,
+      });
+    }
+    if (!response.Body) {
+      throw new S3ObjectReadError({
+        message: "S3 returned an object without a response body",
+      });
+    }
+    return await response.Body.transformToByteArray();
+  });
 
 // The signed URL is consumed by the very next statement, so it only has to
 // outlive one read.
@@ -903,30 +970,33 @@ const throwCorpusObjectResponseError = async ({
  * it straight to `fetch`; never log or store it.
  */
 const fetchObject = async (
-  client: S3Client,
+  store: ObjectStore,
   key: string,
   signal?: AbortSignal,
-): Promise<Response> => {
-  const response = await fetchWithTimeout(
-    client.presign(key, { expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS }),
-    { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
-  );
-  if (!response.ok) {
-    return await throwCorpusObjectResponseError({
-      response,
-      key,
-      message: `Object read for ${key} failed with ${response.status}`,
-    });
-  }
-  return response;
-};
+): Promise<Response> =>
+  await store.run(async () => {
+    const response = await fetchWithTimeout(
+      store.client().presign(key, {
+        expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
+      }),
+      { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
+    );
+    if (!response.ok) {
+      return await throwCorpusObjectResponseError({
+        response,
+        key,
+        message: `Object read for ${key} failed with ${response.status}`,
+      });
+    }
+    return response;
+  });
 
 /** Read a legal-corpus object's bytes. See `fetchObject`. */
 export const readCorpusS3Bytes = async (
   key: string,
   signal: AbortSignal,
 ): Promise<Uint8Array> =>
-  await (await fetchObject(getCorpusS3(), key, signal)).bytes();
+  await (await fetchObject(corpusStore, key, signal)).bytes();
 
 type BoundedCorpusReadOptions = {
   key: string;
@@ -953,7 +1023,7 @@ export const readCorpusS3BytesBounded = async ({
   maxBytes,
   signal,
 }: BoundedCorpusReadOptions): Promise<Uint8Array> => {
-  const response = await fetchObject(getCorpusS3(), key, signal);
+  const response = await fetchObject(corpusStore, key, signal);
   // Tested as a header, not as a number. `Number(null)` is 0 and `Number("")`
   // is 0, so converting first would turn a missing or empty `Content-Length`
   // into a length of zero that passes every ceiling — making the refusal below
@@ -1019,21 +1089,29 @@ export const readCorpusS3Range = async ({
     );
   }
   const last = offset + length - 1;
-  const response = await fetchWithTimeout(
-    getCorpusS3().presign(key, { expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS }),
-    {
-      headers: { Range: `bytes=${offset}-${last}` },
-      signal,
-      timeoutMs: OBJECT_READ_TIMEOUT_MS,
-    },
-  );
-  if (response.status !== 206) {
-    return await throwCorpusObjectResponseError({
-      response,
-      key,
-      message: `Range read for ${key} answered ${response.status}, not 206`,
-    });
-  }
+  // The status check runs inside the guard: a refused credential arrives as a
+  // response, not as a thrown request failure, so the retry only sees it once
+  // the response has been turned into an error.
+  const response = await corpusCredentials.run(async () => {
+    const served = await fetchWithTimeout(
+      getCorpusS3().presign(key, {
+        expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
+      }),
+      {
+        headers: { Range: `bytes=${offset}-${last}` },
+        signal,
+        timeoutMs: OBJECT_READ_TIMEOUT_MS,
+      },
+    );
+    if (served.status !== 206) {
+      return await throwCorpusObjectResponseError({
+        response: served,
+        key,
+        message: `Range read for ${key} answered ${served.status}, not 206`,
+      });
+    }
+    return served;
+  });
   const contentRange = CONTENT_RANGE_PATTERN.exec(
     response.headers.get("content-range") ?? "",
   );
@@ -1075,7 +1153,7 @@ export const readS3ArrayBuffer = async (
   key: string,
   signal?: AbortSignal,
 ): Promise<ArrayBuffer> =>
-  await (await fetchObject(getS3(), key, signal)).arrayBuffer();
+  await (await fetchObject(documentsStore, key, signal)).arrayBuffer();
 
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
 export const putCorpusS3ObjectWithSignal = async (
@@ -1084,15 +1162,17 @@ export const putCorpusS3ObjectWithSignal = async (
   mimeType: string,
   signal: AbortSignal,
 ): Promise<void> => {
-  _abortableCorpusClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  await _abortableCorpusClient.send(
-    new PutObjectCommand({
-      Body: bytes,
-      Bucket: corpusBucket(),
-      ContentType: mimeType,
-      Key: key,
-    }),
-    { abortSignal: signal },
+  await corpusCredentials.run(
+    async () =>
+      await getAbortableCorpusS3().send(
+        new PutObjectCommand({
+          Body: bytes,
+          Bucket: corpusBucket(),
+          ContentType: mimeType,
+          Key: key,
+        }),
+        { abortSignal: signal },
+      ),
   );
 };
 
@@ -1101,15 +1181,14 @@ export const deleteCorpusS3ObjectWithSignal = async (
   key: string,
   signal: AbortSignal,
 ): Promise<void> => {
-  _abortableCorpusClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
-  await _abortableCorpusClient.send(
-    new DeleteObjectCommand({ Bucket: corpusBucket(), Key: key }),
-    { abortSignal: signal },
+  await corpusCredentials.run(
+    async () =>
+      await getAbortableCorpusS3().send(
+        new DeleteObjectCommand({ Bucket: corpusBucket(), Key: key }),
+        { abortSignal: signal },
+      ),
   );
 };
-
-export const isCorpusS3Stale = (): boolean =>
-  !_corpusClient || Date.now() - _corpusClientCreatedAt > CREDENTIAL_MAX_AGE_MS;
 
 /**
  * Generate a presigned GET URL that forces the browser to

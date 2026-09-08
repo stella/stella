@@ -155,10 +155,10 @@ import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
-  isCorpusS3Stale,
-  isS3Stale,
   refreshCorpusS3,
   refreshS3,
+  refreshStaleCorpusS3,
+  refreshStaleS3,
 } from "@/api/lib/s3";
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
@@ -738,21 +738,20 @@ const scopeRequestAsyncStores = (): void => {
 
 const startS3RefreshLoop = () => {
   const timer = setInterval(() => {
-    if (isS3Stale()) {
-      refreshS3().catch((error: unknown) => {
-        logger.error("s3.refresh_failed", {
-          "error.type": errorTag(error),
-        });
+    // `refreshStale*` own both the staleness test and the deduplication, so a
+    // resolution still in flight when the next tick arrives is joined rather
+    // than started again.
+    refreshStaleS3().catch((error: unknown) => {
+      logger.error("s3.refresh_failed", {
+        "error.type": errorTag(error),
       });
-    }
+    });
 
-    if (isCorpusS3Stale()) {
-      refreshCorpusS3().catch((error: unknown) => {
-        logger.error("s3.corpus_refresh_failed", {
-          "error.type": errorTag(error),
-        });
+    refreshStaleCorpusS3().catch((error: unknown) => {
+      logger.error("s3.corpus_refresh_failed", {
+        "error.type": errorTag(error),
       });
-    }
+    });
   }, S3_REFRESH_CHECK_INTERVAL_MS);
 
   timer.unref();

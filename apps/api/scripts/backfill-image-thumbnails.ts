@@ -30,7 +30,12 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey } from "@/api/lib/files/utils";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  getS3,
+  readS3ArrayBuffer,
+  refreshStaleS3,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -59,7 +64,13 @@ type EntityFieldRow = {
 
 const deleteThumbnailBestEffort = async (thumbnailKey: string) => {
   const cleanup = await Result.tryPromise({
-    try: async () => await getS3().delete(thumbnailKey),
+    try: async () => {
+      // The one call this script makes on the client handle rather than
+      // through a helper in `@/api/lib/s3`, and a full backfill outlives the
+      // task role's credentials.
+      await refreshStaleS3();
+      return await getS3().delete(thumbnailKey);
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(cleanup)) {
