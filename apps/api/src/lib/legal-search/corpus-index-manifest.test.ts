@@ -15,7 +15,8 @@ import {
 /**
  * A published generation's digest is the identity every projection fingerprint
  * is derived from, so it may never move: a changed digest re-projects the whole
- * corpus. Extend this map with a new generation; never edit an entry.
+ * corpus. Extend this map with a new generation; edit an entry only for a
+ * generation nothing has built.
  */
 const EXPECTED_DIGESTS = {
   case_law_v5:
@@ -23,7 +24,7 @@ const EXPECTED_DIGESTS = {
   case_law_v6:
     "1fc5f09b5471e49a4e5588c9f59c3ce78c08a9aa54b55e5edef168bc315accc8",
   case_law_v7:
-    "2de0dbda9f81c61968b0775f47dcbdb151aa1f3bfa2e982aa7272ce43238add4",
+    "ca567a8f26fc3c4af987db655943ac46bbde12af27379b927239e795eb16d2d0",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
@@ -279,6 +280,14 @@ test("v5 removes stale and repeated physical fields", () => {
   expect(manifest.projection.yearFacetField).toBe("decision_year");
 });
 
+/** Per generation, and total so a new generation answers rather than inherits. */
+const EXPECTED_DOCSTORE_BLOCKSIZE = {
+  case_law_v5: 1_000_000,
+  case_law_v6: 1_000_000,
+  case_law_v7: 65_536,
+  legislation_v2: 1_000_000,
+} as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, number>;
+
 test("final manifests make every storage and index cost explicit", () => {
   for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
     const fields = new Set(
@@ -316,7 +325,7 @@ test("final manifests make every storage and index cost explicit", () => {
     );
     expect(manifest.engine.indexConfig.indexing_settings).toMatchObject({
       commit_timeout_secs: 60,
-      docstore_blocksize: 1_000_000,
+      docstore_blocksize: EXPECTED_DOCSTORE_BLOCKSIZE[manifest.generation],
       docstore_compression_level: 8,
       merge_policy: {
         type: "stable_log",
@@ -456,6 +465,43 @@ test("v7 gives the publisher's classification a field of its own", () => {
   expect(CORPUS_INDEX_MANIFESTS.case_law_v7.projection.builderVersion).toBe(
     "case-law-passages-v3",
   );
+});
+
+test("v7 carries its own docstore settings and marks the ids fast", () => {
+  const v6 = CORPUS_INDEX_MANIFESTS.case_law_v6.engine.indexConfig;
+  const v7 = CORPUS_INDEX_MANIFESTS.case_law_v7.engine.indexConfig;
+
+  // Only the block size moves; every other indexing setting is v6's.
+  expect(v6.indexing_settings.docstore_blocksize).toBe(1_000_000);
+  expect(v7.indexing_settings).toEqual({
+    ...v6.indexing_settings,
+    docstore_blocksize: 65_536,
+  });
+
+  const idFields = (config: typeof v6) =>
+    config.doc_mapping.field_mappings.filter((field) =>
+      ["document_id", "anchor_id"].includes(field.name),
+    );
+  // Fast in v7, stored in both, and identical otherwise.
+  const v6Ids = idFields(v6);
+  const v7Ids = idFields(v7);
+  expect(v6Ids.map(({ name, fast, stored }) => [name, fast, stored])).toEqual([
+    ["document_id", false, true],
+    ["anchor_id", false, true],
+  ]);
+  expect(v7Ids.map(({ fast }) => fast)).toEqual([true, true]);
+  const v7IdsWithoutFast: typeof v6Ids = [];
+  for (const field of v7Ids) {
+    v7IdsWithoutFast.push({ ...field, fast: false });
+  }
+  expect(v7IdsWithoutFast).toEqual(v6Ids);
+
+  // Every other field is v6's, `keywords` aside.
+  const carriedFields = (config: typeof v6) =>
+    config.doc_mapping.field_mappings.filter(
+      (field) => !["document_id", "anchor_id", "keywords"].includes(field.name),
+    );
+  expect(carriedFields(v7)).toEqual(carriedFields(v6));
 });
 
 test("only a generation that maps a publisher field reports one", () => {

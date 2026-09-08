@@ -4,8 +4,8 @@ import { CASE_LAW_INDEX_GROUP_OF } from "@/api/lib/legal-search/case-law-index-g
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_FINAL_INDEX_CONFIG_VERSION,
-  CORPUS_FINAL_INDEX_DOCSTORE_BLOCKSIZE,
-  CORPUS_FINAL_INDEX_DOCSTORE_COMPRESSION_LEVEL,
+  CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
+  CORPUS_FINAL_INDEX_DOCSTORE_V7,
   CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES,
   CORPUS_FINAL_INDEX_MAX_PARTITIONS,
   CORPUS_FINAL_INDEX_MERGE_POLICY,
@@ -20,6 +20,7 @@ import {
   STEM_FIELD_OF,
   canonicalCorpusIndexMaturationPeriod,
   type CorpusIndexConfig,
+  type CorpusIndexDocstoreSettings,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import {
@@ -92,6 +93,10 @@ type CaseLawV6Manifest = CaseLawManifestBase & {
  * mapping change, and the case-law doc mapping is `strict`, so it arrives as a
  * generation: v6 keeps its exact bytes, its digest, and every projection
  * fingerprint derived from it while v7 builds beside it.
+ *
+ * v7 also carries its own docstore settings and marks `document_id` and
+ * `anchor_id` fast; both are fixed at index creation, so they arrive with a
+ * generation.
  */
 type CaseLawV7Manifest = CaseLawManifestBase & {
   generation: "case_law_v7";
@@ -169,6 +174,22 @@ const stemCompanionField = (
   name: string,
 ): CorpusIndexFieldMapping => ({ ...surface, name, stored: false });
 
+/** Mark mapped fields fast; panics on a name the mapping does not declare. */
+const withFastFields = (
+  fields: CorpusIndexFieldMapping[],
+  names: readonly string[],
+): CorpusIndexFieldMapping[] => {
+  const mapped = new Set(fields.map(({ name }) => name));
+  const missing = names.filter((name) => !mapped.has(name));
+  if (missing.length > 0) {
+    return panic(`Cannot make unmapped fields fast: ${missing.join(", ")}`);
+  }
+  const fast = new Set(names);
+  return fields.map((field) =>
+    fast.has(field.name) ? { ...field, fast: true } : field,
+  );
+};
+
 const unsignedIntegerField = (name: string): CorpusIndexFieldMapping => ({
   name,
   type: "u64",
@@ -221,6 +242,8 @@ type IndexConfigOptions = {
   fieldMappings: CorpusIndexFieldMapping[];
   tagFields: string[];
   timestampField?: string;
+  /** Required per generation: the engine fixes these at index creation. */
+  docstore: CorpusIndexDocstoreSettings;
   /**
    * What a bare free-text term reaches. Only a field written once per document
    * belongs here: under a passage layout a field repeated across a document's
@@ -234,6 +257,7 @@ const indexConfig = ({
   fieldMappings,
   tagFields,
   timestampField,
+  docstore,
   defaultSearchFields,
 }: IndexConfigOptions): Omit<CorpusIndexConfig, "index_id"> => ({
   version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
@@ -251,8 +275,8 @@ const indexConfig = ({
   indexing_settings: {
     merge_policy: CORPUS_FINAL_INDEX_MERGE_POLICY,
     commit_timeout_secs: CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
-    docstore_blocksize: CORPUS_FINAL_INDEX_DOCSTORE_BLOCKSIZE,
-    docstore_compression_level: CORPUS_FINAL_INDEX_DOCSTORE_COMPRESSION_LEVEL,
+    docstore_blocksize: docstore.blocksize,
+    docstore_compression_level: docstore.compressionLevel,
     split_num_docs_target: CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
     resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
   },
@@ -311,6 +335,7 @@ const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
       fieldMappings: caseLawFields(),
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
       defaultSearchFields: ["title", "text"],
     }),
   ),
@@ -347,6 +372,7 @@ const CASE_LAW_V6_INDEX_CONFIG = deepFreeze(
       fieldMappings: caseLawV6Fields(),
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
       // Unchanged from v5, and the summary is deliberately not added.
       //
       // A default search field decides what a *bare* term matches, and a hit
@@ -361,8 +387,11 @@ const CASE_LAW_V6_INDEX_CONFIG = deepFreeze(
   ),
 );
 
+/** Fields v7 marks fast in addition to stored; both are raw-normalized ids. */
+const CASE_LAW_V7_FAST_ID_FIELDS = ["document_id", "anchor_id"];
+
 const caseLawV7Fields = (): CorpusIndexFieldMapping[] => {
-  const base = caseLawV6Fields();
+  const base = withFastFields(caseLawV6Fields(), CASE_LAW_V7_FAST_ID_FIELDS);
   const headnote =
     base.find((field) => field.name === PUBLISHER_SUMMARY_FIELD) ??
     panic("Case-law fields no longer map the headnote");
@@ -383,6 +412,7 @@ const CASE_LAW_V7_INDEX_CONFIG = deepFreeze(
       fieldMappings: caseLawV7Fields(),
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_V7,
       // Unchanged from v6, for the reason stated there: a hit is a passage and
       // its stored `text` is the excerpt that stands for the match, so a field
       // written to the opening passage only is named by the query builder or
@@ -403,6 +433,7 @@ const LEGISLATION_V2_INDEX_CONFIG = deepFreeze(
         dateField("version_valid_to"),
         rawField("eli", { stored: false, fast: false }),
       ],
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
       tagFields: [
         "jurisdiction",
         "document_type",

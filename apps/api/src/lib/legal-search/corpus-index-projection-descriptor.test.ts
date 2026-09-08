@@ -192,9 +192,10 @@ test("only a generation that indexes the summary fingerprints it", () => {
 
 /**
  * The projection census. A fingerprint moving re-projects every document it
- * covers, so these change only when what the generation writes changes, and
- * then deliberately. Extend the map with a new generation; never edit an entry
- * to make a test pass.
+ * covers, so these change only when the manifest digest or what the generation
+ * writes changes, and then deliberately. Extend the map with a new generation;
+ * edit an entry only for a generation nothing has built, never to make a test
+ * pass.
  */
 const EXPECTED_FINGERPRINTS = {
   case_law_v5:
@@ -202,7 +203,7 @@ const EXPECTED_FINGERPRINTS = {
   case_law_v6:
     "f52ff99433302ac499667cf09c3745046db4a5451bb5c46e218eb8bc8d8376f1",
   case_law_v7:
-    "a9c3029fe0840d45d985de94edba5bd92c3bdac7bb76dc53e5449237802c92d9",
+    "d3ef561a8db3feab3ff67a726b743840d1c1224baedc9e5dc1777c462f9f5fd9",
 } as const;
 
 test("v7 fingerprints the sentence and the classification apart", () => {
