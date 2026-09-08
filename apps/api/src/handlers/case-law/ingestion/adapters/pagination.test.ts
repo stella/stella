@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -392,8 +392,16 @@ const mockFailingEndpoint = (
  */
 describe("a page the origin never answered does not move the cursor", () => {
   let restore: (() => void) | undefined;
+  const realSleep = Bun.sleep;
+
+  beforeEach(() => {
+    // Every refused page exhausts its retry budget, and the backoff between
+    // attempts is randomized wall-clock time. Nothing here is about waiting.
+    Bun.sleep = () => Promise.resolve();
+  });
 
   afterEach(() => {
+    Bun.sleep = realSleep;
     restore?.();
     restore = undefined;
   });
@@ -417,35 +425,46 @@ describe("a page the origin never answered does not move the cursor", () => {
     return cursor;
   };
 
-  test("a gateway outage holds the cursor instead of consuming the collection", async () => {
-    // Every page answers alike while the publisher's gateway is down, so a
-    // skip that advanced would walk the whole collection one page per refusal
-    // and end far past the tip. The cursor stays, and the same page is asked
-    // for again.
+  test("a bad-gateway outage holds the cursor instead of consuming the collection", async () => {
+    // The gateway got nothing from the origin, so this page's items are
+    // unknown. Every page answers alike while it is down, so a skip that
+    // advanced would walk the whole collection one page per refusal and end
+    // far past the tip.
     const endpoint = mockFailingEndpoint(502);
     restore = endpoint.restore;
 
-    const fetchPage = createTestFetch({ firstPage: 0 });
-    const cursor = await walk(fetchPage, "offset:30", 2);
+    const cursor = await walk(
+      createTestFetch({ firstPage: 0 }),
+      "offset:30",
+      3,
+    );
 
     expect(cursor).toBe("offset:30");
     expect(new Set(endpoint.requestedPages)).toEqual(new Set([10]));
-    // Each refused page exhausts its retry budget before answering, so the
-    // walk costs real backoff.
-  }, 30_000);
+  });
 
-  test("a server error the origin produced still skips its own page", async () => {
-    // The origin ran this request and failed on it, which is a fact about the
-    // page. Skipping it is what keeps one poison page from stalling a source.
-    const endpoint = mockFailingEndpoint(500);
-    restore = endpoint.restore;
+  /**
+   * The origin answered, so the refusal is about this page and skipping it is
+   * what keeps one page from stalling a source. A 504 is the publisher proxy's
+   * own read timeout, which the origin earns by being slow on this page — the
+   * same event `page_skipped_timeout` skips when our timeout fires first.
+   */
+  test.each([500, 503, 504])(
+    "a %i still skips its own page",
+    async (status) => {
+      const endpoint = mockFailingEndpoint(status);
+      restore = endpoint.restore;
 
-    const fetchPage = createTestFetch({ firstPage: 0 });
-    const cursor = await walk(fetchPage, "offset:30", 2);
+      const cursor = await walk(
+        createTestFetch({ firstPage: 0 }),
+        "offset:30",
+        2,
+      );
 
-    expect(cursor).toBe("offset:36");
-    expect(endpoint.requestedPages).toContain(11);
-  }, 30_000);
+      expect(cursor).toBe("offset:36");
+      expect(endpoint.requestedPages).toContain(11);
+    },
+  );
 });
 
 /**
