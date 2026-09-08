@@ -33,15 +33,44 @@ const buildCustomPropertiesXml = (stamp: string, code: string): string =>
     "</Properties>",
   ].join("\n");
 
+/**
+ * Mirrors `buildStampParagraph` in the API's DOCX stamper, including the split
+ * the hyperlink forces: the reference and the code live in separate `<w:t>`
+ * runs, so a parser that reads only one run finds half the line.
+ */
+const buildFooterXml = (stamp: string, code: string): string =>
+  [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    "<w:ftr>",
+    "  <w:p>",
+    '    <w:pPr><w:jc w:val="right"/></w:pPr>',
+    '    <w:bookmarkStart w:id="900" w:name="stella_dms_ref"/>',
+    "    <w:r>",
+    '      <w:rPr><w:color w:val="999999"/></w:rPr>',
+    `      <w:t xml:space="preserve">${stamp}  </w:t>`,
+    "    </w:r>",
+    '    <w:hyperlink r:id="rIdStellaVerify">',
+    "      <w:r>",
+    '        <w:rPr><w:color w:val="999999"/></w:rPr>',
+    `        <w:t>stl:${code}</w:t>`,
+    "      </w:r>",
+    "    </w:hyperlink>",
+    '    <w:bookmarkEnd w:id="900"/>',
+    "  </w:p>",
+    "</w:ftr>",
+  ].join("\n");
+
 type DocxFixtureOptions = {
   customPropertiesXml?: string;
   fileName?: string;
+  footerXml?: string;
   mimeType?: string;
 };
 
 const buildDocx = async ({
   customPropertiesXml,
   fileName = "engagement-letter.docx",
+  footerXml,
   mimeType = DOCX_MIME_TYPE,
 }: DocxFixtureOptions = {}): Promise<File> => {
   const zip = new JSZip();
@@ -55,6 +84,9 @@ const buildDocx = async ({
   );
   if (customPropertiesXml !== undefined) {
     zip.file("docProps/custom.xml", customPropertiesXml);
+  }
+  if (footerXml !== undefined) {
+    zip.file("word/footer1.xml", footerXml);
   }
   const bytes = await zip.generateAsync({ type: "uint8array" });
   return new File([bytes], fileName, { type: mimeType });
@@ -89,6 +121,67 @@ describe("reading a stella reference out of an uploaded file", () => {
 
   test("answers null for a DOCX that never left stella", async () => {
     expect(await readDocumentReference(await buildDocx())).toBeNull();
+  });
+
+  // Another editor's "Save as" can drop `docProps/custom.xml` while leaving
+  // the body — and therefore the footer — intact, so the footer is the
+  // fallback the API reads too.
+  test("falls back to the footer when the custom properties are gone", async () => {
+    const file = await buildDocx({
+      footerXml: buildFooterXml("2026/001/015.v3", "kx8mq2n4p3"),
+    });
+
+    expect(await readDocumentReference(file)).toEqual({
+      verificationCode: "kx8mq2n4p3",
+      stamp: "2026/001/015.v3",
+    });
+  });
+
+  test("reads the footer of a stamp that carries no reference", async () => {
+    const file = await buildDocx({
+      footerXml: buildFooterXml("", "kx8mq2n4p3"),
+    });
+
+    expect(await readDocumentReference(file)).toEqual({
+      verificationCode: "kx8mq2n4p3",
+      stamp: null,
+    });
+  });
+
+  test("holds the footer to the same code shape as the properties", async () => {
+    const file = await buildDocx({
+      footerXml: buildFooterXml("2026/001/015.v3", "KX8MQ2N4P3"),
+    });
+
+    expect(await readDocumentReference(file)).toBeNull();
+  });
+
+  test("ignores a footer without stella's bookmark", async () => {
+    const file = await buildDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        "<w:ftr><w:p><w:r><w:t>Page 1</w:t></w:r></w:p></w:ftr>",
+      ].join("\n"),
+    });
+
+    expect(await readDocumentReference(file)).toBeNull();
+  });
+
+  // The properties are the reliable copy: a footer edited by hand must not
+  // outrank what the stamper wrote.
+  test("prefers the custom properties over the footer", async () => {
+    const file = await buildDocx({
+      customPropertiesXml: buildCustomPropertiesXml(
+        "2026/001/015.v3",
+        "kx8mq2n4p3",
+      ),
+      footerXml: buildFooterXml("2019/900/001.v1", "qqqqqqqqqq"),
+    });
+
+    expect(await readDocumentReference(file)).toEqual({
+      verificationCode: "kx8mq2n4p3",
+      stamp: "2026/001/015.v3",
+    });
   });
 
   test("answers null for custom properties without stella's own", async () => {

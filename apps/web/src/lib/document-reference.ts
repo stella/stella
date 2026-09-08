@@ -4,10 +4,11 @@
  * A document that left stella carries its reference in the OOXML custom
  * properties (`docProps/custom.xml`): `stella-code` holds the verification
  * code the API resolves, `stella-ref` the human-readable reference
- * (`2026/001/015.v3`). Reading it in the browser is what lets an upload offer
- * "file this as the next version" instead of silently creating a duplicate —
- * and it costs one small archive entry rather than re-uploading the whole file
- * to the API to ask.
+ * (`2026/001/015.v3`), and the visible footer carries both again for a file
+ * that came back without the properties part. Reading it in the browser is
+ * what lets an upload offer "file this as the next version" instead of
+ * silently creating a duplicate — and it costs one small archive entry rather
+ * than re-uploading the whole file to the API to ask.
  *
  * Never throws: every unreadable, oversized, or unstamped file answers `null`,
  * because a file the user dropped is untrusted input and the upload has to
@@ -33,6 +34,23 @@ const DOCX_EXTENSION = ".docx";
 const MAX_REFERENCED_DOCX_BYTES = 50 * 1024 * 1024;
 
 const CUSTOM_PROPERTIES_PATH = "docProps/custom.xml";
+
+/**
+ * The visible footer, which the API's `parseFooterStamp` reads for the same
+ * reason: the custom properties can be dropped on the way back — another
+ * editor's "Save as" rewrites `docProps/custom.xml` or omits the part — while
+ * the footer survives, because it is document body content.
+ */
+const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/u;
+const STAMP_BOOKMARK = "stella_dms_ref";
+const STAMP_BOOKMARK_REGION_RE = new RegExp(
+  `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK}"[\\s\\S]*?<w:bookmarkEnd[^>]*/>`,
+  "u",
+);
+const WT_TEXT_RE = /<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu;
+/** Deliberately loose: `isVerificationCode` stays the one shape check. */
+const STL_CODE_RE = /stl:(?<code>[^\s<]+)/u;
+const STL_PREFIX = "stl:";
 
 /**
  * The alphabet the API mints verification codes from (lowercase alphanumeric
@@ -88,6 +106,7 @@ export const couldCarryDocumentReference = (file: File): boolean => {
 /**
  * Extract the stella reference a DOCX carries, or `null` when it has none, is
  * not a DOCX, is too large to have been stamped, or cannot be opened at all.
+ * Custom properties first, the footer second, in the API's own order.
  */
 export const readDocumentReference = async (
   file: File,
@@ -96,35 +115,89 @@ export const readDocumentReference = async (
     return null;
   }
 
-  const customXml = await readCustomPropertiesXml(file);
-  if (customXml === null) {
-    return null;
-  }
-
-  const verificationCode = parseProperty(customXml, CODE_PROPERTY_RE);
-  if (verificationCode === null) {
-    return null;
-  }
-  if (!isVerificationCode(verificationCode)) {
-    return null;
-  }
-
-  return {
-    verificationCode,
-    stamp: parseProperty(customXml, STAMP_PROPERTY_RE),
-  };
-};
-
-const readCustomPropertiesXml = async (file: File): Promise<string | null> => {
   try {
     const zip = await JSZip.loadAsync(await file.arrayBuffer());
-    const entry = zip.file(CUSTOM_PROPERTIES_PATH);
-    return entry ? await entry.async("string") : null;
+    return (
+      (await readCustomPropertyReference(zip)) ??
+      (await readFooterReference(zip))
+    );
   } catch {
     // Corrupt archive, non-zip bytes, or an entry that failed to inflate. An
     // unreadable file simply carries no reference.
     return null;
   }
+};
+
+const readCustomPropertyReference = async (
+  zip: JSZip,
+): Promise<DocumentReference | null> => {
+  const entry = zip.file(CUSTOM_PROPERTIES_PATH);
+  if (entry === null) {
+    return null;
+  }
+
+  const xml = await entry.async("string");
+  const verificationCode = parseProperty(xml, CODE_PROPERTY_RE);
+  if (verificationCode === null || !isVerificationCode(verificationCode)) {
+    return null;
+  }
+
+  return {
+    verificationCode,
+    stamp: parseProperty(xml, STAMP_PROPERTY_RE),
+  };
+};
+
+const readFooterReference = async (
+  zip: JSZip,
+): Promise<DocumentReference | null> => {
+  const footerPaths = Object.keys(zip.files).filter((path) =>
+    FOOTER_FILE_RE.test(path),
+  );
+
+  for (const path of footerPaths) {
+    const entry = zip.file(path);
+    if (entry === null) {
+      continue;
+    }
+    const xml = await entry.async("string");
+    if (!xml.includes(STAMP_BOOKMARK)) {
+      continue;
+    }
+    const reference = parseFooterReference(xml);
+    if (reference !== null) {
+      return reference;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * The bookmark region's `<w:t>` runs, joined: the stamper splits the line
+ * across runs (the code lives inside a hyperlink) so no single run holds
+ * `"2026/001/015.v3  stl:kx8mq2n4p3"`. The reference is whatever precedes the
+ * code.
+ */
+const parseFooterReference = (xml: string): DocumentReference | null => {
+  const region = STAMP_BOOKMARK_REGION_RE.exec(xml)?.[0];
+  if (region === undefined) {
+    return null;
+  }
+
+  const text = decodeXmlEntities(
+    [...region.matchAll(WT_TEXT_RE)]
+      .map((match) => match.groups?.["text"] ?? "")
+      .join(""),
+  ).trim();
+
+  const verificationCode = STL_CODE_RE.exec(text)?.groups?.["code"];
+  if (verificationCode === undefined || !isVerificationCode(verificationCode)) {
+    return null;
+  }
+
+  const stamp = text.slice(0, text.indexOf(STL_PREFIX)).trim();
+  return { verificationCode, stamp: stamp === "" ? null : stamp };
 };
 
 const parseProperty = (xml: string, pattern: RegExp): string | null => {
