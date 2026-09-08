@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -5,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
@@ -16,6 +18,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { FieldDescription } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -262,6 +265,20 @@ export const MatterMetadataPanel = ({
     return null;
   }
 
+  // Document references are built from the matter reference, so the helper
+  // spells out the numbering it produces. It reads the value being typed, not
+  // the saved one, so the example tracks the edit before it is committed.
+  // `bdi` isolates the Latin/digit runs inside an RTL sentence.
+  const trimmedReference = referenceValue.trim();
+  const documentNumberingHint =
+    trimmedReference === ""
+      ? t("workspaces.referenceNumberingEmptyHint")
+      : t.rich("workspaces.referenceNumberingHint", {
+          bdi: (chunks: ReactNode) => <BidiText>{chunks}</BidiText>,
+          firstDocument: `${trimmedReference}/001`,
+          secondDocument: `${trimmedReference}/002`,
+        });
+
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -298,16 +315,16 @@ export const MatterMetadataPanel = ({
         </section>
 
         {/* Reference */}
-        <section
-          className={cn(
-            "grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 border-b px-3",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
+        <section className="grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-3 border-b px-3">
           <span className="text-muted-foreground truncate text-sm font-medium">
             {t("workspaces.reference")}
           </span>
-          <div className="flex min-w-0 items-center gap-2">
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+          >
             <Input
               className="w-36 shrink-0 rounded-md shadow-none"
               onBlur={handleSaveReference}
@@ -332,6 +349,9 @@ export const MatterMetadataPanel = ({
               variant="inline"
             />
           </div>
+          <FieldDescription className="col-start-2 pb-2 text-pretty">
+            {documentNumberingHint}
+          </FieldDescription>
         </section>
 
         {/* InfoSoud */}
