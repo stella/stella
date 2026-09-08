@@ -41,7 +41,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag } from "domhandler";
+import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import type {
   Block,
@@ -447,19 +447,18 @@ const classDepth = (
  * latter (`#fragment`) to text, which is what the reader wants: the
  * footnote targets are not part of the AST.
  */
+const ECJ_INLINE_OPTIONS = {
+  sanitizeHref: sanitizeUrl,
+  emphasisClasses: {
+    bold: [CLASS.bold, `${CLASS_PREFIX}${CLASS.bold}`],
+    italic: [CLASS.italic, `${CLASS_PREFIX}${CLASS.italic}`],
+  },
+};
+
 const walkEcjInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-): Inline[] =>
-  collapseWhitespace(
-    walkInlines($, el, {
-      sanitizeHref: sanitizeUrl,
-      emphasisClasses: {
-        bold: [CLASS.bold, `${CLASS_PREFIX}${CLASS.bold}`],
-        italic: [CLASS.italic, `${CLASS_PREFIX}${CLASS.italic}`],
-      },
-    }),
-  );
+): Inline[] => collapseWhitespace(walkInlines($, el, ECJ_INLINE_OPTIONS));
 
 /**
  * The converter pretty-prints its output, so inline text arrives with
@@ -993,6 +992,27 @@ type CellContext =
   | { marker: string; number?: undefined }
   | undefined;
 
+/**
+ * Cellar's inline vocabulary inside a cell. Anything outside it opens a
+ * block of its own, so each `<p class="coj-normal">` of a quoted passage
+ * stays a separate paragraph and an unrecognised element keeps the
+ * paragraph it used to get.
+ */
+const INLINE_TAGS = new Set([
+  "a",
+  "b",
+  "br",
+  "em",
+  "i",
+  "img",
+  "small",
+  "span",
+  "strong",
+  "sub",
+  "sup",
+  "u",
+]);
+
 const visitCell = (
   $: cheerio.CheerioAPI,
   builder: BlockBuilder,
@@ -1001,21 +1021,61 @@ const visitCell = (
 ): void => {
   const before = builder.blocks.length;
   const signature = isSignature($, $cell);
-  const cellText = textOf($cell);
 
-  $cell.children().each((_, child) => {
+  // A cell mixes its own text with elements: Cellar writes a quoted
+  // entry as loose text around the spans that emphasize part of it.
+  // Walking `children()` alone reaches the elements and never the text
+  // between them, so that text was dropped whenever any element child
+  // produced a block — the one failure rule 10 does not allow. Collect
+  // the loose run instead and close it whenever a block child starts.
+  let run: Inline[] = [];
+  const flushRun = (): void => {
+    const inlines = collapseWhitespace(run);
+    run = [];
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (!plainText) {
+      return;
+    }
+    pushParagraph(builder, {
+      ...roleOf(builder.zone, signature),
+      inlines,
+      plainText,
+    });
+  };
+
+  $cell.contents().each((_, child) => {
+    if (isText(child)) {
+      run.push({ type: "text", text: $(child).text() });
+      return;
+    }
+
+    if (!isTag(child)) {
+      return;
+    }
+
     const $child = $(child);
-    const tag = tagNameOf(child);
+    const tag = child.tagName.toLowerCase();
 
     if (tag === "table") {
+      flushRun();
       visitTable($, builder, $child);
       return;
     }
 
     if (tag === "div") {
+      flushRun();
       visitCell($, builder, $child, undefined);
       return;
     }
+
+    // Untrimmed: the run's edges are trimmed once, in `flushRun`, so a
+    // span's own leading space still separates it from the text before.
+    if (INLINE_TAGS.has(tag)) {
+      run.push(...walkInlines($, $child, ECJ_INLINE_OPTIONS));
+      return;
+    }
+
+    flushRun();
 
     // As in `visitChild`: anything else still contributes its text.
     const inlines = walkEcjInlines($, $child);
@@ -1031,15 +1091,7 @@ const visitCell = (
     });
   });
 
-  // A cell holding bare text rather than paragraphs would otherwise
-  // contribute nothing.
-  if (builder.blocks.length === before && cellText !== "") {
-    pushParagraph(builder, {
-      ...roleOf(builder.zone, signature),
-      inlines: [{ type: "text", text: cellText }],
-      plainText: cellText,
-    });
-  }
+  flushRun();
 
   const first = builder.blocks[before];
   if (!first || first.type !== "paragraph") {

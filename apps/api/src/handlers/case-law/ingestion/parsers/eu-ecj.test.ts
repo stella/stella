@@ -647,6 +647,57 @@ describe("parseEcjDecisionHtml", () => {
     expect(missing).toEqual([]);
   });
 
+  test("keeps a cell's own text however it is arranged around its elements", () => {
+    // Cellar writes a quoted entry as loose text around the spans that
+    // emphasize part of it, so a cell's text and its elements interleave
+    // in every order. The text is the cell's content just as much as the
+    // elements are, and no arrangement may drop it.
+    const loose = (position: string) => `loose-${position} content`;
+    const arrangements = {
+      "text only": loose("only"),
+      "text then span": `${loose("before")} <span class="coj-italic">emph</span>`,
+      "span then text": `<span class="coj-italic">emph</span> ${loose("after")}`,
+      "text around a span": `${loose("before")} <span class="coj-italic">emph</span> ${loose("after")}`,
+      "text around a paragraph": `${loose("before")} <p class="coj-normal">block</p> ${loose("after")}`,
+      "text around a nested table": `${loose("before")} <table><tr><td><p>nested</p></td></tr></table> ${loose("after")}`,
+      "text around an unknown element": `${loose("before")} <section>other</section> ${loose("after")}`,
+    };
+
+    const rows = Object.values(arrangements)
+      .map(
+        (cell, index) =>
+          `<tr><td><span class="coj-count" id="point${index + 1}">${index + 1}</span></td><td>${cell}</td></tr>`,
+      )
+      .join("");
+    const html = [
+      "<html><body><div class='coj-normal' lang='en'>",
+      "<p class='coj-sum-title-1'>JUDGMENT OF THE COURT</p>",
+      `<table>${rows}</table>`,
+      "</div></body></html>",
+    ].join("");
+
+    const { fulltext, validationIssues } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html,
+    });
+
+    const dropped = Object.entries(arrangements).filter(
+      ([, cell]) =>
+        !(cell.match(/loose-\w+ content/gu) ?? []).every((text) =>
+          fulltext.includes(text),
+        ),
+    );
+    expect(dropped.map(([name]) => name)).toEqual([]);
+    expect(validationIssues).not.toContain("CONTENT_LOSS");
+    expect(validationIssues).not.toContain("MISSING_WORDS");
+  });
+
   test("reads the keyword chain in a non-Latin script", async () => {
     const html = await readFixture("62022CJ0128.el.html.gz");
     if (html === undefined) {
