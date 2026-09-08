@@ -1,10 +1,15 @@
 /**
- * DOCX stamp injection and extraction.
+ * DOCX document-reference injection and extraction.
  *
  * Injects a visible footer and invisible custom properties
  * into DOCX files for document provenance tracking. Uses
  * JSZip to manipulate the OOXML package; XML is handled
  * via string operations for simplicity and robustness.
+ *
+ * Nothing here substitutes text the author wrote. A `{{ ... }}` sequence in a
+ * DOCX belongs to the docxtpl Jinja template grammar, so this module must
+ * never claim a spelling inside those braces: the footer and the custom
+ * properties are the only things it writes.
  */
 import type { DocxArchive } from "@/api/lib/docx-archive";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
@@ -66,9 +71,6 @@ const FOOTER_REL_RE =
   /Id="(?<id>[^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="(?<target>[^"]+)"/gu;
 const DEFAULT_FOOTER_REF_RE =
   /w:footerReference[^>]*w:type="default"[^>]*r:id="(?<rid>[^"]+)"/u;
-const PLACEHOLDER_REF_RE = /\{\{STELLA_REF\}\}/gu;
-const PLACEHOLDER_CODE_RE = /\{\{STELLA_CODE\}\}/gu;
-const PLACEHOLDER_ID_RE = /\{\{STELLA_ID\}\}/gu;
 
 // ── Public API ──────────────────────────────────────────
 
@@ -76,46 +78,12 @@ export const isStampableDocx = (mimeType: string, sizeBytes: number): boolean =>
   DOCX_MIME_TYPES.has(mimeType) && sizeBytes <= LIMITS.docxStampMaxBytes;
 
 /**
- * Replace `{{STELLA_REF}}`, `{{STELLA_CODE}}`, `{{STELLA_ID}}`
- * placeholders in a DOCX file. Returns null if no placeholders
- * were found (file is unchanged). This runs on every download
- * for stampable DOCX files; it never modifies the file unless
- * the user explicitly placed placeholders.
- */
-export const fillPlaceholders = async (
-  docxBuffer: ArrayBuffer,
-  stamp: string,
-  verificationCode: string,
-): Promise<ArrayBuffer | null> => {
-  let archive: DocxArchive;
-  try {
-    archive = await loadDocxArchive(docxBuffer);
-  } catch {
-    return null;
-  }
-
-  const replaced = await replacePlaceholders(archive, stamp, verificationCode);
-  if (!replaced) {
-    return null;
-  }
-
-  // Also inject custom properties so round-trip extraction works
-  await injectCustomProperties(archive, stamp, verificationCode);
-
-  return archive.zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-  });
-};
-
-/**
- * Inject a full DMS stamp into a DOCX file. Adds:
+ * Inject the document reference into a DOCX file. Adds:
  * 1. Custom properties (stella-ref, stella-code)
- * 2. Placeholder replacement (if any)
- * 3. A visible right-aligned footer (skipped if placeholders found)
+ * 2. A visible right-aligned footer
  *
- * Only called when the user explicitly requests stamping.
- * Idempotent: existing Stella stamps are updated, not duplicated.
+ * Only called when the user explicitly requests the reference.
+ * Idempotent: an existing stella reference is updated, not duplicated.
  */
 export const injectStamp = async (
   docxBuffer: ArrayBuffer,
@@ -132,17 +100,7 @@ export const injectStamp = async (
   }
 
   await injectCustomProperties(archive, stamp, verificationCode);
-
-  const placeholdersReplaced = await replacePlaceholders(
-    archive,
-    stamp,
-    verificationCode,
-  );
-
-  // Skip auto-footer when the user placed their own references
-  if (!placeholdersReplaced) {
-    await injectFooter(archive, stamp, verificationCode, baseUrl);
-  }
+  await injectFooter(archive, stamp, verificationCode, baseUrl);
 
   return archive.zip.generateAsync({
     type: "arraybuffer",
@@ -333,64 +291,6 @@ const ensureCustomPropsRelationship = async (
       () => `<Relationship Id=${rel}\n</Relationships>`,
     ),
   );
-};
-
-// ── Placeholder Replacement ─────────────────────────────
-
-/**
- * Scan all XML parts (document, headers, footers) for
- * `{{STELLA_REF}}` and `{{STELLA_CODE}}` placeholders and
- * replace them with the actual values, preserving the user's
- * formatting. Returns true if any replacements were made.
- */
-const replacePlaceholders = async (
-  archive: DocxArchive,
-  stamp: string,
-  verificationCode: string,
-): Promise<boolean> => {
-  const xmlPaths = Object.keys(archive.zip.files).filter(
-    (p) => p.startsWith("word/") && p.endsWith(".xml") && !p.includes("_rels/"),
-  );
-
-  let replaced = false;
-
-  for (const path of xmlPaths) {
-    const xml = await archive.readEntryString(path);
-    if (!xml) {
-      continue;
-    }
-
-    const hasRef = PLACEHOLDER_REF_RE.test(xml);
-    const hasCode = PLACEHOLDER_CODE_RE.test(xml);
-    const hasId = PLACEHOLDER_ID_RE.test(xml);
-    if (!hasRef && !hasCode && !hasId) {
-      continue;
-    }
-
-    // Reset lastIndex after .test() for global regexes
-    PLACEHOLDER_REF_RE.lastIndex = 0;
-    PLACEHOLDER_CODE_RE.lastIndex = 0;
-    PLACEHOLDER_ID_RE.lastIndex = 0;
-
-    let result = xml;
-    if (hasId) {
-      const idText = escapeXml(`${stamp}  stl:${verificationCode}`);
-      result = result.replace(PLACEHOLDER_ID_RE, () => idText);
-    }
-    if (hasRef) {
-      const refText = escapeXml(stamp);
-      result = result.replace(PLACEHOLDER_REF_RE, () => refText);
-    }
-    if (hasCode) {
-      const codeText = escapeXml(`stl:${verificationCode}`);
-      result = result.replace(PLACEHOLDER_CODE_RE, () => codeText);
-    }
-
-    archive.zip.file(path, result);
-    replaced = true;
-  }
-
-  return replaced;
 };
 
 // ── Footer Injection ────────────────────────────────────
