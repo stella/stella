@@ -8,10 +8,19 @@
 // satisfies a source-field inventory by coincidence: the disposition map
 // names a target, not where the value came from.
 //
-// The rule proves one local property: `court` in an adapter is not written
-// from a literal. Whether the resolver was given the right field, and whether
-// the record's own court field was preferred over the publisher's, stay
-// review and test responsibilities.
+// The rule proves one local property, and only it: the value written at a
+// `court` property is not a literal standing there. Whether the resolver was
+// given the right field, and whether the record's own court field was
+// preferred over the publisher's, stay review and test responsibilities.
+//
+// Deliberately direct-property-only: a literal bound to a name first
+// (`const court = "…"`, then `{ court }`) is not reported. Reading through
+// the binding is a mechanical extension, but it is not free — it flags the
+// adapters that still hold a constant, and each of those needs its own
+// jurisdiction's resolver and its own evidence of what the source states,
+// which is a change per source rather than a change to this rule. Until then
+// the rule is a floor, not a proof, and this comment is what keeps the two
+// from being confused.
 //
 // Flags:
 //   return { caseNumber, court: "Nejvyšší soud", country: "CZE" };

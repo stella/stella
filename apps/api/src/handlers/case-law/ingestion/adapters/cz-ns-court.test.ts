@@ -72,6 +72,28 @@ const builtCourt = async (page: PageOptions): Promise<string> => {
   return built.decision.court;
 };
 
+/** The source fingerprint the refresh check compares a stored row against. */
+const builtRawHash = async (page: PageOptions): Promise<string> => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+    const url = input instanceof Request ? input.url : String(input);
+    return await Promise.resolve(
+      url.includes("/WebPrint/")
+        ? new Response("", { status: 404 })
+        : new Response(detailPage(page), {
+            headers: { "Content-Type": "text/html" },
+          }),
+    );
+  });
+  const built = await buildCzNsDecision({
+    unid: "0000000000000000000000000000000A",
+    caseNumber: "75 Co 19/2011",
+  });
+  if (built.type !== "built") {
+    throw new Error(`cz-ns decision did not build: ${built.type}`);
+  }
+  return built.decision.rawHash;
+};
+
 describe("cz-ns court attribution", () => {
   test("stores a regional court's decision under that court", async () => {
     expect(
@@ -102,4 +124,16 @@ describe("cz-ns court attribution", () => {
       await builtCourt({ ecli: "ECLI:CZ:KSOS:2011:75.CO.19.2011.1" }),
     ).toBe("Krajský soud v Ostravě");
   });
+});
+
+/**
+ * A stored row is refreshed only where its source fingerprint moved, so a
+ * field outside the fingerprint can never reach the rows already stored. The
+ * court has to be inside it: a decision the publisher restated under another
+ * court's name changes nothing else on its page.
+ */
+test("a page stating another court hashes differently", async () => {
+  const publisher = await builtRawHash({ court: "Nejvyšší soud" });
+  const deciding = await builtRawHash({ court: "Vrchní soud v Praze" });
+  expect(deciding).not.toBe(publisher);
 });

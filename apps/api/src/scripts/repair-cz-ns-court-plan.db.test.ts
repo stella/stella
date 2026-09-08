@@ -13,11 +13,11 @@ import { drizzle } from "drizzle-orm/pglite";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   applyCzNsCourtRepairStatement,
   CZ_NS_COURT_REPAIR_OUTCOMES,
   decideCzNsCourtRepair,
-  executedRows,
   parseCzNsCourtRow,
   selectCzNsForeignCourtRowsStatement,
 } from "@/api/scripts/repair-cz-ns-court-plan";
@@ -30,6 +30,9 @@ const nsSourceId = createSafeId<"caseLawSource">();
 const nssSourceId = createSafeId<"caseLawSource">();
 
 const PUBLISHER_COURT = "Nejvyšší soud";
+
+/** When the fixtures were last written, long before any run of the repair. */
+const STORED_AT = new Date("2020-01-01T00:00:00.000Z");
 
 type Fixture = {
   ecli: string | null;
@@ -109,6 +112,13 @@ beforeAll(
         language: "cs",
         ecli: fixture.ecli,
         metadata: { court: PUBLISHER_COURT, ecli: fixture.ecli },
+        // Both hashes present and equal: the row reads as projected and up to
+        // date, which is the state a court-only change has to disturb.
+        contentHash: "a".repeat(64),
+        indexedHash: "a".repeat(64),
+        // Stamped in the past rather than at insert time, so "the repair moved
+        // this" is a fact about the row and not about how fast the test ran.
+        updatedAt: STORED_AT,
         slug: `fixture-${String(index)}`,
         languageGroupKey: `fixture-${String(index)}`,
       })),
@@ -165,13 +175,23 @@ test("writes the court and the copy the row's metadata carries", async () => {
       await db
         .select({
           court: caseLawDecisions.court,
+          indexedHash: caseLawDecisions.indexedHash,
           metadata: caseLawDecisions.metadata,
+          updatedAt: caseLawDecisions.updatedAt,
         })
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.id, repair.id))
     ).at(0);
     expect(stored?.court).toBe(repair.court);
     expect(stored?.metadata?.["court"]).toBe(repair.court);
+    // Both search projections read a mark rather than the court itself: the
+    // full-text one compares this timestamp against its own, and the legacy
+    // corpus index treats a cleared hash as work. A row whose court moved and
+    // whose marks did not is served under its old court for good.
+    expect(stored?.indexedHash).toBeNull();
+    expect(stored?.updatedAt.getTime() ?? 0).toBeGreaterThan(
+      STORED_AT.getTime(),
+    );
   }
 
   // Idempotent: the repaired rows have left the decision's re-attribution

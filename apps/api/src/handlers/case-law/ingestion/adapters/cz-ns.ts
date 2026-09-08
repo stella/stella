@@ -598,13 +598,15 @@ export const buildCzNsDecision = async (
     meta["publishedOnWeb"] === undefined
       ? undefined
       : parseCeDate(meta["publishedOnWeb"]);
-  // The publication day is hashed for every decision, not only where the page
-  // states one, and that moves every stored row's hash once. It is the pass
-  // that carries the day itself, and the multi-part raw beside it, onto rows
-  // written before either existed: the refresh check skips a row whose hash
-  // stands still, so a field nothing hashes can never reach the corpus that is
-  // already stored.
-  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
+  // The publication day and the court are hashed for every decision, not only
+  // where the page states one, and that moves every stored row's hash once. It
+  // is the pass that carries them, and the multi-part raw beside them, onto
+  // rows written before any of it existed: the refresh check skips a row whose
+  // hash stands still, so a field nothing hashes can never reach the corpus
+  // that is already stored. For the court that is the whole point — a row
+  // stored under the publisher's name whose page states another court has an
+  // otherwise unchanged page, and would keep the wrong court for good.
+  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["court"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
 
   // Parse AST from the print page (rich HTML)
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;

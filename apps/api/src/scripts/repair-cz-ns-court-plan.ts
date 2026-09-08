@@ -73,13 +73,16 @@ export const CZ_NS_COURT_REPAIR_OUTCOMES = {
 export type CzNsCourtRepairOutcome =
   (typeof CZ_NS_COURT_REPAIR_OUTCOMES)[keyof typeof CZ_NS_COURT_REPAIR_OUTCOMES];
 
+/** A row the run writes: the court it holds now, and the one it should. */
+export type CzNsCourtReattribution = {
+  outcome: typeof CZ_NS_COURT_REPAIR_OUTCOMES.REATTRIBUTED;
+  id: SafeId<"caseLawDecision">;
+  from: string;
+  court: string;
+};
+
 export type CzNsCourtRepair =
-  | {
-      outcome: typeof CZ_NS_COURT_REPAIR_OUTCOMES.REATTRIBUTED;
-      id: SafeId<"caseLawDecision">;
-      from: string;
-      court: string;
-    }
+  | CzNsCourtReattribution
   | {
       outcome: typeof CZ_NS_COURT_REPAIR_OUTCOMES.HELD;
       id: SafeId<"caseLawDecision">;
@@ -133,13 +136,24 @@ export const decideCzNsCourtRepair = ({
 };
 
 /**
- * Write one row's court, and the copy of it the row's metadata carries.
+ * Write one row's court, the copy of it the row's metadata carries, and the
+ * two marks that tell the search projections the row moved.
  *
  * Guarded on the court the selection read: the crawl keeps running, and a
  * decision it re-ingested in between already carries what the fixed adapter
  * derived. Overwriting that with this run's value would be a stale write, so
  * the statement returns nothing for such a row and the run counts it as
  * superseded rather than repaired.
+ *
+ * Both marks are set here rather than left to the caller, because a court that
+ * changes in the row and nowhere else is served under its old name for as long
+ * as the deployment stands. `updated_at` is the staleness test the PostgreSQL
+ * full-text projection runs (`decisions.updated_at > search_documents.updated_at`),
+ * and raw SQL does not go through the ORM's own timestamp. `indexed_hash` is
+ * the legacy corpus-index one, whose enqueue trigger fires on the column being
+ * assigned rather than on its value changing. Neither reaches a generation
+ * projected from its projection state; that one is reconciled by the caller,
+ * inside the same transaction as this statement.
  */
 export const applyCzNsCourtRepairStatement = ({
   court,
@@ -154,22 +168,13 @@ export const applyCzNsCourtRepairStatement = ({
      SET court = ${court},
          metadata = jsonb_set(
            COALESCE(d.metadata, '{}'::jsonb), '{court}', to_jsonb(${court}::text)
-         )
+         ),
+         updated_at = now(),
+         indexed_hash = NULL
    WHERE d.id = ${id}::uuid
      AND d.court = ${from}
   RETURNING d.id
 `;
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-export const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
 
 /** One selected row, from a driver result that is untyped by construction. */
 export const parseCzNsCourtRow = (value: unknown): CzNsCourtRow => {

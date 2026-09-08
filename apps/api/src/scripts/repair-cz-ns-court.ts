@@ -47,20 +47,23 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { isRecord } from "@/api/lib/type-guards";
 import {
   applyCzNsCourtRepairStatement,
   CZ_NS_COURT_REPAIR_OUTCOMES,
   decideCzNsCourtRepair,
-  executedRows,
   parseCzNsCourtRow,
   selectCzNsForeignCourtRowsStatement,
 } from "@/api/scripts/repair-cz-ns-court-plan";
-import type { CzNsCourtRow } from "@/api/scripts/repair-cz-ns-court-plan";
+import type {
+  CzNsCourtReattribution,
+  CzNsCourtRow,
+} from "@/api/scripts/repair-cz-ns-court-plan";
+import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
 
 /** The publisher's own ECLI court code; its rows need no re-attribution. */
 const CZ_NS_PUBLISHER_ECLI_CODE = "NS";
@@ -82,43 +85,18 @@ const USAGE = `Usage: bun run src/scripts/repair-cz-ns-court.ts [options]
                  for a flag this script ignores; contradicts --apply.
   --limit <n>    Rows this run may re-attribute (default ${String(DEFAULT_LIMIT)}).`;
 
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
-
-const DECIMAL_INTEGER = /^\d+$/u;
-
-const flagInteger = (name: string, fallback: number): number => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return fallback;
-  }
-  const raw = process.argv[index + 1];
-  const parsed =
-    raw !== undefined && DECIMAL_INTEGER.test(raw)
-      ? Number.parseInt(raw, 10)
-      : Number.NaN;
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    console.error(
-      `--${name} must be a positive integer, got: ${raw ?? "(none)"}`,
-    );
-    console.error(USAGE);
-    process.exit(1);
-  }
-  return parsed;
-};
-
-const apply = hasFlag("apply");
-if (apply && hasFlag("dry-run")) {
-  console.error("--apply and --dry-run contradict each other; pass one.");
-  console.error(USAGE);
-  process.exit(1);
-}
+const apply = readApplyFlag(USAGE);
 
 // A report run only reads, so it takes no lane and cannot block a writer; the
 // read-only session makes that a property of the connection, not a promise.
-const { rootDb, ingestionDb } = apply
+const { ingestionDb, rootDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
-const limit = flagInteger("limit", DEFAULT_LIMIT);
+const limit = flagInteger({
+  fallback: DEFAULT_LIMIT,
+  name: "limit",
+  usage: USAGE,
+});
 
 /** One keyset page of the selection, strictly after `after`. */
 const readPage = async (
@@ -134,6 +112,48 @@ const readPage = async (
       }),
     ),
   ).map(parseCzNsCourtRow);
+
+/**
+ * Re-attribute one row, and re-enqueue the projection that carries it.
+ *
+ * One row is the transaction, and the whole transaction: the write and the
+ * projection reconcile have to commit together, or a row would carry its new
+ * court while the index kept serving the old one, with nothing left to notice
+ * — the row has by then left the selection predicate, so a later run does not
+ * revisit it. Batching the writes would not change that, because the desired
+ * state is reconciled per decision, and it would put the two on either side of
+ * a statement boundary. The source lock, taken first, is what keeps a crawl
+ * refreshing the same decision from interleaving with either half.
+ *
+ * Answers whether the row was written: a guarded update that matches nothing
+ * is a row the crawl re-observed under the run, already carrying whatever the
+ * fixed adapter derived, and this run has nothing to add to it.
+ */
+const reattributeRow = async (
+  repair: CzNsCourtReattribution,
+): Promise<boolean> =>
+  await ingestionDb(async (tx) => {
+    const subject = { family: "case_law", entityId: repair.id } as const;
+    const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+    // audit: skip — operator repair of a derived attribution
+    const written =
+      executedRows(
+        await tx.execute(
+          applyCzNsCourtRepairStatement({
+            court: repair.court,
+            from: repair.from,
+            id: repair.id,
+          }),
+        ),
+      ).length > 0;
+    if (written && lock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock,
+        subject,
+      });
+    }
+    return written;
+  });
 
 let cursor: SafeId<"caseLawDecision"> | null = null;
 let scanned = 0;
@@ -154,6 +174,12 @@ while (reattributed + superseded < limit) {
   scanned += page.length;
 
   for (const row of page) {
+    // The allowance is per row, not per page: a page is read whole, so a run
+    // with one slot left would otherwise write every re-attributable row on
+    // it. What an operator authorised is the number of rows changed.
+    if (reattributed + superseded >= limit) {
+      break;
+    }
     const repair = decideCzNsCourtRepair(row);
     switch (repair.outcome) {
       case CZ_NS_COURT_REPAIR_OUTCOMES.HELD: {
@@ -170,35 +196,7 @@ while (reattributed + superseded < limit) {
           reattributed += 1;
           break;
         }
-        // One transaction per row, through the ingestion role the pipeline
-        // writes these tables with: the update and the projection reconcile
-        // have to be atomic, and the source lock they take is what keeps a
-        // concurrent crawl of the same decision from interleaving with them.
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one row per transaction under the projection source lock
-        const written = await ingestionDb(async (tx) => {
-          const subject = {
-            family: "case_law",
-            entityId: repair.id,
-          } as const;
-          const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
-          // audit: skip — operator repair of a derived attribution
-          const rows = executedRows(
-            await tx.execute(
-              applyCzNsCourtRepairStatement({
-                court: repair.court,
-                from: repair.from,
-                id: repair.id,
-              }),
-            ),
-          ).filter(isRecord);
-          if (rows.length > 0 && lock !== null) {
-            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-              lock,
-              subject,
-            });
-          }
-          return rows.length > 0;
-        });
+        const written = await reattributeRow(repair);
         if (written) {
           reattributed += 1;
         } else {
