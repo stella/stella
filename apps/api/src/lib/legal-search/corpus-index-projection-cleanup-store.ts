@@ -486,9 +486,12 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
         lte(rankedRevisions.taskRank, limit),
       ),
     )
+    // Total: two revisions committed by the same cleanup turn share both
+    // timestamps, and the lease order follows this one.
     .orderBy(
       asc(corpusIndexProjectionIntents.cleanupStartedAt),
       asc(corpusIndexProjectionIntents.createdAt),
+      asc(corpusIndexProjectionIntents.id),
     )
     .limit(limit * leasedOpstamps.length)
     .for("update", {
