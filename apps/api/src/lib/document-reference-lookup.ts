@@ -1,9 +1,10 @@
 /**
- * One owner for resolving a document reference to the version it was frozen
- * onto: by verification code (globally unique) or by the reference string
- * (`2026/001/015.v3`, unique only within a matter). Both the uploaded-DOCX
- * check and the authenticated code resolution answer from here, so the two
- * cannot drift on what a match is or on how it is scoped.
+ * One owner for resolving a verification code to the version it was frozen
+ * onto. Both the uploaded-DOCX check and the authenticated code resolution
+ * answer from here, so the two cannot drift on what a match is or on how it
+ * is scoped. The printed reference string (`2026/001/015.v3`) is never a
+ * lookup key: a matter can be re-referenced and the freed reference reused,
+ * so the same string can name two unrelated documents over time.
  *
  * Every lookup is organization-scoped in the query itself, on top of whatever
  * the caller's database handle already enforces: a verification code travels
@@ -13,7 +14,7 @@
  */
 
 import { panic } from "better-result";
-import { and, desc, eq, isNull, max } from "drizzle-orm";
+import { and, eq, isNull, max } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
@@ -42,7 +43,7 @@ type LookupOptions = {
   organizationId: SafeId<"organization">;
 };
 
-/** The columns both lookups project, before the current-version read. */
+/** The columns the lookup projects, before the current-version read. */
 const MATCH_COLUMNS = {
   entityId: entities.id,
   entityName: entities.name,
@@ -131,39 +132,6 @@ export const lookupByVerificationCode = async ({
         isNull(entityVersions.deletedAt),
       ),
     )
-    .limit(1);
-
-  const row = rows.at(0);
-  return row ? await completeMatch(tx, row) : null;
-};
-
-/**
- * Resolve a reference string. A reference is unique only within a matter and
- * the same string can be reprinted across matters, so the most recently
- * created version carrying it wins.
- */
-export const lookupByStamp = async ({
-  tx,
-  organizationId,
-  stamp,
-}: LookupOptions & {
-  stamp: string;
-}): Promise<DocumentReferenceMatch | null> => {
-  const rows = await tx
-    .select(MATCH_COLUMNS)
-    .from(entityVersions)
-    .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-    .innerJoin(
-      workspaces,
-      and(
-        eq(entities.workspaceId, workspaces.id),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .where(
-      and(eq(entityVersions.stamp, stamp), isNull(entityVersions.deletedAt)),
-    )
-    .orderBy(desc(entityVersions.createdAt))
     .limit(1);
 
   const row = rows.at(0);
