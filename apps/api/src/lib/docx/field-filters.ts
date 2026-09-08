@@ -22,12 +22,14 @@ import {
 } from "@stll/agent-input";
 import { assertNever } from "@stll/template-conditions";
 import type {
+  FieldDateFormat,
   FilterArgument,
   FilterCall,
   FilterName,
   MarkerLiteral,
 } from "@stll/template-conditions";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import {
   ATTORNEY_REFS,
   CONTACT_FIELDS,
@@ -49,22 +51,198 @@ import {
 
 // ── The catalogue ────────────────────────────────────────
 
-/** How a manifest property is written: by these filters, or deliberately not
- *  at all. */
-type FilterDisposition = { via: readonly FilterName[] } | { excluded: string };
+/** The filter calls one manifest property contributes to a marker's chain. */
+type FilterWriter = (field: FieldMeta) => FilterCall[];
 
 /**
- * Every key of {@link FieldMeta}, and the filters that write it. Total over
- * the manifest shape, so a property added to `fieldMetaSchema` cannot ship
- * without a decision about how an author expresses it in the document.
+ * How a manifest property is written: by these filters and this writer, or
+ * deliberately not at all. Reader and writer are declared together so a
+ * property cannot gain a way in without a way out.
+ */
+type FilterDisposition =
+  | { via: readonly FilterName[]; write: FilterWriter }
+  | { excluded: string };
+
+const NO_FILTERS: FilterCall[] = [];
+
+const filterCall = (
+  name: FilterName,
+  ...args: FilterArgument[]
+): FilterCall => ({ name, args });
+
+const positionalArg = (value: MarkerLiteral): FilterArgument => ({
+  kind: "positional",
+  value,
+});
+
+const keywordArg = (name: string, value: MarkerLiteral): FilterArgument => ({
+  kind: "keyword",
+  name,
+  value,
+});
+
+/** The `date()` spec that reads back as this pair: a locale, then the style it
+ *  renders with. `iso` carries the locale that never reaches a rendered date,
+ *  so it is written as the bare style the reader accepts. */
+const dateSpec = ({ locale, style }: FieldDateFormat): string =>
+  style === "iso" ? style : `${locale}-${style}`;
+
+/** The numeric bounds, in the order the reader lists them, so a chain a
+ *  document already carries and one this writes are the same text. */
+const VALIDATION_BOUNDS = [
+  ["min", "min"],
+  ["max", "max"],
+  ["minLength", "min_length"],
+  ["maxLength", "max_length"],
+  ["minItems", "min_items"],
+  ["maxItems", "max_items"],
+] as const satisfies readonly (readonly [keyof FieldValidation, FilterName])[];
+
+const writeInputType = (field: FieldMeta): FilterCall[] => {
+  // A date format is what makes a field a date, so it writes the input type:
+  // `date("cs-long")` is one filter that says both, and a configuration that
+  // named a format without naming the type still round-trips.
+  if (field.dateFormat !== undefined) {
+    return [filterCall("date", positionalArg(dateSpec(field.dateFormat)))];
+  }
+  const { inputType } = field;
+  if (inputType === undefined) {
+    return NO_FILTERS;
+  }
+  switch (inputType) {
+    case "boolean":
+      return [filterCall("checkbox")];
+    case "date":
+      return [filterCall("date", positionalArg("iso"))];
+    case "select":
+      return [
+        filterCall(
+          "select",
+          ...arrayOrEmpty(field.options).map((option) => positionalArg(option)),
+        ),
+      ];
+    case "number":
+    case "text":
+      return [filterCall(inputType)];
+    default:
+      return assertNever(inputType);
+  }
+};
+
+const writeSource = (field: FieldMeta): FilterCall[] => {
+  const { source } = field;
+  if (source === undefined) {
+    return NO_FILTERS;
+  }
+  switch (source.kind) {
+    case "party":
+      return [
+        filterCall(
+          "party",
+          positionalArg(source.role),
+          positionalArg(source.field),
+        ),
+      ];
+    case "attorney":
+      return [
+        filterCall(
+          "attorney",
+          positionalArg(source.ref),
+          positionalArg(source.field),
+        ),
+      ];
+    case "contact":
+    case "firm":
+    case "matter":
+      return [filterCall(source.kind, positionalArg(source.field))];
+    default:
+      return assertNever(source);
+  }
+};
+
+const writeAi = (field: FieldMeta): FilterCall[] => {
+  const { aiAdapt, aiPrompt, aiSeesDocument } = field;
+  if (aiPrompt === undefined && aiAdapt !== true) {
+    return NO_FILTERS;
+  }
+  return [
+    filterCall(
+      "ai",
+      ...(aiPrompt === undefined ? [] : [positionalArg(aiPrompt)]),
+      ...(aiAdapt === undefined ? [] : [keywordArg("adapt", aiAdapt)]),
+      ...(aiSeesDocument === undefined
+        ? []
+        : [keywordArg("sees_document", aiSeesDocument)]),
+    ),
+  ];
+};
+
+const writeValidation = (field: FieldMeta): FilterCall[] => {
+  const validation = field.validation;
+  if (validation === undefined) {
+    return NO_FILTERS;
+  }
+  const calls: FilterCall[] = [];
+  if (validation.pattern !== undefined) {
+    calls.push(filterCall("pattern", positionalArg(validation.pattern)));
+  }
+  for (const [key, name] of VALIDATION_BOUNDS) {
+    const bound = validation[key];
+    if (bound !== undefined) {
+      calls.push(filterCall(name, positionalArg(bound)));
+    }
+  }
+  return calls;
+};
+
+/**
+ * Every key of {@link FieldMeta}, the filters that write it, and how. Total
+ * over the manifest shape, so a property added to `fieldMetaSchema` cannot
+ * ship without a decision about how an author expresses it in the document —
+ * and, when it is expressible, without the code that writes it back.
+ *
+ * A filter several properties feed (`ai`, `select`, `date`) is written by one
+ * of them and skipped by the rest; the round-trip property in
+ * `field-filters.test.ts` is what proves nothing is dropped.
  */
 export const FIELD_META_FILTERS = {
   path: { excluded: "the marker's own path is the field path" },
-  label: { via: ["label"] },
-  hint: { via: ["hint"] },
-  inputType: { via: ["text", "number", "date", "checkbox", "select"] },
-  options: { via: ["select"] },
-  optionsFrom: { via: ["options_from"] },
+  inputType: {
+    via: ["text", "number", "date", "checkbox", "select"],
+    write: writeInputType,
+  },
+  options: { via: ["select"], write: () => NO_FILTERS },
+  dateFormat: { via: ["date"], write: () => NO_FILTERS },
+  optionsFrom: {
+    via: ["options_from"],
+    write: ({ optionsFrom }) =>
+      optionsFrom === undefined
+        ? NO_FILTERS
+        : [filterCall("options_from", positionalArg(optionsFrom))],
+  },
+  label: {
+    via: ["label"],
+    write: ({ label }) =>
+      label === undefined
+        ? NO_FILTERS
+        : [filterCall("label", positionalArg(label))],
+  },
+  hint: {
+    via: ["hint"],
+    write: ({ hint }) =>
+      hint === undefined
+        ? NO_FILTERS
+        : [filterCall("hint", positionalArg(hint))],
+  },
+  required: {
+    via: ["required"],
+    // The reader writes both the flag and the validation entry, so either one
+    // standing alone still comes back as the same field.
+    write: (field) =>
+      field.required === true || field.validation?.required === true
+        ? [filterCall("required")]
+        : NO_FILTERS,
+  },
   validation: {
     via: [
       "required",
@@ -76,16 +254,44 @@ export const FIELD_META_FILTERS = {
       "min_items",
       "max_items",
     ],
+    write: writeValidation,
   },
-  required: { via: ["required"] },
-  aiPrompt: { via: ["ai"] },
-  aiAdapt: { via: ["ai"] },
-  aiSeesDocument: { via: ["ai"] },
-  lookup: { via: ["lookup"] },
-  source: { via: ["matter", "contact", "party", "attorney", "firm"] },
-  formula: { via: ["formula"] },
-  condition: { via: ["condition"] },
-  dateFormat: { via: ["date"] },
+  aiPrompt: { via: ["ai"], write: writeAi },
+  aiAdapt: { via: ["ai"], write: () => NO_FILTERS },
+  aiSeesDocument: { via: ["ai"], write: () => NO_FILTERS },
+  lookup: {
+    via: ["lookup"],
+    write: ({ lookup }) =>
+      lookup === undefined
+        ? NO_FILTERS
+        : [
+            filterCall(
+              "lookup",
+              positionalArg(lookup.registry),
+              ...lookup.formats.map(({ key, template }) =>
+                keywordArg(key, template),
+              ),
+            ),
+          ],
+  },
+  source: {
+    via: ["matter", "contact", "party", "attorney", "firm"],
+    write: writeSource,
+  },
+  formula: {
+    via: ["formula"],
+    write: ({ formula }) =>
+      formula === undefined
+        ? NO_FILTERS
+        : [filterCall("formula", positionalArg(formula))],
+  },
+  condition: {
+    via: ["condition"],
+    write: ({ condition }) =>
+      condition === undefined
+        ? NO_FILTERS
+        : [filterCall("condition", positionalArg(condition))],
+  },
   parts: {
     excluded:
       "a composite is written as document text around its part markers, so the format needs no filter",
@@ -101,6 +307,17 @@ export const FIELD_META_FILTERS = {
       "the record that a configure call decided the source, which is what a filter is not",
   },
 } as const satisfies Record<keyof FieldMeta, FilterDisposition>;
+
+/**
+ * The filter chain that declares this field in a document, in the catalogue's
+ * own order so a chain the writer produces and one an author wrote read the
+ * same. The inverse of {@link fieldMetaFromFilters}: a field that round-trips
+ * through both is one the document can hold.
+ */
+export const filtersFromFieldMeta = (field: FieldMeta): FilterCall[] =>
+  Object.values(FIELD_META_FILTERS).flatMap((disposition) =>
+    "write" in disposition ? disposition.write(field) : NO_FILTERS,
+  );
 
 type CoveredFilter = {
   [TKey in keyof typeof FIELD_META_FILTERS]: (typeof FIELD_META_FILTERS)[TKey] extends {
@@ -623,6 +840,15 @@ export const arrayFieldFromFilters = (
   const applied = fieldMetaFromFilters(path, applicable);
   return { field: applied.field, issues: [...issues, ...applied.issues] };
 };
+
+/**
+ * The chain a `{% for %}` opener carries for this array: the repeat's own
+ * filters and nothing else. The inverse of {@link arrayFieldFromFilters},
+ * derived from the same {@link ARRAY_FILTERS} list, so a value filter can
+ * never be written where the reader would refuse it.
+ */
+export const arrayFiltersFromFieldMeta = (field: FieldMeta): FilterCall[] =>
+  filtersFromFieldMeta(field).filter(({ name }) => isArrayFilter(name));
 
 // ── Item counts ──────────────────────────────────────────
 

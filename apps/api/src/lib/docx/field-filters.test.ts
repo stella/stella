@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { DATE_FORMAT_SPEC_HINT } from "@stll/agent-input";
-import { assertNever, classifyMarker } from "@stll/template-conditions";
+import { classifyMarker, renderValueMarker } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
 
 import { discoverTemplate } from "./discover-template";
-import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
+import {
+  fieldMetaFromFilters,
+  FIELD_META_FILTERS,
+  filtersFromFieldMeta,
+} from "./field-filters";
 import type { FieldMeta } from "./types";
 
 const WRAP = (body: string) =>
@@ -313,140 +317,14 @@ describe("the filter catalogue", () => {
 
 // ── Fixed point ──────────────────────────────────────────
 
-const quote = (value: string): string => `"${value.replaceAll('"', '\\"')}"`;
-
 /**
- * Render one manifest field back to the filter chain that declares it. Total
- * over the manifest keys, so a property that gains a filter without gaining a
- * rendering here is a compile error rather than a field that silently stops
- * round-tripping.
+ * Render one manifest field back to the marker that declares it, through the
+ * production writer. The test used to carry its own renderer; a second one is
+ * a second answer to "what does this field look like in a document", so the
+ * fixed point below now exercises the code the configure boundary runs.
  */
-const FIELD_TO_FILTERS = {
-  path: () => [],
-  inputType: (field: FieldMeta) => {
-    switch (field.inputType) {
-      case undefined:
-        return [];
-      case "boolean":
-        return ["checkbox"];
-      case "date":
-        return field.dateFormat
-          ? [
-              `date(${quote(`${field.dateFormat.locale}-${field.dateFormat.style}`)})`,
-            ]
-          : ["date"];
-      case "select":
-        return [`select(${(field.options ?? []).map(quote).join(", ")})`];
-      case "number":
-      case "text":
-        return [field.inputType];
-      default:
-        return assertNever(field.inputType);
-    }
-  },
-  // Rendered with the input type it belongs to.
-  dateFormat: () => [],
-  options: () => [],
-  optionsFrom: (field: FieldMeta) =>
-    field.optionsFrom === undefined
-      ? []
-      : [`options_from(${quote(field.optionsFrom)})`],
-  label: (field: FieldMeta) =>
-    field.label === undefined ? [] : [`label(${quote(field.label)})`],
-  hint: (field: FieldMeta) =>
-    field.hint === undefined ? [] : [`hint(${quote(field.hint)})`],
-  required: (field: FieldMeta) => (field.required === true ? ["required"] : []),
-  validation: (field: FieldMeta) => {
-    const validation = field.validation;
-    if (validation === undefined) {
-      return [];
-    }
-    const parts: string[] = [];
-    if (validation.pattern !== undefined) {
-      parts.push(`pattern(${quote(validation.pattern)})`);
-    }
-    for (const [key, filter] of [
-      ["min", "min"],
-      ["max", "max"],
-      ["minLength", "min_length"],
-      ["maxLength", "max_length"],
-      ["minItems", "min_items"],
-      ["maxItems", "max_items"],
-    ] as const) {
-      const value = validation[key];
-      if (value !== undefined) {
-        parts.push(`${filter}(${value})`);
-      }
-    }
-    return parts;
-  },
-  aiPrompt: (field: FieldMeta) => {
-    if (field.aiPrompt === undefined && field.aiAdapt !== true) {
-      return [];
-    }
-    const args: string[] = [];
-    if (field.aiPrompt !== undefined) {
-      args.push(quote(field.aiPrompt));
-    }
-    if (field.aiAdapt !== undefined) {
-      args.push(`adapt=${field.aiAdapt}`);
-    }
-    if (field.aiSeesDocument !== undefined) {
-      args.push(`sees_document=${field.aiSeesDocument}`);
-    }
-    return [`ai(${args.join(", ")})`];
-  },
-  aiAdapt: () => [],
-  aiSeesDocument: () => [],
-  lookup: (field: FieldMeta) =>
-    field.lookup === undefined
-      ? []
-      : [
-          `lookup(${[
-            quote(field.lookup.registry),
-            ...field.lookup.formats.map(
-              ({ key, template }) => `${key}=${quote(template)}`,
-            ),
-          ].join(", ")})`,
-        ],
-  source: (field: FieldMeta) => {
-    const source = field.source;
-    if (source === undefined) {
-      return [];
-    }
-    switch (source.kind) {
-      case "party":
-        return [`party(${quote(source.role)}, ${quote(source.field)})`];
-      case "attorney":
-        return [`attorney(${quote(source.ref)}, ${quote(source.field)})`];
-      case "contact":
-      case "firm":
-      case "matter":
-        return [`${source.kind}(${quote(source.field)})`];
-      default:
-        return assertNever(source);
-    }
-  },
-  formula: (field: FieldMeta) =>
-    field.formula === undefined ? [] : [`formula(${quote(field.formula)})`],
-  condition: (field: FieldMeta) =>
-    field.condition === undefined
-      ? []
-      : [`condition(${quote(field.condition)})`],
-  conditionAst: () => [],
-  parts: () => [],
-  format: () => [],
-  sourceLayer: () => [],
-} as const satisfies Record<keyof FieldMeta, (field: FieldMeta) => string[]>;
-
-const markerFor = (field: FieldMeta): string => {
-  const filters = Object.values(FIELD_TO_FILTERS).flatMap((render) =>
-    render(field),
-  );
-  return filters.length === 0
-    ? `{{ ${field.path} }}`
-    : `{{ ${field.path} | ${filters.join(" | ")} }}`;
-};
+const markerFor = (field: FieldMeta): string =>
+  renderValueMarker(field.path, filtersFromFieldMeta(field));
 
 describe("the document layer is a fixed point", () => {
   test("a manifest re-authored from its own fields discovers identically", async () => {
