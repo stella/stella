@@ -567,7 +567,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -643,7 +643,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -911,7 +911,7 @@
     },
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",
@@ -980,7 +980,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.26.0",
+      "version": "0.26.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1044,7 +1044,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
