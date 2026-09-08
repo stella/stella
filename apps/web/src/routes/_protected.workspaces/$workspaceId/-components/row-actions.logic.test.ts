@@ -1,53 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
-
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import {
-  canDownloadScrubbed,
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrExportFormats,
   getOcrSource,
   getOcrSources,
-  getRowDownloadMenu,
   hasOcrExport,
-  getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
-
-describe("scrubbed download eligibility", () => {
-  test("rejects files the server cannot scrub", () => {
-    expect(
-      canDownloadScrubbed({
-        encrypted: false,
-        mimeType: "application/pdf",
-        sizeBytes: DOCUMENT_PROPERTIES_MAX_BYTES,
-      }),
-    ).toBe(true);
-    expect(
-      canDownloadScrubbed({
-        encrypted: true,
-        mimeType: "application/pdf",
-        sizeBytes: 1,
-      }),
-    ).toBe(false);
-    expect(
-      canDownloadScrubbed({
-        encrypted: false,
-        mimeType: "application/pdf",
-        sizeBytes: DOCUMENT_PROPERTIES_MAX_BYTES + 1,
-      }),
-    ).toBe(false);
-    expect(
-      canDownloadScrubbed({
-        encrypted: false,
-        mimeType: "text/plain",
-        sizeBytes: 1,
-      }),
-    ).toBe(false);
-  });
-});
 
 const firstPropertyId = toSafeId<"property">("property-first");
 const selectedPropertyId = toSafeId<"property">("property-selected");
@@ -88,21 +50,6 @@ const ocrFields = {
     },
   },
 } satisfies WorkspaceEntity["fields"];
-
-describe("save-as-PDF download filenames", () => {
-  test("uses the source document base name with a PDF extension", () => {
-    expect(getPdfDownloadFileName("Contract.docx")).toBe("Contract.pdf");
-    expect(getPdfDownloadFileName("Contract.v2.DOCX")).toBe("Contract.v2.pdf");
-  });
-
-  test("appends the PDF extension when the source has no extension", () => {
-    expect(getPdfDownloadFileName("Contract")).toBe("Contract.pdf");
-  });
-
-  test("does not treat a leading dot as a removable extension", () => {
-    expect(getPdfDownloadFileName(".contract")).toBe(".contract.pdf");
-  });
-});
 
 describe("desktop edit lock actions", () => {
   test("distinguishes an orphanable own session from another user's lock", () => {
@@ -163,64 +110,6 @@ describe("OCR export formats", () => {
     expect(hasOcrExport({ ...source, exportStatus: "unavailable" })).toBe(
       false,
     );
-  });
-});
-
-describe("row download menu", () => {
-  const docx = {
-    encrypted: false,
-    mimeType:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  };
-  const plainMenu = {
-    canScrub: false,
-    currentVersionReference: null,
-    exportableOcrSourceCount: 0,
-    hasPdfConversion: false,
-    isBulk: false,
-  };
-
-  test("leads with the reference copy when the current version is referenced", () => {
-    expect(
-      getRowDownloadMenu({
-        ...plainMenu,
-        currentVersionReference: "2026/001/015.v3",
-        file: docx,
-      }),
-    ).toEqual({ hasVariants: true, primaryVariant: "reference" });
-  });
-
-  // The row's matter can hold a reference while this version predates it;
-  // the version's own stamp is the only signal the download can act on.
-  test("offers no variants for a version stamped before the matter got a reference", () => {
-    expect(
-      getRowDownloadMenu({
-        ...plainMenu,
-        file: docx,
-      }),
-    ).toEqual({ hasVariants: false, primaryVariant: "original" });
-  });
-
-  test("keeps a bulk selection on the originals", () => {
-    expect(
-      getRowDownloadMenu({
-        ...plainMenu,
-        currentVersionReference: "2026/001/015.v3",
-        file: docx,
-        isBulk: true,
-      }),
-    ).toEqual({ hasVariants: false, primaryVariant: "original" });
-  });
-
-  test("still opens the submenu for a rendition the reference cannot ride", () => {
-    expect(
-      getRowDownloadMenu({
-        ...plainMenu,
-        currentVersionReference: "2026/001/015.v3",
-        file: { encrypted: false, mimeType: "image/png" },
-        hasPdfConversion: true,
-      }),
-    ).toEqual({ hasVariants: true, primaryVariant: "original" });
   });
 });
 

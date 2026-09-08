@@ -8,9 +8,8 @@ import {
   CopyIcon,
   DownloadIcon,
   EllipsisVerticalIcon,
-  EraserIcon,
   EyeIcon,
-  FileBadgeIcon,
+  FileDownIcon,
   FilePenLineIcon,
   FileOutputIcon,
   FileTextIcon,
@@ -56,8 +55,14 @@ import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
-import { fetchReferencedFile } from "@/components/inspector/file-download-service";
-import type { PrimaryDownloadVariant } from "@/components/inspector/file-download-service.logic";
+import { DownloadRenditionMenuItems } from "@/components/inspector/download-rendition-menu";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
+import {
+  canDownloadScrubbed,
+  getDownloadRenditions,
+  type DownloadRendition,
+  type DownloadVariant,
+} from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
@@ -97,7 +102,6 @@ import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast"
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
-import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
@@ -123,14 +127,11 @@ import {
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
-  canDownloadScrubbed,
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrExportFileName,
   getOcrExportFormats,
   getOcrSources,
-  getPdfDownloadFileName,
-  getRowDownloadMenu,
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
@@ -481,25 +482,22 @@ export const RowActions = ({
   } else if (!isBulk && !isCellContext) {
     exportableOcrSources = ocrSources.filter(hasOcrExport);
   }
-  // Only formats whose embedded metadata the API can actually strip; offering
-  // the action on a file it would refuse is worse than not offering it.
-  const canScrub = !isBulk && file !== null && canDownloadScrubbed(file);
-  const {
-    hasVariants: hasDownloadVariants,
-    primaryVariant: primaryDownloadVariant,
-  } = getRowDownloadMenu({
-    canScrub,
-    currentVersionReference: entity.currentVersionReference,
-    exportableOcrSourceCount: exportableOcrSources.length,
-    file,
-    hasPdfConversion,
-    isBulk,
-  });
+  // A bulk selection keeps the originals: it spans files whose versions do not
+  // share one answer, so no rendition is offered for all of them.
+  const downloadRenditions =
+    isBulk || file === null
+      ? []
+      : getDownloadRenditions({
+          canScrub: canDownloadScrubbed(file),
+          currentVersionReference: entity.currentVersionReference,
+          encrypted: file.encrypted,
+          hasPdfConversion,
+          mimeType: file.mimeType,
+        });
 
   const msg: Msg = {
     downloading: t("workspaces.files.downloadAsZip"),
     failed: t("errors.actionFailed"),
-    scrubFailed: t("workspaces.files.scrubFailed"),
   };
 
   const showDesktopOpenResult = async (result: OpenFileInDesktopResult) => {
@@ -562,14 +560,14 @@ export const RowActions = ({
       for (const e of selectedEntities) {
         const f = getFirstFile(e);
         if (f) {
-          await downloadSingleFile(workspaceId, f, variant, msg);
+          await downloadSingleFile(workspaceId, f, variant);
         }
       }
       return;
     }
 
     if (file) {
-      await downloadSingleFile(workspaceId, file, variant, msg);
+      await downloadSingleFile(workspaceId, file, variant);
     }
   };
 
@@ -1046,13 +1044,10 @@ export const RowActions = ({
           sources={exportableOcrSources}
         />
         <RowFileOperationsMenu
-          canScrub={canScrub}
+          downloadRenditions={downloadRenditions}
           exportableOcrSources={exportableOcrSources}
           hasAnyFile={hasAnyFile}
           hasAnyFolder={hasAnyFolder}
-          hasDownloadVariants={hasDownloadVariants}
-          hasPdfConversion={hasPdfConversion}
-          isBulk={isBulk}
           isCellContext={isCellContext}
           onCopyToMatter={openCopyToMatterDialog}
           onDelete={requestDelete}
@@ -1060,7 +1055,6 @@ export const RowActions = ({
           onDuplicate={handleDuplicate}
           onOcrExport={handleOcrExport}
           onZipDownload={handleZipDownload}
-          primaryDownloadVariant={primaryDownloadVariant}
         />
       </MenuPopup>
       <CopyToMatterDialog
@@ -1439,13 +1433,10 @@ const RowCellOcrExportMenuActions = ({
 };
 
 type RowFileOperationsMenuProps = {
-  canScrub: boolean;
+  downloadRenditions: readonly DownloadRendition[];
   exportableOcrSources: readonly OcrSource[];
   hasAnyFile: boolean;
   hasAnyFolder: boolean;
-  hasDownloadVariants: boolean;
-  hasPdfConversion: boolean;
-  isBulk: boolean;
   isCellContext: boolean;
   onCopyToMatter: () => void;
   onDelete: () => void;
@@ -1453,17 +1444,13 @@ type RowFileOperationsMenuProps = {
   onDuplicate: () => Promise<void>;
   onOcrExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
   onZipDownload: () => Promise<void>;
-  primaryDownloadVariant: PrimaryDownloadVariant;
 };
 
 const RowFileOperationsMenu = ({
-  canScrub,
+  downloadRenditions,
   exportableOcrSources,
   hasAnyFile,
   hasAnyFolder,
-  hasDownloadVariants,
-  hasPdfConversion,
-  isBulk,
   isCellContext,
   onCopyToMatter,
   onDelete,
@@ -1471,13 +1458,13 @@ const RowFileOperationsMenu = ({
   onDuplicate,
   onOcrExport,
   onZipDownload,
-  primaryDownloadVariant,
 }: RowFileOperationsMenuProps) => {
   const t = useTranslations();
   if (isCellContext) {
     return null;
   }
-  const hasReferenceDownload = primaryDownloadVariant === "reference";
+  const hasDownloadAsMenu =
+    downloadRenditions.length > 0 || exportableOcrSources.length > 0;
   const renderOcrExport = (source: OcrSource) => (
     <OcrExportMenuItems
       exportStatus={source.exportStatus}
@@ -1491,7 +1478,7 @@ const RowFileOperationsMenu = ({
   return (
     <>
       <MenuSeparator />
-      {hasAnyFile && (isBulk || !hasDownloadVariants) && (
+      {hasAnyFile && (
         <MenuItem
           onClick={() =>
             detached(onDownload("original"), "row-actions.download")
@@ -1501,58 +1488,19 @@ const RowFileOperationsMenu = ({
           {t("common.download")}
         </MenuItem>
       )}
-      {hasDownloadVariants && (
+      {hasDownloadAsMenu && (
         <MenuSub>
           <MenuSubTrigger>
-            <DownloadIcon />
-            {t("common.download")}
+            <FileDownIcon />
+            {t("workspaces.files.downloadAs")}
           </MenuSubTrigger>
           <MenuSubPopup>
-            {hasReferenceDownload && (
-              <MenuItem
-                onClick={() =>
-                  detached(onDownload("reference"), "row-actions.download")
-                }
-              >
-                <FileBadgeIcon />
-                {t("workspaces.files.downloadWithReference")}
-              </MenuItem>
-            )}
-            <MenuItem
-              onClick={() =>
-                detached(onDownload("original"), "row-actions.download")
+            <DownloadRenditionMenuItems
+              onSelect={(rendition) =>
+                detached(onDownload(rendition), "row-actions.download")
               }
-            >
-              <DownloadIcon />
-              {hasReferenceDownload
-                ? t("workspaces.files.downloadOriginalNoReference")
-                : t("workspaces.files.downloadOriginal")}
-            </MenuItem>
-            {hasPdfConversion && (
-              <MenuItem
-                onClick={() =>
-                  detached(onDownload("pdf"), "row-actions.download")
-                }
-              >
-                <FileOutputIcon />
-                {t("workspaces.files.downloadPdf")}
-              </MenuItem>
-            )}
-            {canScrub && (
-              <Tooltip
-                content={t("workspaces.files.downloadScrubbedHint")}
-                render={
-                  <MenuItem
-                    onClick={() =>
-                      detached(onDownload("scrubbed"), "row-actions.download")
-                    }
-                  >
-                    <EraserIcon />
-                    {t("workspaces.files.downloadScrubbed")}
-                  </MenuItem>
-                }
-              />
-            )}
+              renditions={downloadRenditions}
+            />
             {exportableOcrSources.length === 1 &&
               exportableOcrSources.map((source) => (
                 <OcrExportMenuItems
@@ -1746,8 +1694,8 @@ const toCopyToMatterEntities = (
   }));
 };
 
-type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
-type Msg = { downloading: string; failed: string; scrubFailed: string };
+type FileRef = { fieldId: string; fileName: string };
+type Msg = { downloading: string; failed: string };
 
 const downloadEntityAsZip = async (
   workspaceId: string,
@@ -1833,116 +1781,21 @@ const downloadOcrExport = async ({
 };
 
 /**
- * Which copy of the file to hand the user. Not an `asPdf` boolean: the answer
- * is "which rendition", and `scrubbed` and `reference` are served by the API
- * rather than by a presigned storage URL because those bytes are built per
- * request. Which of `original` and `reference` leads is not this menu's call:
- * `resolvePrimaryDownloadVariant` owns it for every download entry point.
+ * One field's file, in the copy the menu asked for. The download itself is
+ * owned by `downloadTabFile`, shared with the inspector header, so both entry
+ * points hand over the same bytes for the same choice.
  */
-type DownloadVariant = PrimaryDownloadVariant | "pdf" | "scrubbed";
-
-/** The reference copy, saved under the document's own file name. Every
- *  failure reads the same: the API refuses a file it cannot stamp exactly as
- *  it refuses a transport error, and the user's next step is the same. */
-const downloadReferencedFile = async (
-  workspaceId: string,
-  file: FileRef,
-  msg: Msg,
-) => {
-  const blob = await fetchReferencedFile({
-    fieldId: file.fieldId,
-    workspaceId,
-  });
-  if (blob === null) {
-    stellaToast.add({ title: msg.failed, type: "error" });
-    return;
-  }
-
-  downloadFile(blob, file.fileName);
-};
-
-/**
- * Fetched directly rather than through the treaty client: Eden text-decodes
- * every non-JSON body except `application/octet-stream`, which would mangle the
- * DOCX or PDF bytes this endpoint returns.
- */
-const downloadScrubbedFile = async (
-  workspaceId: string,
-  file: FileRef,
-  msg: Msg,
-) => {
-  const responseResult = await Result.tryPromise(
-    async () =>
-      await fetchWithTimeout(
-        apiUrl(
-          `/files/${encodeURIComponent(workspaceId)}/scrubbed/${encodeURIComponent(file.fieldId)}`,
-        ),
-        { credentials: "include", timeoutMs: 60_000 },
-      ),
-  );
-  if (Result.isError(responseResult) || !responseResult.value.ok) {
-    stellaToast.add({ title: msg.scrubFailed, type: "error" });
-    return;
-  }
-
-  const blobResult = await Result.tryPromise(
-    async () => await responseResult.value.blob(),
-  );
-  if (Result.isError(blobResult)) {
-    stellaToast.add({ title: msg.scrubFailed, type: "error" });
-    return;
-  }
-
-  downloadFile(blobResult.value, file.fileName);
-};
-
 const downloadSingleFile = async (
   workspaceId: string,
   file: FileRef,
   variant: DownloadVariant,
-  msg: Msg,
-) => {
-  if (variant === "reference") {
-    await downloadReferencedFile(workspaceId, file, msg);
-    return;
-  }
-
-  if (variant === "scrubbed") {
-    await downloadScrubbedFile(workspaceId, file, msg);
-    return;
-  }
-
-  const asPdf = variant === "pdf";
-  const response = await api
-    .files({ workspaceId })
-    .url({ fieldId: file.fieldId })
-    .get({ query: { purpose: asPdf ? "display" : "download" } });
-
-  if (response.error) {
-    stellaToast.add({ title: msg.failed, type: "error" });
-    return;
-  }
-
-  const blobResult = await Result.tryPromise(async () => {
-    const s3Response = await fetchWithTimeout(response.data.presignedUrl, {
-      timeoutMs: 60_000,
-    });
-    if (!s3Response.ok) {
-      throw new ClientOperationError({
-        action: "downloadSingleFile",
-        message: "Failed to fetch file from storage",
-      });
-    }
-    return await s3Response.blob();
+) =>
+  await downloadTabFile({
+    fieldId: file.fieldId,
+    fileName: file.fileName,
+    variant,
+    workspaceId,
+    onError: (message) => {
+      stellaToast.add({ title: message, type: "error" });
+    },
   });
-
-  if (Result.isError(blobResult)) {
-    stellaToast.add({ title: msg.failed, type: "error" });
-    return;
-  }
-
-  const fileName = asPdf
-    ? getPdfDownloadFileName(file.fileName)
-    : file.fileName;
-  downloadFile(blobResult.value, fileName);
-};

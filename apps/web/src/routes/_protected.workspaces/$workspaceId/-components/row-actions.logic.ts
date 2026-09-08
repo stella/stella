@@ -1,14 +1,5 @@
 import { panic } from "better-result";
 
-import {
-  DOCUMENT_PROPERTIES_MAX_BYTES,
-  hasDocumentProperties,
-} from "@stll/api-contract";
-
-import {
-  resolvePrimaryDownloadVariant,
-  type PrimaryDownloadVariant,
-} from "@/components/inspector/file-download-service.logic";
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -27,67 +18,6 @@ export type OcrSource = {
 
 export type RowActionContext = "bulk" | "cell" | "row";
 export type OcrExportFormat = "searchable-pdf" | "text";
-
-type RowDownloadMenuInput = {
-  canScrub: boolean;
-  /** The reference frozen onto the row's current version, null without one. */
-  currentVersionReference: string | null;
-  exportableOcrSourceCount: number;
-  /** The row's file, or null for a folder, a task, or an empty row. */
-  file: { encrypted: boolean; mimeType: string } | null;
-  hasPdfConversion: boolean;
-  isBulk: boolean;
-};
-
-type RowDownloadMenu = {
-  /** Whether Download opens a submenu instead of acting on its own. */
-  hasVariants: boolean;
-  /** What the plain Download hands over. */
-  primaryVariant: PrimaryDownloadVariant;
-};
-
-/**
- * The shape of a row's download menu. A bulk selection keeps the originals:
- * it spans files whose versions do not share one answer. Everything else
- * defers to the shared policy, so the row menu and the inspector header
- * cannot disagree about which copy leads.
- */
-export const getRowDownloadMenu = ({
-  canScrub,
-  currentVersionReference,
-  exportableOcrSourceCount,
-  file,
-  hasPdfConversion,
-  isBulk,
-}: RowDownloadMenuInput): RowDownloadMenu => {
-  const primaryVariant =
-    isBulk || file === null
-      ? "original"
-      : resolvePrimaryDownloadVariant({
-          encrypted: file.encrypted,
-          mimeType: file.mimeType,
-          reference: currentVersionReference,
-        });
-
-  return {
-    hasVariants:
-      !isBulk &&
-      (hasPdfConversion ||
-        canScrub ||
-        primaryVariant === "reference" ||
-        exportableOcrSourceCount > 0),
-    primaryVariant,
-  };
-};
-
-export const canDownloadScrubbed = (file: {
-  encrypted: boolean;
-  mimeType: string;
-  sizeBytes: number;
-}): boolean =>
-  !file.encrypted &&
-  file.sizeBytes <= DOCUMENT_PROPERTIES_MAX_BYTES &&
-  hasDocumentProperties(file.mimeType);
 
 /**
  * The searchable PDF is a stored derivative that can lag or fail behind the
@@ -175,16 +105,6 @@ export const canRunManualOcr = ({
   ocrSource !== undefined &&
   !ocrSource.encrypted &&
   ocrSource.mimeType === PDF_MIME_TYPE;
-
-export const getPdfDownloadFileName = (fileName: string): string => {
-  const dotIndex = fileName.lastIndexOf(".");
-
-  if (dotIndex <= 0) {
-    return `${fileName}.pdf`;
-  }
-
-  return `${fileName.slice(0, dotIndex)}.pdf`;
-};
 
 export const getOcrExportFileName = (
   fileName: string,

@@ -11,7 +11,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
-  DownloadIcon,
   GitCommitHorizontalIcon,
   LockOpenIcon,
   Maximize2Icon,
@@ -36,6 +35,7 @@ import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.lo
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
+import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
 import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
 import {
@@ -53,8 +53,10 @@ import {
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
-  resolvePrimaryDownloadVariant,
-  type PrimaryDownloadVariant,
+  canDownloadScrubbed,
+  getDownloadRenditions,
+  type DownloadRendition,
+  type DownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import {
   FullViewPreviewGuard,
@@ -89,7 +91,6 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
-import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
@@ -294,19 +295,14 @@ const getFileTabEntityState = ({
   };
 };
 
-/** What the header's Download button says it will hand over. */
-const DOWNLOAD_LABEL_KEY = {
-  original: "common.download",
-  reference: "workspaces.files.downloadWithReference",
-} as const satisfies Record<PrimaryDownloadVariant, TranslationKey>;
-
 /**
- * Which copy the header's Download hands over. The entity read resolves both
- * inputs the policy needs: the field's encryption and the reference frozen
- * onto the current version. The policy itself belongs to
- * `resolvePrimaryDownloadVariant`, shared with the matter row menu.
+ * The alternative copies the header's Download menu offers. The entity read
+ * resolves every input the policy needs — the field's encryption, size,
+ * stored PDF conversion, and the reference frozen onto the current version —
+ * so an unread entity offers nothing rather than an action that fails at the
+ * click. `getDownloadRenditions` owns the policy, shared with the row menu.
  */
-const getFileTabDownloadVariant = ({
+const getFileTabDownloadRenditions = ({
   entityData,
   tab,
 }: {
@@ -314,20 +310,36 @@ const getFileTabDownloadVariant = ({
     | {
         currentVersionReference: string | null;
         fields: {
-          content: { encrypted?: boolean | undefined; type: string };
+          content: {
+            encrypted?: boolean | undefined;
+            mimeType?: string | undefined;
+            pdfFileId?: string | null | undefined;
+            sizeBytes?: number | undefined;
+            type: string;
+          };
           id: string;
         }[];
       }
     | undefined;
   tab: FileTabPanelProps["tab"];
-}): PrimaryDownloadVariant => {
+}): readonly DownloadRendition[] => {
   const field = entityData?.fields.find((candidate) => candidate.id === tab.id);
+  const content = field?.content.type === "file" ? field.content : undefined;
+  const encrypted = content?.encrypted;
+  const mimeType = content?.mimeType;
+  const sizeBytes = content?.sizeBytes;
 
-  return resolvePrimaryDownloadVariant({
-    encrypted:
-      field?.content.type === "file" ? field.content.encrypted : undefined,
-    mimeType: tab.mimeType,
-    reference: entityData?.currentVersionReference,
+  return getDownloadRenditions({
+    canScrub:
+      encrypted !== undefined &&
+      mimeType !== undefined &&
+      sizeBytes !== undefined &&
+      canDownloadScrubbed({ encrypted, mimeType, sizeBytes }),
+    currentVersionReference: entityData?.currentVersionReference,
+    encrypted,
+    hasPdfConversion:
+      (content?.pdfFileId ?? null) !== null && mimeType !== PDF_MIME,
+    mimeType,
   });
 };
 
@@ -583,7 +595,7 @@ export const FileTabPanel = ({
     needsPropertyResolution,
     tab,
   });
-  const downloadVariant = getFileTabDownloadVariant({
+  const downloadRenditions = getFileTabDownloadRenditions({
     entityData: entityQuery.data,
     tab,
   });
@@ -762,34 +774,26 @@ export const FileTabPanel = ({
       />
     ) : null;
 
-  const downloadLabel = t(DOWNLOAD_LABEL_KEY[downloadVariant]);
+  const startDownload = (variant: DownloadVariant) => {
+    detached(
+      downloadTabFile({
+        fieldId: tab.id,
+        fileName: tab.fileName,
+        variant,
+        workspaceId: tab.workspaceId,
+        onError: (message) => {
+          stellaToast.add({ title: message, type: "error" });
+        },
+      }),
+      "file-tab-panel.download-tab-file",
+    );
+  };
+  // One element, rendered by both the peek header and the full-view header, so
+  // the two cannot drift apart.
   const downloadButton = (
-    <Tooltip
-      content={downloadLabel}
-      render={
-        <Button
-          aria-label={downloadLabel}
-          onClick={() => {
-            detached(
-              downloadTabFile({
-                fieldId: tab.id,
-                fileName: tab.fileName,
-                variant: downloadVariant,
-                workspaceId: tab.workspaceId,
-                onError: (message) => {
-                  stellaToast.add({ title: message, type: "error" });
-                },
-              }),
-              "file-tab-panel.download-tab-file",
-            );
-          }}
-          size="xs"
-          variant="ghost"
-        >
-          <DownloadIcon className="size-3.5" />
-        </Button>
-      }
-      side="bottom"
+    <DownloadSplitButton
+      onDownload={startDownload}
+      renditions={downloadRenditions}
     />
   );
 
