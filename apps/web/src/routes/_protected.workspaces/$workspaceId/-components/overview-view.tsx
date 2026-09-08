@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -408,7 +409,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             task.status !== "done" &&
             task.status !== "cancelled",
         )
-        .toSorted((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? "")),
+        .toSorted((a, b) => compareCodeUnit(a.dueDate ?? "", b.dueDate ?? "")),
     [tasks],
   );
 

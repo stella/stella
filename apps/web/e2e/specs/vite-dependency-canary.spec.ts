@@ -132,11 +132,13 @@ test.describe("Temporal browser runtime", () => {
   test("loads the implementation only when native Temporal is absent", async ({
     page,
   }) => {
-    await page.route("**/e2e/temporal-runtime?*", (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
-      }),
+    await page.route(
+      "**/e2e/temporal-runtime?*",
+      async (route) =>
+        await route.fulfill({
+          contentType: "text/html",
+          body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
+        }),
     );
     const implementationRequests: string[] = [];
     page.on("request", (request) => {
