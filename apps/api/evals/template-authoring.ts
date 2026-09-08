@@ -1472,9 +1472,9 @@ const createAuthoringTools = ({
     }
     // The run holds one template. Any other id names a template production
     // would not find, so the overlay must not reach the stored document.
-    if (parsed.output.template_id !== EVAL_TEMPLATE_ID) {
+    if (parsed.templateId !== EVAL_TEMPLATE_ID) {
       const issues = [
-        `template_id: no template ${parsed.output.template_id} exists; pass the template_id ${CREATE_TEMPLATE_TOOL_NAME} returned`,
+        `template_id: no template ${parsed.templateId} exists; pass the template_id ${CREATE_TEMPLATE_TOOL_NAME} returned`,
       ];
       await recordAttempt({
         outcome: { status: "rejected", issues },
@@ -2227,7 +2227,7 @@ const rescoreRuns = async ({
 }): Promise<EvalRun[]> => {
   const recorded = v.parse(
     RECORDED_EVAL_SCHEMA,
-    JSON.parse(await readFile(path, "utf8")),
+    JSON.parse(await readFile(path, "utf-8")),
   );
   const runs: EvalRun[] = [];
   for (const run of recorded.runs) {
