@@ -766,7 +766,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "create_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters configure the field. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields sets what the filters did not.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "annotations": {
       "title": "Create template",
       "idempotentHint": false,
@@ -828,7 +828,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "configure_template_fields",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting. The document is untouched, and a filter written on a marker says the same thing. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
+    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The configuration lives in the document, so this rewrites each named marker's filter chain, at every occurrence, and publishes the result. Pass template_id and one entry per field path; every path must already have a value marker, and a property you leave out keeps what the marker says. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards, plus the entries that could not be applied.",
     "annotations": {
       "title": "Configure template fields",
       "idempotentHint": true,

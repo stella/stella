@@ -548,9 +548,9 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
     `file or strip parts out to fit. Read ${TEMPLATE_MARKER_REFERENCE_URI} ` +
     "before authoring: markers are the docxtpl dialect of Jinja, and a value " +
-    "marker's filters ARE the field's configuration. Returns the template " +
+    "marker's filters ARE its field's configuration. Returns the template " +
     "id, its fields, arrays, conditions, computed values and warnings; " +
-    "configure_template_fields writes those filters for you afterwards.",
+    "configure_template_fields writes those filters.",
   inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
