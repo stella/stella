@@ -19,7 +19,7 @@
 
 import { panic } from "better-result";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
