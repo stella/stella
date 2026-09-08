@@ -4,6 +4,8 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
     "allow-get-state",
     "allow-open-stella-account",
     "allow-desktop-report-error",
