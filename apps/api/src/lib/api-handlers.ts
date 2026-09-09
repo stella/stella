@@ -1,5 +1,5 @@
-import type { Err, UnhandledException } from "better-result";
-import { Result } from "better-result";
+import type { Err } from "better-result";
+import { Panic, Result, UnhandledException } from "better-result";
 import type {
   Context,
   ElysiaCustomStatusResponse,
@@ -562,6 +562,34 @@ type SafeHandlerLogContext = {
   route: string;
 };
 
+/** How far a typed status is followed through transport wrappers. */
+const MAX_TRANSPORT_WRAPPER_DEPTH = 3;
+
+/**
+ * The typed `HandlerError` an error carries, or null.
+ *
+ * A handler that throws a status rarely throws it here directly: a throw
+ * inside `Result.tryPromise` arrives as `UnhandledException` and one inside a
+ * `Result.gen` body arrives as `Panic`, both carrying the original as `cause`.
+ * Grading the wrapper spends the status the thrower chose, so a refusal the
+ * caller could act on (an upstream 503, a misconfiguration) is reported as a
+ * generic 500.
+ */
+const resolveHandlerError = (error: unknown): HandlerError | null => {
+  let candidate = error;
+  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    if (HandlerError.is(candidate)) {
+      return candidate;
+    }
+    if (!Panic.is(candidate) && !UnhandledException.is(candidate)) {
+      return null;
+    }
+    candidate = candidate.cause;
+  }
+
+  return null;
+};
+
 const runSafeHandler = async <
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
@@ -578,19 +606,20 @@ const runSafeHandler = async <
 
     const error = result.error;
 
-    if (HandlerError.is(error)) {
-      const statusCode = error.status;
+    const handlerError = resolveHandlerError(error);
+    if (handlerError !== null) {
+      const statusCode = handlerError.status;
 
       if (statusCode >= 500) {
         logAndCaptureSafeError({
           request: ctx.request,
           route: ctx.route,
-          error,
+          error: handlerError,
           statusCode,
         });
       }
 
-      return toSafeStatusResponse(error.status, safeErrorBody(error));
+      return toSafeStatusResponse(statusCode, safeErrorBody(handlerError));
     }
 
     if (DatabaseError.is(error)) {
@@ -640,16 +669,20 @@ const runSafeHandler = async <
     // an AI request hitting a role the org has not configured a
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
-    if (HandlerError.is(error)) {
-      if (error.status >= 500) {
+    const handlerError = resolveHandlerError(error);
+    if (handlerError !== null) {
+      if (handlerError.status >= 500) {
         logAndCaptureSafeError({
           request: ctx.request,
           route: ctx.route,
-          error,
-          statusCode: error.status,
+          error: handlerError,
+          statusCode: handlerError.status,
         });
       }
-      return toSafeStatusResponse(error.status, safeErrorBody(error));
+      return toSafeStatusResponse(
+        handlerError.status,
+        safeErrorBody(handlerError),
+      );
     }
 
     logAndCaptureSafeError({

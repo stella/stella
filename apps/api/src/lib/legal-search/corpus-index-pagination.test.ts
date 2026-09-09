@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -47,6 +48,11 @@ let requestDelayMs: number;
  * physical copy of, say.
  */
 let snippetResponseBody: unknown;
+/**
+ * Status the fake engine answers every request with, when the test is about
+ * what a refusal does rather than what a result does.
+ */
+let engineFailureStatus: number | null;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
@@ -54,6 +60,7 @@ beforeEach(() => {
   requestBodies = [];
   requestDelayMs = 0;
   snippetResponseBody = null;
+  engineFailureStatus = null;
   const stub = async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -63,6 +70,11 @@ beforeEach(() => {
     requestBodies.push(body);
     if (requestDelayMs > 0) {
       await Bun.sleep(requestDelayMs);
+    }
+    if (engineFailureStatus !== null) {
+      return new Response("engine refused the search", {
+        status: engineFailureStatus,
+      });
     }
     if (snippetResponseBody !== null && body["snippet_fields"] !== undefined) {
       return new Response(JSON.stringify(snippetResponseBody), { status: 200 });
@@ -924,5 +936,77 @@ describe("the reported engine time accounts for every round trip", () => {
     expect(requestBodies).toHaveLength(1);
     expect(page.scan.indexMs).toBeGreaterThanOrEqual(DELAY_MS);
     expect(page.scan.indexMs).toBeLessThanOrEqual(elapsedMs);
+  });
+});
+
+/**
+ * The client hands back a typed `CorpusIndexError` precisely so the failure can
+ * be named. These pin that the read spends it on a status instead of letting
+ * the value escape for the handler boundary to grade as an internal fault.
+ */
+describe("an engine refusal reaches the caller as a mapped status", () => {
+  const readPageFailure = async (): Promise<unknown> =>
+    await readPage().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  test("the engine's own 5xx is answered as 503", async () => {
+    engineFailureStatus = 500;
+
+    const failure = await readPageFailure();
+
+    if (!HandlerError.is(failure)) {
+      throw new Error("the read did not fail with a HandlerError");
+    }
+    // The engine reports overload as a 500, so this is the busy case too.
+    expect(failure.status).toBe(503);
+    expect(failure.cause).toBeDefined();
+  });
+
+  test("a request the engine refused is answered as 502", async () => {
+    engineFailureStatus = 400;
+
+    const failure = await readPageFailure();
+
+    if (!HandlerError.is(failure)) {
+      throw new Error("the read did not fail with a HandlerError");
+    }
+    // A malformed query is this module's doing; retrying cannot fix it.
+    expect(failure.status).toBe(502);
+  });
+
+  test("the highlight round maps its refusal the same way", async () => {
+    const hits = [{ document_id: "doc-a", seq: 1 }];
+    responseBody = {
+      num_hits: hits.length,
+      hits,
+      snippets: hits.map(() => ({ text: ["passage"] })),
+    };
+    // Only the highlight round asks for snippet fields, so failing on that
+    // request alone reaches the second read site with a page already scanned.
+    snippetResponseBody = null;
+    const stubbedFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        if (body["snippet_fields"] !== undefined) {
+          return new Response("engine refused the highlight", { status: 503 });
+        }
+        return await stubbedFetch(input, init);
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+
+    const failure = await readPageFailure();
+
+    if (!HandlerError.is(failure)) {
+      throw new Error("the read did not fail with a HandlerError");
+    }
+    expect(failure.status).toBe(503);
   });
 });
