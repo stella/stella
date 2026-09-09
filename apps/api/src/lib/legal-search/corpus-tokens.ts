@@ -22,14 +22,45 @@
  */
 const CORPUS_TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
 
-export const corpusTokens = (text: string): string[] => {
-  const tokens: string[] = [];
+/**
+ * The form the offsets below are measured in. A caller that slices text by
+ * those offsets normalises it with this first.
+ */
+export const normalizeCorpusText = (text: string): string =>
+  text.normalize("NFC");
+
+/** One token and where it sits in {@link normalizeCorpusText} of the input. */
+export type CorpusTokenSpan = {
+  value: string;
+  /** Inclusive start offset. */
+  start: number;
+  /** Exclusive end offset. */
+  end: number;
+};
+
+/**
+ * Tokens with their offsets. The offsets are into the NFC form, not into the
+ * caller's string: normalisation can change length, so an offset taken here
+ * only addresses text that was normalised the same way.
+ */
+export const corpusTokenSpans = (text: string): CorpusTokenSpan[] => {
+  const spans: CorpusTokenSpan[] = [];
   // `matchAll` over `match`: text with no token is an empty iteration rather
   // than a null needing a fallback, so there is one code path and no second
   // spelling of "no tokens". It also iterates its own regex clone, which is
   // what makes a shared pattern object safe to reuse here.
-  for (const [token] of text.normalize("NFC").matchAll(CORPUS_TOKEN_PATTERN)) {
-    tokens.push(token);
+  for (const match of normalizeCorpusText(text).matchAll(
+    CORPUS_TOKEN_PATTERN,
+  )) {
+    spans.push({
+      value: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
   }
-  return tokens;
+  return spans;
 };
+
+/** Derived from the spans, so there is one scan of the rule, not two. */
+export const corpusTokens = (text: string): string[] =>
+  corpusTokenSpans(text).map(({ value }) => value);

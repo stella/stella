@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
@@ -814,15 +816,54 @@ export const restoreOriginalSearchPreview = ({
   return truncateHighlightAware(content, maxLength);
 };
 
-/** HTML-escape text, then replace highlight markers with `<mark>` tags. */
-export const escapeAndHighlight = (text: string): string => {
-  const escaped = text
+/** HTML-escape text for a search snippet: `&`, `<`, `>`, `"`, `'`. */
+export const escapeSearchHtml = (text: string): string =>
+  text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#x27;");
-  return escaped
+
+/** HTML-escape text, then replace highlight markers with `<mark>` tags. */
+export const escapeAndHighlight = (text: string): string =>
+  escapeSearchHtml(text)
     .replaceAll(HIGHLIGHT_START, "<mark>")
     .replaceAll(HIGHLIGHT_STOP, "</mark>");
+
+const HTML_ENTITY_TEXT = new Map<string, string>([
+  ["&amp;", "&"],
+  ["&lt;", "<"],
+  ["&gt;", ">"],
+  ["&quot;", '"'],
+  ["&#x27;", "'"],
+  ["&#39;", "'"],
+]);
+const HTML_ENTITY_PATTERN = /&(?:amp|lt|gt|quot|#x27|#39);/gu;
+const HIGHLIGHT_TAG_PATTERN = /<\/?mark>/gu;
+
+/**
+ * A snippet as plain text. Tags are dropped before entities are decoded, so an
+ * escaped literal `&lt;mark&gt;` survives as text; entities are decoded in one
+ * pass so `&amp;lt;` decodes to `&lt;`, not `<`.
+ */
+export const stripSearchHighlightMarkup = (snippet: string): string =>
+  snippet
+    .replaceAll(HIGHLIGHT_TAG_PATTERN, "")
+    .replaceAll(
+      HTML_ENTITY_PATTERN,
+      (entity) =>
+        HTML_ENTITY_TEXT.get(entity) ??
+        panic(`Unmapped HTML entity: ${entity}`),
+    );
+
+const MARKED_RUN_PATTERN = /<mark>(?<marked>[^<]*)<\/mark>/gu;
+
+/** The `<mark>`-wrapped runs of a snippet, as text, in order. */
+export const searchHighlightMarks = (snippet: string): string[] => {
+  const marks: string[] = [];
+  for (const match of snippet.matchAll(MARKED_RUN_PATTERN)) {
+    marks.push(stripSearchHighlightMarkup(match[1] ?? ""));
+  }
+  return marks;
 };
