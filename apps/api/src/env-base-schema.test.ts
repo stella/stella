@@ -54,6 +54,74 @@ describe("corpus cluster endpoint transport", () => {
     ).toBeNull();
   });
 
+  test("accepts a lane-suffixed q09 mutation endpoint", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_ENDPOINT:
+          "http://corpus-index-v09-append.stella-staging.local:7280",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a q09 mutation endpoint under another service name", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_ENDPOINT:
+          "http://corpus-index-v10.stella-staging.local:7280",
+      }),
+    ).toBe(
+      "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.",
+    );
+  });
+
+  test("accepts a private-host q09 search endpoint outside local development", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "http://corpus-index-v09-search.stella-staging.local:7280",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a private search host on a non-HTTP scheme", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "ftp://corpus-index-v09-search.stella-staging.local:7280",
+      }),
+    ).toBe(
+      "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address or the private corpus-index-v09 Cloud Map service.",
+    );
+  });
+
+  test("rejects a private search host carrying credentials", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "http://user:pw@corpus-index-v09-search.stella-staging.local:7280",
+      }),
+    ).toBe(
+      "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address or the private corpus-index-v09 Cloud Map service.",
+    );
+  });
+
+  test("rejects a private mutation host carrying credentials", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_ENDPOINT:
+          "http://user:pw@corpus-index-v09.stella-staging.local:7280",
+      }),
+    ).toBe(
+      "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.",
+    );
+  });
+
   test("keeps a remote plaintext search override forbidden", () => {
     expect(
       envBaseInvariantViolation({
@@ -61,7 +129,18 @@ describe("corpus cluster endpoint transport", () => {
         CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://search.example.com",
       }),
     ).toBe(
-      "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      "CORPUS_INDEX_Q09_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address or the private corpus-index-v09 Cloud Map service.",
+    );
+  });
+
+  test("keeps a public search endpoint forbidden outside local development", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "https://search.example.com",
+      }),
+    ).toBe(
+      "CORPUS_INDEX_Q09_SEARCH_ENDPOINT is only supported in local development or against the private corpus-index-v09 Cloud Map service.",
     );
   });
 

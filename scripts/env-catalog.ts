@@ -285,7 +285,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   CORPUS_INDEX_Q09_ENDPOINT:
     "Isolated Quickwit 0.9 mutation endpoint. Final generations registered on q09 use this endpoint; it never falls back to the legacy cluster.",
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
-    "Local-development-only read endpoint for Quickwit 0.9. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
+    "Read endpoint for Quickwit 0.9, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   CORPUS_INDEX_SEARCH_ENDPOINT:
     "Local-development-only search endpoint for a shared corpus index. Unset uses CORPUS_INDEX_ENDPOINT; this endpoint is never used for index mutations.",
   DATABASE_URL:
