@@ -29,8 +29,10 @@ import {
 } from "@/api/scripts/corpus-snippet-compare-report";
 
 /**
- * Runs each query of a query set, cuts a fragment from every hit's passage and
- * writes a JSON and a Markdown report of both fragments per hit to `--out-dir`.
+ * Runs each query of a query set and writes a JSON and a Markdown report of
+ * two fragments per hit to `--out-dir`: the snippet the search returned, and
+ * one cut here from the hit's whole passage. Both carry the same marks, so
+ * what the report measures is the window each fragment covers.
  *
  * The query file is JSON: an array of `{ id, text, country }`; a sample is
  * committed as corpus-snippet-compare.sample.json. Reads only (read-only
@@ -113,7 +115,7 @@ const compareHit = ({
     return { status: "skipped", reason: passageSkipReason(passage.status) };
   }
   if (hit.headline === null) {
-    return { status: "skipped", reason: "no_engine_snippet" };
+    return { status: "skipped", reason: "no_snippet" };
   }
   const startedAt = performance.now();
   const fragment = highlightCorpusPassage({
@@ -124,11 +126,11 @@ const compareHit = ({
   const highlightMs = performance.now() - startedAt;
   return {
     status: "compared",
-    engineFragment: hit.headline,
-    apiFragment: fragment.html,
+    snippetFragment: hit.headline,
+    passageFragment: fragment.html,
     comparison: compareSnippetFragments({
-      engineSnippet: hit.headline,
-      apiSnippet: fragment.html,
+      snippetFragment: hit.headline,
+      passageFragment: fragment.html,
     }),
     highlightMs,
   };

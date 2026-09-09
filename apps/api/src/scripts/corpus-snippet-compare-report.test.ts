@@ -147,41 +147,41 @@ describe("compareSnippetFragments", () => {
 
     expect(
       compareSnippetFragments({
-        engineSnippet: snippet,
-        apiSnippet: snippet,
+        snippetFragment: snippet,
+        passageFragment: snippet,
       }),
     ).toEqual({
       overlap: 1,
-      engineMarks: ["skody"],
-      apiMarks: ["skody"],
+      snippetMarks: ["skody"],
+      passageMarks: ["skody"],
       marks: "identical",
     });
   });
 
-  test("reports the API side marking more than the engine", () => {
+  test("reports the passage side marking more than the snippet", () => {
     const comparison = compareSnippetFragments({
-      engineSnippet: "náhrada <mark>škody</mark> z prodlení",
-      apiSnippet: "náhrada <mark>škody</mark> z <mark>prodlení</mark>",
+      snippetFragment: "náhrada <mark>škody</mark> z prodlení",
+      passageFragment: "náhrada <mark>škody</mark> z <mark>prodlení</mark>",
     });
 
     expect(comparison.overlap).toBe(1);
-    expect(comparison.marks).toBe("api_superset");
-    expect(comparison.apiMarks).toEqual(["prodleni", "skody"]);
+    expect(comparison.marks).toBe("passage_superset");
+    expect(comparison.passageMarks).toEqual(["prodleni", "skody"]);
   });
 
   test("reports marks neither side covers", () => {
     expect(
       compareSnippetFragments({
-        engineSnippet: "<mark>škody</mark> a prodlení",
-        apiSnippet: "škody a <mark>prodlení</mark>",
+        snippetFragment: "<mark>škody</mark> a prodlení",
+        passageFragment: "škody a <mark>prodlení</mark>",
       }).marks,
     ).toBe("divergent");
   });
 
   test("scores fragments cut from different places of the passage", () => {
     const comparison = compareSnippetFragments({
-      engineSnippet: "alpha beta gamma delta",
-      apiSnippet: "gamma delta epsilon zeta",
+      snippetFragment: "alpha beta gamma delta",
+      passageFragment: "gamma delta epsilon zeta",
     });
 
     // Two words shared of six distinct.
@@ -191,8 +191,8 @@ describe("compareSnippetFragments", () => {
   test("scores disjoint fragments as no overlap", () => {
     expect(
       compareSnippetFragments({
-        engineSnippet: "alpha beta",
-        apiSnippet: "gamma delta",
+        snippetFragment: "alpha beta",
+        passageFragment: "gamma delta",
       }).overlap,
     ).toBe(0);
   });
@@ -200,8 +200,8 @@ describe("compareSnippetFragments", () => {
   test("compares the escaped text, not the entities", () => {
     expect(
       compareSnippetFragments({
-        engineSnippet: "smlouva &amp; podmínky",
-        apiSnippet: "smlouva &amp; podmínky",
+        snippetFragment: "smlouva &amp; podmínky",
+        passageFragment: "smlouva &amp; podmínky",
       }).overlap,
     ).toBe(1);
   });
@@ -223,11 +223,11 @@ const row = (): SnippetCompareQueryRow => ({
       anchorId: "p1",
       outcome: {
         status: "compared",
-        engineFragment: "náhrada <mark>škody</mark> z prodlení",
-        apiFragment: "náhrada <mark>škody</mark> z prodlení",
+        snippetFragment: "náhrada <mark>škody</mark> z prodlení",
+        passageFragment: "náhrada <mark>škody</mark> z prodlení",
         comparison: compareSnippetFragments({
-          engineSnippet: "náhrada <mark>škody</mark> z prodlení",
-          apiSnippet: "náhrada <mark>škody</mark> z prodlení",
+          snippetFragment: "náhrada <mark>škody</mark> z prodlení",
+          passageFragment: "náhrada <mark>škody</mark> z prodlení",
         }),
         highlightMs: 2,
       },
@@ -237,11 +237,11 @@ const row = (): SnippetCompareQueryRow => ({
       anchorId: "p2",
       outcome: {
         status: "compared",
-        engineFragment: "<mark>škody</mark> alpha beta",
-        apiFragment: "gamma delta epsilon",
+        snippetFragment: "<mark>škody</mark> alpha beta",
+        passageFragment: "gamma delta epsilon",
         comparison: compareSnippetFragments({
-          engineSnippet: "<mark>škody</mark> alpha beta",
-          apiSnippet: "gamma delta epsilon",
+          snippetFragment: "<mark>škody</mark> alpha beta",
+          passageFragment: "gamma delta epsilon",
         }),
         highlightMs: 4,
       },
@@ -262,12 +262,12 @@ describe("summarizeSnippetComparison", () => {
     expect(summary.hits).toBe(3);
     expect(summary.compared).toBe(2);
     expect(summary.skipped.unanchored).toBe(1);
-    expect(summary.skipped.no_engine_snippet).toBe(0);
+    expect(summary.skipped.no_snippet).toBe(0);
     expect(summary.marks.identical).toBe(1);
-    // The second hit's API fragment marks nothing the engine marked.
-    expect(summary.marks.engine_superset).toBe(1);
+    // The second hit's passage fragment marks nothing the snippet marked.
+    expect(summary.marks.snippet_superset).toBe(1);
     expect(summary.overlapAtLeastHalfShare).toBe(0.5);
-    expect(summary.apiMarksCoverEngineShare).toBe(0.5);
+    expect(summary.passageMarksCoverSnippetShare).toBe(0.5);
     expect(summary.timings.highlightMsTotal).toBe(6);
     expect(summary.timings.highlightMsMedian).toBe(3);
     expect(summary.timings.searchMsTotal).toBe(40);
@@ -292,8 +292,8 @@ describe("renderSnippetCompareMarkdown", () => {
     expect(markdown).toContain("- queries: 1");
     expect(markdown).toContain("- overlap >= 0.5: 50.0%");
     expect(markdown).toContain("## cze-a — cze: náhrada škody");
-    expect(markdown).toContain("| 1 | engine |");
-    expect(markdown).toContain("| 1 | api |");
+    expect(markdown).toContain("| 1 | snippet |");
+    expect(markdown).toContain("| 1 | passage |");
     expect(markdown).toContain("not compared: unanchored");
   });
 
@@ -303,7 +303,7 @@ describe("renderSnippetCompareMarkdown", () => {
     if (first?.outcome.status !== "compared") {
       throw new Error("fixture must hold a compared hit");
     }
-    first.outcome.engineFragment = "alpha | beta\ngamma";
+    first.outcome.snippetFragment = "alpha | beta\ngamma";
 
     const markdown = renderSnippetCompareMarkdown(
       snippetCompareReport([withPipes]),
