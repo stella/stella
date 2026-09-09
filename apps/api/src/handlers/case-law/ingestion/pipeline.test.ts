@@ -398,6 +398,40 @@ describe("sanitizeResult — documentAst text fields", () => {
     expect(plainTextOf(plainPara.inlines)).toBe("Normálny text bez medzier.");
   });
 
+  test("preserves external keys without changing nested prototypes", () => {
+    const ast: DocumentAst = {
+      version: 1,
+      source: { system: "test", documentId: "x", webUrl: "", printUrl: "" },
+      metadata: { ...astMetadata },
+      blocks: [],
+    };
+    Object.defineProperty(ast.metadata, "__proto__", {
+      configurable: true,
+      enumerable: true,
+      value: { label: "A\u0000B", polluted: true },
+      writable: true,
+    });
+
+    const sanitized = sanitizeResult(baseResult(ast));
+    if (!("blocks" in sanitized.documentAst)) {
+      throw new Error("sanitized documentAst should be a DocumentAst");
+    }
+
+    expect(Object.getPrototypeOf(sanitized.documentAst.metadata)).toBe(
+      Object.prototype,
+    );
+    expect(Object.hasOwn(sanitized.documentAst.metadata, "__proto__")).toBe(
+      true,
+    );
+    expect(Reflect.get(sanitized.documentAst.metadata, "__proto__")).toEqual({
+      label: "AB",
+      polluted: true,
+    });
+    expect(
+      Reflect.get(sanitized.documentAst.metadata, "polluted"),
+    ).toBeUndefined();
+  });
+
   test("table cell plainText is collapsed, inline text stays verbatim", () => {
     const ast: DocumentAst = {
       version: 1,

@@ -167,11 +167,12 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
       return value.map((item) => deepSanitize(item));
     }
     if (isRecord(value)) {
-      const sanitized: Record<string, unknown> = {};
-      for (const [entryKey, entryValue] of Object.entries(value)) {
-        sanitized[entryKey] = deepSanitize(entryValue);
-      }
-      return sanitized;
+      return Object.fromEntries(
+        Object.entries(value).map(([entryKey, entryValue]) => [
+          entryKey,
+          deepSanitize(entryValue),
+        ]),
+      );
     }
     return value;
   };

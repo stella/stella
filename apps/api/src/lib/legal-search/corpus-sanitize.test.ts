@@ -20,4 +20,24 @@ describe("sanitizeMetadata", () => {
       },
     });
   });
+
+  test("preserves external keys without changing the result prototype", () => {
+    const metadata: Record<string, unknown> = { ordinary: "value" };
+    Object.defineProperty(metadata, "__proto__", {
+      configurable: true,
+      enumerable: true,
+      value: { label: "A\u0000B", polluted: true },
+      writable: true,
+    });
+
+    const sanitized = sanitizeMetadata(metadata);
+
+    expect(Object.getPrototypeOf(sanitized)).toBe(Object.prototype);
+    expect(Object.hasOwn(sanitized, "__proto__")).toBe(true);
+    expect(Reflect.get(sanitized, "__proto__")).toEqual({
+      label: "AB",
+      polluted: true,
+    });
+    expect(Reflect.get(sanitized, "polluted")).toBeUndefined();
+  });
 });
