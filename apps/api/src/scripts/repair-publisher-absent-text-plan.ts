@@ -68,7 +68,11 @@ const absentPublisherTextKeys = (
 
 /** Where a walk of one source stands: the last row a page examined. */
 export type AbsentTextCursor = {
-  /** The row's `created_at`, the leading key of the index the walk uses. */
+  /**
+   * The row's `created_at` as the database rendered it, at the microsecond
+   * precision the column stores. Never a date object: milliseconds are not
+   * enough to page inside one.
+   */
   createdAt: string;
   id: SafeId<"caseLawDecision">;
 };
@@ -145,6 +149,13 @@ export const parseAbsentTextSources = (
  * with no rows past the cursor returns nothing at all, which is the one way
  * the walk finishes.
  *
+ * The cursor timestamp is rendered `::text` by the database rather than carried
+ * as a driver value: `created_at` holds microseconds, a JavaScript date holds
+ * milliseconds, and a cursor rounded down to the millisecond re-reads every row
+ * that shares it — at a page boundary inside one millisecond, forever. The text
+ * goes back in as `::timestamptz`, so the comparison is made at the precision
+ * the column is stored in.
+ *
  * A report and an apply read this same statement, so what a run says it would
  * change is what a run with `--apply` changes.
  */
@@ -177,7 +188,7 @@ export const selectAbsentTextPageStatement = ({
      ORDER BY created_at DESC, id DESC
      LIMIT 1
   )
-  SELECT b.created_at AS cursor_created_at,
+  SELECT b.created_at::text AS cursor_created_at,
          b.id AS cursor_id,
          b.scanned AS scanned,
          p.id AS match_id
@@ -206,12 +217,8 @@ export const parseAbsentTextPage = (
   if (!isRecord(first) || typeof first["scanned"] !== "number") {
     return panic(`Unreadable absent-text page: ${JSON.stringify(first)}`);
   }
-  const createdAt = first["cursor_created_at"];
   const cursor: AbsentTextCursor = {
-    createdAt:
-      createdAt instanceof Date
-        ? createdAt.toISOString()
-        : requiredString(createdAt, "cursor_created_at"),
+    createdAt: requiredString(first["cursor_created_at"], "cursor_created_at"),
     id: brandPersistedCaseLawDecisionId(
       requiredString(first["cursor_id"], "cursor_id"),
     ),

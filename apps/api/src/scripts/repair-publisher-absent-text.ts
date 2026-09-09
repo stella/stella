@@ -42,9 +42,9 @@
  * there, and is cancelled by the lane's statement timeout before it reports
  * anything. The cursor advances by the last row examined, so a page that
  * matched nothing is still progress. Both modes read through the same
- * statement, so what a report says it would change is what an apply changes.
- * An operator meeting a slower database lowers `--page` rather than raising a
- * timeout.
+ * statement and stop at the same `--limit`, so what a report says it would
+ * change is what an apply changes. An operator meeting a slower database
+ * lowers `--page` rather than raising a timeout.
  *
  * Idempotent: a repaired row no longer carries a marker, so a later run walks
  * past it.
@@ -78,7 +78,11 @@ import {
   lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
+import {
+  flagInteger,
+  readApplyFlag,
+  rejectUnknownFlags,
+} from "@/api/scripts/repair-flags";
 import {
   absentTextSourcesStatement,
   carriesAbsentPublisherText,
@@ -110,8 +114,16 @@ const USAGE = `Usage: bun run src/scripts/repair-publisher-absent-text.ts [optio
   --apply        Write the repairs. Omitted, the run only reports.
   --dry-run      Report only, the default. Accepted so it cannot be mistaken
                  for a flag this script ignores; contradicts --apply.
-  --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).
+  --limit <n>    Rows this run may repair, and rows a report may promise
+                 (default ${String(DEFAULT_LIMIT)}).
   --page <n>     Rows one statement examines (default ${String(DEFAULT_PAGE_SIZE)}).`;
+
+// Before anything is opened or locked: a run that names a flag this repair
+// does not have is a run whose operator expects something else of it. The
+// source-scoping and resume flags an earlier revision documented are among
+// them, and widening silently from one source to all of them is exactly the
+// outcome the check exists to prevent.
+rejectUnknownFlags({ known: ["limit", "page"], usage: USAGE });
 
 const apply = readApplyFlag(USAGE);
 
@@ -223,7 +235,12 @@ const repairRow = async (
   });
 
 let scanned = 0;
-let matched = 0;
+/**
+ * Rows changed, or — in a report — rows that would be changed. One counter for
+ * both, because `--limit` bounds the report exactly as it bounds the apply it
+ * previews: a report that walked past the allowance would promise a run the
+ * apply then stops short of.
+ */
 let repaired = 0;
 let superseded = 0;
 
@@ -243,7 +260,6 @@ for (const source of sources) {
     cursor = page.cursor;
     examinedHere += page.scanned;
     scanned += page.scanned;
-    matched += page.ids.length;
 
     for (const entityId of page.ids) {
       // The allowance is per row, not per page: a page is read whole, so a run
@@ -253,6 +269,7 @@ for (const source of sources) {
         break;
       }
       if (!apply) {
+        repaired += 1;
         continue;
       }
       if (await repairRow(source, entityId)) {
@@ -271,12 +288,16 @@ for (const source of sources) {
 console.info(
   apply
     ? `${scanned.toLocaleString()} rows examined: ` +
-        `${matched.toLocaleString()} carry a marker, ` +
         `${repaired.toLocaleString()} repaired, ` +
         `${superseded.toLocaleString()} changed under the run.`
     : `${scanned.toLocaleString()} rows examined: ` +
-        `${matched.toLocaleString()} carry a marker and would be repaired.`,
+        `${repaired.toLocaleString()} would be repaired.`,
 );
+if (repaired + superseded >= limit) {
+  console.info(
+    `Stopped at --limit ${String(limit)}; re-run to continue where this left off.`,
+  );
+}
 
 console.info(
   apply

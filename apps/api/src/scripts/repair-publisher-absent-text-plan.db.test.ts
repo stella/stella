@@ -20,7 +20,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -340,6 +340,59 @@ describe("the walk", () => {
   test("reads this source's rows carrying one of its own markers", async () => {
     const { ids } = await walk(50);
     expect(new Set(ids)).toEqual(markerIds);
+  });
+
+  test("pages across rows that share a millisecond", async () => {
+    // `created_at` holds microseconds. A cursor carried at millisecond
+    // precision compares as the start of its millisecond, so every row sharing
+    // that millisecond is read again on the next page — a page boundary inside
+    // one never advances, and the walk does not end. Ten rows are moved into a
+    // single millisecond, two of them carrying markers, and the page size is
+    // small enough that a boundary lands among them.
+    const shared = Array.from({ length: 10 }, (_, offset) => 95 + offset);
+    await db.execute(sql`
+      UPDATE case_law_decisions AS d
+         SET created_at = timestamptz '2020-01-01 00:01:35Z'
+                        + (v.micros * interval '1 microsecond')
+        FROM (VALUES ${sql.join(
+          shared.map(
+            (index, position) =>
+              sql`(${fixtureId(index)}::uuid, ${position + 1}::int)`,
+          ),
+          sql`, `,
+        )}) AS v(id, micros)
+       WHERE d.id = v.id
+    `);
+
+    // The walk terminates — its own bound throws otherwise — and every row is
+    // examined exactly once: a re-read would push the total above the source,
+    // a skip would leave it below.
+    const { pages, ids } = await walk(3);
+    expect(pages.reduce((total, page) => total + page.scanned, 0)).toBe(
+      SOURCE_ROWS,
+    );
+    // The markers inside the shared millisecond are still each found once.
+    expect(new Set(ids)).toEqual(markerIds);
+    expect(ids).toHaveLength(markerIds.size);
+  });
+
+  test("refuses a cursor that is not the database's own text form", () => {
+    // The precision has to be pinned at the parser, because whether a driver
+    // hands back text or a date object is a driver's choice: `pglite` returns
+    // the microseconds as text, and a driver that returns a date instead would
+    // round them away and page from the start of the millisecond. The
+    // statement asks for text, so anything else is a page this walk must not
+    // continue from.
+    expect(() =>
+      parseAbsentTextPage([
+        {
+          cursor_created_at: new Date(),
+          cursor_id: fixtureId(0),
+          scanned: 1,
+          match_id: null,
+        },
+      ]),
+    ).toThrow(/cursor_created_at/u);
   });
 
   test("does not read another source's rows", async () => {
