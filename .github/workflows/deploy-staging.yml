@@ -466,6 +466,15 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      # Playwright installs its pinned browser; the runner's Chrome channel is unrelated.
+      - name: Disable runner Chrome apt source
+        if: steps.current.outputs.promoted == 'true'
+        run: |
+          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
+          if [[ -f "$chrome_apt_source" ]]; then
+            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
+          fi
+
       - name: Install Playwright browser
         if: steps.current.outputs.promoted == 'true'
         run: cd apps/web && bunx playwright install --with-deps chromium

@@ -1979,6 +1979,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
+      - name: Disable runner Chrome apt source
+        run: |
+          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
+          if [[ -f "$chrome_apt_source" ]]; then
+            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
+          fi
+
       - name: Install Firefox and WebKit
         run: bunx playwright install --with-deps firefox webkit
 
