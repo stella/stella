@@ -1,5 +1,11 @@
 # @stll/template-conditions
 
+## 0.5.2
+
+### Patch Changes
+
+- [#3183](https://github.com/stella/stella/pull/3183) [`42cc28c`](https://github.com/stella/stella/commit/42cc28c838cd54f29dd4afd1700791f4fad30385) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the reserved words of the condition language.
+
 ## 0.5.1
 
 ### Patch Changes
