@@ -295,7 +295,9 @@ console.info(
 );
 if (repaired + superseded >= limit) {
   console.info(
-    `Stopped at --limit ${String(limit)}; re-run to continue where this left off.`,
+    apply
+      ? `Stopped at --limit ${String(limit)}; re-run to continue, because a repaired row no longer matches.`
+      : `Stopped at --limit ${String(limit)}; raise it, or run with --apply, to reach further. A second report reads the same rows: nothing it counts has changed.`,
   );
 }
 

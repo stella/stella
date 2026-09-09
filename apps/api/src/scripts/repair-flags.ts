@@ -109,13 +109,38 @@ export const rejectUnknownFlags = ({
 };
 
 /**
+ * A flag that is a statement rather than a setting: present or absent, never
+ * assigned.
+ *
+ * `--apply=true` is refused rather than read, and the reason is the direction
+ * a misreading fails in. The name alone is recognised, so the value would be
+ * dropped and the run would report instead of write — the opposite of what an
+ * operator who spelled out `true` asked for, and silently. What the reader
+ * cannot represent it does not accept.
+ */
+const readStatedFlag = (name: string, usage: string): boolean => {
+  if (process.argv.some((argument) => argument.startsWith(`--${name}=`))) {
+    console.error(
+      `--${name} takes no value; pass it on its own or leave it out.`,
+    );
+    console.error(usage);
+    process.exit(1);
+  }
+  return hasFlag(name);
+};
+
+/**
  * Whether this run writes. `--dry-run` is the default and is accepted so it
  * cannot be mistaken for a flag the script ignores; stating both is an error
  * rather than a silent preference for one of them.
  */
 export const readApplyFlag = (usage: string): boolean => {
-  const apply = hasFlag("apply");
-  if (apply && hasFlag("dry-run")) {
+  // Both read before either is judged: short-circuiting past `--dry-run`
+  // would let an assigned value through on the flag nobody passes with
+  // `--apply`, which is the one an operator states on its own.
+  const apply = readStatedFlag("apply", usage);
+  const dryRun = readStatedFlag("dry-run", usage);
+  if (apply && dryRun) {
     console.error("--apply and --dry-run contradict each other; pass one.");
     console.error(usage);
     process.exit(1);
