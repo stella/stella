@@ -70,14 +70,77 @@ export const flagInteger = ({
   return parsed;
 };
 
+/** Flags every repair takes, so a caller lists only its own. */
+const SHARED_FLAGS = ["apply", "dry-run"] as const;
+
+/**
+ * Refuse a flag this repair does not have.
+ *
+ * Silence is the dangerous reading: an operator repeating a command a script
+ * used to document — a flag that scoped a run to one source, or resumed it
+ * from a cursor — would otherwise be told nothing and get a run over a wider
+ * population than they asked for. What a repair does not understand it must
+ * not accept, so an unrecognised `--flag` stops the run before it takes a lane
+ * or writes anything.
+ *
+ * Values are not flags: only arguments opening with `--` are inspected, in
+ * both the separate and the `--flag=value` spelling.
+ */
+export const rejectUnknownFlags = ({
+  known,
+  usage,
+}: {
+  known: readonly string[];
+  usage: string;
+}): void => {
+  const recognised = new Set<string>([...SHARED_FLAGS, ...known]);
+  const unknown = process.argv
+    .filter((argument) => argument.startsWith("--"))
+    .map((argument) => argument.slice(2).split("=")[0] ?? "")
+    .filter((name) => !recognised.has(name));
+  if (unknown.length === 0) {
+    return;
+  }
+  console.error(
+    `This repair has no ${unknown.map((name) => `--${name}`).join(", ")}.`,
+  );
+  console.error(usage);
+  process.exit(1);
+};
+
+/**
+ * A flag that is a statement rather than a setting: present or absent, never
+ * assigned.
+ *
+ * `--apply=true` is refused rather than read, and the reason is the direction
+ * a misreading fails in. The name alone is recognised, so the value would be
+ * dropped and the run would report instead of write — the opposite of what an
+ * operator who spelled out `true` asked for, and silently. What the reader
+ * cannot represent it does not accept.
+ */
+const readStatedFlag = (name: string, usage: string): boolean => {
+  if (process.argv.some((argument) => argument.startsWith(`--${name}=`))) {
+    console.error(
+      `--${name} takes no value; pass it on its own or leave it out.`,
+    );
+    console.error(usage);
+    process.exit(1);
+  }
+  return hasFlag(name);
+};
+
 /**
  * Whether this run writes. `--dry-run` is the default and is accepted so it
  * cannot be mistaken for a flag the script ignores; stating both is an error
  * rather than a silent preference for one of them.
  */
 export const readApplyFlag = (usage: string): boolean => {
-  const apply = hasFlag("apply");
-  if (apply && hasFlag("dry-run")) {
+  // Both read before either is judged: short-circuiting past `--dry-run`
+  // would let an assigned value through on the flag nobody passes with
+  // `--apply`, which is the one an operator states on its own.
+  const apply = readStatedFlag("apply", usage);
+  const dryRun = readStatedFlag("dry-run", usage);
+  if (apply && dryRun) {
     console.error("--apply and --dry-run contradict each other; pass one.");
     console.error(usage);
     process.exit(1);
