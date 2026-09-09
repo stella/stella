@@ -221,7 +221,7 @@ await Bun.write(
   `${JSON.stringify(
     {
       $schema:
-        "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+        "https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json",
       schema_version: 1,
       ...CHATGPT_APP_SUBMISSION_PROFILE,
       tools: submissionTools,

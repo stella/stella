@@ -27,7 +27,6 @@ export type NeedsApprovalPolicyKind = {
 }[ChatToolPolicyKind];
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
-  ...MCP_CHAT_TOOL_POLICY_KINDS,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -94,6 +93,7 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // non-executing proposals and return to the top-level loop for per-write
   // approval; this grant never authorizes the proposed writes themselves.
   spawn_subagents: CHAT_TOOL_POLICY_KIND.mutation,
+  ...MCP_CHAT_TOOL_POLICY_KINDS,
 } as const satisfies Record<string, ChatToolPolicyKind>;
 
 export type BuiltInChatToolPolicyKindByName =
