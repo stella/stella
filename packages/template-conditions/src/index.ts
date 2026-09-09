@@ -155,7 +155,7 @@ export const evaluateCondition = (
   );
 };
 
-export { parseCondition } from "./parse.js";
+export { CONDITION_RESERVED_WORDS, parseCondition } from "./parse.js";
 export { referencedConditionPaths } from "./referenced-paths.js";
 
 // Value-returning arithmetic evaluator for computed fields. Kept separate

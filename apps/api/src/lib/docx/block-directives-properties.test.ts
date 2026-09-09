@@ -13,6 +13,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { CONDITION_RESERVED_WORDS } from "@stll/template-conditions";
 
 import {
   evaluateCondition,
@@ -75,6 +76,7 @@ const extractTexts = async (buffer: Buffer): Promise<string[]> => {
 // ── Arbitraries ──────────────────────────────────────────
 
 const IDENT_RE = /^[a-z]{2,10}$/u;
+const RESERVED_WORDS: ReadonlySet<string> = new Set(CONDITION_RESERVED_WORDS);
 const LEAF_RE = /^[A-Za-z0-9 ]{1,20}$/u;
 const IDENT_UNDERSCORE_RE = /^[a-z_]{1,8}$/u;
 const HAS_LETTER_RE = /[a-z]/u;
@@ -84,7 +86,7 @@ const DIRECTIVE_RE = /\{\{[#/]/u;
 /** XML-safe identifier (letters only, 2-10 chars). */
 const identifier = fc
   .stringMatching(IDENT_RE)
-  .filter((s) => s !== "and" && s !== "or" && s !== "true" && s !== "false");
+  .filter((s) => !RESERVED_WORDS.has(s));
 
 /** XML-safe leaf value (no special chars). */
 const leafValue = fc.stringMatching(LEAF_RE).filter((s) => s.trim().length > 0);
