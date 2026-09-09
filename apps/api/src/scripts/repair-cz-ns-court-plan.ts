@@ -14,7 +14,14 @@ import { sql } from "drizzle-orm";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { czCourtFromEcli } from "@/api/lib/case-law/cz-ecli-courts";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import {
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedCaseLawSourceId,
+} from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** One stored decision, as the selection reads it. */
@@ -24,42 +31,155 @@ export type CzNsCourtRow = {
   court: string;
 };
 
-/**
- * Rows of one adapter whose stored ECLI names a court other than the
- * publisher's own, newest id last.
- *
- * The publisher's own code is excluded in SQL rather than in the decision
- * below, because it is what makes this a bounded selection over a
- * multi-million-row table instead of a walk of every decision the source
- * holds. Everything the exclusion lets through is decided in TypeScript, off
- * the one map every Czech adapter resolves a court through.
- *
- * Keyset paging on the primary key, and not on the repair predicate: a
- * repaired row stops matching, but a row this run decides to leave alone does
- * not, and a self-consuming walk would read those again on every batch.
- */
-export const selectCzNsForeignCourtRowsStatement = ({
-  adapterKey,
-  after,
-  limit,
-  publisherEcliCode,
-}: {
-  adapterKey: string;
-  after: SafeId<"caseLawDecision"> | null;
-  limit: number;
-  publisherEcliCode: string;
-}): SQL => sql`
-  SELECT d.id, d.ecli, d.court
-    FROM case_law_decisions d
-    JOIN case_law_sources s ON s.id = d.source_id
-   WHERE s.adapter_key = ${adapterKey}
-     AND d.ecli IS NOT NULL
-     AND d.ecli LIKE 'ECLI:CZ:%'
-     AND d.ecli NOT LIKE ${`ECLI:CZ:${publisherEcliCode}:%`}
-     ${after === null ? sql`` : sql`AND d.id > ${after}::uuid`}
-   ORDER BY d.id
-   LIMIT ${limit}
+/** Where a walk of the source stands: the last row a page examined. */
+export type CzNsCourtCursor = {
+  /**
+   * The row's `created_at`, the leading key of the index the walk uses, as
+   * the database's own microsecond text.
+   *
+   * Never a `Date`: the column is microsecond-precision and a `Date` holds
+   * milliseconds, so a cursor round-tripped through one lands before the row
+   * it was taken from. The rows sharing that millisecond are then read again
+   * by the next page — and the last row of the source is read by every page
+   * after it, which is a walk that never ends.
+   */
+  createdAt: string;
+  id: SafeId<"caseLawDecision">;
+};
+
+/** What one page of the walk examined, and which of it needs repairing. */
+export type CzNsCourtPage = {
+  /** Rows on this page whose ECLI names a court other than the publisher's. */
+  rows: CzNsCourtRow[];
+  /** Rows the page examined, matching or not. Zero ends the walk. */
+  scanned: number;
+  /** Where the next page starts, or null when the source is exhausted. */
+  cursor: CzNsCourtCursor | null;
+};
+
+/** The source a repair owns, looked up once by the adapter that wrote it. */
+export const czNsSourceIdStatement = (adapterKey: string): SQL => sql`
+  SELECT id FROM case_law_sources WHERE adapter_key = ${adapterKey}
 `;
+
+/**
+ * One page of a walk of the source, and whichever of its rows carry an ECLI
+ * naming a court other than the publisher's own.
+ *
+ * The bound is on rows examined, not on rows matched, and that is the whole
+ * point. The population is a few hundred rows among the source's many
+ * thousands, so a statement whose `LIMIT` counts matches scans forward until
+ * it finds them — and the last such statement, with no matches left to find,
+ * reads every remaining row of the source and is cancelled by the lane's
+ * statement timeout. Here the page takes a fixed number of rows in index
+ * order and the filter runs over those rows alone, so every statement of the
+ * walk costs the same bounded amount whatever the data holds.
+ *
+ * The order is the source's own cursor index (`source_id, created_at, id`),
+ * so a page is an index range rather than a sort of everything the source
+ * holds. The primary key would have been the obvious cursor and the wrong
+ * one: it is random per row, so ordering by it reads the whole partition
+ * before serving the first page.
+ *
+ * The bound comes back on every row, including on a page that matched
+ * nothing, because a page that advances no cursor is a walk that never ends.
+ * A source with no rows past the cursor returns nothing at all, which is the
+ * one way the walk finishes.
+ */
+export const selectCzNsCourtPageStatement = ({
+  after,
+  pageSize,
+  publisherEcliCode,
+  sourceId,
+}: {
+  after: CzNsCourtCursor | null;
+  pageSize: number;
+  publisherEcliCode: string;
+  sourceId: SafeId<"caseLawSource">;
+}): SQL => sql`
+  WITH page AS (
+    SELECT d.id, d.ecli, d.court, d.created_at
+      FROM case_law_decisions d
+     WHERE d.source_id = ${sourceId}::uuid
+       ${
+         after === null
+           ? sql``
+           : sql`AND (d.created_at, d.id) > (${pgTimestampCursorBoundary({
+               type: "pgTimestampCursor",
+               value: after.createdAt,
+               precision: "microseconds",
+             })}, ${after.id}::uuid)`
+       }
+     ORDER BY d.created_at, d.id
+     LIMIT ${pageSize}
+  ),
+  bound AS (
+    SELECT created_at, id, (SELECT count(*) FROM page)::int AS scanned
+      FROM page
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1
+  )
+  SELECT ${pgTimestampCursorValue(sql`b.created_at`)} AS cursor_created_at,
+         b.id AS cursor_id,
+         b.scanned AS scanned,
+         p.id AS match_id,
+         p.ecli AS match_ecli,
+         p.court AS match_court
+    FROM bound b
+    LEFT JOIN page p
+      ON p.ecli IS NOT NULL
+     AND p.ecli LIKE 'ECLI:CZ:%'
+     AND split_part(p.ecli, ':', 3) <> ${publisherEcliCode}
+`;
+
+const requiredString = (value: unknown, column: string): string => {
+  if (typeof value !== "string") {
+    return panic(`cz-ns court page column ${column} is not a string`);
+  }
+  return value;
+};
+
+/**
+ * A page read back from a driver result that is untyped by construction.
+ *
+ * An empty result is the end of the walk; anything else states the bound on
+ * every row, so the first row is enough to read it from.
+ */
+export const parseCzNsCourtPage = (rows: readonly unknown[]): CzNsCourtPage => {
+  const first = rows.at(0);
+  if (first === undefined) {
+    return { rows: [], scanned: 0, cursor: null };
+  }
+  if (!isRecord(first) || typeof first["scanned"] !== "number") {
+    return panic(`Unreadable cz-ns court page: ${JSON.stringify(first)}`);
+  }
+  const cursor: CzNsCourtCursor = {
+    // The statement projects this as text at microsecond precision, so it
+    // arrives as the database's own value rather than as a driver's `Date`.
+    // Reading it as anything else is a statement this parser no longer
+    // matches, not a value to coerce.
+    createdAt: requiredString(first["cursor_created_at"], "cursor_created_at"),
+    id: brandPersistedCaseLawDecisionId(
+      requiredString(first["cursor_id"], "cursor_id"),
+    ),
+  };
+
+  const matched: CzNsCourtRow[] = [];
+  for (const row of rows) {
+    if (!isRecord(row) || row["match_id"] === null) {
+      continue;
+    }
+    matched.push({
+      id: brandPersistedCaseLawDecisionId(
+        requiredString(row["match_id"], "match_id"),
+      ),
+      ecli: requiredString(row["match_ecli"], "match_ecli"),
+      court: requiredString(row["match_court"], "match_court"),
+    });
+  }
+
+  return { rows: matched, scanned: first["scanned"], cursor };
+};
 
 export const CZ_NS_COURT_REPAIR_OUTCOMES = {
   /** The stored court is not what the decision's ECLI names. */
@@ -176,19 +296,16 @@ export const applyCzNsCourtRepairStatement = ({
   RETURNING d.id
 `;
 
-/** One selected row, from a driver result that is untyped by construction. */
-export const parseCzNsCourtRow = (value: unknown): CzNsCourtRow => {
-  if (
-    !isRecord(value) ||
-    typeof value["id"] !== "string" ||
-    typeof value["ecli"] !== "string" ||
-    typeof value["court"] !== "string"
-  ) {
-    return panic(`Unreadable cz-ns court row: ${JSON.stringify(value)}`);
+/** The source id a lookup answered with, or null when no source matches. */
+export const parseCzNsSourceId = (
+  rows: readonly unknown[],
+): SafeId<"caseLawSource"> | null => {
+  const row = rows.at(0);
+  if (row === undefined) {
+    return null;
   }
-  return {
-    id: brandPersistedCaseLawDecisionId(value["id"]),
-    ecli: value["ecli"],
-    court: value["court"],
-  };
+  if (!isRecord(row) || typeof row["id"] !== "string") {
+    return panic(`Unreadable case-law source row: ${JSON.stringify(row)}`);
+  }
+  return brandPersistedCaseLawSourceId(row["id"]);
 };
