@@ -9,7 +9,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- The reader roles hold their grants by name, and a dropped relation takes its
 -- grants with it silently. Revoking first keeps the granted set derivable from
 -- the migration history alone.
-REVOKE SELECT ON TABLE "case_law_corpus_index_projections"
+REVOKE SELECT (
+  "generation", "decision_id", "index_id", "indexed_hash", "pending_action"
+) ON TABLE "case_law_corpus_index_projections"
   FROM "stella_public_law_reader";--> statement-breakpoint
 
 REVOKE SELECT ON TABLE "case_law_corpus_index_projections"
@@ -49,6 +51,9 @@ DELETE FROM "corpus_index_generations" WHERE "cluster" <> 'q09';--> statement-br
 ALTER TABLE "corpus_index_generations"
   DROP CONSTRAINT IF EXISTS "corpus_index_generations_cluster_values";--> statement-breakpoint
 
+-- Added NOT VALID so this transaction does not scan the table behind an
+-- ACCESS EXCLUSIVE lock. The rows it would have rejected are deleted above,
+-- and the next migration validates it in its own transaction.
 ALTER TABLE "corpus_index_generations"
   ADD CONSTRAINT "corpus_index_generations_cluster_values"
-    CHECK ("cluster" IN ('q09'));
+    CHECK ("cluster" IN ('q09')) NOT VALID;

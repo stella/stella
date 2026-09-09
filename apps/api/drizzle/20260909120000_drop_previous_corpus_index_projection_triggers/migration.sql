@@ -89,6 +89,7 @@ DROP FUNCTION IF EXISTS case_law_corpus_index_id(text, text);--> statement-break
 
 -- An erasure or a withdrawal targets whichever generations hold the document,
 -- so its audit row names none. Widening only: a row that already carries a
--- generation keeps it.
+-- generation keeps it, and a task from the previous release still supplies one.
 ALTER TABLE "case_law_index_jobs"
+  -- squawk-ignore ban-drop-not-null
   ALTER COLUMN "generation" DROP NOT NULL;

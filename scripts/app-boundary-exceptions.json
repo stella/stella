@@ -50,18 +50,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/handlers/case-law/corpus-index",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/handlers/legislation/corpus-index",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
     "specifier": "@/api/lib/analytics/capture",
     "target": "apps/api"
   },
@@ -75,18 +63,6 @@
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
     "specifier": "@/api/lib/db/timestamp-cas",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/errors/tagged-errors",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/legal-search/corpus-family",
     "target": "apps/api"
   },
   {
@@ -140,12 +116,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/handlers/case-law/corpus-index",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/handlers/case-law/ingestion/adapters/adapter-registry",
     "target": "apps/api"
   },
@@ -170,12 +140,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/handlers/legislation/corpus-index",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/handlers/legislation/search-index",
     "target": "apps/api"
   },
@@ -183,12 +147,6 @@
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/lib/analytics/capture",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/lib/corpus-index/census",
     "target": "apps/api"
   },
   {
@@ -218,12 +176,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/lib/legal-search/corpus-family",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/lib/legal-search/sk-document-backfill",
     "target": "apps/api"
   },
@@ -231,12 +183,6 @@
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/lib/legal-search/sk-document-queue",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/lib/limits",
     "target": "apps/api"
   },
   {
