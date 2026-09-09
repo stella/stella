@@ -118,7 +118,7 @@
     "@tiptap/pm": "^3.31.2",
     "@tiptap/react": "^3.31.2",
     "@tiptap/suggestion": "^3.31.2",
-    "@vscode/markdown-editor": "0.0.2-87",
+    "@vscode/markdown-editor": "0.0.2-88",
     "@vscode/observables": "0.1.1-0",
     "better-auth": "catalog:",
     "better-result": "catalog:",
