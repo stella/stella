@@ -12,10 +12,10 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { isVerificationCode } from "@/lib/files/document-reference";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import { isVerificationCode } from "@/lib/document-reference";
 
 /**
  * Where the verification code printed in a document leads. The API answers
@@ -58,7 +58,7 @@ export const Route = createFileRoute("/_protected/verify/$code")({
 
     // 404 is the only answer this route reads: everything else is a genuine
     // failure and belongs to the route's error boundary.
-    if (response.error && response.error.status === 404) {
+    if (response.error?.status === 404) {
       return NOT_FOUND;
     }
 

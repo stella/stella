@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
-import { Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -25,16 +25,22 @@ import {
 } from "@stll/ui/select";
 
 import { detached } from "@/lib/detached";
-import type { ReferenceUploadAction } from "@/lib/document-reference";
+import type { ReferenceUploadAction } from "@/lib/files/document-reference";
 import {
   defaultReferenceUploadAction,
   DOCUMENT_REFERENCE_EVIDENCE,
   REFERENCE_UPLOAD_ACTION,
-} from "@/lib/document-reference";
-import type { ReferencedFile } from "@/lib/document-reference-queries";
-import type { DocumentReferenceUploadPrompt } from "@/lib/document-reference-upload-store";
-import { useDocumentReferenceUploadStore } from "@/lib/document-reference-upload-store";
-import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
+} from "@/lib/files/document-reference";
+import type { ReferencedFile } from "@/lib/files/document-reference-queries";
+import type { DocumentReferenceUploadPrompt } from "@/lib/files/document-reference-upload-store";
+import {
+  currentDocumentReferenceUploadPrompt,
+  useDocumentReferenceUploadStore,
+} from "@/lib/files/document-reference-upload-store";
+import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
+
+import type { ReferencedFileRowState } from "./document-reference-upload-dialog.logic";
+import { uploadReferencedVersions } from "./document-reference-upload-dialog.logic";
 
 /**
  * Asks what to do with uploaded files that turned out to be versions of
@@ -50,48 +56,27 @@ import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-h
  * "new document".
  */
 export const DocumentReferenceUploadDialog = () => {
-  const prompt = useDocumentReferenceUploadStore((store) => store.prompt);
-  const promptId = useDocumentReferenceUploadStore((store) => store.promptId);
+  const queuedPrompt = useDocumentReferenceUploadStore(
+    currentDocumentReferenceUploadPrompt,
+  );
   const close = useDocumentReferenceUploadStore((store) => store.close);
 
-  if (prompt === null) {
+  if (queuedPrompt === null) {
     return null;
   }
 
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        if (!open) {
-          prompt.onCancelled();
-          close();
-        }
-      }}
-      open
-    >
-      {/* Remounts per prompt, so the previous batch's choices cannot leak. */}
-      <DocumentReferenceUploadDialogBody
-        key={promptId}
-        onClose={close}
-        prompt={prompt}
-      />
-    </Dialog>
+    <DocumentReferenceUploadDialogBody
+      key={queuedPrompt.id}
+      onClose={() => close(queuedPrompt.id)}
+      prompt={queuedPrompt.prompt}
+    />
   );
 };
 
 type DocumentReferenceUploadDialogBodyProps = {
   prompt: DocumentReferenceUploadPrompt;
   onClose: () => void;
-};
-
-/**
- * One row's own identity and answer. Two files dropped from different folders
- * can share a filename, so the row carries an id rather than leaning on its
- * position in the batch.
- */
-type ReferencedFileRowState = {
-  id: string;
-  entry: ReferencedFile;
-  choice: ReferenceUploadAction;
 };
 
 const DocumentReferenceUploadDialogBody = ({
@@ -108,90 +93,110 @@ const DocumentReferenceUploadDialogBody = ({
     })),
   );
   const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(false);
 
-  const confirm = async () => {
-    setIsSending(true);
-    const newDocumentFiles: File[] = [];
-    for (const {
-      entry: { file, match },
-      choice,
-    } of rows) {
-      if (choice === REFERENCE_UPLOAD_ACTION.newDocument) {
-        newDocumentFiles.push(file);
-        continue;
-      }
-      // Sequential: each version upload is a separate document's history, and
-      // the mutation reports its own outcome. Failures are surfaced there and
-      // must not abandon the remaining files.
-      await Result.tryPromise(
-        async () =>
-          await uploadVersion.mutateAsync({
-            workspaceId: match.workspaceId,
-            entityId: match.entityId,
-            // A file document's name is its filename, which is all the
-            // extension pre-check reads.
-            entityFileName: match.entityName,
-            file,
-          }),
-      );
+  const cancel = () => {
+    if (isSendingRef.current) {
+      return;
     }
-    onResolved(newDocumentFiles);
+    onCancelled();
     onClose();
   };
 
+  const confirm = async () => {
+    if (isSendingRef.current) {
+      return;
+    }
+    isSendingRef.current = true;
+    setIsSending(true);
+    const outcome = await uploadReferencedVersions({
+      rows,
+      // Sequential: each version upload is a separate document's history, and
+      // the mutation reports its own outcome. Failures are surfaced there and
+      // remain in the dialog without abandoning the other files.
+      uploadVersion: async ({ file, match }) =>
+        await uploadVersion.mutateAsync({
+          workspaceId: match.workspaceId,
+          entityId: match.entityId,
+          // A file document's name is its filename, which is all the extension
+          // pre-check reads.
+          entityFileName: match.entityName,
+          file,
+        }),
+    });
+
+    switch (outcome.type) {
+      case "retry":
+        setRows(outcome.rows);
+        isSendingRef.current = false;
+        setIsSending(false);
+        return;
+      case "complete":
+        onResolved(outcome.newDocumentFiles);
+        onClose();
+        return;
+      default: {
+        outcome satisfies never;
+        panic("Unhandled referenced-version upload outcome");
+      }
+    }
+  };
+
   return (
-    <DialogPopup className="max-w-lg">
-      <DialogHeader>
-        <DialogTitle>
-          {t("workspaces.files.referencedUpload.title")}
-        </DialogTitle>
-        <DialogDescription>
-          {t("workspaces.files.referencedUpload.description", {
-            count: referenced.length,
-          })}
-        </DialogDescription>
-      </DialogHeader>
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          cancel();
+        }
+      }}
+      open
+    >
+      <DialogPopup className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {t("workspaces.files.referencedUpload.title")}
+          </DialogTitle>
+          <DialogDescription>
+            {t("workspaces.files.referencedUpload.description", {
+              count: rows.length,
+            })}
+          </DialogDescription>
+        </DialogHeader>
 
-      <DialogPanel className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <ReferencedFileRow
-            choice={row.choice}
+        <DialogPanel className="flex flex-col gap-3">
+          {rows.map((row) => (
+            <ReferencedFileRow
+              choice={row.choice}
+              disabled={isSending}
+              entry={row.entry}
+              key={row.id}
+              onChoiceChange={(choice) =>
+                setRows((current) =>
+                  current.map((existing) =>
+                    existing.id === row.id ? { ...existing, choice } : existing,
+                  ),
+                )
+              }
+            />
+          ))}
+        </DialogPanel>
+
+        <DialogFooter>
+          <Button disabled={isSending} onClick={cancel} variant="ghost">
+            {t("common.cancel")}
+          </Button>
+          <Button
             disabled={isSending}
-            entry={row.entry}
-            key={row.id}
-            onChoiceChange={(choice) =>
-              setRows((current) =>
-                current.map((existing) =>
-                  existing.id === row.id ? { ...existing, choice } : existing,
-                ),
-              )
+            loading={isSending}
+            onClick={() =>
+              detached(confirm(), "document-reference-upload.confirm")
             }
-          />
-        ))}
-      </DialogPanel>
-
-      <DialogFooter>
-        <Button
-          disabled={isSending}
-          onClick={() => {
-            onCancelled();
-            onClose();
-          }}
-          variant="ghost"
-        >
-          {t("common.cancel")}
-        </Button>
-        <Button
-          disabled={isSending}
-          loading={isSending}
-          onClick={() =>
-            detached(confirm(), "document-reference-upload.confirm")
-          }
-        >
-          {t("common.uploadFiles")}
-        </Button>
-      </DialogFooter>
-    </DialogPopup>
+          >
+            {t("common.uploadFiles")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 };
 
@@ -248,7 +253,15 @@ const ReferencedFileRow = ({
           fileName: file.name,
         })}
       </Label>
-      <Select disabled={disabled} onValueChange={onChoiceChange} value={choice}>
+      <Select
+        disabled={disabled}
+        onValueChange={(nextChoice) => {
+          if (nextChoice !== null) {
+            onChoiceChange(nextChoice);
+          }
+        }}
+        value={choice}
+      >
         <SelectTrigger className="w-full" id={selectId} size="sm">
           <SelectValue />
         </SelectTrigger>

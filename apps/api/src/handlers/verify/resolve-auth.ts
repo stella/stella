@@ -2,7 +2,7 @@ import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lookupByVerificationCode } from "@/api/lib/document-reference-lookup";
+import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-reference-lookup";
 
 /**
  * Resolve a verification code to the document version it was frozen onto.

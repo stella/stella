@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
-import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  REALTIME_EVENT_TYPE,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -56,6 +60,7 @@ const stampedDocxBytes = async (): Promise<Uint8Array> => {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
       '  <Default Extension="xml" ContentType="application/xml"/>',
+      `  <Override PartName="/${DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mainPartPath}" ContentType="${DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mainPartContentType}"/>`,
       "</Types>",
     ].join("\n"),
   );
@@ -325,7 +330,7 @@ describe("createEntityVersionFromBuffer", () => {
     });
   });
 
-  test("stores a stamped DOCX without its document reference", async () => {
+  test("stores a stamped DOCX without its reference despite a generic MIME", async () => {
     writeFileVersionMock.mockImplementation(async (input) => {
       const result = {
         status: "ok" as const,
@@ -342,6 +347,7 @@ describe("createEntityVersionFromBuffer", () => {
     const result = await createEntityVersionFromBuffer({
       ...baseInput,
       buffer: submitted,
+      mimeType: "application/octet-stream",
     });
 
     expect(Result.isOk(result)).toBe(true);

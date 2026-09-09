@@ -167,10 +167,7 @@ export const createEntityFromBuffer = async ({
   // A generated document can be built from a stamped download; the new
   // document must not inherit the reference of the one it came from. Size and
   // hash below are taken from the bytes this returns, never the submitted ones.
-  const { bytes } = await storedDocumentBytes({
-    buffer: submittedBytes,
-    mimeType,
-  });
+  const { bytes } = await storedDocumentBytes(submittedBytes);
 
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = allocateFileObject();

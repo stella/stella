@@ -11,6 +11,9 @@
  * never claim a spelling inside those braces: the footer and the custom
  * properties are the only things it writes.
  */
+import { Result } from "better-result";
+
+import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { LIMITS } from "@/api/lib/limits";
@@ -64,9 +67,11 @@ const FMTID = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
 
 const PID_RE = /pid="(?<pid>\d+)"/gu;
 const WID_RE = /w:id="(?<id>\d+)"/gu;
+const WID_VALUE_RE = /w:id="(?<id>\d+)"/u;
 const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/u;
 const WT_TEXT_RE = /<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu;
 const STL_CODE_RE = /stl:(?<code>[abcdefghjkmnpqrstuvwxyz23456789]{10})/u;
+const STL_CODES_RE = /stl:[abcdefghjkmnpqrstuvwxyz23456789]{10}/gu;
 const STL_SUFFIX_RE = /(?<!\s)\s*stl:[abcdefghjkmnpqrstuvwxyz23456789]+\s*$/u;
 const SECT_PR_RE = /(?<sect><w:sectPr[^>]*>)/u;
 const CLOSING_BODY_RE = /<\/w:body>/u;
@@ -93,6 +98,166 @@ const STAMP_TEXT_RE =
 
 export const isStampableDocx = (mimeType: string, sizeBytes: number): boolean =>
   DOCX_MIME_TYPES.has(mimeType) && sizeBytes <= LIMITS.docxStampMaxBytes;
+
+const isXmlWhitespace = (character: string | undefined): boolean =>
+  character === " " ||
+  character === "\t" ||
+  character === "\n" ||
+  character === "\r";
+
+const xmlLocalName = (name: string): string =>
+  name.slice(name.lastIndexOf(":") + 1);
+
+/** Find a tag's closing bracket without mistaking one inside a quoted value. */
+const findXmlTagEnd = (xml: string, start: number): number => {
+  let quote: '"' | "'" | null = null;
+  for (let index = start + 1; index < xml.length; index += 1) {
+    const character = xml[index];
+    if (quote === null && (character === '"' || character === "'")) {
+      quote = character;
+    } else if (character === quote) {
+      quote = null;
+    } else if (quote === null && character === ">") {
+      return index;
+    }
+  }
+  return -1;
+};
+
+/** Read the two attributes that identify the DOCX main-part override. */
+const isDocxMainPartOverride = (tag: string): boolean => {
+  let cursor = 0;
+  while (
+    cursor < tag.length &&
+    !isXmlWhitespace(tag[cursor]) &&
+    tag[cursor] !== "/"
+  ) {
+    cursor += 1;
+  }
+
+  let partName: string | null = null;
+  let contentType: string | null = null;
+  while (cursor < tag.length) {
+    while (isXmlWhitespace(tag[cursor]) || tag[cursor] === "/") {
+      cursor += 1;
+    }
+    if (cursor >= tag.length) {
+      break;
+    }
+
+    const nameStart = cursor;
+    while (
+      cursor < tag.length &&
+      !isXmlWhitespace(tag[cursor]) &&
+      tag[cursor] !== "="
+    ) {
+      cursor += 1;
+    }
+    const name = xmlLocalName(tag.slice(nameStart, cursor));
+    while (isXmlWhitespace(tag[cursor])) {
+      cursor += 1;
+    }
+    if (tag[cursor] !== "=") {
+      return false;
+    }
+    cursor += 1;
+    while (isXmlWhitespace(tag[cursor])) {
+      cursor += 1;
+    }
+
+    const quote = tag[cursor];
+    if (quote !== '"' && quote !== "'") {
+      return false;
+    }
+    const valueStart = cursor + 1;
+    const valueEnd = tag.indexOf(quote, valueStart);
+    if (valueEnd === -1) {
+      return false;
+    }
+    const value = tag.slice(valueStart, valueEnd);
+    if (name === "PartName") {
+      partName = value;
+    } else if (name === "ContentType") {
+      contentType = value;
+    }
+    cursor = valueEnd + 1;
+  }
+
+  const { mainPartContentType, mainPartPath } =
+    DESKTOP_EDIT_FILE_TYPE_CONFIG.docx;
+  return partName === `/${mainPartPath}` && contentType === mainPartContentType;
+};
+
+/** Scan the small package manifest without a backtracking XML regex. */
+const hasDocxMainPartOverride = (contentTypes: string): boolean => {
+  let cursor = 0;
+  while (cursor < contentTypes.length) {
+    const start = contentTypes.indexOf("<", cursor);
+    if (start === -1) {
+      return false;
+    }
+    if (contentTypes.startsWith("<!--", start)) {
+      const commentEnd = contentTypes.indexOf("-->", start + 4);
+      if (commentEnd === -1) {
+        return false;
+      }
+      cursor = commentEnd + 3;
+      continue;
+    }
+    if (contentTypes.startsWith("<?", start)) {
+      const instructionEnd = contentTypes.indexOf("?>", start + 2);
+      if (instructionEnd === -1) {
+        return false;
+      }
+      cursor = instructionEnd + 2;
+      continue;
+    }
+    if (contentTypes.startsWith("<!", start)) {
+      return false;
+    }
+
+    const end = findXmlTagEnd(contentTypes, start);
+    if (end === -1) {
+      return false;
+    }
+    const tag = contentTypes.slice(start + 1, end);
+    let nameEnd = 0;
+    while (
+      nameEnd < tag.length &&
+      !isXmlWhitespace(tag[nameEnd]) &&
+      tag[nameEnd] !== "/"
+    ) {
+      nameEnd += 1;
+    }
+    if (
+      xmlLocalName(tag.slice(0, nameEnd)) === "Override" &&
+      isDocxMainPartOverride(tag)
+    ) {
+      return true;
+    }
+    cursor = end + 1;
+  }
+  return false;
+};
+
+/**
+ * Confirm that an archive is a DOCX from its package manifest, not from a
+ * caller-controlled MIME type. Both the main part and its exact OOXML content
+ * type must agree, so an XLSX, PPTX, or arbitrary ZIP is never rewritten.
+ */
+const isDocxArchive = async (archive: DocxArchive): Promise<boolean> => {
+  const { mainPartPath } = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx;
+  if (archive.zip.file(mainPartPath) === null) {
+    return false;
+  }
+
+  const contentTypes = await archive.readEntryString(CONTENT_TYPES_PATH);
+  if (contentTypes === null) {
+    return false;
+  }
+
+  return hasDocxMainPartOverride(contentTypes);
+};
 
 /**
  * Inject the document reference into a DOCX file. Adds:
@@ -176,22 +341,28 @@ export const extractStamp = async (
 export const stripStamp = async (
   docxBuffer: ArrayBuffer | Uint8Array,
 ): Promise<ArrayBuffer | null> => {
-  let archive: DocxArchive;
-  try {
-    archive = await loadDocxArchive(docxBuffer);
-  } catch {
+  const archiveResult = await Result.tryPromise(
+    async () => await loadDocxArchive(docxBuffer),
+  );
+  if (Result.isError(archiveResult)) {
     return null;
   }
+  const archive = archiveResult.value;
 
-  try {
+  const stripResult = await Result.tryPromise(async () => {
+    if (!(await isDocxArchive(archive))) {
+      return false;
+    }
     const strippedProperties = await stripCustomProperties(archive);
     const strippedFooter = await stripStampParagraph(archive);
-    if (!strippedProperties && !strippedFooter) {
-      return null;
-    }
-  } catch {
+    return strippedProperties || strippedFooter;
+  });
+  if (Result.isError(stripResult)) {
     // A bounded-read cap tripped part-way through: the archive is out of
     // bounds, so leave it to the validation step that reports that.
+    return null;
+  }
+  if (!stripResult.value) {
     return null;
   }
 
@@ -204,44 +375,76 @@ export const stripStamp = async (
 // ── Reference Removal ───────────────────────────────────
 
 /**
- * Drop `<tagName ... marker ... />`. Attribute values in an OOXML part are
- * quoted and cannot contain `>`, so the first `>` after the marker closes the
- * element carrying it.
+ * Drop every `<tagName ... marker ... />`. Attribute values in an OOXML part
+ * are quoted and cannot contain `>`, so the first `>` after the marker closes
+ * the element carrying it. Exhaustive removal matters for copied or malformed
+ * packages: leaving a duplicate reference behind breaks the storage invariant.
  */
-const removeSelfClosingElement = (
+const removeSelfClosingElements = (
   xml: string,
   tagName: string,
   marker: string,
 ): string => {
-  const markerIndex = xml.indexOf(marker);
-  if (markerIndex === -1) {
+  const parts: string[] = [];
+  let cursor = 0;
+  let searchFrom = 0;
+  let removed = false;
+  while (true) {
+    const markerIndex = xml.indexOf(marker, searchFrom);
+    if (markerIndex === -1) {
+      break;
+    }
+    const start = xml.lastIndexOf(`<${tagName}`, markerIndex);
+    const end = start === -1 ? -1 : xml.indexOf(">", start);
+    if (start < cursor || end < markerIndex) {
+      searchFrom = markerIndex + marker.length;
+      continue;
+    }
+    parts.push(xml.slice(cursor, start));
+    cursor = end + 1;
+    searchFrom = cursor;
+    removed = true;
+  }
+  if (!removed) {
     return xml;
   }
-  const start = xml.lastIndexOf(`<${tagName}`, markerIndex);
-  const end = xml.indexOf(">", markerIndex);
-  if (start === -1 || end === -1) {
-    return xml;
-  }
-  return xml.slice(0, start) + xml.slice(end + 1);
+  parts.push(xml.slice(cursor));
+  return parts.join("");
 };
 
-/** Drop `<tagName ... marker ...>…</tagName>`. */
-const removePairedElement = (
+/** Drop every `<tagName ... marker ...>…</tagName>`. */
+const removePairedElements = (
   xml: string,
   tagName: string,
   marker: string,
 ): string => {
-  const markerIndex = xml.indexOf(marker);
-  if (markerIndex === -1) {
-    return xml;
-  }
   const closing = `</${tagName}>`;
-  const start = xml.lastIndexOf(`<${tagName}`, markerIndex);
-  const end = xml.indexOf(closing, markerIndex);
-  if (start === -1 || end === -1) {
+  const parts: string[] = [];
+  let cursor = 0;
+  let searchFrom = 0;
+  let removed = false;
+  while (true) {
+    const markerIndex = xml.indexOf(marker, searchFrom);
+    if (markerIndex === -1) {
+      break;
+    }
+    const start = xml.lastIndexOf(`<${tagName}`, markerIndex);
+    const openingEnd = start === -1 ? -1 : xml.indexOf(">", start);
+    const closingStart = xml.indexOf(closing, markerIndex);
+    if (start < cursor || openingEnd < markerIndex || closingStart === -1) {
+      searchFrom = markerIndex + marker.length;
+      continue;
+    }
+    parts.push(xml.slice(cursor, start));
+    cursor = closingStart + closing.length;
+    searchFrom = cursor;
+    removed = true;
+  }
+  if (!removed) {
     return xml;
   }
-  return xml.slice(0, start) + xml.slice(end + closing.length);
+  parts.push(xml.slice(cursor));
+  return parts.join("");
 };
 
 const removePartDeclaration = async (
@@ -254,7 +457,7 @@ const removePartDeclaration = async (
   if (!xml) {
     return;
   }
-  const stripped = removeSelfClosingElement(xml, tagName, marker);
+  const stripped = removeSelfClosingElements(xml, tagName, marker);
   if (stripped !== xml) {
     archive.zip.file(path, stripped);
   }
@@ -276,7 +479,7 @@ const stripCustomProperties = async (
 
   let stripped = customXml;
   for (const name of STAMP_PROPERTY_NAMES) {
-    stripped = removePairedElement(stripped, "property", `name="${name}"`);
+    stripped = removePairedElements(stripped, "property", `name="${name}"`);
   }
   if (stripped === customXml) {
     return false;
@@ -303,34 +506,6 @@ const stripCustomProperties = async (
   return true;
 };
 
-/**
- * The bookmarked paragraph's span. The opening tag comes from scanning the
- * paragraph starts before the bookmark rather than searching backwards for the
- * literal `<w:p`, which `<w:pPr>` also matches.
- */
-const stampParagraphRange = (
-  footerXml: string,
-): { start: number; end: number } | null => {
-  const bookmarkIndex = footerXml.indexOf(STAMP_BOOKMARK_MARKER);
-  if (bookmarkIndex === -1) {
-    return null;
-  }
-
-  let start = -1;
-  for (const match of footerXml.matchAll(PARAGRAPH_OPEN_RE)) {
-    if (match.index >= bookmarkIndex) {
-      break;
-    }
-    start = match.index;
-  }
-
-  const closeIndex = footerXml.indexOf(PARAGRAPH_CLOSE, bookmarkIndex);
-  if (start === -1 || closeIndex === -1) {
-    return null;
-  }
-  return { start, end: closeIndex + PARAGRAPH_CLOSE.length };
-};
-
 /** A footer Word writes always holds a paragraph; keep one when ours was the last. */
 const keepFooterBlockContent = (footerXml: string): string =>
   ANY_PARAGRAPH_RE.test(footerXml)
@@ -341,10 +516,197 @@ const footerRelsPathFor = (footerPath: string): string =>
   `word/_rels/${footerPath.replace(STRIP_PATH_RE, () => "")}.rels`;
 
 /**
- * Remove the footer line and its verification hyperlink, but only where the
- * text still reads exactly as stella wrote it. An edited line keeps its
- * bookmark: the words are the author's by then, and the next stamped download
- * rewrites that paragraph in place anyway.
+ * Remove every verification code from a stella hyperlink's run text,
+ * including when Word split one across runs. Restricting this to the
+ * machine-owned hyperlink preserves valid-looking `stl:` text the author may
+ * have added elsewhere in the edited paragraph.
+ */
+const stripVerificationCodesFromRunText = (runXml: string): string => {
+  const textMatches = [...runXml.matchAll(WT_TEXT_RE)];
+  const text = textMatches
+    .map((match) => match.groups?.["text"] ?? "")
+    .join("");
+  const codeRanges = [...text.matchAll(STL_CODES_RE)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+  if (codeRanges.length === 0) {
+    return runXml;
+  }
+
+  const parts: string[] = [];
+  let runXmlOffset = 0;
+  let textOffset = 0;
+  let codeRangeIndex = 0;
+
+  for (const match of textMatches) {
+    const runText = match.groups?.["text"] ?? "";
+    const matchIndex = match.index;
+    const runEnd = textOffset + runText.length;
+    const rewrittenRunParts: string[] = [];
+    let runCursor = 0;
+    let removedFromRun = false;
+
+    while (true) {
+      const previousRange = codeRanges[codeRangeIndex];
+      if (previousRange === undefined || previousRange.end > textOffset) {
+        break;
+      }
+      codeRangeIndex += 1;
+    }
+    while (true) {
+      const range = codeRanges[codeRangeIndex];
+      if (range === undefined || range.start >= runEnd) {
+        break;
+      }
+      const removalStart = Math.max(0, range.start - textOffset);
+      const removalEnd = Math.min(runText.length, range.end - textOffset);
+      if (removalStart < removalEnd) {
+        rewrittenRunParts.push(runText.slice(runCursor, removalStart));
+        runCursor = removalEnd;
+        removedFromRun = true;
+      }
+      if (range.end > runEnd) {
+        break;
+      }
+      codeRangeIndex += 1;
+    }
+
+    if (removedFromRun) {
+      const runTextIndex = match[0].indexOf(runText);
+      const absoluteTextIndex = matchIndex + runTextIndex;
+      parts.push(runXml.slice(runXmlOffset, absoluteTextIndex));
+      rewrittenRunParts.push(runText.slice(runCursor));
+      parts.push(rewrittenRunParts.join(""));
+      runXmlOffset = absoluteTextIndex + runText.length;
+    }
+    textOffset = runEnd;
+  }
+
+  parts.push(runXml.slice(runXmlOffset));
+  return parts.join("");
+};
+
+/** Keep edited words while dropping every stella hyperlink wrapper. */
+const unwrapStampHyperlinks = (paragraphXml: string): string => {
+  const marker = `r:id="${STAMP_HYPERLINK_REL_ID}"`;
+  const closing = "</w:hyperlink>";
+  const parts: string[] = [];
+  let cursor = 0;
+  let searchFrom = 0;
+  let unwrapped = false;
+
+  while (true) {
+    const markerIndex = paragraphXml.indexOf(marker, searchFrom);
+    if (markerIndex === -1) {
+      break;
+    }
+    const start = paragraphXml.lastIndexOf("<w:hyperlink", markerIndex);
+    const contentStart = start === -1 ? -1 : paragraphXml.indexOf(">", start);
+    const contentEnd = paragraphXml.indexOf(closing, markerIndex);
+    if (start < cursor || contentStart < markerIndex || contentEnd === -1) {
+      searchFrom = markerIndex + marker.length;
+      continue;
+    }
+    parts.push(paragraphXml.slice(cursor, start));
+    parts.push(
+      stripVerificationCodesFromRunText(
+        paragraphXml.slice(contentStart + 1, contentEnd),
+      ),
+    );
+    cursor = contentEnd + closing.length;
+    searchFrom = cursor;
+    unwrapped = true;
+  }
+
+  if (!unwrapped) {
+    return paragraphXml;
+  }
+  parts.push(paragraphXml.slice(cursor));
+  return parts.join("");
+};
+
+/** Remove stella's named bookmarks without disturbing any others. */
+const stripStampBookmarks = (paragraphXml: string): string => {
+  const bookmarkIds = new Set<string>();
+  let searchFrom = 0;
+  while (true) {
+    const markerIndex = paragraphXml.indexOf(STAMP_BOOKMARK_MARKER, searchFrom);
+    if (markerIndex === -1) {
+      break;
+    }
+    const start = paragraphXml.lastIndexOf("<w:bookmarkStart", markerIndex);
+    const end = start === -1 ? -1 : paragraphXml.indexOf(">", start);
+    if (start === -1 || end < markerIndex) {
+      searchFrom = markerIndex + STAMP_BOOKMARK_MARKER.length;
+      continue;
+    }
+    const bookmarkId = WID_VALUE_RE.exec(paragraphXml.slice(start, end + 1))
+      ?.groups?.["id"];
+    if (bookmarkId !== undefined) {
+      bookmarkIds.add(bookmarkId);
+    }
+    searchFrom = end + 1;
+  }
+
+  let stripped = removeSelfClosingElements(
+    paragraphXml,
+    "w:bookmarkStart",
+    STAMP_BOOKMARK_MARKER,
+  );
+  for (const bookmarkId of bookmarkIds) {
+    stripped = removeSelfClosingElements(
+      stripped,
+      "w:bookmarkEnd",
+      `w:id="${bookmarkId}"`,
+    );
+  }
+  return stripped;
+};
+
+const stripEditedStampParagraph = (paragraphXml: string): string =>
+  stripStampBookmarks(unwrapStampHyperlinks(paragraphXml));
+
+/** Remove or sanitize every stella-owned paragraph in one footer part. */
+const stripStampParagraphsFromFooter = (footerXml: string): string => {
+  const parts: string[] = [];
+  let cursor = 0;
+  let stripped = false;
+
+  for (const match of footerXml.matchAll(PARAGRAPH_OPEN_RE)) {
+    const start = match.index;
+    if (start < cursor) {
+      continue;
+    }
+    const closeIndex = footerXml.indexOf(PARAGRAPH_CLOSE, start);
+    if (closeIndex === -1) {
+      break;
+    }
+    const end = closeIndex + PARAGRAPH_CLOSE.length;
+    const paragraphXml = footerXml.slice(start, end);
+    if (!paragraphXml.includes(STAMP_BOOKMARK_MARKER)) {
+      continue;
+    }
+
+    parts.push(footerXml.slice(cursor, start));
+    if (!STAMP_TEXT_RE.test(collectRunText(paragraphXml))) {
+      parts.push(stripEditedStampParagraph(paragraphXml));
+    }
+    cursor = end;
+    stripped = true;
+  }
+
+  if (!stripped) {
+    return footerXml;
+  }
+  parts.push(footerXml.slice(cursor));
+  return keepFooterBlockContent(parts.join(""));
+};
+
+/**
+ * Remove an untouched stella footer line wholesale. Once the author edits the
+ * line, keep its words but remove the bookmark, hyperlink, and verification
+ * code that would make the stored file resolve back to the source document.
  */
 const stripStampParagraph = async (archive: DocxArchive): Promise<boolean> => {
   const footerPaths = Object.keys(archive.zip.files).filter((path) =>
@@ -357,24 +719,12 @@ const stripStampParagraph = async (archive: DocxArchive): Promise<boolean> => {
     if (!footerXml?.includes(STAMP_BOOKMARK)) {
       continue;
     }
-    const range = stampParagraphRange(footerXml);
-    if (!range) {
-      continue;
-    }
-    if (
-      !STAMP_TEXT_RE.test(
-        collectRunText(footerXml.slice(range.start, range.end)),
-      )
-    ) {
+    const rewrittenFooter = stripStampParagraphsFromFooter(footerXml);
+    if (rewrittenFooter === footerXml) {
       continue;
     }
 
-    archive.zip.file(
-      path,
-      keepFooterBlockContent(
-        footerXml.slice(0, range.start) + footerXml.slice(range.end),
-      ),
-    );
+    archive.zip.file(path, rewrittenFooter);
     await removePartDeclaration(
       archive,
       footerRelsPathFor(path),

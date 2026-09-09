@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import {
   DOCUMENT_REFERENCE_EVIDENCE,
   readDocumentReference,
-} from "@/lib/document-reference";
+} from "@/lib/files/document-reference";
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -91,7 +91,7 @@ const buildDocx = async ({
   if (footerXml !== undefined) {
     zip.file("word/footer1.xml", footerXml);
   }
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generateAsync({ type: "arraybuffer" });
   return new File([bytes], fileName, { type: mimeType });
 };
 

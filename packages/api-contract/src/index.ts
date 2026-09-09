@@ -138,6 +138,7 @@ export type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "./document-properties";
+export type { DocumentReferenceMatch } from "./document-reference";
 export {
   ENTITY_FIND_SCOPE_TYPES,
   ENTITY_FIND_TERM_MIN_LENGTH,

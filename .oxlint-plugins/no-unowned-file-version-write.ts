@@ -369,9 +369,6 @@ export default eslintCompatPlugin({
                 }
                 continue;
               }
-              if (property.type !== "Property") {
-                continue;
-              }
               const tableName = getPropertyName(property.key);
               const value = unwrapExpression(property.value);
               const local =

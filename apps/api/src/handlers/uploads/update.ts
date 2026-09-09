@@ -477,10 +477,8 @@ const runFinalize = async function* ({
   //     sent. Every presigned purpose promotes through the same object and
   //     records the same size and hash, so this is where a stamped download
   //     coming back stops being version N's bytes carrying version N-1's code.
-  const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes({
-    buffer: fileBuffer,
-    mimeType: claimed.declaredMime,
-  });
+  const { bytes: storedBytes, strippedArchive } =
+    await storedDocumentBytes(fileBuffer);
   const storedSha256Hex =
     strippedArchive === null
       ? claimed.declaredSha256
@@ -500,7 +498,7 @@ const runFinalize = async function* ({
                 key: finalKey,
               }),
           );
-    if (Result.isError(promoted)) {
+    if (promoted.status === "error") {
       return Result.err(
         new UploadFinalizeError({
           status: 500,

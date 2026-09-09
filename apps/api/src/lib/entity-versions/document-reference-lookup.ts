@@ -1,6 +1,6 @@
 /**
- * One owner for resolving a verification code to the version it was frozen
- * onto. Both the uploaded-DOCX check and the authenticated code resolution
+ * Resolve a verification code to the entity version it was frozen onto. Both
+ * the uploaded-DOCX check and the authenticated code resolution
  * answer from here, so the two cannot drift on what a match is or on how it
  * is scoped. The printed reference string (`2026/001/015.v3`) is never a
  * lookup key: a matter can be re-referenced and the freed reference reused,
@@ -16,27 +16,11 @@
 import { panic } from "better-result";
 import { and, eq, isNull, max } from "drizzle-orm";
 
+import type { DocumentReferenceMatch } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-
-export type DocumentReferenceMatch = {
-  entityId: string;
-  entityName: string | null;
-  workspaceId: string;
-  workspaceName: string;
-  /** The reference frozen onto the matched version. */
-  stamp: string;
-  /** The version the reference points at: what the holder of the file has. */
-  versionNumber: number;
-  /**
-   * Highest version number the document currently has, tombstoned versions
-   * excluded. Equal to `versionNumber` when the reference points at the
-   * latest version, higher when the file in hand has been superseded, which
-   * is the one thing a reader of an old printout needs to be told.
-   */
-  currentVersionNumber: number;
-};
 
 type LookupOptions = {
   tx: Transaction;

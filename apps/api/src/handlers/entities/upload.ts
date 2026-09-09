@@ -893,10 +893,8 @@ const uploadEntityHandler = async function* ({
   // Scanning and the draft-content check above judge what the client sent, so
   // they run on the submitted bytes. Everything from here describes the stored
   // ones, which never carry a document reference.
-  const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes({
-    buffer: fileBuffer,
-    mimeType: file.type,
-  });
+  const { bytes: storedBytes, strippedArchive } =
+    await storedDocumentBytes(fileBuffer);
   const storedSizeBytes = storedBytes.byteLength;
   const storedSha256Hex =
     strippedArchive === null
