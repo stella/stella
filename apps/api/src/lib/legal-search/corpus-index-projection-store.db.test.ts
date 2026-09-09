@@ -2913,3 +2913,64 @@ test("settlement proves the lease against the instant its delete task carries", 
       .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID)),
   ).toEqual([{ status: "settled" }]);
 });
+
+test("a settlement release whose revisions a later turn holds releases none of them", async () => {
+  await seedCommittedCleanupPair();
+  // A lease written against a test clock in the past is already expired by the
+  // database clock, which is the state the claim predicate re-leases.
+  const outrunLeases = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          taskLimit: 1,
+          leaseMs: 60_000,
+          testNow: new Date("2026-08-25T12:00:00.000Z"),
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        },
+      ),
+  );
+  const outrun =
+    outrunLeases.at(0) ?? panic("Expected a projection settlement lease");
+  const laterLeases = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          limit: 10,
+          taskLimit: 1,
+          leaseMs: 60_000,
+          newLeaseToken: () => SECOND_LEASE_TOKEN,
+        },
+      ),
+  );
+  expect(laterLeases.map(({ intentIds }) => intentIds)).toEqual([
+    outrun.intentIds,
+  ]);
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await releaseCorpusProjectionCleanupSettlementTx(
+          asTestRaw<Transaction>(tx),
+          { lease: outrun },
+        ),
+    ),
+  ).toBe(0);
+  expect(
+    await db
+      .select({
+        status: corpusIndexProjectionIntents.status,
+        leaseToken: corpusIndexProjectionIntents.leaseToken,
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID)),
+  ).toEqual([{ status: "cleanup_committed", leaseToken: SECOND_LEASE_TOKEN }]);
+});

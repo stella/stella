@@ -8,6 +8,7 @@ import {
   isNull,
   lte,
   min,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -701,9 +702,38 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  if (rows.length !== lease.intentIds.length) {
+  if (rows.length === lease.intentIds.length) {
+    return rows.length;
+  }
+  // The settlement claim re-leases a revision whose lease has expired, and it
+  // overwrites the token without matching the old one. A turn whose proof
+  // outran its own lease therefore finds a later turn holding the revisions it
+  // came to relinquish, which the claim path is written to produce: releasing
+  // what that turn owns would take its lease away, so this releases nothing.
+  // A revision that is neither released nor held by a later turn is the state
+  // nothing should have produced.
+  const released = new Set(rows.map(({ id }) => id));
+  const unreleased = lease.intentIds.filter((id) => !released.has(id));
+  // A null token compares unequal to nothing, so an unleased revision is not
+  // one of these and still reaches the panic below.
+  const reLeased = await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, unreleased),
+        eq(corpusIndexProjectionIntents.indexId, lease.indexId),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+        eq(
+          corpusIndexProjectionIntents.deleteOpstamp,
+          BigInt(lease.deleteOpstamp),
+        ),
+        ne(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
+      ),
+    );
+  if (reLeased.length !== unreleased.length) {
     return panic(
-      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions`,
+      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions, and ${unreleased.length - reLeased.length} of the rest are held by no later turn`,
     );
   }
   return rows.length;
