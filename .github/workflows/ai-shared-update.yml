@@ -16,7 +16,7 @@ jobs:
       actions: write
       contents: write
       pull-requests: write
-    uses: stella/.github/.github/workflows/ai-shared-update.yml@9e1915536efc226c5ec9d3ca0f2192be5aa6ec7e
+    uses: stella/.github/.github/workflows/ai-shared-update.yml@fb1e83fbc3fae39902da763ca7b2613090571717
     with:
       validation-workflow: ci.yml
     secrets:
