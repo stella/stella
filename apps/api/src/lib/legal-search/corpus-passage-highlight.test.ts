@@ -3,14 +3,18 @@ import { describe, expect, test } from "bun:test";
 import {
   CORPUS_SNIPPET_MAX_CHARS,
   highlightCorpusPassage,
+  markCorpusFragment,
 } from "@/api/lib/legal-search/corpus-passage-highlight";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { searchHighlightMarks } from "@/api/lib/search/highlight";
+import {
+  searchHighlightMarks,
+  stripSearchHighlightMarkup,
+} from "@/api/lib/search/highlight";
 
 /**
- * Window selection, the forms a passage word is matched by, the mark format,
- * and the cuts: whole words only, budget respected, empty passage empty.
+ * Window selection, the forms a word is matched by, the mark format, and the
+ * cuts: whole words only, budget respected, empty passage empty.
  */
 
 const highlight = (
@@ -23,6 +27,13 @@ const highlight = (
     tokens: tokenizeCorpusFreeText(query),
     language: options.language === undefined ? "cs" : options.language,
     maxChars: options.maxChars,
+  });
+
+const mark = (fragment: string, query: string) =>
+  markCorpusFragment({
+    text: fragment,
+    tokens: tokenizeCorpusFreeText(query),
+    language: "cs",
   });
 
 describe("window selection", () => {
@@ -131,6 +142,42 @@ describe("matching", () => {
     const { html } = highlight(passage, '"dobré mravy" mravy');
 
     expect(searchHighlightMarks(html)).toEqual(["dobré mravy"]);
+  });
+});
+
+describe("stem matching", () => {
+  test("marks the inflections of the query's term", () => {
+    const fragment =
+      "Soud přiznal náhradu škody, náhrady nákladů i náhradu újmy.";
+
+    expect(searchHighlightMarks(mark(fragment, "náhrada"))).toEqual([
+      "náhradu",
+      "náhrady",
+      "náhradu",
+    ]);
+  });
+
+  test("leaves a word whose stem matches only once the accents are folded", () => {
+    const fragment =
+      "Nájemce nemusí být v bytě přítomen; ukončení nájemního bytu se ho týká.";
+
+    expect(searchHighlightMarks(mark(fragment, "nájemního bytu"))).toEqual([
+      "bytě",
+      "nájemního",
+      "bytu",
+    ]);
+  });
+});
+
+describe("markCorpusFragment", () => {
+  test("marks every match and keeps the fragment whole, however long", () => {
+    const fragment = `Smlouva & ${"slovo ".repeat(40)}náhrada škody.`;
+
+    const html = mark(fragment, "škoda");
+
+    expect(html).toContain("&amp;");
+    expect(stripSearchHighlightMarkup(html)).toBe(fragment);
+    expect(searchHighlightMarks(html)).toEqual(["škody"]);
   });
 });
 

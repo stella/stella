@@ -144,8 +144,8 @@ export const parseSnippetCompareArgs = (
 /** How the two sides' marked terms relate. */
 const MARK_AGREEMENTS = [
   "identical",
-  "api_superset",
-  "engine_superset",
+  "passage_superset",
+  "snippet_superset",
   "divergent",
 ] as const;
 type MarkAgreement = (typeof MARK_AGREEMENTS)[number];
@@ -155,7 +155,7 @@ const SNIPPET_COMPARE_SKIPS = [
   "unanchored",
   "no_payload",
   "anchor_not_found",
-  "no_engine_snippet",
+  "no_snippet",
 ] as const;
 type SnippetCompareSkip = (typeof SNIPPET_COMPARE_SKIPS)[number];
 
@@ -180,8 +180,8 @@ type FragmentComparison = {
    */
   overlap: number;
   /** Distinct folded terms each side marked. */
-  engineMarks: string[];
-  apiMarks: string[];
+  snippetMarks: string[];
+  passageMarks: string[];
   marks: MarkAgreement;
 };
 
@@ -211,38 +211,38 @@ const markedTerms = (snippet: string): Set<string> =>
   new Set(searchHighlightMarks(snippet).flatMap(foldedWords));
 
 const markAgreement = (
-  engine: Set<string>,
-  api: Set<string>,
+  snippet: Set<string>,
+  passage: Set<string>,
 ): MarkAgreement => {
-  const apiCoversEngine = [...engine].every((term) => api.has(term));
-  const engineCoversApi = [...api].every((term) => engine.has(term));
-  if (apiCoversEngine && engineCoversApi) {
+  const passageCoversSnippet = [...snippet].every((term) => passage.has(term));
+  const snippetCoversPassage = [...passage].every((term) => snippet.has(term));
+  if (passageCoversSnippet && snippetCoversPassage) {
     return "identical";
   }
-  if (apiCoversEngine) {
-    return "api_superset";
+  if (passageCoversSnippet) {
+    return "passage_superset";
   }
-  return engineCoversApi ? "engine_superset" : "divergent";
+  return snippetCoversPassage ? "snippet_superset" : "divergent";
 };
 
 /** One hit's two fragments, compared. Both are `<mark>`-format snippets. */
 export const compareSnippetFragments = ({
-  engineSnippet,
-  apiSnippet,
+  snippetFragment,
+  passageFragment,
 }: {
-  engineSnippet: string;
-  apiSnippet: string;
+  snippetFragment: string;
+  passageFragment: string;
 }): FragmentComparison => {
-  const engineMarks = markedTerms(engineSnippet);
-  const apiMarks = markedTerms(apiSnippet);
+  const snippetMarks = markedTerms(snippetFragment);
+  const passageMarks = markedTerms(passageFragment);
   return {
     overlap: multisetOverlap(
-      foldedWords(stripSearchHighlightMarkup(engineSnippet)),
-      foldedWords(stripSearchHighlightMarkup(apiSnippet)),
+      foldedWords(stripSearchHighlightMarkup(snippetFragment)),
+      foldedWords(stripSearchHighlightMarkup(passageFragment)),
     ),
-    engineMarks: [...engineMarks].sort(),
-    apiMarks: [...apiMarks].sort(),
-    marks: markAgreement(engineMarks, apiMarks),
+    snippetMarks: [...snippetMarks].sort(),
+    passageMarks: [...passageMarks].sort(),
+    marks: markAgreement(snippetMarks, passageMarks),
   };
 };
 
@@ -250,9 +250,9 @@ export type SnippetCompareOutcome =
   | {
       status: "compared";
       /** The snippet the search returned for this hit. */
-      engineFragment: string;
+      snippetFragment: string;
       /** The fragment cut here from the same passage. */
-      apiFragment: string;
+      passageFragment: string;
       comparison: FragmentComparison;
       /** Wall time of the cut alone, storage reads excluded. */
       highlightMs: number;
@@ -282,7 +282,7 @@ type SnippetCompareSummary = {
   marks: Record<MarkAgreement, number>;
   /** Share of compared hits, so an empty run reports 0 rather than NaN. */
   overlapAtLeastHalfShare: number;
-  apiMarksCoverEngineShare: number;
+  passageMarksCoverSnippetShare: number;
   medianOverlap: number;
   timings: {
     searchMsMedian: number;
@@ -322,19 +322,19 @@ export const summarizeSnippetComparison = (
     unanchored: 0,
     no_payload: 0,
     anchor_not_found: 0,
-    no_engine_snippet: 0,
+    no_snippet: 0,
   };
   const marks: Record<MarkAgreement, number> = {
     identical: 0,
-    api_superset: 0,
-    engine_superset: 0,
+    passage_superset: 0,
+    snippet_superset: 0,
     divergent: 0,
   };
   const overlaps: number[] = [];
   const highlightMs: number[] = [];
   let hits = 0;
   let overlapAtLeastHalf = 0;
-  let apiMarksCoverEngine = 0;
+  let passageMarksCoverEngine = 0;
 
   for (const row of rows) {
     for (const { outcome } of row.hits) {
@@ -351,9 +351,9 @@ export const summarizeSnippetComparison = (
       }
       if (
         outcome.comparison.marks === "identical" ||
-        outcome.comparison.marks === "api_superset"
+        outcome.comparison.marks === "passage_superset"
       ) {
-        apiMarksCoverEngine += 1;
+        passageMarksCoverEngine += 1;
       }
     }
   }
@@ -368,7 +368,7 @@ export const summarizeSnippetComparison = (
     skipped,
     marks,
     overlapAtLeastHalfShare: share(overlapAtLeastHalf),
-    apiMarksCoverEngineShare: share(apiMarksCoverEngine),
+    passageMarksCoverSnippetShare: share(passageMarksCoverEngine),
     medianOverlap: median(overlaps),
     timings: {
       searchMsMedian: median(rows.map(({ searchMs }) => searchMs)),
@@ -411,15 +411,16 @@ export const renderSnippetCompareMarkdown = (
   const lines: string[] = [
     "# Passage fragments per hit",
     "",
-    "Overlap is the Jaccard index of the fragments' folded word multisets;",
-    "marks are compared as folded terms.",
+    "`snippet` is the fragment the search returned, `passage` the one cut here",
+    "from the hit's whole passage. Overlap is the Jaccard index of the",
+    "fragments' folded word multisets; marks are compared as folded terms.",
     "",
     "## Summary",
     "",
     `- queries: ${summary.queries}`,
     `- hits: ${summary.hits}, compared: ${summary.compared}`,
     `- overlap >= 0.5: ${percent(summary.overlapAtLeastHalfShare)} of compared hits`,
-    `- api marks cover engine marks: ${percent(summary.apiMarksCoverEngineShare)}`,
+    `- passage marks cover snippet marks: ${percent(summary.passageMarksCoverSnippetShare)}`,
     `- median overlap: ${ratio(summary.medianOverlap)}`,
     "",
     "| measure | median | total |",
@@ -457,10 +458,10 @@ export const renderSnippetCompareMarkdown = (
         );
         continue;
       }
-      const { comparison, engineFragment, apiFragment } = hit.outcome;
+      const { comparison, snippetFragment, passageFragment } = hit.outcome;
       lines.push(
-        `| ${rank} | engine | ${ratio(comparison.overlap)} | ${comparison.marks} | ${cell(engineFragment)} |`,
-        `| ${rank} | api | | | ${cell(apiFragment)} |`,
+        `| ${rank} | snippet | ${ratio(comparison.overlap)} | ${comparison.marks} | ${cell(snippetFragment)} |`,
+        `| ${rank} | passage | | | ${cell(passageFragment)} |`,
       );
     }
     lines.push("");

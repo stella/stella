@@ -25,7 +25,11 @@ import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-fac
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
+import {
+  caseLawCorpusQuery,
+  tokenizeCorpusFreeText,
+} from "@/api/lib/legal-search/corpus-query";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -53,6 +57,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 
 /**
  * corpus index legal-search provider: two-stage retrieve-then-rerank.
@@ -73,7 +78,15 @@ import {
 const toNullableString = (x: unknown): string | null =>
   x === null ? null : JSON.stringify(x);
 
-const extractSnippet = (
+/**
+ * The engine's snippet as plain text: the window it cut, without its own marks.
+ *
+ * corpus index wraps matched terms in `<b>` and escapes the surrounding text,
+ * so the swap below hands `stripSearchHighlightMarkup` the one tag it strips.
+ * The marks the response carries are put back by
+ * {@link markCorpusFragment}, which reads the same terms the reader typed.
+ */
+const engineSnippetText = (
   snippet: Record<string, unknown> | undefined,
 ): string | null => {
   const text = snippet?.["text"];
@@ -81,10 +94,9 @@ const extractSnippet = (
   if (typeof raw !== "string" || raw.length === 0) {
     return null;
   }
-  // corpus index wraps matched terms in <b>; the UI renders <mark>. corpus index
-  // escapes the surrounding text, so this swap is safe. Aligning fully
-  // with the pg ts_headline pipeline is a follow-up.
-  return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
+  return stripSearchHighlightMarkup(
+    raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>"),
+  );
 };
 
 type RehydrateCorpusIndexCandidatesOptions = {
@@ -223,6 +235,10 @@ const searchResult = async (
     );
   }
 
+  // The reader's own words, not the expanded query: an expansion term is a
+  // reason a document ranks, not a word the reader asked to see marked.
+  const snippetTokens = tokenizeCorpusFreeText(query.query);
+
   const searchPage = await readCorpusIndexSearchPage({
     cluster: serving.cluster,
     indexId,
@@ -234,7 +250,21 @@ const searchResult = async (
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;
     },
-    extractSnippet,
+    // The engine picks the window, the marks are put on here: the engine marks
+    // the tokens its query names, so an inflected form is left unmarked inside
+    // a window that was returned for it, and a quoted phrase is marked word by
+    // word. Marking the window the engine already sent back keeps that off the
+    // read path: no passage is fetched per hit.
+    extractSnippet: (snippet) => {
+      const text = engineSnippetText(snippet);
+      return text === null
+        ? null
+        : markCorpusFragment({
+            text,
+            tokens: snippetTokens,
+            language: stemming?.language ?? null,
+          });
+    },
     // Upper bound for the pagination early-stop: scanning may end only once
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.

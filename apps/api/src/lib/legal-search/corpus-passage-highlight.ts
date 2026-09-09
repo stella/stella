@@ -1,13 +1,15 @@
 /**
- * Cut a fragment out of a corpus passage and mark the query's matches in it.
+ * Mark a query's matches in corpus text, either in a fragment a caller already
+ * holds ({@link markCorpusFragment}) or in one cut from a whole passage
+ * ({@link highlightCorpusPassage}).
  *
- * Takes the passage text, the query's tokens (`tokenizeCorpusFreeText`) and the
- * language both sides are stemmed in. Returns the fragment twice: as
- * HTML-escaped text with `<mark>` around each matched run, and as plain text.
+ * Takes the text, the query's tokens (`tokenizeCorpusFreeText`) and the
+ * language both sides are stemmed in, and returns HTML-escaped text with
+ * `<mark>` around each matched run.
  *
- * A passage word matches a query word when their folded surfaces are equal or
- * their stems are; a phrase token matches consecutive passage words. Splitting,
- * folding and stemming come from `corpus-tokens`, `@stll/text-normalize` and
+ * A word matches a query word when their folded surfaces are equal or their
+ * stems are; a phrase token matches consecutive words. Splitting, folding and
+ * stemming come from `corpus-tokens`, `@stll/text-normalize` and
  * `morphology/stem`. Pure.
  */
 
@@ -47,7 +49,7 @@ const isIndexedTerm = (folded: string): boolean =>
 /** A word of the query, as the two forms a passage word is compared against. */
 type QueryWord = {
   folded: string;
-  /** Empty when the language has no stemmer. */
+  /** The stem with its accents; empty when the language has no stemmer. */
   stem: string;
 };
 
@@ -62,11 +64,21 @@ type PassageWord = CorpusTokenSpan & {
   indexed: boolean;
 };
 
-const stemFolded = (
+/**
+ * The stem as the stemmer writes it: lower-cased and NFC, accents kept.
+ *
+ * Not folded, and that is the whole rule. Stemming runs before folding because
+ * the suffix tables are written over accented characters, so an accent inside
+ * a stem is a letter the algorithm read; folding the stem afterwards merges
+ * words that are not forms of each other, because the endings that separate
+ * them are already gone ("bytu" stems to "byt", "být" to itself, and both fold
+ * to "byt"). A query typed without diacritics still reaches the accented text
+ * through the folded surface.
+ */
+const stemTerm = (
   value: string,
   language: MorphologyLanguage | null,
-): string =>
-  language === null ? "" : foldCorpusTerm(stemLegalTerm(value, language));
+): string => (language === null ? "" : stemLegalTerm(value, language));
 
 const queryTermWords = (
   tokens: readonly CorpusQueryToken[],
@@ -75,7 +87,7 @@ const queryTermWords = (
   tokens.flatMap((token) => {
     const words = corpusTokens(token.value).map((word) => ({
       folded: foldCorpusTerm(word),
-      stem: stemFolded(word, language),
+      stem: stemTerm(word, language),
     }));
     // One dropped word makes the whole term unmatchable: a term is its word,
     // and a phrase needs every one of its words to match adjacently.
@@ -96,11 +108,12 @@ const passageWords = (
       start: span.start,
       end: span.end,
       folded,
-      stem: stemFolded(span.value, language),
+      stem: stemTerm(span.value, language),
       indexed: isIndexedTerm(folded),
     };
   });
 
+/** Same folded surface, or same stem; see {@link stemTerm} for the asymmetry. */
 const wordMatches = (word: PassageWord, queryWord: QueryWord): boolean =>
   word.indexed &&
   (word.folded === queryWord.folded ||
@@ -131,8 +144,11 @@ const termMatches = (
   return matches;
 };
 
-/** A candidate fragment, as a half-open range of passage words. */
-type Window = { start: number; end: number; terms: number; matches: number };
+/** A half-open range of words, `end` exclusive. */
+type WordRange = { start: number; end: number };
+
+/** A candidate fragment, as a range of passage words and what it holds. */
+type Window = WordRange & { terms: number; matches: number };
 
 /**
  * The window a fragment is cut from: most distinct matched terms, then most
@@ -220,11 +236,11 @@ type MarkRange = { start: number; end: number };
 const markRanges = (
   words: readonly PassageWord[],
   matches: readonly TermMatch[],
-  window: Window,
+  range: WordRange,
 ): MarkRange[] => {
   const ranges: MarkRange[] = [];
   for (const match of matches) {
-    if (match.start < window.start || match.end > window.end) {
+    if (match.start < range.start || match.end > range.end) {
       continue;
     }
     const startWord = words.at(match.start);
@@ -258,6 +274,38 @@ const markFragment = (
     cursor = range.end;
   }
   return html + escapeSearchHtml(text.slice(cursor, to));
+};
+
+type MarkCorpusFragmentOptions = {
+  /** The fragment to mark, whole; the caller has already chosen the window. */
+  text: string;
+  /** The query's tokens, from `tokenizeCorpusFreeText`. */
+  tokens: readonly CorpusQueryToken[];
+  /** The language both sides are stemmed in; null stems neither. */
+  language: MorphologyLanguage | null;
+};
+
+/**
+ * `text`, HTML-escaped, with `<mark>` around every run `tokens` matches.
+ *
+ * Nothing is cut: a fragment chosen elsewhere keeps its own edges, marks and
+ * all.
+ */
+export const markCorpusFragment = ({
+  text,
+  tokens,
+  language,
+}: MarkCorpusFragmentOptions): string => {
+  // The spans below index the NFC form, so the marked text is cut from it too.
+  const normalized = normalizeCorpusText(text);
+  const words = passageWords(normalized, language);
+  const matches = termMatches(words, queryTermWords(tokens, language));
+  return markFragment(
+    normalized,
+    0,
+    normalized.length,
+    markRanges(words, matches, { start: 0, end: words.length }),
+  );
 };
 
 type CorpusPassageFragment = {
