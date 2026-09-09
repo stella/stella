@@ -6,10 +6,9 @@
  * The generic invoke path bypasses the per-route rate-limit middleware some REST
  * routes install (e.g. `document-translations.runs.create`, `entities.upload`), so it needs its
  * own budget or an agent could drive backend cost through the long tail. It
- * reuses the same fixed-window counter the public feedback intake and the MCP
- * `send_feedback` tool ride on (`FeedbackIntakeGuards.consumeCounter`,
- * Redis-backed with an in-memory fallback), under a distinct bucket, rather than
- * hand-rolling a limiter.
+ * reuses the same fixed-window counter as the public feedback intake
+ * (`FeedbackIntakeGuards.consumeCounter`, Redis-backed with an in-memory
+ * fallback), under a distinct bucket rather than hand-rolling a limiter.
  *
  * A generous default applies to every capability; a small override table mirrors
  * the explicit limits capability endpoints carry on their REST routes so the

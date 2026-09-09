@@ -21,10 +21,10 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpAnonymizedPolicy,
-  McpToolAccessBranch,
   McpToolDefinition,
   McpToolFeatureFlag,
   McpToolInputSchema,
+  McpToolAnnotations,
   ToolScope,
 } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
@@ -63,15 +63,42 @@ const externalMcpToolAccess = ({
 }: {
   readOnlyHint: boolean | undefined;
   title: string;
-}): McpToolAccessBranch =>
+}):
+  | {
+      access: "read";
+      annotations: McpToolAnnotations & {
+        destructiveHint: false;
+        readOnlyHint: true;
+      };
+      destructiveBehavior?: undefined;
+    }
+  | {
+      access: "write";
+      annotations: McpToolAnnotations & {
+        destructiveHint: true;
+        readOnlyHint: false;
+      };
+      destructiveBehavior: { type: "upstream" };
+    } =>
   readOnlyHint === true
-    ? { access: "read", annotations: { title, readOnlyHint: true } }
+    ? {
+        access: "read",
+        annotations: {
+          title,
+          destructiveHint: false,
+          openWorldHint: true,
+          readOnlyHint: true,
+        },
+      }
     : {
         access: "write",
         annotations: {
           title,
-          ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
+          destructiveHint: true,
+          openWorldHint: true,
+          readOnlyHint: false,
         },
+        destructiveBehavior: { type: "upstream" },
       };
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
@@ -194,6 +221,8 @@ export const listGatewayMcpToolDefinitions = async ({
         access: "read",
         annotations: {
           title: toDynamicToolTitle(skill.name) || skill.exposedName,
+          destructiveHint: false,
+          openWorldHint: true,
           readOnlyHint: true,
         },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
@@ -272,6 +301,8 @@ export const getGatewayMcpToolDefinition = async ({
     access: "read",
     annotations: {
       title: toDynamicToolTitle(skill.name) || skill.exposedName,
+      destructiveHint: false,
+      openWorldHint: true,
       readOnlyHint: true,
     },
     anonymized: DYNAMIC_GATEWAY_ANONYMIZED,

@@ -1564,21 +1564,19 @@ const computeCliCommandPaths = async (
       inputSchema: Record<string, unknown>;
       annotations: {
         title: string;
-        readOnlyHint?: boolean;
-        destructiveHint?: boolean;
+        readOnlyHint: boolean;
+        destructiveHint: boolean;
       };
     } = {
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
-      annotations: { title: tool.annotations.title },
+      annotations: {
+        title: tool.annotations.title,
+        readOnlyHint: tool.annotations.readOnlyHint,
+        destructiveHint: tool.annotations.destructiveHint,
+      },
     };
-    if (tool.annotations.readOnlyHint !== undefined) {
-      listing.annotations.readOnlyHint = tool.annotations.readOnlyHint;
-    }
-    if (tool.annotations.destructiveHint !== undefined) {
-      listing.annotations.destructiveHint = tool.annotations.destructiveHint;
-    }
     return listing;
   });
 

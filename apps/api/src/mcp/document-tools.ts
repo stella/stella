@@ -482,8 +482,10 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Upload document version",
+    destructiveHint: false,
     idempotentHint: false,
-    openWorldHint: true,
+    openWorldHint: false,
+    readOnlyHint: false,
   },
   description:
     "Upload an attached host file as a new version of an existing document. " +
@@ -506,8 +508,10 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Open document version upload",
+    destructiveHint: false,
     idempotentHint: false,
-    openWorldHint: true,
+    openWorldHint: false,
+    readOnlyHint: false,
   },
   description:
     "Open a portable file picker for uploading a new version of an existing " +
@@ -2496,6 +2500,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "List documents",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -2524,6 +2529,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Read document",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -2569,8 +2575,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save document",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -2585,6 +2593,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     description:
       "Delete a document and all its versions, or delete a single version when " +
@@ -2594,12 +2603,14 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     inputSchema: deleteDocumentArgsSchema,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "always" },
     name: "delete_document",
     scope: "stella:documents_write",
   }),
   defineValibotMcpTool({
     annotations: {
       title: "List properties",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -2634,8 +2645,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     // effect (a duplicate audit entry) in this compliance context.
     annotations: {
       title: "Set field value",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },

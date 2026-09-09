@@ -129,7 +129,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_TODOS",
   "FEATURE_USAGE",
   "FEATURE_WEB_SEARCH",
-  "FEEDBACK_INTAKE_URL",
   "FRONTEND_URL",
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
@@ -325,9 +324,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   FEATURE_TEMPLATE_PACKS:
     "Offer the bundled template-pack catalogue. Off until a deployment opts in; its routes do not exist while off.",
   FEEDBACK_EMAIL_TO:
-    "Destination for MCP and public-intake feedback email. Unset disables local email delivery.",
-  FEEDBACK_INTAKE_URL:
-    "Endpoint for approved, sanitized feedback forwarded through the stella channel.",
+    "Destination for public-intake feedback email. Unset disables local email delivery.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links and trusted redirects.",
   GOOGLE_AUTH_CLIENT_ID:

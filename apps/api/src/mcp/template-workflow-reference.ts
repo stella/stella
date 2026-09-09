@@ -39,7 +39,7 @@ const TOOL = {
   setPracticeJurisdictions: "set_practice_jurisdictions",
   fillTemplate: "fill_template",
   saveFilledTemplate: "save_filled_template",
-  sendFeedback: "send_feedback",
+  prepareFeedback: "prepare_feedback",
   uploadDocumentVersion: "upload_document_version",
 } as const satisfies Record<string, McpToolName>;
 
@@ -51,7 +51,7 @@ const {
   fillTemplate: FILL_TEMPLATE,
   listTemplates: LIST_TEMPLATES,
   saveFilledTemplate: SAVE_FILLED_TEMPLATE,
-  sendFeedback: SEND_FEEDBACK,
+  prepareFeedback: PREPARE_FEEDBACK,
   setPracticeJurisdictions: SET_PRACTICE_JURISDICTIONS,
   uploadDocumentVersion: UPLOAD_DOCUMENT_VERSION,
 } = TOOL;
@@ -275,6 +275,6 @@ export const buildWorkflowReference = (): string => {
       "(`values.tenant.name`, `fields.0.path`) and a `message`. Read `hint`: " +
       "it states the next call.",
     "",
-    `Something missing or wrong here? File it with ${SEND_FEEDBACK}.`,
+    `Something missing or wrong here? Prepare a report with ${PREPARE_FEEDBACK}.`,
   ].join("\n");
 };

@@ -478,11 +478,11 @@ export const errorResult = (message: string): InternalToolErrorResult => ({
 /**
  * Hint pointing an agent at the feedback tool after an unexpected server-side
  * failure. Kept as a shared constant so the internal-error envelope reads the
- * same wherever it is produced. `send_feedback` lands in a follow-up commit on
+ * same wherever it is produced. `prepare_feedback` lands in a follow-up commit on
  * this branch; the hint is stable regardless.
  */
 export const MCP_INTERNAL_ERROR_HINT =
-  "If this looks like a stella bug, report it with the send_feedback tool.";
+  "If this looks like a stella bug, prepare a report with the prepare_feedback tool.";
 
 /**
  * Preserve the caller's current grants while adding every scope required by an
@@ -629,7 +629,7 @@ export const internalFailureResult = (
       return structuredErrorResult({
         code: "upstream_unavailable",
         message: error.message,
-        hint: "Retry the same request. If the service remains unavailable, report the request ID with send_feedback.",
+        hint: "Retry the same request. If the service remains unavailable, prepare a report with the request ID using prepare_feedback.",
         retryable: true,
       });
     }

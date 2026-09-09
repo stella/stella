@@ -121,11 +121,11 @@ handlers themselves tolerate and ignore the extra `confirm` arg.
 
 ## Feedback channel
 
-`send_feedback` (`feedback-tools.ts`, scope `stella:feedback`) lets an agent
-file a bug, feature request, or docs issue against the public repo — but never
-without explicit human approval and never with private data. It is a write tool
-(excluded from the anonymized surface) with no backing REST endpoint, so it is
-waived in the coverage guard's `TOOLS_WITHOUT_ENUMERABLE_ENDPOINT`.
+`prepare_feedback` (`feedback-tools.ts`, scope `stella:feedback`) lets an agent
+prepare a sanitized bug, feature request, or docs issue for the public repo. It
+is read-only because it publishes nothing; it is excluded from the anonymized
+surface and has no backing REST endpoint, so it is waived in the coverage
+guard's `TOOLS_WITHOUT_ENUMERABLE_ENDPOINT`.
 
 Title and body are always sanitized server-side by `feedback-sanitize.ts`: a
 deterministic set of regex passes redacts emails, ids/UUIDs, JWT/secret blobs,
@@ -143,7 +143,7 @@ paste-the-rest marker; the full sanitized body is always returned separately.
 ## Public feedback intake
 
 The separate public, unauthenticated `POST /public/feedback` endpoint
-(`handlers/feedback/`) is not a backing endpoint for `send_feedback`. It carries
+(`handlers/feedback/`) is not a backing endpoint for `prepare_feedback`. It carries
 no `mcp` disposition and is mounted outside the auth macro alongside the other
 public routes in `index.ts`.
 
@@ -153,7 +153,7 @@ rejected). Title and body are re-sanitized here — the caller's pass is never
 trusted. Delivery is email-only: the sanitized report is emailed to
 `FEEDBACK_EMAIL_TO` when set (`200 { delivered: "email" }`), otherwise the
 endpoint refuses with `503 feature_disabled`. Public issues are filed
-exclusively through the github channel of `send_feedback`, where the human
+through `prepare_feedback`, where the human
 submits under their own GitHub account, so the intake never holds a GitHub
 token. Because it is an unauthenticated public write, it is abuse-bounded in
 `intake-guards.ts` (Redis with an in-memory fallback): a per-IP rate limit

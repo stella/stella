@@ -2616,7 +2616,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expectErrorEnvelope(result, {
       code: "internal_error",
       message: "Tool execution failed",
-      hint: "If this looks like a stella bug, report it with the send_feedback tool.",
+      hint: "If this looks like a stella bug, prepare a report with the prepare_feedback tool.",
     });
     // The message stays out of the event by design; the class, tool, and
     // source are what identify the failure.
@@ -4621,9 +4621,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   // --- Destructive-op confirm guardrail --------------------------------
 
-  // A destructiveHint tool (delete_*) is refused before dispatch unless the
-  // caller passes confirm: true, so an agent cannot delete without an explicit
-  // human-approved confirmation. The gate runs before any DB access.
+  // Confirmation is resolved from each registry definition before dispatch.
   test("delete_document refuses to run without confirm: true", async () => {
     const result = await handleMcpToolCall({
       args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
@@ -4655,6 +4653,57 @@ describe("OpenAI-compatible MCP tools", () => {
     expectErrorEnvelope(result, {
       code: "not_found",
       message: "Document not found or not accessible",
+    });
+  });
+
+  test("mixed destructive tools reach their handler without blanket confirmation", async () => {
+    const result = await handleMcpToolCall({
+      args: { action: "update_org_settings" },
+      context: createContext(),
+      toolName: "manage_organization",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "Provide at least one setting to change for update_org_settings",
+    );
+  });
+
+  test("mixed destructive tools require confirmation for the destructive action", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        action: "remove_member",
+        matter_id: "00000000-0000-4000-8000-0000000e0001",
+        user_id: "user_2",
+      },
+      context: createContext(),
+      toolName: "manage_organization",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "confirmation_required",
+      message:
+        "manage_organization is an irreversible operation and was called without confirmation",
+      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+    });
+  });
+
+  test("mixed destructive tools clear the selected-action gate with confirmation", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        action: "remove_member",
+        matter_id: "00000000-0000-4000-8000-0000000e0404",
+        user_id: "user_2",
+        confirm: true,
+      },
+      context: createContext(),
+      toolName: "manage_organization",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Matter not found or not accessible",
     });
   });
 

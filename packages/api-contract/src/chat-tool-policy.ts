@@ -1,3 +1,5 @@
+import { MCP_CHAT_TOOL_POLICY_KINDS } from "./mcp-chat-tool-policy.gen";
+
 export const CHAT_TOOL_POLICY_KIND = {
   external: "external",
   internal: "internal",
@@ -25,6 +27,7 @@ export type NeedsApprovalPolicyKind = {
 }[ChatToolPolicyKind];
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
+  ...MCP_CHAT_TOOL_POLICY_KINDS,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -87,28 +90,6 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
   web_search: CHAT_TOOL_POLICY_KIND.external,
-  // Registry write projections must all stay mutation-classified. The exact
-  // key-set check in the server binds this map to registered built-in tools,
-  // so adding a projection cannot land without an approval classification.
-  delete_clause: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_contact: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_document: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_matter: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_task: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
-  link_matter_contact: CHAT_TOOL_POLICY_KIND.mutation,
-  manage_organization: CHAT_TOOL_POLICY_KIND.mutation,
-  run_playbook: CHAT_TOOL_POLICY_KIND.mutation,
-  save_clause: CHAT_TOOL_POLICY_KIND.mutation,
-  save_contact: CHAT_TOOL_POLICY_KIND.mutation,
-  save_document: CHAT_TOOL_POLICY_KIND.mutation,
-  save_matter: CHAT_TOOL_POLICY_KIND.mutation,
-  save_task: CHAT_TOOL_POLICY_KIND.mutation,
-  create_template: CHAT_TOOL_POLICY_KIND.mutation,
-  configure_template_fields: CHAT_TOOL_POLICY_KIND.mutation,
-  save_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
-  set_field_value: CHAT_TOOL_POLICY_KIND.mutation,
-  set_practice_jurisdictions: CHAT_TOOL_POLICY_KIND.mutation,
   // The top-level delegation is approval-gated. Subagent writes remain
   // non-executing proposals and return to the top-level loop for per-write
   // approval; this grant never authorizes the proposed writes themselves.

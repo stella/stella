@@ -713,6 +713,7 @@ export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "List matters",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -737,6 +738,7 @@ export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Search across matters",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -755,6 +757,7 @@ export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Search case law",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -774,6 +777,7 @@ export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Read content across matters",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -797,6 +801,7 @@ export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Read case-law decision",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -817,6 +822,7 @@ export const STELLA_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Read contact",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -848,8 +854,10 @@ export const STELLA_TOOL_DEFINITIONS = [
     // duplicate audit entry) in this compliance context.
     annotations: {
       title: "Set practice jurisdictions",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },

@@ -30,7 +30,7 @@ export type RegistryToolListing = {
 /** One required-enum subcommand produced by a discriminator split (spec S2). */
 export type DiscriminatorSubcommand = {
   command: string;
-  destructive?: true;
+  destructive?: boolean;
   include?: readonly string[];
   required?: readonly string[];
 };

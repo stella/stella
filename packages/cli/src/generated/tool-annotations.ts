@@ -267,6 +267,7 @@ export const generatedToolAnnotations: Readonly<
       subcommands: {
         add_member: {
           command: "add-member",
+          destructive: false,
           include: ["matter_id", "user_id"],
           required: ["matter_id", "user_id"],
         },
@@ -278,6 +279,7 @@ export const generatedToolAnnotations: Readonly<
         },
         update_org_settings: {
           command: "update-settings",
+          destructive: false,
           include: [
             "matter_number_pattern",
             "matter_number_padding",
@@ -288,8 +290,8 @@ export const generatedToolAnnotations: Readonly<
       },
     },
   },
-  send_feedback: {
-    command: ["feedback", "send"],
+  prepare_feedback: {
+    command: ["feedback", "prepare"],
     scope: "feedback",
   },
   list_capabilities: {

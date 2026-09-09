@@ -17,6 +17,7 @@ import type {
   ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@/lib/api-contract";
+import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 
 export type {
   ChatAnonRestoration,
@@ -372,9 +373,6 @@ export const isPublicOfficialChatToolName = (
 ): toolName is PublicOfficialToolName =>
   toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
 
-/** Prefix marking a destructive (irreversible delete) registry write tool. */
-const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
-
 const CHAT_TOOL_GRANT_POLICY_KIND = {
   /** May be covered by a stored "allow in conversation" or "always allow" grant. */
   grantable: "grantable",
@@ -390,44 +388,23 @@ const CHAT_TOOL_GRANT_POLICY_KIND = {
 type ChatToolGrantPolicy =
   (typeof CHAT_TOOL_GRANT_POLICY_KIND)[keyof typeof CHAT_TOOL_GRANT_POLICY_KIND];
 
-/**
- * Grant policy for every built-in tool whose backend policy kind requires
- * approval, keyed off {@link ApprovalRequiredBuiltInChatToolName} — a TOTAL
- * record, not `Partial`, so a newly approval-gated backend tool must be
- * classified here before it typechecks rather than silently defaulting to
- * `grantable`. `delete_*` tools are also covered independently by
- * {@link isDestructiveChatToolName}; they are listed here too so this record
- * stays authoritative on its own.
- */
-const CHAT_TOOL_GRANT_POLICY = {
+type GeneratedMcpGrantToolName = keyof typeof MCP_CHAT_TOOL_GRANT_POLICIES;
+type ManualGrantToolName = Exclude<
+  Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
+  GeneratedMcpGrantToolName
+>;
+
+/** Approval policy for built-in tools that do not project from MCP. */
+const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   add_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   boe_search_legislation: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "create-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   create_matter_document: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  delete_clause: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  delete_contact: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  delete_document: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  delete_matter: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  delete_task: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  delete_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   fetch_url: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   fill_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  link_matter_contact: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  manage_organization: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   remember: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  run_playbook: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_clause: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_contact: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_document: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_matter: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_task: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  create_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  configure_template_fields: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  set_field_value: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  set_practice_jurisdictions: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   spawn_subagents: CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   // Only the server-executed apply variant ever requests approval; it writes
   // a new document version, so each call is approved on its own.
@@ -436,6 +413,15 @@ const CHAT_TOOL_GRANT_POLICY = {
   "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+} as const satisfies Record<ManualGrantToolName, ChatToolGrantPolicy>;
+
+/**
+ * Total approval policy: MCP-projected writes come from the registry-generated
+ * map; web-only tools make their decision in the disjoint manual map above.
+ */
+const CHAT_TOOL_GRANT_POLICY = {
+  ...MANUAL_CHAT_TOOL_GRANT_POLICY,
+  ...MCP_CHAT_TOOL_GRANT_POLICIES,
 } as const satisfies Record<
   Extract<BuiltInApprovalToolName, ApprovalRequiredBuiltInChatToolName>,
   ChatToolGrantPolicy
@@ -451,22 +437,7 @@ const getChatToolGrantPolicy = (toolName: string): ChatToolGrantPolicy =>
     ? CHAT_TOOL_GRANT_POLICY[toolName]
     : CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
-/**
- * Whether a chat tool is destructive (an irreversible delete). Destructive
- * writes may only be approved once or denied — never "allow in conversation"
- * or "always allow" — so a stored grant can never auto-approve a delete.
- *
- * The `delete_` prefix is a GUARDED convention, not a loose heuristic: an
- * api-side test (registry-quality suite) asserts that in the MCP registry every
- * `access: "write"` tool with `annotations.destructiveHint` is named `delete_*`
- * and every `delete_*` tool carries `destructiveHint`, so this frontend check
- * cannot silently drift from the registry's own destructive classification.
- */
-export const isDestructiveChatToolName = (toolName: string): boolean =>
-  toolName.startsWith(DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX);
-
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
-  isDestructiveChatToolName(toolName) ||
   getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**

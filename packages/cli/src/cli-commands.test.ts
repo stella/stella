@@ -1516,7 +1516,7 @@ describe("feedback submission (S4)", () => {
     const result = await runCli({
       args: [
         "feedback",
-        "send",
+        "prepare",
         "--kind",
         "bug",
         "--title",
@@ -1529,7 +1529,7 @@ describe("feedback submission (S4)", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("send_feedback");
+    expect(server.requests.at(0)?.params.name).toBe("prepare_feedback");
     const payload = JSON.parse(result.stdout);
     expect(payload.issue_url).toBe(
       "https://github.com/stella/stella/issues/new",

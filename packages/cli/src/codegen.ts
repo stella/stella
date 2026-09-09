@@ -50,7 +50,7 @@ const stringArraySchema = v.array(v.string());
 
 const discriminatorSubcommandSchema = v.object({
   command: v.string(),
-  destructive: v.optional(v.literal(true)),
+  destructive: v.optional(v.boolean()),
   include: v.optional(stringArraySchema),
   required: v.optional(stringArraySchema),
 });

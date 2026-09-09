@@ -1551,6 +1551,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "List clauses",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1597,8 +1598,10 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save clause",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -1611,6 +1614,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     description:
       "Permanently delete a clause and all its variants and versions from the " +
@@ -1618,12 +1622,14 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     inputSchema: deleteClauseArgsSchema,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "always" },
     name: "delete_clause",
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
     annotations: {
       title: "List playbooks",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1661,8 +1667,10 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     inputSchema: runPlaybookArgsSchema,
     annotations: {
       title: "Run playbook",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },

@@ -55,8 +55,8 @@ describe("MCP server instructions", () => {
     expect(MCP_INSTRUCTIONS.default).toContain(TEMPLATE_WORKFLOW_REFERENCE_URI);
   });
 
-  test("the anonymized surface omits the write-only feedback tool", () => {
-    expect(MCP_INSTRUCTIONS.default).toContain("send_feedback");
-    expect(MCP_INSTRUCTIONS.anonymized).not.toContain("send_feedback");
+  test("the anonymized surface omits the feedback preparation tool", () => {
+    expect(MCP_INSTRUCTIONS.default).toContain("prepare_feedback");
+    expect(MCP_INSTRUCTIONS.anonymized).not.toContain("prepare_feedback");
   });
 });

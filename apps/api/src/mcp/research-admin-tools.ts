@@ -34,10 +34,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import {
-  bindApprovedMcpAuditContext,
-  type McpRequestContext,
-} from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type {
   McpToolDefinition,
@@ -198,6 +195,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
 const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   annotations: {
     title: "List audit log",
+    destructiveHint: false,
     readOnlyHint: true,
     openWorldHint: false,
   },
@@ -440,6 +438,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
 const SEARCH_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
   annotations: {
     title: "Search legislation",
+    destructiveHint: false,
     readOnlyHint: true,
     openWorldHint: true,
   },
@@ -792,11 +791,18 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Manage organization",
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
+    readOnlyHint: false,
   },
   access: "write",
   anonymized: { exposure: "excluded", reason: "write" },
+  destructiveBehavior: {
+    type: "input-discriminator",
+    property: "action",
+    destructiveValues: ["remove_member"],
+  },
   name: "manage_organization",
   scope: "stella:admin_write",
 });
@@ -895,22 +901,9 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   }
 
   if (input.action === "remove_member") {
-    // Action-level confirm gate: manage_organization is not `destructiveHint`
-    // as a whole (it also adds members and updates settings), so the central
-    // gate in tools.ts cannot cover this. Removing a member is irreversible,
-    // so refuse until the human-approved `confirm: true` arrives (the CLI's
-    // --yes flow injects it). Mirrors the central gate's wording.
-    if (input.confirm !== true) {
-      return structuredErrorResult({
-        code: "confirmation_required",
-        message:
-          "remove_member is an irreversible operation and was called without confirmation",
-        hint: "Removing a member is irreversible. Confirm with the human user, then retry with confirm: true.",
-      });
-    }
     // matter_id and user_id are guaranteed present by the schema.
     return await handleRemoveMember({
-      context: bindApprovedMcpAuditContext(context),
+      context,
       requestedWorkspaceId: input.matter_id ?? "",
       userId: input.user_id ?? "",
     });

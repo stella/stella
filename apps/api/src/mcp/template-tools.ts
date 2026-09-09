@@ -556,8 +556,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Create template",
+    destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
+    readOnlyHint: false,
   },
   access: "write",
   anonymized: { exposure: "excluded", reason: "write" },
@@ -586,8 +588,10 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Configure template fields",
+    destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
+    readOnlyHint: false,
   },
   access: "write",
   anonymized: { exposure: "excluded", reason: "write" },
@@ -599,6 +603,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   {
     annotations: {
       title: "List templates",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -682,8 +687,10 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     // though most fills touch no lookup field.
     annotations: {
       title: "Fill template",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: true,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -739,8 +746,10 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save filled template",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: true,
+      readOnlyHint: false,
     },
     access: "write",
     additionalScopes: ["stella:templates"],

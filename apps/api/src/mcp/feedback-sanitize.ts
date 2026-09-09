@@ -2,7 +2,7 @@
  * Deterministic, regex-based redaction for agent-authored feedback text.
  *
  * The MCP surface is driven almost entirely by AI agents. When an agent files a
- * bug or gap with `send_feedback`, its free-text title/body can accidentally
+ * bug or gap with `prepare_feedback`, its free-text title/body can accidentally
  * carry a client email, a tenant id, an auth token, or an internal URL. This
  * module strips the obvious shapes before the text is ever shown to a human for
  * approval or emailed to a maintainer. It is a coarse safety net, not a

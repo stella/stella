@@ -34,9 +34,9 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // increase an explicit, reviewed decision rather than allowing silent growth.
 // sits at the tighter measured 40 so unreviewed growth fails first. Any tool
 // added to either surface must bump the matching ceiling deliberately.
-// default bumped 40 -> 41 for the write-only `send_feedback` tool (agent-filed
-// bug/feature/docs reports). It is excluded from the anonymized surface (a
-// write tool), so the anonymized ceiling is unchanged.
+// default bumped 40 -> 41 for the `prepare_feedback` tool (agent-drafted
+// bug/feature/docs reports). It is excluded from the anonymized surface, so
+// the anonymized ceiling is unchanged.
 // default bumped 41 -> 44 for the three capability meta-tools (plan 049 phase 2:
 // list_capabilities, describe_capability, invoke_capability). All three are
 // excluded from the anonymized surface (two read-only meta-reads that expose a
@@ -108,9 +108,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // `template_id` plus the rules that say what it means with and without a
 // document. Measured 71_254 chars, after list_templates gave back the fill
 // semantics its own description was repeating from fill_template.
+// Explicit destructive/read-only hints on every tool add only their required
+// wire metadata: measured 72_652 default and 23_727 anonymized. Pin the exact
+// new sizes so this submission fix does not create unrelated growth headroom.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 72_000,
-  anonymized: 23_557,
+  default: 72_652,
+  anonymized: 23_727,
 };
 
 // Longest description measured after plan 047: the template authoring tool at
@@ -254,13 +257,13 @@ const anonymizedTools: readonly McpToolDefinition[] =
   ANONYMIZED_MCP_TOOL_DEFINITIONS;
 
 describe("MCP registry access coherence", () => {
-  test('access: "write" tools never carry readOnlyHint', () => {
+  test('every access: "write" tool carries readOnlyHint false', () => {
     for (const tool of defaultTools) {
       if (tool.access === "write") {
         expect(
           tool.annotations.readOnlyHint,
-          `Tool ${tool.name} is access: "write" but carries readOnlyHint`,
-        ).not.toBe(true);
+          `Tool ${tool.name} is access: "write" but does not declare readOnlyHint false`,
+        ).toBe(false);
       }
     }
   });
@@ -332,6 +335,15 @@ describe("MCP registry access coherence", () => {
  * or ships a `delete_*` that is not idempotent fails the build.
  */
 describe("MCP registry annotation coherence", () => {
+  test("every tool declares destructiveHint explicitly (boolean)", () => {
+    for (const tool of defaultTools) {
+      expect(
+        typeof tool.annotations.destructiveHint,
+        `Tool ${tool.name} must declare annotations.destructiveHint explicitly`,
+      ).toBe("boolean");
+    }
+  });
+
   test("every tool declares openWorldHint explicitly (boolean)", () => {
     for (const tool of defaultTools) {
       expect(
@@ -629,33 +641,22 @@ const getInputProperties = (
 ): Record<string, unknown> =>
   isRecord(tool.inputSchema.properties) ? tool.inputSchema.properties : {};
 
-/**
- * Guards the `delete_` naming convention the chat frontend relies on to
- * restrict destructive-write approvals to allow-once/deny only (no "allow in
- * conversation", no "always allow"). The frontend has no access to the MCP
- * `annotations.destructiveHint`; it keys purely off the `delete_` name prefix
- * (`isDestructiveChatToolName`). This test keeps that heuristic honest: it must
- * agree with the registry's own destructive classification in both directions,
- * so a destructive tool named without the prefix, or a `delete_` tool missing
- * the hint, fails the build rather than silently letting a delete be
- * auto-approved (or a save be treated as irreversible).
- */
-describe("destructive write-tool naming convention", () => {
+describe("destructive write-tool behavior", () => {
   const writeTools: readonly McpToolDefinition[] =
     DEFAULT_MCP_TOOL_DEFINITIONS.filter((tool) => tool.access === "write");
 
-  test("every destructiveHint write tool is named delete_*", () => {
+  test("every destructiveHint write tool declares its executable behavior", () => {
     const offenders = writeTools
-      .filter((tool) => tool.annotations.destructiveHint === true)
-      .filter((tool) => !tool.name.startsWith("delete_"))
+      .filter((tool) => tool.annotations.destructiveHint)
+      .filter((tool) => tool.destructiveBehavior === undefined)
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
   });
 
-  test("every delete_* write tool carries destructiveHint", () => {
+  test("non-destructive tools do not declare destructive behavior", () => {
     const offenders = writeTools
-      .filter((tool) => tool.name.startsWith("delete_"))
-      .filter((tool) => tool.annotations.destructiveHint !== true)
+      .filter((tool) => !tool.annotations.destructiveHint)
+      .filter((tool) => tool.destructiveBehavior !== undefined)
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
   });

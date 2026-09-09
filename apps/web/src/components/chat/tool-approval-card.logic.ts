@@ -1,5 +1,5 @@
 import {
-  isNonPersistentGrantChatToolName,
+  isApprovalOnceChatToolName,
   isToolApprovedByGrant,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -22,7 +22,7 @@ export const hasAutomaticApproval = ({
   isPublicOfficialApproval,
   name,
 }: HasAutomaticApprovalOptions) =>
-  !isNonPersistentGrantChatToolName(name) &&
+  !isApprovalOnceChatToolName(name) &&
   (isPublicOfficialApproval ||
     isToolApprovedByGrant(conversationApprovedTools, name) ||
     (canAlwaysAllow && isToolApprovedByGrant(alwaysApprovedTools, name)));

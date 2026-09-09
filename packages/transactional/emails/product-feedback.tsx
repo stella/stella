@@ -14,7 +14,7 @@ import { BRAND_FOOTER_TEXT, brand, sharedStyles } from "./_shared";
 import { KIND_LABELS } from "./product-feedback-subject";
 
 /**
- * Maintainer-facing feedback email filed through the MCP `send_feedback` tool.
+ * Maintainer-facing feedback email filed through the public feedback intake.
  *
  * Unlike the other transactional emails this one is not user-facing and is not
  * localized: it goes to the project maintainer(s), so it is English-only and

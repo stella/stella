@@ -34,7 +34,12 @@ describe("Valibot-backed MCP tool definitions", () => {
     );
     const definition = defineValibotMcpTool({
       access: "read",
-      annotations: { title: "Read example", readOnlyHint: true },
+      annotations: {
+        title: "Read example",
+        destructiveHint: false,
+        openWorldHint: false,
+        readOnlyHint: true,
+      },
       anonymized: { exposure: "passthrough" },
       description: "Read an example.",
       inputSchema,
@@ -98,7 +103,12 @@ describe("Valibot-backed MCP tool definitions", () => {
     // surface's provider-safe check, and both have exact equivalents.
     const definition = defineValibotMcpTool({
       access: "write",
-      annotations: { title: "Set example", readOnlyHint: false },
+      annotations: {
+        title: "Set example",
+        destructiveHint: false,
+        openWorldHint: false,
+        readOnlyHint: false,
+      },
       anonymized: { exposure: "excluded", reason: "write" },
       description: "Set an example.",
       inputSchema: nullAsAbsent(
@@ -144,7 +154,12 @@ describe("Valibot-backed MCP tool definitions", () => {
     expect(() =>
       defineValibotMcpTool({
         access: "read",
-        annotations: { title: "Read example", readOnlyHint: true },
+        annotations: {
+          title: "Read example",
+          destructiveHint: false,
+          openWorldHint: false,
+          readOnlyHint: true,
+        },
         anonymized: { exposure: "passthrough" },
         description: "Read an example.",
         inputSchema: nullAsAbsent(
@@ -162,7 +177,12 @@ describe("Valibot-backed MCP tool definitions", () => {
     expect(() =>
       defineValibotMcpTool({
         access: "read",
-        annotations: { title: "Read example", readOnlyHint: true },
+        annotations: {
+          title: "Read example",
+          destructiveHint: false,
+          openWorldHint: false,
+          readOnlyHint: true,
+        },
         anonymized: { exposure: "passthrough" },
         description: "Read an example.",
         inputSchema: nullAsAbsent(v.looseObject({ query: v.string() })),
