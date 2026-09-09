@@ -146,8 +146,12 @@ const isPrivateQ09ServiceEndpoint = (value: string) => {
   if (!URL.canParse(value)) {
     return false;
   }
-  return Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN.test(
-    new URL(value).hostname.toLowerCase(),
+  const url = new URL(value);
+  return (
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    url.username.length === 0 &&
+    url.password.length === 0 &&
+    Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN.test(url.hostname.toLowerCase())
   );
 };
 
