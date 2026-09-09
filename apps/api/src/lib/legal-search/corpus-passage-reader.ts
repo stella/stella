@@ -12,6 +12,7 @@
 
 import { inArray } from "drizzle-orm";
 
+import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { Transaction } from "@/api/db/root";
@@ -109,10 +110,14 @@ const corpusPayloadStorage: CorpusPayloadSource = {
   readAst: async (storedKey) => await readCorpusAst(storedKey),
 };
 
+/** Payload reads in flight at once, over the whole request list. */
+const PAYLOAD_READ_CONCURRENCY = 8;
+
 type ReadCorpusPassagesOptions = {
   requests: readonly CorpusPassageRequest[];
   pointers: readonly CorpusPassagePointer[];
   source?: CorpusPayloadSource;
+  concurrency?: number;
 };
 
 /** A decision's payload, as the chunker takes it. */
@@ -127,64 +132,66 @@ const loadPayload = async ({
   source: CorpusPayloadSource;
   textKey: string;
   astKey: string | null;
-}): Promise<LoadedPayload> => ({
-  text: await source.readText(textKey),
-  ast: astKey === null ? null : await source.readAst(astKey),
-});
+}): Promise<LoadedPayload> => {
+  const [text, ast] = await Promise.all([
+    source.readText(textKey),
+    astKey === null ? null : source.readAst(astKey),
+  ]);
+  return { text, ast };
+};
 
 /**
- * One result per request, in request order. A document's payload is read once
- * however many of the requests name it.
+ * One result per request, in request order. Each document's payload is read
+ * once however many requests name it, and the reads run `concurrency` at a
+ * time rather than one after another.
  */
 export const readCorpusPassages = async ({
   requests,
   pointers,
   source = corpusPayloadStorage,
+  concurrency = PAYLOAD_READ_CONCURRENCY,
 }: ReadCorpusPassagesOptions): Promise<CorpusPassageResult[]> => {
   const pointerById = new Map(
     pointers.map((pointer) => [pointer.documentId, pointer]),
   );
-  const payloads = new Map<string, Promise<LoadedPayload | null>>();
-  const payloadOf = async (
-    documentId: string,
-  ): Promise<LoadedPayload | null> => {
-    const started = payloads.get(documentId);
-    if (started !== undefined) {
-      return await started;
-    }
-    const pointer = pointerById.get(documentId);
-    const textKey = pointer?.textS3Key ?? null;
-    const astKey = pointer?.astS3Key ?? null;
-    const load: Promise<LoadedPayload | null> =
-      textKey === null
-        ? Promise.resolve(null)
-        : loadPayload({ source, textKey, astKey });
-    payloads.set(documentId, load);
-    return await load;
-  };
+  const wanted = [
+    ...new Set(
+      requests
+        .filter(({ anchorId }) => anchorId !== null)
+        .map(({ documentId }) => documentId),
+    ),
+  ];
+  const loaded = await mapWithConcurrency({
+    items: wanted,
+    limit: concurrency,
+    operation: async (documentId): Promise<LoadedPayload | null> => {
+      const pointer = pointerById.get(documentId);
+      const textKey = pointer?.textS3Key ?? null;
+      return textKey === null
+        ? null
+        : await loadPayload({
+            source,
+            textKey,
+            astKey: pointer?.astS3Key ?? null,
+          });
+    },
+  });
+  // `mapWithConcurrency` answers in input order, so index maps back to id.
+  const payloads = new Map(
+    wanted.map((documentId, index) => [documentId, loaded.at(index) ?? null]),
+  );
 
-  const results: CorpusPassageResult[] = [];
-  for (const { documentId, anchorId } of requests) {
+  return requests.map(({ documentId, anchorId }): CorpusPassageResult => {
     if (anchorId === null) {
-      results.push({ status: "unanchored", documentId });
-      continue;
+      return { status: "unanchored", documentId };
     }
-    const payload = await payloadOf(documentId);
+    const payload = payloads.get(documentId) ?? null;
     if (payload === null) {
-      results.push({ status: "no_payload", documentId });
-      continue;
+      return { status: "no_payload", documentId };
     }
     const selected = selectCorpusPassage({ ...payload, anchorId });
-    results.push(
-      selected.status === "found"
-        ? {
-            status: "found",
-            documentId,
-            seq: selected.seq,
-            text: selected.text,
-          }
-        : { status: "anchor_not_found", documentId, anchorId },
-    );
-  }
-  return results;
+    return selected.status === "found"
+      ? { status: "found", documentId, seq: selected.seq, text: selected.text }
+      : { status: "anchor_not_found", documentId, anchorId };
+  });
 };

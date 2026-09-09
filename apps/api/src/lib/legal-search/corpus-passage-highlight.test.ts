@@ -106,6 +106,25 @@ describe("matching", () => {
     expect(searchHighlightMarks(html)).toEqual(["damages"]);
   });
 
+  test("marks a phrase that outruns the fragment budget", () => {
+    const phrase = "dobré mravy a poctivý obchodní styk podle ustanovení";
+    const passage = `Soud uvedl, že ${phrase} jsou zachovány.`;
+
+    const { html } = highlight(passage, `"${phrase}"`, { maxChars: 20 });
+
+    expect(searchHighlightMarks(html)).toEqual([phrase]);
+  });
+
+  test("ignores a token the index drops for length", () => {
+    const oversized = "a".repeat(300);
+    const passage = `${oversized} náhrada škody ${oversized}`;
+
+    const { html, text } = highlight(passage, `${oversized} škody`);
+
+    expect(searchHighlightMarks(html)).toEqual(["škody"]);
+    expect(text).toContain("náhrada škody");
+  });
+
   test("overlapping matches merge into one mark", () => {
     const passage = "Soud posoudil dobré mravy a dobré úmysly stran.";
 

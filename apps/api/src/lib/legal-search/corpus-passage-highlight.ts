@@ -11,8 +11,11 @@
  * `morphology/stem`. Pure.
  */
 
+import { Buffer } from "node:buffer";
+
 import { foldToAscii } from "@stll/text-normalize";
 
+import { CORPUS_TOKEN_LENGTH_LIMIT_BYTES } from "@/api/lib/legal-search/corpus-index-config";
 import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
 import type { CorpusTokenSpan } from "@/api/lib/legal-search/corpus-tokens";
 import {
@@ -34,6 +37,13 @@ export const CORPUS_SNIPPET_MAX_CHARS = 100;
 export const foldCorpusTerm = (value: string): string =>
   foldToAscii(value.toLowerCase());
 
+/**
+ * Whether the index holds this folded token at all: `remove_long` drops the
+ * rest, so an over-long token (an OCR run) matches nothing on either side.
+ */
+const isIndexedTerm = (folded: string): boolean =>
+  Buffer.byteLength(folded, "utf-8") < CORPUS_TOKEN_LENGTH_LIMIT_BYTES;
+
 /** A word of the query, as the two forms a passage word is compared against. */
 type QueryWord = {
   folded: string;
@@ -45,7 +55,12 @@ type QueryWord = {
 type QueryTermWords = readonly QueryWord[];
 
 /** A passage word, folded and stemmed once so the scan below can be a scan. */
-type PassageWord = CorpusTokenSpan & { folded: string; stem: string };
+type PassageWord = CorpusTokenSpan & {
+  folded: string;
+  stem: string;
+  /** False for a token `remove_long` drops; such a word matches nothing. */
+  indexed: boolean;
+};
 
 const stemFolded = (
   value: string,
@@ -62,24 +77,34 @@ const queryTermWords = (
       folded: foldCorpusTerm(word),
       stem: stemFolded(word, language),
     }));
-    return words.length === 0 ? [] : [words];
+    // One dropped word makes the whole term unmatchable: a term is its word,
+    // and a phrase needs every one of its words to match adjacently.
+    return words.length === 0 ||
+      !words.every(({ folded }) => isIndexedTerm(folded))
+      ? []
+      : [words];
   });
 
 const passageWords = (
   text: string,
   language: MorphologyLanguage | null,
 ): PassageWord[] =>
-  corpusTokenSpans(text).map((span) => ({
-    value: span.value,
-    start: span.start,
-    end: span.end,
-    folded: foldCorpusTerm(span.value),
-    stem: stemFolded(span.value, language),
-  }));
+  corpusTokenSpans(text).map((span) => {
+    const folded = foldCorpusTerm(span.value);
+    return {
+      value: span.value,
+      start: span.start,
+      end: span.end,
+      folded,
+      stem: stemFolded(span.value, language),
+      indexed: isIndexedTerm(folded),
+    };
+  });
 
 const wordMatches = (word: PassageWord, queryWord: QueryWord): boolean =>
-  word.folded === queryWord.folded ||
-  (queryWord.stem !== "" && word.stem === queryWord.stem);
+  word.indexed &&
+  (word.folded === queryWord.folded ||
+    (queryWord.stem !== "" && word.stem === queryWord.stem));
 
 /** One term matching a run of passage words; `end` is exclusive. */
 type TermMatch = { termIndex: number; start: number; end: number };
@@ -114,8 +139,10 @@ type Window = { start: number; end: number; terms: number; matches: number };
  * matches, then earliest. A passage with no match therefore yields its opening
  * window.
  *
- * Each window is grown to the character budget before it is scored, so `end`
- * never moves backwards as `start` advances and the scan is linear.
+ * Each window is grown to the character budget before it is scored. The budget
+ * edge never moves backwards as `start` advances, so the scan is linear; a
+ * match that begins at `start` and outruns the budget extends that one window
+ * past it, the way an over-long single word forms a window of its own.
  */
 const bestWindow = (
   words: readonly PassageWord[],
@@ -134,7 +161,7 @@ const bestWindow = (
   };
 
   let best: Window | null = null;
-  let end = 0;
+  let budgetEnd = 0;
   // Matches are produced in start order, so a cursor over them is enough to
   // reach the ones a window can hold without rescanning the passage per window.
   let cursor = 0;
@@ -146,9 +173,21 @@ const bestWindow = (
       cursor += 1;
     }
     // A word longer than the whole budget still forms a window of its own.
-    end = Math.max(end, start + 1);
-    while (end < words.length && spanChars(start, end + 1) <= maxChars) {
-      end += 1;
+    budgetEnd = Math.max(budgetEnd, start + 1);
+    while (
+      budgetEnd < words.length &&
+      spanChars(start, budgetEnd + 1) <= maxChars
+    ) {
+      budgetEnd += 1;
+    }
+    // Kept out of `budgetEnd` so the widening applies to this window only.
+    let end = budgetEnd;
+    for (let index = cursor; index < matches.length; index += 1) {
+      const match = matches.at(index);
+      if (match === undefined || match.start > start) {
+        break;
+      }
+      end = Math.max(end, match.end);
     }
 
     const seen = new Set<number>();

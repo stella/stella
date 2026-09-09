@@ -47,6 +47,13 @@ export const FOLDED_TOKENIZER = {
   filters: ["lower_caser", "ascii_folding", "remove_long"],
 } as const satisfies CorpusIndexTokenizer;
 
+/**
+ * Byte length at which `remove_long` drops a token: the filter keeps a token
+ * shorter than this and discards the rest, so a term of this many UTF-8 bytes
+ * or more is in no index and matches no query.
+ */
+export const CORPUS_TOKEN_LENGTH_LIMIT_BYTES = 255;
+
 const CUSTOM_TOKENIZERS = [FOLDED_TOKENIZER] as const;
 
 type CorpusIndexFieldMapping = {

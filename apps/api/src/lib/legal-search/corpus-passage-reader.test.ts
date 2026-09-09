@@ -146,6 +146,48 @@ describe("readCorpusPassages", () => {
     expect(astReads).toBe(1);
   });
 
+  test("reads the payloads concurrently, up to the limit", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let inFlight = 0;
+    let peak = 0;
+    const pending: CorpusPayloadSource = {
+      readText: async (key) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await gate;
+        inFlight -= 1;
+        return await source.readText(key);
+      },
+      readAst: async (key) => await source.readAst(key),
+    };
+    const documentIds = ["d1", "d2", "d3"];
+
+    const results = readCorpusPassages({
+      requests: documentIds.map((documentId) => ({
+        documentId,
+        anchorId: chunks.at(0)?.anchorId ?? "",
+      })),
+      pointers: documentIds.map((documentId) => ({
+        documentId,
+        textS3Key: TEXT_KEY,
+        astS3Key: AST_KEY,
+      })),
+      source: pending,
+      concurrency: 2,
+    });
+    // A macrotask turn, so every read the pool starts has reached the gate.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    release();
+    await results;
+
+    expect(peak).toBe(2);
+  });
+
   test("reports a hit that carries no anchor", async () => {
     const results = await readCorpusPassages({
       requests: [{ documentId: DECISION_ID, anchorId: null }],

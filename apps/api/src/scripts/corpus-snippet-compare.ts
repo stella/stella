@@ -3,6 +3,8 @@ import { mkdir } from "node:fs/promises";
 
 import { envBase } from "@/api/env-base";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
+import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { highlightCorpusPassage } from "@/api/lib/legal-search/corpus-passage-highlight";
 import type { CorpusPassageResult } from "@/api/lib/legal-search/corpus-passage-reader";
 import {
@@ -10,7 +12,7 @@ import {
   readCorpusPassages,
 } from "@/api/lib/legal-search/corpus-passage-reader";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
 import type { LegalSearchHit } from "@/api/lib/legal-search/types";
 import {
@@ -22,6 +24,7 @@ import {
   snippetCompareReport,
   type SnippetCompareHit,
   type SnippetCompareOutcome,
+  type SnippetCompareQuery,
   type SnippetCompareQueryRow,
 } from "@/api/scripts/corpus-snippet-compare-report";
 
@@ -97,11 +100,14 @@ const compareHit = ({
   hit,
   passage,
   tokens,
+  language,
 }: {
   hit: LegalSearchHit;
   /** The reader answers in request order, so this is the hit's own passage. */
   passage: CorpusPassageResult;
   tokens: ReturnType<typeof tokenizeCorpusFreeText>;
+  /** The language the engine query stemmed in, or null when it stemmed none. */
+  language: MorphologyLanguage | null;
 }): SnippetCompareOutcome => {
   if (passage.status !== "found") {
     return { status: "skipped", reason: passageSkipReason(passage.status) };
@@ -113,7 +119,7 @@ const compareHit = ({
   const fragment = highlightCorpusPassage({
     passage: passage.text,
     tokens,
-    language: documentMorphologyLanguage(hit.language),
+    language,
   });
   const highlightMs = performance.now() - startedAt;
   return {
@@ -128,37 +134,59 @@ const compareHit = ({
   };
 };
 
-const rows: SnippetCompareQueryRow[] = [];
+/** One query's page, and what the run measured getting it. */
+type SearchedQuery = {
+  query: SnippetCompareQuery;
+  hits: readonly LegalSearchHit[];
+  searchMs: number;
+};
+
+const searched: SearchedQuery[] = [];
 for (const query of queries.value) {
-  const searchStartedAt = performance.now();
-  const searched = await provider.search({
+  const startedAt = performance.now();
+  const page = await provider.search({
     query: query.text,
     jurisdiction: query.country,
     limit,
   });
-  const searchMs = performance.now() - searchStartedAt;
-  if (Result.isError(searched)) {
-    abort(`search for ${query.id} failed: ${searched.error.message}`);
+  const searchMs = performance.now() - startedAt;
+  if (Result.isError(page)) {
+    abort(`search for ${query.id} failed: ${page.error.message}`);
   }
+  searched.push({ query, hits: page.value.hits, searchMs });
+  console.error(`searched ${searched.length}/${queries.value.length}…`);
+}
 
-  const hits = searched.value.hits;
+// One statement for the whole run: every page's decisions at once, so the
+// pointer read does not scale with the query set.
+const { generation } = await rootDb.transaction(
+  async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+);
+const pointers = await rootDb.transaction(
+  async (tx) =>
+    await readCaseLawPassagePointersTx(
+      tx,
+      searched.flatMap(({ hits }) => hits.map((hit) => hit.decisionId)),
+    ),
+);
+
+const rows: SnippetCompareQueryRow[] = [];
+for (const { query, hits, searchMs } of searched) {
   const requests = hits.map((hit) => ({
     documentId: hit.decisionId,
     anchorId: hit.anchorId,
   }));
   const readStartedAt = performance.now();
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one read per query in the run's own set; the page's pointers are already one `inArray`
-  const pointers = await rootDb.transaction(
-    async (tx) =>
-      await readCaseLawPassagePointersTx(
-        tx,
-        requests.map(({ documentId }) => documentId),
-      ),
-  );
   const passages = await readCorpusPassages({ requests, pointers });
   const passageReadMs = performance.now() - readStartedAt;
 
   const tokens = tokenizeCorpusFreeText(query.text);
+  // The stemming the engine query carried, not the hit's own language: a
+  // query whose route stems nothing must be matched here without stemming.
+  const { stemming } = caseLawCorpusQueryFields({
+    generation,
+    jurisdiction: query.country,
+  });
   const compared: SnippetCompareHit[] = hits.map((hit, index) => {
     const passage =
       passages.at(index) ??
@@ -166,12 +194,16 @@ for (const query of queries.value) {
     return {
       decisionId: hit.decisionId,
       anchorId: hit.anchorId,
-      outcome: compareHit({ hit, passage, tokens }),
+      outcome: compareHit({
+        hit,
+        passage,
+        tokens,
+        language: stemming?.language ?? null,
+      }),
     };
   });
 
   rows.push({ query, searchMs, passageReadMs, hits: compared });
-  console.error(`compared ${rows.length}/${queries.value.length}…`);
 }
 
 const report = snippetCompareReport(rows);
