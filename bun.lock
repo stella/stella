@@ -643,7 +643,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "1.2.4",
+      "version": "1.2.5",
       "bin": {
         "stella": "./dist/cli.js",
       },
