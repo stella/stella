@@ -260,12 +260,9 @@ export const HeadnoteCell = ({ decision }: { decision: Decision }) => {
     case TEXT_FIELD_TYPE.ABSENT:
       return "—";
     case TEXT_FIELD_TYPE.PRESENT: {
-      const text = `${decision.headnote.text}${
-        decision.headnote.truncated ? "…" : ""
-      }`;
       return (
         <BidiText as="p" className="text-muted-foreground line-clamp-2 text-xs">
-          {text}
+          {decision.headnote.text}
         </BidiText>
       );
     }

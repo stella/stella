@@ -27,7 +27,10 @@ const DECISION_HEADNOTE_SCHEMAS = {
   [TEXT_FIELD_TYPE.PRESENT]: t.Object(
     {
       type: t.Literal(TEXT_FIELD_TYPE.PRESENT),
-      text: t.String({ maxLength: LIMITS.caseLawHeadnoteMaxChars }),
+      text: t.String({
+        minLength: 1,
+        maxLength: LIMITS.caseLawHeadnoteMaxChars,
+      }),
       truncated: t.Boolean(),
     },
     { additionalProperties: false },

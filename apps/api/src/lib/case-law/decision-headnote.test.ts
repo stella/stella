@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-text-field";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -51,7 +52,7 @@ describe("headnote text fits one row", () => {
 
     expect(headnote).not.toBeNull();
     expect(headnote?.truncated).toBe(true);
-    expect(headnote?.text).toMatch(/slovo\d+$/u);
+    expect(headnote?.text).toMatch(/slovo\d+…$/u);
     expect(headnote?.text.length).toBeLessThanOrEqual(
       LIMITS.caseLawHeadnoteMaxChars,
     );
@@ -77,7 +78,14 @@ describe("headnote cuts are explicit word-boundary decisions", () => {
         }
 
         expect(headnote.truncated).toBe(true);
-        expect(text.startsWith(headnote.text)).toBe(true);
+        expect(headnote.text.endsWith(DECISION_HEADNOTE_TRUNCATION_MARK)).toBe(
+          true,
+        );
+        const prefix = headnote.text.slice(
+          0,
+          -DECISION_HEADNOTE_TRUNCATION_MARK.length,
+        );
+        expect(text.startsWith(prefix)).toBe(true);
         expect(headnote.text.length).toBeLessThanOrEqual(
           LIMITS.caseLawHeadnoteMaxChars,
         );
@@ -86,11 +94,18 @@ describe("headnote cuts are explicit word-boundary decisions", () => {
             ({ index, segment }) => index + segment.length,
           ),
         );
-        expect(
-          headnote.text.length === 0 || boundaries.has(headnote.text.length),
-        ).toBe(true);
+        expect(prefix.length === 0 || boundaries.has(prefix.length)).toBe(true);
       }),
       propertyConfig(),
     );
+  });
+
+  test("does not invent a boundary by slicing through a flag", () => {
+    const prefix = "a".repeat(LIMITS.caseLawHeadnoteMaxChars - 2);
+
+    expect(truncateDecisionHeadnote(`${prefix}🇨🇿tail`)).toEqual({
+      text: `${prefix}${DECISION_HEADNOTE_TRUNCATION_MARK}`,
+      truncated: true,
+    });
   });
 });

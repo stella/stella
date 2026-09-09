@@ -29,7 +29,13 @@ export type TextField =
       readonly reason: TextAbsenceReason;
     };
 
-/** A bounded publisher-summary preview returned for a public decision row. */
+export const DECISION_HEADNOTE_TRUNCATION_MARK = "…";
+
+/**
+ * A bounded publisher-summary preview returned for a public decision row.
+ * Truncated text retains its terminal mark for clients that do not yet read
+ * the explicit flag.
+ */
 export type DecisionHeadnotePreview =
   | Extract<TextField, { readonly type: typeof TEXT_FIELD_TYPE.ABSENT }>
   | (Extract<TextField, { readonly type: typeof TEXT_FIELD_TYPE.PRESENT }> & {
