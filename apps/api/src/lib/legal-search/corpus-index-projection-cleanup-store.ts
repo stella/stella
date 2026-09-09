@@ -701,9 +701,35 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  if (rows.length !== lease.intentIds.length) {
+  if (rows.length === lease.intentIds.length) {
+    return rows.length;
+  }
+  // The settlement claim re-leases a revision whose lease has expired, and it
+  // overwrites the token without matching the old one. A turn whose proof
+  // outran its own lease therefore finds a successor owning the revisions it
+  // came to relinquish, which the claim path is written to produce. Where that
+  // successor has got to is not this turn's business: it may still hold the
+  // lease, or have released or settled it already, and every one of those
+  // clears this token. So the invariant is only that this lease is gone, not
+  // which state replaced it — enumerating the successor's states would make an
+  // ordinary finishing order panic.
+  const released = new Set(rows.map(({ id }) => id));
+  const unreleased = lease.intentIds.filter((id) => !released.has(id));
+  const stillLeasedHere = await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, unreleased),
+        eq(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
+      ),
+    );
+  // Carrying this token while failing the release predicate means the row left
+  // the index, status or delete task the lease was granted against without the
+  // lease ever being given up, which no transition writes.
+  if (stillLeasedHere.length > 0) {
     return panic(
-      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions`,
+      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions, and ${stillLeasedHere.length} of the rest still carry this lease`,
     );
   }
   return rows.length;
