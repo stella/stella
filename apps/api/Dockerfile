@@ -146,6 +146,15 @@ RUN bun build \
     --target bun \
     --outfile /app/repair-cz-ns-court.js \
     apps/api/src/scripts/repair-cz-ns-court.ts
+# Read-only snippet comparison over the serving corpus index. Reads its query
+# set from a JSON file, so the committed sample ships next to the bundle:
+#   ["bun", "/app/corpus-snippet-compare.js",
+#    "--queries", "/app/corpus-snippet-compare.sample.json",
+#    "--out-dir", "/tmp/snippets"]
+RUN bun build \
+    --target bun \
+    --outfile /app/corpus-snippet-compare.js \
+    apps/api/src/scripts/corpus-snippet-compare.ts
 # Dedicated durable document-processing worker. Deploy the same image with
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
 # in-image through the isolated local ONNX worker.
@@ -263,6 +272,9 @@ COPY --chown=stella:stella --from=builder /app/decision-analysis-input.js /app/d
 COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/decision-analysis-save.js
 COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /app/repair-publisher-absent-text.js
 COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
+COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/corpus-snippet-compare.js
+# The snippet report reads its query set from a file passed with `--queries`.
+COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:
