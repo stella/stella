@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1110,
+    "count": 1108,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -216,7 +216,7 @@
       "apps/api/src/lib/hosted-usage-provider/client.ts": 6,
       "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": 5,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 24,
+      "apps/api/src/lib/legal-search/corpus-index-client.ts": 22,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-pack.ts": 6,

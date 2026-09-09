@@ -374,10 +374,11 @@ type SettlementPass = {
   excludedSplits: number;
 };
 
-const invalidSplitList = () =>
-  new CorpusIndexError({
+const invalidSplitList = (): never => {
+  throw new CorpusIndexError({
     message: "corpus index split list returned an invalid response",
   });
+};
 
 /** Null while the split has never been published. */
 const parseSplitPublishedAtSeconds = (value: unknown): number | null => {
@@ -385,7 +386,7 @@ const parseSplitPublishedAtSeconds = (value: unknown): number | null => {
     return null;
   }
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw invalidSplitList();
+    return invalidSplitList();
   }
   return value;
 };
@@ -407,7 +408,7 @@ const parseSettlementSplit = (
     !Number.isSafeInteger(appliedOpstamp) ||
     appliedOpstamp < 0
   ) {
-    throw invalidSplitList();
+    return invalidSplitList();
   }
   return { splitId, appliedOpstamp, publishedAtSeconds };
 };
@@ -960,7 +961,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
               ? parseRecordArray(response["splits"])
               : null;
             if (splits === null) {
-              throw invalidSplitList();
+              return invalidSplitList();
             }
             scannedSplits += splits.length;
             if (scannedSplits > MAX_SETTLEMENT_SPLITS) {
