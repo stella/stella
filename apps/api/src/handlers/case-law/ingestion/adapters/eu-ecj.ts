@@ -43,6 +43,13 @@ import {
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  splitStoredDecisionTextMetadata,
+  type DecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import {
   AdapterFetchError,
   TelemetryError,
 } from "@/api/lib/errors/tagged-errors";
@@ -1079,6 +1086,7 @@ type EcjDecisionFromHtmlOptions = EcjDecisionIdentity & {
    * row's stored metadata, so fields the query once recorded survive.
    */
   metadata: Record<string, unknown>;
+  textFields: DecisionTextFields;
 };
 
 /**
@@ -1099,6 +1107,7 @@ const ecjDecisionFromHtml = ({
   documentUrl,
   html,
   metadata,
+  textFields,
 }: EcjDecisionFromHtmlOptions): IngestionResult | undefined => {
   const caseNumber = celexToCaseNumber(celex);
   const { documentAst, sections, fulltext, keywords } = parseManifestation({
@@ -1137,14 +1146,15 @@ const ecjDecisionFromHtml = ({
     fulltext,
     sourceUrl,
     documentUrl,
-    metadata: {
+    metadata: checkedDecisionMetadata({
       ...metadata,
       celex,
       ecli,
       decisionDate,
       decisionType,
       keywords,
-    },
+    }),
+    textFields,
     rawHash: hashContent(
       `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
     ),
@@ -1232,6 +1242,9 @@ const reparseStoredRaw = (
         "historical source normalization made ECJ keyword spacing ambiguous",
     };
   }
+  const { metadata, textFields } = splitStoredDecisionTextMetadata(
+    stored.metadata,
+  );
   const result = ecjDecisionFromHtml({
     celex,
     ecli,
@@ -1247,7 +1260,8 @@ const reparseStoredRaw = (
       (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
     documentUrl: stored.documentUrl ?? undefined,
     html,
-    metadata: stored.metadata,
+    metadata: checkedDecisionMetadata(metadata),
+    textFields,
   });
 
   return result === undefined
@@ -1323,6 +1337,7 @@ export const buildDecision = async (
     // an item-only manifestation answers 404 at its own URL.
     documentUrl: served.url,
     html: served.html,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       manifestationUri: binding.manifestation.value,
       languageUri: binding.language.value,

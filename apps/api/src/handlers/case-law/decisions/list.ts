@@ -8,7 +8,7 @@ import type { Static } from "elysia";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import {
@@ -253,7 +253,7 @@ export const listDecisionsHandler = async (
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       sourceUrl: decision.sourceUrl,
-      headnote: normalizeDecisionHeadnote(decision.headnote),
+      headnote: readDecisionHeadnote(decision.headnote),
       citationCount: decision.citationCount,
       createdAt: decision.createdAt,
     })),

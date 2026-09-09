@@ -28,6 +28,10 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -150,6 +154,7 @@ if (!databaseUrl || !runPostgresTests) {
       decisionType: "rozsudok",
       documentUrl: "https://example.test/refresh.pdf",
       metadata: { judge: "New Judge" },
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       rawHash: "hash-after",
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,

@@ -62,6 +62,10 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import {
   AdapterFetchError,
   FetchBoundaryError,
 } from "@/api/lib/errors/tagged-errors";
@@ -409,6 +413,7 @@ export const buildSkUsDecision = async (
     ...(pdfBytes === undefined ? { isListingOnly: true } : {}),
     sourceUrl: documentUrl,
     documentUrl,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       caseNumber,
       ecli,

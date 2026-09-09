@@ -25,6 +25,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -439,7 +444,7 @@ describe("pl-courts buildDecision", () => {
         body: JSON.stringify({
           data: {
             ...item,
-            textContent: "<p>POSTANOWIENIE z dnia 5 marca 2015 r.</p>",
+            textContent: "<p>Published decision text.</p>",
           },
         }),
       },
@@ -476,6 +481,7 @@ describe("pl-courts buildDecision", () => {
               code: "COMMON_COURT",
               judgmentUrl: "https://orzeczenia.bialystok.sr.gov.pl/content/1",
             },
+            summary: "Published summary.",
           },
         }),
       },
@@ -497,6 +503,14 @@ describe("pl-courts buildDecision", () => {
       sourceDocumentId: "130600",
       sourceUrl: "https://www.saos.org.pl/judgments/130600",
     });
+    expect(built.decision.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      summary: {
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text: "Published summary.",
+      },
+    });
+    expect(built.decision.metadata).not.toHaveProperty("summary");
     // The one identity rule: what the walk keyed this item on is what the
     // decision it builds actually stores.
     expect(listingIdentityKey(plCourtsListingIdentity(COMMON_COURT_ITEM))).toBe(
@@ -505,6 +519,44 @@ describe("pl-courts buildDecision", () => {
         sourceDocumentId: built.decision.sourceDocumentId ?? "",
       }),
     );
+  });
+
+  test("represents a missing publisher summary explicitly", async () => {
+    const item = {
+      id: 1,
+      href: "https://example.test/api/judgments/1",
+      courtType: "COMMON",
+      courtCases: [{ caseNumber: "Fixture 1" }],
+      judgmentType: "DECISION",
+      judgmentDate: "2020-01-01",
+      division: {
+        id: 1,
+        name: "Fixture division",
+        court: { id: 1, code: "fixture", name: "Fixture court" },
+      },
+    } as const satisfies SaosItem;
+    mockFetchWithBodies([
+      {
+        pattern: DETAIL_PATTERN,
+        body: JSON.stringify({
+          data: {
+            ...item,
+            textContent: "<p>Published decision text.</p>",
+          },
+        }),
+      },
+    ]);
+
+    const built = await reconciliation.buildDecision(item);
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.textFields).toEqual(
+      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    );
+    expect(built.decision.metadata).not.toHaveProperty("summary");
   });
 
   test("does not emit nonexistent dates from source fields or content", async () => {

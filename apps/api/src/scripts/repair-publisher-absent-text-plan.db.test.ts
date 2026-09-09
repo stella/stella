@@ -25,12 +25,13 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  absentTextComparisonsFor,
-  sourceTextOrAbsent,
-} from "@/api/handlers/case-law/ingestion/adapters/absent-source-text";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_FIELD_TYPE,
+  absentTextComparisonsFor,
+  sourceTextField,
+} from "@/api/lib/case-law/decision-text";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -441,7 +442,7 @@ describe("the write", () => {
   });
 
   test("what the repair strips is what that source's adapter reads as absent", async () => {
-    // The binding: the SQL reading and `sourceTextOrAbsent` decide the same
+    // The binding: the SQL reading and `sourceTextField` decide the same
     // way about the same stored values, under the same adapter, so a marker
     // declared once is recognised on both the write path and the repair path.
     await repairEverySource();
@@ -453,7 +454,8 @@ describe("the write", () => {
           continue;
         }
         expect(key in after).toBe(
-          sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, value) !== undefined,
+          sourceTextField(ADAPTER_KEYS.CZ_US, value).type ===
+            TEXT_FIELD_TYPE.PRESENT,
         );
       }
     }

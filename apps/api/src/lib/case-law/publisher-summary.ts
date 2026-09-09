@@ -4,6 +4,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import type { ApparatusRole, DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { DECISION_TEXT_FIELD } from "@/api/lib/case-law/decision-text";
+
 /**
  * What a publisher says about a decision, in the two kinds it comes in: the
  * headnote — the sentence a reader recognises the case by, written by whoever
@@ -65,9 +67,24 @@ type PublisherSummarySource = PublisherSummarySourceOf<PublisherSummaryKind>;
  */
 const PUBLISHER_HEADNOTE_SOURCES = [
   { kind: "headnote", origin: "ast", roles: PUBLISHER_HEADNOTE_AST_ROLES },
-  { kind: "headnote", origin: "metadata", key: "legalSentence", shape: "text" },
-  { kind: "headnote", origin: "metadata", key: "abstract", shape: "text" },
-  { kind: "headnote", origin: "metadata", key: "summary", shape: "text" },
+  {
+    kind: "headnote",
+    origin: "metadata",
+    key: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+    shape: "text",
+  },
+  {
+    kind: "headnote",
+    origin: "metadata",
+    key: DECISION_TEXT_FIELD.ABSTRACT,
+    shape: "text",
+  },
+  {
+    kind: "headnote",
+    origin: "metadata",
+    key: DECISION_TEXT_FIELD.SUMMARY,
+    shape: "text",
+  },
 ] as const satisfies readonly PublisherSummarySourceOf<"headnote">[];
 
 /**

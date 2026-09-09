@@ -802,8 +802,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read a single case-law decision by its decision ID. Returns metadata, " +
-      "plain text, citation links, source URLs, and its route-independent " +
-      "resourceName. Long decision text and large citation lists are returned " +
+      "explicit decision text fields, plain text, citation links, source URLs, " +
+      "and its route-independent resourceName. Long decision text and large citation lists are returned " +
       "in windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: readCaseLawDecisionArgsSchema,
     access: "read",
@@ -1873,6 +1873,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       ecli: result.ecli,
       language: result.language,
       metadata: result.metadata,
+      textFields: result.textFields,
       source: result.source,
       sourceUrl: result.sourceUrl,
       text:

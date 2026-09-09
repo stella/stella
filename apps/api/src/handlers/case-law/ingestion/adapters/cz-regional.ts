@@ -41,6 +41,11 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+} from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
   AdapterFetchError,
@@ -451,10 +456,10 @@ const applyFinaldoc = (
 
   const rm = result.richMetadata;
   if (Object.keys(rm).length > 0) {
-    decision.metadata = {
+    decision.metadata = checkedDecisionMetadata({
       ...decision.metadata,
       ...rm,
-    };
+    });
   }
 };
 
@@ -529,6 +534,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     sourceDocumentId: documentIdFromLink(publishedDocumentUrl),
     sourceUrl: documentUrl?.toString(),
     documentUrl: documentUrl?.toString(),
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       caseNumber,
       sheetNumber,

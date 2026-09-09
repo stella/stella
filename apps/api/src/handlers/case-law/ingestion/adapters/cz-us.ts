@@ -26,7 +26,6 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { sourceTextOrAbsent } from "@/api/handlers/case-law/ingestion/adapters/absent-source-text";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -36,6 +35,16 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+  absentTextField,
+  checkedDecisionMetadata,
+  sourceTextField,
+  type DecisionTextFields,
+  type TextField,
+} from "@/api/lib/case-law/decision-text";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -377,38 +386,41 @@ const extractJudge = (bodyText: string): string | undefined => {
 /** Below this a cell holds a stub or a label, not a publisher's own text. */
 const ABSTRACT_MIN_CHARS = 20;
 
+const fieldAboveAbstractMinimum = (field: TextField): TextField => {
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return field;
+    case TEXT_FIELD_TYPE.PRESENT:
+      return field.text.length > ABSTRACT_MIN_CHARS
+        ? field
+        : absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED);
+    default: {
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+    }
+  }
+};
+
 /**
  * Extract abstract and legal sentence from GetAbstract.aspx.
  *
- * The court fills both cells whether or not it holds the text, so the read
- * goes through `sourceTextOrAbsent`: its "not available" sentences are longer
- * than any length threshold and would otherwise be stored, indexed and
- * displayed as the decision's headnote.
+ * Both source cells are represented by the text-field contract.
  */
 const extractAbstract = (
   html: string,
-): {
-  abstract?: string;
-  legalSentence?: string;
-} => {
+): Required<Pick<DecisionTextFields, "abstract" | "legalSentence">> => {
   const $ = cheerio.load(html);
-  const abstractText = sourceTextOrAbsent(
-    ADAPTER_KEYS.CZ_US,
-    $("table.abstractContent td").text(),
-  );
-  const legalText = sourceTextOrAbsent(
-    ADAPTER_KEYS.CZ_US,
-    $("table.legalSentenceContent td").text(),
-  );
-
-  const result: { abstract?: string; legalSentence?: string } = {};
-  if (abstractText !== undefined && abstractText.length > ABSTRACT_MIN_CHARS) {
-    result.abstract = abstractText;
-  }
-  if (legalText !== undefined && legalText.length > ABSTRACT_MIN_CHARS) {
-    result.legalSentence = legalText;
-  }
-  return result;
+  return {
+    abstract: fieldAboveAbstractMinimum(
+      sourceTextField(ADAPTER_KEYS.CZ_US, $("table.abstractContent td").text()),
+    ),
+    legalSentence: fieldAboveAbstractMinimum(
+      sourceTextField(
+        ADAPTER_KEYS.CZ_US,
+        $("table.legalSentenceContent td").text(),
+      ),
+    ),
+  };
 };
 
 type ParseDecisionPageOptions = {
@@ -520,7 +532,8 @@ const parseDecisionPage = ({
     decisionType: decisionForm?.toLowerCase(),
     fulltext: resolvedFulltext,
     sourceUrl,
-    metadata: {
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
       caseNumber: parsed.caseNumber,
       ecli,
       court,
@@ -532,7 +545,7 @@ const parseDecisionPage = ({
       ecliCounter,
       nalusRecordId,
       nalusSz,
-    },
+    }),
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
     documentAst,
@@ -1253,21 +1266,37 @@ const fetchListedDecision = async (
     );
     if (abstractResponse.ok) {
       abstractHtml = await abstractResponse.text();
-      const { abstract, legalSentence } = extractAbstract(abstractHtml);
-      if (abstract) {
-        decision.metadata["abstract"] = abstract;
-      }
-      if (legalSentence) {
-        decision.metadata["legalSentence"] = legalSentence;
-      }
+      decision.textFields = {
+        ...decision.textFields,
+        ...extractAbstract(abstractHtml),
+      };
+    } else {
+      decision.textFields = {
+        ...decision.textFields,
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      };
     }
   } catch (error) {
     if (signal?.aborted) {
       throw error;
     }
+    decision.textFields = {
+      ...decision.textFields,
+      abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+    };
     // Abstracts are optional enrichment; the listed decision is complete
     // enough to ingest without one.
   }
+  // Text-field changes must pass the pipeline's source-hash gate.
+  decision.rawHash = hashContent(
+    JSON.stringify({
+      abstract: decision.textFields.abstract,
+      identityHash: decision.rawHash,
+      legalSentence: decision.textFields.legalSentence,
+    }),
+  );
   Object.assign(
     decision,
     multiResponseSourceRaw({
@@ -1336,7 +1365,8 @@ const listedOnlyDecision = (
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,
     language: "cs",
     sourceUrl: listed.sourceUrl,
-    metadata: {
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
       caseNumber: listed.caseNumber,
       ecli: listed.ecli,
       court,
@@ -1349,7 +1379,7 @@ const listedOnlyDecision = (
       ecliCounter: listed.counter,
       listedOnly: true,
       listedOnlyReason: reason,
-    },
+    }),
     rawHash: hashContent(
       `${listed.sourceDocumentId}|${listed.caseNumber}|listed-only|${reason}`,
     ),

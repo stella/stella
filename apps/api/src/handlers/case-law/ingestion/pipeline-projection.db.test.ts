@@ -18,6 +18,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -58,6 +62,7 @@ const input = (court: string, rawHash: string): IngestionResult => ({
   decisionType: "rozsudek",
   fulltext: "Nejvyšší správní soud rozhodl v právní věci žalobkyně.",
   metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash,
   documentAst: {},
 });

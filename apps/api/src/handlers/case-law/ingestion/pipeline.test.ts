@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
@@ -23,6 +24,12 @@ import {
   sanitizeResult,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  absentTextField,
+  presentTextField,
+} from "@/api/lib/case-law/decision-text";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -40,6 +47,7 @@ const baseResult = (
   country: "SK",
   language: "sk",
   metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "hash",
   documentAst,
 });
@@ -68,6 +76,38 @@ const testSourceLease = (
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
+});
+
+describe("sanitizeResult — decision text fields", () => {
+  test("stores present text and retains the boundary value", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: presentTextField("Published summary"),
+      },
+    });
+
+    expect(sanitized.metadata["summary"]).toBe("Published summary");
+    expect(sanitized.textFields.summary).toEqual(
+      presentTextField("Published summary"),
+    );
+  });
+
+  test("stores every declared absence as no metadata value", () => {
+    for (const reason of TEXT_ABSENCE_REASONS) {
+      const sanitized = sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        textFields: {
+          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+          summary: absentTextField(reason),
+        },
+      });
+
+      expect(sanitized.metadata["summary"]).toBeUndefined();
+      expect(sanitized.textFields.summary).toEqual(absentTextField(reason));
+    }
+  });
 });
 
 describe("sanitizeResult — adapter-supplied sections", () => {
@@ -694,6 +734,7 @@ describe("processDecision — corpus storage off", () => {
         language: "sk",
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
@@ -714,16 +755,26 @@ describe("processDecision — corpus storage off", () => {
   });
 });
 
-describe("processDecision — decision date on an existing row", () => {
+describe("processDecision — fields on an existing row", () => {
   // An update omits an undefined column, so a rejected date has to be
   // distinguishable from an unstated one all the way to the write: the
   // first must clear whatever the row holds, the second must not.
-  const refreshedDecisionDate = async (
-    decisionDate: string | undefined,
-  ): Promise<Record<string, unknown> | undefined> => {
+  type RefreshedDecisionOptions = {
+    decisionDate?: string | undefined;
+    storedMetadata?: Record<string, unknown> | undefined;
+    textFields?: IngestionResult["textFields"] | undefined;
+  };
+
+  const refreshedDecision = async ({
+    decisionDate,
+    storedMetadata = {},
+    textFields = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  }: RefreshedDecisionOptions): Promise<
+    Record<string, unknown> | undefined
+  > => {
     const existing = {
       id: createSafeId<"caseLawDecision">(),
-      metadata: {},
+      metadata: storedMetadata,
       sourceHash: "old-hash",
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -789,6 +840,7 @@ describe("processDecision — decision date on an existing row", () => {
         decisionDate,
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields,
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
@@ -802,21 +854,33 @@ describe("processDecision — decision date on an existing row", () => {
   };
 
   test("clears the column when the source restates an unusable date", async () => {
-    const updated = await refreshedDecisionDate("2944-04-30");
+    const updated = await refreshedDecision({ decisionDate: "2944-04-30" });
 
     expect(updated?.["decisionDate"]).toBeNull();
   });
 
   test("writes a usable date", async () => {
-    const updated = await refreshedDecisionDate("2026-04-15");
+    const updated = await refreshedDecision({ decisionDate: "2026-04-15" });
 
     expect(updated?.["decisionDate"]).toBe("2026-04-15");
   });
 
   test("writes nothing when the source states no date", async () => {
-    const updated = await refreshedDecisionDate(undefined);
+    const updated = await refreshedDecision({});
 
     expect(updated?.["decisionDate"]).toBeUndefined();
+  });
+
+  test("keeps stored decision text when parsing fails", async () => {
+    const updated = await refreshedDecision({
+      storedMetadata: { abstract: "Stored abstract" },
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      },
+    });
+
+    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
   });
 });
 
@@ -889,6 +953,7 @@ describe("processDecision — source raw upload failure", () => {
         language: "sk",
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw,
@@ -969,6 +1034,7 @@ describe("processDecision — source raw upload failure", () => {
         language: "sk",
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw: "<html></html>",

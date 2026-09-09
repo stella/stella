@@ -36,6 +36,10 @@ import type {
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -643,6 +647,9 @@ describe("replay of a source", () => {
             country: "EU",
             language: stored.language,
             metadata: stored.metadata,
+            textFields: absentDecisionTextFields(
+              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            ),
             rawHash:
               stored.caseNumber === "C-1/26" ? "stored-hash-1" : "new-hash-2",
             documentAst: EMPTY_AST,
@@ -702,6 +709,9 @@ describe("replay of a source", () => {
             country: "EU",
             language: stored.language,
             metadata: stored.metadata,
+            textFields: absentDecisionTextFields(
+              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            ),
             rawHash: "new-hash-41",
             documentAst: EMPTY_AST,
           },
@@ -751,6 +761,9 @@ describe("replay of a source", () => {
             country: "EU",
             language: stored.language,
             metadata: stored.metadata,
+            textFields: absentDecisionTextFields(
+              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            ),
             rawHash: "stored-hash-42",
             documentAst: EMPTY_AST,
           },

@@ -31,6 +31,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -685,6 +689,7 @@ const buildListingOnly = ({
     )
       ? constructedDocumentUrl(source, sourceDocumentId, "html")
       : undefined,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       ecli: data.ecli,
       court,
@@ -835,6 +840,7 @@ const buildDecision = async ({
     fulltext: parsed.fulltext,
     sourceUrl: data.sourceUrl,
     documentUrl,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       ecli: data.ecli,
       court: data.court,

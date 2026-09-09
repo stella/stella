@@ -35,6 +35,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
@@ -1285,6 +1289,7 @@ const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
     language: FIXTURE_LANGUAGE,
     isListingOnly,
     metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     rawHash: "0".repeat(64),
     documentAst: EMPTY_AST,
   } satisfies IngestionResult).metadata;

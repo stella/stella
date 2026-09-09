@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -83,7 +83,7 @@ export const readPublicDecisionSummaries = async ({
     decisionDate: row.decisionDate,
     decisionType: row.decisionType,
     sourceUrl: row.sourceUrl,
-    headnote: normalizeDecisionHeadnote(row.headnote),
+    headnote: readDecisionHeadnote(row.headnote),
     citationCount: row.citationCount,
     createdAt: row.createdAt.toISOString(),
   }));

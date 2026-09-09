@@ -45,6 +45,10 @@ import {
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import {
   type DocumentAst,
   isDocumentAst,
 } from "@/api/lib/case-law/document-ast";
@@ -174,6 +178,7 @@ export const parsePendingDocument = async (
     country: "SVK",
     language: "sk",
     metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     rawHash: "",
     fulltext: parsed.fulltext,
     documentAst: parsed.documentAst,

@@ -45,6 +45,14 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+  splitStoredDecisionTextMetadata,
+  storeTextField,
+} from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -1008,7 +1016,7 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
   ),
   pravnivetaupravena: {
     disposition: "stored",
-    target: { type: "metadata", key: "legalSentence" },
+    target: { type: "textField", key: "legalSentence" },
   },
   prejudikaturaoznacenivecideleneclistu: excludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
@@ -1270,7 +1278,6 @@ const detailMetadataFields = (
   caseStatus: detail.caseStatus,
   administrativeAuthority: detail.administrativeAuthority,
   citation: detail.citation,
-  legalSentence: detail.legalSentence,
 });
 
 /** The keys a detail page states a value for, for a replay that merges them. */
@@ -1351,7 +1358,11 @@ const rowToResult = ({
     fulltext: content.fulltext,
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
-    metadata: {
+    textFields: {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      legalSentence: sourceTextField(ADAPTER_KEYS.CZ_NSS, detail.legalSentence),
+    },
+    metadata: checkedDecisionMetadata({
       caseNumber: row.caseNumber,
       sheetNumber,
       // The reference exactly as the court publishes it, docket and sheet
@@ -1361,7 +1372,7 @@ const rowToResult = ({
       ...detailMetadataFields(detail),
       // The listing states an outcome for rows whose detail page does not.
       outcome: detail.outcome ?? row.outcome,
-    },
+    }),
     // Fulltext is parser output, not publisher identity. Keeping it out makes
     // crawl and replay converge on the same source hash after parser changes.
     rawHash: czNssSourceHash({
@@ -1579,6 +1590,13 @@ const reparseStoredRaw = (
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
+  const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
+  const statedLegalSentence = nonEmptyString(storedDetail?.legalSentence);
+  const legalSentenceField =
+    statedLegalSentence === undefined
+      ? storedDecisionText.textFields.legalSentence
+      : sourceTextField(ADAPTER_KEYS.CZ_NSS, statedLegalSentence);
+  const legalSentence = storeTextField(legalSentenceField);
 
   return {
     type: "parsed",
@@ -1608,12 +1626,16 @@ const reparseStoredRaw = (
       fulltext: rebuilt.fulltext,
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
+      textFields: {
+        ...storedDecisionText.textFields,
+        legalSentence: legalSentenceField,
+      },
       // Written back rather than passed through: a legacy row states the
       // reference only in `metadata.caseNumber`, and a replay that left the
       // metadata as it found it would leave the split unreversible for good.
       // For a row stored since, these are the values already there.
-      metadata: {
-        ...stored.metadata,
+      metadata: checkedDecisionMetadata({
+        ...storedDecisionText.metadata,
         // What the stored detail page states wins over what the row holds: the
         // page is the publisher's, the row is what an older parser made of it.
         ...(storedDetail === undefined
@@ -1621,7 +1643,7 @@ const reparseStoredRaw = (
           : statedDetailMetadataFields(storedDetail)),
         sheetNumber,
         publishedCaseNumber,
-      },
+      }),
       // The sentence this replay writes, not the one the row arrived with: a
       // row whose detail page was stored before anything read the headnote
       // gains it here, and a hash still taken from the old metadata would make
@@ -1631,9 +1653,7 @@ const reparseStoredRaw = (
         sheetNumber,
         decisionDate,
         decisionType,
-        legalSentence:
-          nonEmptyString(storedDetail?.legalSentence) ??
-          nonEmptyString(stored.metadata["legalSentence"]),
+        legalSentence,
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: rebuilt.documentAst,

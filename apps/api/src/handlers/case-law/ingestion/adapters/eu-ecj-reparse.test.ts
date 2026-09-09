@@ -16,6 +16,11 @@ import {
   buildDecision,
   euEcjAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
@@ -137,6 +142,28 @@ describe("eu-ecj reparseStoredRaw", () => {
     // Field-for-field, including the hash the pipeline dedupes on: that
     // equality is what makes a second replay a no-op instead of a rewrite.
     expect(outcome.result).toEqual(crawled);
+  });
+
+  test("moves stored decision text out of ordinary replay metadata", async () => {
+    const crawled = await crawlDecision();
+    const outcome = await reparse(
+      storedFrom(crawled, {
+        metadata: { ...crawled.metadata, summary: "Published summary" },
+      }),
+    );
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.metadata["summary"]).toBeUndefined();
+    expect(outcome.result.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      summary: {
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text: "Published summary",
+      },
+    });
   });
 
   test("rejects a payload stored under a media type it does not parse", async () => {

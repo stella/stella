@@ -35,7 +35,11 @@ import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
@@ -1413,15 +1417,14 @@ describe("cz-nss buildDecision", () => {
     return built.decision;
   };
 
-  test("the court's headnote reaches the row's publisher summary", async () => {
+  test("the court's headnote reaches the decision text fields", async () => {
     const decision = await crawledWithHeadnote(HEADNOTE);
 
-    expect(decision.metadata["legalSentence"]).toBe(HEADNOTE);
-    // The key is worth writing only where the summary reader looks, so the
-    // reader answers here rather than the spelling being trusted on its own.
-    expect(
-      publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
-    ).toBe(HEADNOTE);
+    expect(decision.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+    });
+    expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
 
   test("the ano/ne flag beside the headnote is not the headnote", async () => {
@@ -1431,14 +1434,17 @@ describe("cz-nss buildDecision", () => {
     // `pravnivetaanv` states ano/ne for every decision and sits beside
     // `pravnivetaupravena`; a reader keyed on the shared prefix would store
     // "ne" as the sentence for the whole corpus.
-    expect(withHeadnote.metadata["legalSentence"]).toBe(HEADNOTE);
-    expect(without.metadata["legalSentence"]).toBeUndefined();
-    expect(
-      publisherSummaryOf({ documentAst: null, metadata: without.metadata }),
-    ).not.toBe("ne");
+    expect(withHeadnote.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+    });
+    expect(without.textFields).toEqual(
+      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    );
+    expect(without.metadata).not.toHaveProperty("legalSentence");
   });
 
-  test("a replay reads the headnote back off the stored detail page", async () => {
+  test("a replay moves the stored headnote into the text-field contract", async () => {
     const decision = await crawledWithHeadnote(HEADNOTE);
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
@@ -1467,7 +1473,7 @@ describe("cz-nss buildDecision", () => {
     // The row as stored today: both pages the crawl fetched. The headnote is
     // on the detail page, so a replay recovers it even for a row written
     // before anything read that field.
-    const { legalSentence: _unread, ...beforeCapture } = decision.metadata;
+    const beforeCapture = decision.metadata;
     const recovered = await replayed({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
@@ -1482,20 +1488,44 @@ describe("cz-nss buildDecision", () => {
       contentType: "text/html",
       metadata: beforeCapture,
     });
+    // A protected stored key moves into the contract rather than being copied.
+    const storedText = await replayed({
+      raw: new TextEncoder().encode(DOCUMENT_HTML),
+      contentType: "text/html",
+      metadata: { ...beforeCapture, legalSentence: HEADNOTE },
+    });
 
     expect(recovered.type).toBe("parsed");
     expect(legacy.type).toBe("parsed");
-    if (recovered.type !== "parsed" || legacy.type !== "parsed") {
+    expect(storedText.type).toBe("parsed");
+    if (
+      recovered.type !== "parsed" ||
+      legacy.type !== "parsed" ||
+      storedText.type !== "parsed"
+    ) {
       return;
     }
-    expect(recovered.result.metadata["legalSentence"]).toBe(HEADNOTE);
-    expect(legacy.result.metadata["legalSentence"]).toBeUndefined();
+    expect(recovered.result.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+    });
+    expect(legacy.result.textFields).toEqual(
+      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    );
+    expect(storedText.result.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+    });
+    expect(recovered.result.metadata).not.toHaveProperty("legalSentence");
+    expect(legacy.result.metadata).not.toHaveProperty("legalSentence");
+    expect(storedText.result.metadata).not.toHaveProperty("legalSentence");
     // Crawl and replay have to agree on the hash, or every replayed row would
     // read as changed to the crawl that next re-reads it, and back again. For
     // a row whose metadata never read the sentence, the stored detail page is
     // what brings the two back into agreement.
     expect(recovered.result.rawHash).toBe(decision.rawHash);
     expect(legacy.result.rawHash).not.toBe(decision.rawHash);
+    expect(storedText.result.rawHash).toBe(decision.rawHash);
   });
 
   test("a headnote the court adds or edits moves the source hash", async () => {

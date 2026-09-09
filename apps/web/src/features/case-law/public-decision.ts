@@ -1,3 +1,5 @@
+import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
+
 export type PublicDecisionLanguageAlternate = {
   caseNumber: string;
   country: string;
@@ -20,9 +22,10 @@ export type PublicCaseLawDecision = {
   id: string;
   language: string;
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
-  metadata?: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
   slug?: string | null;
   source: { name: string | null } | null;
   sourceUrl: string | null;
+  textFields: ReadDecisionTextFields;
   updatedAt: Date | string | null;
 };

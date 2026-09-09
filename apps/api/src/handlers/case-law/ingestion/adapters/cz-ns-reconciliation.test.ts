@@ -24,7 +24,11 @@ import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(czNsAdapter);
@@ -662,28 +666,30 @@ describe("cz-ns buildDecision", () => {
     return built.decision;
   };
 
-  test("the court's headnote and annotation reach the row's publisher summary", async () => {
+  test("the court's headnote and annotation reach the decision text fields", async () => {
     const decision = await crawledWithSummary({
       abstract: ANNOTATION,
       legalSentence: HEADNOTE,
     });
 
-    expect(decision.metadata["legalSentence"]).toBe(HEADNOTE);
-    expect(decision.metadata["abstract"]).toBe(ANNOTATION);
-    // The keys are worth writing only where the summary reader looks, and the
-    // headnote is the more specific of the two, so it is what a reader gets.
-    expect(
-      publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
-    ).toBe(HEADNOTE);
+    expect(decision.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: ANNOTATION },
+      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+    });
+    expect(decision.metadata).not.toHaveProperty("abstract");
+    expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
 
-  test("an annotation the court wrote no headnote for is still a summary", async () => {
+  test("an annotation and an absent headnote remain distinct", async () => {
     const decision = await crawledWithSummary({ abstract: ANNOTATION });
 
-    expect(decision.metadata["legalSentence"]).toBeUndefined();
-    expect(
-      publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
-    ).toBe(ANNOTATION);
+    expect(decision.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: ANNOTATION },
+    });
+    expect(decision.metadata).not.toHaveProperty("abstract");
+    expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
 
   test("the spacer the court prints for a decision it wrote neither for is not a summary", async () => {
@@ -691,8 +697,11 @@ describe("cz-ns buildDecision", () => {
 
     // The headnote row is on every page; where the court wrote nothing it
     // holds a one-pixel spacer image, which must not be stored as a sentence.
-    expect(decision.metadata["legalSentence"]).toBeUndefined();
-    expect(decision.metadata["abstract"]).toBeUndefined();
+    expect(decision.textFields).toEqual(
+      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    );
+    expect(decision.metadata).not.toHaveProperty("abstract");
+    expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
 
   test("a headnote or annotation the court adds later moves the source hash", async () => {

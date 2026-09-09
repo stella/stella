@@ -17,6 +17,10 @@ import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extr
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -40,6 +44,7 @@ const decisionAt = (
   decisionType: "rozsudok",
   fulltext: `Rozsudok ${court}`,
   metadata: { court },
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: `hash-${court}`,
   documentAst: EMPTY_AST,
 });

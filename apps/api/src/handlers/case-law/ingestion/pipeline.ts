@@ -58,6 +58,7 @@ import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
@@ -1748,7 +1749,11 @@ const processDecisionAttempt = async ({
                   decisionType: result.decisionType,
                   sourceUrl: result.sourceUrl,
                   documentUrl: result.documentUrl,
-                  metadata: result.metadata,
+                  metadata: preserveStoredTextAfterParseFailure({
+                    incomingMetadata: result.metadata,
+                    storedMetadata: existing.metadata,
+                    textFields: result.textFields,
+                  }),
                   sourceRaw: null,
                   sourceRawS3Key,
                   sourceRawContentType,

@@ -10,7 +10,7 @@
  * path is fixed; this is the pass over what it already wrote.
  *
  * **Which sentences.** Only what an adapter declares in
- * `adapters/absent-source-text.ts`, and only for that adapter's own rows, over
+ * `lib/case-law/decision-text.ts`, and only for that adapter's own rows, over
  * the publisher-summary metadata keys the read path itself walks. A sentence
  * stripped from a source whose adapter does not read it would be written
  * straight back on the next crawl, so scope is what makes the repair a fixed
@@ -64,11 +64,11 @@ import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   ADAPTERS_DECLARING_ABSENT_TEXT,
   absentTextComparisonsFor,
-} from "@/api/handlers/case-law/ingestion/adapters/absent-source-text";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/decision-text";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,

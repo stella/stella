@@ -38,6 +38,7 @@ import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-r
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-field-inventory-baseline.json";
+import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -406,6 +407,8 @@ const storedValueOf = (
   switch (target.type) {
     case "metadata":
       return decision.metadata[target.key];
+    case "textField":
+      return storeTextField(decision.textFields[target.key]);
     case "result":
       return decision[target.key];
     case "document":
@@ -426,6 +429,8 @@ const describeTarget = (target: SourceFieldTarget): string => {
   switch (target.type) {
     case "metadata":
       return `metadata.${target.key}`;
+    case "textField":
+      return `textFields.${target.key}`;
     case "result":
       return `the result's ${target.key}`;
     case "document":

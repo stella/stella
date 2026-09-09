@@ -1044,6 +1044,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
@@ -2512,6 +2513,14 @@ export default defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-raw-decision-text-fields.fixture.ts",
+      ],
+      rules: {
+        "no-raw-decision-text-fields/no-raw-decision-text-fields": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-unowned-file-version-write.fixture.ts",
       ],
       rules: {
@@ -3029,6 +3038,18 @@ export default defineConfig({
       ],
       rules: {
         "no-literal-decision-court/no-literal-decision-court": "error",
+      },
+    },
+    {
+      // Publisher decision text carries an explicit present/absent state.
+      // Keep its known keys out of open metadata and require raw literals to
+      // cross the TextField construction boundary before adapters emit them.
+      files: ["apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.test.ts",
+      ],
+      rules: {
+        "no-raw-decision-text-fields/no-raw-decision-text-fields": "error",
       },
     },
     {

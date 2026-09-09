@@ -10,7 +10,10 @@ import {
   type ShelfCourt,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
+import {
+  readDecisionHeadnote,
+  type TextField,
+} from "@/api/lib/case-law/decision-text";
 import {
   type PublicDecisionLanguageAlternate,
   readPublicDecisionLanguageAlternatesByGroup,
@@ -48,7 +51,7 @@ export type LatestDecision = {
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
   decisionDate: string | null;
   decisionType: string | null;
-  headnote: string | null;
+  headnote: TextField;
   citationCount: number;
 };
 
@@ -224,7 +227,7 @@ export const readLatestDecisionsByCourt = async ({
       ),
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
-      headnote: normalizeDecisionHeadnote(row["headnote"]),
+      headnote: readDecisionHeadnote(row["headnote"]),
       citationCount: Number(row["citation_count"]) || 0,
     });
   }

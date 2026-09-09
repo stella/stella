@@ -13,6 +13,11 @@ import {
 } from "bun:test";
 
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type ResultRow = {
@@ -731,14 +736,44 @@ describe("czUsAdapter.fetchPage", () => {
     const page = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
-    expect(page.decisions[0]?.metadata["abstract"]).toBe(abstract);
-    expect(page.decisions[0]?.metadata["legalSentence"]).toBe(legalSentence);
-    expect(page.decisions[0]?.sourceRawContentType).toBe("application/json");
-    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
+    const decision = page.decisions.at(0);
+    expect(decision?.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: abstract },
+      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: legalSentence },
+    });
+    expect(decision?.sourceRawContentType).toBe("application/json");
+    expect(JSON.parse(decision?.sourceRaw ?? "")).toMatchObject({
       listingHtml: expect.stringContaining("ResultDetail.aspx?id=5001"),
       textHtml: expect.stringContaining("lblRegistrySign"),
       abstractHtml: expect.stringContaining(abstract),
     });
+  });
+
+  test("moves the source hash when publisher text changes", async () => {
+    const row = {
+      id: "fixture-text-hash",
+      sz: "fixture-text-hash_1",
+      caseNumber: "Fixture 1",
+      date: "1. 1. 2024",
+    };
+    installSearchMock({
+      rows: [row],
+      abstract: "First published summary is long enough to be retained.",
+    });
+    const first = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions.at(0);
+
+    installSearchMock({
+      rows: [row],
+      abstract: "Second published summary is long enough to be retained.",
+    });
+    const second = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    ).decisions.at(0);
+
+    expect(first?.rawHash).not.toBe(second?.rawHash);
   });
 
   test("stores no headnote where the court prints that it has none", async () => {
@@ -762,8 +797,17 @@ describe("czUsAdapter.fetchPage", () => {
     const page = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
-    expect(page.decisions[0]?.metadata).not.toHaveProperty("abstract");
-    expect(page.decisions[0]?.metadata).not.toHaveProperty("legalSentence");
+    expect(page.decisions.at(0)?.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      },
+      legalSentence: {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      },
+    });
     // The page the sentences came from is still stored, so a later reading
     // can recover whatever the court served.
     expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({

@@ -195,9 +195,15 @@ test(
     const second = all.find((item) => item.caseNumber === "2 Cdo 2/2024");
     const undated = all.find((item) => item.caseNumber === "undated");
 
-    expect(first?.headnote).toBe("Právní věta.");
-    expect(second?.headnote).toBe("smlouva");
-    expect(undated?.headnote).toBeNull();
+    expect(first?.headnote).toEqual({
+      type: "present",
+      text: "Právní věta.",
+    });
+    expect(second?.headnote).toEqual({ type: "present", text: "smlouva" });
+    expect(undated?.headnote).toEqual({
+      type: "absent",
+      reason: "not_published",
+    });
   },
   DB_TEST_TIMEOUT_MS,
 );

@@ -18,6 +18,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
@@ -137,6 +141,7 @@ const decision: IngestionResult = {
   language: "sk",
   fulltext: "Rozhodnutie o veci samej.",
   metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "raw-hash",
   documentAst: {},
 };
