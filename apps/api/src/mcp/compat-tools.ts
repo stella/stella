@@ -269,7 +269,12 @@ const compatFetchArgsSchema = nullAsAbsent(
 
 export const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    annotations: { title: "Search", readOnlyHint: true, openWorldHint: false },
+    annotations: {
+      title: "Search",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     access: "read",
     anonymized: {
       exposure: "anonymize",
@@ -286,7 +291,12 @@ export const COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    annotations: { title: "Fetch", readOnlyHint: true, openWorldHint: false },
+    annotations: {
+      title: "Fetch",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     access: "read",
     anonymized: {
       exposure: "anonymize",

@@ -266,7 +266,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
       error: {
         code: "upstream_unavailable",
         message: "ARES is temporarily unavailable",
-        hint: "Retry the same request. If the service remains unavailable, report the request ID with send_feedback.",
+        hint: "Retry the same request. If the service remains unavailable, prepare a report with the request ID using prepare_feedback.",
         retryable: true,
       },
     });

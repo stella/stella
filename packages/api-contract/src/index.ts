@@ -45,6 +45,10 @@ export {
   CHAT_TOOL_POLICY_KIND,
   CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
 } from "./chat-tool-policy";
+export {
+  MCP_CHAT_TOOL_GRANT_POLICIES,
+  MCP_CHAT_TOOL_POLICY_KINDS,
+} from "./mcp-chat-tool-policy.gen";
 export type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,

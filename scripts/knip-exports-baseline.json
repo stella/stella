@@ -380,7 +380,7 @@
     }
   },
   "apps/web": {
-    "count": 427,
+    "count": 425,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -415,7 +415,7 @@
       "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
       "apps/web/src/components/chat/chat-mention-href.ts": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 1,
-      "apps/web/src/components/chat/chat-ui-tools.ts": 6,
+      "apps/web/src/components/chat/chat-ui-tools.ts": 5,
       "apps/web/src/components/chat/composer-plus-menu.tsx": 1,
       "apps/web/src/components/chat/create-document-draft-preview.logic.ts": 1,
       "apps/web/src/components/chat/entity-link.tsx": 1,
@@ -592,7 +592,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-scroll.logic.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.logic.ts": 2,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.logic.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic.ts": 1,

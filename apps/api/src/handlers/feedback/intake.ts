@@ -1,13 +1,9 @@
 /**
  * Public feedback intake receiver (`POST /public/feedback`).
  *
- * The upstream half of the agent feedback path: a self-hosted Stella (or the
- * MCP `send_feedback` "stella" channel) forwards approved, already-sanitized
- * feedback here, and this endpoint delivers it to the maintainer inbox
+ * A Stella deployment accepts feedback here and delivers it to the maintainer inbox
  * (`FEEDBACK_EMAIL_TO`) when configured, otherwise a `feature_disabled` refusal.
- * Delivery is email-only: public issues are filed exclusively through the
- * github channel of `send_feedback`, where the human submits under their own
- * GitHub account, so the intake never holds a GitHub token.
+ * Delivery is email-only, so the intake never holds a GitHub token.
  *
  * Security model: unauthenticated by design (the caller may have no account and
  * no email), so the protection is entirely abuse bounding, not identity:

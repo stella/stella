@@ -4992,13 +4992,13 @@ export const generatedRouteMap: RouteNode = {
     feedback: {
       kind: "route",
       children: {
-        send: {
+        prepare: {
           kind: "leaf",
           spec: {
-            commandPath: ["feedback", "send"],
-            toolName: "send_feedback",
+            commandPath: ["feedback", "prepare"],
+            toolName: "prepare_feedback",
             description:
-              "File a bug, feature request, or docs issue with the stella maintainers.",
+              "Prepare a bug, feature request, or docs issue for the stella maintainers.",
             flags: [
               {
                 flag: "--kind",

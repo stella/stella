@@ -286,46 +286,26 @@ describe("manage_organization per-action validation", () => {
   });
 });
 
-describe("manage_organization remove_member confirm gate", () => {
-  test("the tool is not marked destructiveHint (so the central gate skips it)", () => {
-    // Widen to the SDK annotations shape (the `as const` registry element types
-    // annotations to only the keys manage_organization declares, which omits
-    // destructiveHint) so the assertion below can read the hint it must be absent.
+describe("manage_organization destructive behavior", () => {
+  test("binds remove_member confirmation to the action discriminator", () => {
     const definitions: readonly McpToolDefinition[] =
       DEFAULT_MCP_TOOL_DEFINITIONS;
     const def = definitions.find((tool) => tool.name === "manage_organization");
     expect(def).toBeDefined();
-    // manage_organization also adds members and updates settings, so it must not
-    // trip the whole-tool central confirm gate: it carries no destructiveHint.
-    // The remove_member gate is action-level inside the handler instead. (It
-    // does carry the behavioural idempotent/open-world hints like every write
-    // tool; only destructiveHint drives the central gate.)
-    expect(def?.annotations.destructiveHint).not.toBe(true);
+    expect(def?.annotations.destructiveHint).toBe(true);
+    expect(def?.destructiveBehavior).toEqual({
+      type: "input-discriminator",
+      property: "action",
+      destructiveValues: ["remove_member"],
+    });
   });
 
-  test("remove_member without confirm is refused with confirmation_required", async () => {
-    const payload = JSON.parse(
-      errorText(
-        await runManageOrg({
-          action: "remove_member",
-          matter_id: WORKSPACE_ID,
-          user_id: "user_2",
-        }),
-      ),
-    );
-    expect(payload.error.code).toBe("confirmation_required");
-  });
-
-  test("remove_member with confirm clears the gate and proceeds to resolution", async () => {
-    // With confirm the action-level gate passes; the op then fails on workspace
-    // access (this context grants none), proving it advanced past the gate
-    // rather than being blocked by it.
+  test("remove_member handler proceeds to normal resolution", async () => {
     const text = errorText(
       await runManageOrg({
         action: "remove_member",
         matter_id: WORKSPACE_ID,
         user_id: "user_2",
-        confirm: true,
       }),
     );
     expect(text).not.toContain("confirmation_required");

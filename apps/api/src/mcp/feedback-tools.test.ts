@@ -32,7 +32,10 @@ const context: McpRequestContext = {
 };
 
 const parsePayload = async (args: Record<string, unknown>) => {
-  const result = await FEEDBACK_TOOL_HANDLERS.send_feedback({ args, context });
+  const result = await FEEDBACK_TOOL_HANDLERS.prepare_feedback({
+    args,
+    context,
+  });
   if (isMcpEgressPlan(result)) {
     throw new TypeError("Expected a finished result");
   }
@@ -46,7 +49,7 @@ const parsePayload = async (args: Record<string, unknown>) => {
   return { payload, result };
 };
 
-describe("MCP send_feedback tool", () => {
+describe("MCP prepare_feedback tool", () => {
   test("returns sanitized content for manual submission", async () => {
     const { payload, result } = await parsePayload({
       kind: "bug",

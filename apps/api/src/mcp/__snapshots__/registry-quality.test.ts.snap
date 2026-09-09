@@ -9,6 +9,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
     "annotations": {
       "title": "Search",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -41,6 +42,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Fetch a knowledge document by id using the OpenAI-compatible fetch tool shape. Use ids returned by the search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Fetch",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -72,6 +74,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the matters you can access, or get one matter's overview. Omit matter_id to list accessible matters (filter with status, page with cursor); list first when the user does not name a matter or you need matter IDs for follow-up tools. Pass matter_id to return that matter's overview instead: counts, recent entities, linked contacts, and members.",
     "annotations": {
       "title": "List matters",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -115,6 +118,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Search across all accessible matters. Use this when the user explicitly asks to search outside a single matter or you do not yet know the right matter.",
     "annotations": {
       "title": "Search across matters",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -154,6 +158,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
     "annotations": {
       "title": "Search case law",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -226,6 +231,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Read a document's content, found anywhere in your accessible matters. DOCX files are converted to Markdown with structure preserved (headings, tables, lists); other formats return their extracted plain text. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read content across matters",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -258,6 +264,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Read a single case-law decision by its decision ID. Returns metadata, explicit decision text fields, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read case-law decision",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -289,6 +296,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Read a contact by ID. Use this after matter overview or entity metadata surfaces a contact the user wants to inspect more closely.",
     "annotations": {
       "title": "Read contact",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -314,8 +322,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
     "annotations": {
       "title": "Set practice jurisdictions",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -610,6 +620,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -637,8 +648,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "annotations": {
       "title": "Fill template",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -693,8 +706,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Fill a registered template and persist its DOCX in a matter. Use create_document (optionally with parent_id) or create_version with entity_id. Call list_templates for field paths; never guess required values. Missing required values always fail. Unfilled placeholders or failed AI drafts stop writes unless completion_mode is allow_partial. Returns document/version ids and fill diagnostics.",
     "annotations": {
       "title": "Save filled template",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -769,8 +784,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters ARE its field's configuration. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields writes those filters.",
     "annotations": {
       "title": "Create template",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -831,8 +848,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The configuration lives in the document, so this rewrites what carries each field (its markers at every occurrence, the {% if %} tags a rule replaces, the keyed markers that render a registry hit) and publishes the result. Pass template_id and one entry per field path; every path must be one the document already carries, and a property you leave out keeps what the marker says. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards, plus the entries that could not be applied.",
     "annotations": {
       "title": "Configure template fields",
+      "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1282,6 +1301,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the documents and folders in a matter. Use 'flat' mode to enumerate every document and folder in the matter, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the matter root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
     "annotations": {
       "title": "List documents",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -1331,6 +1351,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
     "annotations": {
       "title": "Read document",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -1375,8 +1396,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
     "annotations": {
       "title": "Save document",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1457,8 +1480,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Upload an attached host file as a new version of an existing document. Pass entity_id and file. Use open_document_version_upload only when the host cannot supply MCP file parameters. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
     "annotations": {
       "title": "Upload document version",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": true
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1510,8 +1535,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Open a portable file picker for uploading a new version of an existing document. Use only when upload_document_version cannot receive a host file reference; do not use when the host already supplied an attached file.",
     "annotations": {
       "title": "Open document version upload",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": true
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1537,7 +1564,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "title": "Delete document",
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1570,6 +1598,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
     "annotations": {
       "title": "List properties",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -1606,8 +1635,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
     "annotations": {
       "title": "Set field value",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1780,8 +1811,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
     "annotations": {
       "title": "Save matter",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1842,7 +1875,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "title": "Delete matter",
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1870,6 +1904,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List or search the organization's internal contact directory. Returns internal contact IDs accepted by read_contact, save_contact, and link_matter_contact. Use q to search display names and type to filter people or organizations.",
     "annotations": {
       "title": "List contacts",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -1911,8 +1946,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "annotations": {
       "title": "Save contact",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -1997,7 +2034,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "title": "Delete contact",
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2025,6 +2063,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": true
     },
@@ -2069,6 +2108,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
     "annotations": {
       "title": "List tasks",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2126,8 +2166,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "annotations": {
       "title": "Save task",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2256,7 +2298,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "title": "Delete task",
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2284,8 +2327,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
     "annotations": {
       "title": "Link contact to matter",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2334,6 +2379,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the clause library for this organization, or read one clause in detail. Pass clause_id to get a clause's body, description, usage notes, variants, and version history; add version_id to read one version's body. Otherwise list clauses (newest first), optionally filtered by category_id or a text query, and set include_categories to also return the category tree. Returns each clause's id, title, category, language, and current version.",
     "annotations": {
       "title": "List clauses",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2387,8 +2433,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2566,7 +2614,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "title": "Delete clause",
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2594,6 +2643,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, tiered rules, and ideal language), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
     "annotations": {
       "title": "List playbooks",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2628,8 +2678,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass matter_id and playbook_id. Returns the number of columns queued for review.",
     "annotations": {
       "title": "Run playbook",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2660,6 +2712,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
     "annotations": {
       "title": "List time entries",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2732,8 +2785,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
     "annotations": {
       "title": "Save time entry",
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2842,7 +2897,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "title": "Delete time entry",
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -2871,6 +2927,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
     "annotations": {
       "title": "Resolve billing rate",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2910,6 +2967,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
     "annotations": {
       "title": "List invoices",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2950,6 +3008,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
     "annotations": {
       "title": "Get usage",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -2968,6 +3027,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
     "annotations": {
       "title": "Search legislation",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": true
     },
@@ -3062,6 +3122,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "annotations": {
       "title": "List audit log",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3127,8 +3188,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, and document processing. Manage provider secrets in the dashboard.",
     "annotations": {
       "title": "Manage organization",
+      "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -3188,14 +3251,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "send_feedback",
+    "name": "prepare_feedback",
     "scope": "stella:feedback",
-    "access": "write",
-    "description": "File a bug, feature request, or docs issue with the stella maintainers. Requires explicit human approval; the tool never publishes anything on its own. It returns a prefilled new-issue URL and a gh command the human opens and submits under their own GitHub account. All content is sanitized server-side (emails, ids, secrets, URLs, IPs are redacted). Never include tenant data, client or matter names, ids, or secrets; describe the problem, reproduction steps, and expected vs actual result.",
+    "access": "read",
+    "description": "Prepare a bug, feature request, or docs issue for the stella maintainers. The tool never publishes anything. It returns a prefilled new-issue URL and a gh command the human opens and submits under their own GitHub account. All content is sanitized server-side (emails, ids, secrets, URLs, IPs are redacted). Never include tenant data, client or matter names, ids, or secrets; describe the problem, reproduction steps, and expected vs actual result.",
     "annotations": {
-      "title": "Send feedback",
-      "idempotentHint": false,
-      "openWorldHint": true
+      "title": "Prepare feedback",
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
     },
     "inputSchema": {
       "type": "object",
@@ -3246,6 +3310,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "annotations": {
       "title": "List capabilities",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3286,6 +3351,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), its disposition, and its transport (whether this path can run it, which field takes a file, and what to use instead). Call this before invoke_capability to learn exactly what input to pass.",
     "annotations": {
       "title": "Describe capability",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3310,8 +3376,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
       "title": "Invoke capability",
+      "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     },
     "inputSchema": {
       "type": "object",
@@ -3369,6 +3437,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Search anonymized knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns anonymized titles with ids and urls for follow-up fetch calls.",
     "annotations": {
       "title": "Search",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3401,6 +3470,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Fetch anonymized document text by id using the OpenAI-compatible fetch tool shape. Use ids returned by the anonymized search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Fetch",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3432,6 +3502,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List the matters you can access, or get one matter's overview. Omit matter_id to list accessible matters (filter with status, page with cursor); list first when the user does not name a matter or you need matter IDs for follow-up tools. Pass matter_id to return that matter's overview instead: counts, recent entities, linked contacts, and members.",
     "annotations": {
       "title": "List matters",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3475,6 +3546,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Search across all accessible matters. Use this when the user explicitly asks to search outside a single matter or you do not yet know the right matter.",
     "annotations": {
       "title": "Search across matters",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3514,6 +3586,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
     "annotations": {
       "title": "Search case law",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3586,6 +3659,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Read a document's content, found anywhere in your accessible matters. DOCX files are converted to Markdown with structure preserved (headings, tables, lists); other formats return their extracted plain text. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read content across matters",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3618,6 +3692,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Read a single case-law decision by its decision ID. Returns metadata, explicit decision text fields, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read case-law decision",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3649,6 +3724,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Read a contact by ID. Use this after matter overview or entity metadata surfaces a contact the user wants to inspect more closely.",
     "annotations": {
       "title": "Read contact",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3674,6 +3750,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3701,6 +3778,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List the documents and folders in a matter. Use 'flat' mode to enumerate every document and folder in the matter, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the matter root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
     "annotations": {
       "title": "List documents",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3750,6 +3828,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
     "annotations": {
       "title": "Read document",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3794,6 +3873,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
     "annotations": {
       "title": "List properties",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3830,6 +3910,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": true
     },
@@ -3874,6 +3955,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
     "annotations": {
       "title": "List tasks",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3931,6 +4013,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List the clause library for this organization, or read one clause in detail. Pass clause_id to get a clause's body, description, usage notes, variants, and version history; add version_id to read one version's body. Otherwise list clauses (newest first), optionally filtered by category_id or a text query, and set include_categories to also return the category tree. Returns each clause's id, title, category, language, and current version.",
     "annotations": {
       "title": "List clauses",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -3984,6 +4067,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, tiered rules, and ideal language), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
     "annotations": {
       "title": "List playbooks",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -4019,6 +4103,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
     "annotations": {
       "title": "List time entries",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -4091,6 +4176,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
     "annotations": {
       "title": "Resolve billing rate",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -4130,6 +4216,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
     "annotations": {
       "title": "List invoices",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -4170,6 +4257,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
     "annotations": {
       "title": "Get usage",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
     },
@@ -4188,6 +4276,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
     "annotations": {
       "title": "Search legislation",
+      "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": true
     },

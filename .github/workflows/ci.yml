@@ -831,14 +831,17 @@ jobs:
 
       - name: CLI registry snapshot guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The stella CLI's committed registry snapshot, generated route map, and
-        # the generated TanStack Intent agent skill must match the live MCP
+        # The CLI and shared chat-policy projections must match the live MCP
         # registry: regenerate all of them and fail on any diff so a registry
-        # change cannot silently ship a stale CLI surface (or stale skill docs).
+        # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
           (cd packages/cli && bun run codegen)
-          git diff --exit-code -- packages/cli/src/generated packages/cli/skills
+          git diff --exit-code -- \
+            chatgpt-app-submission.json \
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/cli/src/generated \
+            packages/cli/skills
 
       - name: MCP App bundle guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'

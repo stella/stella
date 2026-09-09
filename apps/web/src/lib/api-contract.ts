@@ -78,3 +78,4 @@ export type {
   TemplateRecipeDefinition,
   ViewLayoutType,
 };
+export { MCP_CHAT_TOOL_GRANT_POLICIES } from "@stll/api-contract";

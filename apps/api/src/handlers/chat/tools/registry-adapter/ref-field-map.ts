@@ -154,6 +154,10 @@ export const READ_TOOL_REF_FIELD_MAP = {
   fetch: { chatProjectable: false },
   search: { chatProjectable: false },
 
+  // The feedback helper only prepares sanitized GitHub issue content. It is
+  // served through MCP/CLI and never projected into the in-app chat surface.
+  prepare_feedback: { chatProjectable: false },
+
   // --- Matters / contacts / content -----------------------------------------
   list_matters: {
     chatProjectable: true,
@@ -484,15 +488,6 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     projection: CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
   },
-
-  // --- Feedback -------------------------------------------------------------
-  // `send_feedback` is an agent/MCP tool that reports bugs to the maintainers
-  // and runs its own human-approval handshake (preview -> confirmation token).
-  // It is not a chat surface tool: it takes no entity references, returns no
-  // tenant ids, and would double-gate on approval if projected. It stays off
-  // the chat write projection, so it never enters `ProjectedWriteToolName` or
-  // the chat tool-policy map.
-  send_feedback: { chatProjectable: false },
 
   // --- Capability meta-tool: not projected to chat --------------------------
   // `invoke_capability` runs an arbitrary catalog capability over the MCP/CLI

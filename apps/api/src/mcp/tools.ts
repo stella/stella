@@ -2,7 +2,7 @@ import type {
   CallToolResult,
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
@@ -92,6 +92,39 @@ export const findUndeclaredArguments = ({
       ),
     }));
   return undeclared.length === 0 ? undefined : { declared, undeclared };
+};
+
+const requiresTransportConfirmation = (
+  definition: McpToolDefinition,
+  args: Record<string, unknown>,
+): boolean => {
+  const behavior = definition.destructiveBehavior;
+  if (behavior === undefined) {
+    return false;
+  }
+
+  switch (behavior.type) {
+    case "always":
+      return true;
+    case "input-discriminator": {
+      const value = args[behavior.property];
+      return (
+        typeof value === "string" && behavior.destructiveValues.includes(value)
+      );
+    }
+    case "capability-catalog":
+      // The handler resolves the selected capability from the canonical
+      // catalog, then applies its target-specific confirmation gate.
+      return false;
+    case "upstream":
+      // Dynamic connector tools are executed by their owning MCP server. Its
+      // advertised risk remains visible to clients, while the upstream server
+      // owns any operation-specific confirmation protocol.
+      return false;
+    default:
+      behavior satisfies never;
+      return panic("Unhandled MCP destructive behavior");
+  }
 };
 
 const undeclaredArgumentMessage = ({ key, suggestion }: UndeclaredArgument) =>
@@ -238,14 +271,11 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  // Destructive-op guardrail (agent misuse protection): an irreversible tool
-  // (delete_*) must be called with `confirm: true`, set only after a human user
-  // approved the action. Runs before dispatch so the mutation never starts
-  // without the confirmation.
-  if (
-    staticTool.annotations.destructiveHint === true &&
-    args["confirm"] !== true
-  ) {
+  // Resolve confirmation from the registry's canonical destructive behavior.
+  // Capability-catalog and upstream tools defer the final decision to their
+  // owning dispatch boundary because the selected target determines risk.
+  const requiresConfirmation = requiresTransportConfirmation(staticTool, args);
+  if (requiresConfirmation && args["confirm"] !== true) {
     return serializeToolResult(
       structuredErrorResult({
         code: "confirmation_required",
@@ -266,10 +296,9 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  const executionContext =
-    staticTool.annotations.destructiveHint === true
-      ? bindApprovedMcpAuditContext(context)
-      : context;
+  const executionContext = requiresConfirmation
+    ? bindApprovedMcpAuditContext(context)
+    : context;
   // Handlers never see the mode: they return either a finished result or an
   // egress plan. The central pipeline applies anonymization (anonymized mode)
   // before windowing; this transport boundary then serializes. Both steps run

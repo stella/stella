@@ -75,9 +75,8 @@ const feedbackArgsSchema = nullAsAbsent(
 export const FEEDBACK_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     description:
-      "File a bug, feature request, or docs issue with the stella maintainers. " +
-      "Requires explicit human approval; the tool never publishes anything on " +
-      "its own. It returns a prefilled " +
+      "Prepare a bug, feature request, or docs issue for the stella maintainers. " +
+      "The tool never publishes anything. It returns a prefilled " +
       "new-issue URL and a gh command the human opens and submits under their " +
       "own GitHub account. All content is sanitized server-side (emails, ids, secrets, " +
       "URLs, IPs are redacted). Never include tenant data, client or matter " +
@@ -90,13 +89,14 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
         "Trimming is server-side normalization, not a constraint a client can express.",
     },
     annotations: {
-      title: "Send feedback",
-      idempotentHint: false,
-      openWorldHint: true,
+      title: "Prepare feedback",
+      destructiveHint: false,
+      openWorldHint: false,
+      readOnlyHint: true,
     },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "send_feedback",
+    access: "read",
+    anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
+    name: "prepare_feedback",
     scope: "stella:feedback",
   }),
 ] as const satisfies readonly McpToolDefinition[];
@@ -112,7 +112,7 @@ const composeFeedbackBody = ({
   body: string;
   kind: FeedbackKind;
 }): string =>
-  `${body}\n\n---\n_Filed via stella send_feedback (agent-assisted, sanitized). Kind: ${kind}._`;
+  `${body}\n\n---\n_Prepared via stella prepare_feedback (agent-assisted, sanitized). Kind: ${kind}._`;
 
 const buildGithubIssueUrl = ({
   body,
@@ -209,7 +209,7 @@ const buildGithubFeedbackResult = ({
   });
 };
 
-const handleSendFeedbackTool: McpToolHandler = async ({ args }) => {
+const handlePrepareFeedbackTool: McpToolHandler = async ({ args }) => {
   const parsed = await Promise.resolve(v.safeParse(feedbackArgsSchema, args));
   if (!parsed.success) {
     return validationErrorResult(
@@ -234,8 +234,8 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args }) => {
 };
 
 export const FEEDBACK_TOOL_HANDLERS = {
-  send_feedback: handleSendFeedbackTool,
-} satisfies Record<"send_feedback", McpToolHandler>;
+  prepare_feedback: handlePrepareFeedbackTool,
+} satisfies Record<"prepare_feedback", McpToolHandler>;
 
 export const FEEDBACK_TOOL_SET = defineMcpToolSet(
   FEEDBACK_TOOL_DEFINITIONS,

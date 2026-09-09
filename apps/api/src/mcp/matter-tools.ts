@@ -2075,8 +2075,10 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save matter",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -2089,6 +2091,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     description:
       "Permanently delete a matter and all its documents, tasks, fields, and " +
@@ -2096,12 +2099,14 @@ export const MATTER_TOOL_DEFINITIONS = [
     inputSchema: deleteMatterArgsSchema,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "always" },
     name: "delete_matter",
     scope: "stella:matters_write",
   }),
   defineValibotMcpTool({
     annotations: {
       title: "List contacts",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -2134,8 +2139,10 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save contact",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -2148,6 +2155,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     description:
       "Permanently delete a contact from the organization address book. " +
@@ -2156,12 +2164,14 @@ export const MATTER_TOOL_DEFINITIONS = [
     inputSchema: deleteContactArgsSchema,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "always" },
     name: "delete_contact",
     scope: "stella:contacts_write",
   }),
   defineValibotMcpTool({
     annotations: {
       title: "Look up business registry",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: true,
     },
@@ -2183,6 +2193,7 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "List tasks",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -2223,8 +2234,10 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save task",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -2237,6 +2250,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     description:
       "Permanently delete a task from its matter, together with its links, " +
@@ -2245,6 +2259,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     inputSchema: deleteTaskArgsSchema,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "always" },
     name: "delete_task",
     scope: "stella:matters_write",
   }),
@@ -2264,8 +2279,10 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Link contact to matter",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },

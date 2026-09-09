@@ -1437,6 +1437,7 @@ export const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "List time entries",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1488,8 +1489,10 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save time entry",
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
@@ -1506,6 +1509,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
+      readOnlyHint: false,
     },
     description:
       "Delete a time entry. A draft entry is permanently deleted; an approved " +
@@ -1515,6 +1519,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     inputSchema: deleteTimeEntryArgsSchema,
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
     isVisibleToMemberRole: (memberRole) =>
       roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
@@ -1524,6 +1529,7 @@ export const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Resolve billing rate",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1545,6 +1551,7 @@ export const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "List invoices",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1577,6 +1584,7 @@ export const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Get usage",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },

@@ -136,7 +136,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       windowedText: true,
     },
 
-    send_feedback: { command: ["feedback", "send"], scope: "feedback" },
+    prepare_feedback: { command: ["feedback", "prepare"], scope: "feedback" },
 
     set_practice_jurisdictions: {
       command: ["organization", "set-jurisdictions"],
@@ -248,11 +248,6 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     invoke_capability: {
       command: ["capability", "invoke"],
       scope: "read",
-      // Destructiveness is per-invoked-capability (catalog flag), not a
-      // property of the tool, so the leaf is non-destructive; the confirm
-      // passthrough lets --yes / a TTY prompt satisfy the server's per-target
-      // confirmation_required gate.
-      confirmPassthrough: true,
     },
 
     manage_organization: {
@@ -270,7 +265,6 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
             command: "remove-member",
             include: ["matter_id", "user_id"],
             required: ["matter_id", "user_id"],
-            destructive: true,
           },
           update_org_settings: {
             command: "update-settings",

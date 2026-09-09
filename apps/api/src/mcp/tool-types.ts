@@ -49,7 +49,7 @@ export type McpToolFeatureFlag = Extract<keyof typeof env, `FEATURE_${string}`>;
  * freetext: adding a tool forces one of these, and the projection in
  * `static-tool-definitions.ts` can only reason about known reasons.
  */
-export const MCP_ANONYMIZED_EXCLUSION_REASONS = [
+const MCP_ANONYMIZED_EXCLUSION_REASONS = [
   /** Mutating tool. The anonymized surface is egress-only, so writes never appear. */
   "write",
   /**
@@ -108,20 +108,23 @@ export type McpAnonymizedPolicy =
  * consequence of the same fact). The registry-quality suite cross-checks all
  * three stay coherent.
  */
-export const MCP_TOOL_ACCESS_LEVELS = ["read", "write"] as const;
+const MCP_TOOL_ACCESS_LEVELS = ["read", "write"] as const;
 
 export type McpToolAccess = (typeof MCP_TOOL_ACCESS_LEVELS)[number];
 
-type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
+export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
+  destructiveHint: boolean;
+  openWorldHint: boolean;
   title: string;
 };
 
 /**
  * `access` and `readOnlyHint` are one fact stated twice (the registry's
  * structural signal and the MCP client hint), so the type binds them: a
- * `read` tool must carry `readOnlyHint: true` and a `write` tool cannot. A
- * definition that says one thing to the code-mode projection and another to
- * clients is unrepresentable rather than caught by a test.
+ * `read` tool must carry `readOnlyHint: true` and a `write` tool must carry
+ * `readOnlyHint: false`. The other behavioral hints are required too, so a
+ * definition cannot rely on protocol defaults that submission reviewers and
+ * clients may interpret differently.
  */
 export type McpToolAccessBranch =
   | {
@@ -130,42 +133,63 @@ export type McpToolAccessBranch =
     }
   | {
       access: "write";
-      annotations: McpToolAnnotations & { readOnlyHint?: false | undefined };
+      annotations: McpToolAnnotations & { readOnlyHint: false };
     };
 
-export type McpToolDefinition = McpToolAccessBranch & {
-  /**
-   * Host-extension metadata served verbatim through `tools/list`. Keep it on
-   * the canonical definition so MCP Apps and host-specific transports cannot
-   * grow a second registry beside the in-app chat and CLI projections.
-   */
-  _meta?: McpTool["_meta"];
-  /**
-   * Extra grants required in addition to the primary `scope`. Discovery and
-   * dispatch both enforce this list centrally, so compound operations cannot
-   * be advertised or called with only one half of their consent contract.
-   */
-  additionalScopes?: readonly ToolScope[];
-  anonymized: McpAnonymizedPolicy;
-  description: string;
-  /**
-   * Deployment feature flag gating this tool. When set, the tool is dropped
-   * from the advertised list and its dispatch is rejected unless the flag is on
-   * (or the deployment runs in dev). Omitted for always-available tools.
-   */
-  feature?: McpToolFeatureFlag;
-  inputSchema: McpToolInputSchema;
-  /**
-   * Optional session-member visibility predicate, enforced centrally for both
-   * discovery and dispatch. Internal registry metadata; never projected onto
-   * the MCP wire shape.
-   */
-  isVisibleToMemberRole?: (
-    memberRole: McpRequestContext["memberRole"],
-  ) => boolean;
-  name: string;
-  scope: ToolScope;
-};
+export type McpToolDestructiveBehavior =
+  | { type: "always" }
+  | {
+      type: "input-discriminator";
+      property: string;
+      destructiveValues: readonly string[];
+    }
+  | { type: "capability-catalog" }
+  | { type: "upstream" };
+
+type McpToolDestructiveBranch =
+  | {
+      annotations: McpToolAnnotations & { destructiveHint: false };
+      destructiveBehavior?: undefined;
+    }
+  | {
+      annotations: McpToolAnnotations & { destructiveHint: true };
+      destructiveBehavior: McpToolDestructiveBehavior;
+    };
+
+export type McpToolDefinition = McpToolAccessBranch &
+  McpToolDestructiveBranch & {
+    /**
+     * Host-extension metadata served verbatim through `tools/list`. Keep it on
+     * the canonical definition so MCP Apps and host-specific transports cannot
+     * grow a second registry beside the in-app chat and CLI projections.
+     */
+    _meta?: McpTool["_meta"];
+    /**
+     * Extra grants required in addition to the primary `scope`. Discovery and
+     * dispatch both enforce this list centrally, so compound operations cannot
+     * be advertised or called with only one half of their consent contract.
+     */
+    additionalScopes?: readonly ToolScope[];
+    anonymized: McpAnonymizedPolicy;
+    description: string;
+    /**
+     * Deployment feature flag gating this tool. When set, the tool is dropped
+     * from the advertised list and its dispatch is rejected unless the flag is on
+     * (or the deployment runs in dev). Omitted for always-available tools.
+     */
+    feature?: McpToolFeatureFlag;
+    inputSchema: McpToolInputSchema;
+    /**
+     * Optional session-member visibility predicate, enforced centrally for both
+     * discovery and dispatch. Internal registry metadata; never projected onto
+     * the MCP wire shape.
+     */
+    isVisibleToMemberRole?: (
+      memberRole: McpRequestContext["memberRole"],
+    ) => boolean;
+    name: string;
+    scope: ToolScope;
+  };
 
 type DefaultMcpResourceScope = (typeof MCP_DEFAULT_RESOURCE_SCOPES)[number];
 
@@ -203,7 +227,7 @@ export const MCP_CLI_TOOL_SCOPES: readonly McpCliToolScope[] = Object.values(
 
 export type McpCliDiscriminatorSubcommand = {
   command: string;
-  destructive?: true;
+  destructive?: boolean;
   include?: readonly string[];
   required?: readonly string[];
 };

@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1110,
+    "count": 1108,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -97,7 +97,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": 12,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 7,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 9,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 11,
       "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 5,
@@ -216,7 +216,7 @@
       "apps/api/src/lib/hosted-usage-provider/client.ts": 6,
       "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": 5,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 23,
+      "apps/api/src/lib/legal-search/corpus-index-client.ts": 22,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-pack.ts": 6,
@@ -910,7 +910,7 @@
       "apps/api/src/handlers/agent-auth/events.ts": 1,
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/audit-logs/query.ts": 3,
-      "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
+      "apps/api/src/handlers/case-law/analysis/analysis-store.ts": 1,
       "apps/api/src/handlers/case-law/corpus-index.ts": 1,
       "apps/api/src/handlers/case-law/decisions/list.ts": 1,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
@@ -1099,7 +1099,7 @@
       "apps/api/src/handlers/agent-auth/events.ts": 1,
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/audit-logs/query.ts": 1,
-      "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
+      "apps/api/src/handlers/case-law/analysis/analysis-store.ts": 1,
       "apps/api/src/handlers/case-law/corpus-index.ts": 1,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
       "apps/api/src/handlers/case-law/erasure.ts": 3,
@@ -1284,9 +1284,9 @@
     "files": {}
   },
   "capability-file-transport-suppressed": {
-    "count": 21,
+    "count": 20,
     "files": {
-      "packages/cli/capability-catalog.json": 21
+      "packages/cli/capability-catalog.json": 20
     }
   },
   "read-capabilities-with-write-scope": {
@@ -1343,7 +1343,7 @@
     }
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 61,
+    "count": 60,
     "files": {
       "apps/web/src/lib/analytics/noop.ts": 1,
       "apps/web/src/lib/analytics/posthog.ts": 1,
@@ -1379,14 +1379,13 @@
       "packages/template-conditions/src/field-values.ts": 1,
       "packages/template-conditions/src/index.ts": 1,
       "packages/template-conditions/src/path.ts": 1,
-      "packages/time/src/dates.ts": 1,
       "packages/ui/src/inspector/layout-tokens.ts": 2,
       "packages/ui/src/lib/option-color.ts": 1,
       "packages/workspace-model/src/properties.ts": 1
     }
   },
   "duplicate-token-blocks": {
-    "count": 123,
+    "count": 121,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1465,8 +1464,6 @@
       "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 2,
       "apps/web/src/routes/law/$country/cases/$court/$language/$slug.tsx": 1,
       "apps/web/src/routes/law/$country/cases/$court/$slug.tsx": 1,
@@ -1700,7 +1697,7 @@
       "apps/api/src/lib/restrict-outbound-url.ts": 1,
       "apps/api/src/lib/root-scoped-db.ts": 1,
       "apps/api/src/lib/runtime-worker-path.ts": 1,
-      "apps/api/src/lib/s3-credentials.ts": 1,
+      "apps/api/src/lib/s3": 1,
       "apps/api/src/lib/s3-presign.ts": 1,
       "apps/api/src/lib/s3.ts": 1,
       "apps/api/src/lib/safe-id-boundaries.ts": 1,

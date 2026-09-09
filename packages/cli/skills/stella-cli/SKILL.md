@@ -103,7 +103,7 @@ requires (request it at `stella auth login --scopes`).
 | document     | `stella document properties list`          | read                        | paginated                             |
 | document     | `stella document read`                     | read                        |                                       |
 | document     | `stella document save`                     | documents_write             |                                       |
-| feedback     | `stella feedback send`                     | feedback                    |                                       |
+| feedback     | `stella feedback prepare`                  | feedback                    |                                       |
 | invoice      | `stella invoice list`                      | read                        | paginated                             |
 | legislation  | `stella legislation search`                | read                        | paginated                             |
 | matter       | `stella matter delete`                     | matters_write               | destructive (needs `--yes` off a TTY) |
@@ -188,7 +188,7 @@ are omitted here.
   - optional: --version-id, --compare-with-version-id, --include-versions, --versions-cursor
 - `stella document save`
   - optional: --entity-id, --matter-id, --name, --parent-id, --kind (document|folder), --move-to-root, --version-id, --label, --description
-- `stella feedback send`
+- `stella feedback prepare`
   - `--kind` — Feedback category: bug, feature_request, docs, or other (enum: bug, feature_request, docs, other)
   - `--title` — Short one-line summary of the issue; no tenant data, ids, or secrets (string)
   - `--body` — Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side. (string)
@@ -318,9 +318,9 @@ generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-l
   `matterId`). Run `stella <command> --help` or `stella capability describe
 <id>` and copy the field paths it prints.
 
-## Filing feedback
+## Preparing feedback
 
-`stella feedback send` files a bug, feature request, or docs issue with the
+`stella feedback prepare` drafts a bug, feature request, or docs issue for the
 maintainers. Content is sanitized server-side (emails, ids, secrets, URLs, and
 IPs are redacted); never include tenant data, client or matter names, ids, or
 secrets: describe the problem, reproduction steps, and expected vs actual

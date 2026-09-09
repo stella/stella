@@ -1867,6 +1867,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
   {
     annotations: {
       title: "List capabilities",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1904,6 +1905,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
   {
     annotations: {
       title: "Describe capability",
+      destructiveHint: false,
       readOnlyHint: true,
       openWorldHint: false,
     },
@@ -1939,16 +1941,18 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     // though most capabilities never leave the closed Stella domain.
     annotations: {
       title: "Invoke capability",
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
+      readOnlyHint: false,
     },
     name: "invoke_capability",
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
+    destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",
-    // Destructiveness is per-capability (from the catalog), not a property of
-    // this tool, so no `destructiveHint` annotation: the confirm gate is applied
-    // inside the handler from the target capability's `destructive` flag.
+    // Confirmation is per capability (from the catalog), so the handler applies
+    // the gate from the target capability's `destructive` flag.
     description:
       "Invoke one capability by id (from list_capabilities/describe_capability). " +
       "Pass its input under input: { body, params, query } (no other top-level " +

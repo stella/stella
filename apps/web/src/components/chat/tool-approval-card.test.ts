@@ -21,17 +21,24 @@ describe("automatic tool approval", () => {
     ).toBe(true);
   });
 
-  test("never reuses a stored grant for delegation", () => {
-    expect(
-      hasAutomaticApproval({
-        alwaysApprovedTools: new Set(["spawn_subagents"]),
-        canAlwaysAllow: true,
-        conversationApprovedTools: new Set(["spawn_subagents"]),
-        isPublicOfficialApproval: false,
-        name: "spawn_subagents",
-      }),
-    ).toBe(false);
-  });
+  test.each([
+    "delete_matter",
+    "manage_organization",
+    "spawn_subagents",
+  ] as const)(
+    "never reuses a stored grant for approve-once tool %s",
+    (name) => {
+      expect(
+        hasAutomaticApproval({
+          alwaysApprovedTools: new Set([name]),
+          canAlwaysAllow: true,
+          conversationApprovedTools: new Set([name]),
+          isPublicOfficialApproval: false,
+          name,
+        }),
+      ).toBe(false);
+    },
+  );
 });
 
 describe("isSuggestChangesApplyOutput", () => {

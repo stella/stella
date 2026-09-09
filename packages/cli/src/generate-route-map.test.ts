@@ -93,13 +93,13 @@ describe("generateRouteMap: structure", () => {
     expect(paths.every((p) => !p.endsWith(" fetch"))).toBe(true);
   });
 
-  test("send_feedback maps to `feedback send` with the feedback scope", () => {
-    const send = findLeaf(tree, ["feedback", "send"]);
-    expect(send?.toolName).toBe("send_feedback");
-    expect(send?.scope).toBe("feedback");
-    expect(send?.destructive).toBe(false);
+  test("prepare_feedback maps to `feedback prepare` with the feedback scope", () => {
+    const prepare = findLeaf(tree, ["feedback", "prepare"]);
+    expect(prepare?.toolName).toBe("prepare_feedback");
+    expect(prepare?.scope).toBe("feedback");
+    expect(prepare?.destructive).toBe(false);
     expect(
-      flagFor(send ?? errorSpec(), "--confirmation-token"),
+      flagFor(prepare ?? errorSpec(), "--confirmation-token"),
     ).toBeUndefined();
   });
 
@@ -189,9 +189,16 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     expect(settings?.flags.some((f) => f.required)).toBe(false);
   });
 
-  test("remove-member is destructive; add-member is not", () => {
+  test("only remove-member is destructive", () => {
     expect(remove?.destructive).toBe(true);
     expect(add?.destructive).toBe(false);
+    expect(settings?.destructive).toBe(false);
+  });
+
+  test("capability invocation defers destructiveness to the selected target", () => {
+    const invoke = findLeaf(tree, ["capability", "invoke"]);
+    expect(invoke?.destructive).toBe(false);
+    expect(invoke?.confirmPassthrough).toBe(true);
   });
 
   test("no manage_organization subcommand emits a --confirm flag", () => {
