@@ -509,8 +509,8 @@ export const OWNERSHIP = [
     ],
     summary:
       "One total map binds every adapter key to its source name, jurisdiction, " +
-      "known ECLI court codes, declared text sentinels, date range and " +
-      "duplicate-text threshold. Adapters read the declaration, and the runner " +
+      "known ECLI court codes, declared text sentinels, and date range. " +
+      "Adapters read the declaration, and the runner " +
       "reads the resulting total registry, so adding a source requires one " +
       "complete entry.",
     enforcement: { kind: "none" },

@@ -9,8 +9,6 @@ import {
   type CaseLawJurisdiction,
 } from "@/api/lib/legal-search/ingestion-constants";
 
-const DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD = 50;
-
 type SourcePlaceholderPattern = {
   readonly type: "exact";
   readonly text: string;
@@ -39,7 +37,6 @@ type AdapterManifest<TKey extends AdapterKey> = {
   readonly ecliCourtCodes: Readonly<Record<string, string>>;
   readonly placeholderPatterns: readonly SourcePlaceholderPattern[];
   readonly dateRange: AdapterDateRange;
-  readonly duplicateTextThreshold: number;
 };
 
 type AdapterManifestMap = {
@@ -62,7 +59,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2020-10-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.CZ_NS]: {
     key: ADAPTER_KEYS.CZ_NS,
@@ -75,7 +71,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2010-01-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.CZ_NSS]: {
     key: ADAPTER_KEYS.CZ_NSS,
@@ -88,7 +83,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2003-02-04",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.CZ_US]: {
     key: ADAPTER_KEYS.CZ_US,
@@ -104,7 +98,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1993-01-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.SK_COURTS]: {
     key: ADAPTER_KEYS.SK_COURTS,
@@ -117,7 +110,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1965-07-11",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.SK_US]: {
     key: ADAPTER_KEYS.SK_US,
@@ -130,7 +122,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1993-01-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.PL_COURTS]: {
     key: ADAPTER_KEYS.PL_COURTS,
@@ -143,7 +134,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1986-05-28",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
@@ -156,7 +146,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1925-04-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_VFGH]: {
     key: ADAPTER_KEYS.AT_VFGH,
@@ -169,7 +158,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1919-03-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_VWGH]: {
     key: ADAPTER_KEYS.AT_VWGH,
@@ -182,7 +170,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1876-10-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_BVWG]: {
     key: ADAPTER_KEYS.AT_BVWG,
@@ -195,7 +182,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2014-01-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_LVWG]: {
     key: ADAPTER_KEYS.AT_LVWG,
@@ -208,7 +194,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2002-03-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_ASYLGH]: {
     key: ADAPTER_KEYS.AT_ASYLGH,
@@ -221,7 +206,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2008-07-01",
       through: { type: "inclusive", date: "2013-12-31" },
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_UBAS]: {
     key: ADAPTER_KEYS.AT_UBAS,
@@ -234,7 +218,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1998-01-01",
       through: { type: "inclusive", date: "2008-06-30" },
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_UVS]: {
     key: ADAPTER_KEYS.AT_UVS,
@@ -247,7 +230,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1991-02-01",
       through: { type: "inclusive", date: "2013-12-31" },
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_VERG]: {
     key: ADAPTER_KEYS.AT_VERG,
@@ -260,7 +242,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1994-04-01",
       through: { type: "inclusive", date: "2013-12-31" },
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_UMSE]: {
     key: ADAPTER_KEYS.AT_UMSE,
@@ -273,7 +254,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1995-10-01",
       through: { type: "inclusive", date: "2013-12-31" },
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_BKS]: {
     key: ADAPTER_KEYS.AT_BKS,
@@ -286,7 +266,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2001-10-01",
       through: { type: "inclusive", date: "2013-12-31" },
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
     key: ADAPTER_KEYS.AT_FINDOK,
@@ -299,7 +278,6 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "2003-01-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
@@ -312,6 +290,5 @@ export const ADAPTER_MANIFESTS = {
       fromInclusive: "1952-01-01",
       through: OPEN_RANGE,
     },
-    duplicateTextThreshold: DEFAULT_DUPLICATE_SUMMARY_TEXT_THRESHOLD,
   },
 } as const satisfies AdapterManifestMap;

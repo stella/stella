@@ -21,9 +21,6 @@ describe("case-law adapter manifests", () => {
   test("carry valid bounded source facts", () => {
     for (const manifest of Object.values(ADAPTER_MANIFESTS)) {
       expect(manifest.name.trim().length).toBeGreaterThan(0);
-      expect(Number.isSafeInteger(manifest.duplicateTextThreshold)).toBe(true);
-      expect(manifest.duplicateTextThreshold).toBeGreaterThan(0);
-
       const from = parsePlainDate(manifest.dateRange.fromInclusive);
       expect(from).not.toBeNull();
       if (from === null) {
