@@ -33,4 +33,16 @@ export const DOCUMENT_INPUT_OVERRIDES: Partial<
       "2026-08-20: OpenAI Responses accepts input_file PDF content for this " +
       "vision-capable model; models.dev currently omits the pdf modality",
   },
+  "us.amazon.nova-pro-v1:0": {
+    supported: true,
+    reason:
+      "2026-09-09: AWS documents PDF input for Nova Pro through Bedrock " +
+      "Converse; models.dev lists text, image and video only",
+  },
+  "us.amazon.nova-lite-v1:0": {
+    supported: true,
+    reason:
+      "2026-09-09: AWS documents PDF input for Nova Lite through Bedrock " +
+      "Converse; models.dev lists text, image and video only",
+  },
 };

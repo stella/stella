@@ -56,34 +56,7 @@ export const RETAINED_MODELS_DEV_RATE_ENTRIES = {
 /**
  * Exact mappings where Stella uses a provider routing ID while models.dev
  * publishes pricing under the corresponding base model ID. Generation rejects
- * a mapping once models.dev begins publishing the Stella ID directly.
+ * a mapping once models.dev begins publishing the Stella ID directly, so the
+ * map is empty whenever upstream covers every offered ID.
  */
-export const MODELS_DEV_RATE_SOURCE_ALIASES = defineRateSourceAliases({
-  "us.amazon.nova-pro-v1:0": {
-    modelId: "amazon.nova-pro-v1:0",
-    provider: "amazon-bedrock",
-    reason:
-      "2026-09-03: stella uses the Bedrock US inference-profile ID; " +
-      "models.dev prices its corresponding base model ID",
-    sourceUrl:
-      "https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html",
-  },
-  "us.amazon.nova-lite-v1:0": {
-    modelId: "amazon.nova-lite-v1:0",
-    provider: "amazon-bedrock",
-    reason:
-      "2026-09-03: stella uses the Bedrock US inference-profile ID; " +
-      "models.dev prices its corresponding base model ID",
-    sourceUrl:
-      "https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html",
-  },
-  "us.amazon.nova-micro-v1:0": {
-    modelId: "amazon.nova-micro-v1:0",
-    provider: "amazon-bedrock",
-    reason:
-      "2026-09-03: stella uses the Bedrock US inference-profile ID; " +
-      "models.dev prices its corresponding base model ID",
-    sourceUrl:
-      "https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html",
-  },
-});
+export const MODELS_DEV_RATE_SOURCE_ALIASES = defineRateSourceAliases({});

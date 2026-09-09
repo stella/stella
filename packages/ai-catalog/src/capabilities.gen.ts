@@ -77,9 +77,9 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    // override: 2026-08-20: AWS documents PDF input for Nova Pro through Bedrock Converse
+    // override: 2026-09-09: AWS documents PDF input for Nova Pro through Bedrock Converse; models.dev lists text, image and video only
     "us.amazon.nova-pro-v1:0",
-    // override: 2026-08-20: AWS documents PDF input for Nova Lite through Bedrock Converse
+    // override: 2026-09-09: AWS documents PDF input for Nova Lite through Bedrock Converse; models.dev lists text, image and video only
     "us.amazon.nova-lite-v1:0",
   ],
   mistral: [],
@@ -137,11 +137,8 @@ export const MODEL_REASONING_EFFORTS = {
   "claude-haiku-4-5-20251001": null,
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
-  // override: 2026-07-20: absent from the models.dev amazon-bedrock catalog; Bedrock Converse accepts temperature and Nova has no reasoning dial
   "us.amazon.nova-pro-v1:0": null,
-  // override: 2026-07-20: absent from the models.dev amazon-bedrock catalog; Bedrock Converse accepts temperature and Nova has no reasoning dial
   "us.amazon.nova-lite-v1:0": null,
-  // override: 2026-07-20: absent from the models.dev amazon-bedrock catalog; Bedrock Converse accepts temperature and Nova has no reasoning dial
   "us.amazon.nova-micro-v1:0": null,
   "openai.gpt-oss-120b-1:0": ["low", "medium", "high"],
   "openai.gpt-oss-20b-1:0": ["low", "medium", "high"],
