@@ -151,6 +151,172 @@
     "useDifferentEmail": "Use um e-mail diferente",
     "weSentCodeTo": "Enviamos um código para <email>{emailAddress}</email>"
   },
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Adicionar fato",
+      "addUnavailable": "Indisponível neste harness — adicionar um fato exige persistência que ainda não está configurada.",
+      "confirmedByReviewer": "Confirmado pelo revisor",
+      "description": "Evidências concretas — e-mails, mensagens, extratos bancários, fatos acordados — extraídas para o registro de fatos-âncora contra o qual as alegações são verificadas. Revise, edite ou adicione fatos manualmente.",
+      "editFact": "Editar fato",
+      "editOrRetype": "Editar / redigitar",
+      "extractionAndReview": "Extração e revisão",
+      "factCount": "{count, plural, one {# fato} other {# fatos}}",
+      "factText": "Texto do fato-âncora",
+      "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong> — o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
+      "heldForReview": "Em espera para revisão",
+      "importSource": "Importar fonte",
+      "importUnavailable": "Indisponível neste harness — importar uma fonte exige ingestão e armazenamento que ainda não estão configurados.",
+      "interpretation": "Interpretação",
+      "interpretiveConfidence": "Confiança interpretativa",
+      "record": "Registro de fatos-âncora",
+      "sourceAndProvenance": "Fonte e proveniência",
+      "timePeriod": "Período",
+      "title": "Fatos-âncora"
+    },
+    "claimDetail": {
+      "escalatedReview": "Escalado para a equipe de evidências — não há veredito a confirmar ou disputar aqui até que o conflito subjacente seja resolvido.",
+      "factId": "Fato {id}",
+      "flagDispute": "Sinalizar disputa",
+      "humanReview": "Revisão humana",
+      "interpretationCaveat": "Um fato contribuinte carrega uma ressalva substantiva de interpretação — o que é incerto é o significado da evidência, não o meio em que ela chegou.",
+      "notVerifiable": {
+        "pending": "Nenhum modelo ativo configurado nesta versão — resultado: <strong>Sem cobertura, verificação pendente</strong>.",
+        "reopen": "Reabrir → verificar contra o registro",
+        "reopenExplanation": "<strong>Deixada de lado como não verificável.</strong> Se esta for de fato uma alegação verificável, reabra-a: o AVT mantém a sua reclassificação e executa apenas a verificação contra o registro que havia sido pulada."
+      },
+      "note": {
+        "add": "Adicionar nota / correção",
+        "heading": "Sua nota · {savedAt}",
+        "placeholder": "Registre uma correção ou uma explicação. Salvar registra a nota apenas nesta alegação — não altera o veredito nem o registro de fatos-âncora.",
+        "saveCorrection": "Salvar correção"
+      },
+      "overridden": "Substituído",
+      "overrideNotice": "Substituído por <strong>{verdict}</strong> — a análise abaixo é a da própria ferramenta, exibida sem alterações.",
+      "overrideTooltip": "Um revisor registrou um veredito diferente. A análise abaixo é a da própria ferramenta, sem alterações.",
+      "overrideVerdict": "Substituir veredito",
+      "recordConflict": {
+        "dateDecides": "Por que a data decide o veredito",
+        "description": "Dois fatos-âncora tratam do mesmo ponto — <strong>{subject}</strong> — mas divergem. Ambos são fontes de <strong>alta confiança</strong>, então não se trata de um problema de confiabilidade: o próprio registro é internamente inconsistente. O AVT retém o veredito em vez de pontuar a alegação, porque escolher um registro em detrimento do outro é um julgamento que cabe a você fazer e registrar — não algo que a ferramenta deva fazer silenciosamente.",
+        "escalated": "Marcado localmente para acompanhamento da equipe de evidências. O conflito no registro permanece aberto e contabilizado até que uma fonte prevalecente seja selecionada.",
+        "flagForEvidenceTeam": "Sinalizar para a equipe de evidências",
+        "governingPreview": "Esta prévia local trata <strong>{factId}</strong> como prevalecente e avalia a alegação contra <strong>{value}</strong>. Ambos os registros de exemplo permanecem inalterados.",
+        "governingPreviewWithVerdict": "Esta prévia local trata <strong>{factId}</strong> como prevalecente e avalia a alegação contra <strong>{value}</strong> — resultando em <strong>{verdict}</strong>. Ambos os registros de exemplo permanecem inalterados.",
+        "oppositeSides": "As duas datas ficam em <emphasis>lados opostos</emphasis> do evento delimitador. O registro que prevalecer decide o resultado — portanto, resolver o conflito aqui define diretamente o veredito.",
+        "reconcile": "Reconciliar o registro",
+        "resultAsAt": "Em <strong>{date}</strong>, {note}",
+        "title": "Evidências conflitantes no registro",
+        "treatAsGoverning": "Tratar {id} como prevalecente"
+      },
+      "relation": {
+        "conflicts": "Conflita",
+        "supports": "Sustenta"
+      },
+      "reopened": "Reaberta, verificação pendente",
+      "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
+      "revisedLater": "Revisada em declaração posterior",
+      "score": {
+        "anchorFactsDisagree": "Fatos-âncora divergem",
+        "conflictCount": "{count, plural, one {# conflito} other {# conflitos}}",
+        "noCoverage": "<strong>O registro é silente.</strong> Nenhum fato-âncora na base de dados trata desta alegação. Isso é diferente de uma pontuação baixa — significa que ainda não há nada contra o que verificá-la.",
+        "notVerifiable": "<strong>Não é uma asserção verificável.</strong> É o tipo de afirmação que nenhum documento poderia jamais resolver — um contrafactual, uma previsão, uma declaração de intenção, uma conclusão jurídica ou uma alegação vaga demais para ser verificada. Deixada de lado em vez de pontuada.",
+        "outOf100": "<strong>/ 100</strong> pontuação de sustentação",
+        "supportCount": "{count, plural, one {# sustentação} other {# sustentações}}",
+        "verdictWithheld": "Veredito retido"
+      },
+      "timeline": {
+        "asAt": "Em <strong>{date}</strong>",
+        "asAtDate": "Data de referência",
+        "preview": "Visualize a alegação contra o registro de exemplo <emphasis>na data</emphasis> escolhida. Veredito da prévia: <strong>{verdict}</strong>."
+      },
+      "whyScore": "Por que esta pontuação — fatos-âncora"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Asserção objetiva e verificável — pontuada contra o registro. Inclui alegações formuladas como admissões ou negações: julgadas pela proposição subjacente, não pelas meras palavras."
+      },
+      "opinion": {
+        "hint": "Um juízo de valor ou caracterização — nenhum documento pode confirmá-lo ou contradizê-lo, por isso é deixado de lado, não pontuado.",
+        "label": "Opinião"
+      },
+      "setAside": "deixada de lado",
+      "unverifiable": {
+        "hint": "Uma asserção que nenhum documento poderia jamais resolver — um contrafactual, uma previsão, uma declaração de intenção ou crença, uma conclusão jurídica ou uma alegação vaga demais para ser verificada. Deixada de lado, não pontuada. Diferente de Sem cobertura, que é um fato verificável sobre o qual o registro apenas se cala.",
+        "label": "Não verificável"
+      }
+    },
+    "confidence": {
+      "interpretation": "Interpretação",
+      "tooltip": "Confiança interpretativa — quão inequívoco é o significado desta evidência. Independente do meio da fonte (manuscrito, digitalização etc.)."
+    },
+    "confirm": {
+      "recordConflict": "Confirmar resolução",
+      "supported": "Confirmar — pronta",
+      "verdict": "Confirmar veredito"
+    },
+    "devHarness": {
+      "localSessionNotice": "Sessão apenas local — nada aqui é salvo. Cada revisão, nota e edição de fato-âncora existe somente nesta aba do navegador e é perdida ao recarregar.",
+      "title": "Anchor Verification Tool — harness de desenvolvimento",
+      "verifyDocument": "Verificar documento"
+    },
+    "disposition": {
+      "contested": "O veredito está limpo, mas a interpretação de um fato contribuinte está contestada — merece a sua atenção antes da aprovação.",
+      "contradicted": "O registro diverge desta alegação. É preciso uma decisão humana antes que este veredito seja mantido.",
+      "nocover": "Nenhum fato-âncora trata desta alegação, então não há contra o que confirmá-la. A aprovação é opcional.",
+      "notverifiable": "Deixada de lado como não verificável — a aprovação é opcional. Reabra abaixo se ela for de fato verificável.",
+      "recordconflict": "Dois documentos no registro divergem. Resolva acima qual prevalece ou sinalize para a equipe de evidências — a ferramenta não escolherá por você.",
+      "supported": "O registro confirma esta alegação. Sua aprovação atesta que a ferramenta a leu corretamente — nenhum julgamento é necessário.",
+      "tension": "O registro sustenta esta alegação apenas em parte. Pese os fatos favoráveis e conflitantes acima antes que o veredito seja mantido."
+    },
+    "guidance": {
+      "escalate": "Escalar",
+      "manualJudgement": "Julgamento manual",
+      "optional": "Opcional",
+      "readyToConfirm": "Pronta para confirmar"
+    },
+    "matches": {
+      "count": "{count, plural, one {# correspondência} other {# correspondências}}",
+      "position": "{current}/{total}"
+    },
+    "sourceMediumTooltip": "Meio da fonte — um descritor neutro. Por si só, não reduz a confiança.",
+    "states": {
+      "contradicted": {
+        "chip": "Contradita",
+        "label": "Contradita pelo registro"
+      },
+      "nocover": {
+        "chip": "Sem cobertura",
+        "label": "Nenhum fato-âncora cobre esta alegação"
+      },
+      "notverifiable": {
+        "chip": "Não verificável",
+        "label": "Não é uma alegação factual verificável"
+      },
+      "recordconflict": {
+        "chip": "Conflito no registro",
+        "label": "Fatos-âncora divergem entre si"
+      },
+      "supported": {
+        "chip": "Sustentada",
+        "label": "Sustentada pelo registro"
+      },
+      "tension": {
+        "chip": "Em tensão",
+        "label": "Em tensão com o registro"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "Aceitar {count, plural, one {# alegação de rotina} other {# alegações de rotina}}",
+      "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
+      "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
+      "claimStatus": " ({state}{contested, select, true {, contestada} other {}}{superseded, select, true {, substituída} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
+      "selectClaim": "Selecione uma alegação para inspecionar o registro.",
+      "showQueue": "Mostrar fila",
+      "stats": {
+        "claims": "Alegações",
+        "needsJudgement": "Precisa de julgamento"
+      }
+    }
+  },
   "bilingual": {
     "dialog": {
       "create": "Criar versão bilíngue",

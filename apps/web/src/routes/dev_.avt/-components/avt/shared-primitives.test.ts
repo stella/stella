@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 
-import type { AnchorFactsPanel } from "@/routes/dev/-components/avt/anchor-facts-panel";
-import type { ClaimDetailPanel } from "@/routes/dev/-components/avt/claim-detail-panel";
+import type { AnchorFactsPanel } from "@/routes/dev_.avt/-components/avt/anchor-facts-panel";
+import type { ClaimDetailPanel } from "@/routes/dev_.avt/-components/avt/claim-detail-panel";
 import type {
   CLAIM_TEXT,
   DOCUMENT,
-} from "@/routes/dev/-components/avt/sample-data";
+} from "@/routes/dev_.avt/-components/avt/sample-data";
 import type {
   ConfBadge,
   InterpNote,
@@ -19,7 +19,7 @@ import type {
   StateChip,
   StateSwatch,
   TypeChip,
-} from "@/routes/dev/-components/avt/state-chip";
+} from "@/routes/dev_.avt/-components/avt/state-chip";
 import type {
   CONFIDENCE_LEVELS,
   CLAIM_TYPE_META,
@@ -27,7 +27,7 @@ import type {
   STATE_META,
   ClaimFactRelation,
   RecordConflictBoundary,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 import type {
   DispositionTone,
   confirmLabel,
@@ -37,8 +37,8 @@ import type {
   isSettled,
   needsAttention,
   resolveClaimView,
-} from "@/routes/dev/-components/avt/verdict";
-import type { VerificationView } from "@/routes/dev/-components/avt/verification-view";
+} from "@/routes/dev_.avt/-components/avt/verdict";
+import type { VerificationView } from "@/routes/dev_.avt/-components/avt/verification-view";
 
 type SharedPrimitiveExports = [
   typeof AnchorFactsPanel,

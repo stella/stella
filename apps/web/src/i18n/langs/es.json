@@ -151,6 +151,172 @@
     "useDifferentEmail": "Usar otro correo",
     "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Añadir hecho",
+      "addUnavailable": "No disponible en este entorno de prueba: añadir un hecho requiere una persistencia que aún no está conectada.",
+      "confirmedByReviewer": "Confirmado por el revisor",
+      "description": "Las pruebas sólidas (correos, mensajes, registros bancarios y hechos acordados) se extraen al registro de hechos de referencia con el que se contrastan las afirmaciones. Revise, edite o añada hechos manualmente.",
+      "editFact": "Editar hecho",
+      "editOrRetype": "Editar / volver a escribir",
+      "extractionAndReview": "Extracción y revisión",
+      "factCount": "{count, plural, one {# hecho} other {# hechos}}",
+      "factText": "Texto del hecho de referencia",
+      "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
+      "heldForReview": "Pendiente de revisión",
+      "importSource": "Importar fuente",
+      "importUnavailable": "No disponible en este entorno de prueba: importar una fuente requiere una ingesta y un almacenamiento que aún no están conectados.",
+      "interpretation": "Interpretación",
+      "interpretiveConfidence": "Confianza interpretativa",
+      "record": "Registro de hechos de referencia",
+      "sourceAndProvenance": "Fuente y procedencia",
+      "timePeriod": "Periodo",
+      "title": "Hechos de referencia"
+    },
+    "claimDetail": {
+      "escalatedReview": "Remitido al equipo de pruebas: no hay un resultado que confirmar o impugnar hasta que se resuelva el conflicto subyacente.",
+      "factId": "Hecho {id}",
+      "flagDispute": "Marcar discrepancia",
+      "humanReview": "Revisión humana",
+      "interpretationCaveat": "Un hecho relacionado contiene una salvedad interpretativa sustancial: lo incierto es el significado de la prueba, no el formato del que procede.",
+      "notVerifiable": {
+        "pending": "No hay ningún modelo en vivo conectado en esta versión: el resultado es <strong>Sin cobertura, comprobación pendiente</strong>.",
+        "reopen": "Reabrir → contrastar con el registro",
+        "reopenExplanation": "<strong>Reservada como no verificable.</strong> Si la afirmación puede comprobarse, vuelva a abrirla: AVT conserva la reclasificación y ejecuta únicamente la comprobación del registro que se omitió."
+      },
+      "note": {
+        "add": "Añadir nota / corrección",
+        "heading": "Su nota · {savedAt}",
+        "placeholder": "Anote una corrección o explicación. Al guardar, la nota se vincula solo a esta afirmación; no cambia el resultado ni el registro de hechos de referencia.",
+        "saveCorrection": "Guardar corrección"
+      },
+      "overridden": "Cambiado",
+      "overrideNotice": "Cambiado a <strong>{verdict}</strong>; el análisis inferior es el del sistema y se muestra sin cambios.",
+      "overrideTooltip": "Un revisor ha registrado un resultado diferente. El análisis inferior es el del sistema y no se ha modificado.",
+      "overrideVerdict": "Cambiar resultado",
+      "recordConflict": {
+        "dateDecides": "Por qué la fecha determina el resultado",
+        "description": "Dos hechos de referencia tratan el mismo punto (<strong>{subject}</strong>), pero discrepan. Ambos proceden de fuentes de <strong>alta confianza</strong>, por lo que no es un problema de fiabilidad: el propio registro es incoherente. AVT no emite un resultado ni puntúa la afirmación, porque decidir qué registro prevalece es una valoración que usted debe realizar y dejar registrada; la herramienta no debe hacerla en silencio.",
+        "escalated": "Marcado localmente para que el equipo de pruebas haga seguimiento. El conflicto del registro permanece abierto y se contabiliza hasta que se seleccione una fuente prevalente.",
+        "flagForEvidenceTeam": "Marcar para el equipo de pruebas",
+        "governingPreview": "Esta vista previa local considera <strong>{factId}</strong> prevalente y evalúa la afirmación frente a <strong>{value}</strong>. Ambos registros de prueba permanecen sin cambios.",
+        "governingPreviewWithVerdict": "Esta vista previa local considera <strong>{factId}</strong> prevalente y evalúa la afirmación frente a <strong>{value}</strong>, con el resultado <strong>{verdict}</strong>. Ambos registros de prueba permanecen sin cambios.",
+        "oppositeSides": "Las dos fechas están en <emphasis>lados opuestos</emphasis> del hecho determinante. El registro que prevalezca decide el resultado; resolver aquí el conflicto fija directamente el resultado.",
+        "reconcile": "Conciliar el registro",
+        "resultAsAt": "A <strong>{date}</strong>, {note}",
+        "title": "Pruebas contradictorias en el registro",
+        "treatAsGoverning": "Considerar prevalente {id}"
+      },
+      "relation": {
+        "conflicts": "Contradice",
+        "supports": "Respalda"
+      },
+      "reopened": "Reabierta, comprobación pendiente",
+      "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
+      "revisedLater": "Modificada en una declaración posterior",
+      "score": {
+        "anchorFactsDisagree": "Los hechos de referencia discrepan",
+        "conflictCount": "{count, plural, one {# conflicto} other {# conflictos}}",
+        "noCoverage": "<strong>El registro no contiene información.</strong> Ningún hecho de referencia de la base de datos aborda esta afirmación. No equivale a una puntuación baja: todavía no hay nada con lo que contrastarla.",
+        "notVerifiable": "<strong>No es una afirmación verificable.</strong> Ningún documento podría resolver este tipo de declaración: un contrafactual, una predicción, una declaración de intenciones, una conclusión jurídica o una afirmación demasiado imprecisa. Se reserva en lugar de puntuarse.",
+        "outOf100": "<strong>/ 100</strong> puntuación de respaldo",
+        "supportCount": "{count, plural, one {# respaldo} other {# respaldos}}",
+        "verdictWithheld": "Resultado retenido"
+      },
+      "timeline": {
+        "asAt": "A <strong>{date}</strong>",
+        "asAtDate": "Fecha de referencia",
+        "preview": "Previsualice la afirmación frente al registro de prueba <emphasis>a</emphasis> una fecha determinada. Resultado preliminar: <strong>{verdict}</strong>."
+      },
+      "whyScore": "Motivo de esta puntuación: hechos de referencia"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Afirmación objetiva y comprobable: se contrasta con el registro. Incluye afirmaciones formuladas como admisiones o negaciones; se valora la proposición subyacente, no las meras palabras."
+      },
+      "opinion": {
+        "hint": "Juicio de valor o caracterización: ningún documento puede confirmarlo ni contradecirlo, por lo que se reserva y no se puntúa.",
+        "label": "Opinión"
+      },
+      "setAside": "reservada",
+      "unverifiable": {
+        "hint": "Afirmación que ningún documento podría resolver: un contrafactual, una predicción, una declaración de intención o creencia, una conclusión jurídica o una afirmación demasiado imprecisa. Se reserva y no se puntúa. Es distinto de Sin cobertura, que es un hecho comprobable sobre el cual el registro simplemente no contiene información.",
+        "label": "No verificable"
+      }
+    },
+    "confidence": {
+      "interpretation": "Interpretación",
+      "tooltip": "Confianza interpretativa: hasta qué punto es inequívoco el significado de esta prueba. Es independiente del formato de la fuente (manuscrito, escaneo, etc.)."
+    },
+    "confirm": {
+      "recordConflict": "Confirmar resolución",
+      "supported": "Confirmar: listo",
+      "verdict": "Confirmar resultado"
+    },
+    "devHarness": {
+      "localSessionNotice": "Solo sesión local: nada se guarda. Todas las revisiones, notas y modificaciones de hechos de referencia permanecen en esta pestaña y se pierden al actualizarla.",
+      "title": "Herramienta de verificación de referencia: entorno de desarrollo",
+      "verifyDocument": "Verificar documento"
+    },
+    "disposition": {
+      "contested": "El resultado es claro, pero se cuestiona la interpretación de un hecho relacionado; conviene revisarlo antes de aprobar.",
+      "contradicted": "El registro difiere de esta afirmación. Hace falta una decisión humana antes de dar por válido el resultado.",
+      "nocover": "Ningún hecho de referencia aborda esta afirmación, por lo que no hay nada con que contrastarla. La aprobación es opcional.",
+      "notverifiable": "Reservada como no verificable; la aprobación es opcional. Reábrala abajo si realmente puede comprobarse.",
+      "recordconflict": "Dos documentos del registro discrepan. Resuelva arriba cuál prevalece o avise al equipo de pruebas; la herramienta no decidirá por usted.",
+      "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
+      "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado."
+    },
+    "guidance": {
+      "escalate": "Remitir",
+      "manualJudgement": "Valoración manual",
+      "optional": "Opcional",
+      "readyToConfirm": "Listo para confirmar"
+    },
+    "matches": {
+      "count": "{count, plural, one {# coincidencia} other {# coincidencias}}",
+      "position": "{current}/{total}"
+    },
+    "sourceMediumTooltip": "Formato de la fuente: descriptor neutro. Por sí solo no reduce la confianza.",
+    "states": {
+      "contradicted": {
+        "chip": "Contradicha",
+        "label": "Contradicha por el registro"
+      },
+      "nocover": {
+        "chip": "Sin cobertura",
+        "label": "Ningún hecho de referencia cubre esta afirmación"
+      },
+      "notverifiable": {
+        "chip": "No verificable",
+        "label": "No es una afirmación fáctica comprobable"
+      },
+      "recordconflict": {
+        "chip": "Conflicto del registro",
+        "label": "Los hechos de referencia se contradicen"
+      },
+      "supported": {
+        "chip": "Respaldada",
+        "label": "Respaldada por el registro"
+      },
+      "tension": {
+        "chip": "En tensión",
+        "label": "En tensión con el registro"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "Aceptar {count, plural, one {# afirmación rutinaria} other {# afirmaciones rutinarias}}",
+      "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
+      "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
+      "claimStatus": " ({state}{contested, select, true {, cuestionada} other {}}{superseded, select, true {, sustituida} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "selectClaim": "Seleccione una afirmación para examinar el registro.",
+      "showQueue": "Mostrar cola",
+      "stats": {
+        "claims": "Afirmaciones",
+        "needsJudgement": "Requieren valoración"
+      }
+    }
+  },
   "bilingual": {
     "dialog": {
       "create": "Crear versión bilingüe",

@@ -151,6 +151,172 @@
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
     "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Pridėti faktą",
+      "addUnavailable": "Šioje bandymo aplinkoje funkcija nepasiekiama: faktui pridėti reikia dar neprijungto nuolatinio saugojimo.",
+      "confirmedByReviewer": "Patvirtino tikrintojas",
+      "description": "Patikimi įrodymai, pavyzdžiui, el. laiškai, žinutės, banko įrašai ir sutarti faktai, išskirti į atraminių faktų registrą, su kuriuo tikrinami teiginiai. Peržiūrėkite, redaguokite arba pridėkite faktų rankiniu būdu.",
+      "editFact": "Redaguoti faktą",
+      "editOrRetype": "Redaguoti arba įvesti iš naujo",
+      "extractionAndReview": "Išskyrimas ir peržiūra",
+      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# faktų} other {# fakto}}",
+      "factText": "Atraminio fakto tekstas",
+      "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
+      "heldForReview": "Sulaikyta peržiūrai",
+      "importSource": "Importuoti šaltinį",
+      "importUnavailable": "Šioje bandymo aplinkoje funkcija nepasiekiama: šaltiniui importuoti reikia dar neprijungto duomenų gavimo ir saugojimo.",
+      "interpretation": "Aiškinimas",
+      "interpretiveConfidence": "Aiškinimo patikimumas",
+      "record": "Atraminių faktų registras",
+      "sourceAndProvenance": "Šaltinis ir kilmė",
+      "timePeriod": "Laikotarpis",
+      "title": "Atraminiai faktai"
+    },
+    "claimDetail": {
+      "escalatedReview": "Perduota įrodymų grupei: kol neišspręstas pagrindinis prieštaravimas, čia nėra išvados, kurią būtų galima patvirtinti ar ginčyti.",
+      "factId": "Faktas {id}",
+      "flagDispute": "Pažymėti ginčą",
+      "humanReview": "Žmogaus peržiūra",
+      "interpretationCaveat": "Dėl vieno iš susijusių faktų yra esminė aiškinimo išlyga: neaiški įrodymo reikšmė, o ne jo laikmena.",
+      "notVerifiable": {
+        "pending": "Šioje versijoje neprijungtas tiesioginis modelis: rezultatas yra <strong>Nėra aprėpties, laukiama patikros</strong>.",
+        "reopen": "Atverti iš naujo → tikrinti pagal registrą",
+        "reopenExplanation": "<strong>Atidėta kaip nepatikrinama.</strong> Jei šį teiginį iš tiesų galima patikrinti, atverkite jį iš naujo: AVT išsaugos jūsų perklasifikavimą ir atliks tik anksčiau praleistą patikrą pagal registrą."
+      },
+      "note": {
+        "add": "Pridėti pastabą arba pataisą",
+        "heading": "Jūsų pastaba · {savedAt}",
+        "placeholder": "Įrašykite pataisą arba paaiškinimą. Išsaugojus pastaba susiejama tik su šiuo teiginiu; išvada ir atraminių faktų registras nesikeičia.",
+        "saveCorrection": "Išsaugoti pataisą"
+      },
+      "overridden": "Pakeista",
+      "overrideNotice": "Išvada pakeista į <strong>{verdict}</strong>. Toliau rodoma nepakeista paties įrankio analizė.",
+      "overrideTooltip": "Tikrintojas įrašė kitą išvadą. Toliau rodoma nepakeista paties įrankio analizė.",
+      "overrideVerdict": "Pakeisti išvadą",
+      "recordConflict": {
+        "dateDecides": "Kodėl data lemia išvadą",
+        "description": "Du atraminiai faktai susiję su tuo pačiu dalyku, <strong>{subject}</strong>, tačiau vienas kitam prieštarauja. Abu yra <strong>didelio patikimumo</strong> šaltiniai, todėl tai nėra patikimumo problema: pats registras yra vidujai prieštaringas. AVT nepateikia išvados ir nevertina teiginio, nes pasirinkti vieną įrašą vietoj kito turite jūs ir šį pasirinkimą turite užfiksuoti; įrankis neturėtų to daryti neatsiklausęs.",
+        "escalated": "Pažymėta vietoje tolesnei įrodymų grupės peržiūrai. Registro prieštaravimas lieka atviras ir skaičiuojamas, kol pasirenkamas vadovaujamasis šaltinis.",
+        "flagForEvidenceTeam": "Perduoti įrodymų grupei",
+        "governingPreview": "Šioje vietinėje peržiūroje <strong>{factId}</strong> laikomas vadovaujamuoju, o teiginys vertinamas pagal <strong>{value}</strong>. Abu pavyzdinio registro įrašai lieka nepakeisti.",
+        "governingPreviewWithVerdict": "Šioje vietinėje peržiūroje <strong>{factId}</strong> laikomas vadovaujamuoju, o teiginys vertinamas pagal <strong>{value}</strong>; gaunama išvada <strong>{verdict}</strong>. Abu pavyzdinio registro įrašai lieka nepakeisti.",
+        "oppositeSides": "Šios dvi datos yra <emphasis>skirtingose ribinio įvykio pusėse</emphasis>. Rezultatą lemia tai, kuris įrašas laikomas vadovaujamuoju, todėl čia išsprendus prieštaravimą tiesiogiai nustatoma išvada.",
+        "reconcile": "Suderinti registrą",
+        "resultAsAt": "<strong>{date}</strong> dieną {note}",
+        "title": "Prieštaringi įrodymai registre",
+        "treatAsGoverning": "Laikyti {id} vadovaujamuoju"
+      },
+      "relation": {
+        "conflicts": "Prieštarauja",
+        "supports": "Patvirtina"
+      },
+      "reopened": "Atverta iš naujo, laukiama patikros",
+      "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
+      "revisedLater": "Pakeista vėlesniame pareiškime",
+      "score": {
+        "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
+        "conflictCount": "{count, plural, one {# prieštaravimas} few {# prieštaravimai} many {# prieštaravimų} other {# prieštaravimo}}",
+        "noCoverage": "<strong>Registre apie tai duomenų nėra.</strong> Joks duomenų bazės atraminis faktas nesusijęs su šiuo teiginiu. Tai ne tas pats, kas mažas balas: kol kas nėra su kuo jo palyginti.",
+        "notVerifiable": "<strong>Teiginio negalima patikrinti.</strong> Tokio teiginio negalėtų patvirtinti joks dokumentas: tai kontrafaktinis teiginys, prognozė, ketinimų pareiškimas, teisinė išvada arba pernelyg nekonkretus teiginys. Jis atidedamas, o ne vertinamas.",
+        "outOf100": "<strong>/ 100</strong> pagrįstumo balas",
+        "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
+        "verdictWithheld": "Išvada nepateikta"
+      },
+      "timeline": {
+        "asAt": "<strong>{date}</strong> dieną",
+        "asAtDate": "Vertinimo data",
+        "preview": "Peržiūrėkite teiginį pagal pavyzdinį registrą pasirinktos datos <emphasis>būklei</emphasis>. Peržiūros išvada: <strong>{verdict}</strong>."
+      },
+      "whyScore": "Balų pagrindimas: atraminiai faktai"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Objektyvus patikrinamas teiginys, vertinamas pagal registrą. Tai apima pripažinimo arba neigimo forma pateiktus teiginius: vertinamas pagrindinis teiginys, o ne vien žodžiai."
+      },
+      "opinion": {
+        "hint": "Vertinamasis sprendimas arba apibūdinimas, kurio negali patvirtinti ar paneigti joks dokumentas; jis atidedamas, o ne vertinamas.",
+        "label": "Nuomonė"
+      },
+      "setAside": "atidėta",
+      "unverifiable": {
+        "hint": "Teiginys, kurio negalėtų patvirtinti joks dokumentas: kontrafaktinis teiginys, prognozė, ketinimų ar įsitikinimų pareiškimas, teisinė išvada arba pernelyg nekonkretus teiginys. Jis atidedamas, o ne vertinamas. Tai ne tas pats, kas aprėpties nebuvimas, kai faktą galima patikrinti, tačiau registre apie jį nėra duomenų.",
+        "label": "Nepatikrinama"
+      }
+    },
+    "confidence": {
+      "interpretation": "Aiškinimas",
+      "tooltip": "Aiškinimo patikimumas rodo, kiek vienareikšmė yra įrodymo prasmė. Jis nepriklauso nuo šaltinio laikmenos, pavyzdžiui, rašysenos ar nuskaitymo."
+    },
+    "confirm": {
+      "recordConflict": "Patvirtinti sprendimą",
+      "supported": "Patvirtinti: paruošta",
+      "verdict": "Patvirtinti išvadą"
+    },
+    "devHarness": {
+      "localSessionNotice": "Tik vietinė sesija: niekas neišsaugoma. Visos peržiūros, pastabos ir atraminių faktų pakeitimai laikomi šiame naršyklės skirtuke ir prarandami jį atnaujinus.",
+      "title": "Atraminių faktų tikrinimo įrankio bandymo aplinka",
+      "verifyDocument": "Tikrinti dokumentą"
+    },
+    "disposition": {
+      "contested": "Išvada aiški, tačiau vieno susijusio fakto aiškinimas ginčijamas; prieš patvirtindami jį peržiūrėkite.",
+      "contradicted": "Registras šio teiginio nepatvirtina. Prieš patvirtinant išvadą ją turi įvertinti žmogus.",
+      "nocover": "Joks atraminis faktas nesusijęs su šiuo teiginiu, todėl nėra su kuo jo palyginti. Patvirtinti neprivaloma.",
+      "notverifiable": "Atidėta kaip nepatikrinama; patvirtinti neprivaloma. Jei teiginį iš tiesų galima patikrinti, atverkite jį iš naujo toliau.",
+      "recordconflict": "Du registro įrodymai prieštarauja vienas kitam. Aukščiau nuspręskite, kuris yra vadovaujamasis, arba perduokite įrodymų grupei; įrankis už jus nepasirinks.",
+      "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
+      "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus."
+    },
+    "guidance": {
+      "escalate": "Perduoti",
+      "manualJudgement": "Žmogaus sprendimas",
+      "optional": "Neprivaloma",
+      "readyToConfirm": "Paruošta patvirtinti"
+    },
+    "matches": {
+      "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
+      "position": "{current}/{total}"
+    },
+    "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
+    "states": {
+      "contradicted": {
+        "chip": "Prieštarauja",
+        "label": "Prieštarauja registrui"
+      },
+      "nocover": {
+        "chip": "Nėra aprėpties",
+        "label": "Joks atraminis faktas nesusijęs su šiuo teiginiu"
+      },
+      "notverifiable": {
+        "chip": "Nepatikrinama",
+        "label": "Tai nėra patikrinamas faktinis teiginys"
+      },
+      "recordconflict": {
+        "chip": "Registro prieštaravimas",
+        "label": "Atraminiai faktai prieštarauja vienas kitam"
+      },
+      "supported": {
+        "chip": "Patvirtinta",
+        "label": "Patvirtinta registro duomenimis"
+      },
+      "tension": {
+        "chip": "Nevisiškai sutampa",
+        "label": "Nevisiškai sutampa su registru"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "{count, plural, one {Priimti # įprastą teiginį} few {Priimti # įprastus teiginius} many {Priimti # įprastų teiginių} other {Priimti # įprasto teiginio}}",
+      "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
+      "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
+      "claimStatus": " ({state}{contested, select, true {, ginčijama} other {}}{superseded, select, true {, pakeista} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
+      "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
+      "showQueue": "Rodyti eilę",
+      "stats": {
+        "claims": "Teiginiai",
+        "needsJudgement": "Reikia sprendimo"
+      }
+    }
+  },
   "bilingual": {
     "dialog": {
       "create": "Sukurti dvikalbę versiją",

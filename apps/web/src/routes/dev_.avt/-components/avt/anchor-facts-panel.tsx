@@ -17,6 +17,7 @@ import {
   ShieldAlertIcon,
   UploadIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -38,15 +39,16 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAvtStore } from "@/routes/dev/-components/avt/avt-store";
+import { useAvtStore } from "@/routes/dev_.avt/-components/avt/avt-store";
 import {
   InterpNote,
   MediumChip,
-} from "@/routes/dev/-components/avt/state-chip";
+} from "@/routes/dev_.avt/-components/avt/state-chip";
 import {
+  CONFIDENCE_LABEL_KEYS,
   CONFIDENCE_LEVELS,
   type AnchorFact,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 
 function orderFlaggedFirst(facts: readonly AnchorFact[]): AnchorFact[] {
   return [...facts].sort(
@@ -56,6 +58,7 @@ function orderFlaggedFirst(facts: readonly AnchorFact[]): AnchorFact[] {
 
 export function AnchorFactsPanel() {
   const format = useFormatter();
+  const t = useTranslations();
   const facts = useAvtStore((state) => state.facts);
   const setFactConfidence = useAvtStore((state) => state.setFactConfidence);
   const acceptFact = useAvtStore((state) => state.acceptFact);
@@ -99,13 +102,13 @@ export function AnchorFactsPanel() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-            Anchor facts
+            {t("avt.anchorFacts.title")}
           </div>
-          <h2 className="text-lg font-semibold">Extraction &amp; review</h2>
+          <h2 className="text-lg font-semibold">
+            {t("avt.anchorFacts.extractionAndReview")}
+          </h2>
           <p className="text-muted-foreground mt-1.5 max-w-prose text-sm leading-relaxed">
-            Hard evidence — emails, messages, bank records, agreed facts —
-            extracted into the anchor-fact record that claims are checked
-            against. Review, edit, or add facts by hand.
+            {t("avt.anchorFacts.description")}
           </p>
         </div>
         {/*
@@ -120,17 +123,17 @@ export function AnchorFactsPanel() {
           <Button
             disabled
             size="sm"
-            title="Not available in this harness — importing a source needs ingestion and storage that are not wired up yet."
+            title={t("avt.anchorFacts.importUnavailable")}
             variant="outline"
           >
-            <UploadIcon /> Import source
+            <UploadIcon /> {t("avt.anchorFacts.importSource")}
           </Button>
           <Button
             disabled
             size="sm"
-            title="Not available in this harness — adding a fact needs persistence that is not wired up yet."
+            title={t("avt.anchorFacts.addUnavailable")}
           >
-            <PlusIcon /> Add fact
+            <PlusIcon /> {t("avt.anchorFacts.addFact")}
           </Button>
         </div>
       </div>
@@ -139,24 +142,23 @@ export function AnchorFactsPanel() {
         <div className="text-warning-foreground bg-warning/10 border-warning/32 rounded-lg border p-3.5">
           <div className="text-warning flex items-center gap-2 text-sm font-bold">
             <ShieldAlertIcon aria-hidden="true" className="size-4" />
-            Held for review
+            {t("avt.anchorFacts.heldForReview")}
             <span className="bg-warning text-warning-foreground rounded-full px-2 py-0.5 text-xs">
               {format.number(heldCount)}
             </span>
           </div>
           <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-            These extractions are <b>genuinely uncertain in meaning</b> — the
-            content is provisional or unconfirmed, not merely written by hand.
-            They are held out of scoring until a reviewer confirms, edits, or
-            retypes them. A legible source is never queued just for its medium.
+            {t.rich("avt.anchorFacts.heldDescription", {
+              strong: (chunks) => <b>{chunks}</b>,
+            })}
           </p>
         </div>
       )}
 
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold">Anchor-fact record</h3>
+        <h3 className="text-sm font-semibold">{t("avt.anchorFacts.record")}</h3>
         <span className="text-muted-foreground text-sm">
-          {format.number(ordered.length)} facts
+          {t("avt.anchorFacts.factCount", { count: ordered.length })}
         </span>
       </div>
 
@@ -164,12 +166,14 @@ export function AnchorFactsPanel() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[34%] whitespace-normal">Fact</TableHead>
-              <TableHead className="w-[26%] whitespace-normal">
-                Source &amp; provenance
+              <TableHead className="w-[34%] whitespace-normal">
+                {t("memory.kinds.fact")}
               </TableHead>
-              <TableHead>Interpretation</TableHead>
-              <TableHead>Time period</TableHead>
+              <TableHead className="w-[26%] whitespace-normal">
+                {t("avt.anchorFacts.sourceAndProvenance")}
+              </TableHead>
+              <TableHead>{t("avt.anchorFacts.interpretation")}</TableHead>
+              <TableHead>{t("avt.anchorFacts.timePeriod")}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -183,7 +187,7 @@ export function AnchorFactsPanel() {
                   {editingId === fact.id ? (
                     <div className="space-y-2">
                       <Textarea
-                        aria-label="Anchor fact text"
+                        aria-label={t("avt.anchorFacts.factText")}
                         onChange={(event) => setDraft(event.target.value)}
                         value={draft}
                       />
@@ -193,14 +197,14 @@ export function AnchorFactsPanel() {
                           onClick={() => saveEdit(fact.id)}
                           size="sm"
                         >
-                          Save
+                          {t("common.save")}
                         </Button>
                         <Button
                           onClick={() => setEditingId(null)}
                           size="sm"
                           variant="ghost"
                         >
-                          Cancel
+                          {t("common.cancel")}
                         </Button>
                       </div>
                     </div>
@@ -217,7 +221,7 @@ export function AnchorFactsPanel() {
                             size="sm"
                             variant="outline"
                           >
-                            Confirm
+                            {t("common.confirm")}
                           </Button>
                           <Button
                             disabled={editingId !== null}
@@ -225,13 +229,13 @@ export function AnchorFactsPanel() {
                             size="sm"
                             variant="outline"
                           >
-                            <PencilIcon /> Edit / retype
+                            <PencilIcon /> {t("avt.anchorFacts.editOrRetype")}
                           </Button>
                         </div>
                       )}
                       {fact.accepted && (
                         <div className="text-success text-xs font-semibold">
-                          Confirmed by reviewer
+                          {t("avt.anchorFacts.confirmedByReviewer")}
                         </div>
                       )}
                     </div>
@@ -255,7 +259,7 @@ export function AnchorFactsPanel() {
                     value={fact.confidence}
                   >
                     <SelectTrigger
-                      aria-label="Interpretive confidence"
+                      aria-label={t("avt.anchorFacts.interpretiveConfidence")}
                       size="sm"
                     >
                       <SelectValue />
@@ -263,7 +267,7 @@ export function AnchorFactsPanel() {
                     <SelectContent>
                       {CONFIDENCE_LEVELS.map((level) => (
                         <SelectItem key={level} value={level}>
-                          {level}
+                          {t(CONFIDENCE_LABEL_KEYS[level])}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -274,7 +278,7 @@ export function AnchorFactsPanel() {
                 </TableCell>
                 <TableCell className="py-3 text-end">
                   <Button
-                    aria-label="Edit fact"
+                    aria-label={t("avt.anchorFacts.editFact")}
                     disabled={editingId !== null}
                     onClick={() => startEdit(fact)}
                     size="icon-sm"

@@ -8,8 +8,16 @@
  * here. This file only gives that design real TypeScript types.
  */
 
+import type { TranslationKey } from "@/i18n/types";
+
 export const CONFIDENCE_LEVELS = ["High", "Medium", "Low"] as const;
 export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
+
+export const CONFIDENCE_LABEL_KEYS = {
+  High: "tasks.priorityValues.high",
+  Medium: "tasks.priorityValues.medium",
+  Low: "tasks.priorityValues.low",
+} as const satisfies Record<ConfidenceLevel, TranslationKey>;
 
 /**
  * A curated piece of hard evidence (email, bank record, agreed fact,
@@ -192,67 +200,67 @@ export const EMPTY_REVIEW: ClaimReview = {
 
 type StateMeta = {
   state: ClaimState;
-  label: string;
-  chip: string;
+  labelKey: TranslationKey;
+  chipKey: TranslationKey;
 };
 
-export const STATE_META: Record<ClaimState, StateMeta> = {
+export const STATE_META = {
   supported: {
     state: "supported",
-    label: "Supported by the record",
-    chip: "Supported",
+    labelKey: "avt.states.supported.label",
+    chipKey: "avt.states.supported.chip",
   },
   tension: {
     state: "tension",
-    label: "In tension with the record",
-    chip: "In tension",
+    labelKey: "avt.states.tension.label",
+    chipKey: "avt.states.tension.chip",
   },
   contradicted: {
     state: "contradicted",
-    label: "Contradicted by the record",
-    chip: "Contradicted",
+    labelKey: "avt.states.contradicted.label",
+    chipKey: "avt.states.contradicted.chip",
   },
   nocover: {
     state: "nocover",
-    label: "No anchor fact covers this claim",
-    chip: "No coverage",
+    labelKey: "avt.states.nocover.label",
+    chipKey: "avt.states.nocover.chip",
   },
   recordconflict: {
     state: "recordconflict",
-    label: "Anchor facts disagree with each other",
-    chip: "Record conflict",
+    labelKey: "avt.states.recordconflict.label",
+    chipKey: "avt.states.recordconflict.chip",
   },
   notverifiable: {
     state: "notverifiable",
-    label: "Not a checkable factual claim",
-    chip: "Not verifiable",
+    labelKey: "avt.states.notverifiable.label",
+    chipKey: "avt.states.notverifiable.chip",
   },
-};
+} as const satisfies Record<ClaimState, StateMeta>;
 
 type ClaimTypeMeta = {
   type: ClaimType;
-  label: string;
+  labelKey: TranslationKey;
   verifiable: boolean;
-  hint: string;
+  hintKey: TranslationKey;
 };
 
-export const CLAIM_TYPE_META: Record<ClaimType, ClaimTypeMeta> = {
+export const CLAIM_TYPE_META = {
   fact: {
     type: "fact",
-    label: "Fact",
+    labelKey: "memory.kinds.fact",
     verifiable: true,
-    hint: "Objective, checkable assertion — scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words.",
+    hintKey: "avt.claimTypes.fact.hint",
   },
   opinion: {
     type: "opinion",
-    label: "Opinion",
+    labelKey: "avt.claimTypes.opinion.label",
     verifiable: false,
-    hint: "A value judgement or characterisation — no document can confirm or contradict it, so it is set aside, not scored.",
+    hintKey: "avt.claimTypes.opinion.hint",
   },
   unverifiable: {
     type: "unverifiable",
-    label: "Not verifiable",
+    labelKey: "avt.claimTypes.unverifiable.label",
     verifiable: false,
-    hint: "An assertion no document could ever settle — a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.",
+    hintKey: "avt.claimTypes.unverifiable.hint",
   },
-};
+} as const satisfies Record<ClaimType, ClaimTypeMeta>;

@@ -10,12 +10,13 @@
 
 import { panic } from "better-result";
 
+import type { TranslationKey } from "@/i18n/types";
 import type {
   AnchorFact,
   Claim,
   ClaimReview,
   ClaimState,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 
 const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
   "contradicted",
@@ -115,26 +116,33 @@ export const resolveClaimView = (
 
 export type DispositionTone = "ready" | "manual" | "escalate" | "routine";
 
-type DispositionGuidance = {
+const GUIDANCE_KEYS = {
+  ready: "avt.guidance.readyToConfirm",
+  manual: "avt.guidance.manualJudgement",
+  escalate: "avt.guidance.escalate",
+  routine: "avt.guidance.optional",
+} as const satisfies Record<DispositionTone, TranslationKey>;
+
+type DispositionGuideKey = (typeof GUIDANCE_KEYS)[keyof typeof GUIDANCE_KEYS];
+
+export type DispositionGuidance = {
   tone: DispositionTone;
-  guide: string;
-  ask: string;
+  guideKey: DispositionGuideKey;
+  askKey: DispositionAskKey;
 };
 
-const DISP_COPY: Record<ClaimState, string> = {
-  supported:
-    "The record affirms this. Your sign-off confirms the tool read it correctly — no judgement call needed.",
-  tension:
-    "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.",
-  contradicted:
-    "The record departs from this claim. A human call is needed before this verdict stands.",
-  recordconflict:
-    "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team — the tool won't pick for you.",
-  nocover:
-    "No anchor fact addresses this claim, so there's nothing to confirm it against. Sign-off is optional.",
-  notverifiable:
-    "Set aside as not verifiable — sign-off is optional. Re-open below if it's actually checkable.",
-};
+const DISP_COPY = {
+  supported: "avt.disposition.supported",
+  tension: "avt.disposition.tension",
+  contradicted: "avt.disposition.contradicted",
+  recordconflict: "avt.disposition.recordconflict",
+  nocover: "avt.disposition.nocover",
+  notverifiable: "avt.disposition.notverifiable",
+} as const satisfies Record<ClaimState, TranslationKey>;
+
+type DispositionAskKey =
+  | (typeof DISP_COPY)[keyof typeof DISP_COPY]
+  | "avt.disposition.contested";
 
 /**
  * State-aware disposition steer: what KIND of call a verdict is
@@ -147,46 +155,48 @@ export const dispositionGuidance = (
   if (claim.state === "recordconflict") {
     return {
       tone: "escalate",
-      guide: "Escalate",
-      ask: DISP_COPY.recordconflict,
+      guideKey: GUIDANCE_KEYS.escalate,
+      askKey: DISP_COPY.recordconflict,
     };
   }
   if (claim.state === "contradicted" || claim.state === "tension") {
     return {
       tone: "manual",
-      guide: "Manual judgement",
-      ask: DISP_COPY[claim.state],
+      guideKey: GUIDANCE_KEYS.manual,
+      askKey: DISP_COPY[claim.state],
     };
   }
   if (isContested(claim, factById)) {
     return {
       tone: "manual",
-      guide: "Manual judgement",
-      ask: "The verdict is clean, but a contributing fact's interpretation is contested — worth your eyes before sign-off.",
+      guideKey: GUIDANCE_KEYS.manual,
+      askKey: "avt.disposition.contested",
     };
   }
   if (claim.state === "supported") {
     return {
       tone: "ready",
-      guide: "Ready to confirm",
-      ask: DISP_COPY.supported,
+      guideKey: GUIDANCE_KEYS.ready,
+      askKey: DISP_COPY.supported,
     };
   }
-  return { tone: "routine", guide: "Optional", ask: DISP_COPY[claim.state] };
+  return {
+    tone: "routine",
+    guideKey: GUIDANCE_KEYS.routine,
+    askKey: DISP_COPY[claim.state],
+  };
 };
 
-export const confirmLabel = (state: ClaimState): string => {
-  if (state === "supported") {
-    return "Confirm — ready";
-  }
-  if (state === "nocover" || state === "notverifiable") {
-    return "Acknowledge";
-  }
-  if (state === "recordconflict") {
-    return "Confirm resolution";
-  }
-  return "Confirm verdict";
-};
+const CONFIRM_LABEL_KEYS = {
+  supported: "avt.confirm.supported",
+  tension: "avt.confirm.verdict",
+  contradicted: "avt.confirm.verdict",
+  nocover: "tasks.acknowledge",
+  recordconflict: "avt.confirm.recordConflict",
+  notverifiable: "tasks.acknowledge",
+} as const satisfies Record<ClaimState, TranslationKey>;
+
+export const confirmLabel = (state: ClaimState) => CONFIRM_LABEL_KEYS[state];
 
 type ClaimCounts = {
   total: number;

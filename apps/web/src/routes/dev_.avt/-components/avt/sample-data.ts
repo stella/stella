@@ -12,7 +12,7 @@ import type {
   AnchorFact,
   CaseDocument,
   Claim,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 
 export const ANCHOR_FACTS: readonly AnchorFact[] = [
   {
