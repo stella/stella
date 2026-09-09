@@ -273,10 +273,11 @@ export const decideDecisionDateRepair = ({
  * batch without a cursor, and a keyset cursor over a self-consuming predicate
  * would only add a way to skip rows.
  *
- * The corpus index carries `decision_date` and its derived year, and
- * `content_hash` covers only the text payload, so a date-only change reaches
- * the index through the projection's desired state, which the caller
- * reconciles in the same transaction as this statement.
+ * `decision_date` and its derived year are projection fingerprint fields, and
+ * `content_hash` covers only the text payload, so a date-only change is
+ * invisible to anything keyed on the payload. It reaches the index through the
+ * projection's desired state, reconciled per written id in this transaction by
+ * the `reconcileProjection` collaborator the batch is given.
  *
  * The predicate is re-checked here, against the row as it stands now rather
  * than as the selection read it: the crawl keeps running, and a decision it
@@ -319,6 +320,20 @@ export const executedRows = (result: unknown): unknown[] => {
 };
 
 type CitationGraphTx = Parameters<typeof lockCitationGraph>[0];
+
+/**
+ * Reconcile one repaired decision's projection desired state, in the batch's
+ * own transaction. `null` says the caller cannot: the migrate-time repair runs
+ * on a raw connection with no query layer to reach the desired-state writer,
+ * and reports how many rows it left for a later reconcile sweep.
+ */
+export type DecisionDateProjectionReconcile =
+  | ((entityId: SafeId<"caseLawDecision">) => Promise<void>)
+  | null;
+
+export type DecisionDateRepairCollaborators = {
+  reconcileProjection: DecisionDateProjectionReconcile;
+};
 
 /**
  * Tell the citation graph that this decision's date is no longer what it was.
@@ -369,6 +384,11 @@ export type DecisionDateRepairBatch = {
    * date is repaired; their key was not re-announced to the graph.
    */
   unannounced: CorruptDecisionDateRow[];
+  /**
+   * Written rows whose projection was left to a later reconcile sweep, because
+   * the caller supplied no reconciler. Zero wherever one was supplied.
+   */
+  unreconciled: number;
 };
 
 type ReopenWalk = {
@@ -385,6 +405,24 @@ type ReopenWalk = {
  * graph mutations under one lock, so they must not fan out, and expressing that
  * as a walk keeps the sequencing structural instead of a suppressed lint.
  */
+/**
+ * Reconcile each written id in turn. Recursive rather than a loop with an
+ * awaited body, like the citation walk below: the desired state is reconciled
+ * per decision, on one transaction, so the sequencing is structural.
+ */
+const reconcileWrittenAt = async (
+  ids: readonly SafeId<"caseLawDecision">[],
+  reconcile: (entityId: SafeId<"caseLawDecision">) => Promise<void>,
+  offset = 0,
+): Promise<void> => {
+  const id = ids.at(offset);
+  if (id === undefined) {
+    return;
+  }
+  await reconcile(id);
+  await reconcileWrittenAt(ids, reconcile, offset + 1);
+};
+
 const reopenWrittenAt = async (
   tx: CitationGraphTx,
   { batch, repairs, rows, written }: ReopenWalk,
@@ -427,12 +465,14 @@ const reopenWrittenAt = async (
 export const repairDecisionDateBatch = async (
   tx: CitationGraphTx,
   size: number,
+  { reconcileProjection }: DecisionDateRepairCollaborators,
 ): Promise<DecisionDateRepairBatch> => {
   const batch: DecisionDateRepairBatch = {
     cleared: 0,
     rederived: 0,
     skipped: 0,
     unannounced: [],
+    unreconciled: 0,
   };
   const rows = executedRows(
     await tx.execute(
@@ -455,5 +495,13 @@ export const repairDecisionDateBatch = async (
   );
   await reopenWrittenAt(tx, { batch, repairs, rows, written });
   batch.skipped = rows.length - written.size;
+  if (reconcileProjection === null) {
+    batch.unreconciled = written.size;
+    return batch;
+  }
+  await reconcileWrittenAt(
+    rows.filter(({ id }) => written.has(id)).map(({ id }) => id),
+    reconcileProjection,
+  );
   return batch;
 };

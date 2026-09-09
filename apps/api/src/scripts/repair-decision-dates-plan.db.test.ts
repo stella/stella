@@ -20,6 +20,7 @@ import {
   decisionDateSourceSurveyStatement,
   decisionDateYearSurveyStatement,
   parseCorruptDecisionDateRow,
+  repairDecisionDateBatch,
   selectCorruptDecisionDatesStatement,
 } from "@/api/scripts/repair-decision-dates-plan";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -353,4 +354,59 @@ test("applying writes the decisions, re-enqueues them, and converges", async () 
     }
     expect(byId.get(fixture.id)?.decisionDate).toBe(fixture.decisionDate);
   }
+});
+
+test("the batch hands every written id to its projection reconciler", async () => {
+  // Its own corrupt row: the tests above converge the fixture population, and
+  // a reconciler that is handed nothing proves nothing.
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId: czSourceId,
+    caseNumber: "RECONCILED C 1/2020",
+    court: "Krajský soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "1168-01-01",
+    contentHash: "b".repeat(64),
+    slug: "reconciled-fixture",
+    languageGroupKey: "reconciled-fixture",
+  });
+
+  const reconciled: string[] = [];
+  const batch = await repairDecisionDateBatch(db, 10, {
+    reconcileProjection: async (entityId) => {
+      reconciled.push(entityId);
+      await Promise.resolve();
+    },
+  });
+
+  // The date really was repaired, so the reconcile below is about a row that
+  // changed rather than one the statement skipped.
+  expect(batch.cleared + batch.rederived).toBe(1);
+  expect(reconciled).toEqual([id]);
+  expect(batch.unreconciled).toBe(0);
+});
+
+test("a batch given no reconciler reports the rows it left behind", async () => {
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId: czSourceId,
+    caseNumber: "UNRECONCILED C 1/2020",
+    court: "Krajský soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "1168-02-02",
+    contentHash: "c".repeat(64),
+    slug: "unreconciled-fixture",
+    languageGroupKey: "unreconciled-fixture",
+  });
+
+  const batch = await repairDecisionDateBatch(db, 10, {
+    reconcileProjection: null,
+  });
+
+  expect(batch.cleared + batch.rederived).toBe(1);
+  expect(batch.unreconciled).toBe(1);
 });

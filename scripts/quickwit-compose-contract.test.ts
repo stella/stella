@@ -38,8 +38,8 @@ const stringArrayField = (
   return candidate;
 };
 
-describe("local Quickwit generations", () => {
-  test("keeps q09 isolated and aligned with the final manifest", async () => {
+describe("local Quickwit generation", () => {
+  test("pins the engine the manifest declares, on its own metastore", async () => {
     const compose: unknown = Bun.YAML.parse(
       await Bun.file(new URL("../docker-compose.yml", import.meta.url)).text(),
     );
@@ -48,27 +48,20 @@ describe("local Quickwit generations", () => {
     }
     const services = recordField(compose, "services");
     const rustfsSetup = recordField(services, "rustfs-setup");
-    const quickwit08 = recordField(services, "quickwit");
     const q09 = recordField(services, "quickwit09");
     const q09Setup = recordField(services, "quickwit09-postgres-setup");
-    const quickwit08Environment = recordField(quickwit08, "environment");
     const q09Environment = recordField(q09, "environment");
     const rustfsSetupEnvironment = recordField(rustfsSetup, "environment");
 
-    expect(stringField(quickwit08, "image")).toStartWith(
-      "quickwit/quickwit:0.8.2@sha256:",
-    );
+    // One engine service, and it is the one the manifest declares.
+    expect(
+      Object.keys(services).filter((name) => name.startsWith("quickwit")),
+    ).toEqual(["quickwit09-postgres-setup", "quickwit09"]);
     expect(stringField(q09, "image")).toStartWith(
       `quickwit/quickwit:${QUICKWIT_V09_BINARY_VERSION}@sha256:`,
     );
     expect(stringField(q09Environment, "QW_METASTORE_URI")).toBe(
       "postgres://postgres:postgres@postgres:5432/stella_quickwit_09",
-    );
-    expect(stringField(q09Environment, "QW_METASTORE_URI")).not.toBe(
-      stringField(quickwit08Environment, "QW_METASTORE_URI"),
-    );
-    expect(stringField(q09Environment, "QW_DEFAULT_INDEX_ROOT_URI")).not.toBe(
-      stringField(quickwit08Environment, "QW_DEFAULT_INDEX_ROOT_URI"),
     );
     expect(stringField(q09Environment, "QW_DEFAULT_INDEX_ROOT_URI")).toBe(
       stringField(rustfsSetupEnvironment, "QUICKWIT09_INDEX_ROOT_URI"),
@@ -76,9 +69,11 @@ describe("local Quickwit generations", () => {
     expect(stringField(rustfsSetup, "entrypoint")).toMatch(
       /quickwit09_bucket=\$\$\{QUICKWIT09_INDEX_ROOT_URI#s3:\/\/\}/u,
     );
-    expect(stringArrayField(q09, "ports")).not.toEqual(
-      stringArrayField(quickwit08, "ports"),
-    );
+    // The published host ports are what the test environment defaults to.
+    expect(stringArrayField(q09, "ports")).toEqual([
+      expect.stringContaining(":-7290}:7280"),
+      expect.stringContaining(":-7291}:7281"),
+    ]);
     expect(stringArrayField(q09, "profiles")).toEqual(["quickwit09"]);
     expect(stringArrayField(q09Setup, "profiles")).toEqual(["quickwit09"]);
   });
