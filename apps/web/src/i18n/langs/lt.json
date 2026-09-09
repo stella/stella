@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Ištrinti išsaugotą paiešką",
     "editedBy": "Redagavo",
     "emptyState": "Pradėkite rašyti, kad ieškotumėte visose bylose.",
+    "estimatedResultCount": "{count, plural, one {Apytiksliai # rezultatas} few {Apytiksliai # rezultatai} many {Apytiksliai # rezultato} other {Apytiksliai # rezultatų}}",
     "hintAskAI": "<kbd>Tab</kbd> klausti DI",
     "hintClose": "<kbd>Esc</kbd> uždaryti",
     "hintNavigate": "<kbd>↑↓</kbd> naršyti",

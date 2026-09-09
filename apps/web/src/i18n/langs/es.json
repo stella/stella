@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Eliminar búsqueda guardada",
     "editedBy": "Editado por",
     "emptyState": "Empiece a escribir para buscar en todos los asuntos.",
+    "estimatedResultCount": "{count, plural, one {Aproximadamente # resultado} other {Aproximadamente # resultados}}",
     "hintAskAI": "<kbd>Tab</kbd> preguntar a la IA",
     "hintClose": "<kbd>Esc</kbd> cerrar",
     "hintNavigate": "<kbd>↑↓</kbd> navegar",

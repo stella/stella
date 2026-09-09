@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Gespeicherte Suche löschen",
     "editedBy": "Bearbeitet von",
     "emptyState": "Tippen Sie, um alle Akten zu durchsuchen.",
+    "estimatedResultCount": "{count, plural, one {Etwa # Ergebnis} other {Etwa # Ergebnisse}}",
     "hintAskAI": "<kbd>Tab</kbd> KI fragen",
     "hintClose": "<kbd>Esc</kbd> schließen",
     "hintNavigate": "<kbd>↑↓</kbd> navigieren",

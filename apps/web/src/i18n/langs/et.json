@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Kustuta salvestatud otsing",
     "editedBy": "Muutja",
     "emptyState": "Alustage tippimist, et otsida kõigist asjadest.",
+    "estimatedResultCount": "{count, plural, one {Ligikaudu # tulemus} other {Ligikaudu # tulemust}}",
     "hintAskAI": "<kbd>Tab</kbd> küsi AI-lt",
     "hintClose": "<kbd>Esc</kbd> sulge",
     "hintNavigate": "<kbd>↑↓</kbd> liikumine",

@@ -510,7 +510,7 @@ function ListHeading({
     case SEARCH_TOTAL_TYPE.ESTIMATE:
       return (
         <p className="text-muted-foreground text-xs">
-          ≈ {t("search.resultCount", { count: total.count })}
+          {t("search.estimatedResultCount", { count: total.count })}
         </p>
       );
     case SEARCH_TOTAL_TYPE.NOT_COUNTED:

@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Usuń zapisane wyszukiwanie",
     "editedBy": "Edytowane przez",
     "emptyState": "Zacznij pisać, aby przeszukać wszystkie sprawy.",
+    "estimatedResultCount": "{count, plural, one {Szacunkowo # wynik} few {Szacunkowo # wyniki} many {Szacunkowo # wyników} other {Szacunkowo # wyniku}}",
     "hintAskAI": "<kbd>Tab</kbd> zapytaj AI",
     "hintClose": "<kbd>Esc</kbd> zamknij",
     "hintNavigate": "<kbd>↑↓</kbd> nawigacja",
