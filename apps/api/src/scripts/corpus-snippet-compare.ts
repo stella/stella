@@ -186,6 +186,9 @@ for (const { query, hits, searchMs } of searched) {
   const { stemming } = caseLawCorpusQueryFields({
     generation,
     jurisdiction: query.country,
+    // A query set carries no language filter, which is the request shape the
+    // search was run with.
+    language: undefined,
   });
   const compared: SnippetCompareHit[] = hits.map((hit, index) => {
     const passage =
