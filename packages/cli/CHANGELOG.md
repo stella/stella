@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.4
+
+### Patch Changes
+
+- [#3190](https://github.com/stella/stella/pull/3190) [`96fc95e`](https://github.com/stella/stella/commit/96fc95ee219c193453df074546becc8474a0e6d2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the explicit decision text fields returned by the case-law decision command.
+
 ## 1.2.3
 
 ### Patch Changes
