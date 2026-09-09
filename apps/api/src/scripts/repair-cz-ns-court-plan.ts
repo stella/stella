@@ -15,6 +15,10 @@ import { sql } from "drizzle-orm";
 import type { SafeId } from "@/api/lib/branded-types";
 import { czCourtFromEcli } from "@/api/lib/case-law/cz-ecli-courts";
 import {
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
@@ -29,7 +33,16 @@ export type CzNsCourtRow = {
 
 /** Where a walk of the source stands: the last row a page examined. */
 export type CzNsCourtCursor = {
-  /** The row's `created_at`, the leading key of the index the walk uses. */
+  /**
+   * The row's `created_at`, the leading key of the index the walk uses, as
+   * the database's own microsecond text.
+   *
+   * Never a `Date`: the column is microsecond-precision and a `Date` holds
+   * milliseconds, so a cursor round-tripped through one lands before the row
+   * it was taken from. The rows sharing that millisecond are then read again
+   * by the next page — and the last row of the source is read by every page
+   * after it, which is a walk that never ends.
+   */
   createdAt: string;
   id: SafeId<"caseLawDecision">;
 };
@@ -91,7 +104,11 @@ export const selectCzNsCourtPageStatement = ({
        ${
          after === null
            ? sql``
-           : sql`AND (d.created_at, d.id) > (${after.createdAt}::timestamptz, ${after.id}::uuid)`
+           : sql`AND (d.created_at, d.id) > (${pgTimestampCursorBoundary({
+               type: "pgTimestampCursor",
+               value: after.createdAt,
+               precision: "microseconds",
+             })}, ${after.id}::uuid)`
        }
      ORDER BY d.created_at, d.id
      LIMIT ${pageSize}
@@ -102,7 +119,7 @@ export const selectCzNsCourtPageStatement = ({
      ORDER BY created_at DESC, id DESC
      LIMIT 1
   )
-  SELECT b.created_at AS cursor_created_at,
+  SELECT ${pgTimestampCursorValue(sql`b.created_at`)} AS cursor_created_at,
          b.id AS cursor_id,
          b.scanned AS scanned,
          p.id AS match_id,
@@ -136,12 +153,12 @@ export const parseCzNsCourtPage = (rows: readonly unknown[]): CzNsCourtPage => {
   if (!isRecord(first) || typeof first["scanned"] !== "number") {
     return panic(`Unreadable cz-ns court page: ${JSON.stringify(first)}`);
   }
-  const createdAt = first["cursor_created_at"];
   const cursor: CzNsCourtCursor = {
-    createdAt:
-      createdAt instanceof Date
-        ? createdAt.toISOString()
-        : requiredString(createdAt, "cursor_created_at"),
+    // The statement projects this as text at microsecond precision, so it
+    // arrives as the database's own value rather than as a driver's `Date`.
+    // Reading it as anything else is a statement this parser no longer
+    // matches, not a value to coerce.
+    createdAt: requiredString(first["cursor_created_at"], "cursor_created_at"),
     id: brandPersistedCaseLawDecisionId(
       requiredString(first["cursor_id"], "cursor_id"),
     ),

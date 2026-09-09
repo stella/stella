@@ -12,7 +12,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -58,10 +58,20 @@ const SOURCE_ROWS = 240;
 const FOREIGN_ROWS = new Map<number, string>([
   [3, "KSOS"],
   [4, "VSPH"],
+  [50, "KSPL"],
   [97, "KSBR"],
   [98, "MSPH"],
   [140, "OSOV"],
 ]);
+
+/**
+ * Rows the fixture puts inside one millisecond, straddling the boundary of a
+ * fifty-row page. `created_at` is microsecond-precision, and a cursor carried
+ * through a JavaScript `Date` holds milliseconds: it would land before the row
+ * it was taken from, so the next page would read this whole group again — and
+ * the last row of the source would come back on every page after it.
+ */
+const SAME_MILLISECOND_ROWS = [48, 49, 50, 51];
 
 const fixtureIds = Array.from({ length: SOURCE_ROWS }, () =>
   createSafeId<"caseLawDecision">(),
@@ -172,6 +182,22 @@ beforeAll(
         updatedAt: STORED_AT,
       },
     ]);
+
+    // Written as microseconds inside a single millisecond, which drizzle
+    // cannot express through a `Date` — which is the point. The offsets are
+    // added as an interval so the fixture states no timestamp format of its
+    // own; the one the cursor uses belongs to the pagination helpers.
+    const sameMillisecond = new Date(
+      STORED_AT.getTime() + (SAME_MILLISECOND_ROWS[0] ?? 0) * 1000,
+    );
+    for (const [offset, index] of SAME_MILLISECOND_ROWS.entries()) {
+      await db.execute(
+        sql`UPDATE case_law_decisions
+               SET created_at = ${sameMillisecond}::timestamptz
+                              + make_interval(secs => ${(offset + 1) / 1_000_000})
+             WHERE id = ${fixtureId(index)}::uuid`,
+      );
+    }
   },
   { timeout: 120_000 },
 );
@@ -230,6 +256,20 @@ describe("the walk", () => {
       coarsely.rows.map((row) => row.id).sort(),
     );
     expect(coarsely.pages).toHaveLength(2);
+  });
+
+  test("visits rows sharing a millisecond once across a page boundary", async () => {
+    const inTheMillisecond = new Set(SAME_MILLISECOND_ROWS.map(fixtureId));
+    // The boundary of a fifty-row page falls inside the group, so the cursor
+    // this page hands on is one of its rows: a millisecond-precision cursor
+    // re-admits the rest of the group, and the walk stops terminating.
+    const { pages, rows } = await walk(50);
+
+    expect(pages.reduce((total, page) => total + page.scanned, 0)).toBe(
+      SOURCE_ROWS,
+    );
+    const matchedInside = rows.filter((row) => inTheMillisecond.has(row.id));
+    expect(matchedInside).toHaveLength(1);
   });
 
   test("reads this source's rows whose own ECLI names another court", async () => {
