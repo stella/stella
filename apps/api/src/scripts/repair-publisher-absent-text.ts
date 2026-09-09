@@ -35,35 +35,34 @@
  * active there is no lock and no synchronization; the row is repaired either
  * way and the next desired-state pass reads the repaired metadata.
  *
- * **How it walks.** Candidates are read a page at a time by a keyset cursor
- * over the source's ids, so each row is inspected once however many pages a
- * run takes, and a row the page did not repair is not met again. A run
- * reports the resume point it stopped at; passing it back as `--after`
- * continues from there.
+ * **How it walks.** A page at a time, bounded by rows examined rather than by
+ * rows matched, in the order of the source's own cursor index. The population
+ * thins out as the repair proceeds, so a selection bounded by matches reads
+ * further and further into the source looking for rows that are no longer
+ * there, and is cancelled by the lane's statement timeout before it reports
+ * anything. The cursor advances by the last row examined, so a page that
+ * matched nothing is still progress. Both modes read through the same
+ * statement, so what a report says it would change is what an apply changes.
+ * An operator meeting a slower database lowers `--page` rather than raising a
+ * timeout.
  *
- * Without `--apply` nothing is written and nothing is locked: the run reports
- * the affected rows per source and exits. Idempotent either way — a repaired
- * row leaves the selection predicate, so a later run finds nothing.
+ * Idempotent: a repaired row no longer carries a marker, so a later run walks
+ * past it.
  *
- *   # what the repair would touch, writing nothing
+ *   # what the repair would change, writing nothing
  *   bun run src/scripts/repair-publisher-absent-text.ts
  *
  *   # repair, bounded and resumable by re-running
- *   bun run src/scripts/repair-publisher-absent-text.ts --apply [--limit 50000]
- *
- *   # continue one source's walk from where a run stopped
- *   bun run src/scripts/repair-publisher-absent-text.ts --apply \
- *     --adapter cz-us --after <decisionId>
+ *   bun run src/scripts/repair-publisher-absent-text.ts --apply [--limit 50000] [--page 2000]
  *
  * Not a scheduled job: the write path stopped producing these rows when the
  * adapters started reading the markers, so this is a one-shot pass over the
  * rows that predate it, run by an operator who reads the report first.
  */
 
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawDecisions } from "@/api/db/schema";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import {
   ADAPTERS_DECLARING_ABSENT_TEXT,
@@ -74,27 +73,35 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
 import {
-  flagInteger,
-  hasFlag,
-  readApplyFlag,
-} from "@/api/scripts/repair-flags";
-import {
+  absentTextSourcesStatement,
   carriesAbsentPublisherText,
-  carriesDeclaredAbsentPublisherText,
+  parseAbsentTextPage,
+  parseAbsentTextSources,
+  selectAbsentTextPageStatement,
   strippedPublisherMetadata,
+} from "@/api/scripts/repair-publisher-absent-text-plan";
+import type {
+  AbsentTextCursor,
+  AbsentTextPage,
 } from "@/api/scripts/repair-publisher-absent-text-plan";
 
 /**
- * Ids read per keyset page. The page is a plain id-range read; the writes it
- * leads to are one short transaction each, so the page size trades round trips
- * against how much of a walk an interrupted run loses.
+ * Rows one page of the walk examines, matching or not.
+ *
+ * This is what bounds a statement, so it is the number that keeps the walk
+ * inside the lane's statement timeout: the rows still carrying a marker thin
+ * out as a run proceeds, and a selection bounded by matches instead reads to
+ * the end of the source looking for the ones that are not there. An operator
+ * meeting a slower database lowers it rather than raising a timeout.
  */
-const PAGE = 500;
+const DEFAULT_PAGE_SIZE = 2000;
 /** Rows one run may repair unless `--limit` says otherwise. */
 const DEFAULT_LIMIT = 50_000;
 
@@ -104,14 +111,7 @@ const USAGE = `Usage: bun run src/scripts/repair-publisher-absent-text.ts [optio
   --dry-run      Report only, the default. Accepted so it cannot be mistaken
                  for a flag this script ignores; contradicts --apply.
   --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).
-  --after <id>   Resume one source's walk after this decision id. Requires a
-                 single affected source, or --adapter to name one.
-  --adapter <k>  Repair only this adapter's source.`;
-
-const flagValue = (name: string): string | undefined => {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
-};
+  --page <n>     Rows one statement examines (default ${String(DEFAULT_PAGE_SIZE)}).`;
 
 const apply = readApplyFlag(USAGE);
 
@@ -125,147 +125,88 @@ const limit = flagInteger({
   name: "limit",
   usage: USAGE,
 });
-const adapterFilter = flagValue("adapter");
-const resumeAfter = flagValue("after");
+const pageSize = flagInteger({
+  fallback: DEFAULT_PAGE_SIZE,
+  name: "page",
+  usage: USAGE,
+});
 
-if (hasFlag("after") && resumeAfter === undefined) {
-  console.error("--after needs a decision id.");
-  console.error(USAGE);
-  process.exit(1);
-}
-
-type AffectedSource = {
+/** One source to walk, with the markers its adapter declares. */
+type MarkedSource = {
   adapter: AdapterKey;
-  rows: number;
-  sourceId: SafeId<"caseLawSource">;
-};
-
-/**
- * The stored adapter key as the declared one it names.
- *
- * Matched against the declarations rather than asserted from the column: the
- * markers to strip are looked up by this value, so a source whose key names no
- * declaring adapter has nothing to strip and drops out of the walk. The survey
- * predicate already judges each row by its own adapter, so this cannot lose an
- * affected source.
- */
-const declaringAdapter = (adapterKey: string): AdapterKey | undefined =>
-  ADAPTERS_DECLARING_ABSENT_TEXT.find((adapter) => adapter === adapterKey);
-
-const survey = async (): Promise<AffectedSource[]> => {
-  const rows = await rootDb.transaction(
-    async (tx) =>
-      await tx
-        .select({
-          adapterKey: caseLawSources.adapterKey,
-          rows: count(),
-          sourceId: caseLawSources.id,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(carriesDeclaredAbsentPublisherText)
-        .groupBy(caseLawSources.id, caseLawSources.adapterKey),
-  );
-  return rows.flatMap(({ adapterKey, rows: affectedRows, sourceId }) => {
-    const adapter = declaringAdapter(adapterKey);
-    return adapter === undefined
-      ? []
-      : [{ adapter, rows: affectedRows, sourceId }];
-  });
-};
-
-/**
- * One line per source, in a stable order for the report. Adapter keys are
- * identifiers, so they sort by code point rather than by anyone's locale.
- */
-const byAdapterKey = (left: AffectedSource, right: AffectedSource): number => {
-  if (left.adapter === right.adapter) {
-    return 0;
-  }
-  return left.adapter < right.adapter ? -1 : 1;
-};
-
-const printSurvey = (sources: readonly AffectedSource[]): number => {
-  console.info("--- rows carrying their source's absent-text marker ---");
-  let total = 0;
-  for (const { adapter, rows } of sources.toSorted(byAdapterKey)) {
-    total += rows;
-    console.info(`${adapter.padEnd(14)} ${String(rows).padStart(9)}`);
-  }
-  console.info(`${"total".padEnd(14)} ${String(total).padStart(9)}`);
-  return total;
-};
-
-type SourceWalk = {
   markers: readonly string[];
   sourceId: SafeId<"caseLawSource">;
 };
 
-/**
- * The next page of candidate ids after the cursor.
- *
- * The page is bounded by both the cursor and the predicate, so a source's
- * population is read once across a whole walk rather than re-scanned per
- * batch, and an id the page passed over is never met again.
- */
-const nextPage = async (
-  walk: SourceWalk,
-  after: string | null,
-): Promise<SafeId<"caseLawDecision">[]> => {
-  const rows = await rootDb.transaction(
-    async (tx) =>
-      await tx
-        .select({ id: caseLawDecisions.id })
-        .from(caseLawDecisions)
-        .where(
-          and(
-            eq(caseLawDecisions.sourceId, walk.sourceId),
-            carriesAbsentPublisherText(walk.markers),
-            // Compared as SQL rather than through a typed column predicate:
-            // the cursor is either an id this run already visited or the one an
-            // operator passed to `--after`, and the cast is where a value that
-            // is not an id fails loudly.
-            ...(after === null
-              ? []
-              : [sql`${caseLawDecisions.id} > ${after}::uuid`]),
-          ),
-        )
-        .orderBy(caseLawDecisions.id)
-        .limit(PAGE),
+// Resolved once, by the adapters that declare a marker: the walk filters on
+// the source id, which is the leading column of the index it reads in, rather
+// than joining the source table on every page.
+const sources: MarkedSource[] = parseAbsentTextSources(
+  executedRows(
+    await rootDb.execute(
+      absentTextSourcesStatement(ADAPTERS_DECLARING_ABSENT_TEXT),
+    ),
+  ),
+).flatMap(({ adapterKey, sourceId }) => {
+  const adapter = ADAPTERS_DECLARING_ABSENT_TEXT.find(
+    (declared) => declared === adapterKey,
   );
-  return rows.map(({ id }) => id);
-};
+  return adapter === undefined
+    ? []
+    : [{ adapter, markers: absentTextComparisonsFor(adapter), sourceId }];
+});
+
+if (sources.length === 0) {
+  console.info("No source of a declared absent-text marker is registered.");
+  process.exit(0);
+}
+
+/** One page of one source's walk, strictly after `after`. */
+const readPage = async (
+  source: MarkedSource,
+  after: AbsentTextCursor | null,
+): Promise<AbsentTextPage> =>
+  parseAbsentTextPage(
+    executedRows(
+      await rootDb.execute(
+        selectAbsentTextPageStatement({
+          after,
+          markers: source.markers,
+          pageSize,
+          sourceId: source.sourceId,
+        }),
+      ),
+    ),
+  );
 
 /**
- * Repair one decision and tell the projection, in one transaction.
+ * Strip one row's markers and tell the projection, in one transaction.
  *
  * The row is re-read under the predicate rather than trusted from the page: a
  * decision the crawl re-observed in between already carries whatever the write
- * path allowed, and this run must not undo that.
+ * path allowed, and this run must not undo that. A row that changed under the
+ * run is reported as superseded rather than repaired.
  */
-const repairDecision = async (
-  walk: SourceWalk,
+const repairRow = async (
+  source: MarkedSource,
   entityId: SafeId<"caseLawDecision">,
 ): Promise<boolean> =>
-  await rootDb.transaction(async (tx: Transaction) => {
+  await rootDb.transaction(async (tx) => {
     const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
       family: "case_law",
-      sourceId: walk.sourceId,
+      sourceId: source.sourceId,
     });
     // audit: skip — operator repair of public case-law metadata; no user action
     const repaired = await tx
       .update(caseLawDecisions)
       .set({
-        metadata: strippedPublisherMetadata(walk.markers),
+        metadata: strippedPublisherMetadata(source.markers),
         indexedHash: null,
       })
       .where(
         and(
           eq(caseLawDecisions.id, entityId),
-          carriesAbsentPublisherText(walk.markers),
+          carriesAbsentPublisherText(source.markers),
         ),
       )
       .returning({ id: caseLawDecisions.id });
@@ -281,125 +222,67 @@ const repairDecision = async (
     return true;
   });
 
-type WalkProgress = {
-  /** Ids the walk has visited, repaired or not. */
-  visited: number;
-  /** Rows this walk actually changed. */
-  repaired: number;
-  /** Last id the walk accounted for, to resume after. */
-  resumeAfter: string | null;
-};
+let scanned = 0;
+let matched = 0;
+let repaired = 0;
+let superseded = 0;
 
-/**
- * Repair one page, id by id. Recursive rather than a loop: each decision is
- * its own transaction, and the next one may only start once the previous has
- * committed, so this is a walk rather than a fan-out.
- */
-const repairPage = async (
-  walk: SourceWalk,
-  ids: readonly SafeId<"caseLawDecision">[],
-  index: number,
-  progress: WalkProgress,
-  budget: number,
-): Promise<WalkProgress> => {
-  const entityId = ids.at(index);
-  if (entityId === undefined || progress.repaired >= budget) {
-    return progress;
-  }
-  const repaired = await repairDecision(walk, entityId);
-  return await repairPage(
-    walk,
-    ids,
-    index + 1,
-    {
-      visited: progress.visited + 1,
-      repaired: progress.repaired + (repaired ? 1 : 0),
-      resumeAfter: entityId,
-    },
-    budget,
-  );
-};
+for (const source of sources) {
+  let cursor: AbsentTextCursor | null = null;
+  let examinedHere = 0;
 
-/** Page after page, from the cursor, until the source or the budget is done. */
-const walkSource = async (
-  walk: SourceWalk,
-  progress: WalkProgress,
-  budget: number,
-): Promise<WalkProgress> => {
-  if (progress.repaired >= budget) {
-    return progress;
-  }
-  const ids = await nextPage(walk, progress.resumeAfter);
-  if (ids.length === 0) {
-    return progress;
-  }
-  const advanced = await repairPage(walk, ids, 0, progress, budget);
-  if (advanced.visited === progress.visited) {
-    return advanced;
-  }
-  return await walkSource(walk, advanced, budget);
-};
+  while (repaired + superseded < limit) {
+    const page = await readPage(source, cursor);
 
-/** Source after source, each its own walk, until the run's budget is spent. */
-const walkSources = async (
-  sources: readonly AffectedSource[],
-  index: number,
-  repaired: number,
-): Promise<number> => {
-  const source = sources.at(index);
-  if (source === undefined || repaired >= limit) {
-    return repaired;
+    // The cursor advances by rows examined, not by rows matched. A page whose
+    // rows all held is still progress, and a walk that only moved on a match
+    // would read the same page forever once the last one was behind it.
+    if (page.cursor === null) {
+      break;
+    }
+    cursor = page.cursor;
+    examinedHere += page.scanned;
+    scanned += page.scanned;
+    matched += page.ids.length;
+
+    for (const entityId of page.ids) {
+      // The allowance is per row, not per page: a page is read whole, so a run
+      // with one slot left would otherwise write every matching row on it.
+      // What an operator authorised is the number of rows changed.
+      if (repaired + superseded >= limit) {
+        break;
+      }
+      if (!apply) {
+        continue;
+      }
+      if (await repairRow(source, entityId)) {
+        repaired += 1;
+      } else {
+        superseded += 1;
+      }
+    }
   }
-  const progress = await walkSource(
-    {
-      markers: absentTextComparisonsFor(source.adapter),
-      sourceId: source.sourceId,
-    },
-    { visited: 0, repaired: 0, resumeAfter: resumeAfter ?? null },
-    limit - repaired,
-  );
+
   console.info(
-    `${source.adapter.padEnd(14)} ${String(progress.repaired).padStart(9)} repaired, ` +
-      `${String(progress.visited)} visited, resume after ${progress.resumeAfter ?? "<start>"}`,
+    `${source.adapter.padEnd(14)} ${examinedHere.toLocaleString()} rows examined`,
   );
-  return await walkSources(sources, index + 1, repaired + progress.repaired);
-};
-
-const affected = (await survey()).filter(
-  ({ adapter }) => adapterFilter === undefined || adapter === adapterFilter,
-);
-const total = printSurvey(affected);
-
-if (!apply) {
-  console.info(
-    "Report only: nothing written. Re-run with --apply to strip the markers " +
-      "and re-enqueue the affected rows for projection.",
-  );
-  process.exit(0);
 }
 
-if (resumeAfter !== undefined && affected.length > 1) {
-  console.error(
-    "--after resumes one source's walk; name it with --adapter, because a " +
-      "decision id orders rows within a source only.",
-  );
-  console.error(USAGE);
-  process.exit(1);
-}
-
-const repaired = await walkSources(affected.toSorted(byAdapterKey), 0, 0);
-
 console.info(
-  `done: ${String(repaired)} rows repaired ` +
-    `(survey reported ${String(total)} before the run).`,
-);
-console.info(
-  "Both index paths are re-enqueued; they settle on their own schedules.",
+  apply
+    ? `${scanned.toLocaleString()} rows examined: ` +
+        `${matched.toLocaleString()} carry a marker, ` +
+        `${repaired.toLocaleString()} repaired, ` +
+        `${superseded.toLocaleString()} changed under the run.`
+    : `${scanned.toLocaleString()} rows examined: ` +
+        `${matched.toLocaleString()} carry a marker and would be repaired.`,
 );
 
-// Re-surveyed rather than inferred from the count above: a run that hit
-// `--limit`, or raced a crawl of a source deployed without the fix, has a count
-// that says otherwise.
-printSurvey(await survey());
+console.info(
+  apply
+    ? "Both index paths are re-enqueued; they settle on their own schedules."
+    : "Report only: nothing written. Re-run with --apply to strip the markers " +
+        "and re-enqueue the affected rows for projection.",
+);
 
 process.exit(0);

@@ -1,5 +1,26 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { and, count, eq, inArray } from "drizzle-orm";
+/**
+ * The repair's two halves against a real PostgreSQL: the walk, which decides
+ * which stored rows are looked at at all, and the write, which decides what a
+ * looked-at row becomes. Neither is exercised anywhere else — an operator
+ * script's SQL is never executed by CI — and the SQL reading of a marker has
+ * to agree with the TypeScript one the adapters write through, or the two
+ * paths disagree about what absence is.
+ *
+ * The source fixture is deliberately larger than a page. The fault this walk
+ * was rebuilt for only appears at scale: a selection bounded by matches reads
+ * to the end of a source looking for rows that are not there, which a handful
+ * of fixtures can never show.
+ */
+
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -11,21 +32,20 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
+  absentTextSourcesStatement,
   carriesAbsentPublisherText,
-  carriesDeclaredAbsentPublisherText,
+  parseAbsentTextPage,
+  parseAbsentTextSources,
+  selectAbsentTextPageStatement,
   strippedPublisherMetadata,
 } from "@/api/scripts/repair-publisher-absent-text-plan";
+import type {
+  AbsentTextCursor,
+  AbsentTextPage,
+} from "@/api/scripts/repair-publisher-absent-text-plan";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
-
-/**
- * The repair recognises a marker in SQL while the adapters recognise it in
- * TypeScript, and the two readings have to be the same reading: a row the
- * write path would now store without the sentence but the repair does not
- * strip keeps serving it forever, and a row the repair strips that the write
- * path would have kept loses a real headnote. Both directions are checked
- * here against a real PostgreSQL, over the value shapes the sources publish.
- */
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -36,105 +56,124 @@ const nsSourceId = createSafeId<"caseLawSource">();
 const HEADNOTE = "Uloží-li soud rodičům povinnost účastnit se mediace.";
 const LEGAL_SENTENCE_MARKER = "Právní věta není k dispozici.";
 const ABSTRACT_MARKER = "Abstrakt není k dispozici.";
+const NEAR_MISS = "Právní věta není k dispozici v tomto jazyce.";
 
-type Fixture = {
-  id: SafeId<"caseLawDecision">;
-  label: string;
-  metadata: Record<string, unknown>;
-  sourceId: SafeId<"caseLawSource">;
-  /** Metadata keys the repair must remove from this row. */
-  stripped: readonly string[];
-};
+/** When the fixtures were last written, long before any run of the repair. */
+const STORED_AT = new Date("2020-01-01T00:00:00.000Z");
 
-const bothMarkers: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "both fields carry the court's own absence sentence",
-  metadata: {
-    abstract: ABSTRACT_MARKER,
-    legalSentence: LEGAL_SENTENCE_MARKER,
-    keywords: ["Daně", "Správní řízení"],
-  },
-  sourceId: usSourceId,
-  stripped: ["abstract", "legalSentence"],
-};
+/** Rows the source holds. Several pages' worth at the size the walk uses. */
+const SOURCE_ROWS = 240;
 
-const wrappedMarker: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "the marker as the page indents and wraps it",
-  metadata: { legalSentence: "  Právní   věta\nnení k dispozici.  " },
-  sourceId: usSourceId,
-  stripped: ["legalSentence"],
-};
-
-const writtenHeadnote: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "a headnote the court wrote, beside an empty abstract",
-  metadata: { legalSentence: HEADNOTE, abstract: ABSTRACT_MARKER },
-  sourceId: usSourceId,
-  stripped: ["abstract"],
-};
-
-const nearMiss: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "a sentence that only opens like the marker",
-  metadata: {
-    legalSentence: `${LEGAL_SENTENCE_MARKER.slice(0, -1)} v tomto jazyce.`,
-  },
-  sourceId: usSourceId,
-  stripped: [],
-};
-
-const nothingPublished: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "a decision the publisher filled nothing in for",
-  metadata: {},
-  sourceId: usSourceId,
-  stripped: [],
-};
-
-const wrongShape: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "a value of the wrong JSON shape under a summary key",
-  metadata: { legalSentence: 42, summary: ["not prose"] },
-  sourceId: usSourceId,
-  stripped: [],
-};
+const US_MARKERS = absentTextComparisonsFor(ADAPTER_KEYS.CZ_US);
+const NS_MARKERS = absentTextComparisonsFor(ADAPTER_KEYS.CZ_NS);
 
 /**
- * A marker belongs to the source that prints it. Another source's row holding
- * the same words is left alone: its adapter does not read the sentence as
- * absence, so the next crawl would write it straight back and the repair would
- * never reach a fixed point.
+ * What each interesting row of the source holds under its publisher-summary
+ * keys. Spread on purpose, and with a long run of ordinary rows after the last
+ * of them: a walk that only advanced on a match would stall exactly there.
  */
-const otherSource: Fixture = {
-  id: createSafeId<"caseLawDecision">(),
-  label: "another source's row carrying the same sentence",
-  metadata: { summary: LEGAL_SENTENCE_MARKER },
-  sourceId: nsSourceId,
-  stripped: [],
+const PLANTED = new Map<number, Record<string, unknown>>([
+  [
+    3,
+    {
+      abstract: ABSTRACT_MARKER,
+      legalSentence: LEGAL_SENTENCE_MARKER,
+      keywords: ["Daně", "Správní řízení"],
+    },
+  ],
+  [4, { legalSentence: "  Právní   věta\nnení k dispozici.  " }],
+  [97, { legalSentence: HEADNOTE, abstract: ABSTRACT_MARKER }],
+  [98, { legalSentence: NEAR_MISS }],
+  [140, { legalSentence: 42, summary: ["not prose"] }],
+  [141, { abstract: ABSTRACT_MARKER }],
+]);
+
+/** Which keys the repair must remove from each planted row. */
+const STRIPPED = new Map<number, readonly string[]>([
+  [3, ["abstract", "legalSentence"]],
+  [4, ["legalSentence"]],
+  [97, ["abstract"]],
+  [98, []],
+  [140, []],
+  [141, ["abstract"]],
+]);
+
+const fixtureIds = Array.from({ length: SOURCE_ROWS }, () =>
+  createSafeId<"caseLawDecision">(),
+);
+
+/** The id at `index`, which the fixture array is built to hold. */
+const fixtureId = (index: number): SafeId<"caseLawDecision"> => {
+  const id = fixtureIds[index];
+  if (id === undefined) {
+    throw new Error(`no fixture at ${String(index)}`);
+  }
+  return id;
 };
 
-const fixtures: readonly Fixture[] = [
-  bothMarkers,
-  wrappedMarker,
-  writtenHeadnote,
-  nearMiss,
-  nothingPublished,
-  wrongShape,
-  otherSource,
-];
+/** The metadata row `index` holds: a headnote the court wrote, unless planted. */
+const metadataOf = (index: number): Record<string, unknown> =>
+  PLANTED.get(index) ?? { legalSentence: `${HEADNOTE} (${String(index)})` };
+
+const strippedOf = (index: number): readonly string[] =>
+  STRIPPED.get(index) ?? [];
+
+const markerIds = new Set(
+  [...STRIPPED.entries()]
+    .filter(([, keys]) => keys.length > 0)
+    .map(([index]) => fixtureId(index)),
+);
+
+/**
+ * The other source's row, holding the same words under a summary key. Its
+ * adapter declares no marker, so nothing about it is absence.
+ */
+const otherSourceId = createSafeId<"caseLawDecision">();
+const OTHER_SOURCE_METADATA = { summary: LEGAL_SENTENCE_MARKER };
 
 const INDEXED_HASH = "a".repeat(64);
 
-/** Which adapter each seeded source belongs to, and so which markers it has. */
-const ADAPTER_OF_SOURCE = new Map([
-  [usSourceId, ADAPTER_KEYS.CZ_US],
-  [nsSourceId, ADAPTER_KEYS.CZ_NS],
-]);
+/** Read one page, exactly as the script reads it. */
+const readPage = async (
+  after: AbsentTextCursor | null,
+  pageSize: number,
+): Promise<AbsentTextPage> =>
+  parseAbsentTextPage(
+    executedRows(
+      await db.execute(
+        selectAbsentTextPageStatement({
+          after,
+          markers: US_MARKERS,
+          pageSize,
+          sourceId: usSourceId,
+        }),
+      ),
+    ),
+  );
 
-const markersOf = (sourceId: SafeId<"caseLawSource">): readonly string[] => {
-  const adapter = ADAPTER_OF_SOURCE.get(sourceId);
-  return adapter === undefined ? [] : absentTextComparisonsFor(adapter);
+type Walk = {
+  /** Every page the walk read, in order. */
+  pages: AbsentTextPage[];
+  ids: SafeId<"caseLawDecision">[];
+};
+
+/** Walk the source to its end, as the script's loop does. */
+const walk = async (pageSize: number): Promise<Walk> => {
+  const pages: AbsentTextPage[] = [];
+  const ids: SafeId<"caseLawDecision">[] = [];
+  let cursor: AbsentTextCursor | null = null;
+  // A walk that does not terminate is the failure this test exists to catch,
+  // so the loop is bounded and the bound is asserted rather than trusted.
+  for (let read = 0; read <= SOURCE_ROWS + 2; read += 1) {
+    const page = await readPage(cursor, pageSize);
+    pages.push(page);
+    ids.push(...page.ids);
+    if (page.cursor === null) {
+      return { pages, ids };
+    }
+    cursor = page.cursor;
+  }
+  throw new Error("the walk did not reach the end of the source");
 };
 
 beforeAll(
@@ -153,30 +192,45 @@ beforeAll(
 // Every test seeds its own rows, so each states its whole precondition and one
 // selected by name behaves as it does in a whole run.
 beforeEach(async () => {
-  await db.delete(caseLawDecisions).where(
-    inArray(
-      caseLawDecisions.id,
-      fixtures.map(({ id }) => id),
-    ),
-  );
-  await db.insert(caseLawDecisions).values(
-    fixtures.map((fixture, index) => ({
-      id: fixture.id,
-      sourceId: fixture.sourceId,
+  await db
+    .delete(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, [...fixtureIds, otherSourceId]));
+  await db.insert(caseLawDecisions).values([
+    ...fixtureIds.map((id, index) => ({
+      id,
+      sourceId: usSourceId,
       caseNumber: `${String(index)} C ${String(index)}/2020`,
       court: "Ústavní soud",
       country: "CZE",
       language: "cs",
       decisionDate: "2024-01-01",
-      metadata: fixture.metadata,
+      metadata: metadataOf(index),
       // Both hashes present and equal: the row reads as projected and up to
       // date, which is the state a metadata-only change has to disturb.
       contentHash: INDEXED_HASH,
       indexedHash: INDEXED_HASH,
-      slug: `fixture-${String(index)}`,
-      languageGroupKey: `fixture-${String(index)}`,
+      slug: `us-${String(index)}`,
+      languageGroupKey: `us-${String(index)}`,
+      // Distinct and increasing, so the walk's order is the one the index
+      // serves and a page boundary falls where this test says it does.
+      createdAt: new Date(STORED_AT.getTime() + index * 1000),
     })),
-  );
+    {
+      id: otherSourceId,
+      sourceId: nsSourceId,
+      caseNumber: "1 C 1/2020",
+      court: "Nejvyšší soud",
+      country: "CZE",
+      language: "cs",
+      decisionDate: "2024-01-01",
+      metadata: OTHER_SOURCE_METADATA,
+      contentHash: INDEXED_HASH,
+      indexedHash: INDEXED_HASH,
+      slug: "ns-1",
+      languageGroupKey: "ns-1",
+      createdAt: STORED_AT,
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -193,12 +247,7 @@ const storedRows = async (): Promise<
       indexedHash: caseLawDecisions.indexedHash,
     })
     .from(caseLawDecisions)
-    .where(
-      inArray(
-        caseLawDecisions.id,
-        fixtures.map(({ id }) => id),
-      ),
-    );
+    .where(inArray(caseLawDecisions.id, [...fixtureIds, otherSourceId]));
   return new Map(
     rows.map((row) => [
       row.id,
@@ -208,8 +257,10 @@ const storedRows = async (): Promise<
 };
 
 /** The repair's own write over one source's rows, with that source's markers. */
-const repair = async (sourceId: SafeId<"caseLawSource">): Promise<string[]> => {
-  const markers = markersOf(sourceId);
+const repair = async (
+  sourceId: SafeId<"caseLawSource">,
+  markers: readonly string[],
+): Promise<string[]> => {
   const repaired = await db
     .update(caseLawDecisions)
     .set({
@@ -228,109 +279,152 @@ const repair = async (sourceId: SafeId<"caseLawSource">): Promise<string[]> => {
 
 /** Both sources, as one run of the script would walk them. */
 const repairEverySource = async (): Promise<Set<string>> =>
-  new Set([...(await repair(usSourceId)), ...(await repair(nsSourceId))]);
+  new Set([
+    ...(await repair(usSourceId, US_MARKERS)),
+    ...(await repair(nsSourceId, NS_MARKERS)),
+  ]);
 
-/** The survey the script reads before it writes anything. */
-const surveyed = async (): Promise<{ adapterKey: string; rows: number }[]> =>
-  await db
-    .select({ adapterKey: caseLawSources.adapterKey, rows: count() })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(carriesDeclaredAbsentPublisherText)
-    .groupBy(caseLawSources.id, caseLawSources.adapterKey);
+describe("the walk", () => {
+  test("finds the sources by the adapters that declare a marker", async () => {
+    const sources = parseAbsentTextSources(
+      executedRows(
+        await db.execute(absentTextSourcesStatement([ADAPTER_KEYS.CZ_US])),
+      ),
+    );
+    expect(sources).toEqual([
+      { adapterKey: ADAPTER_KEYS.CZ_US, sourceId: usSourceId },
+    ]);
+    expect(
+      parseAbsentTextSources(
+        executedRows(await db.execute(absentTextSourcesStatement([]))),
+      ),
+    ).toEqual([]);
+  });
 
-test("the survey counts the rows a repair would touch, per source", async () => {
-  const perSource = new Map(
-    (await surveyed()).map(({ adapterKey, rows }) => [adapterKey, rows]),
-  );
+  test("examines one bounded page per statement", async () => {
+    const pageSize = 50;
+    const { pages } = await walk(pageSize);
 
-  expect(perSource.get(ADAPTER_KEYS.CZ_US)).toBe(
-    fixtures.filter(
-      ({ sourceId, stripped }) =>
-        sourceId === usSourceId && stripped.length > 0,
-    ).length,
-  );
-  // The other source's row holds the same sentence and is still not counted:
-  // its adapter declares no marker, so nothing about it is absence.
-  expect(perSource.has(ADAPTER_KEYS.CZ_NS)).toBe(false);
+    // What bounds a statement is rows examined, so that is what is asserted:
+    // no page may read more than it was given, however few of its rows match.
+    expect(pages.every((page) => page.scanned <= pageSize)).toBe(true);
+    // Every row of the source is examined exactly once, and the walk stops on
+    // the empty page that follows the last full one.
+    expect(pages.reduce((total, page) => total + page.scanned, 0)).toBe(
+      SOURCE_ROWS,
+    );
+    expect(pages).toHaveLength(Math.ceil(SOURCE_ROWS / pageSize) + 1);
+    expect(pages.at(-1)?.cursor).toBeNull();
+  });
+
+  test("advances over a page whose rows all hold", async () => {
+    const { pages } = await walk(50);
+    const barren = pages.filter(
+      (page) => page.scanned > 0 && page.ids.length === 0,
+    );
+    // The fixture puts a long run of ordinary rows after the last planted one,
+    // so this is not a vacuous filter: a page that matched nothing still
+    // states where the next one starts.
+    expect(barren.length).toBeGreaterThan(0);
+    expect(barren.every((page) => page.cursor !== null)).toBe(true);
+  });
+
+  test("reads the same rows however it is paged", async () => {
+    const finely = await walk(7);
+    const coarsely = await walk(SOURCE_ROWS * 2);
+
+    expect(finely.ids.toSorted()).toEqual(coarsely.ids.toSorted());
+    expect(coarsely.pages).toHaveLength(2);
+  });
+
+  test("reads this source's rows carrying one of its own markers", async () => {
+    const { ids } = await walk(50);
+    expect(new Set(ids)).toEqual(markerIds);
+  });
+
+  test("does not read another source's rows", async () => {
+    const { ids } = await walk(50);
+    expect(ids).not.toContain(otherSourceId);
+  });
 });
 
-test("a marker is only absence for the source that prints it", async () => {
-  expect(await repair(nsSourceId)).toEqual([]);
-  const stored = await storedRows();
-  expect(stored.get(otherSource.id)?.metadata).toEqual(otherSource.metadata);
-  expect(stored.get(otherSource.id)?.indexed).toBe(true);
-  // The same words at the source that does declare them are absence, so the
-  // assertion above is scope rather than a predicate that matches nothing.
-  expect(await repair(usSourceId)).toContain(bothMarkers.id);
-});
+describe("the write", () => {
+  test("strips exactly the keys the write path would now leave absent", async () => {
+    const repaired = await repairEverySource();
+    const stored = await storedRows();
 
-test("the repair strips exactly the keys the write path would now leave absent", async () => {
-  const repaired = await repairEverySource();
-  const stored = await storedRows();
+    for (const [index, id] of fixtureIds.entries()) {
+      const row = stored.get(id);
+      expect(row).toBeDefined();
+      const metadata: Record<string, unknown> = row?.metadata ?? {};
+      const stripped = strippedOf(index);
 
-  for (const fixture of fixtures) {
-    const row = stored.get(fixture.id);
-    expect(row).toBeDefined();
-    const metadata: Record<string, unknown> = row?.metadata ?? {};
-
-    for (const key of fixture.stripped) {
-      expect(metadata).not.toHaveProperty(key);
-    }
-    // Everything the row held besides the stripped keys is still there, with
-    // the value the publisher published.
-    for (const [key, value] of Object.entries(fixture.metadata)) {
-      if (fixture.stripped.includes(key)) {
-        continue;
+      for (const key of stripped) {
+        expect(metadata).not.toHaveProperty(key);
       }
-      expect(metadata[key]).toEqual(value);
-    }
-    // A changed row is re-enqueued for the index; an untouched one is left
-    // exactly as it was, so the repair cannot re-project the whole corpus.
-    expect(repaired.has(fixture.id)).toBe(fixture.stripped.length > 0);
-    expect(row?.indexed).toBe(fixture.stripped.length === 0);
-  }
-});
-
-test("what the repair strips is what that source's adapter reads as absent", async () => {
-  // The binding: the SQL reading and `sourceTextOrAbsent` decide the same way
-  // about the same stored values, under the same adapter, so a marker declared
-  // once is recognised on both the write path and the repair path.
-  await repairEverySource();
-  const stored = await storedRows();
-  for (const fixture of fixtures) {
-    const adapter = ADAPTER_OF_SOURCE.get(fixture.sourceId);
-    expect(adapter).toBeDefined();
-    const after: Record<string, unknown> =
-      stored.get(fixture.id)?.metadata ?? {};
-    for (const [key, value] of Object.entries(fixture.metadata)) {
-      if (typeof value !== "string" || adapter === undefined) {
-        continue;
+      // Everything the row held besides the stripped keys is still there, with
+      // the value the publisher published.
+      for (const [key, value] of Object.entries(metadataOf(index))) {
+        if (stripped.includes(key)) {
+          continue;
+        }
+        expect(metadata[key]).toEqual(value);
       }
-      expect(key in after).toBe(
-        sourceTextOrAbsent(adapter, value) !== undefined,
-      );
+      // A changed row is re-enqueued for the index; an untouched one is left
+      // exactly as it was, so the repair cannot re-project the whole corpus.
+      expect(repaired.has(id)).toBe(stripped.length > 0);
+      expect(row?.indexed).toBe(stripped.length === 0);
     }
-  }
-});
+  });
 
-test("a repaired row shows the next headnote the publisher wrote, or none", async () => {
-  await repairEverySource();
-  const stored = await storedRows();
-  const headnoteOf = (id: SafeId<"caseLawDecision">): string | null =>
-    publisherHeadnoteOf({
-      documentAst: null,
-      metadata: stored.get(id)?.metadata ?? null,
-    });
+  test("a marker is only absence for the source that prints it", async () => {
+    expect(await repair(nsSourceId, NS_MARKERS)).toEqual([]);
+    const stored = await storedRows();
+    expect(stored.get(otherSourceId)?.metadata).toEqual(OTHER_SOURCE_METADATA);
+    expect(stored.get(otherSourceId)?.indexed).toBe(true);
+    // The same words at the source that does declare them are absence, so the
+    // assertion above is scope rather than a predicate that matches nothing.
+    expect(await repair(usSourceId, US_MARKERS)).toContain(fixtureId(3));
+  });
 
-  expect(headnoteOf(bothMarkers.id)).toBeNull();
-  expect(headnoteOf(wrappedMarker.id)).toBeNull();
-  expect(headnoteOf(writtenHeadnote.id)).toBe(HEADNOTE);
-});
+  test("what the repair strips is what that source's adapter reads as absent", async () => {
+    // The binding: the SQL reading and `sourceTextOrAbsent` decide the same
+    // way about the same stored values, under the same adapter, so a marker
+    // declared once is recognised on both the write path and the repair path.
+    await repairEverySource();
+    const stored = await storedRows();
+    for (const [index, id] of fixtureIds.entries()) {
+      const after: Record<string, unknown> = stored.get(id)?.metadata ?? {};
+      for (const [key, value] of Object.entries(metadataOf(index))) {
+        if (typeof value !== "string") {
+          continue;
+        }
+        expect(key in after).toBe(
+          sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, value) !== undefined,
+        );
+      }
+    }
+  });
 
-test("a second pass finds nothing left to repair", async () => {
-  await repairEverySource();
-  expect(await repair(usSourceId)).toEqual([]);
-  expect(await repair(nsSourceId)).toEqual([]);
-  expect(await surveyed()).toEqual([]);
+  test("a repaired row shows the next headnote the publisher wrote, or none", async () => {
+    await repairEverySource();
+    const stored = await storedRows();
+    const headnoteOf = (id: SafeId<"caseLawDecision">): string | null =>
+      publisherHeadnoteOf({
+        documentAst: null,
+        metadata: stored.get(id)?.metadata ?? null,
+      });
+
+    expect(headnoteOf(fixtureId(3))).toBeNull();
+    expect(headnoteOf(fixtureId(4))).toBeNull();
+    expect(headnoteOf(fixtureId(97))).toBe(HEADNOTE);
+    expect(headnoteOf(fixtureId(98))).toBe(NEAR_MISS);
+  });
+
+  test("a second pass finds nothing left to repair", async () => {
+    await repairEverySource();
+    expect(await repair(usSourceId, US_MARKERS)).toEqual([]);
+    expect(await repair(nsSourceId, NS_MARKERS)).toEqual([]);
+    expect((await walk(50)).ids).toEqual([]);
+  });
 });
