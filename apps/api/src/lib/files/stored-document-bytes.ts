@@ -12,7 +12,9 @@
  * `docx-strip-ownership-policy.ts` names the modules that must call this and
  * the ones that provably need not.
  */
-import { isStampableDocx, stripStamp } from "@/api/lib/docx-stamp";
+import { stripStamp } from "@/api/lib/docx-stamp";
+import { hasZipMagic } from "@/api/lib/file-scan/zip";
+import { LIMITS } from "@/api/lib/limits";
 
 type StoredDocumentBytes = {
   /** The bytes to store. Identical to the input unless a reference was removed. */
@@ -25,25 +27,18 @@ type StoredDocumentBytes = {
   strippedArchive: ArrayBuffer | null;
 };
 
-type StoredDocumentBytesOptions = {
-  buffer: ArrayBuffer | Uint8Array;
-  mimeType: string;
-};
-
 /**
- * The bytes to store for a document file. Non-DOCX input and DOCX too large to
- * have been stamped on the way out are returned untouched, as is a DOCX that
- * carries no reference, so an ordinary upload keeps its exact bytes and hash.
+ * The bytes to store for a document file. Archive identity comes from the
+ * bytes, never the caller-controlled MIME type. Non-ZIP input and archives too
+ * large to have been stamped on the way out are returned untouched;
+ * `stripStamp` then confirms the package is a DOCX before changing it.
  */
-export const storedDocumentBytes = async ({
-  buffer,
-  mimeType,
-}: StoredDocumentBytesOptions): Promise<StoredDocumentBytes> => {
+export const storedDocumentBytes = async (
+  buffer: ArrayBuffer | Uint8Array,
+): Promise<StoredDocumentBytes> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-  // The same predicate gates injection, so the two sides cannot disagree about
-  // which files can be carrying a reference.
-  if (!isStampableDocx(mimeType, bytes.byteLength)) {
+  if (bytes.byteLength > LIMITS.docxStampMaxBytes || !hasZipMagic(bytes)) {
     return { bytes, strippedArchive: null };
   }
 

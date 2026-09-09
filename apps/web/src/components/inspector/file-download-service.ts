@@ -42,7 +42,7 @@ type DownloadTabFileProps = {
  * (encrypted, too large, no reference on the version) the same way it refuses
  * a transport error, and no caller acts differently on the reason.
  */
-export const fetchBuiltFile = async ({
+const fetchBuiltFile = async ({
   fieldId,
   rendition,
   workspaceId,

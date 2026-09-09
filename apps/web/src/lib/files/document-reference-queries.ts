@@ -1,22 +1,23 @@
 /**
  * Resolve the document reference an uploaded file carries.
  *
- * Split from `@/lib/document-reference` so the extractor stays importable (and
- * testable) without pulling in the API client.
+ * Split from the DOCX reader so the extractor stays importable (and testable)
+ * without pulling in the API client.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
 import { Result } from "better-result";
 
+import type { DocumentReferenceMatch } from "@stll/api-contract";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { api } from "@/lib/api";
-import type { DocumentReferenceEvidence } from "@/lib/document-reference";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import type { DocumentReferenceEvidence } from "@/lib/files/document-reference";
 import {
   couldCarryDocumentReference,
   readDocumentReference,
-} from "@/lib/document-reference";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+} from "@/lib/files/document-reference";
 
 const NOT_FOUND_STATUS = 404;
 
@@ -34,19 +35,6 @@ const DOCUMENT_REFERENCE_STALE_MS = 5 * 60 * 1000;
  */
 const MAX_PARALLEL_REFERENCE_LOOKUPS = 4;
 
-export type DocumentReferenceMatch = {
-  entityId: string;
-  entityName: string | null;
-  workspaceId: string;
-  workspaceName: string;
-  /** The reference frozen onto the matched version (`2026/001/015.v3`). */
-  stamp: string;
-  /** Version the file in hand was taken from. */
-  versionNumber: number;
-  /** Highest version the document has now; higher means the file is stale. */
-  currentVersionNumber: number;
-};
-
 /**
  * The document a file's reference names, together with what the file still
  * carried that reference in. The evidence is the file's own, not the server's:
@@ -63,9 +51,14 @@ export type ReferencedFile = ResolvedDocumentReference & {
   file: File;
 };
 
+type DocumentReferenceKey = {
+  organizationId: string;
+  verificationCode: string;
+};
+
 export const documentReferenceKeys = {
-  byCode: (verificationCode: string) =>
-    ["document-reference", verificationCode] as const,
+  byCode: ({ organizationId, verificationCode }: DocumentReferenceKey) =>
+    ["document-reference", organizationId, verificationCode] as const,
 };
 
 /**
@@ -76,9 +69,15 @@ export const documentReferenceKeys = {
  * outside the product, so an unknown one simply means the upload is a new
  * document.
  */
-export const documentReferenceOptions = (verificationCode: string) =>
+const documentReferenceOptions = ({
+  organizationId,
+  verificationCode,
+}: DocumentReferenceKey) =>
   queryOptions({
-    queryKey: documentReferenceKeys.byCode(verificationCode),
+    queryKey: documentReferenceKeys.byCode({
+      organizationId,
+      verificationCode,
+    }),
     staleTime: DOCUMENT_REFERENCE_STALE_MS,
     retry: shouldRetryAPIRequest,
     queryFn: async ({
@@ -102,16 +101,26 @@ export const documentReferenceOptions = (verificationCode: string) =>
  * carries none, whose reference belongs to another organization, or that
  * cannot be opened.
  */
-export const resolveFileDocumentReference = async (
-  queryClient: QueryClient,
-  file: File,
-): Promise<ResolvedDocumentReference | null> => {
+type ResolveFileDocumentReferenceOptions = {
+  queryClient: QueryClient;
+  file: File;
+  organizationId: string;
+};
+
+export const resolveFileDocumentReference = async ({
+  queryClient,
+  file,
+  organizationId,
+}: ResolveFileDocumentReferenceOptions): Promise<ResolvedDocumentReference | null> => {
   const reference = await readDocumentReference(file);
   if (reference === null) {
     return null;
   }
-  const match = await queryClient.fetchQuery(
-    documentReferenceOptions(reference.verificationCode),
+  const match = await queryClient.query(
+    documentReferenceOptions({
+      organizationId,
+      verificationCode: reference.verificationCode,
+    }),
   );
   return match === null ? null : { match, evidence: reference.evidence };
 };
@@ -119,6 +128,7 @@ export const resolveFileDocumentReference = async (
 type ResolveDocumentReferenceMatchesOptions = {
   queryClient: QueryClient;
   files: readonly File[];
+  organizationId: string;
   /** Telemetry for a lookup that failed; the file still uploads as new. */
   onError: (error: Error) => void;
 };
@@ -134,6 +144,7 @@ type ResolveDocumentReferenceMatchesOptions = {
 export const resolveDocumentReferenceMatches = async ({
   queryClient,
   files,
+  organizationId,
   onError,
 }: ResolveDocumentReferenceMatchesOptions): Promise<ReferencedFile[]> => {
   const candidates = files.filter(couldCarryDocumentReference);
@@ -146,7 +157,12 @@ export const resolveDocumentReferenceMatches = async ({
     limit: MAX_PARALLEL_REFERENCE_LOOKUPS,
     operation: async (file): Promise<ReferencedFile | null> => {
       const result = await Result.tryPromise(
-        async () => await resolveFileDocumentReference(queryClient, file),
+        async () =>
+          await resolveFileDocumentReference({
+            queryClient,
+            file,
+            organizationId,
+          }),
       );
       if (Result.isError(result)) {
         onError(result.error);

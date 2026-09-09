@@ -104,6 +104,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { getExtension } from "@/lib/files/file-extension";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -116,6 +117,7 @@ import {
   useCreateEntities,
   useDeleteEntities,
 } from "@/lib/workspaces/mutations/entities";
+import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -124,7 +126,6 @@ import {
   CellLockMenuItem,
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
   canRunManualOcr,
@@ -138,7 +139,6 @@ import {
   type RowActionContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
-import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;

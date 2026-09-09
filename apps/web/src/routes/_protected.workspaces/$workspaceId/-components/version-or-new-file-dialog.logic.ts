@@ -10,16 +10,12 @@
  * How strong that evidence is decides which offer leads: a file that kept only
  * the hidden property is offered as a new document first.
  */
-import type { ReferenceUploadAction } from "@/lib/document-reference";
-import { defaultReferenceUploadAction } from "@/lib/document-reference";
-import type {
-  DocumentReferenceMatch,
-  ResolvedDocumentReference,
-} from "@/lib/document-reference-queries";
-import {
-  extensionMatches,
-  getExtension,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
+import type { DocumentReferenceMatch } from "@stll/api-contract";
+
+import type { ReferenceUploadAction } from "@/lib/files/document-reference";
+import { defaultReferenceUploadAction } from "@/lib/files/document-reference";
+import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
+import { extensionMatches, getExtension } from "@/lib/files/file-extension";
 
 /** A reference such as `2026/001/015.v3` with the version suffix removed. */
 const VERSION_SUFFIX_RE = /\.v\d+$/u;
@@ -37,7 +33,7 @@ export const VERSION_OR_NEW_FILE_CHOICE = {
 export type VersionOrNewFileChoice =
   (typeof VERSION_OR_NEW_FILE_CHOICE)[keyof typeof VERSION_OR_NEW_FILE_CHOICE];
 
-export type ReferencedDocument = {
+type ReferencedDocument = {
   entityId: string;
   workspaceId: string;
   /** Null when the document has no name of its own to show. */
@@ -55,7 +51,7 @@ export type ReferencedDocument = {
  * Set when the dropped file was taken from a version the document has since
  * moved past — the one thing the person dropping it cannot see for themselves.
  */
-export type SupersededBase = {
+type SupersededBase = {
   basedOnVersionNumber: number;
   currentVersionNumber: number;
 };

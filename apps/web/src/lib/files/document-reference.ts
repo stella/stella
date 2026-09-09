@@ -16,7 +16,8 @@
  * because a file the user dropped is untrusted input and the upload has to
  * proceed regardless.
  */
-import JSZip from "jszip";
+import { Result } from "better-result";
+import type JSZip from "jszip";
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -178,10 +179,12 @@ export const readDocumentReference = async (
     return null;
   }
 
-  try {
+  const result = await Result.tryPromise(async () => {
     // One archive, both carriers: the footer parts are a few kilobytes next
-    // to the file the user just dropped.
-    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    // to the file the user just dropped. JSZip stays out of the protected
+    // shell's eager bundle; only a qualifying DOCX pays to load it.
+    const { default: ZipArchive } = await import("jszip");
+    const zip = await ZipArchive.loadAsync(await file.arrayBuffer());
     const properties = await readCustomPropertyReference(zip);
     const footer = await readFooterStamp(zip);
 
@@ -204,11 +207,13 @@ export const readDocumentReference = async (
       stamp: footer.reference.stamp,
       evidence: DOCUMENT_REFERENCE_EVIDENCE.footerOnly,
     };
-  } catch {
+  });
+  if (Result.isError(result)) {
     // Corrupt archive, non-zip bytes, or an entry that failed to inflate. An
     // unreadable file simply carries no reference.
     return null;
   }
+  return result.value;
 };
 
 const readCustomPropertyReference = async (

@@ -8,20 +8,21 @@ import { getFirstFile } from "@/components/workspaces/entity-utils";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import type { ResolvedDocumentReference } from "@/lib/document-reference-queries";
-import { resolveFileDocumentReference } from "@/lib/document-reference-queries";
+import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
+import { resolveFileDocumentReference } from "@/lib/files/document-reference-queries";
 import {
   REFERENCE_CHECK,
   useCreateFileEntities,
 } from "@/lib/workspaces/mutations/use-create-file-entities";
+import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 import type { VersionOrNewFileDialogProps } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { VersionOrNewFileChoice } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
 import {
   resolveVersionOrNewFileDecision,
   VERSION_OR_NEW_FILE_CHOICE,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
-import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 
 type UseVersionOrNewFileDropOptions = {
   entity: TableTreeNode;
@@ -72,6 +73,7 @@ export const useVersionOrNewFileDrop = ({
   const [isOpen, setIsOpen] = useState(false);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
+  const { activeOrganizationId } = useAuthenticatedUser();
   const uploadVersion = useUploadVersion();
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
 
@@ -84,7 +86,12 @@ export const useVersionOrNewFileDrop = ({
 
   const resolveReference = async (dropped: File): Promise<void> => {
     const result = await Result.tryPromise(
-      async () => await resolveFileDocumentReference(queryClient, dropped),
+      async () =>
+        await resolveFileDocumentReference({
+          queryClient,
+          file: dropped,
+          organizationId: activeOrganizationId,
+        }),
     );
     if (Result.isError(result)) {
       // A failed lookup costs the offer to file this as a version, not the
@@ -150,7 +157,7 @@ export const useVersionOrNewFileDrop = ({
         })
       : null;
 
-  const choose = (choice: VersionOrNewFileChoice) => {
+  const choose = (choice: VersionOrNewFileChoice): void => {
     switch (choice) {
       case VERSION_OR_NEW_FILE_CHOICE.newDocument: {
         createFileEntities({

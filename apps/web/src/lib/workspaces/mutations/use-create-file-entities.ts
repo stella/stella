@@ -13,12 +13,13 @@ import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { resolveDocumentReferenceMatches } from "@/lib/document-reference-queries";
-import { useDocumentReferenceUploadStore } from "@/lib/document-reference-upload-store";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
+import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -644,7 +645,7 @@ export const REFERENCE_CHECK = {
   skip: "skip",
 } as const;
 
-export type ReferenceCheckMode =
+type ReferenceCheckMode =
   (typeof REFERENCE_CHECK)[keyof typeof REFERENCE_CHECK];
 
 type CreateFileEntitiesOptions = {
@@ -696,6 +697,7 @@ const withoutUploadInputFiles = (
 
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
+  const { activeOrganizationId } = useAuthenticatedUser();
   const labels = useBatchUploadLabels();
   const queryClient = useQueryClient();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -815,6 +817,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
     const referenced = await resolveDocumentReferenceMatches({
       queryClient,
       files: uploadInputFiles(input),
+      organizationId: activeOrganizationId,
       onError: (error) => analytics.captureError(error),
     });
 

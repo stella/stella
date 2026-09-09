@@ -798,76 +798,78 @@ const queryEntitiesGenerator = async function* ({
         currentOrganizationId,
         "created_by_members",
       );
-      return tx
-        .select({
-          id: entities.id,
-          kind: entities.kind,
-          name: entities.name,
-          parentId: entities.parentId,
-          currentVersionId: entities.currentVersionId,
-          currentVersionReference: entityVersions.stamp,
-          createdAt: entities.createdAt,
-          updatedAt: entities.updatedAt,
-          // Author display falls back to email when the user hasn't set
-          // a display name (Better Auth's notNull `name` allows empty
-          // strings, so passwordless email signups land with `name=''`).
-          // Without this coalesce the Author column renders blank for
-          // those users.
-          createdByName: sql<
-            string | null
-          >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
-          createdByUserId: user.id,
-          createdByImage: user.image,
-          createdByDeletedAt: user.deletedAt,
-          status: entities.status,
-          priority: entities.priority,
-          listItemType: entities.listItemType,
-          dueDate: entities.dueDate,
-          agendaKind: entities.agendaKind,
-          startAt: entities.startAt,
-          endAt: entities.endAt,
-          occurredAt: entities.occurredAt,
-          remindAt: entities.remindAt,
-          allDay: entities.allDay,
-          timeZone: entities.timeZone,
-          location: entities.location,
-          onlineMeetingUrl: entities.onlineMeetingUrl,
-          availability: entities.availability,
-          sensitivity: entities.sensitivity,
-          organizer: entities.organizer,
-          attendees: entities.attendees,
-          recurrence: entities.recurrence,
-          agendaSource: entities.agendaSource,
-          externalSource: entities.externalSource,
-          externalId: entities.externalId,
-          externalChangeKey: entities.externalChangeKey,
-          externalICalUid: entities.externalICalUid,
-          readOnly: entities.readOnly,
-          sortOrder: entities.sortOrder,
-        })
-        .from(entities)
-        // The current version's reference rides the row the page already
-        // reads: one join on the entity's own version pointer, never a query
-        // per row.
-        .leftJoin(
-          entityVersions,
-          and(
-            eq(entityVersions.id, entities.currentVersionId),
-            eq(entityVersions.workspaceId, workspaceId),
-          ),
-        )
-        .leftJoin(
-          createdByMembers,
-          eq(entities.createdBy, createdByMembers.userId),
-        )
-        .leftJoin(
-          user,
-          or(
-            eq(createdByMembers.userId, user.id),
-            and(eq(entities.createdBy, user.id), isNotNull(user.deletedAt)),
-          ),
-        )
-        .where(idFilter);
+      return (
+        tx
+          .select({
+            id: entities.id,
+            kind: entities.kind,
+            name: entities.name,
+            parentId: entities.parentId,
+            currentVersionId: entities.currentVersionId,
+            currentVersionReference: entityVersions.stamp,
+            createdAt: entities.createdAt,
+            updatedAt: entities.updatedAt,
+            // Author display falls back to email when the user hasn't set
+            // a display name (Better Auth's notNull `name` allows empty
+            // strings, so passwordless email signups land with `name=''`).
+            // Without this coalesce the Author column renders blank for
+            // those users.
+            createdByName: sql<
+              string | null
+            >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+            createdByUserId: user.id,
+            createdByImage: user.image,
+            createdByDeletedAt: user.deletedAt,
+            status: entities.status,
+            priority: entities.priority,
+            listItemType: entities.listItemType,
+            dueDate: entities.dueDate,
+            agendaKind: entities.agendaKind,
+            startAt: entities.startAt,
+            endAt: entities.endAt,
+            occurredAt: entities.occurredAt,
+            remindAt: entities.remindAt,
+            allDay: entities.allDay,
+            timeZone: entities.timeZone,
+            location: entities.location,
+            onlineMeetingUrl: entities.onlineMeetingUrl,
+            availability: entities.availability,
+            sensitivity: entities.sensitivity,
+            organizer: entities.organizer,
+            attendees: entities.attendees,
+            recurrence: entities.recurrence,
+            agendaSource: entities.agendaSource,
+            externalSource: entities.externalSource,
+            externalId: entities.externalId,
+            externalChangeKey: entities.externalChangeKey,
+            externalICalUid: entities.externalICalUid,
+            readOnly: entities.readOnly,
+            sortOrder: entities.sortOrder,
+          })
+          .from(entities)
+          // The current version's reference rides the row the page already
+          // reads: one join on the entity's own version pointer, never a query
+          // per row.
+          .leftJoin(
+            entityVersions,
+            and(
+              eq(entityVersions.id, entities.currentVersionId),
+              eq(entityVersions.workspaceId, workspaceId),
+            ),
+          )
+          .leftJoin(
+            createdByMembers,
+            eq(entities.createdBy, createdByMembers.userId),
+          )
+          .leftJoin(
+            user,
+            or(
+              eq(createdByMembers.userId, user.id),
+              and(eq(entities.createdBy, user.id), isNotNull(user.deletedAt)),
+            ),
+          )
+          .where(idFilter)
+      );
     }),
     safeDb((tx) =>
       tx
