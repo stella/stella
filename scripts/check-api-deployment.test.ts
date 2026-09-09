@@ -72,6 +72,11 @@ describe("API deployment health receipt", () => {
     expect(apiBuildStart).toBeGreaterThan(healthJobStart);
     expect(webBuildStart).toBeGreaterThan(apiBuildStart);
     expect(promoteStart).toBeGreaterThan(webBuildStart);
+    expect(promoteJob).toContain("/etc/apt/sources.list.d/google-chrome.list");
+    expect(promoteJob).toContain("Disable runner Chrome apt source");
+    expect(promoteJob.indexOf("Disable runner Chrome apt source")).toBeLessThan(
+      promoteJob.indexOf("Install Playwright browser"),
+    );
     // The gate only reads: it decides whether to promote, never promotes.
     // Both delimiters are asserted so a missing block cannot slice to "" and
     // satisfy the write check by being empty.

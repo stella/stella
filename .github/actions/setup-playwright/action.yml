@@ -37,6 +37,15 @@ runs:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
 
+    # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
+    - name: Disable runner Chrome apt source
+      shell: bash
+      run: |
+        chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
+        if [[ -f "$chrome_apt_source" ]]; then
+          sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
+        fi
+
     - name: Install Chromium on cache miss
       if: steps.browser-cache.outputs.cache-hit != 'true'
       shell: bash

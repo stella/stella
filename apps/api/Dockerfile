@@ -48,6 +48,7 @@ COPY --from=pruner /app/out/full/ .
 RUN bun build \
     --compile \
     --no-compile-autoload-dotenv \
+    --sourcemap=inline \
     --target bun \
     --outfile /app/server \
     apps/api/src/server.ts
@@ -160,6 +161,7 @@ RUN bun build \
 # in-image through the isolated local ONNX worker.
 RUN bun build \
     --target bun \
+    --sourcemap=inline \
     --outfile /app/document-processing-worker.js \
     apps/api/src/scripts/document-processing-worker.ts
 # Bundle the migration entrypoint so its full transitive @/api import graph is

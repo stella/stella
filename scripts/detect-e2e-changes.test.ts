@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
+const runnerChromeAptSource = "/etc/apt/sources.list.d/google-chrome.list";
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 // Built, not written literally: a `${...}` in a plain string reads as a
 // broken template literal to the linter.
@@ -716,6 +717,12 @@ describe("detect-e2e-changes", () => {
     );
     expect(playwrightSetup).toContain("if verify_chromium; then");
     expect(playwrightSetup).toContain("bunx playwright install-deps chromium");
+    expect(
+      actionStep(playwrightSetup, "Disable runner Chrome apt source"),
+    ).toContain(runnerChromeAptSource);
+    expect(
+      playwrightSetup.indexOf("Disable runner Chrome apt source"),
+    ).toBeLessThan(playwrightSetup.indexOf("Install Chromium on cache miss"));
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {
@@ -759,6 +766,12 @@ describe("detect-e2e-changes", () => {
     expect(stackRedaction).toContain(
       "bunx playwright install --with-deps firefox webkit",
     );
+    expect(
+      workflowStep(stackRedaction, "Disable runner Chrome apt source"),
+    ).toContain(runnerChromeAptSource);
+    expect(
+      stackRedaction.indexOf("Disable runner Chrome apt source"),
+    ).toBeLessThan(stackRedaction.indexOf("Install Firefox and WebKit"));
     expect(stackRedaction).toContain(
       "bun --filter @stll/web test:e2e:stack-redaction",
     );

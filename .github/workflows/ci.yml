@@ -1979,6 +1979,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
+      - name: Disable runner Chrome apt source
+        run: |
+          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
+          if [[ -f "$chrome_apt_source" ]]; then
+            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
+          fi
+
       - name: Install Firefox and WebKit
         run: bunx playwright install --with-deps firefox webkit
 
@@ -2433,6 +2441,7 @@ jobs:
             --no-compile-autoload-dotenv \
             --minify-whitespace \
             --minify-syntax \
+            --sourcemap=inline \
             --target bun \
             --outfile /tmp/server \
             apps/api/src/server.ts
@@ -2453,6 +2462,12 @@ jobs:
             --outfile /tmp/better-auth-migration-audit.js \
             apps/api/src/scripts/better-auth-migration-audit.ts
           test -s /tmp/better-auth-migration-audit.js
+          bun build \
+            --target bun \
+            --sourcemap=inline \
+            --outfile /tmp/document-processing-worker.js \
+            apps/api/src/scripts/document-processing-worker.ts
+          test -s /tmp/document-processing-worker.js
           mkdir -p /tmp/runtime-workers
           bun build \
             --target bun \

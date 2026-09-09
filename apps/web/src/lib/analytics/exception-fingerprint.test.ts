@@ -1,6 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
-import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
+import { fingerprintExceptionEvent as fingerprintExceptionEventWithOrigin } from "@/lib/analytics/exception-fingerprint";
+
+const FIRST_PARTY_ORIGIN = "https://my.stll.app";
+const fingerprintExceptionEvent = (
+  input: Omit<
+    Parameters<typeof fingerprintExceptionEventWithOrigin>[0],
+    "firstPartyOrigin"
+  >,
+) =>
+  fingerprintExceptionEventWithOrigin({
+    ...input,
+    firstPartyOrigin: FIRST_PARTY_ORIGIN,
+  });
 
 // Production-shaped frames: bundled asset URLs as posthog-js reports them,
 // crash frame last (caller-first ordering).
@@ -63,14 +75,14 @@ describe("fingerprintExceptionEvent", () => {
     ).toBe(fingerprintExceptionEvent({ area: "pdf-viewer", entries: [entry] }));
   });
 
-  test("keeps only asset basename and symbol name from each frame", () => {
+  test("keeps only the asset basename from each frame", () => {
     expect(
       fingerprintExceptionEvent({
         entries: [
           { type: "TypeError", stacktrace: { frames: matterViewFrames } },
         ],
       }),
-    ).toBe("TypeError||root.js:dispatchEvent;matter-view.js:renderMatter|");
+    ).toBe("TypeError||root.js;matter-view.js|");
   });
 
   test("the area slug and cause-chain classes separate otherwise identical errors", () => {
@@ -84,7 +96,7 @@ describe("fingerprintExceptionEvent", () => {
       entries,
     });
     expect(fingerprint).toBe(
-      "ClientTelemetryError|pdf-viewer|root.js:dispatchEvent;matter-view.js:renderMatter|RangeError",
+      "ClientTelemetryError|pdf-viewer|root.js;matter-view.js|RangeError",
     );
     expect(fingerprint).not.toBe(fingerprintExceptionEvent({ entries }));
     expect(fingerprint).not.toBe(
@@ -105,14 +117,14 @@ describe("fingerprintExceptionEvent", () => {
               {
                 filename:
                   "https://my.stll.app/assets/matter-view-D3kfQx9a.js?token=phx_9f3b2c&email=jana.novakova@example.com#L4",
-                function: "renderMatter",
+                in_app: true,
               },
             ],
           },
         },
       ],
     });
-    expect(fingerprint).toBe("TypeError||matter-view.js:renderMatter|");
+    expect(fingerprint).toBe("TypeError||matter-view.js|");
     expect(fingerprint).not.toContain("?");
     expect(fingerprint).not.toContain("@");
   });
@@ -122,6 +134,7 @@ describe("fingerprintExceptionEvent", () => {
       ...Array.from({ length: 8 }, (_, index) => ({
         filename: "https://my.stll.app/assets/root-BOq2mF3k.js",
         function: `frame${index}`,
+        in_app: true,
       })),
       ...matterViewFrames,
     ];
@@ -129,9 +142,7 @@ describe("fingerprintExceptionEvent", () => {
       fingerprintExceptionEvent({
         entries: [{ type: "TypeError", stacktrace: { frames: deepStack } }],
       }),
-    ).toBe(
-      "TypeError||root.js:frame7;root.js:dispatchEvent;matter-view.js:renderMatter|",
-    );
+    ).toBe("TypeError||root.js;root.js;matter-view.js|");
   });
 
   test("frameless and entryless events still yield a stable class-level identity", () => {
@@ -150,23 +161,23 @@ test("fingerprint is stable across content-hashed chunk renames", () => {
       {
         type: "TypeError",
         stacktrace: {
-          frames: [{ filename, function: "renderMatter" }],
+          frames: [{ filename, function: "renderMatter", in_app: true }],
         },
       },
     ],
   });
   const a = fingerprintExceptionEvent(
-    input("https://app.example/assets/matter-view-D3kfQx9a.js"),
+    input("https://my.stll.app/assets/matter-view-D3kfQx9a.js"),
   );
   const b = fingerprintExceptionEvent(
-    input("https://app.example/assets/matter-view-Bx91kQwe.js"),
+    input("https://my.stll.app/assets/matter-view-Bx91kQwe.js"),
   );
   // Different content hashes must not split the issue; the fixture differs
   // before the equivalence is asserted.
   expect("matter-view-D3kfQx9a.js").not.toBe("matter-view-Bx91kQwe.js");
   expect(a).toBe(b);
   const c = fingerprintExceptionEvent(
-    input("https://app.example/assets/other-view-D3kfQx9a.js"),
+    input("https://my.stll.app/assets/other-view-D3kfQx9a.js"),
   );
   expect(a).not.toBe(c);
 });
@@ -179,7 +190,7 @@ test("an API error carries its response identity as a trailing component", () =>
     },
   ];
   const withoutHttp = fingerprintExceptionEvent({ entries });
-  expect(withoutHttp).toBe("ApiError||matter-view.js:renderMatter|");
+  expect(withoutHttp).toBe("ApiError||matter-view.js|");
   expect(fingerprintExceptionEvent({ entries, http: { status: 404 } })).toBe(
     `${withoutHttp}|404`,
   );
@@ -193,4 +204,73 @@ test("an API error carries its response identity as a trailing component", () =>
   expect(
     fingerprintExceptionEvent({ entries, http: { status: 503 } }),
   ).not.toBe(fingerprintExceptionEvent({ entries, http: { status: 404 } }));
+});
+
+test("hash-shaped suffixes outside first-party assets remain identity", () => {
+  const fingerprint = (filename: string) =>
+    fingerprintExceptionEvent({
+      entries: [
+        {
+          type: "TypeError",
+          stacktrace: {
+            frames: [
+              {
+                filename,
+                // PostHog's parser reports ordinary external URLs as true,
+                // so this flag cannot grant the first-party build contract.
+                in_app: true,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+  expect(fingerprint("https://cdn.example/document-12345678.js")).toBe(
+    "TypeError||document-12345678.js|",
+  );
+  expect(fingerprint("https://my.stll.app/vendor/document-12345678.js")).toBe(
+    "TypeError||document-12345678.js|",
+  );
+});
+
+test("data-derived symbols and deployed positions never enter identity", () => {
+  const fingerprint = ({
+    colno,
+    lineno,
+    symbol,
+  }: {
+    colno: number;
+    lineno: number;
+    symbol: string;
+  }) => {
+    const frame = {
+      filename: "https://my.stll.app/assets/matter-view-A1b2C3d4.js",
+      function: symbol,
+      in_app: true,
+      lineno,
+      colno,
+    };
+    return fingerprintExceptionEvent({
+      entries: [
+        {
+          type: "TypeError",
+          stacktrace: { frames: [frame] },
+        },
+      ],
+    });
+  };
+
+  const dataDerived = fingerprint({
+    colno: 7,
+    lineno: 1,
+    symbol: "jana_novakova",
+  });
+  const renamedAndShifted = fingerprint({
+    colno: 18_733,
+    lineno: 42,
+    symbol: "renderMatter2",
+  });
+  expect(dataDerived).toBe(renamedAndShifted);
+  expect(dataDerived).toBe("TypeError||matter-view.js|");
 });

@@ -151,7 +151,11 @@ const captureErrorWithOptions = (
     // Group by the structural fingerprint instead: same non-PII components,
     // one issue per distinct defect. Positions are fixed (empty stays empty)
     // so a frameless error's cause frame can never collide with another
-    // error's primary frame — the same shape `captureWindowKey` uses.
+    // error's primary frame — the same shape `captureWindowKey` uses. The
+    // production server and long-running worker embed source maps, so these
+    // are source positions rather than bundle positions; the artifact test
+    // guards that build contract. Stack symbols are deliberately absent:
+    // engines can infer one from a data-derived computed property key.
     $exception_fingerprint: [
       fingerprint["error.class"] ?? "",
       fingerprint["error.code"] ?? "",

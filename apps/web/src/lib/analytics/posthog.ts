@@ -235,22 +235,17 @@ const apiErrorIdentity = (
   };
 };
 
-// Structural frame fields only: code locations and symbol names from the
-// deployed bundle. Free-text fields (context lines, local variables) never
-// pass through.
+// Structural frame fields only: code locations from the deployed bundle.
+// Free-text fields (context lines, local variables, function names) never
+// pass through. Function names are unsafe even when identifier-shaped:
+// engines infer them from computed property keys, which can be user data.
 type SanitizedFrame = {
   platform?: string;
   filename?: string;
-  function?: string;
   in_app?: boolean;
   lineno?: number;
   colno?: number;
 };
-
-// Symbol-shaped frame function names only. V8 embeds computed property keys
-// verbatim in stacks (`at Client Smith (…)`), so anything with whitespace or
-// beyond identifier punctuation is treated as untrusted and dropped.
-const FRAME_SYMBOL = /^[\w$.<>[\]#~]{1,120}$/u;
 
 const stripUrlMetadata = (url: string): string => {
   const terminator = url.search(/[?#]/u);
@@ -262,7 +257,6 @@ const sanitizeFrame = (frame: unknown): SanitizedFrame => {
     return {};
   }
   const filename = frame["filename"];
-  const functionName = frame["function"];
   const platform = frame["platform"];
   const inApp = frame["in_app"];
   const lineno = frame["lineno"];
@@ -272,9 +266,6 @@ const sanitizeFrame = (frame: unknown): SanitizedFrame => {
     // URL metadata on asset URLs can carry tokens; keep only the path.
     ...(typeof filename === "string"
       ? { filename: stripUrlMetadata(filename) }
-      : {}),
-    ...(typeof functionName === "string" && FRAME_SYMBOL.test(functionName)
-      ? { function: functionName }
       : {}),
     ...(typeof inApp === "boolean" ? { in_app: inApp } : {}),
     ...(typeof lineno === "number" ? { lineno } : {}),
@@ -323,6 +314,7 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
       $exception_fingerprint: fingerprintExceptionEvent({
         area: safeArea,
         entries: sanitizedList,
+        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
         http,
       }),
       $exception_list: sanitizedList,

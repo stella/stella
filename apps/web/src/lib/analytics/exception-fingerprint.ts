@@ -11,7 +11,7 @@ const FRAME_IDENTITY_LIMIT = 3;
 
 type FingerprintFrame = {
   filename?: string;
-  function?: string;
+  in_app?: boolean;
 };
 
 type FingerprintEntry = {
@@ -38,6 +38,8 @@ type ExceptionFingerprintInput = {
   entries: readonly FingerprintEntry[];
   /** Validated telemetry area slug, when an error boundary declared one. */
   area?: string | undefined;
+  /** Configured origin whose Vite assets may have content hashes removed. */
+  firstPartyOrigin: string;
   /** Validated API response identity, when the error is an `ApiError`. */
   http?: ApiErrorIdentity | undefined;
 };
@@ -51,53 +53,85 @@ const assetBasename = (filename: string): string => {
   return path.slice(path.lastIndexOf("/") + 1);
 };
 
-// Vite content-hashes chunk basenames (`matter-view-D3kfQx9a.js`), so a
-// rebuild renames the chunk without the defect changing. Strip the hash
-// segment so a fingerprint survives deployments; a basename with no hash
-// passes through unchanged.
+// Vite content-hashes first-party chunk basenames
+// (`matter-view-D3kfQx9a.js`), so a rebuild renames the chunk without the
+// defect changing. PostHog's parser marks ordinary external URLs `in_app`,
+// so trust only the configured app origin and Vite's owned asset directory.
 const CHUNK_HASH_SUFFIX = /-[A-Za-z0-9_-]{8}(?=\.[a-z]+$)/u;
 const stableBasename = (basename: string): string =>
   basename.replace(CHUNK_HASH_SUFFIX, "");
 
-const frameIdentity = (frame: FingerprintFrame): string => {
-  const basename =
-    frame.filename === undefined
-      ? ""
-      : stableBasename(assetBasename(frame.filename));
-  const symbol = frame.function ?? "";
-  return basename === "" && symbol === "" ? "" : `${basename}:${symbol}`;
+type FirstPartyAssetOptions = {
+  filename: string;
+  firstPartyOrigin: string;
+};
+
+const isFirstPartyAsset = ({
+  filename,
+  firstPartyOrigin,
+}: FirstPartyAssetOptions): boolean => {
+  if (
+    !URL.canParse(firstPartyOrigin) ||
+    !URL.canParse(filename, firstPartyOrigin)
+  ) {
+    return false;
+  }
+  const appOrigin = new URL(firstPartyOrigin).origin;
+  const frameUrl = new URL(filename, firstPartyOrigin);
+  return (
+    frameUrl.origin === appOrigin && frameUrl.pathname.startsWith("/assets/")
+  );
+};
+
+const frameIdentity = (
+  frame: FingerprintFrame,
+  firstPartyOrigin: string,
+): string => {
+  if (frame.filename === undefined) {
+    return "";
+  }
+  const basename = assetBasename(frame.filename);
+  return isFirstPartyAsset({ filename: frame.filename, firstPartyOrigin })
+    ? stableBasename(basename)
+    : basename;
 };
 
 // Frames are ordered caller-first, so the tail of the list is the crash
 // site. A frameless error legitimately yields no identities.
-const frameIdentities = (entry: FingerprintEntry | undefined): string[] => {
+const frameIdentities = (
+  entry: FingerprintEntry | undefined,
+  firstPartyOrigin: string,
+): string[] => {
   if (entry?.stacktrace === undefined) {
     return [];
   }
   return entry.stacktrace.frames
-    .map(frameIdentity)
+    .map((frame) => frameIdentity(frame, firstPartyOrigin))
     .filter((identity) => identity !== "")
     .slice(-FRAME_IDENTITY_LIMIT);
 };
 
 /**
- * Positions are fixed (an empty component stays empty) so one component can
- * never collide with another — the same shape the server-side capture
- * wrapper uses for its `$exception_fingerprint`. The API identity is a
- * trailing fifth component present only for API errors: appending rather
- * than reserving keeps every existing identity byte-for-byte stable, and a
- * class list can never start with a digit, so the two shapes cannot collide.
+ * Component slots are fixed (an empty component stays empty), so one cannot
+ * collide with another. Function names are deliberately absent: an engine
+ * can infer one from a data-derived computed property key, and a bundler can
+ * rename it while the source stays unchanged. Bundle line and column numbers
+ * also shift between builds. Errors in the same asset chain may therefore
+ * group together; area, class and cause identity split them when available.
+ * The API identity is a trailing fifth component present only for API errors:
+ * a class list can never start with a digit, so the two shapes cannot collide.
  */
 export const fingerprintExceptionEvent = ({
   area,
   entries,
+  firstPartyOrigin,
   http,
 }: ExceptionFingerprintInput): string => {
   const classes = entries.map((entry) => entry.type);
   const identity = [
     classes.at(0) ?? "UnknownError",
     area ?? "",
-    frameIdentities(entries.at(0)).join(";"),
+    frameIdentities(entries.at(0), firstPartyOrigin).join(";"),
     classes.slice(1).join(";"),
   ].join("|");
   if (http === undefined) {
