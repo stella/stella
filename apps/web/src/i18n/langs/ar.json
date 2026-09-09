@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "حذف البحث المحفوظ",
     "editedBy": "عُدِّل بواسطة",
     "emptyState": "ابدأ الكتابة للبحث عبر جميع الملفات القانونية.",
+    "estimatedResultCount": "{count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
     "hintAskAI": "<kbd>Tab</kbd> لسؤال AI",
     "hintClose": "<kbd>Esc</kbd> للإغلاق",
     "hintNavigate": "<kbd>↑↓</kbd> للتنقل",

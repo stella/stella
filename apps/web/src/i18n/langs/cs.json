@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Odstranit uložené hledání",
     "editedBy": "Upravil/a",
     "emptyState": "Začněte psát pro vyhledávání ve všech spisech.",
+    "estimatedResultCount": "{count, plural, one {Přibližně # výsledek} few {Přibližně # výsledky} other {Přibližně # výsledků}}",
     "hintAskAI": "<kbd>Tab</kbd> zeptat se AI",
     "hintClose": "<kbd>Esc</kbd> zavřít",
     "hintNavigate": "<kbd>↑↓</kbd> procházení",

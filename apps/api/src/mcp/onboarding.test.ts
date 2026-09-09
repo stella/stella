@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  countedSearchTotal,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
+
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -476,7 +481,7 @@ describe("empty-result onboarding hints", () => {
       facets: {},
       hits: [],
       nextCursor: null,
-      totalCount: 0,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
     });
 
     const context = createContext({
@@ -519,7 +524,7 @@ describe("empty-result onboarding hints", () => {
         },
       ],
       nextCursor: null,
-      totalCount: 1,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
 
     const context = createContext({
@@ -542,7 +547,7 @@ describe("empty-result onboarding hints", () => {
       facets: {},
       hits: [],
       nextCursor: null,
-      totalCount: 0,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
     });
 
     const context = createContext({

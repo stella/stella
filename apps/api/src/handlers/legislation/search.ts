@@ -4,9 +4,15 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import {
+  searchLegislationResponseSchema,
+  type searchLegislationSuccessResponseSchema,
+} from "@/api/handlers/legislation/search-schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
@@ -58,11 +64,7 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 
-/**
- * Legislation search. Same two-engine shape as case law (pg-fts default,
- * corpus index when LEGAL_SEARCH_PROVIDER=corpus-index) over the `legislation`
- * family, returning legislation-shaped hits (eli/status/effectiveDate).
- */
+/** Search the public legislation corpus and return legislation-shaped items. */
 
 export const searchLegislationBodySchema = t.Object({
   query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
@@ -488,17 +490,22 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const { hits, nextCursor } =
+  const { hits: items, nextCursor } =
     envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
       ? await corpusIndexSearch(body, parsedCursor, legislationDb)
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
-  return { hits, nextCursor, totalCount: null };
+  const response: Static<typeof searchLegislationSuccessResponseSchema> = {
+    items,
+    nextCursor,
+    total: SEARCH_TOTAL_NOT_COUNTED,
+  };
+  return response;
 };
 
 const config = {
   description:
-    "Full-text search the stella legislation corpus, returning ranked hits " +
+    "Full-text search the stella legislation corpus, returning ranked results " +
     "with a highlighted snippet and each document's ELI, title, country, " +
     "language, type, status, and effective date. Filter by jurisdiction, " +
     "document type, status, source, language, and effective-date range; " +
@@ -510,6 +517,7 @@ const config = {
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   access: "read",
   body: searchLegislationBodySchema,
+  response: searchLegislationResponseSchema,
 } satisfies HandlerConfig;
 
 const searchLegislation = createSafeRootHandler(

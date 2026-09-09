@@ -7,6 +7,11 @@ import {
   type DecisionQueryIntent,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
+import {
+  countedSearchTotal,
+  SEARCH_TOTAL_NOT_COUNTED,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
 
 import {
   caseLawCorpusIndexProjections,
@@ -495,9 +500,12 @@ const searchPostgresDecisions = async (
     };
   });
 
-  const totalCount = parsedCursor
-    ? null
-    : Number(countResult.at(0)?.["total"]) || 0;
+  const total = parsedCursor
+    ? SEARCH_TOTAL_NOT_COUNTED
+    : countedSearchTotal(
+        SEARCH_TOTAL_TYPE.EXACT,
+        Number(countResult.at(0)?.["total"]) || 0,
+      );
 
   const facets = parsedCursor
     ? null
@@ -519,7 +527,7 @@ const searchPostgresDecisions = async (
   return {
     hits,
     facets,
-    totalCount,
+    total,
     nextCursor,
   };
 };
@@ -1033,7 +1041,7 @@ const decisionHitsPage = ({
   return {
     hits,
     facets: null,
-    totalCount: null,
+    total: SEARCH_TOTAL_NOT_COUNTED,
     nextCursor,
   };
 };
@@ -1183,7 +1191,12 @@ const searchCorpusIndexDecisions = async (
   });
   if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
-    return { hits: [], facets: null, totalCount: null, nextCursor: null };
+    return {
+      hits: [],
+      facets: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+      nextCursor: null,
+    };
   }
   // A page boundary only means something inside the ranking that produced it,
   // and expansion makes the dictionary part of that ranking. A cursor from a

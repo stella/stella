@@ -3641,6 +3641,7 @@ type Messages = {
     "deleteSearchTitle": "Delete saved search";
     "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";
+    "estimatedResultCount": "{count, plural, one {About # result} other {About # results}}";
     "hintAskAI": "<kbd>Tab</kbd> to ask AI";
     "hintClose": "<kbd>Esc</kbd> to close";
     "hintNavigate": "<kbd>↑↓</kbd> to navigate";

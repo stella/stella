@@ -1746,7 +1746,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         sourceUrl: hit.sourceUrl,
       };
     }),
-    totalCount: result.totalCount,
+    total: result.total,
   } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
 
   return await withOnboardingHintIfApplicable({

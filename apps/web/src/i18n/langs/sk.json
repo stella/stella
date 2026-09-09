@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Odstrániť uložené vyhľadávanie",
     "editedBy": "Upravil/a",
     "emptyState": "Začnite písať a vyhľadajte vo všetkých spisoch.",
+    "estimatedResultCount": "{count, plural, one {Približne # výsledok} few {Približne # výsledky} other {Približne # výsledkov}}",
     "hintAskAI": "<kbd>Tab</kbd> opýtať sa AI",
     "hintClose": "<kbd>Esc</kbd> zavrieť",
     "hintNavigate": "<kbd>↑↓</kbd> prechádzať",

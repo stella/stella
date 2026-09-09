@@ -8,6 +8,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -16,6 +17,11 @@ import {
   type DecisionQueryIntent,
   exactDecisionMatches,
 } from "@stll/api-contract/decision-query-intent";
+import {
+  SEARCH_TOTAL_NOT_COUNTED,
+  SEARCH_TOTAL_TYPE,
+  type SearchTotal,
+} from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -332,6 +338,7 @@ function PublicCaseLawIndex() {
       : [...exact, ...decisions.filter((d) => !exactIds.has(d.id))];
 
   const searchFacets = data?.pages.at(0)?.facets ?? null;
+  const searchTotal = data?.pages.at(0)?.total ?? SEARCH_TOTAL_NOT_COUNTED;
   const browseFacets: CaseLawBrowseFacets | undefined =
     scope === undefined ? allFacets : scopedFacets;
   const courtBuckets =
@@ -414,7 +421,11 @@ function PublicCaseLawIndex() {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <ListHeading exactCount={exact.length} intent={intent} />
+        <ListHeading
+          exactCount={exact.length}
+          intent={intent}
+          total={searchTotal}
+        />
         <div className="flex flex-wrap items-center gap-2">
           <DecisionFilterChips
             courts={courtBuckets}
@@ -467,9 +478,11 @@ function PublicCaseLawIndex() {
 function ListHeading({
   exactCount,
   intent,
+  total,
 }: {
   exactCount: number;
   intent: DecisionQueryIntent;
+  total: SearchTotal;
 }) {
   const t = useTranslations();
 
@@ -487,5 +500,23 @@ function ListHeading({
       </p>
     );
   }
-  return <span />;
+  switch (total.type) {
+    case SEARCH_TOTAL_TYPE.EXACT:
+      return (
+        <p className="text-muted-foreground text-xs">
+          {t("search.resultCount", { count: total.count })}
+        </p>
+      );
+    case SEARCH_TOTAL_TYPE.ESTIMATE:
+      return (
+        <p className="text-muted-foreground text-xs">
+          {t("search.estimatedResultCount", { count: total.count })}
+        </p>
+      );
+    case SEARCH_TOTAL_TYPE.NOT_COUNTED:
+      return <span />;
+    default:
+      total satisfies never;
+      return panic("Unhandled search total");
+  }
 }

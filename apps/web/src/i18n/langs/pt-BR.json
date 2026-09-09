@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Excluir pesquisa salva",
     "editedBy": "Editado por",
     "emptyState": "Comece a digitar para pesquisar em todos os casos.",
+    "estimatedResultCount": "{count, plural, =0 {Cerca de # resultados} one {Cerca de # resultado} many {Cerca de # resultados} other {Cerca de # resultados}}",
     "hintAskAI": "<kbd>Tab</kbd> perguntar à IA",
     "hintClose": "<kbd>Esc</kbd> fechar",
     "hintNavigate": "<kbd>↑↓</kbd> navegar",

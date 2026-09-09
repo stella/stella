@@ -3638,6 +3638,7 @@
     "deleteSearchTitle": "Dzēst saglabāto meklējumu",
     "editedBy": "Rediģēja",
     "emptyState": "Sāciet rakstīt, lai meklētu visās lietās.",
+    "estimatedResultCount": "{count, plural, zero {Aptuveni # rezultātu} one {Aptuveni # rezultāts} other {Aptuveni # rezultāti}}",
     "hintAskAI": "<kbd>Tab</kbd> jautāt AI",
     "hintClose": "<kbd>Esc</kbd> aizvērt",
     "hintNavigate": "<kbd>↑↓</kbd> pārvietoties",

@@ -102,7 +102,7 @@ export const STELLA_API_CONTRACT = {
   // built for protocol 1 refuses this server up front instead of failing on
   // its first renamed input.
   protocol: 2,
-  revision: 2,
+  revision: 3,
   capabilities: {
     "document-version-upload": 1,
     "mcp-v2-transport": 1,

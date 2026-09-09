@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  countedSearchTotal,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -1184,7 +1188,7 @@ const CONTRACT_CORPUS = {
             },
           ],
           nextCursor: null,
-          totalCount: 1,
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],

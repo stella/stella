@@ -15,15 +15,13 @@ describe("unwrapPublicLawEden", () => {
   });
 
   test("names a disabled surface instead of a generic API failure", () => {
-    // The gate body is `{ error: "Not Found" }` alone; the contract type
-    // insists on a message, which the marker check ignores.
     expect(() =>
       unwrapPublicLawEden(
         {
           data: null,
           error: {
             status: 404,
-            value: { error: "Not Found", message: "Not Found" },
+            value: { error: "Not Found" },
           },
         },
         "listPublicCaseLawFacets",
