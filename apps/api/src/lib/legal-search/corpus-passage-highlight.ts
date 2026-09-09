@@ -46,39 +46,50 @@ export const foldCorpusTerm = (value: string): string =>
 const isIndexedTerm = (folded: string): boolean =>
   Buffer.byteLength(folded, "utf-8") < CORPUS_TOKEN_LENGTH_LIMIT_BYTES;
 
-/** A word of the query, as the two forms a passage word is compared against. */
-type QueryWord = {
-  folded: string;
-  /** The stem with its accents; empty when the language has no stemmer. */
+/** The stem forms a word is matched by; both empty without a stemmer. */
+type WordStem = {
+  /** The stem as the stemmer writes it: lower-cased, NFC, accents kept. */
   stem: string;
+  /** The same stem, ASCII-folded, as the index holds it. */
+  foldedStem: string;
 };
+
+/** A word of the query, as the forms a passage word is compared against. */
+type QueryWord = WordStem & { folded: string };
 
 /** One query token's words, in order; a phrase carries more than one. */
 type QueryTermWords = readonly QueryWord[];
 
 /** A passage word, folded and stemmed once so the scan below can be a scan. */
-type PassageWord = CorpusTokenSpan & {
-  folded: string;
-  stem: string;
-  /** False for a token `remove_long` drops; such a word matches nothing. */
-  indexed: boolean;
-};
+type PassageWord = CorpusTokenSpan &
+  WordStem & {
+    folded: string;
+    /** False for a token `remove_long` drops; such a word matches nothing. */
+    indexed: boolean;
+  };
 
 /**
- * The stem as the stemmer writes it: lower-cased and NFC, accents kept.
+ * Letters a folded stem needs before a folded-stem match is taken on its own.
  *
- * Not folded, and that is the whole rule. Stemming runs before folding because
- * the suffix tables are written over accented characters, so an accent inside
- * a stem is a letter the algorithm read; folding the stem afterwards merges
- * words that are not forms of each other, because the endings that separate
- * them are already gone ("bytu" stems to "byt", "být" to itself, and both fold
- * to "byt"). A query typed without diacritics still reaches the accented text
- * through the folded surface.
+ * Stemming runs before folding, because the suffix tables are written over
+ * accented characters; folding the stem afterwards can merge words that are
+ * not forms of each other, and the shorter the stem, the more of it a single
+ * accent decides ("bytu" stems to "byt", "být" to itself, and both fold to
+ * "byt"). Past this length the fold is what carries a query typed without
+ * diacritics onto accented text, which is how most of them are typed.
  */
-const stemTerm = (
+const FOLDED_STEM_MIN_LENGTH = 4;
+
+const wordStem = (
   value: string,
   language: MorphologyLanguage | null,
-): string => (language === null ? "" : stemLegalTerm(value, language));
+): WordStem => {
+  if (language === null) {
+    return { stem: "", foldedStem: "" };
+  }
+  const stem = stemLegalTerm(value, language);
+  return { stem, foldedStem: foldCorpusTerm(stem) };
+};
 
 const queryTermWords = (
   tokens: readonly CorpusQueryToken[],
@@ -87,7 +98,7 @@ const queryTermWords = (
   tokens.flatMap((token) => {
     const words = corpusTokens(token.value).map((word) => ({
       folded: foldCorpusTerm(word),
-      stem: stemTerm(word, language),
+      ...wordStem(word, language),
     }));
     // One dropped word makes the whole term unmatchable: a term is its word,
     // and a phrase needs every one of its words to match adjacently.
@@ -108,16 +119,28 @@ const passageWords = (
       start: span.start,
       end: span.end,
       folded,
-      stem: stemTerm(span.value, language),
+      ...wordStem(span.value, language),
       indexed: isIndexedTerm(folded),
     };
   });
 
-/** Same folded surface, or same stem; see {@link stemTerm} for the asymmetry. */
+/**
+ * Same stem: folded once the folded stem is long enough to stand on its own,
+ * accents and all below that length. See {@link FOLDED_STEM_MIN_LENGTH}.
+ */
+const stemMatches = (word: PassageWord, queryWord: QueryWord): boolean => {
+  if (queryWord.stem === "") {
+    return false;
+  }
+  return queryWord.foldedStem.length >= FOLDED_STEM_MIN_LENGTH
+    ? word.foldedStem === queryWord.foldedStem
+    : word.stem === queryWord.stem;
+};
+
+/** Same folded surface, or same stem. */
 const wordMatches = (word: PassageWord, queryWord: QueryWord): boolean =>
   word.indexed &&
-  (word.folded === queryWord.folded ||
-    (queryWord.stem !== "" && word.stem === queryWord.stem));
+  (word.folded === queryWord.folded || stemMatches(word, queryWord));
 
 /** One term matching a run of passage words; `end` is exclusive. */
 type TermMatch = { termIndex: number; start: number; end: number };

@@ -157,7 +157,16 @@ describe("stem matching", () => {
     ]);
   });
 
-  test("leaves a word whose stem matches only once the accents are folded", () => {
+  test("marks the accented inflections of a query typed without diacritics", () => {
+    const fragment = "Soud přiznal náhrady nákladů; náhrada škody trvá.";
+
+    expect(searchHighlightMarks(mark(fragment, "nahradu"))).toEqual([
+      "náhrady",
+      "náhrada",
+    ]);
+  });
+
+  test("leaves a word whose short stem matches only once the accents are folded", () => {
     const fragment =
       "Nájemce nemusí být v bytě přítomen; ukončení nájemního bytu se ho týká.";
 
