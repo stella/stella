@@ -96,24 +96,32 @@ const scanString = (expr: string, start: number): StringScan => {
   return { content: expr.slice(start + 1), end: expr.length };
 };
 
+/** Bare words the tokenizer reads as operators or literals; a data path can
+ *  never be one of them. */
+export const CONDITION_RESERVED_WORDS = [
+  "and",
+  "or",
+  "not",
+  "in",
+  "is",
+  "defined",
+  "true",
+  "false",
+] as const;
+
+type ConditionKeyword = Exclude<
+  (typeof CONDITION_RESERVED_WORDS)[number],
+  "true" | "false"
+>;
+
+const RESERVED_WORDS: ReadonlySet<string> = new Set(CONDITION_RESERVED_WORDS);
+
+const isConditionKeyword = (raw: string): raw is ConditionKeyword =>
+  raw !== "true" && raw !== "false" && RESERVED_WORDS.has(raw);
+
 const classifyNonString = (raw: string): Token => {
-  if (raw === "and") {
-    return { type: "and" };
-  }
-  if (raw === "or") {
-    return { type: "or" };
-  }
-  if (raw === "not") {
-    return { type: "not" };
-  }
-  if (raw === "in") {
-    return { type: "in" };
-  }
-  if (raw === "is") {
-    return { type: "is" };
-  }
-  if (raw === "defined") {
-    return { type: "defined" };
+  if (isConditionKeyword(raw)) {
+    return { type: raw };
   }
   if (isCompareSymbol(raw)) {
     return { type: "op", raw };
