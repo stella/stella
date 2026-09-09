@@ -1,3 +1,4 @@
+import type { TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { Panic, Result, UnhandledException } from "better-result";
 import type {
@@ -6,7 +7,7 @@ import type {
   InputSchema,
   UnwrapRoute,
 } from "elysia";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
 import type { PermissionInput, roles } from "@stll/permissions";
@@ -437,7 +438,7 @@ type SafeHandlerError =
   | UnhandledException;
 
 type SafeErrorBody = {
-  code?: HandlerErrorCode | undefined;
+  code?: HandlerErrorCode;
   message: string;
   /**
    * Structured fields surfaced on specific error responses. Today
@@ -477,6 +478,85 @@ type SafeErrorBody = {
    *  HandlerErrorMissingRequiredField). Optional everywhere. */
   requiredFields?: HandlerErrorMissingRequiredField[];
 };
+
+export const safeHandlerErrorResponseSchema = t.Object(
+  {
+    message: t.String(),
+    code: t.Optional(t.String()),
+  },
+  { additionalProperties: true },
+);
+
+const safeHandlerErrorOrStatusTextResponseSchema = t.Union([
+  safeHandlerErrorResponseSchema,
+  t.String(),
+]);
+
+type SafeHandlerErrorResponseSchemas<TErrorSchema extends TSchema> = Readonly<
+  Record<HandlerErrorStatusCode, TErrorSchema>
+>;
+
+const safeHandlerErrorResponseSchemas = <TErrorSchema extends TSchema>(
+  errorSchema: TErrorSchema,
+): SafeHandlerErrorResponseSchemas<TErrorSchema> => ({
+  400: errorSchema,
+  401: errorSchema,
+  402: errorSchema,
+  403: errorSchema,
+  404: errorSchema,
+  409: errorSchema,
+  413: errorSchema,
+  422: errorSchema,
+  428: errorSchema,
+  429: errorSchema,
+  500: errorSchema,
+  502: errorSchema,
+  503: errorSchema,
+});
+
+const SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS = safeHandlerErrorResponseSchemas(
+  safeHandlerErrorResponseSchema,
+);
+
+type SafeHandlerResponseSchemasFor<
+  TSuccessSchema extends TSchema,
+  TErrorSchema extends TSchema,
+> = {
+  readonly [TStatus in 200 | HandlerErrorStatusCode]: TStatus extends 200
+    ? TSuccessSchema
+    : TErrorSchema;
+};
+
+export type SafeHandlerResponseSchemas<TSuccessSchema extends TSchema> =
+  SafeHandlerResponseSchemasFor<
+    TSuccessSchema,
+    typeof safeHandlerErrorResponseSchema
+  >;
+
+export const safeHandlerResponseSchemas = <TSuccessSchema extends TSchema>(
+  successSchema: TSuccessSchema,
+): SafeHandlerResponseSchemas<TSuccessSchema> => ({
+  200: successSchema,
+  ...SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS,
+});
+
+type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends TSchema> =
+  SafeHandlerResponseSchemasFor<
+    TSuccessSchema,
+    typeof safeHandlerErrorOrStatusTextResponseSchema
+  >;
+
+const SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
+  safeHandlerErrorResponseSchemas(safeHandlerErrorOrStatusTextResponseSchema);
+
+export const safeHandlerResponseSchemasWithStatusText = <
+  TSuccessSchema extends TSchema,
+>(
+  successSchema: TSuccessSchema,
+): SafeHandlerStatusTextResponseSchemas<TSuccessSchema> => ({
+  200: successSchema,
+  ...SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
+});
 
 // The conditional form is intentional: it keeps status unions distributive so
 // Eden sees distinct error codes instead of a single widened response.

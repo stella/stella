@@ -20,6 +20,7 @@
     "./matter-activity": "./src/matter-activity.ts",
     "./notifications": "./src/notifications.ts",
     "./safe-id": "./src/safe-id.ts",
+    "./search": "./src/search.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
     "./time-entries": "./src/time-entries.ts",
     "./signals": "./src/signals.ts",

@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -202,6 +204,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           })),
           facets: data.facets,
           nextCursor: data.nextCursor,
+          total: data.total,
         };
       }
 
@@ -238,7 +241,12 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
 
       const facets: SearchFacets = null;
       const { items, ...page } = data;
-      return { ...page, decisions: items, facets };
+      return {
+        ...page,
+        decisions: items,
+        facets,
+        total: SEARCH_TOTAL_NOT_COUNTED,
+      };
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,

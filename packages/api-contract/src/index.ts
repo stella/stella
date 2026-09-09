@@ -1,5 +1,5 @@
 /** Version of the public REST request and response contract. */
-export const STELLA_REST_API_CONTRACT_VERSION = 2 as const;
+export const STELLA_REST_API_CONTRACT_VERSION = 3 as const;
 
 export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
 export type { AgendaItemKind, AgendaItemSource } from "./agenda";
@@ -257,8 +257,13 @@ export {
   REVIEW_FLAGS_MAX_ITEMS,
 } from "./review-flags";
 export type { ReviewFlag } from "./review-flags";
-export { GLOBAL_SEARCH_RESULT_TYPES } from "./search";
-export type { GlobalSearchResultType } from "./search";
+export {
+  countedSearchTotal,
+  GLOBAL_SEARCH_RESULT_TYPES,
+  SEARCH_TOTAL_NOT_COUNTED,
+  SEARCH_TOTAL_TYPE,
+} from "./search";
+export type { GlobalSearchResultType, SearchTotal } from "./search";
 export {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,

@@ -2,6 +2,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+
 import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
@@ -296,7 +298,7 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
       searchReadDb,
       searchDependencies,
     ),
-  ).toMatchObject({ hits: [] });
+  ).toMatchObject({ items: [], total: SEARCH_TOTAL_NOT_COUNTED });
 
   await db
     .update(legislationSearchDocuments)
@@ -324,7 +326,10 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
       searchReadDb,
       searchDependencies,
     ),
-  ).toMatchObject({ hits: [{ documentId: unavailableCorpusId }] });
+  ).toMatchObject({
+    items: [{ documentId: unavailableCorpusId }],
+    total: SEARCH_TOTAL_NOT_COUNTED,
+  });
 });
 
 test("the stale scan breaks equal update timestamps by document id", async () => {

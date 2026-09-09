@@ -19,6 +19,7 @@ export const legislationCorpusRoute = new Elysia({
   .post("/search", searchLegislation.handler, {
     body: searchLegislation.config.body,
     permissions: searchLegislation.config.permissions,
+    response: searchLegislation.config.response,
   })
   .get("/:documentId", readLegislation.handler, {
     params: readLegislation.config.params,

@@ -26,7 +26,10 @@ import {
   createSafePublicSubjectFollowUpHandler,
 } from "@/api/handlers/case-law/decisions/public-subject";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
-import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
+import {
+  searchDecisionsBodySchema,
+  searchDecisionsResponseSchema,
+} from "@/api/handlers/case-law/decisions/search-schema";
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
@@ -180,6 +183,7 @@ const searchDecisions = createSafePublicHandler(
   {
     mcp: { type: "tool", name: "search_case_law" },
     body: searchDecisionsBodySchema,
+    response: searchDecisionsResponseSchema,
   },
   async function* ({ body }) {
     const response = yield* Result.await(
@@ -281,6 +285,7 @@ export const publicCaseLawRoute = new Elysia({
   })
   .post("/decisions/search", searchDecisions.handler, {
     body: searchDecisions.config.body,
+    response: searchDecisions.config.response,
   })
   .get("/sitemap/shards", listSitemapShards.handler)
   .get("/sitemap/decisions/shard", listSitemapShardDecisions.handler, {

@@ -10,6 +10,11 @@ import {
 import JSZip from "jszip";
 
 import {
+  countedSearchTotal,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
+
+import {
   entities,
   WORK_OBLIGATION_STATUS,
   workObligations,
@@ -1261,7 +1266,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
       nextCursor: "cursor_2",
-      totalCount: 1,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
 
     const context = createContext();
@@ -1316,7 +1321,7 @@ describe("OpenAI-compatible MCP tools", () => {
           sourceUrl: "https://example.test/decision",
         },
       ],
-      totalCount: 1,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
   });
 
@@ -1342,7 +1347,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
       nextCursor: null,
-      totalCount: 1,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
 
     const result = await handleMcpToolCall({
@@ -1374,7 +1379,7 @@ describe("OpenAI-compatible MCP tools", () => {
           sourceUrl: "https://example.test/decision",
         },
       ],
-      totalCount: 1,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
@@ -1476,7 +1481,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         ],
         nextCursor: null,
-        totalCount: 1,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
       });
 
       const result = await handleMcpToolCall({
@@ -1497,7 +1502,7 @@ describe("OpenAI-compatible MCP tools", () => {
             resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           },
         ],
-        totalCount: 1,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
       });
     });
   });

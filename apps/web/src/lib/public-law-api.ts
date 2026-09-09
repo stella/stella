@@ -1,7 +1,9 @@
 import { TaggedError } from "better-result";
 
+import { parseApiErrorValue } from "@stll/api-contract";
+
 import { toAPIError } from "@/lib/errors/api";
-import type { APIError, EdenResponse, ToAPIErrorProps } from "@/lib/errors/api";
+import type { APIError } from "@/lib/errors/api";
 
 const PUBLIC_LAW_DISABLED_STATUS = 404;
 const PUBLIC_LAW_DISABLED_MARKER = "Not Found";
@@ -32,7 +34,9 @@ type DisabledPublicLawData = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isDisabledPublicLawData = (value: unknown): boolean =>
+const isDisabledPublicLawData = (
+  value: unknown,
+): value is DisabledPublicLawData =>
   isRecord(value) && value["error"] === PUBLIC_LAW_DISABLED_MARKER;
 
 // A generic predicate, so the exclusion narrows the payload type of each
@@ -44,11 +48,18 @@ const isPublicLawData = <T>(
 // The gate answers with status 404, so Eden files the marker under `error`;
 // a missing resource on an enabled surface carries a different body, so the
 // marker is unambiguous.
-const isDisabledPublicLawResponse = ({
-  status,
-  value,
-}: ToAPIErrorProps): boolean =>
-  status === PUBLIC_LAW_DISABLED_STATUS && isDisabledPublicLawData(value);
+type PublicLawErrorInput = {
+  status: number;
+  value: unknown;
+};
+
+type PublicLawEdenResponse<T> =
+  | { data: T; error: null }
+  | { data: null; error: PublicLawErrorInput };
+
+const isDisabledPublicLawResponse = (error: PublicLawErrorInput): boolean =>
+  error.status === PUBLIC_LAW_DISABLED_STATUS &&
+  isDisabledPublicLawData(error.value);
 
 const publicLawUnavailable = (action: string) =>
   new PublicLawUnavailableError({
@@ -65,12 +76,18 @@ const publicLawUnavailable = (action: string) =>
  * classify first and decide second.
  */
 export const toPublicLawError = (
-  error: ToAPIErrorProps,
+  error: PublicLawErrorInput,
   action: string,
-): APIError | PublicLawUnavailableError =>
-  isDisabledPublicLawResponse(error)
-    ? publicLawUnavailable(action)
-    : toAPIError(error);
+): APIError | PublicLawUnavailableError => {
+  if (isDisabledPublicLawResponse(error)) {
+    return publicLawUnavailable(action);
+  }
+
+  return toAPIError({
+    status: error.status,
+    value: parseApiErrorValue(error.value),
+  });
+};
 
 /**
  * Unwraps a public-law Eden response, throwing the classified failure.
@@ -81,7 +98,7 @@ export const toPublicLawError = (
  * payload type alone.
  */
 export function unwrapPublicLawEden<T>(
-  response: EdenResponse<T>,
+  response: PublicLawEdenResponse<T>,
   action: string,
 ): Exclude<T, DisabledPublicLawData> {
   if (response.error) {

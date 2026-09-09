@@ -7,6 +7,8 @@ import {
   TEXT_FIELD_TYPE,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
+import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import type { SearchTotal } from "@stll/api-contract/search";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -1264,11 +1266,34 @@ const caseLawFacetBucketProjection = v.strictObject({
   count: v.number(),
 });
 
+type CountedSearchTotalType = Extract<
+  SearchTotal,
+  { readonly count: number }
+>["type"];
+
+const countedSearchTotalProjection = (type: CountedSearchTotalType) =>
+  v.strictObject({
+    type: v.literal(type),
+    count: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  });
+
+const searchTotalProjection = v.variant("type", [
+  projectionBranch(countedSearchTotalProjection(SEARCH_TOTAL_TYPE.EXACT)),
+  projectionBranch(countedSearchTotalProjection(SEARCH_TOTAL_TYPE.ESTIMATE)),
+  projectionBranch(
+    v.strictObject({ type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED) }),
+  ),
+]);
+
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
- * (`stella-tools.ts`) mapping `searchDecisionsHandler` hits; `facets` and
- * `totalCount` are null on cursor pages. Decision ids are public case-law
- * corpus ids, not tenant refs.
+ * (`stella-tools.ts`) mapping `searchDecisionsHandler` hits. Decision ids are
+ * public case-law corpus ids, not tenant refs.
  */
 export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
   facets: v.nullable(
@@ -1301,7 +1326,7 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       sourceUrl: v.nullable(v.string()),
     }),
   ),
-  totalCount: v.nullable(v.number()),
+  total: searchTotalProjection,
 });
 
 const decisionTextFieldProjection = v.variant("type", [

@@ -42,7 +42,7 @@ test("a cursor naming a dictionary is refused, and reads nothing", async () => {
     db,
   );
 
-  expect(result).not.toHaveProperty("hits");
+  expect(result).not.toHaveProperty("items");
   expect(result).toMatchObject({
     code: 400,
     response: { message: "Invalid cursor" },
