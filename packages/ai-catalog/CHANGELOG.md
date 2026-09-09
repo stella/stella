@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.9
+
+### Patch Changes
+
+- [#3172](https://github.com/stella/stella/pull/3172) [`4498142`](https://github.com/stella/stella/commit/44981429c8a7a8ce7c9d5a94880a7bf1cf740b70) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Source the Bedrock Nova rates and capabilities from their own models.dev records, now that upstream publishes the US inference-profile IDs directly. Rates and capability values are unchanged; Nova Pro and Nova Lite keep document input through a reviewed override, because models.dev lists no PDF modality for them.
+
 ## 0.1.8
 
 ### Patch Changes
