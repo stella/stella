@@ -400,6 +400,86 @@ describe("request.failed severity", () => {
   });
 });
 
+describe("a mapped status survives the transport wrapper", () => {
+  const runEndpoint = async (
+    body: Parameters<typeof createSafeRootHandler>[1],
+  ) => {
+    const analytics = installRecordingAnalytics();
+    const recordingLogger = installRecordingLogger();
+    try {
+      const endpoint = createSafeRootHandler(
+        {
+          permissions: { workspace: ["read"] },
+          mcp: { type: "internal", reason: "health_infra" },
+        },
+        body,
+      );
+      const safeDb: SafeDb = async <T>() =>
+        Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+
+      return await endpoint.handler(createContext(endpoint, safeDb));
+    } finally {
+      recordingLogger.restore();
+      analytics.restore();
+    }
+  };
+
+  const upstreamRefusal = () =>
+    new HandlerError({
+      status: 503,
+      message: "Search is temporarily unavailable",
+    });
+
+  // Result.tryPromise answers a throw with UnhandledException, so an upstream
+  // status mapped deep inside the wrapped call reaches the boundary nested.
+  test("a status thrown through Result.tryPromise is answered, not graded 500", async () => {
+    const response = await runEndpoint(async function* () {
+      const value = yield* Result.await(
+        Result.tryPromise(async () => {
+          throw upstreamRefusal();
+        }),
+      );
+
+      return Result.ok({ value });
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(503);
+    expect(response.response.message).toBe("Search is temporarily unavailable");
+  });
+
+  // Result.gen answers a throw out of the generator body with a Panic.
+  test("a status thrown straight out of the handler body is answered", async () => {
+    const response = await runEndpoint(async function* () {
+      throw upstreamRefusal();
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(503);
+  });
+
+  test("an untyped failure is still graded a server fault", async () => {
+    const response = await runEndpoint(async function* () {
+      const value = yield* Result.await(
+        Result.tryPromise(async () => {
+          throw new Error("engine socket closed");
+        }),
+      );
+
+      return Result.ok({ value });
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(500);
+  });
+});
+
 describe("errorCauseChainAttributes", () => {
   test("records the status of a typed cause behind a generic wrapper", () => {
     const cause = new HandlerError({ status: 403, message: "byok missing" });
