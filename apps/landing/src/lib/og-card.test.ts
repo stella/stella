@@ -4,7 +4,9 @@ import { renderOgCard } from "./og-card";
 
 // A card whose unsupported background was discarded encoded below 14 kB.
 const MINIMUM_GRADIENT_CARD_BYTES = 25_000;
-const OG_CARD_RENDER_TIMEOUT_MS = 10_000;
+// Maximum-compression PNG encoding varies widely by CPU; this test guards
+// rendering fidelity, not latency.
+const OG_CARD_RENDER_TIMEOUT_MS = 30_000;
 
 describe("Open Graph card rendering", () => {
   test(
