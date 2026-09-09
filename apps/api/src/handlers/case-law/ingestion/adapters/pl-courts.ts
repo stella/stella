@@ -42,6 +42,7 @@ import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parser
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -126,7 +127,8 @@ export const PL_COURTS_LANGUAGE = "pl";
  * ingests it, since `fetchPage` walks the dump in id order and never consults
  * a date.
  */
-export const PL_COURTS_FIRST_SLICE = "1986-05-28";
+export const PL_COURTS_FIRST_SLICE =
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].dateRange.fromInclusive;
 
 /**
  * Slices near the tip the reconciliation re-walks on a fast cadence.
@@ -856,7 +858,7 @@ const buildPlDecision = ({
           identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
         }),
     court: courtName,
-    country: "POL",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
     language: "pl",
     decisionDate,
     decisionType,
@@ -1143,8 +1145,6 @@ const buildPlCourtsFromPayload = async (
 export const plCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.PL_COURTS,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-  name: "Polish Courts (SAOS)",
-  country: "POL",
   language: "pl",
   minRequestIntervalMs: 200,
   pageTimeoutMs: 280_000,

@@ -38,6 +38,7 @@ import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/c
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const COMMON_HEADERS = {
@@ -147,7 +148,10 @@ const LISTING_PAGE_SIZE = 80;
 const DOCUMENT_CONCURRENCY = 5;
 
 /** First year of the Constitutional Court's existence. */
-const FIRST_YEAR = 1993;
+const FIRST_YEAR = Number.parseInt(
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].dateRange.fromInclusive.slice(0, 4),
+  10,
+);
 
 const SWEEP_PHASE = {
   /** One-time complete enumeration by decision year. */
@@ -510,7 +514,7 @@ const parseDecisionPage = ({
     ),
     ecli,
     court,
-    country: "CZE",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,
     language: "cs",
     decisionDate: parsed.decisionDate,
     decisionType: decisionForm?.toLowerCase(),
@@ -1329,7 +1333,7 @@ const listedOnlyDecision = (
     ),
     ecli: listed.ecli,
     court,
-    country: "CZE",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_US].country,
     language: "cs",
     sourceUrl: listed.sourceUrl,
     metadata: {
@@ -1556,8 +1560,6 @@ const buildCzUsFromPayload = async (
 export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-  name: "Czech Constitutional Court",
-  country: "CZE",
   language: "cs",
   minRequestIntervalMs: 100,
   // A page performs three serial search requests, then up to eight batches

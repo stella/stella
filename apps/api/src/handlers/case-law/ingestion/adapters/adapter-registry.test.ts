@@ -10,6 +10,7 @@ import {
   listAdapterKeys as listLazyAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 describe("case-law adapter capabilities", () => {
@@ -49,11 +50,17 @@ describe("case-law adapter registries", () => {
     expect([...listEagerAdapterKeys()].toSorted()).toEqual(
       [...listLazyAdapterKeys()].toSorted(),
     );
-    expect(
-      listAdapters()
-        .map((adapter) => adapter.key)
-        .toSorted(),
-    ).toEqual([...listLazyAdapterKeys()].toSorted());
+    expect(listAdapters().map((adapter) => adapter.key)).toEqual([
+      ...listEagerAdapterKeys(),
+    ]);
+  });
+
+  test("registered adapters take their identity from the manifest", () => {
+    for (const adapter of listAdapters()) {
+      const manifest = ADAPTER_MANIFESTS[adapter.key];
+      expect(adapter.name).toBe(manifest.name);
+      expect(adapter.country).toBe(manifest.country);
+    }
   });
 
   test("lazy loading returns the adapter selected by the closed key", async () => {

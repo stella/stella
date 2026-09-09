@@ -46,6 +46,7 @@ import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -653,7 +654,7 @@ export const buildCzNsDecision = async (
       legacySourceUrls: [webUrl],
       ecli: meta["ecli"],
       court,
-      country: "CZE",
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,
       language: CZ_NS_LANGUAGE,
       decisionDate: meta["decisionDate"]
         ? parseCeDate(meta["decisionDate"])
@@ -767,7 +768,8 @@ const SEARCH_ORDER_VIEW = 4;
  * it is what the crawl's full walk of the id-ordered view already covers;
  * what that walk cannot see, and this capability exists for, is the tip.
  */
-export const CZ_NS_FIRST_SLICE = "2010-01-01";
+export const CZ_NS_FIRST_SLICE =
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].dateRange.fromInclusive;
 
 /**
  * Days near the tip that the reconciliation re-walks on a fast cadence. The
@@ -1038,8 +1040,6 @@ export const czNsAdapter = defineSourceAdapter({
     fields: CZ_NS_SOURCE_FIELD_DISPOSITIONS,
     listSourceFields: listCzNsSourceFields,
   },
-  name: "Czech Supreme Court",
-  country: "CZE",
   language: CZ_NS_LANGUAGE,
   minRequestIntervalMs: 200,
   // Each page fetches 40 decisions + detail pages. ~40s/page.

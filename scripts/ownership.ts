@@ -501,6 +501,21 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "case-law-adapter-manifest",
+    capability: "Case-law source declarations",
+    owner: [
+      "apps/api/src/lib/legal-search/adapter-manifest.ts",
+      "apps/api/src/lib/case-law/ecli-court-codes.ts",
+    ],
+    summary:
+      "One total map binds every adapter key to its source name, jurisdiction, " +
+      "known ECLI court codes, declared text sentinels, date range and " +
+      "duplicate-text threshold. Adapters read the declaration, and the runner " +
+      "reads the resulting total registry, so adding a source requires one " +
+      "complete entry.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "agent-input-normalization",
     capability:
       "Reading a value a model wrote on the MCP/CLI wire: dates, date formats, numbers, booleans, locales, closed vocabularies",

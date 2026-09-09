@@ -4,6 +4,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
@@ -723,7 +724,16 @@ export type SourceAdapter = {
   reconciliation: SourceReconciliation;
 };
 
-/** Preserve an adapter's literal registry key while contextualizing its API. */
-export const defineSourceAdapter = <const TKey extends string>(
-  adapter: SourceAdapter & { readonly key: TKey },
-): SourceAdapter & { readonly key: TKey } => adapter;
+type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
+  SourceAdapter,
+  "country" | "key" | "name"
+> & { readonly key: TKey };
+
+/** Build an adapter from the source facts declared for its registry key. */
+export const defineSourceAdapter = <const TKey extends AdapterKey>(
+  adapter: SourceAdapterDefinition<TKey>,
+): SourceAdapter & { readonly key: TKey } => ({
+  ...adapter,
+  country: ADAPTER_MANIFESTS[adapter.key].country,
+  name: ADAPTER_MANIFESTS[adapter.key].name,
+});

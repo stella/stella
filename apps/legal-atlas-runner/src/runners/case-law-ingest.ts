@@ -32,12 +32,19 @@ import {
   countPendingCitations,
   tryResolveCitationBatch,
 } from "@/api/handlers/case-law/citation-resolution";
-import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  MAX_CYCLE_MS,
+} from "@/api/handlers/case-law/consts";
 import {
   BACKFILL_STATUS,
   backfillCorpusIndex,
 } from "@/api/handlers/case-law/corpus-index";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  getAdapter,
+  listAdapters,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -189,7 +196,7 @@ const drainOnSigterm = (): void => {
 };
 
 type SourceDef = {
-  adapterKey: string;
+  adapterKey: AdapterKey;
   name: string;
 };
 
@@ -586,88 +593,9 @@ const DISABLED_ADAPTER_KEYS = new Set(
   }),
 );
 
-const ALL_SOURCES: SourceDef[] = [
-  {
-    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-    name: "Czech Regional Courts",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.CZ_NS,
-    name: "Czech Supreme Court",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.CZ_NSS,
-    name: "Czech Supreme Administrative Court",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.CZ_US,
-    name: "Czech Constitutional Court",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    name: "Slovak Courts",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.SK_US,
-    name: "Slovak Constitutional Court",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.PL_COURTS,
-    name: "Polish Courts (SAOS)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_COURTS,
-    name: "Austrian Courts (RIS Justiz)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_VFGH,
-    name: "Austrian Constitutional Court (RIS VfGH)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_VWGH,
-    name: "Austrian Administrative Court (RIS VwGH)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_BVWG,
-    name: "Austrian Federal Administrative Court (RIS BVwG)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_LVWG,
-    name: "Austrian State Administrative Courts (RIS LVwG)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_ASYLGH,
-    name: "Austrian Asylum Court (RIS AsylGH)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_UBAS,
-    name: "Austrian Federal Asylum Senate (RIS UBAS)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_UVS,
-    name: "Austrian Independent Administrative Senates (RIS UVS)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_VERG,
-    name: "Austrian Procurement Review Bodies (RIS Verg)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_UMSE,
-    name: "Austrian Environmental Senate (RIS Umweltsenat)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_BKS,
-    name: "Austrian Federal Communications Senate (RIS BKS)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.AT_FINDOK,
-    name: "Austrian Fiscal Courts (Findok BFG and UFS)",
-  },
-  {
-    adapterKey: ADAPTER_KEYS.EU_ECJ,
-    name: "Court of Justice of the EU (CJEU)",
-  },
-];
+const ALL_SOURCES: SourceDef[] = listAdapters().map(
+  ({ key: adapterKey, name }) => ({ adapterKey, name }),
+);
 
 const SOURCES = ALL_SOURCES.filter(
   (s) => !DISABLED_ADAPTER_KEYS.has(s.adapterKey),
@@ -678,7 +606,7 @@ if (DISABLED_ADAPTER_KEYS.size > 0) {
 }
 
 const ensureSource = async (
-  adapterKey: string,
+  adapterKey: AdapterKey,
   name: string,
   initialCursor: string | null,
 ) => {
@@ -720,7 +648,7 @@ type CycleAttempt =
   | { cycle: CycleResult; type: "ran" };
 
 const runOneCycle = async (
-  adapterKey: string,
+  adapterKey: AdapterKey,
   name: string,
   bounds: CycleBounds = {},
 ): Promise<CycleAttempt> => {
@@ -1743,8 +1671,7 @@ export const runCaseLawIngest = async (
   // publisher on boot.
   const sourceTotalLoop = (async () => {
     // The enabled set, not the registry: a poll is an external request like
-    // any other, so it must not reach a publisher an operator disabled, nor
-    // the adapter ALL_SOURCES holds back as not production-validated.
+    // any other, so it must not reach a publisher an operator disabled.
     const pollableAdapters = SOURCES.flatMap(({ adapterKey }) => {
       const adapter = getAdapter(adapterKey);
       if (adapter === undefined) {
