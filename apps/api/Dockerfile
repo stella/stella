@@ -133,6 +133,19 @@ RUN bun build \
     --target bun \
     --outfile /app/decision-analysis-save.js \
     apps/api/src/scripts/decision-analysis-save.ts
+# One-shot case-law repair passes over rows an earlier write path produced.
+# Both need the API env (database, corpus bucket) and run inside the API task;
+# both report without writing until `--apply`:
+#   ["bun", "/app/repair-publisher-absent-text.js", "--apply"]
+#   ["bun", "/app/repair-cz-ns-court.js", "--apply"]
+RUN bun build \
+    --target bun \
+    --outfile /app/repair-publisher-absent-text.js \
+    apps/api/src/scripts/repair-publisher-absent-text.ts
+RUN bun build \
+    --target bun \
+    --outfile /app/repair-cz-ns-court.js \
+    apps/api/src/scripts/repair-cz-ns-court.ts
 # Dedicated durable document-processing worker. Deploy the same image with
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
 # in-image through the isolated local ONNX worker.
@@ -248,6 +261,8 @@ COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/re
 COPY --chown=stella:stella --from=builder /app/decision-analysis-candidates.js /app/decision-analysis-candidates.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-input.js /app/decision-analysis-input.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/decision-analysis-save.js
+COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /app/repair-publisher-absent-text.js
+COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:
