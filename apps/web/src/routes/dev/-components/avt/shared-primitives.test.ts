@@ -37,9 +37,11 @@ import type {
   needsAttention,
   resolveClaimView,
 } from "@/routes/dev/-components/avt/verdict";
+import type { VerificationView } from "@/routes/dev/-components/avt/verification-view";
 
 type SharedPrimitiveExports = [
   typeof ClaimDetailPanel,
+  typeof VerificationView,
   typeof CLAIM_TEXT,
   typeof DOCUMENT,
   typeof ConfBadge,
