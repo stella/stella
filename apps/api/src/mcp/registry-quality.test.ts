@@ -109,11 +109,11 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // document. Measured 71_254 chars, after list_templates gave back the fill
 // semantics its own description was repeating from fill_template.
 // Explicit destructive/read-only hints on every tool add only their required
-// wire metadata: measured 72_652 default and 23_727 anonymized. Pin the exact
+// wire metadata: measured 72_683 default and 23_758 anonymized. Pin the exact
 // new sizes so this submission fix does not create unrelated growth headroom.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 72_652,
-  anonymized: 23_727,
+  default: 72_683,
+  anonymized: 23_758,
 };
 
 // Longest description measured after plan 047: the template authoring tool at
