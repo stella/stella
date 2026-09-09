@@ -276,27 +276,21 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 10_000,
     cachedWriteInputPerMTok: 125_000,
   },
-  // models.dev: amazon-bedrock:amazon.nova-pro-v1:0
-  // reviewed source mapping: 2026-09-03: stella uses the Bedrock US inference-profile ID; models.dev prices its corresponding base model ID
-  // reviewed source: https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+  // models.dev: amazon-bedrock:us.amazon.nova-pro-v1:0
   "us.amazon.nova-pro-v1:0": {
     kind: "flat",
     inputPerMTok: 80_000,
     outputPerMTok: 320_000,
     cachedInputPerMTok: 20_000,
   },
-  // models.dev: amazon-bedrock:amazon.nova-lite-v1:0
-  // reviewed source mapping: 2026-09-03: stella uses the Bedrock US inference-profile ID; models.dev prices its corresponding base model ID
-  // reviewed source: https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+  // models.dev: amazon-bedrock:us.amazon.nova-lite-v1:0
   "us.amazon.nova-lite-v1:0": {
     kind: "flat",
     inputPerMTok: 6000,
     outputPerMTok: 24_000,
     cachedInputPerMTok: 1500,
   },
-  // models.dev: amazon-bedrock:amazon.nova-micro-v1:0
-  // reviewed source mapping: 2026-09-03: stella uses the Bedrock US inference-profile ID; models.dev prices its corresponding base model ID
-  // reviewed source: https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html
+  // models.dev: amazon-bedrock:us.amazon.nova-micro-v1:0
   "us.amazon.nova-micro-v1:0": {
     kind: "flat",
     inputPerMTok: 3500,
