@@ -32,17 +32,24 @@
  * Idempotent: a re-attributed row matches the stored court the next run
  * derives, and is counted as held.
  *
+ * **How it walks.** A page at a time, bounded by rows examined rather than by
+ * rows matched, in the order of the source's own cursor index. The population
+ * is a few hundred rows among the source's many thousands, so a selection
+ * bounded by matches reads to the end of the source looking for the ones that
+ * are not there, and is cancelled by the lane's statement timeout before it
+ * reports anything. Both modes read through the same statement, so what a
+ * report says it would change is what an apply changes.
+ *
  *   # what the repair would change, writing nothing
  *   bun run src/scripts/repair-cz-ns-court.ts
  *
  *   # re-attribute, bounded and resumable by re-running
- *   bun run src/scripts/repair-cz-ns-court.ts --apply [--limit 5000]
+ *   bun run src/scripts/repair-cz-ns-court.ts --apply [--limit 5000] [--page 2000]
  */
 
 import { panic } from "better-result";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
@@ -55,21 +62,33 @@ import {
 import {
   applyCzNsCourtRepairStatement,
   CZ_NS_COURT_REPAIR_OUTCOMES,
+  czNsSourceIdStatement,
   decideCzNsCourtRepair,
-  parseCzNsCourtRow,
-  selectCzNsForeignCourtRowsStatement,
+  parseCzNsCourtPage,
+  parseCzNsSourceId,
+  selectCzNsCourtPageStatement,
 } from "@/api/scripts/repair-cz-ns-court-plan";
 import type {
+  CzNsCourtCursor,
+  CzNsCourtPage,
   CzNsCourtReattribution,
-  CzNsCourtRow,
 } from "@/api/scripts/repair-cz-ns-court-plan";
 import { flagInteger, readApplyFlag } from "@/api/scripts/repair-flags";
 
 /** The publisher's own ECLI court code; its rows need no re-attribution. */
 const CZ_NS_PUBLISHER_ECLI_CODE = "NS";
 
-/** Rows read per selection round trip. */
-const BATCH = 200;
+/**
+ * Rows one page of the walk examines, matching or not.
+ *
+ * This is what bounds a statement, so it is the number that keeps the walk
+ * inside the lane's statement timeout: the population is a few hundred rows
+ * among the source's many thousands, and a selection bounded by matches
+ * instead reads to the end of the source looking for the ones that are not
+ * there. An operator meeting a slower database lowers it rather than raising
+ * a timeout.
+ */
+const DEFAULT_PAGE_SIZE = 2000;
 
 /**
  * Rows this run may re-attribute. The affected population is a few hundred,
@@ -83,7 +102,8 @@ const USAGE = `Usage: bun run src/scripts/repair-cz-ns-court.ts [options]
   --apply        Write the re-attributions. Omitted, the run only reports.
   --dry-run      Report only, the default. Accepted so it cannot be mistaken
                  for a flag this script ignores; contradicts --apply.
-  --limit <n>    Rows this run may re-attribute (default ${String(DEFAULT_LIMIT)}).`;
+  --limit <n>    Rows this run may re-attribute (default ${String(DEFAULT_LIMIT)}).
+  --page <n>     Rows one statement examines (default ${String(DEFAULT_PAGE_SIZE)}).`;
 
 const apply = readApplyFlag(USAGE);
 
@@ -97,21 +117,39 @@ const limit = flagInteger({
   name: "limit",
   usage: USAGE,
 });
+const pageSize = flagInteger({
+  fallback: DEFAULT_PAGE_SIZE,
+  name: "page",
+  usage: USAGE,
+});
 
-/** One keyset page of the selection, strictly after `after`. */
+// Resolved once, by the adapter that wrote the rows: the walk below filters on
+// the source id, which is the leading column of the index it reads in, rather
+// than joining the source table on every page.
+const sourceId = parseCzNsSourceId(
+  executedRows(await rootDb.execute(czNsSourceIdStatement(ADAPTER_KEYS.CZ_NS))),
+);
+if (sourceId === null) {
+  console.info(`No ${ADAPTER_KEYS.CZ_NS} source is registered; nothing to do.`);
+  process.exit(0);
+}
+
+/** One page of the walk, strictly after `after`. */
 const readPage = async (
-  after: SafeId<"caseLawDecision"> | null,
-): Promise<CzNsCourtRow[]> =>
-  executedRows(
-    await rootDb.execute(
-      selectCzNsForeignCourtRowsStatement({
-        adapterKey: ADAPTER_KEYS.CZ_NS,
-        after,
-        limit: BATCH,
-        publisherEcliCode: CZ_NS_PUBLISHER_ECLI_CODE,
-      }),
+  after: CzNsCourtCursor | null,
+): Promise<CzNsCourtPage> =>
+  parseCzNsCourtPage(
+    executedRows(
+      await rootDb.execute(
+        selectCzNsCourtPageStatement({
+          after,
+          pageSize,
+          publisherEcliCode: CZ_NS_PUBLISHER_ECLI_CODE,
+          sourceId,
+        }),
+      ),
     ),
-  ).map(parseCzNsCourtRow);
+  );
 
 /**
  * Re-attribute one row, and re-enqueue the projection that carries it.
@@ -155,7 +193,7 @@ const reattributeRow = async (
     return written;
   });
 
-let cursor: SafeId<"caseLawDecision"> | null = null;
+let cursor: CzNsCourtCursor | null = null;
 let scanned = 0;
 let reattributed = 0;
 let superseded = 0;
@@ -166,14 +204,16 @@ const courts = new Map<string, number>();
 while (reattributed + superseded < limit) {
   const page = await readPage(cursor);
 
-  const last = page.at(-1);
-  if (last === undefined) {
+  // The cursor advances by rows examined, not by rows matched. A page whose
+  // rows all held is still progress, and a walk that only moved on a match
+  // would read the same page forever once the last one was behind it.
+  if (page.cursor === null) {
     break;
   }
-  cursor = last.id;
-  scanned += page.length;
+  cursor = page.cursor;
+  scanned += page.scanned;
 
-  for (const row of page) {
+  for (const row of page.rows) {
     // The allowance is per row, not per page: a page is read whole, so a run
     // with one slot left would otherwise write every re-attributable row on
     // it. What an operator authorised is the number of rows changed.
@@ -213,7 +253,7 @@ while (reattributed + superseded < limit) {
 }
 
 console.info(
-  `${scanned.toLocaleString()} rows carry a non-publisher ECLI: ` +
+  `${scanned.toLocaleString()} rows of the source examined: ` +
     `${reattributed.toLocaleString()} ${apply ? "re-attributed" : "would be re-attributed"}, ` +
     `${held.toLocaleString()} already correct, ` +
     `${superseded.toLocaleString()} changed under the run.`,
