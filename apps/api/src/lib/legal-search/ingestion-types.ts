@@ -1,11 +1,11 @@
 import { panic, Result } from "better-result";
 
-import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
-
 import type {
   DecisionTextFieldKey,
-  DecisionTextFields,
-} from "@/api/lib/case-law/decision-text";
+  ReadDecisionTextFields,
+} from "@stll/api-contract/case-law-text-field";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -100,7 +100,7 @@ export type IngestionResult = {
   documentUrl?: string | undefined;
   metadata: Record<string, unknown>;
   /** Publisher text stored under its existing metadata keys by the pipeline. */
-  textFields: DecisionTextFields;
+  textFields: ReadDecisionTextFields;
   rawHash: string;
   /** Parsed document AST, or empty object for courts without a parser. */
   documentAst: DocumentAst | EmptyAst;
