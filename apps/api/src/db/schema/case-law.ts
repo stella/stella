@@ -433,6 +433,14 @@ export const caseLawDecisions = p.pgTable(
     /** sha256 of the canonical payload; what object storage is keyed on. */
     contentHash: p.varchar("content_hash", { length: 64 }),
     /**
+     * Markers of the retired index projection. Nothing reads or writes them;
+     * they stay for one release so a task from the previous one can still
+     * write them, and are dropped after that.
+     */
+    indexedHash: p.varchar("indexed_hash", { length: 64 }),
+    indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
+    indexedAt: timestamptz("indexed_at"),
+    /**
      * Monotonic fence captured by final-generation projection intents. Any
      * desired-state transaction increments it before changing the projection,
      * so a worker leased against an older value cannot publish stale content.
@@ -541,6 +549,18 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_authority_due_idx")
       .on(t.citationAuthorityComputedAt.asc().nullsFirst(), t.id),
+    // Indexes of the retired projection's markers, dropped with the columns.
+    p.index("case_law_decisions_indexed_idx").on(t.indexedHash, t.contentHash),
+    p
+      .index("case_law_decisions_corpus_pending_idx")
+      .on(t.id)
+      .where(
+        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
+      ),
+    p
+      .index("case_law_decisions_corpus_hash_pending_idx")
+      .on(t.id)
+      .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     // The resolver's candidate lookup, answered entirely from the index. The
     // key alone finds the candidates; jurisdiction and date are what decide
     // between them, and the target id is what gets written. Carrying all four

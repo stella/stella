@@ -93,6 +93,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     text_s3_key: "required",
     ast_s3_key: "required",
     content_hash: "required",
+    // Granted, and no longer read: the column is dropped a release from now.
+    indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
   },
@@ -171,6 +173,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     text_s3_key: "required",
     ast_s3_key: "required",
     content_hash: "required",
+    // Granted, and no longer read: the column is dropped a release from now.
+    indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
   },

@@ -6,10 +6,11 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- desired and applied state in corpus_index_projection_states, driven by
 -- corpus_index_projection_intents.
 --
--- This file takes the ACCESS EXCLUSIVE locks on the canonical tables: the
--- triggers, the functions behind them, and the columns. The relations that
+-- This file drops the triggers and the functions behind them. The relations
 -- only the retired path owns are dropped by the next migration, so unlinking
--- their segments at commit does not hold a lock on case_law_decisions.
+-- their segments at commit does not hold a lock on case_law_decisions. The
+-- marker columns those triggers maintained stay for one release, so a task
+-- from the previous one can still write them.
 
 -- stella-migration-safety: reviewed drop-object - the trigger's only purpose
 -- was to enqueue rows into case_law_corpus_index_projections, dropped by the
@@ -85,30 +86,6 @@ DROP FUNCTION IF EXISTS subtract_deleted_case_law_corpus_index_counts();--> stat
 -- layer renders the same expression inline, and the trigger that called it is
 -- dropped above.
 DROP FUNCTION IF EXISTS case_law_corpus_index_id(text, text);--> statement-breakpoint
-
--- A dropped column takes its grants with it silently. Revoking first keeps the
--- granted set derivable from the migration history alone.
-REVOKE SELECT ("indexed_hash") ON TABLE "case_law_decisions"
-  FROM "stella_public_law_reader";--> statement-breakpoint
-
-REVOKE SELECT ("indexed_hash") ON TABLE "legislation_documents"
-  FROM "stella_public_law_reader";--> statement-breakpoint
-
--- stella-migration-safety: reviewed drop-column - the markers answered "which
--- physical index holds this row's content". The serving path answers that from
--- corpus_index_projection_states instead, and the indexes over these columns
--- are dropped with them.
-ALTER TABLE "case_law_decisions"
-  DROP COLUMN IF EXISTS "indexed_hash",
-  DROP COLUMN IF EXISTS "indexed_generation",
-  DROP COLUMN IF EXISTS "indexed_at";--> statement-breakpoint
-
--- stella-migration-safety: reviewed drop-column - the legislation twins of the
--- markers above, with the same replacement.
-ALTER TABLE "legislation_documents"
-  DROP COLUMN IF EXISTS "indexed_hash",
-  DROP COLUMN IF EXISTS "indexed_generation",
-  DROP COLUMN IF EXISTS "indexed_at";--> statement-breakpoint
 
 -- An erasure or a withdrawal targets whichever generations hold the document,
 -- so its audit row names none. Widening only: a row that already carries a

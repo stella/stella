@@ -39,11 +39,10 @@ type CorpusStorageInvariantInput = {
    */
   searchProvider: "pg-fts" | "corpus-index";
   /**
-   * `embedded` is a projection loop inside this process; `external` is
-   * another deployed projection worker. Undefined means no projection owner
-   * was asserted.
+   * `external` is the deployed projection worker that applies the desired
+   * state. Undefined means no projection owner was asserted.
    */
-  projectionOwner: "embedded" | "external" | undefined;
+  projectionOwner: "external" | undefined;
   corpusBucket: string | undefined;
   isDev: boolean;
 };
@@ -80,7 +79,7 @@ export const corpusStorageInvariantViolation = ({
   if (mode === "canonical" && projectionOwner === undefined) {
     return (
       "CORPUS_STORAGE_MODE=canonical requires CORPUS_PROJECTION_OWNER: " +
-      "name either the embedded or external projection owner"
+      "name the external projection owner"
     );
   }
 

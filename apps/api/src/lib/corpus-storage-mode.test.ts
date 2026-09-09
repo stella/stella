@@ -29,7 +29,7 @@ describe("corpusStorageInvariantViolation", () => {
   const deployed = {
     corpusBucket: "corpus",
     isDev: false,
-    projectionOwner: "embedded",
+    projectionOwner: "external",
   } as const;
 
   test("canonical without the corpus-index provider is rejected", () => {

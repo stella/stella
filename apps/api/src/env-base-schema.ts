@@ -207,8 +207,10 @@ export const envBaseServerSchema = {
     "false",
   ),
   // Canonical storage requires an explicit projection owner: naming it keeps a
-  // deliberately delegated writer distinct from an accidental pause.
-  CORPUS_PROJECTION_OWNER: v.optional(v.picklist(["embedded", "external"])),
+  // deliberately delegated writer distinct from an accidental pause. The
+  // projection is applied by a separate worker, so `external` is the only
+  // owner this deployment can assert.
+  CORPUS_PROJECTION_OWNER: v.optional(v.picklist(["external"])),
   // Morphological query expansion for case-law corpus-index searches.
   // `off` is byte-identical to the pre-expansion query builder and fetches
   // no dictionary; `shadow` executes the unexpanded query and records how the
@@ -275,7 +277,7 @@ type EnvBaseInvariantInput = {
   PUBLIC_LAW_DATABASE_URL?: string | undefined;
   CORPUS_INDEX_Q09_ENDPOINT?: string | undefined;
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
-  CORPUS_PROJECTION_OWNER?: "embedded" | "external" | undefined;
+  CORPUS_PROJECTION_OWNER?: "external" | undefined;
   CORPUS_STORAGE_ENABLED: boolean;
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
   DATABASE_URL: string;

@@ -135,6 +135,10 @@ export const legislationDocuments = p.pgTable(
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),
     astS3Key: p.varchar("ast_s3_key", { length: 512 }),
     contentHash: p.varchar("content_hash", { length: 64 }),
+    /** The case-law twins' legislation counterparts; see that table. */
+    indexedHash: p.varchar("indexed_hash", { length: 64 }),
+    indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
+    indexedAt: timestamptz("indexed_at"),
     /** Monotonic fence advanced by each desired-state transaction. */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })
@@ -201,6 +205,20 @@ export const legislationDocuments = p.pgTable(
     p
       .index("legislation_documents_citation_authority_idx")
       .on(t.citationAuthority),
+    // Indexes of the retired projection's markers, dropped with the columns.
+    p
+      .index("legislation_documents_indexed_idx")
+      .on(t.indexedHash, t.contentHash),
+    p
+      .index("legislation_documents_corpus_pending_idx")
+      .on(t.id)
+      .where(
+        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
+      ),
+    p
+      .index("legislation_documents_corpus_hash_pending_idx")
+      .on(t.id)
+      .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     p.check(
       "legislation_documents_status_values",
       sql`${t.status} IN (${sql.join(LEGISLATION_DOCUMENT_STATUS_SQL_VALUES, sql.raw(","))})`,
