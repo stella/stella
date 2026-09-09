@@ -69,8 +69,8 @@ export const getAdapter = (key: string): SourceAdapter | undefined => {
 };
 
 /** List all registered adapters. */
-export const listAdapters = (): SourceAdapter[] =>
-  Object.values(ADAPTER_REGISTRY);
+export const listAdapters = (): readonly AdapterRegistry[AdapterKey][] =>
+  Object.values(ADAPTER_KEYS).map((key) => ADAPTER_REGISTRY[key]);
 
 /** List all registered adapter keys. */
 export const listAdapterKeys = (): readonly AdapterKey[] =>

@@ -36,11 +36,11 @@ import { isUuid } from "@/api/lib/custom-schema";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { isRecord } from "@/api/lib/type-guards";
 
 const FINDOK_ORIGIN = "https://findok.bmf.gv.at";
 const IWG_ROOT = `${FINDOK_ORIGIN}/findok/iwg`;
-const COUNTRY = "AUT";
 const LANGUAGE = "de";
 const CRAWL_PAGE_SIZE = 10;
 const RECONCILIATION_PAGE_SIZE = 100;
@@ -50,6 +50,10 @@ const MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
 const MAX_XML_BYTES = 12 * 1024 * 1024;
 const START_DIGEST = "start";
 const QUARANTINE_ID_PREFIX = "findok-quarantine:";
+const SOURCE_FIRST_YEAR = Number.parseInt(
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.AT_FINDOK].dateRange.fromInclusive.slice(0, 4),
+  10,
+);
 
 const COLLECTIONS = {
   bfg: {
@@ -59,7 +63,7 @@ const COLLECTIONS = {
   },
   ufs: {
     authority: "UFS",
-    firstYear: 2003,
+    firstYear: SOURCE_FIRST_YEAR,
     lastYear: 2013,
     manifestUrl: `${IWG_ROOT}/bestandsliste-ufs.gz`,
   },
@@ -527,7 +531,7 @@ const buildListingOnly = (
     caseNumber: item.gz,
     isListingOnly: true,
     court: item.behoerde,
-    country: COUNTRY,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.AT_FINDOK].country,
     language: LANGUAGE,
     decisionDate,
     decisionType: item.dokumenttyp.toLocaleLowerCase("de-AT"),
@@ -629,7 +633,7 @@ const buildDecision = async ({
     caseNumber: item.gz,
     ecli: parsed.ecli,
     court: item.behoerde,
-    country: COUNTRY,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.AT_FINDOK].country,
     language: LANGUAGE,
     decisionDate,
     decisionType,
@@ -709,8 +713,6 @@ export const createAtFindokAdapter = (
   return defineSourceAdapter({
     key: ADAPTER_KEYS.AT_FINDOK,
     sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-    name: "Austrian Fiscal Courts (Findok BFG and UFS)",
-    country: COUNTRY,
     language: LANGUAGE,
     minRequestIntervalMs: FINDOK_REQUEST_INTERVAL_MS,
     pageTimeoutMs: 10 * 60_000,

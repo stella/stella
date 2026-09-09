@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { COURT_WEIGHT_SEED } from "@/api/handlers/case-law/court-weight-seed";
 import {
-  CZ_ECLI_COURTS,
   czCourtFromEcli,
   czDecisionCourt,
 } from "@/api/lib/case-law/cz-ecli-courts";
+import { CZ_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 
 /** An ECLI in the shape the Czech portals publish, for an arbitrary court. */
 const ecliOf = (code: string): string => `ECLI:CZ:${code}:2011:75.CO.19.2011.1`;

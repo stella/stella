@@ -33,12 +33,12 @@ import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/a
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const DOCUMENT_ORIGIN = "https://www.ris.bka.gv.at";
-const COUNTRY = "AUT";
 const LANGUAGE = "de";
 const PAGE_SIZE = 100;
 const REQUEST_INTERVAL_MS = 5000;
@@ -90,13 +90,23 @@ type RisListingPage = {
   total: number;
 };
 
+type DecisionDateAdapterKey = {
+  [TKey in AdapterKey]: (typeof ADAPTER_MANIFESTS)[TKey]["dateRange"]["type"] extends "decision-date"
+    ? TKey
+    : never;
+}[AdapterKey];
+
+type AtRisAdapterKey = Exclude<
+  Extract<DecisionDateAdapterKey, `at-${string}`>,
+  typeof ADAPTER_KEYS.AT_FINDOK
+>;
+
 export type AtRisSourceDefinition = {
   application: string;
   excludeForeignCourts: boolean;
   firstSlice: string;
-  key: AdapterKey;
+  key: AtRisAdapterKey;
   lastSlice?: string | undefined;
-  name: string;
 };
 
 export type AtRisDependencies = {
@@ -105,13 +115,44 @@ export type AtRisDependencies = {
   sleep: (ms: number) => Promise<void>;
 };
 
-const JUSTIZ_SOURCE = {
+type AtRisSourceDeclaration<TKey extends AtRisAdapterKey> = {
+  application: string;
+  excludeForeignCourts: boolean;
+  key: TKey;
+};
+
+export const defineAtRisSource = <const TKey extends AtRisAdapterKey>({
+  application,
+  excludeForeignCourts,
+  key,
+}: AtRisSourceDeclaration<TKey>): AtRisSourceDefinition & {
+  readonly key: TKey;
+} => {
+  const { dateRange } = ADAPTER_MANIFESTS[key];
+  const firstSlice = dateRange.fromInclusive.slice(0, 7);
+  switch (dateRange.through.type) {
+    case "open":
+      return { application, excludeForeignCourts, firstSlice, key };
+    case "inclusive":
+      return {
+        application,
+        excludeForeignCourts,
+        firstSlice,
+        key,
+        lastSlice: dateRange.through.date.slice(0, 7),
+      };
+    default: {
+      dateRange.through satisfies never;
+      return panic(`Unhandled date-range end for ${key}`);
+    }
+  }
+};
+
+const JUSTIZ_SOURCE = defineAtRisSource({
   application: "Justiz",
   excludeForeignCourts: true,
-  firstSlice: "1925-04",
   key: ADAPTER_KEYS.AT_COURTS,
-  name: "Austrian Courts (RIS Justiz)",
-} as const satisfies AtRisSourceDefinition;
+});
 
 const DEFAULT_DEPENDENCIES: AtRisDependencies = {
   now: () => new Date(),
@@ -630,7 +671,7 @@ const buildListingOnly = ({
     isListingOnly: true,
     ecli: data.ecli,
     court,
-    country: COUNTRY,
+    country: ADAPTER_MANIFESTS[source.key].country,
     language: LANGUAGE,
     decisionDate: data.decisionDate,
     decisionType: data.decisionType,
@@ -787,7 +828,7 @@ const buildDecision = async ({
     caseNumber: data.caseNumber,
     ecli: data.ecli,
     court: data.court,
-    country: COUNTRY,
+    country: ADAPTER_MANIFESTS[source.key].country,
     language: LANGUAGE,
     decisionDate: data.decisionDate,
     decisionType: data.decisionType,
@@ -979,19 +1020,17 @@ const buildReconciliationDecision = async (
   });
 };
 
-type AtRisSourceAdapter<TKey extends AdapterKey> = SourceAdapter & {
+type AtRisSourceAdapter<TKey extends AtRisAdapterKey> = SourceAdapter & {
   readonly key: TKey;
 };
 
-const createAdapter = <const TKey extends AdapterKey>(
+const createAdapter = <const TKey extends AtRisAdapterKey>(
   source: AtRisSourceDefinition & { readonly key: TKey },
   dependencies: AtRisDependencies,
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
     key: source.key,
     sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-    name: source.name,
-    country: COUNTRY,
     language: LANGUAGE,
     minRequestIntervalMs: REQUEST_INTERVAL_MS,
     pageTimeoutMs: PAGE_TIMEOUT_MS,
@@ -1199,7 +1238,7 @@ export const createAtCourtsAdapter = (
 ): AtRisSourceAdapter<typeof ADAPTER_KEYS.AT_COURTS> =>
   createAdapter(JUSTIZ_SOURCE, { ...DEFAULT_DEPENDENCIES, ...dependencies });
 
-export const createAtRisSourceAdapter = <const TKey extends AdapterKey>(
+export const createAtRisSourceAdapter = <const TKey extends AtRisAdapterKey>(
   source: AtRisSourceDefinition & { readonly key: TKey },
   dependencies: Partial<AtRisDependencies> = {},
 ): AtRisSourceAdapter<TKey> =>

@@ -13,96 +13,19 @@
  *
  * The signal is in the decision's own ECLI. Its third segment is the court's
  * Ministry of Justice abbreviation, so `ECLI:CZ:KSOS:2011:75.CO.19.2011.1` is
- * a Krajský soud v Ostravě decision whichever portal serves it. This module
- * owns the code list, the names those codes resolve to, and what happens to a
- * code the list does not know; every Czech adapter resolves its court through
- * {@link czDecisionCourt} rather than deciding any of that for itself.
+ * a Krajský soud v Ostravě decision whichever portal serves it. The static
+ * code table is side-effect-free; this module owns resolution and what happens
+ * to a code the table does not know. Every Czech adapter resolves its court
+ * through {@link czDecisionCourt} rather than deciding that for itself.
  */
 
 import { panic } from "better-result";
 
+import {
+  CZ_ECLI_COURTS,
+  type CzEcliCourtCode,
+} from "@/api/lib/case-law/ecli-court-codes";
 import { logger } from "@/api/lib/observability/logger";
-
-/**
- * Every ECLI court code the Czech portals this codebase reads have been seen
- * to publish under, plus the three national courts.
- *
- * A court sitting at its seat is its own abbreviation (`KSOS`); a court
- * sitting at a branch appends the branch's (`KSOSOL`, the Ostrava regional
- * court in Olomouc). That second shape is why this list is not the ARES one:
- * `packages/business-registries/src/ares/court-names.ts` answers which court
- * keeps a company's file, keyed on the register's own abbreviations, where
- * the same branch is `KSOL` and the Supreme Court is `NSCR`. Overlapping
- * spellings, different key sets, different questions.
- *
- * The list is what the map below is checked total against. It is not a closed
- * world: a code outside it resolves through {@link czDecisionCourt}'s fallback
- * rather than being mapped to anything.
- */
-const CZ_ECLI_COURT_CODES = [
-  "KSBR",
-  "KSBRZL",
-  "KSCB",
-  "KSCBTA",
-  "KSHK",
-  "KSHKPA",
-  "KSOS",
-  "KSOSOL",
-  "KSPH",
-  "KSPL",
-  "KSUL",
-  "KSULLI",
-  "MSBR",
-  "MSPH",
-  "NS",
-  "NSS",
-  "OSCK",
-  "OSOV",
-  "OSZR",
-  "US",
-  "VSOL",
-  "VSPH",
-] as const;
-
-export type CzEcliCourtCode = (typeof CZ_ECLI_COURT_CODES)[number];
-
-/**
- * The name a code is stored under, which is the corpus's canonical spelling
- * of that court and not the publisher's.
- *
- * The publishers' own spellings drift: the Supreme Court's database prints
- * both `Krajský soud v Hradci Králové - pobočka Pardubice` and `Krajský soud
- * v Hradci Králové - pobočka v Pardubicích` for the one court. `court` is a
- * browse and facet key (`case_law_decisions_country_court_date_idx`), so two
- * spellings are two shelves for one court. Resolving the code to a name here
- * gives every Czech source the same one.
- *
- * Total by type: a code on the list without a name does not compile.
- */
-export const CZ_ECLI_COURTS = {
-  KSBR: "Krajský soud v Brně",
-  KSBRZL: "Krajský soud v Brně – pobočka ve Zlíně",
-  KSCB: "Krajský soud v Českých Budějovicích",
-  KSCBTA: "Krajský soud v Českých Budějovicích – pobočka v Táboře",
-  KSHK: "Krajský soud v Hradci Králové",
-  KSHKPA: "Krajský soud v Hradci Králové – pobočka v Pardubicích",
-  KSOS: "Krajský soud v Ostravě",
-  KSOSOL: "Krajský soud v Ostravě – pobočka v Olomouci",
-  KSPH: "Krajský soud v Praze",
-  KSPL: "Krajský soud v Plzni",
-  KSUL: "Krajský soud v Ústí nad Labem",
-  KSULLI: "Krajský soud v Ústí nad Labem – pobočka v Liberci",
-  MSBR: "Městský soud v Brně",
-  MSPH: "Městský soud v Praze",
-  NS: "Nejvyšší soud",
-  NSS: "Nejvyšší správní soud",
-  OSCK: "Okresní soud v Českém Krumlově",
-  OSOV: "Okresní soud v Ostravě",
-  OSZR: "Okresní soud ve Žďáru nad Sázavou",
-  US: "Ústavní soud",
-  VSOL: "Vrchní soud v Olomouci",
-  VSPH: "Vrchní soud v Praze",
-} as const satisfies Record<CzEcliCourtCode, string>;
 
 /**
  * The court segment of a Czech ECLI. Bounded so a malformed identifier is a

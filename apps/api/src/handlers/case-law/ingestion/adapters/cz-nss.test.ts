@@ -397,8 +397,8 @@ describe("cz-nss reconciliation slices", () => {
   });
 
   test("starts at the first day the portal publishes a decision for", () => {
-    expect(reconciliation.firstSlice).toBe("2003-02-04");
-    expect(CZ_NSS_FIRST_SLICE).toBe(reconciliation.firstSlice);
+    expect(reconciliation.firstSlice).toBe(CZ_NSS_FIRST_SLICE);
+    expect(CZ_NSS_FIRST_SLICE).toBe("2003-02-04");
   });
 
   test("slices a UTC instant to its calendar day", () => {

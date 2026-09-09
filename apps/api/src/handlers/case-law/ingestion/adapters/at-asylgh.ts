@@ -1,16 +1,13 @@
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   createAtRisSourceAdapter,
-  type AtRisSourceDefinition,
+  defineAtRisSource,
 } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 
-export const AT_ASYLGH_SOURCE = {
+export const AT_ASYLGH_SOURCE = defineAtRisSource({
   application: "AsylGH",
   excludeForeignCourts: false,
-  firstSlice: "2008-07",
   key: ADAPTER_KEYS.AT_ASYLGH,
-  lastSlice: "2013-12",
-  name: "Austrian Asylum Court (RIS AsylGH)",
-} as const satisfies AtRisSourceDefinition;
+});
 
 export const atAsylghAdapter = createAtRisSourceAdapter(AT_ASYLGH_SOURCE);

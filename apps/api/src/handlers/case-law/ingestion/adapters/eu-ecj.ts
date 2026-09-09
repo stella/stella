@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -941,7 +942,9 @@ const parseManifestation = (
 const CRAWL_DELAY_MS = 500;
 
 /** First year the Court sat; the oldest decisions Cellar can list. */
-const COURT_EPOCH_YEAR = "1952";
+const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
+  ADAPTER_KEYS.EU_ECJ
+].dateRange.fromInclusive.slice(0, 4);
 
 /** First day the Court sat; the widest range a CELEX lookup can need. */
 const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
@@ -1127,7 +1130,7 @@ const ecjDecisionFromHtml = ({
     ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
     ecli,
     court,
-    country: "EU",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
     language,
     decisionDate,
     decisionType,
@@ -1516,8 +1519,6 @@ const ECJ_PAGE_TIMEOUT = 300_000;
 export const euEcjAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.EU_ECJ,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-  name: "Court of Justice of the European Union",
-  country: "EU",
   language: "en",
   minRequestIntervalMs: 1000,
   pageTimeoutMs: ECJ_PAGE_TIMEOUT,

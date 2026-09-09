@@ -67,6 +67,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -95,7 +96,10 @@ const MIN_REQUEST_INTERVAL_MS = 500;
 const LISTING_PAGE_SIZE = 100;
 
 /** First year with decisions in the API. */
-const FIRST_YEAR = 1993;
+const FIRST_YEAR = Number.parseInt(
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].dateRange.fromInclusive.slice(0, 4),
+  10,
+);
 
 /** The only language this source publishes; half of the stored identity. */
 const SK_US_LANGUAGE = "sk";
@@ -395,7 +399,7 @@ export const buildSkUsDecision = async (
     legacySourceUrls: [documentUrl],
     ecli,
     court,
-    country: "SVK",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
     language: SK_US_LANGUAGE,
     decisionDate,
     decisionType,
@@ -948,8 +952,6 @@ const buildSkUsFromPayload = async (
 export const skUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_US,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-  name: "ustavnysud.sk",
-  country: "SVK",
   language: "sk",
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
   pageTimeoutMs: 120_000,

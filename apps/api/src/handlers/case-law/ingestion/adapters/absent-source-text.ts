@@ -1,5 +1,5 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 
 /**
  * What a source prints in a publisher field it has nothing to put in.
@@ -24,22 +24,10 @@ import type { AdapterKey } from "@/api/handlers/case-law/consts";
  * that source's committed fixture by the test beside this module, never a
  * sentence somebody expects it to print.
  */
-type SourceAbsentText = {
-  /** The source observed to print it, and the only source it is read for. */
-  readonly adapter: AdapterKey;
-  /** The sentence, exactly as the source prints it. */
-  readonly text: string;
-};
-
-export const SOURCE_ABSENT_TEXT = [
-  /**
-   * NALUS serves the abstract and the legal sentence of a decision as one
-   * page, and prints these in the cell the text itself would occupy where it
-   * holds neither — one sentence per field, naming the field it stands in for.
-   */
-  { adapter: ADAPTER_KEYS.CZ_US, text: "Abstrakt není k dispozici." },
-  { adapter: ADAPTER_KEYS.CZ_US, text: "Právní věta není k dispozici." },
-] as const satisfies readonly SourceAbsentText[];
+export const SOURCE_ABSENT_TEXT = Object.values(ADAPTER_MANIFESTS).flatMap(
+  ({ key: adapter, placeholderPatterns }) =>
+    placeholderPatterns.map(({ text }) => ({ adapter, text })),
+);
 
 /**
  * The form a marker comparison is made in: whitespace runs collapsed, then
@@ -68,7 +56,9 @@ export const absentTextComparisonsFor = (
 
 /** Every adapter that declares at least one marker. */
 export const ADAPTERS_DECLARING_ABSENT_TEXT: readonly AdapterKey[] = [
-  ...new Set(SOURCE_ABSENT_TEXT.map(({ adapter }) => adapter)),
+  ...Object.values(ADAPTER_MANIFESTS)
+    .filter(({ placeholderPatterns }) => placeholderPatterns.length > 0)
+    .map(({ key }) => key),
 ];
 
 const COMPARISONS_BY_ADAPTER = new Map<AdapterKey, ReadonlySet<string>>(

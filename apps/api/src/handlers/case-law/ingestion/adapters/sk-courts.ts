@@ -36,6 +36,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
@@ -407,7 +408,7 @@ const buildDecisionFromParts = ({
     caseNumber,
     ecli,
     court,
-    country: "SVK",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
     language: SK_COURTS_LANGUAGE,
     decisionDate,
     decisionType,
@@ -537,7 +538,8 @@ const listRequest = (
  * the sweep runs newest-first, so that sparse tail is surveyed last rather
  * than standing between the loop and the dense years.
  */
-export const SK_COURTS_FIRST_SLICE = "1965-07-11";
+export const SK_COURTS_FIRST_SLICE =
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].dateRange.fromInclusive;
 
 /**
  * Days near the tip that get re-walked on a fast cadence.
@@ -759,8 +761,6 @@ const buildSkCourtsFromPayload = async (
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-  name: "obcan.justice.sk",
-  country: "SVK",
   language: "sk",
   minRequestIntervalMs: 300,
   // PDF download deferred; pages now only do list + detail JSON.

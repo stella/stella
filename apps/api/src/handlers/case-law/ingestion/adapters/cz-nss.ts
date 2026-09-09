@@ -49,6 +49,7 @@ import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1341,7 +1342,7 @@ const rowToResult = ({
       : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
     ecli: detail.ecli,
     court,
-    country: "CZE",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NSS].country,
     language: CZ_NSS_LANGUAGE,
     decisionDate,
     // Prefer structured decisionType from detail page over
@@ -1600,7 +1601,7 @@ const reparseStoredRaw = (
         : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
       ecli,
       court: stored.court,
-      country: "CZE",
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NSS].country,
       language: stored.language,
       decisionDate,
       decisionType,
@@ -2004,7 +2005,8 @@ export const buildCzNssDecision = async ({
  * date: the NSS took up its work on 1 January 2003, but the portal states no
  * records at all for any range ending 3 February 2003, and four for this day.
  */
-export const CZ_NSS_FIRST_SLICE = "2003-02-04";
+export const CZ_NSS_FIRST_SLICE =
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NSS].dateRange.fromInclusive;
 
 /**
  * Days near the tip that the reconciliation re-walks on a fast cadence.
@@ -2277,8 +2279,6 @@ export const czNssAdapter = defineSourceAdapter({
     fields: CZ_NSS_SOURCE_FIELD_DISPOSITIONS,
     listSourceFields: listCzNssSourceFields,
   },
-  name: "Czech Supreme Administrative Court",
-  country: "CZE",
   language: "cs",
   minRequestIntervalMs: 500,
   // Each page = 1 day = session + search + fulltext per decision.

@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -74,7 +75,8 @@ const BASE_URL = "https://rozhodnuti.justice.cz/api";
 export const CZ_REGIONAL_LANGUAGE = "cs";
 
 /** First day of the publisher's open-data feed. */
-export const CZ_REGIONAL_FEED_START = "2020-10-01";
+export const CZ_REGIONAL_FEED_START =
+  ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_REGIONAL].dateRange.fromInclusive;
 
 /**
  * Days near the tip that the reconciliation re-walks on a fast cadence. The
@@ -521,7 +523,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     sheetNumber,
     ecli: toOptionalValue(item.ecli),
     court: item.soud,
-    country: "CZE",
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_REGIONAL].country,
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
     sourceDocumentId: documentIdFromLink(publishedDocumentUrl),
@@ -879,8 +881,6 @@ const buildCzRegionalFromPayload = async (
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
-  name: "Czech Regional Courts",
-  country: "CZE",
   language: "cs",
   minRequestIntervalMs: 200,
   // rozhodnuti.justice.cz returns 100 items per page; each
