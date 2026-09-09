@@ -12,7 +12,7 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 export const entityVersionInsertResult = (values: unknown) => ({
   onConflictDoNothing: () => ({
-    returning: async () =>
+    returning: () =>
       (Array.isArray(values) ? values : [values]).map((row: unknown) =>
         isRecord(row)
           ? { id: row["id"] }

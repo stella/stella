@@ -298,10 +298,8 @@ const publishFolioCollabVersion = createSafeHandler(
     // The room's checkpoint can hold whatever a collaborator pasted in,
     // including a stamped download of this document. The published version
     // stores, and records, bytes without a reference.
-    const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes({
-      buffer: checkpointBytes,
-      mimeType: DOCX_MIME_TYPE,
-    });
+    const { bytes: storedBytes, strippedArchive } =
+      await storedDocumentBytes(checkpointBytes);
     const storedSha256Hex =
       strippedArchive === null
         ? expectedSha256Hex

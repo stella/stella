@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1108,
+    "count": 1107,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -360,7 +360,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr.ts": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-actions.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx": 1,
@@ -429,7 +428,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 435,
+    "count": 434,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -500,7 +499,7 @@
       "apps/api/src/lib/document-translation/docx-review.ts": 1,
       "apps/api/src/lib/document-translation/segments.ts": 3,
       "apps/api/src/lib/docx-archive.ts": 1,
-      "apps/api/src/lib/docx-stamp.ts": 3,
+      "apps/api/src/lib/docx-stamp.ts": 2,
       "apps/api/src/lib/docx/ai-field-generator.ts": 3,
       "apps/api/src/lib/docx/resolve-ai-fields.ts": 1,
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,

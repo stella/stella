@@ -1,5 +1,5 @@
 /**
- * Extracts the file extension from a filename (lowercase, without the dot).
+ * Extracts a shared file extension from a filename (lowercase, without the dot).
  * Returns null if no extension is found.
  */
 export const getExtension = (fileName: string): string | null => {

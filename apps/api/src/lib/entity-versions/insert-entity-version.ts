@@ -16,8 +16,6 @@ type EntityVersionValues = Omit<
   "verificationCode"
 >;
 
-type PendingEntityVersion = typeof entityVersions.$inferInsert;
-
 /**
  * Fresh codes to try before declaring the generator broken. A code is one of
  * 31^10 (~8.2e14) values, so a row that loses this many independent draws is
@@ -32,9 +30,7 @@ const MAX_CODE_ATTEMPTS = 4;
  * a row carries both or neither. Deriving the code from the stamp keeps that
  * pairing true at every writer instead of at thirteen of them.
  */
-const withVerificationCode = (
-  values: EntityVersionValues,
-): PendingEntityVersion => ({
+const withVerificationCode = (values: EntityVersionValues) => ({
   ...values,
   // The column's `$defaultFn` would mint this per statement, so a retried row
   // would arrive under a new id. Mint it once here: RETURNING is matched back
@@ -68,31 +64,40 @@ export const insertEntityVersions = async (
     return;
   }
 
-  let pending = values.map(withVerificationCode);
+  await insertPendingEntityVersions(tx, values.map(withVerificationCode), 1);
+};
 
-  for (let attempt = 1; attempt <= MAX_CODE_ATTEMPTS; attempt += 1) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded code-collision retry: each attempt inserts exactly the rows the previous attempt reported as skipped
-    const inserted = await tx
-      .insert(entityVersions)
-      .values(pending)
-      .onConflictDoNothing({
-        target: entityVersions.verificationCode,
-        // Matches the index predicate so Postgres can infer the partial index.
-        where: isNotNull(entityVersions.verificationCode),
-      })
-      .returning({ id: entityVersions.id });
+const insertPendingEntityVersions = async (
+  tx: Transaction,
+  pending: ReturnType<typeof withVerificationCode>[],
+  attempt: number,
+): Promise<void> => {
+  const inserted = await tx
+    .insert(entityVersions)
+    .values(pending)
+    .onConflictDoNothing({
+      target: entityVersions.verificationCode,
+      // Matches the index predicate so Postgres can infer the partial index.
+      where: isNotNull(entityVersions.verificationCode),
+    })
+    .returning({ id: entityVersions.id });
 
-    const storedIds = new Set(inserted.map(({ id }) => id));
-    const collided = pending.filter(({ id }) => !storedIds.has(id));
-    if (collided.length === 0) {
-      return;
-    }
-
-    pending = collided.map(withVerificationCode);
+  const storedIds = new Set(inserted.map(({ id }) => id));
+  const collided = pending.filter(({ id }) => !storedIds.has(id));
+  if (collided.length === 0) {
+    return;
   }
 
-  panic(
-    `Verification code collided on ${String(MAX_CODE_ATTEMPTS)} independent draws`,
+  if (attempt === MAX_CODE_ATTEMPTS) {
+    panic(
+      `Verification code collided on ${String(MAX_CODE_ATTEMPTS)} independent draws`,
+    );
+  }
+
+  await insertPendingEntityVersions(
+    tx,
+    collided.map(withVerificationCode),
+    attempt + 1,
   );
 };
 

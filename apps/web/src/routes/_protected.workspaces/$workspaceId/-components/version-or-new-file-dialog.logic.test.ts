@@ -1,14 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocumentReferenceEvidence } from "@/lib/document-reference";
+import type { DocumentReferenceMatch } from "@stll/api-contract";
+
+import type { DocumentReferenceEvidence } from "@/lib/files/document-reference";
 import {
   DOCUMENT_REFERENCE_EVIDENCE,
   REFERENCE_UPLOAD_ACTION,
-} from "@/lib/document-reference";
-import type {
-  DocumentReferenceMatch,
-  ResolvedDocumentReference,
-} from "@/lib/document-reference-queries";
+} from "@/lib/files/document-reference";
+import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
 import { resolveVersionOrNewFileDecision } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
 
 const DROPPED_ON = "entity-engagement-letter";

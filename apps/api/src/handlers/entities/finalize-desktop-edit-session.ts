@@ -459,9 +459,8 @@ export const finalizeDesktopEditSessionHandler = async ({
       // normally carries nothing. It carries a reference when the editor pasted
       // a stamped download over it, and that must not become this version's
       // stored bytes.
-      const { bytes: storedBytes, strippedArchive } = await storedDocumentBytes(
-        { buffer: checkpointBuffer, mimeType: canonicalMimeType },
-      );
+      const { bytes: storedBytes, strippedArchive } =
+        await storedDocumentBytes(checkpointBuffer);
       const storedSha256Hex =
         strippedArchive === null
           ? editSession.checkpointSha256Hex

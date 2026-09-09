@@ -12038,7 +12038,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "get"],
                 capabilityId: "entities.get",
                 description:
-                  "Read one document, folder, or task in a matter: its kind, name, current version id and creation time, that version's field values, and which field is the current text-extraction source. Use entities.read-version-by-id to read a historical version, and entities.read-versions for the version list.",
+                  "Read one document, folder, or task in a matter: its kind, name, current version id, creation time and document reference, that version's field values, and which field is the current text-extraction source. Use entities.read-version-by-id to read a historical version, and entities.read-versions for the version list.",
                 access: "read",
                 flags: [
                   {

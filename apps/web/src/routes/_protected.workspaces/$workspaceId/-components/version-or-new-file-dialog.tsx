@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 
-import { REFERENCE_UPLOAD_ACTION } from "@/lib/document-reference";
+import { REFERENCE_UPLOAD_ACTION } from "@/lib/files/document-reference";
 import type {
   VersionOrNewFileChoice,
   VersionOrNewFileDecision,
