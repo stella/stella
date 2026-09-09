@@ -44,6 +44,18 @@ const originalFetch = globalThis.fetch;
 const originalQ09Endpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
 const originalQ09SearchEndpoint = envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
 
+/**
+ * The host an endpoint names, read from the test environment rather than
+ * written out: a test that pins the port by hand drifts the moment the
+ * environment moves.
+ */
+const hostOf = (endpoint: string | undefined): string => {
+  if (endpoint === undefined) {
+    throw new Error("the test environment configures no corpus index endpoint");
+  }
+  return new URL(endpoint).host;
+};
+
 beforeEach(() => {
   requests = [];
   responseBody = {};
@@ -375,7 +387,7 @@ test("search sends the documented sort_by parameter", async () => {
 
   expect(result.isOk()).toBe(true);
   const request = requests.at(0);
-  expect(request?.host).toBe("localhost:7281");
+  expect(request?.host).toBe(hostOf(originalQ09SearchEndpoint));
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/search");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["sort_by"]).toBe("_score");
@@ -568,7 +580,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   // indexer never has to know how many documents a row previously emitted.
   expect(requests).toHaveLength(1);
   const request = requests.at(0);
-  expect(request?.host).toBe("localhost:7280");
+  expect(request?.host).toBe(hostOf(originalQ09Endpoint));
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["query"]).toBe('document_id:"dec-1"');
