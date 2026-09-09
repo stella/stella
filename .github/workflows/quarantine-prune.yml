@@ -40,7 +40,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@9e1915536efc226c5ec9d3ca0f2192be5aa6ec7e
+        uses: stella/.github/actions/setup-bun-cached@fb1e83fbc3fae39902da763ca7b2613090571717
 
       # The script only reads bunfig.toml and bun.lock, so no install is needed.
       - name: Prune expired excludes
@@ -78,7 +78,7 @@ jobs:
       # proposal with one computed from current main.
       - name: Open or update the removal PR
         if: steps.prune.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@9e1915536efc226c5ec9d3ca0f2192be5aa6ec7e
+        uses: stella/.github/.github/actions/signed-commit@fb1e83fbc3fae39902da763ca7b2613090571717
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
