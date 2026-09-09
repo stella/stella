@@ -96,10 +96,10 @@ const queryTermWords = (
   language: MorphologyLanguage | null,
 ): QueryTermWords[] =>
   tokens.flatMap((token) => {
-    const words = corpusTokens(token.value).map((word) => ({
-      folded: foldCorpusTerm(word),
-      ...wordStem(word, language),
-    }));
+    const words = corpusTokens(token.value).map((word) => {
+      const { stem, foldedStem } = wordStem(word, language);
+      return { folded: foldCorpusTerm(word), stem, foldedStem };
+    });
     // One dropped word makes the whole term unmatchable: a term is its word,
     // and a phrase needs every one of its words to match adjacently.
     return words.length === 0 ||
@@ -114,12 +114,14 @@ const passageWords = (
 ): PassageWord[] =>
   corpusTokenSpans(text).map((span) => {
     const folded = foldCorpusTerm(span.value);
+    const { stem, foldedStem } = wordStem(span.value, language);
     return {
       value: span.value,
       start: span.start,
       end: span.end,
       folded,
-      ...wordStem(span.value, language),
+      stem,
+      foldedStem,
       indexed: isIndexedTerm(folded),
     };
   });
