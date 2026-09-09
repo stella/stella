@@ -29,6 +29,7 @@ import {
 import {
   claimCorpusProjectionCleanupSettlementTx,
   claimCorpusProjectionCleanupTx,
+  type CorpusProjectionCleanupSettlementLease,
   CorpusProjectionCleanupSettlementProof,
   recordCorpusProjectionDeleteTx,
   recoverExpiredCorpusProjectionIntentsTx,
@@ -2914,7 +2915,10 @@ test("settlement proves the lease against the instant its delete task carries", 
   ).toEqual([{ status: "settled" }]);
 });
 
-test("a settlement release whose revisions a later turn holds releases none of them", async () => {
+// A settlement turn whose verification outlives its lease finds a successor
+// owning its revisions. The successor may be anywhere in its own turn by then,
+// so each of its states is a release the outrun turn must survive.
+const claimOutrunAndSuccessorLeases = async () => {
   await seedCommittedCleanupPair();
   // A lease written against a test clock in the past is already expired by the
   // database clock, which is the state the claim predicate re-leases.
@@ -2936,7 +2940,7 @@ test("a settlement release whose revisions a later turn holds releases none of t
   );
   const outrun =
     outrunLeases.at(0) ?? panic("Expected a projection settlement lease");
-  const laterLeases = await db.transaction(
+  const successorLeases = await db.transaction(
     async (tx) =>
       await claimCorpusProjectionCleanupSettlementTx(
         asTestRaw<Transaction>(tx),
@@ -2951,26 +2955,94 @@ test("a settlement release whose revisions a later turn holds releases none of t
         },
       ),
   );
-  expect(laterLeases.map(({ intentIds }) => intentIds)).toEqual([
-    outrun.intentIds,
-  ]);
+  const successor =
+    successorLeases.at(0) ?? panic("Expected a successor settlement lease");
+  expect(successor.intentIds).toEqual(outrun.intentIds);
+  return { outrun, successor };
+};
 
+const releaseSettlementLease = async (
+  lease: CorpusProjectionCleanupSettlementLease,
+): Promise<number> =>
+  await db.transaction(
+    async (tx) =>
+      await releaseCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        { lease },
+      ),
+  );
+
+const readFirstIntentLease = async () =>
+  await db
+    .select({
+      status: corpusIndexProjectionIntents.status,
+      leaseToken: corpusIndexProjectionIntents.leaseToken,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID));
+
+test("a settlement release whose revisions a successor still holds keeps the successor's lease", async () => {
+  const { outrun } = await claimOutrunAndSuccessorLeases();
+
+  expect(await releaseSettlementLease(outrun)).toBe(0);
+  expect(await readFirstIntentLease()).toEqual([
+    { status: "cleanup_committed", leaseToken: SECOND_LEASE_TOKEN },
+  ]);
+});
+
+test("a settlement release whose successor already released the revisions releases none", async () => {
+  const { outrun, successor } = await claimOutrunAndSuccessorLeases();
+  expect(await releaseSettlementLease(successor)).toBe(
+    successor.intentIds.length,
+  );
+
+  expect(await releaseSettlementLease(outrun)).toBe(0);
+  expect(await readFirstIntentLease()).toEqual([
+    { status: "cleanup_committed", leaseToken: null },
+  ]);
+});
+
+test("a settlement release whose successor already settled the revisions releases none", async () => {
+  const { outrun, successor } = await claimOutrunAndSuccessorLeases();
+  const settlingClient = {
+    readDeleteSettlement: async ({
+      requiredOpstamp,
+    }: {
+      requiredOpstamp: number;
+      deleteCreatedAt: Temporal.Instant | null;
+    }) =>
+      Result.ok({
+        requiredOpstamp,
+        provingSplits: 1,
+        excludedSplits: 1,
+        laggingSplits: 0,
+        minAppliedOpstamp: requiredOpstamp,
+        settled: true,
+      }),
+    search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
+  } satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+  const verified = await CorpusProjectionCleanupSettlementProof.verify({
+    client: settlingClient,
+    lease: successor,
+  });
+  if (verified.isErr()) {
+    panic("Successor settlement verification failed", verified.error);
+  }
+  if (verified.value.status !== "verified") {
+    panic("Successor settlement unexpectedly remained pending");
+  }
+  const proof = verified.value.proof;
   expect(
     await db.transaction(
       async (tx) =>
-        await releaseCorpusProjectionCleanupSettlementTx(
-          asTestRaw<Transaction>(tx),
-          { lease: outrun },
-        ),
+        await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          proof,
+        }),
     ),
-  ).toBe(0);
-  expect(
-    await db
-      .select({
-        status: corpusIndexProjectionIntents.status,
-        leaseToken: corpusIndexProjectionIntents.leaseToken,
-      })
-      .from(corpusIndexProjectionIntents)
-      .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID)),
-  ).toEqual([{ status: "cleanup_committed", leaseToken: SECOND_LEASE_TOKEN }]);
+  ).toBe(successor.intentIds.length);
+
+  expect(await releaseSettlementLease(outrun)).toBe(0);
+  expect(await readFirstIntentLease()).toEqual([
+    { status: "settled", leaseToken: null },
+  ]);
 });

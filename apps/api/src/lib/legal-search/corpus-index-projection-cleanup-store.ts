@@ -8,7 +8,6 @@ import {
   isNull,
   lte,
   min,
-  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -707,33 +706,30 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
   }
   // The settlement claim re-leases a revision whose lease has expired, and it
   // overwrites the token without matching the old one. A turn whose proof
-  // outran its own lease therefore finds a later turn holding the revisions it
-  // came to relinquish, which the claim path is written to produce: releasing
-  // what that turn owns would take its lease away, so this releases nothing.
-  // A revision that is neither released nor held by a later turn is the state
-  // nothing should have produced.
+  // outran its own lease therefore finds a successor owning the revisions it
+  // came to relinquish, which the claim path is written to produce. Where that
+  // successor has got to is not this turn's business: it may still hold the
+  // lease, or have released or settled it already, and every one of those
+  // clears this token. So the invariant is only that this lease is gone, not
+  // which state replaced it — enumerating the successor's states would make an
+  // ordinary finishing order panic.
   const released = new Set(rows.map(({ id }) => id));
   const unreleased = lease.intentIds.filter((id) => !released.has(id));
-  // A null token compares unequal to nothing, so an unleased revision is not
-  // one of these and still reaches the panic below.
-  const reLeased = await tx
+  const stillLeasedHere = await tx
     .select({ id: corpusIndexProjectionIntents.id })
     .from(corpusIndexProjectionIntents)
     .where(
       and(
         inArray(corpusIndexProjectionIntents.id, unreleased),
-        eq(corpusIndexProjectionIntents.indexId, lease.indexId),
-        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
-        eq(
-          corpusIndexProjectionIntents.deleteOpstamp,
-          BigInt(lease.deleteOpstamp),
-        ),
-        ne(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
+        eq(corpusIndexProjectionIntents.leaseToken, lease.leaseToken),
       ),
     );
-  if (reLeased.length !== unreleased.length) {
+  // Carrying this token while failing the release predicate means the row left
+  // the index, status or delete task the lease was granted against without the
+  // lease ever being given up, which no transition writes.
+  if (stillLeasedHere.length > 0) {
     return panic(
-      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions, and ${unreleased.length - reLeased.length} of the rest are held by no later turn`,
+      `Corpus projection settlement release matched ${rows.length} of ${lease.intentIds.length} leased revisions, and ${stillLeasedHere.length} of the rest still carry this lease`,
     );
   }
   return rows.length;
