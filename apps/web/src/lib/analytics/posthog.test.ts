@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { env } from "@/env";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
@@ -414,7 +415,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint: "TypeError||app.js:|",
+        $exception_fingerprint: "TypeError||app.js|",
         $exception_list: [
           {
             type: "TypeError",
@@ -471,7 +472,6 @@ describe("PostHog browser analytics adapter", () => {
             {
               platform: "web:javascript",
               filename: "https://my.stll.app/assets/app.js",
-              function: "renderMatter",
               in_app: true,
               lineno: 42,
               colno: 7,
@@ -801,7 +801,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock.mock.calls.at(-1)?.[0]).toBeInstanceOf(Error);
   });
 
-  test("drops frame function names that are not symbol-shaped", () => {
+  test("drops every frame function name", () => {
     createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
@@ -812,8 +812,12 @@ describe("PostHog browser analytics adapter", () => {
             value: "boom",
             stacktrace: {
               frames: [
-                { filename: "app.js", function: "Client Smith", lineno: 1 },
-                { filename: "app.js", function: "renderMatter", lineno: 2 },
+                {
+                  filename: "app.js",
+                  function: "jana_novakova",
+                  lineno: 1,
+                },
+                { filename: "app.js", function: "renderMatter2", lineno: 2 },
               ],
             },
           },
@@ -829,7 +833,7 @@ describe("PostHog browser analytics adapter", () => {
           type: "raw",
           frames: [
             { filename: "app.js", lineno: 1 },
-            { filename: "app.js", function: "renderMatter", lineno: 2 },
+            { filename: "app.js", lineno: 2 },
           ],
         },
       },
@@ -922,8 +926,10 @@ describe("PostHog browser analytics adapter", () => {
             stacktrace: {
               frames: [
                 {
-                  filename:
-                    "https://my.stll.app/assets/matter-view-D3kfQx9a.js?token=phx_9f3b2c&email=jana.novakova@example.com",
+                  filename: new URL(
+                    "/assets/matter-view-D3kfQx9a.js?token=phx_9f3b2c&email=jana.novakova@example.com",
+                    env.VITE_PUBLIC_APP_URL,
+                  ).toString(),
                   function: "renderMatter",
                   in_app: true,
                   lineno: 4,
@@ -944,7 +950,7 @@ describe("PostHog browser analytics adapter", () => {
         "$exception_fingerprint"
       ];
     expect(fingerprint).toBe(
-      "ClientTelemetryError|pdf-viewer|matter-view.js:renderMatter|RangeError",
+      "ClientTelemetryError|pdf-viewer|matter-view.js|RangeError",
     );
 
     // Deterministic: the same defect groups into the same issue.
@@ -967,8 +973,10 @@ describe("PostHog browser analytics adapter", () => {
               stacktrace: {
                 frames: [
                   {
-                    filename:
-                      "https://my.stll.app/assets/document-panel-Ck2pW7dm.js",
+                    filename: new URL(
+                      "/assets/document-panel-Ck2pW7dm.js",
+                      env.VITE_PUBLIC_APP_URL,
+                    ).toString(),
                     function: "openDocument",
                     in_app: true,
                     lineno: 2,
@@ -1153,7 +1161,7 @@ describe("PostHog browser analytics adapter", () => {
       properties: {
         token: "phc_test",
         distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
-        $exception_fingerprint: "TypeError||app.js:|",
+        $exception_fingerprint: "TypeError||app.js|",
         $exception_list: [
           {
             type: "TypeError",

@@ -117,6 +117,28 @@ describe("errorFingerprint", () => {
     expect(fingerprint["error.frame"]).not.toContain("(");
   });
 
+  test("never includes a data-derived stack symbol", () => {
+    const error = new Error("boom");
+    error.stack =
+      "Error: boom\n    at jana_novakova (/repo/apps/api/src/server.ts:12:34)";
+    const fingerprint = errorFingerprint(error);
+
+    expect(fingerprint["error.frame"]).toBe(
+      "/repo/apps/api/src/server.ts:12:34",
+    );
+    expect(Object.values(fingerprint).join("|")).not.toContain("jana_novakova");
+  });
+
+  test("ignores a bundler rename at the same source position", () => {
+    const raisedIn = (symbol: string) => {
+      const error = new Error("boom");
+      error.stack = `Error: boom\n    at ${symbol} (apps/api/src/worker.ts:12:34)`;
+      return errorFingerprint(error);
+    };
+
+    expect(raisedIn("run")).toEqual(raisedIn("run2"));
+  });
+
   test("prefers a `.code` string when present", () => {
     const error = Object.assign(new Error("socket hang up"), {
       code: "ECONNRESET",

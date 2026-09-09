@@ -262,6 +262,10 @@ const frameLocation = (line: string): string | undefined => {
   if (!location || hasWhitespace(location)) {
     return undefined;
   }
+  // Keep only the code location. A stack symbol can be inferred from a
+  // computed property key and therefore carry matter or personal data; Bun
+  // also suffixes colliding symbols during bundling, so it is neither safe
+  // telemetry nor a stable identity.
   return location;
 };
 

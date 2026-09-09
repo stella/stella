@@ -11,6 +11,10 @@ const dockerfile = readFileSync(
   nodePath.resolve(import.meta.dirname, "../apps/api/Dockerfile"),
   "utf-8",
 );
+const workflow = readFileSync(
+  nodePath.resolve(import.meta.dirname, "../.github/workflows/ci.yml"),
+  "utf-8",
+);
 
 const stage = (name: string): string => {
   const start = dockerfile.search(new RegExp(`^FROM .* AS ${name}$`, "mu"));
@@ -19,6 +23,37 @@ const stage = (name: string): string => {
   const next = rest.search(/^FROM /mu);
   return next === -1 ? rest : rest.slice(0, next);
 };
+
+const logicalInstructions = (body: string): string[] => {
+  const instructions: string[] = [];
+  let current = "";
+  for (const line of body.split("\n")) {
+    current += `${current ? " " : ""}${line.trim()}`;
+    if (current.endsWith("\\")) {
+      current = current.slice(0, -1).trimEnd();
+      continue;
+    }
+    if (current) {
+      instructions.push(current);
+    }
+    current = "";
+  }
+  return instructions;
+};
+
+const buildForOutput = (output: string): string | undefined =>
+  logicalInstructions(stage("builder")).find(
+    (instruction) =>
+      instruction.startsWith("RUN bun build ") &&
+      instruction.includes(`--outfile ${output} `),
+  );
+
+const smokeBuildForOutput = (output: string): string | undefined =>
+  logicalInstructions(workflow).find(
+    (instruction) =>
+      instruction.startsWith("bun build ") &&
+      instruction.includes(`--outfile ${output} `),
+  );
 
 test("every bundled /app entrypoint reaches the runner stage", () => {
   const built = [
@@ -35,4 +70,13 @@ test("every bundled /app entrypoint reaches the runner stage", () => {
     ].map((match) => match[1] ?? ""),
   );
   expect(built.filter((name) => !copied.has(name))).toEqual([]);
+});
+
+test("long-running API builds and their CI smoke map frames to source", () => {
+  for (const output of ["/app/server", "/app/document-processing-worker.js"]) {
+    expect(buildForOutput(output), output).toContain("--sourcemap=inline");
+  }
+  for (const output of ["/tmp/server", "/tmp/document-processing-worker.js"]) {
+    expect(smokeBuildForOutput(output), output).toContain("--sourcemap=inline");
+  }
 });
