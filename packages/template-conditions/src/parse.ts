@@ -56,13 +56,41 @@ type Token =
 const escapeRegexLiteral = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
+/** Bare words the tokenizer reads as operators or literals; a data path can
+ *  never be one of them. */
+export const CONDITION_RESERVED_WORDS = [
+  "and",
+  "or",
+  "not",
+  "in",
+  "is",
+  "defined",
+  "true",
+  "false",
+] as const;
+
+type ConditionKeyword = Exclude<
+  (typeof CONDITION_RESERVED_WORDS)[number],
+  "true" | "false"
+>;
+
+const RESERVED_WORDS: ReadonlySet<string> = new Set(CONDITION_RESERVED_WORDS);
+
+const isConditionKeyword = (raw: string): raw is ConditionKeyword =>
+  raw !== "true" && raw !== "false" && RESERVED_WORDS.has(raw);
+
+/** The keyword alternation of the tokenizer, derived from the same list. */
+const KEYWORD_PATTERN = CONDITION_RESERVED_WORDS.filter(isConditionKeyword)
+  .map((word) => String.raw`${word}\b`)
+  .join("|");
+
 const COMPARE_SYMBOL_PATTERN = Object.keys(COMPARE_SYMBOL_TO_OP)
   .sort((left, right) => right.length - left.length)
   .map(escapeRegexLiteral)
   .join("|");
 
 const NON_STRING_TOKEN_RE = new RegExp(
-  String.raw`(?<token>${COMPARE_SYMBOL_PATTERN}|and\b|or\b|not\b|in\b|is\b|defined\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)`,
+  String.raw`(?<token>${COMPARE_SYMBOL_PATTERN}|${KEYWORD_PATTERN}|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)`,
   "uy",
 );
 
@@ -95,29 +123,6 @@ const scanString = (expr: string, start: number): StringScan => {
   }
   return { content: expr.slice(start + 1), end: expr.length };
 };
-
-/** Bare words the tokenizer reads as operators or literals; a data path can
- *  never be one of them. */
-export const CONDITION_RESERVED_WORDS = [
-  "and",
-  "or",
-  "not",
-  "in",
-  "is",
-  "defined",
-  "true",
-  "false",
-] as const;
-
-type ConditionKeyword = Exclude<
-  (typeof CONDITION_RESERVED_WORDS)[number],
-  "true" | "false"
->;
-
-const RESERVED_WORDS: ReadonlySet<string> = new Set(CONDITION_RESERVED_WORDS);
-
-const isConditionKeyword = (raw: string): raw is ConditionKeyword =>
-  raw !== "true" && raw !== "false" && RESERVED_WORDS.has(raw);
 
 const classifyNonString = (raw: string): Token => {
   if (isConditionKeyword(raw)) {
