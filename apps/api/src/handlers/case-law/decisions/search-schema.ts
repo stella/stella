@@ -2,10 +2,6 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import {
-  TEXT_ABSENCE_REASONS,
-  TEXT_FIELD_TYPE,
-} from "@stll/api-contract/case-law-text-field";
-import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifiers,
@@ -15,6 +11,7 @@ import {
   safeHandlerErrorResponseSchema,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
+import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import {
   tPaginationCursor,
@@ -83,23 +80,6 @@ const languageAlternatesSchema = Type.Unsafe<
   readonly PublicDecisionLanguageAlternate[]
 >(t.Array(languageAlternateSchema));
 
-const headnoteSchema = t.Union([
-  t.Object(
-    {
-      type: t.Literal(TEXT_FIELD_TYPE.PRESENT),
-      text: t.String(),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal(TEXT_FIELD_TYPE.ABSENT),
-      reason: t.UnionEnum(TEXT_ABSENCE_REASONS),
-    },
-    { additionalProperties: false },
-  ),
-]);
-
 const facetValuesSchema = t.Array(
   t.Object(
     {
@@ -127,7 +107,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           decisionDate: nullableStringSchema,
           decisionType: nullableStringSchema,
           sourceUrl: nullableStringSchema,
-          headnote: headnoteSchema,
+          headnote: decisionHeadnotePreviewSchema,
           headline: nullableStringSchema,
           anchorId: nullableStringSchema,
           citationCount: t.Number(),
