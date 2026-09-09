@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.6
+
+### Patch Changes
+
+- [#3194](https://github.com/stella/stella/pull/3194) [`24656a2`](https://github.com/stella/stella/commit/24656a28a7e978e6893b4c7a922135bf93393215) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept search responses that state whether their result total is exact, estimated, or not counted.
+
 ## 1.2.5
 
 ### Patch Changes
