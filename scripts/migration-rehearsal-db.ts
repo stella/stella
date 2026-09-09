@@ -178,7 +178,7 @@ try {
       "SELECT md5(coalesce(string_agg(conname || ':' || convalidated::text, ',' ORDER BY conname), '')) AS digest FROM pg_catalog.pg_constraint WHERE contype = 'c' AND connamespace = 'public'::regnamespace",
     );
     const decisions = await digestOf(
-      "SELECT md5(coalesce(string_agg(id::text || '|' || coalesce(decision_date::text, '') || '|' || coalesce(indexed_hash, ''), ',' ORDER BY id), '')) AS digest FROM case_law_decisions",
+      "SELECT md5(coalesce(string_agg(id::text || '|' || coalesce(decision_date::text, '') || '|' || coalesce(content_hash, ''), ',' ORDER BY id), '')) AS digest FROM case_law_decisions",
     );
     const citations = await digestOf(
       "SELECT md5(coalesce(string_agg(id::text || '|' || resolution_status || '|' || coalesce(cited_decision_id::text, '') || '|' || coalesce(resolution_rule_id, ''), ',' ORDER BY id), '')) AS digest FROM case_law_citations",

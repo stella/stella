@@ -273,13 +273,10 @@ export const decideDecisionDateRepair = ({
  * batch without a cursor, and a keyset cursor over a self-consuming predicate
  * would only add a way to skip rows.
  *
- * `indexed_hash` is cleared in the same statement. The search projection
- * carries `decision_date` and its derived year, but `content_hash` covers only
- * the text payload, so a date-only change is invisible to the
- * `indexed_hash IS DISTINCT FROM content_hash` staleness test and the index
- * would keep serving the corrupt year forever. The projection trigger fires on
- * `indexed_hash` being assigned rather than on its value changing, which is the
- * same mechanism the ingestion pipeline uses for its own metadata-only updates.
+ * The corpus index carries `decision_date` and its derived year, and
+ * `content_hash` covers only the text payload, so a date-only change reaches
+ * the index through the projection's desired state, which the caller
+ * reconciles in the same transaction as this statement.
  *
  * The predicate is re-checked here, against the row as it stands now rather
  * than as the selection read it: the crawl keeps running, and a decision it
@@ -302,8 +299,7 @@ export const applyDecisionDateRepairsStatement = (
   );
   return sql`
     UPDATE case_law_decisions AS d
-       SET decision_date = v.decision_date,
-           indexed_hash = NULL
+       SET decision_date = v.decision_date
       FROM (VALUES ${sql.join(rows, sql`, `)}) AS v(id, decision_date)
      WHERE d.id = v.id
        AND ${decisionDateOutOfBoundsSql(sql.raw("d.decision_date"))}

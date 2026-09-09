@@ -139,7 +139,7 @@ const markerIds = new Set(
 const otherSourceId = createSafeId<"caseLawDecision">();
 const OTHER_SOURCE_METADATA = { summary: LEGAL_SENTENCE_MARKER };
 
-const INDEXED_HASH = "a".repeat(64);
+const CONTENT_HASH = "a".repeat(64);
 
 /** Read one page, exactly as the script reads it. */
 const readPage = async (
@@ -213,10 +213,7 @@ beforeEach(async () => {
       language: "cs",
       decisionDate: "2024-01-01",
       metadata: metadataOf(index),
-      // Both hashes present and equal: the row reads as projected and up to
-      // date, which is the state a metadata-only change has to disturb.
-      contentHash: INDEXED_HASH,
-      indexedHash: INDEXED_HASH,
+      contentHash: CONTENT_HASH,
       slug: `us-${String(index)}`,
       languageGroupKey: `us-${String(index)}`,
       // Distinct and increasing, so the walk's order is the one the index
@@ -232,8 +229,7 @@ beforeEach(async () => {
       language: "cs",
       decisionDate: "2024-01-01",
       metadata: OTHER_SOURCE_METADATA,
-      contentHash: INDEXED_HASH,
-      indexedHash: INDEXED_HASH,
+      contentHash: CONTENT_HASH,
       slug: "ns-1",
       languageGroupKey: "ns-1",
       createdAt: STORED_AT,
@@ -246,22 +242,16 @@ afterAll(async () => {
 });
 
 const storedRows = async (): Promise<
-  Map<string, { metadata: Record<string, unknown> | null; indexed: boolean }>
+  Map<string, { metadata: Record<string, unknown> | null }>
 > => {
   const rows = await db
     .select({
       id: caseLawDecisions.id,
       metadata: caseLawDecisions.metadata,
-      indexedHash: caseLawDecisions.indexedHash,
     })
     .from(caseLawDecisions)
     .where(inArray(caseLawDecisions.id, [...fixtureIds, otherSourceId]));
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      { metadata: row.metadata, indexed: row.indexedHash !== null },
-    ]),
-  );
+  return new Map(rows.map((row) => [row.id, { metadata: row.metadata }]));
 };
 
 /** The repair's own write over one source's rows, with that source's markers. */
@@ -271,10 +261,7 @@ const repair = async (
 ): Promise<string[]> => {
   const repaired = await db
     .update(caseLawDecisions)
-    .set({
-      metadata: publisherPlaceholderMetadata(markers),
-      indexedHash: null,
-    })
+    .set({ metadata: publisherPlaceholderMetadata(markers) })
     .where(
       and(
         eq(caseLawDecisions.sourceId, sourceId),
@@ -443,10 +430,9 @@ describe("the write", () => {
         }
         expect(metadata[key]).toEqual(value);
       }
-      // A changed row is re-enqueued for the index; an untouched one is left
-      // exactly as it was, so the repair cannot re-project the whole corpus.
+      // Only a row with something to strip is written; an untouched one is
+      // left exactly as it was, so the repair cannot rewrite the whole corpus.
       expect(repaired.has(id)).toBe(stripped.length > 0);
-      expect(row?.indexed).toBe(stripped.length === 0);
     }
   });
 
@@ -542,7 +528,6 @@ describe("the write", () => {
     expect(await repair(nsSourceId, NS_MARKERS)).toEqual([]);
     const stored = await storedRows();
     expect(stored.get(otherSourceId)?.metadata).toEqual(OTHER_SOURCE_METADATA);
-    expect(stored.get(otherSourceId)?.indexed).toBe(true);
     // The same words at the source that does declare them are absence, so the
     // assertion above is scope rather than a predicate that matches nothing.
     expect(await repair(usSourceId, US_MARKERS)).toContain(fixtureId(3));

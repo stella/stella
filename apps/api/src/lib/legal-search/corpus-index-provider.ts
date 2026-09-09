@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
-  caseLawCorpusIndexProjections,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
@@ -17,10 +16,7 @@ import {
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid } from "@/api/lib/custom-schema";
-import {
-  caseLawCorpusProjectionJoin,
-  currentCaseLawCorpusProjection,
-} from "@/api/lib/legal-search/case-law-corpus-projection";
+import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -138,10 +134,6 @@ export const rehydrateCorpusIndexProviderCandidates =
           createdAt: caseLawDecisions.createdAt,
         })
         .from(caseLawDecisions)
-        .leftJoin(
-          caseLawCorpusIndexProjections,
-          caseLawCorpusProjectionJoin(generation),
-        )
         .innerJoin(
           caseLawSources,
           eq(caseLawSources.id, caseLawDecisions.sourceId),

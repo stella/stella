@@ -36,13 +36,7 @@ describe("external public-law database boundary", () => {
     ).not.toHaveProperty("config");
     expect(
       Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.legislation_documents),
-    ).toEqual(
-      expect.arrayContaining([
-        "citation_authority",
-        "content_hash",
-        "indexed_hash",
-      ]),
-    );
+    ).toEqual(expect.arrayContaining(["citation_authority", "content_hash"]));
     expect(
       PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.legislation_documents,
     ).not.toHaveProperty("metadata");

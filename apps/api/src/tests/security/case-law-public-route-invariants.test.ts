@@ -31,8 +31,10 @@ const PG_FTS_FACETS_FILE =
   "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts";
 const CORPUS_INDEX_FACETS_FILE =
   "apps/api/src/lib/legal-search/corpus-index-facets.ts";
-const CORPUS_INDEX_PROJECTION_FILE =
-  "apps/api/src/handlers/case-law/corpus-index.ts";
+const CORPUS_INDEX_PROJECTION_INPUT_FILE =
+  "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts";
+const CORPUS_INDEX_PROJECTION_DESCRIPTOR_FILE =
+  "apps/api/src/lib/legal-search/corpus-index-projection-descriptor.ts";
 const BROWSE_FACETS_CACHE_FILE =
   "apps/api/src/lib/legal-search/browse-facets-cache.ts";
 const NON_REDISTRIBUTABLE_SOURCES_FILE =
@@ -100,8 +102,10 @@ const readFacetsSource = async () => await readSource(FACETS_DECISIONS_FILE);
 const readPgFtsFacetsSource = async () => await readSource(PG_FTS_FACETS_FILE);
 const readCorpusIndexFacetsSource = async () =>
   await readSource(CORPUS_INDEX_FACETS_FILE);
-const readCorpusIndexProjectionSource = async () =>
-  await readSource(CORPUS_INDEX_PROJECTION_FILE);
+const readCorpusIndexProjectionInputSource = async () =>
+  await readSource(CORPUS_INDEX_PROJECTION_INPUT_FILE);
+const readCorpusIndexProjectionDescriptorSource = async () =>
+  await readSource(CORPUS_INDEX_PROJECTION_DESCRIPTOR_FILE);
 const readBrowseFacetsCacheSource = async () =>
   await readSource(BROWSE_FACETS_CACHE_FILE);
 const readNonRedistributableSourcesSource = async () =>
@@ -312,9 +316,6 @@ describe("public case-law route boundary", () => {
       "buildAggregations(query.limit, readContract.yearFacetField)",
     );
     expect(
-      corpusIndexReadContract("case_law", "case_law_v4").yearFacetField,
-    ).toBe("year");
-    expect(
       corpusIndexReadContract("case_law", "case_law_v5").yearFacetField,
     ).toBe("decision_year");
   });
@@ -437,7 +438,10 @@ describe("public case-law route boundary", () => {
     const facetsHandlerSource = await readFacetsSource();
     const pgFtsFacetsSource = await readPgFtsFacetsSource();
     const corpusIndexFacetsSource = await readCorpusIndexFacetsSource();
-    const corpusIndexProjectionSource = await readCorpusIndexProjectionSource();
+    const corpusIndexProjectionInputSource =
+      await readCorpusIndexProjectionInputSource();
+    const corpusIndexProjectionDescriptorSource =
+      await readCorpusIndexProjectionDescriptorSource();
     const browseFacetsCacheSource = await readBrowseFacetsCacheSource();
     const nonRedistributableSourcesSource =
       await readNonRedistributableSourcesSource();
@@ -461,11 +465,15 @@ describe("public case-law route boundary", () => {
     );
     expect(pgFtsFacetsSource).toContain("redistributableCaseLawSource");
     // The corpus-index facets aggregate the index rather than the table, so
-    // the gate is two-sided. Projection keeps ineligible sources out of the
-    // index; because a revocation only queues their removal, the aggregation
-    // additionally excludes whatever is ineligible at query time.
-    expect(corpusIndexProjectionSource).toContain(
-      "redistributableCaseLawSource",
+    // the gate is two-sided. Projection reads eligibility off the source
+    // descriptor and erases whatever is ineligible; because a revocation only
+    // queues that removal, the aggregation additionally excludes whatever is
+    // ineligible at query time.
+    expect(corpusIndexProjectionInputSource).toContain(
+      "redistributionEligible: isRedistributable(sourceDescriptor)",
+    );
+    expect(corpusIndexProjectionDescriptorSource).toContain(
+      "!input.redistributionEligible",
     );
     expect(nonRedistributableSourcesSource).toContain(
       "redistributableCaseLawSource",

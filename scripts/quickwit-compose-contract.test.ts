@@ -48,14 +48,14 @@ describe("local Quickwit generations", () => {
     }
     const services = recordField(compose, "services");
     const rustfsSetup = recordField(services, "rustfs-setup");
-    const q08 = recordField(services, "quickwit");
+    const quickwit08 = recordField(services, "quickwit");
     const q09 = recordField(services, "quickwit09");
     const q09Setup = recordField(services, "quickwit09-postgres-setup");
-    const q08Environment = recordField(q08, "environment");
+    const quickwit08Environment = recordField(quickwit08, "environment");
     const q09Environment = recordField(q09, "environment");
     const rustfsSetupEnvironment = recordField(rustfsSetup, "environment");
 
-    expect(stringField(q08, "image")).toStartWith(
+    expect(stringField(quickwit08, "image")).toStartWith(
       "quickwit/quickwit:0.8.2@sha256:",
     );
     expect(stringField(q09, "image")).toStartWith(
@@ -65,10 +65,10 @@ describe("local Quickwit generations", () => {
       "postgres://postgres:postgres@postgres:5432/stella_quickwit_09",
     );
     expect(stringField(q09Environment, "QW_METASTORE_URI")).not.toBe(
-      stringField(q08Environment, "QW_METASTORE_URI"),
+      stringField(quickwit08Environment, "QW_METASTORE_URI"),
     );
     expect(stringField(q09Environment, "QW_DEFAULT_INDEX_ROOT_URI")).not.toBe(
-      stringField(q08Environment, "QW_DEFAULT_INDEX_ROOT_URI"),
+      stringField(quickwit08Environment, "QW_DEFAULT_INDEX_ROOT_URI"),
     );
     expect(stringField(q09Environment, "QW_DEFAULT_INDEX_ROOT_URI")).toBe(
       stringField(rustfsSetupEnvironment, "QUICKWIT09_INDEX_ROOT_URI"),
@@ -77,7 +77,7 @@ describe("local Quickwit generations", () => {
       /quickwit09_bucket=\$\$\{QUICKWIT09_INDEX_ROOT_URI#s3:\/\/\}/u,
     );
     expect(stringArrayField(q09, "ports")).not.toEqual(
-      stringArrayField(q08, "ports"),
+      stringArrayField(quickwit08, "ports"),
     );
     expect(stringArrayField(q09, "profiles")).toEqual(["quickwit09"]);
     expect(stringArrayField(q09Setup, "profiles")).toEqual(["quickwit09"]);

@@ -19,11 +19,6 @@ const RUNNER_DEFINITIONS = [
     description: "copy existing case-law and legislation payloads to S3",
   },
   {
-    name: "legal-corpus-index-backfill",
-    status: "implemented",
-    description: "index corpus-backed case-law and legislation payloads",
-  },
-  {
     name: "statute-ingest",
     status: "reserved",
     description: "statutory text source ingestion and normalization",

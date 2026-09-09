@@ -96,9 +96,7 @@ const requireServingCorpusIndexGeneration = (
       `Serving corpus generation cluster mismatch: ${family}/${row.generation}`,
     );
   }
-  if (row.cluster === "q09") {
-    requireRegisteredCorpusIndexManifest(row);
-  }
+  requireRegisteredCorpusIndexManifest(row);
   return {
     family,
     generation: row.generation,
@@ -149,9 +147,7 @@ const requireActiveGenerationTarget = (
       `Corpus serving target cluster mismatch: ${target.family}/${target.generation}`,
     );
   }
-  if (row.cluster === "q09") {
-    requireRegisteredCorpusIndexManifest(row);
-  }
+  requireRegisteredCorpusIndexManifest(row);
 };
 
 /**
@@ -365,9 +361,9 @@ const requireRebuildTarget = async (
       .limit(1)
       .for("update")
   ).at(0);
-  if (row?.status !== status || row.cluster !== "q09") {
+  if (row?.status !== status) {
     return panic(
-      `Corpus generation rebuild requires q09 ${status}: ${target.family}/${target.generation}`,
+      `Corpus generation rebuild requires ${status}: ${target.family}/${target.generation}`,
     );
   }
   return row;

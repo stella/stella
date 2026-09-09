@@ -20,7 +20,6 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
-import { parseCorpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
@@ -117,28 +116,6 @@ const postgresUrlSchema = () =>
     }, "must use postgres:// or postgresql://."),
   );
 
-type BoundedIntegerEnvOptions = {
-  fallback: string;
-  min: number;
-  max: number;
-};
-
-const boundedIntegerEnv = ({ fallback, min, max }: BoundedIntegerEnvOptions) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.digits(),
-      v.toNumber(),
-      v.integer(),
-      v.minValue(min),
-      v.maxValue(max),
-    ),
-    fallback,
-  );
-
-const BACKPRESSURE_DIMENSIONS_PATTERN =
-  /^[^=,\s]+=[^=,]+(?:,[^=,\s]+=[^=,]+)*$/u;
-
 const Q09_PRIVATE_SERVICE_HOSTNAME_PATTERN =
   /^corpus-index-v09(-[a-z0-9]+)?\.[a-z0-9-]+\.local$/u;
 
@@ -166,19 +143,6 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
       (isLoopbackHostname(url.hostname) || isPrivateQ09ServiceEndpoint(value)))
   );
 };
-
-const nonNegativeNumberEnv = (fallback: string) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.minLength(1),
-      v.toNumber(),
-      v.finite(),
-      v.minValue(0),
-    ),
-    fallback,
-  );
 
 export const envBaseServerSchema = {
   STELLA_VERSION: v.optional(v.string()),
@@ -227,16 +191,6 @@ export const envBaseServerSchema = {
     v.picklist(["pg-fts", "corpus-index"]),
     "pg-fts",
   ),
-  // Blue-green generation prefix. Each jurisdiction gets its own index
-  // (`<generation>_<country>`, e.g. case_law_v1_svk) up to generation 2, and
-  // each index group from generation 3 on (`corpusIndexId`); bump the prefix
-  // to rebuild all jurisdictions and flip to it.
-  LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
-  // Local-development-only search endpoint for consuming a shared corpus.
-  // Request-path searches use it while mutations remain bound to the separate
-  // admin endpoint below, which shared-corpus mode requires to stay unset.
-  CORPUS_INDEX_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
-  CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_Q09_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
@@ -252,60 +206,9 @@ export const envBaseServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
-  CORPUS_INDEXING_ENABLED: v.optional(
-    v.pipe(v.string(), v.parseBoolean()),
-    "false",
-  ),
-  // Canonical storage requires an explicit projection owner. `embedded`
-  // names the loop above; `external` delegates projection without coupling
-  // canonical object writes to that loop's process lifecycle.
+  // Canonical storage requires an explicit projection owner: naming it keeps a
+  // deliberately delegated writer distinct from an accidental pause.
   CORPUS_PROJECTION_OWNER: v.optional(v.picklist(["embedded", "external"])),
-  // Corpus-index throughput. The defaults reproduce the loop's historical
-  // pace exactly, so leaving these unset changes nothing; raising them is a
-  // deployment decision made where it is visible and revertible without a
-  // build. Bounds keep a typo from turning the loop into a stampede.
-  CORPUS_INDEX_BATCH_SIZE: boundedIntegerEnv({
-    fallback: "50",
-    min: 1,
-    max: 2000,
-  }),
-  CORPUS_INDEX_INTERVAL_MS: boundedIntegerEnv({
-    fallback: "15000",
-    min: 250,
-    max: 300_000,
-  }),
-  CORPUS_INDEX_READ_CONCURRENCY: boundedIntegerEnv({
-    fallback: "4",
-    min: 1,
-    max: 32,
-  }),
-  // Optional pacing for long-running corpus-index builds. When metric and
-  // namespace are set, the build loop samples that CloudWatch metric and
-  // pauses while the value is below the low watermark, resuming once it
-  // climbs back above the high watermark. Unset means no pacing check.
-  CORPUS_INDEX_BACKPRESSURE_METRIC: v.optional(
-    v.pipe(v.string(), v.trim(), v.nonEmpty()),
-  ),
-  CORPUS_INDEX_BACKPRESSURE_NAMESPACE: v.optional(
-    v.pipe(v.string(), v.trim(), v.nonEmpty()),
-  ),
-  // `Name=Value[,Name=Value...]` metric dimensions.
-  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS: v.optional(
-    v.pipe(
-      v.string(),
-      v.regex(
-        BACKPRESSURE_DIMENSIONS_PATTERN,
-        "must be Name=Value[,Name=Value...]",
-      ),
-    ),
-  ),
-  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: nonNegativeNumberEnv("30"),
-  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: nonNegativeNumberEnv("50"),
-  CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS: boundedIntegerEnv({
-    fallback: "60000",
-    min: 5000,
-    max: 3_600_000,
-  }),
   // Morphological query expansion for case-law corpus-index searches.
   // `off` is byte-identical to the pre-expansion query builder and fetches
   // no dictionary; `shadow` executes the unexpanded query and records how the
@@ -370,22 +273,13 @@ export const resolveApiEnvironmentPlaceholders = ({
 type EnvBaseInvariantInput = {
   CASE_LAW_DATABASE_URL?: string | undefined;
   PUBLIC_LAW_DATABASE_URL?: string | undefined;
-  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS?: string | undefined;
-  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: number;
-  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: number;
-  CORPUS_INDEX_BACKPRESSURE_METRIC?: string | undefined;
-  CORPUS_INDEX_BACKPRESSURE_NAMESPACE?: string | undefined;
-  CORPUS_INDEX_ENDPOINT?: string | undefined;
   CORPUS_INDEX_Q09_ENDPOINT?: string | undefined;
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
-  CORPUS_INDEX_SEARCH_ENDPOINT?: string | undefined;
-  CORPUS_INDEXING_ENABLED: boolean;
   CORPUS_PROJECTION_OWNER?: "embedded" | "external" | undefined;
   CORPUS_STORAGE_ENABLED: boolean;
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
   DATABASE_URL: string;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
-  LEGAL_SEARCH_INDEX_GENERATION: string;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
   S3_ACCESS_KEY_ID?: string | undefined;
   S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
@@ -394,39 +288,15 @@ type EnvBaseInvariantInput = {
   isDev: boolean;
 };
 
-const backpressureInvariantViolation = ({
+const rollbackInputInvariantViolation = ({
   CASE_LAW_DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
-  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
-  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK,
-  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
-  CORPUS_INDEX_BACKPRESSURE_METRIC,
-  CORPUS_INDEX_BACKPRESSURE_NAMESPACE,
 }: EnvBaseInvariantInput): string | null => {
   if (
     CASE_LAW_DATABASE_URL !== undefined &&
     PUBLIC_LAW_DATABASE_URL === undefined
   ) {
     return "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.";
-  }
-  if (
-    (CORPUS_INDEX_BACKPRESSURE_METRIC === undefined) !==
-    (CORPUS_INDEX_BACKPRESSURE_NAMESPACE === undefined)
-  ) {
-    return "CORPUS_INDEX_BACKPRESSURE_METRIC and CORPUS_INDEX_BACKPRESSURE_NAMESPACE must be set together.";
-  }
-  if (
-    CORPUS_INDEX_BACKPRESSURE_DIMENSIONS !== undefined &&
-    CORPUS_INDEX_BACKPRESSURE_METRIC === undefined
-  ) {
-    return "CORPUS_INDEX_BACKPRESSURE_DIMENSIONS requires CORPUS_INDEX_BACKPRESSURE_METRIC.";
-  }
-  if (
-    CORPUS_INDEX_BACKPRESSURE_METRIC !== undefined &&
-    CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK >=
-      CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK
-  ) {
-    return "CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK must be below CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK.";
   }
   return null;
 };
@@ -464,21 +334,8 @@ const databaseTransportInvariantViolation = ({
 const corpusEndpointInvariantViolation = ({
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
-  CORPUS_INDEX_SEARCH_ENDPOINT,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
-  if (
-    CORPUS_INDEX_SEARCH_ENDPOINT !== undefined &&
-    !isTlsOrLoopbackUrl(CORPUS_INDEX_SEARCH_ENDPOINT, {
-      plaintextProtocol: "http:",
-      tlsProtocol: "https:",
-    })
-  ) {
-    return "CORPUS_INDEX_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.";
-  }
-  if (!isDev && CORPUS_INDEX_SEARCH_ENDPOINT !== undefined) {
-    return "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.";
-  }
   const q09SearchTargetsPrivateService =
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT !== undefined &&
     isPrivateQ09ServiceEndpoint(CORPUS_INDEX_Q09_SEARCH_ENDPOINT);
@@ -510,11 +367,8 @@ const corpusEndpointInvariantViolation = ({
 
 const publicLawTopologyInvariantViolation = ({
   CASE_LAW_DATABASE_URL,
-  CORPUS_INDEX_ENDPOINT,
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
-  CORPUS_INDEX_SEARCH_ENDPOINT,
-  CORPUS_INDEXING_ENABLED,
   LEGAL_SEARCH_PROVIDER,
   PUBLIC_LAW_DATABASE_URL,
 }: EnvBaseInvariantInput): string | null => {
@@ -526,35 +380,23 @@ const publicLawTopologyInvariantViolation = ({
   }
   if (
     hasPublicLawDatabaseUrl &&
-    CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined
   ) {
-    return "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_SEARCH_ENDPOINT.";
+    return "Public-law database URLs require CORPUS_INDEX_Q09_SEARCH_ENDPOINT.";
   }
-  if (
-    hasPublicLawDatabaseUrl &&
-    (CORPUS_INDEX_ENDPOINT !== undefined ||
-      CORPUS_INDEX_Q09_ENDPOINT !== undefined)
-  ) {
-    return "CORPUS_INDEX_ENDPOINT and CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.";
-  }
-  if (hasPublicLawDatabaseUrl && CORPUS_INDEXING_ENABLED) {
-    return "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.";
+  if (hasPublicLawDatabaseUrl && CORPUS_INDEX_Q09_ENDPOINT !== undefined) {
+    return "CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.";
   }
   return null;
 };
 
 const storageAndIndexInvariantViolation = ({
-  CORPUS_INDEX_ENDPOINT,
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
-  CORPUS_INDEX_SEARCH_ENDPOINT,
-  CORPUS_INDEXING_ENABLED,
   CORPUS_PROJECTION_OWNER,
   CORPUS_STORAGE_ENABLED,
   CORPUS_STORAGE_MODE,
   LEGAL_CORPUS_S3_BUCKET,
-  LEGAL_SEARCH_INDEX_GENERATION,
   LEGAL_SEARCH_PROVIDER,
   S3_ACCESS_KEY_ID,
   S3_CREDENTIALS_PROVIDER,
@@ -579,43 +421,12 @@ const storageAndIndexInvariantViolation = ({
   if (S3_CREDENTIALS_PROVIDER === "env" && !(hasAccessKey && hasSecretKey)) {
     return 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.';
   }
-  const caseLawCluster = parseCorpusIndexClusterForGeneration(
-    "case_law",
-    LEGAL_SEARCH_INDEX_GENERATION,
-  );
-  if (LEGAL_SEARCH_PROVIDER === "corpus-index" && caseLawCluster === null) {
-    return `Unknown case-law corpus index generation: ${LEGAL_SEARCH_INDEX_GENERATION}.`;
-  }
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
-    CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
-    CORPUS_INDEX_ENDPOINT === undefined
-  ) {
-    return "Serving legislation_v1 on q08 requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT.";
-  }
-  if (
-    LEGAL_SEARCH_PROVIDER === "corpus-index" &&
-    caseLawCluster === "q09" &&
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_Q09_ENDPOINT === undefined
   ) {
-    return `Serving ${LEGAL_SEARCH_INDEX_GENERATION} on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.`;
-  }
-  if (CORPUS_INDEXING_ENABLED && CORPUS_INDEX_ENDPOINT === undefined) {
-    return "Corpus indexing requires CORPUS_INDEX_ENDPOINT for legislation_v1 on q08.";
-  }
-  if (
-    CORPUS_INDEXING_ENABLED &&
-    caseLawCluster === "q09" &&
-    CORPUS_INDEX_Q09_ENDPOINT === undefined
-  ) {
-    return `Indexing ${LEGAL_SEARCH_INDEX_GENERATION} on q09 requires CORPUS_INDEX_Q09_ENDPOINT.`;
-  }
-  if (
-    CORPUS_INDEXING_ENABLED !== (CORPUS_PROJECTION_OWNER === "embedded") &&
-    CORPUS_PROJECTION_OWNER !== undefined
-  ) {
-    return "CORPUS_PROJECTION_OWNER=embedded must match CORPUS_INDEXING_ENABLED=true; use external when another worker owns projection.";
+    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.";
   }
 
   return corpusStorageInvariantViolation({
@@ -624,9 +435,7 @@ const storageAndIndexInvariantViolation = ({
       legacyEnabled: CORPUS_STORAGE_ENABLED,
     }),
     searchProvider: LEGAL_SEARCH_PROVIDER,
-    projectionOwner:
-      CORPUS_PROJECTION_OWNER ??
-      (CORPUS_INDEXING_ENABLED ? "embedded" : undefined),
+    projectionOwner: CORPUS_PROJECTION_OWNER,
     corpusBucket: LEGAL_CORPUS_S3_BUCKET,
     isDev,
   });
@@ -635,7 +444,7 @@ const storageAndIndexInvariantViolation = ({
 export const envBaseInvariantViolation = (
   input: EnvBaseInvariantInput,
 ): string | null =>
-  backpressureInvariantViolation(input) ??
+  rollbackInputInvariantViolation(input) ??
   databaseTransportInvariantViolation(input) ??
   corpusEndpointInvariantViolation(input) ??
   publicLawTopologyInvariantViolation(input) ??

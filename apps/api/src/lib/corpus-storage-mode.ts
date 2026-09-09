@@ -39,9 +39,9 @@ type CorpusStorageInvariantInput = {
    */
   searchProvider: "pg-fts" | "corpus-index";
   /**
-   * `embedded` is the API/runner loop controlled by
-   * `CORPUS_INDEXING_ENABLED`; `external` is another deployed projection
-   * worker. Undefined means no projection owner was asserted.
+   * `embedded` is a projection loop inside this process; `external` is
+   * another deployed projection worker. Undefined means no projection owner
+   * was asserted.
    */
   projectionOwner: "embedded" | "external" | undefined;
   corpusBucket: string | undefined;

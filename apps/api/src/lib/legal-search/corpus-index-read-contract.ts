@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   corpusIndexPublisherFields,
   corpusIndexStemFields,
@@ -85,10 +84,9 @@ export type CorpusIndexReadContract =
   | LegislationIndexReadContract;
 
 /**
- * Query capabilities owned by a generation's physical schema. Legacy q08
- * generations share their established fields; final q09 generations derive
- * every field name from the immutable manifest so readers cannot drift from
- * writers when a generation changes shape.
+ * Query capabilities owned by a generation's physical schema. Every field name
+ * is derived from the generation's immutable manifest, so readers cannot drift
+ * from writers when a generation changes shape.
  */
 export function corpusIndexReadContract(
   family: "case_law",
@@ -106,20 +104,6 @@ export function corpusIndexReadContract(
   family: CorpusFamily,
   generation: string,
 ): CorpusIndexReadContract {
-  const cluster = corpusIndexClusterForGeneration(family, generation);
-  if (cluster === "q08") {
-    return family === "case_law"
-      ? {
-          family,
-          openingPassageQuery: "seq:0",
-          yearFacetField: "year",
-          stemFields: null,
-          searchableFields: [],
-          keywordFields: [],
-        }
-      : { family, openingPassageQuery: "seq:0" };
-  }
-
   const manifest = requireCorpusIndexManifest(family, generation);
   switch (manifest.family) {
     case "case_law":

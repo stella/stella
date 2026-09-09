@@ -26,15 +26,12 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 /**
- * Rehydration decides which corpus hits a legislation page may serve. What
- * "current" means depends on the generation the hits came from: a legacy
- * generation marks the document it indexed, a final-projection generation
- * states desired and applied per row and never writes that marker. These
- * tests hold both readings against the same fixture.
+ * Rehydration decides which corpus hits a legislation page may serve. A
+ * generation states desired and applied per document, and only a row where
+ * the two agree, in the index the document's jurisdiction routes to, may
+ * stand for a hit. These tests hold that reading.
  */
 
-const GENERATION = "legislation_v1";
-/** A generation the final projection builds: its state row is authoritative. */
 const PROJECTED_GENERATION = "legislation_v2";
 const PROJECTED_INDEX_ID = corpusIndexId(PROJECTED_GENERATION, "CZE");
 const OTHER_INDEX_ID = corpusIndexId(PROJECTED_GENERATION, "SVK");
@@ -42,7 +39,7 @@ const APPLIED_FINGERPRINT = "a".repeat(64);
 const DESIRED_FINGERPRINT = "b".repeat(64);
 
 const sourceId = createSafeId<"legislationSource">();
-const markedId = createSafeId<"legislationDocument">();
+const unheldId = createSafeId<"legislationDocument">();
 const projectedId = createSafeId<"legislationDocument">();
 const queuedId = createSafeId<"legislationDocument">();
 const movedId = createSafeId<"legislationDocument">();
@@ -78,22 +75,10 @@ beforeAll(
         { id: sourceId, adapterKey: "statutes-open", name: "Open statutes" },
       ]);
 
-    await db.insert(legislationDocuments).values([
-      // `indexed_hash = content_hash` is the serving marker a legacy
-      // generation's queue writes.
-      {
-        id: markedId,
-        sourceId,
-        eli: "CZ/2012/89",
-        title: "Civil Code",
-        country: "CZE",
-        language: "cs",
-        contentHash: "hash-marked",
-        indexedHash: "hash-marked",
-      },
-      // The final projection writes no marker at all; what each of these
-      // documents holds is stated by its projection state alone.
-      ...[projectedId, queuedId, movedId].map((id, index) => ({
+    // The document carries nothing that says what an index holds; that is
+    // stated by its projection state alone.
+    await db.insert(legislationDocuments).values(
+      [projectedId, queuedId, movedId, unheldId].map((id, index) => ({
         id,
         sourceId,
         eli: `CZ/2020/${index + 1}`,
@@ -101,9 +86,8 @@ beforeAll(
         country: "CZE",
         language: "cs",
         contentHash: `hash-${index}`,
-        indexedHash: null,
       })),
-    ]);
+    );
 
     await db.insert(corpusIndexGenerations).values({
       family: "legislation",
@@ -199,36 +183,23 @@ afterAll(async () => {
   await client.close();
 });
 
-test("a final-projection generation admits exactly what its projection state holds", async () => {
+test("a generation admits exactly what its projection state holds", async () => {
   const result = await rehydrateLegislationCandidates({
     body: { query: "smlouva" },
-    candidates: candidatesOf(projectedId, queuedId, movedId, markedId),
+    candidates: candidatesOf(projectedId, queuedId, movedId, unheldId),
     generation: PROJECTED_GENERATION,
     legislationDb,
   });
 
   // Applied equals desired for the first document, in the index this
-  // generation routes its jurisdiction to, though it carries no serving
-  // marker at all. The second still owes the index a mutation, the third is
-  // converged on another jurisdiction's index, and the fourth has no state
-  // row in this generation, which is not something a marker on the document
-  // may answer for.
+  // generation routes its jurisdiction to. The second still owes the index a
+  // mutation, the third is converged on another jurisdiction's index, and the
+  // fourth has no state row in this generation at all.
   expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
   expect([...result.context.byId.keys()]).toEqual([projectedId]);
 });
 
-test("a legacy generation still reads the serving marker", async () => {
-  const result = await rehydrateLegislationCandidates({
-    body: { query: "smlouva" },
-    candidates: candidatesOf(projectedId, queuedId, movedId, markedId),
-    generation: GENERATION,
-    legislationDb,
-  });
-
-  expect(result.ranked.map((hit) => hit.id)).toEqual([markedId]);
-});
-
-test("the request filters still bind on a final-projection generation", async () => {
+test("the request filters still bind on the projection state", async () => {
   const result = await rehydrateLegislationCandidates({
     body: { jurisdiction: "SVK", query: "smlouva" },
     candidates: candidatesOf(projectedId),

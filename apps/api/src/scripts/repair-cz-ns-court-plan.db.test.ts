@@ -157,7 +157,6 @@ beforeAll(
         ecli: ecliOf(index),
         metadata: { court: PUBLISHER_COURT },
         contentHash: "a".repeat(64),
-        indexedHash: "a".repeat(64),
         slug: `ns-${String(index)}`,
         languageGroupKey: `ns-${String(index)}`,
         // Distinct and increasing, so the walk's order is the one the index
@@ -301,7 +300,6 @@ describe("the write", () => {
         await db
           .select({
             court: caseLawDecisions.court,
-            indexedHash: caseLawDecisions.indexedHash,
             metadata: caseLawDecisions.metadata,
             updatedAt: caseLawDecisions.updatedAt,
           })
@@ -310,11 +308,9 @@ describe("the write", () => {
       ).at(0);
       expect(stored?.court).toBe(repair.court);
       expect(stored?.metadata?.["court"]).toBe(repair.court);
-      // Both search projections read a mark rather than the court itself: the
-      // full-text one compares this timestamp against its own, and the legacy
-      // corpus index treats a cleared hash as work. A row whose court moved
-      // and whose marks did not is served under its old court for good.
-      expect(stored?.indexedHash).toBeNull();
+      // The full-text projection reads this timestamp rather than the court
+      // itself: a row whose court moved and whose mark did not is served
+      // under its old court for good.
       expect(stored?.updatedAt.getTime()).toBeGreaterThan(STORED_AT.getTime());
     }
 

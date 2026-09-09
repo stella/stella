@@ -430,7 +430,7 @@ const projectDecisionPage = async (
       SELECT DISTINCT decision_id FROM changed_identifiers
     )
     UPDATE case_law_decisions decision
-    SET indexed_hash = NULL, updated_at = clock_timestamp()
+    SET updated_at = clock_timestamp()
     WHERE decision.id IN (SELECT decision_id FROM changed_decisions)
   `);
   }

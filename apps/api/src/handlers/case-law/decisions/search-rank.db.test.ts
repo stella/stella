@@ -2,7 +2,13 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  corpusIndexGenerations,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -10,13 +16,19 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
-const GENERATION = "case_law_v3";
+const GENERATION = "case_law_v5";
+const FINGERPRINT = "a".repeat(64);
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
 
@@ -60,9 +72,7 @@ beforeAll(
       .values([
         caseLawSourceRow({ adapterKey: "open", id: sourceId, name: "open" }),
       ]);
-    // No projection row for this generation, so the legacy marker decides:
-    // an indexed hash equal to the content hash is a current row.
-    const indexed = { contentHash: "rank-hash", indexedHash: "rank-hash" };
+    const indexed = { contentHash: "rank-hash" };
     await db.insert(caseLawDecisions).values([
       {
         ...indexed,
@@ -112,6 +122,62 @@ beforeAll(
         languageGroupKey: "rank-group",
       },
     ]);
+
+    await db.insert(corpusIndexGenerations).values({
+      family: "case_law",
+      generation: GENERATION,
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS[GENERATION],
+      ),
+      status: "building",
+    });
+    // Rehydration serves a decision only where this generation has applied
+    // what it wants, in the index the decision's country routes to.
+    const appliedAt = new Date();
+    const held = [
+      { country: "CZE", entityId: supremeId },
+      { country: "CZE", entityId: districtId },
+      { country: "EU", entityId: groupCsId },
+      { country: "EU", entityId: groupEnId },
+    ].map(({ country, entityId }) => ({
+      entityId,
+      indexId: corpusIndexId(GENERATION, country),
+      intentId: createSafeId<"corpusIndexProjectionIntent">(),
+    }));
+    await db.insert(corpusIndexProjectionIntents).values(
+      held.map(({ entityId, indexId, intentId }) => ({
+        id: intentId,
+        family: "case_law" as const,
+        generation: GENERATION,
+        entityId,
+        epoch: 1n,
+        fingerprint: FINGERPRINT,
+        indexId,
+        status: "applied" as const,
+        appendStartedAt: appliedAt,
+        appendCommittedAt: appliedAt,
+        expectedDocumentCount: 1,
+        appliedAt,
+      })),
+    );
+    await db.insert(corpusIndexProjectionStates).values(
+      held.map(({ entityId, indexId, intentId }) => ({
+        family: "case_law" as const,
+        generation: GENERATION,
+        entityId,
+        desiredAction: "upsert" as const,
+        desiredEpoch: 1n,
+        desiredFingerprint: FINGERPRINT,
+        desiredIndexId: indexId,
+        appliedAction: "upsert" as const,
+        appliedEpoch: 1n,
+        appliedRevision: intentId,
+        appliedFingerprint: FINGERPRINT,
+        appliedIndexId: indexId,
+        appliedAt,
+      })),
+    );
   },
   { timeout: DB_TEST_TIMEOUT_MS },
 );

@@ -112,8 +112,8 @@ const scanRequestCount = (): number =>
 
 const readPage = async (limit = 10, parsedCursor: SearchCursor | null = null) =>
   await readCorpusIndexSearchPage({
-    cluster: "q08",
-    indexId: "case_law_v2_cze",
+    cluster: "q09",
+    indexId: "case_law_v5_cs_sk",
     query: "text:promlčení",
     limit,
     parsedCursor,
@@ -279,8 +279,8 @@ describe("a page settles within one scan round", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
-      cluster: "q08",
-      indexId: "case_law_v2_cze",
+      cluster: "q09",
+      indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
       limit,
       parsedCursor,
@@ -398,8 +398,8 @@ describe("the scan is bounded by engine round trips", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
-      cluster: "q08",
-      indexId: "case_law_v2_cze",
+      cluster: "q09",
+      indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
       limit,
       parsedCursor,
@@ -518,8 +518,8 @@ describe("a passage flood does not strand the reader", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
-      cluster: "q08",
-      indexId: "case_law_v2_cze",
+      cluster: "q09",
+      indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
       limit,
       parsedCursor,
@@ -649,8 +649,8 @@ describe("ranker-folded candidates stay folded across pages", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
-      cluster: "q08",
-      indexId: "case_law_v4_eu",
+      cluster: "q09",
+      indexId: "case_law_v5_eu",
       query: "text:google",
       limit,
       parsedCursor,

@@ -5,7 +5,6 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_GENERATION_STATUSES,
   corpusIndexClusterForGeneration,
-  corpusIndexProjectionStore,
   isCorpusGeneration,
   parseCorpusFamily,
   parseCorpusIndexGenerationStatus,
@@ -51,16 +50,7 @@ test("generation names belong to exactly their declared family", () => {
 });
 
 test("every deployable generation selects one explicit Quickwit cluster", () => {
-  expect(corpusIndexClusterForGeneration("case_law", "case_law_v2")).toBe(
-    "q08",
-  );
   expect(corpusIndexClusterForGeneration("case_law", "case_law_v5")).toBe(
-    "q09",
-  );
-  expect(corpusIndexClusterForGeneration("legislation", "legislation_v1")).toBe(
-    "q08",
-  );
-  expect(corpusIndexClusterForGeneration("legislation", "legislation_v2")).toBe(
     "q09",
   );
   expect(corpusIndexClusterForGeneration("case_law", "case_law_v6")).toBe(
@@ -69,32 +59,23 @@ test("every deployable generation selects one explicit Quickwit cluster", () => 
   expect(corpusIndexClusterForGeneration("case_law", "case_law_v7")).toBe(
     "q09",
   );
+  expect(corpusIndexClusterForGeneration("legislation", "legislation_v2")).toBe(
+    "q09",
+  );
+  // A well-formed name the contract does not declare routes nowhere rather
+  // than to a default.
+  expect(() =>
+    corpusIndexClusterForGeneration("case_law", "case_law_v2"),
+  ).toThrow("Unknown case_law corpus index generation");
   expect(() =>
     corpusIndexClusterForGeneration("case_law", "case_law_v8"),
   ).toThrow("Unknown case_law corpus index generation");
+  expect(() =>
+    corpusIndexClusterForGeneration("legislation", "legislation_v1"),
+  ).toThrow("Unknown legislation corpus index generation");
 });
 
-test("a generation reads its row currency from one declared store", () => {
-  expect(corpusIndexProjectionStore("case_law", "case_law_v4")).toBe(
-    "legacy_projection_row",
-  );
-  expect(corpusIndexProjectionStore("case_law", "case_law_v6")).toBe(
-    "projection_state",
-  );
-  expect(corpusIndexProjectionStore("legislation", "legislation_v1")).toBe(
-    "legacy_projection_row",
-  );
-  expect(corpusIndexProjectionStore("legislation", "legislation_v2")).toBe(
-    "projection_state",
-  );
-  // An undeclared generation is nothing the final projection builds, so it
-  // keeps the store every rebuild rehearsal and fixture writes.
-  expect(corpusIndexProjectionStore("case_law", "case_law_v40")).toBe(
-    "legacy_projection_row",
-  );
-});
-
-test("every final manifest generation selects its declared cluster", () => {
+test("every manifest generation selects its declared cluster", () => {
   for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
     expect(
       corpusIndexClusterForGeneration(manifest.family, manifest.generation),

@@ -185,10 +185,7 @@ beforeAll(
         language: fixture.adapterKey === "pl-courts" ? "pl" : "cs",
         decisionDate: fixture.decisionDate,
         metadata: fixture.metadata,
-        // Both hashes present and equal: the row reads as projected and
-        // up to date, which is the state a date-only change has to disturb.
         contentHash: "a".repeat(64),
-        indexedHash: "a".repeat(64),
         slug: `fixture-${String(index)}`,
         languageGroupKey: `fixture-${String(index)}`,
       })),
@@ -334,32 +331,26 @@ test("applying writes the decisions, re-enqueues them, and converges", async () 
     .select({
       id: caseLawDecisions.id,
       decisionDate: caseLawDecisions.decisionDate,
-      indexedHash: caseLawDecisions.indexedHash,
     })
     .from(caseLawDecisions);
   const byId = new Map(stored.map((row) => [String(row.id), row]));
 
+  // Untouched by this statement: the raced row keeps the date it moved to.
   expect(byId.get(raced.id)?.decisionDate).toBe("2020-02-02");
-  // Untouched by this statement, so still carrying the hash the fixture set.
-  expect(byId.get(raced.id)?.indexedHash).toBe("a".repeat(64));
 
   for (const { decisionDate, id } of repairs) {
     if (!written.has(id)) {
       continue;
     }
     expect(byId.get(id)?.decisionDate).toBe(decisionDate);
-    // A date-only change leaves `content_hash` alone, so clearing this is the
-    // only thing that puts the row back in front of the search projection.
-    expect(byId.get(id)?.indexedHash).toBeNull();
   }
 
-  // Rows the predicate never selected keep both their date and their
-  // projection state: a run cannot widen into dates the guard accepts.
+  // Rows the predicate never selected keep their date: a run cannot widen
+  // into dates the guard accepts.
   for (const fixture of fixtures) {
     if (before.some(({ id }) => id === fixture.id)) {
       continue;
     }
     expect(byId.get(fixture.id)?.decisionDate).toBe(fixture.decisionDate);
-    expect(byId.get(fixture.id)?.indexedHash).toBe("a".repeat(64));
   }
 });

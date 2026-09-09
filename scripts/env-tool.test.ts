@@ -265,7 +265,7 @@ describe("environment doctor output", () => {
   test("does not echo invalid non-public values in validation errors", () => {
     const secret = "actual-secret-value";
     for (const key of [
-      "CORPUS_INDEX_ENDPOINT",
+      "CORPUS_INDEX_Q09_ENDPOINT",
       "DATABASE_URL",
       "UNKNOWN_KEY",
     ]) {
@@ -439,7 +439,8 @@ describe("environment doctor output", () => {
         ...validApiInput(),
         CASE_LAW_DATABASE_POOL_MAX: "3",
         CASE_LAW_DATABASE_URL: legacyUrl,
-        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "http://corpus-index-v09-search.internal.local:7280",
         LEGAL_SEARCH_PROVIDER: "corpus-index",
         PUBLIC_LAW_DATABASE_POOL_MAX: "4",
         PUBLIC_LAW_DATABASE_URL: currentUrl,
@@ -462,7 +463,8 @@ describe("environment doctor output", () => {
         ...validApiInput(),
         CASE_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
-        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "http://corpus-index-v09-search.internal.local:7280",
         LEGAL_SEARCH_PROVIDER: "corpus-index",
       },
     });
@@ -483,35 +485,8 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "Serving legislation_v1 on q08 requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT.",
+        "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.",
       overrides: { LEGAL_SEARCH_PROVIDER: "corpus-index" },
-    },
-    {
-      expected:
-        "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.",
-      overrides: {
-        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-08.example.com",
-        LEGAL_SEARCH_INDEX_GENERATION: "case_law_v5",
-        LEGAL_SEARCH_PROVIDER: "corpus-index",
-      },
-    },
-    {
-      expected:
-        "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.",
-      overrides: {
-        CORPUS_INDEX_ENDPOINT: "https://quickwit-08.example.com",
-        CORPUS_INDEXING_ENABLED: "true",
-        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
-          "https://quickwit-09-search.example.com",
-        LEGAL_SEARCH_INDEX_GENERATION: "case_law_v5",
-      },
-    },
-    {
-      expected:
-        "Corpus indexing requires CORPUS_INDEX_ENDPOINT for legislation_v1 on q08.",
-      overrides: {
-        CORPUS_INDEXING_ENABLED: "true",
-      },
     },
     {
       expected:
@@ -582,22 +557,6 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEX_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.",
-      overrides: {
-        CORPUS_INDEX_SEARCH_ENDPOINT: "http://search.example.com",
-      },
-    },
-    {
-      expected:
-        "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.",
-      overrides: {
-        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
-        CORPUS_INDEX_SEARCH_ENDPOINT: "https://search.example.com",
-        NODE_ENV: "staging",
-      },
-    },
-    {
-      expected:
         "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.",
       overrides: {
         CORPUS_INDEX_Q09_ENDPOINT: "http://quickwit-admin.example.com",
@@ -629,7 +588,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "Public-law database URLs require CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_SEARCH_ENDPOINT.",
+        "Public-law database URLs require CORPUS_INDEX_Q09_SEARCH_ENDPOINT.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
@@ -638,23 +597,14 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "CORPUS_INDEX_ENDPOINT and CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.",
+        "CORPUS_INDEX_Q09_ENDPOINT must be unset when a public-law database URL is configured.",
       overrides: {
         PUBLIC_LAW_DATABASE_URL:
           "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
-        CORPUS_INDEX_ENDPOINT: "https://quickwit-admin.example.com",
-        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
-        LEGAL_SEARCH_PROVIDER: "corpus-index",
-      },
-    },
-    {
-      expected:
-        "CORPUS_INDEXING_ENABLED must be false when a public-law database URL is configured.",
-      overrides: {
-        PUBLIC_LAW_DATABASE_URL:
-          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
-        CORPUS_INDEXING_ENABLED: "true",
-        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        CORPUS_INDEX_Q09_ENDPOINT:
+          "http://corpus-index-v09.internal.local:7280",
+        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
+          "http://corpus-index-v09-search.internal.local:7280",
         LEGAL_SEARCH_PROVIDER: "corpus-index",
       },
     },

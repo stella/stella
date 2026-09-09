@@ -23,11 +23,9 @@
  * list. The stored raw payload is untouched, so the sentence stays recoverable
  * from what the publisher actually served.
  *
- * **What re-projects.** Both index paths, per decision, inside the
- * transaction that repaired it. `indexed_hash` is cleared with the metadata,
- * because `content_hash` covers the text payload only and a metadata-only
- * change is otherwise invisible to the
- * `indexed_hash IS DISTINCT FROM content_hash` staleness test. The final
+ * **What re-projects.** The corpus projection, per decision, inside the
+ * transaction that repaired it: `content_hash` covers the text payload only,
+ * so a metadata-only change reaches the index through the desired state. The
  * projection derives its desired fingerprint from the publisher reading of
  * `metadata`, so the row's desired state is synchronized under its source's
  * projection lock: the fingerprint moves, the row becomes eligible, and the
@@ -213,7 +211,6 @@ const repairRow = async (
       .update(caseLawDecisions)
       .set({
         metadata: publisherPlaceholderMetadata(source.markers),
-        indexedHash: null,
       })
       .where(
         and(

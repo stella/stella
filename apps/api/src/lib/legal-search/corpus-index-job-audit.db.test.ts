@@ -101,7 +101,6 @@ test("a withdrawal files its reason as detail, not as a failure", async () => {
     async (tx) =>
       await recordCorpusWithdrawalAuditEvent(asTestRaw<Transaction>(tx), {
         decisionId: DECISION_ID,
-        generation: GENERATION,
         reason: "the stored payload re-parses to no document",
       }),
   );

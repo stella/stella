@@ -26,8 +26,8 @@
  * visibly wrong date with a plausibly wrong one is worse than an honest gap.
  *
  * **What a date change costs elsewhere.** Two things, both handled per batch:
- * the search projection is re-enqueued by clearing `indexed_hash` in the same
- * statement, and the citation graph is told, because the resolver filters
+ * the corpus projection's desired state is reconciled in the same
+ * transaction, and the citation graph is told, because the resolver filters
  * candidates on `decision_date` and treats NULL on either side as permissive.
  * Edges decided under the old date are retracted and requeued through the same
  * helpers the ingestion pipeline uses when a stored decision's resolution

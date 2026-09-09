@@ -111,7 +111,6 @@ describe("policy coverage", () => {
   const GLOBAL_CASE_LAW_TABLES = [
     "case_law_citations",
     "case_law_court_weights",
-    "case_law_corpus_index_delete_watermarks",
     "case_law_decisions",
     "case_law_fts_configs",
     "case_law_index_jobs",
@@ -122,19 +121,16 @@ describe("policy coverage", () => {
     "case_law_sources",
     "legislation_sources",
     "legislation_documents",
-    "legislation_corpus_index_delete_watermarks",
     "legislation_search_documents",
     "legislation_index_jobs",
   ];
-  // Sources are config (column-restricted writes), index jobs are append-only
-  // audit trails, and delete watermarks are monotone (no DELETE privilege).
+  // Sources are config (column-restricted writes) and index jobs are
+  // append-only audit trails.
   const CONFIG_OR_APPEND_ONLY = new Set([
     "case_law_sources",
     "case_law_index_jobs",
-    "case_law_corpus_index_delete_watermarks",
     "legislation_sources",
     "legislation_index_jobs",
-    "legislation_corpus_index_delete_watermarks",
   ]);
   const INGESTION_MUTABLE_CASE_LAW_TABLES = GLOBAL_CASE_LAW_TABLES.filter(
     (table) => !CONFIG_OR_APPEND_ONLY.has(table),
@@ -834,27 +830,5 @@ describe("policy coverage", () => {
     expect(
       privilegesForTable(tablePrivileges, "legislation_index_jobs"),
     ).toEqual(["INSERT", "SELECT"]);
-    for (const table of [
-      "case_law_corpus_index_delete_watermarks",
-      "legislation_corpus_index_delete_watermarks",
-    ]) {
-      expect(privilegesForTable(tablePrivileges, table)).toEqual([
-        "DELETE",
-        "INSERT",
-        "SELECT",
-        "UPDATE",
-      ]);
-    }
-    for (const table of [
-      "case_law_corpus_index_pending_deletes",
-      "legislation_corpus_index_pending_deletes",
-    ]) {
-      expect(privilegesForTable(tablePrivileges, table)).toEqual([
-        "DELETE",
-        "INSERT",
-        "SELECT",
-        "UPDATE",
-      ]);
-    }
   });
 });

@@ -1,4 +1,4 @@
-import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 
 /**
  * corpus index index configuration, generic over document family. Shared

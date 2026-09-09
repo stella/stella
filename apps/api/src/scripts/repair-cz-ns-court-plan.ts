@@ -265,15 +265,13 @@ export const decideCzNsCourtRepair = ({
  * the statement returns nothing for such a row and the run counts it as
  * superseded rather than repaired.
  *
- * Both marks are set here rather than left to the caller, because a court that
- * changes in the row and nowhere else is served under its old name for as long
- * as the deployment stands. `updated_at` is the staleness test the PostgreSQL
+ * `updated_at` is set here rather than left to the caller, because a court
+ * that changes in the row and nowhere else is served under its old name for as
+ * long as the deployment stands. It is the staleness test the PostgreSQL
  * full-text projection runs (`decisions.updated_at > search_documents.updated_at`),
- * and raw SQL does not go through the ORM's own timestamp. `indexed_hash` is
- * the legacy corpus-index one, whose enqueue trigger fires on the column being
- * assigned rather than on its value changing. Neither reaches a generation
- * projected from its projection state; that one is reconciled by the caller,
- * inside the same transaction as this statement.
+ * and raw SQL does not go through the ORM's own timestamp. It does not reach
+ * the corpus index; that is reconciled by the caller, inside the same
+ * transaction as this statement.
  */
 export const applyCzNsCourtRepairStatement = ({
   court,
@@ -289,8 +287,7 @@ export const applyCzNsCourtRepairStatement = ({
          metadata = jsonb_set(
            COALESCE(d.metadata, '{}'::jsonb), '{court}', to_jsonb(${court}::text)
          ),
-         updated_at = now(),
-         indexed_hash = NULL
+         updated_at = now()
    WHERE d.id = ${id}::uuid
      AND d.court = ${from}
   RETURNING d.id

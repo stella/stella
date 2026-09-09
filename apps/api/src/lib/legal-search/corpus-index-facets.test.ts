@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { envBase } from "@/api/env-base";
 import {
   browseFacetNames,
   corpusIndexBrowseFacets as readCorpusIndexBrowseFacets,
@@ -37,10 +36,10 @@ const originalFetch = globalThis.fetch;
 let requests: { url: string; body: Record<string, unknown> }[];
 let responseBody: unknown;
 let responseStatus: number;
-let servingGeneration: ServingCorpusIndexGeneration = {
+const servingGeneration: ServingCorpusIndexGeneration = {
   family: "case_law",
-  generation: "case_law_v2",
-  cluster: "q08",
+  generation: "case_law_v5",
+  cluster: "q09",
 };
 
 const corpusIndexBrowseFacets = async (
@@ -54,11 +53,6 @@ beforeEach(() => {
   requests = [];
   responseStatus = 200;
   responseBody = { aggregations: {} };
-  servingGeneration = {
-    family: "case_law",
-    generation: "case_law_v2",
-    cluster: "q08",
-  };
   const stub = async (
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -119,26 +113,14 @@ test("aggregates over opening passages only, so buckets count decisions", async 
   expect(Result.isError(result)).toBe(false);
   // Every passage of a decision carries the decision's court and country, so
   // an unrestricted aggregation would count a long judgment once per passage.
-  expect(requests.at(0)?.body["query"]).toBe("seq:0");
+  expect(requests.at(0)?.body["query"]).toBe("is_opening:true");
   expect(requests.at(0)?.body["max_hits"]).toBe(0);
 });
 
-test("v5 facets use only manifest-owned fields", async () => {
+test("facets use only manifest-owned fields", async () => {
   responseBody = engineResponse();
-  servingGeneration = {
-    family: "case_law",
-    generation: "case_law_v5",
-    cluster: "q09",
-  };
-  const originalEndpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
-  Object.assign(envBase, {
-    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
-  });
-  try {
-    await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
-  } finally {
-    Object.assign(envBase, { CORPUS_INDEX_Q09_ENDPOINT: originalEndpoint });
-  }
+
+  await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
 
   expect(requests.at(0)?.url).toContain("/case_law_v5_*/search");
   expect(requests.at(0)?.body["query"]).toBe("is_opening:true");
@@ -199,19 +181,14 @@ test("scopes to one jurisdiction index, and to the generation glob without one",
   });
   await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
 
-  expect(requests.at(0)?.url).toContain(`/${generation}_cze/search`);
+  expect(requests.at(0)?.url).toContain(`/${generation}_cs_sk/search`);
   expect(requests.at(1)?.url).toContain(`/${generation}_*/search`);
 });
 
 test("a scoped query on a shared index carries its jurisdiction as a clause", async () => {
   responseBody = engineResponse();
-  // From generation 3 on CZE and SVK share one physical index, so selecting
-  // the index alone would aggregate over both countries.
-  servingGeneration = {
-    family: "case_law",
-    generation: "case_law_v3",
-    cluster: "q08",
-  };
+  // CZE and SVK share one physical index, so selecting the index alone would
+  // aggregate over both countries.
   await corpusIndexBrowseFacets({
     excludedSourceIds: [],
     jurisdiction: "CZE",
@@ -223,12 +200,14 @@ test("a scoped query on a shared index carries its jurisdiction as a clause", as
     limit: 20,
   });
 
-  expect(requests.at(0)?.url).toContain("/case_law_v3_cs_sk/search");
-  expect(requests.at(0)?.body["query"]).toBe('seq:0 AND jurisdiction:"CZE"');
+  expect(requests.at(0)?.url).toContain("/case_law_v5_cs_sk/search");
+  expect(requests.at(0)?.body["query"]).toBe(
+    'is_opening:true AND jurisdiction:"CZE"',
+  );
   // A single-country index needs no clause; the source exclusion still lands.
-  expect(requests.at(1)?.url).toContain("/case_law_v3_pol/search");
+  expect(requests.at(1)?.url).toContain("/case_law_v5_pol/search");
   expect(requests.at(1)?.body["query"]).toBe(
-    'seq:0 AND NOT (source:"018f0a2b-0000-7000-8000-000000000001")',
+    'is_opening:true AND NOT (source:"018f0a2b-0000-7000-8000-000000000001")',
   );
 });
 
@@ -262,7 +241,7 @@ test("excludes sources that may no longer be redistributed", async () => {
   // only queues their documents for removal: without this clause the buckets
   // keep counting them until reconciliation catches up.
   expect(requests.at(0)?.body["query"]).toBe(
-    'seq:0 AND NOT (source:"018f0a2b-0000-7000-8000-000000000001" OR source:"018f0a2b-0000-7000-8000-000000000002")',
+    'is_opening:true AND NOT (source:"018f0a2b-0000-7000-8000-000000000001" OR source:"018f0a2b-0000-7000-8000-000000000002")',
   );
 });
 

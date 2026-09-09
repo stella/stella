@@ -447,9 +447,9 @@ describe("empty corpus payload hashes", () => {
   });
 
   test("a stored document keeps the hash it was written with", () => {
-    // Every corpus key and every indexedHash comparison in the corpus
-    // derives from this value, so the hash of a known payload is part of
-    // the storage format, not an implementation detail.
+    // Every corpus key and every content comparison in the corpus derives
+    // from this value, so the hash of a known payload is part of the storage
+    // format, not an implementation detail.
     expect(
       corpusContentHash({
         text: "Rozsudok",

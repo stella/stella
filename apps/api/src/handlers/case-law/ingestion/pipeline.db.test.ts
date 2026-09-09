@@ -19,8 +19,6 @@ import { getPgErrorCode } from "@/api/lib/pg-error";
 type JsonbStorageRow = {
   storageType: string;
   version: string | null;
-  // Only selected by the refresh test.
-  indexedHash?: string | null;
 };
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -146,13 +144,6 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
-      await db.execute(sql`
-        UPDATE case_law_decisions
-        SET indexed_hash = 'stale-indexed-hash'
-        WHERE source_id = ${sourceId}
-          AND case_number = ${ingestionResult.caseNumber}
-          AND language = ${ingestionResult.language}
-      `);
       await processDecision({
         input: {
           ...ingestionResult,
@@ -168,8 +159,7 @@ if (!databaseUrl || !runPostgresTests) {
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
           jsonb_typeof(document_ast) AS "storageType",
-          document_ast ->> 'version' AS "version",
-          indexed_hash AS "indexedHash"
+          document_ast ->> 'version' AS "version"
         FROM case_law_decisions
         WHERE source_id = ${sourceId}
           AND case_number = ${ingestionResult.caseNumber}
@@ -179,9 +169,6 @@ if (!databaseUrl || !runPostgresTests) {
       expect(row).toBeDefined();
       expect(row?.["storageType"]).toBe("object");
       expect(row?.["version"]).toBe("1");
-      // A refresh must clear indexedHash so the corpus indexer re-picks
-      // the row even when only metadata changed.
-      expect(row?.["indexedHash"]).toBeNull();
     });
 
     test("database-fences legacy refreshes after observation ordering activates", async () => {

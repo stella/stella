@@ -22,7 +22,7 @@ import { panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
-import { corpusStorageMode, envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   hasResolvedCitations,
   loadCitationCourtWeightEntries,
@@ -37,10 +37,6 @@ import {
   type AdapterKey,
   MAX_CYCLE_MS,
 } from "@/api/handlers/case-law/consts";
-import {
-  BACKFILL_STATUS,
-  backfillCorpusIndex,
-} from "@/api/handlers/case-law/corpus-index";
 import {
   getAdapter,
   listAdapters,
@@ -57,25 +53,18 @@ import {
   readSourceReportedTotals,
   setSourceReportedTotal,
 } from "@/api/handlers/case-law/ingestion/source-totals";
-import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { captureError } from "@/api/lib/analytics/capture";
-import {
-  createCaseLawCensus,
-  createCaseLawCorpusIndexCountSeed,
-} from "@/api/lib/corpus-index/census";
 import { IngestionStallError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { legacyOperationalCorpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
-import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isCorpusS3Stale,
@@ -103,14 +92,6 @@ import {
   type CitationResolutionStep,
   runCitationResolutionDrain,
 } from "./citation-resolution-drain";
-import {
-  CORPUS_INDEX_STEP,
-  type CorpusIndexStepKind,
-  type CorpusIndexStreaks,
-  INITIAL_CORPUS_INDEX_STREAKS,
-  corpusIndexStallThreshold,
-  stepCorpusIndexProgress,
-} from "./corpus-index-progress";
 import {
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
@@ -213,12 +194,6 @@ const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_IDLE_MAX_MS = 15 * 60_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
 const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
-// Throughput comes from the environment so a drain can be sped up or
-// reverted as a deployment change; the defaults preserve the historical
-// pace.
-const CORPUS_INDEX_INTERVAL_MS = envBase.CORPUS_INDEX_INTERVAL_MS;
-const CORPUS_INDEX_BATCH_SIZE = envBase.CORPUS_INDEX_BATCH_SIZE;
-const CORPUS_INDEX_READ_CONCURRENCY = envBase.CORPUS_INDEX_READ_CONCURRENCY;
 // Deferred Slovak documents. The page size is how many rows one tier query
 // reads ahead of the walk, and the probe interval is the longest a decision
 // a reader asked for waits behind the bulk tier. Neither touches throughput:
@@ -298,12 +273,11 @@ const WATCHDOG_FATAL_LAG_MS = 300_000;
 const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
 const BACKFILL_DEADLINE_TRANSACTION_GRACE_MS = 60_000;
 
-// Hard wall-clock backstop for one backfill batch (the corpus-index and
-// search-index loops). Every external await inside a batch is individually
-// bounded — corpus S3 reads via the corpus-storage ceiling, the database via
-// the dedicated backfill transaction handle in ../db (statement_timeout +
-// wall-clock grace), the corpus-index engine via its own HTTP request
-// timeout — so this is a pure backstop: it guards against any FUTURE
+// Hard wall-clock backstop for one backfill batch (the search-index loops).
+// Every external await inside a batch is individually bounded — corpus S3
+// reads via the corpus-storage ceiling, the database via the dedicated
+// backfill transaction handle in ../db (statement_timeout + wall-clock
+// grace) — so this is a pure backstop: it guards against any FUTURE
 // unbounded await slipping into a batch, where the batch would never return
 // and the loop would stop making progress silently while the event loop
 // stays responsive (invisible to the lag watchdog). Sizing basis: the
@@ -1304,109 +1278,6 @@ export const runCaseLawIngest = async (
     });
   })();
 
-  // corpus index index backfill loop: pushes corpus-backed decisions into the
-  // active generation. Gated so the index can warm up (and be benchmarked)
-  // while search still reads pg-fts; runs outside the DB slot semaphore.
-  const corpusIndexLoop = (async () => {
-    if (!envBase.CORPUS_INDEXING_ENABLED) {
-      return;
-    }
-    const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
-    logInfo(`[corpus-index] Enabled for generation ${generation}`);
-    // Acceptance is not durability for the bulk pages of a rebuild, and no
-    // per-request signal can prove a whole generation landed. Counting both
-    // sides on this loop's own cadence is what makes a lost split visible
-    // at all: the rows it lost are neither missing nor stale, so nothing
-    // else in this process would ever look at them again.
-    const census = createCaseLawCensus({ generation, scopedDb: backfillDb });
-    const countSeed = createCaseLawCorpusIndexCountSeed({
-      generation,
-      scopedDb: backfillDb,
-    });
-    // A leaked lease (every step BUSY) and a failing backend (every step
-    // throws) both look like idle silence in this loop unless counted.
-    let corpusStreaks: CorpusIndexStreaks = INITIAL_CORPUS_INDEX_STREAKS;
-    const stallThreshold = corpusIndexStallThreshold(CORPUS_INDEX_INTERVAL_MS);
-    const foldCorpusStep = (kind: CorpusIndexStepKind): void => {
-      const step = stepCorpusIndexProgress({
-        kind,
-        streaks: corpusStreaks,
-        threshold: stallThreshold,
-      });
-      corpusStreaks = step.streaks;
-      if (!step.stall) {
-        return;
-      }
-      logger.error(
-        step.stall.kind === "sustained_busy"
-          ? "case_law.corpus_index.sustained_busy"
-          : "case_law.corpus_index.sustained_failure",
-        { generation, steps: step.stall.steps },
-      );
-    };
-    while (true) {
-      if (isDraining()) {
-        return;
-      }
-      // The census rides the interval the loop is idle for anyway, so it
-      // costs the backfill no latency and runs on every cycle — including
-      // the ones where the batch failed or found nothing, which is
-      // exactly when drift stops being repaired. It contains its own
-      // failures, so it cannot turn a slow cycle into a stopped loop.
-      await Promise.all([
-        Bun.sleep(CORPUS_INDEX_INTERVAL_MS),
-        census.step(),
-        runWithHardDeadline(
-          "corpus-index-count-seed",
-          BACKFILL_HARD_DEADLINE_MS,
-          async () => await countSeed.step(),
-        ),
-      ]);
-      if (isDraining()) {
-        return;
-      }
-      try {
-        const result = await runWithHardDeadline(
-          "corpus-index",
-          BACKFILL_HARD_DEADLINE_MS,
-          async () =>
-            await backfillCorpusIndex(
-              backfillDb,
-              CORPUS_INDEX_BATCH_SIZE,
-              generation,
-              { readConcurrency: CORPUS_INDEX_READ_CONCURRENCY },
-            ),
-        );
-        if (result.indexed > 0) {
-          logInfo(`[corpus-index] Indexed ${result.indexed} decisions`);
-        }
-        switch (result.status) {
-          case BACKFILL_STATUS.ADVANCED:
-            foldCorpusStep(CORPUS_INDEX_STEP.ADVANCED);
-            break;
-          case BACKFILL_STATUS.BUSY:
-            foldCorpusStep(CORPUS_INDEX_STEP.BUSY);
-            break;
-          case BACKFILL_STATUS.COMPLETE:
-            foldCorpusStep(CORPUS_INDEX_STEP.COMPLETE);
-            break;
-          default: {
-            result satisfies never;
-            panic(`Unhandled corpus index result: ${String(result)}`);
-          }
-        }
-      } catch (error) {
-        foldCorpusStep(CORPUS_INDEX_STEP.FAILED);
-        const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(error)) {
-          logError(`[corpus-index] DB connection error (will retry): ${msg}`);
-        } else {
-          logError("[corpus-index] Backfill error:", error);
-        }
-      }
-    }
-  })();
-
   // Legislation pg-fts projection loop (mirrors searchIndexLoop). The
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
@@ -1447,48 +1318,6 @@ export const runCaseLawIngest = async (
           );
         } else {
           logError("[legislation-search-index] Backfill error:", error);
-        }
-      }
-    }
-  })();
-
-  // Legislation corpus index index loop (mirrors corpusIndexLoop), gated.
-  const legislationCorpusIndexLoop = (async () => {
-    if (!envBase.CORPUS_INDEXING_ENABLED) {
-      return;
-    }
-    const generation = legacyOperationalCorpusGeneration("legislation");
-    logInfo(`[legislation-corpus-index] Enabled for generation ${generation}`);
-    while (true) {
-      if (isDraining()) {
-        return;
-      }
-      await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
-      if (isDraining()) {
-        return;
-      }
-      try {
-        const indexed = await runWithHardDeadline(
-          "legislation-corpus-index",
-          BACKFILL_HARD_DEADLINE_MS,
-          async () =>
-            await backfillLegislationCorpusIndex(
-              backfillDb,
-              LIMITS.corpusIndexBatchSize,
-              generation,
-            ),
-        );
-        if (indexed > 0) {
-          logInfo(`[legislation-corpus-index] Indexed ${indexed} documents`);
-        }
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(error)) {
-          logError(
-            `[legislation-corpus-index] DB connection error (will retry): ${msg}`,
-          );
-        } else {
-          logError("[legislation-corpus-index] Backfill error:", error);
         }
       }
     }
@@ -1729,9 +1558,7 @@ export const runCaseLawIngest = async (
     searchIndexLoop,
     citationResolutionLoop,
     citationAuthorityLoop,
-    corpusIndexLoop,
     legislationSearchIndexLoop,
-    legislationCorpusIndexLoop,
     skDocumentLoop,
     reconciliationLoop,
     sourceTotalLoop,

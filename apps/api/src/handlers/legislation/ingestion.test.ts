@@ -194,13 +194,11 @@ test("metadata-only change updates the row (same text, new status)", async () =>
     .select({
       status: legislationDocuments.status,
       versionValidTo: legislationDocuments.versionValidTo,
-      indexedHash: legislationDocuments.indexedHash,
     })
     .from(legislationDocuments)
     .where(eq(legislationDocuments.id, first.id));
   expect(row?.status).toBe("repealed");
   expect(row?.versionValidTo).toBe("2026-01-01");
-  expect(row?.indexedHash).toBeNull();
 });
 
 test("a changed observation fingerprint alone refreshes the row", async () => {

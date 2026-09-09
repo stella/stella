@@ -75,21 +75,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
-  "CORPUS_INDEXING_ENABLED",
   "CORPUS_PROJECTION_OWNER",
-  "CORPUS_INDEX_BACKPRESSURE_DIMENSIONS",
-  "CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK",
-  "CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK",
-  "CORPUS_INDEX_BACKPRESSURE_METRIC",
-  "CORPUS_INDEX_BACKPRESSURE_NAMESPACE",
-  "CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS",
-  "CORPUS_INDEX_BATCH_SIZE",
-  "CORPUS_INDEX_ENDPOINT",
-  "CORPUS_INDEX_INTERVAL_MS",
   "CORPUS_INDEX_Q09_ENDPOINT",
   "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
-  "CORPUS_INDEX_READ_CONCURRENCY",
-  "CORPUS_INDEX_SEARCH_ENDPOINT",
   "CORPUS_INDEX_S3_BUCKET",
   "CORPUS_STORAGE_ENABLED",
   "CORPUS_STORAGE_MODE",
@@ -136,7 +124,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "LEGAL_CORPUS_S3_BUCKET",
-  "LEGAL_SEARCH_INDEX_GENERATION",
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
@@ -269,24 +256,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
     "Local-development-only read-only Postgres URL for the shared public-law corpus. Unset uses DATABASE_URL.",
-  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS:
-    "Name=Value[,Name=Value...] dimensions of the pacing metric.",
-  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK:
-    "Metric value above which a paused corpus-index build resumes.",
-  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK:
-    "Metric value below which the corpus-index build loop pauses.",
-  CORPUS_INDEX_BACKPRESSURE_METRIC:
-    "CloudWatch metric name the corpus-index build loop samples to pace itself. Unset disables pacing.",
-  CORPUS_INDEX_BACKPRESSURE_NAMESPACE:
-    "CloudWatch namespace of the pacing metric.",
-  CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS:
-    "Minimum interval between pacing-metric samples.",
-  CORPUS_INDEX_Q09_ENDPOINT:
-    "Isolated Quickwit 0.9 mutation endpoint. Final generations registered on q09 use this endpoint; it never falls back to the legacy cluster.",
+  CORPUS_INDEX_Q09_ENDPOINT: "Corpus index mutation endpoint.",
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
-    "Read endpoint for Quickwit 0.9, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
-  CORPUS_INDEX_SEARCH_ENDPOINT:
-    "Local-development-only search endpoint for a shared corpus index. Unset uses CORPUS_INDEX_ENDPOINT; this endpoint is never used for index mutations.",
+    "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
   DB_HOST:
@@ -448,10 +420,8 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
-  CORPUS_INDEX_SEARCH_ENDPOINT:
-    "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_ENDPOINT is unset",
   CORPUS_INDEX_Q09_ENDPOINT:
-    "CORPUS_INDEXING_ENABLED is true and LEGAL_SEARCH_INDEX_GENERATION is case_law_v5",
+    "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",

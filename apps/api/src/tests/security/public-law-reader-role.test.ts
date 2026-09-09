@@ -49,6 +49,10 @@ import {
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
@@ -588,28 +592,32 @@ describe("public-law reader role", () => {
         await tx.insert(corpusIndexGenerations).values([
           {
             family: "case_law",
-            generation: "case_law_v2",
-            cluster: "q08",
-            manifestDigest: "a".repeat(64),
+            generation: "case_law_v6",
+            cluster: "q09",
+            manifestDigest: corpusIndexManifestDigest(
+              CORPUS_INDEX_MANIFESTS.case_law_v6,
+            ),
             status: "serving",
           },
           {
             family: "legislation",
-            generation: "legislation_v1",
-            cluster: "q08",
-            manifestDigest: "a".repeat(64),
+            generation: "legislation_v2",
+            cluster: "q09",
+            manifestDigest: corpusIndexManifestDigest(
+              CORPUS_INDEX_MANIFESTS.legislation_v2,
+            ),
             status: "serving",
           },
         ]);
         await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
         expect(
           await readServingCorpusIndexGenerationTx(tx, "case_law"),
-        ).toMatchObject({ family: "case_law", generation: "case_law_v2" });
+        ).toMatchObject({ family: "case_law", generation: "case_law_v6" });
         expect(
           await readServingCorpusIndexGenerationTx(tx, "legislation"),
         ).toMatchObject({
           family: "legislation",
-          generation: "legislation_v1",
+          generation: "legislation_v2",
         });
         tx.rollback();
       });
@@ -633,22 +641,11 @@ describe("public-law reader role", () => {
     const result = await rehydrateLegislationCandidates({
       body: { query: "reader role census" },
       candidates: [{ id: createSafeId<"legislationDocument">(), score: 1 }],
-      generation: "legislation_v1",
-      legislationDb,
-    });
-
-    expect(result.ranked).toEqual([]);
-
-    // A generation the final projection builds reads its projection state
-    // instead of the serving marker, so the census covers both predicates.
-    const projected = await rehydrateLegislationCandidates({
-      body: { query: "reader role census" },
-      candidates: [{ id: createSafeId<"legislationDocument">(), score: 1 }],
       generation: "legislation_v2",
       legislationDb,
     });
 
-    expect(projected.ranked).toEqual([]);
+    expect(result.ranked).toEqual([]);
   });
 
   test("executes list, sitemap, and search projections as the reader role", async () => {

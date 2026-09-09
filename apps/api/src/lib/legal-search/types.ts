@@ -5,7 +5,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
-import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { LegalSearchError } from "@/api/lib/legal-search/search-error";
 import type { FacetBucket } from "@/api/lib/search/types";

@@ -235,7 +235,6 @@ if (!databaseUrl || !runPostgresTests) {
           normalizedS3Key: true,
           astS3Key: true,
           contentHash: true,
-          indexedHash: true,
         },
       });
 
@@ -256,10 +255,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(stored?.textS3Key).toBe(NEW_KEYS.textKey);
       expect(stored?.normalizedS3Key).toBe(NEW_KEYS.sectionsKey);
       expect(stored?.astS3Key).toBe(NEW_KEYS.astKey);
-      // The corpus indexer compares indexedHash against contentHash, so
-      // moving the hash is what makes the row stale and re-indexed.
       expect(stored?.contentHash).toBe(NEW_CONTENT_HASH);
-      expect(stored?.indexedHash).not.toBe(NEW_CONTENT_HASH);
     });
 
     test("writes the columns alone where corpus storage is off", async () => {

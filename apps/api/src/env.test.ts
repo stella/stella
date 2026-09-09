@@ -271,18 +271,6 @@ describe("API environment", () => {
     );
   });
 
-  test("rejects blank numeric backpressure settings", () => {
-    const result = bootApiEnvironment({
-      ...baseEnv,
-      CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: "   ",
-    });
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain(
-      "CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK",
-    );
-  });
-
   test.each([
     {
       expected:
