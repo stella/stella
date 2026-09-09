@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.5
+
+### Patch Changes
+
+- [#3189](https://github.com/stella/stella/pull/3189) [`26ae00b`](https://github.com/stella/stella/commit/26ae00bcda0ec6e97fd29e9efcc1a76a8f1186d0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align generated MCP behavioral annotations and destructive command metadata with the server registry.
+
 ## 1.2.4
 
 ### Patch Changes
