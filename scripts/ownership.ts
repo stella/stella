@@ -522,6 +522,7 @@ export const OWNERSHIP = [
     owner: [
       "packages/api-contract/src/case-law-text-field.ts",
       "apps/api/src/lib/case-law/decision-text.ts",
+      "apps/api/src/lib/case-law/decision-text-sql.ts",
     ],
     summary:
       "The shared discriminated value makes text presence explicit to API consumers. " +

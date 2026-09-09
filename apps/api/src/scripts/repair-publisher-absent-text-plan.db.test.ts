@@ -23,13 +23,20 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  type DecisionTextFieldKey,
+} from "@stll/api-contract/case-law-text-field";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
   absentTextComparisonsFor,
+  readDecisionTextMetadata,
   sourceTextField,
 } from "@/api/lib/case-law/decision-text";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
@@ -39,8 +46,8 @@ import {
   carriesAbsentPublisherText,
   parseAbsentTextPage,
   parseAbsentTextSources,
+  publisherPlaceholderMetadata,
   selectAbsentTextPageStatement,
-  strippedPublisherMetadata,
 } from "@/api/scripts/repair-publisher-absent-text-plan";
 import type {
   AbsentTextCursor,
@@ -90,7 +97,7 @@ const PLANTED = new Map<number, Record<string, unknown>>([
 ]);
 
 /** Which keys the repair must remove from each planted row. */
-const STRIPPED = new Map<number, readonly string[]>([
+const STRIPPED = new Map<number, readonly DecisionTextFieldKey[]>([
   [3, ["abstract", "legalSentence"]],
   [4, ["legalSentence"]],
   [97, ["abstract"]],
@@ -116,7 +123,7 @@ const fixtureId = (index: number): SafeId<"caseLawDecision"> => {
 const metadataOf = (index: number): Record<string, unknown> =>
   PLANTED.get(index) ?? { legalSentence: `${HEADNOTE} (${String(index)})` };
 
-const strippedOf = (index: number): readonly string[] =>
+const strippedOf = (index: number): readonly DecisionTextFieldKey[] =>
   STRIPPED.get(index) ?? [];
 
 const markerIds = new Set(
@@ -265,7 +272,7 @@ const repair = async (
   const repaired = await db
     .update(caseLawDecisions)
     .set({
-      metadata: strippedPublisherMetadata(markers),
+      metadata: publisherPlaceholderMetadata(markers),
       indexedHash: null,
     })
     .where(
@@ -403,7 +410,7 @@ describe("the walk", () => {
 });
 
 describe("the write", () => {
-  test("strips exactly the keys the write path would now leave absent", async () => {
+  test("records exactly the fields the write path declares absent", async () => {
     const repaired = await repairEverySource();
     const stored = await storedRows();
 
@@ -415,11 +422,23 @@ describe("the write", () => {
 
       for (const key of stripped) {
         expect(metadata).not.toHaveProperty(key);
+        expect(readDecisionTextMetadata(metadata).textFields[key]).toEqual({
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        });
       }
+      expect(metadata[DECISION_TEXT_ABSENCE_METADATA_KEY]).toEqual(
+        stripped.length === 0
+          ? undefined
+          : stripped.map((field) => ({
+              field,
+              reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+            })),
+      );
       // Everything the row held besides the stripped keys is still there, with
       // the value the publisher published.
       for (const [key, value] of Object.entries(metadataOf(index))) {
-        if (stripped.includes(key)) {
+        if (stripped.some((candidate) => candidate === key)) {
           continue;
         }
         expect(metadata[key]).toEqual(value);
@@ -429,6 +448,94 @@ describe("the write", () => {
       expect(repaired.has(id)).toBe(stripped.length > 0);
       expect(row?.indexed).toBe(stripped.length === 0);
     }
+  });
+
+  test("merges valid absence entries and skips malformed sidecars", async () => {
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: {
+          ...metadataOf(3),
+          [DECISION_TEXT_ABSENCE_METADATA_KEY]: [],
+        },
+      })
+      .where(eq(caseLawDecisions.id, fixtureId(3)));
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: {
+          ...metadataOf(4),
+          [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+            {
+              field: "abstract",
+              reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+            },
+          ],
+        },
+      })
+      .where(eq(caseLawDecisions.id, fixtureId(4)));
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: {
+          ...metadataOf(97),
+          [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+            {
+              field: "abstract",
+              reason: TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD,
+            },
+          ],
+        },
+      })
+      .where(eq(caseLawDecisions.id, fixtureId(97)));
+    const malformed = {
+      ...metadataOf(141),
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: "invalid",
+    };
+    await db
+      .update(caseLawDecisions)
+      .set({ metadata: malformed })
+      .where(eq(caseLawDecisions.id, fixtureId(141)));
+
+    const repaired = new Set(await repair(usSourceId, US_MARKERS));
+    const stored = await storedRows();
+
+    expect(stored.get(fixtureId(3))?.metadata).toEqual({
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: "abstract",
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+        {
+          field: "legalSentence",
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+      ],
+      keywords: ["Daně", "Správní řízení"],
+    });
+    expect(stored.get(fixtureId(4))?.metadata).toEqual({
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+        {
+          field: "legalSentence",
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+      ],
+    });
+    expect(stored.get(fixtureId(97))?.metadata).toEqual({
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: "abstract",
+          reason: TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD,
+        },
+      ],
+      legalSentence: HEADNOTE,
+    });
+    expect(stored.get(fixtureId(141))?.metadata).toEqual(malformed);
+    expect(repaired).toEqual(
+      new Set([fixtureId(3), fixtureId(4), fixtureId(97)]),
+    );
+    expect(stored.get(fixtureId(141))?.indexed).toBe(true);
   });
 
   test("a marker is only absence for the source that prints it", async () => {

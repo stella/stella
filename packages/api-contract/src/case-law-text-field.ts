@@ -43,6 +43,13 @@ export const DECISION_TEXT_FIELD_KEYS = Object.freeze(
   Object.values(DECISION_TEXT_FIELD),
 );
 
+export const DECISION_TEXT_ABSENCE_METADATA_KEY = "_stellaDecisionTextAbsence";
+
+export const DECISION_TEXT_METADATA_KEYS = Object.freeze([
+  ...DECISION_TEXT_FIELD_KEYS,
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+]);
+
 export type ReadDecisionTextFields = Readonly<
   Record<DecisionTextFieldKey, TextField>
 >;

@@ -847,6 +847,8 @@ const buildPlDecision = ({
 
   const rawPayload = JSON.stringify({ dumpItem, detail });
   const rawHash = hashContent(JSON.stringify(dumpItem));
+  const detailHash =
+    detail === null ? undefined : hashContent(JSON.stringify(detail));
 
   const publisherCitedCases = normalizeOptionalArray(
     item.referencedCourtCases,
@@ -929,6 +931,7 @@ const buildPlDecision = ({
       ingestion: {
         dumpHash: rawHash,
         sourceTier: detail ? "detail" : "dump",
+        ...(detailHash === undefined ? {} : { detailHash }),
       },
       ...((additionalCaseNumbers?.length ?? 0) > 0 && {
         additionalCaseNumbers,

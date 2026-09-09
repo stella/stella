@@ -88,8 +88,8 @@ import {
   carriesAbsentPublisherText,
   parseAbsentTextPage,
   parseAbsentTextSources,
+  publisherPlaceholderMetadata,
   selectAbsentTextPageStatement,
-  strippedPublisherMetadata,
 } from "@/api/scripts/repair-publisher-absent-text-plan";
 import type {
   AbsentTextCursor,
@@ -212,7 +212,7 @@ const repairRow = async (
     const repaired = await tx
       .update(caseLawDecisions)
       .set({
-        metadata: strippedPublisherMetadata(source.markers),
+        metadata: publisherPlaceholderMetadata(source.markers),
         indexedHash: null,
       })
       .where(

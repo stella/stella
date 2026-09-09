@@ -25,6 +25,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -557,6 +558,55 @@ describe("pl-courts buildDecision", () => {
       absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     );
     expect(built.decision.metadata).not.toHaveProperty("summary");
+  });
+
+  test("fingerprints detail changes separately from stable listing data", async () => {
+    const item = {
+      id: 2,
+      href: "https://example.test/api/judgments/2",
+      courtType: "COMMON",
+      courtCases: [{ caseNumber: "Fixture 2" }],
+      judgmentType: "DECISION",
+      judgmentDate: "2020-01-02",
+      division: {
+        id: 2,
+        name: "Fixture division",
+        court: { id: 2, code: "fixture", name: "Fixture court" },
+      },
+    } as const satisfies SaosItem;
+    const buildWithSummary = async (summary: string) => {
+      mockFetchWithBodies([
+        {
+          pattern: DETAIL_PATTERN,
+          body: JSON.stringify({
+            data: {
+              ...item,
+              summary,
+              textContent: "<p>Published decision text.</p>",
+            },
+          }),
+        },
+      ]);
+      return await reconciliation.buildDecision(item);
+    };
+
+    const first = await buildWithSummary("First published summary.");
+    const second = await buildWithSummary("Second published summary.");
+
+    expect(first.type).toBe("built");
+    expect(second.type).toBe("built");
+    if (first.type !== "built" || second.type !== "built") {
+      return;
+    }
+    expect(first.decision.rawHash).toBe(second.decision.rawHash);
+    expect(
+      getCaseLawIngestionMetadata(first.decision.metadata)?.detailHash,
+    ).not.toBe(
+      getCaseLawIngestionMetadata(second.decision.metadata)?.detailHash,
+    );
+    expect(first.decision.textFields.summary).not.toEqual(
+      second.decision.textFields.summary,
+    );
   });
 
   test("does not emit nonexistent dates from source fields or content", async () => {

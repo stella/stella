@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  DECISION_TEXT_METADATA_KEYS,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   TEXT_ABSENCE_REASON,
@@ -60,33 +67,70 @@ describe("decision text fields", () => {
   });
 
   test("stores declared fields separately from ordinary metadata", () => {
-    expect(
-      storeDecisionTextFields({
-        metadata: { sourceReference: "fixture-reference" },
-        textFields: {
-          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-          abstract: presentTextField("Published abstract"),
-        },
-      }),
-    ).toEqual({
+    const stored = storeDecisionTextFields({
+      metadata: { sourceReference: "fixture-reference" },
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: presentTextField("Published abstract"),
+      },
+    });
+
+    expect(stored).toEqual({
       sourceReference: "fixture-reference",
       abstract: "Published abstract",
     });
+    expect(Object.hasOwn(stored, DECISION_TEXT_ABSENCE_METADATA_KEY)).toBe(
+      false,
+    );
   });
 
-  test("rejects a protected field hidden in ordinary metadata", () => {
-    expect(() =>
-      storeDecisionTextFields({
-        metadata: { summary: "raw text" },
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      }),
-    ).toThrow("Decision text must use the textFields contract: summary");
+  test("rejects every protected field hidden in ordinary metadata", () => {
+    for (const key of DECISION_TEXT_METADATA_KEYS) {
+      expect(() =>
+        storeDecisionTextFields({
+          metadata: { [key]: "raw value" },
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+        }),
+      ).toThrow(`Decision text must use the textFields contract: ${key}`);
+    }
+  });
+
+  test("round trips every absence reason for every decision text field", () => {
+    for (const key of DECISION_TEXT_FIELD_KEYS) {
+      for (const reason of TEXT_ABSENCE_REASONS) {
+        const textFields = {
+          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+          [key]: absentTextField(reason),
+        };
+        const stored = storeDecisionTextFields({
+          metadata: { sourceReference: "fixture-reference" },
+          textFields,
+        });
+
+        expect(readDecisionTextMetadata(stored)).toEqual({
+          metadata: { sourceReference: "fixture-reference" },
+          textFields,
+        });
+        expect(stored[DECISION_TEXT_ABSENCE_METADATA_KEY]).toEqual(
+          reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
+            ? undefined
+            : [{ field: key, reason }],
+        );
+      }
+    }
   });
 
   test("preserves stored text when a new parse fails", () => {
     expect(
       preserveStoredTextAfterParseFailure({
-        incomingMetadata: { sourceReference: "new-reference" },
+        incomingMetadata: {
+          [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+            { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+          ],
+          sourceReference: "new-reference",
+        },
         storedMetadata: {
           abstract: "Stored abstract",
           sourceReference: "stored-reference",
@@ -98,6 +142,40 @@ describe("decision text fields", () => {
       }),
     ).toEqual({
       abstract: "Stored abstract",
+      sourceReference: "new-reference",
+    });
+  });
+
+  test("preserves a stored non-default absence when a new parse fails", () => {
+    const storedMetadata = storeDecisionTextFields({
+      metadata: { sourceReference: "stored-reference" },
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER),
+      },
+    });
+    const textFields = {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+    };
+    const incomingMetadata = storeDecisionTextFields({
+      metadata: { sourceReference: "new-reference" },
+      textFields,
+    });
+
+    expect(
+      preserveStoredTextAfterParseFailure({
+        incomingMetadata,
+        storedMetadata,
+        textFields,
+      }),
+    ).toEqual({
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: "abstract",
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+      ],
       sourceReference: "new-reference",
     });
   });
@@ -121,18 +199,140 @@ describe("decision text fields", () => {
   });
 
   test("splits stored text before replaying an ingestion result", () => {
+    const textFields = {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      legalSentence: presentTextField("Published sentence"),
+      summary: absentTextField(TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD),
+    };
+    const stored = storeDecisionTextFields({
+      metadata: { sourceReference: "fixture-reference" },
+      textFields,
+    });
+
+    expect(splitStoredDecisionTextMetadata(stored)).toEqual({
+      metadata: { sourceReference: "fixture-reference" },
+      textFields,
+    });
+  });
+
+  test("fails closed when the stored absence sidecar is malformed", () => {
+    const malformedSidecars = [
+      null,
+      "invalid",
+      [{ field: "abstract", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED }],
+      [
+        {
+          field: "abstract",
+          reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+          unexpected: true,
+        },
+      ],
+      [
+        { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+        {
+          field: "abstract",
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+      ],
+    ];
+
+    for (const sidecar of malformedSidecars) {
+      expect(
+        splitStoredDecisionTextMetadata({
+          [DECISION_TEXT_ABSENCE_METADATA_KEY]: sidecar,
+          abstract: "Stored abstract",
+          sourceReference: "fixture-reference",
+        }),
+      ).toEqual({
+        metadata: { sourceReference: "fixture-reference" },
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      });
+    }
+  });
+
+  test("a malformed sidecar is quarantined during a failed refresh", () => {
+    const textFields = {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+    };
+    const incomingMetadata = storeDecisionTextFields({
+      metadata: { sourceReference: "new-reference" },
+      textFields,
+    });
+    const malformedSidecar = [
+      {
+        field: "abstract",
+        reason: TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD,
+      },
+      { field: "unknown", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+    ];
+
+    const preserved = preserveStoredTextAfterParseFailure({
+      incomingMetadata,
+      storedMetadata: {
+        [DECISION_TEXT_ABSENCE_METADATA_KEY]: malformedSidecar,
+        abstract: "Restricted text",
+      },
+      textFields,
+    });
+
+    expect(preserved).toEqual({
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+      ],
+      abstract: "Restricted text",
+      sourceReference: "new-reference",
+    });
+    expect(readDecisionTextMetadata(preserved).textFields.abstract).toEqual(
+      absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+    );
+
     expect(
-      splitStoredDecisionTextMetadata({
-        sourceReference: "fixture-reference",
-        legalSentence: "Published sentence",
+      preserveStoredTextAfterParseFailure({
+        incomingMetadata,
+        storedMetadata: preserved,
+        textFields,
+      }),
+    ).toEqual(preserved);
+  });
+
+  test("a successful refresh replaces malformed stored text state", () => {
+    const textFields = {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: presentTextField("Current abstract"),
+    };
+    const incomingMetadata = storeDecisionTextFields({
+      metadata: { sourceReference: "new-reference" },
+      textFields,
+    });
+
+    expect(
+      preserveStoredTextAfterParseFailure({
+        incomingMetadata,
+        storedMetadata: {
+          [DECISION_TEXT_ABSENCE_METADATA_KEY]: "malformed",
+          abstract: "Untrusted stored text",
+        },
+        textFields,
       }),
     ).toEqual({
-      metadata: { sourceReference: "fixture-reference" },
-      textFields: {
-        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        legalSentence: presentTextField("Published sentence"),
-      },
+      abstract: "Current abstract",
+      sourceReference: "new-reference",
     });
+  });
+
+  test("an explicit stored absence wins over a contradictory text value", () => {
+    expect(
+      readDecisionTextMetadata({
+        [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+          {
+            field: "abstract",
+            reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+          },
+        ],
+        abstract: "Contradictory text",
+      }).textFields.abstract,
+    ).toEqual(absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER));
   });
 
   test("reports an invalid stored value as a parse failure", () => {

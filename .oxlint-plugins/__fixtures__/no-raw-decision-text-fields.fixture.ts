@@ -34,6 +34,8 @@ const directMetadata = {
     abstract: rawAbstract,
     // oxlint-disable-next-line no-raw-decision-text-fields/no-raw-decision-text-fields -- fixture: a protected key stays out of metadata even when its value is contracted
     headnote: parsedTextField,
+    // oxlint-disable-next-line no-raw-decision-text-fields/no-raw-decision-text-fields -- fixture: adapters cannot forge the pipeline-owned absence sidecar
+    _stellaDecisionTextAbsence: rawMetadata,
   },
   textFields: validTextFields,
 };

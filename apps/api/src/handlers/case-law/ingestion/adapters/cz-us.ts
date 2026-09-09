@@ -391,7 +391,7 @@ const fieldAboveAbstractMinimum = (field: TextField): TextField => {
     case TEXT_FIELD_TYPE.ABSENT:
       return field;
     case TEXT_FIELD_TYPE.PRESENT:
-      return field.text.length > ABSTRACT_MIN_CHARS
+      return field.text.length >= ABSTRACT_MIN_CHARS
         ? field
         : absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED);
     default: {

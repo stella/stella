@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -86,14 +87,21 @@ const lint = async (source: string): Promise<number[]> => {
     ],
     { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
   );
-  const [stdout] = await Promise.all([
+  const [stdout, stderr] = await Promise.all([
     new Response(spawned.stdout).text(),
+    new Response(spawned.stderr).text(),
     spawned.exited,
   ]);
-  const report: unknown = JSON.parse(stdout);
-  const diagnostics = isRecord(report) ? report.diagnostics : undefined;
+  const output = `stdout:\n${stdout}\nstderr:\n${stderr}`;
+  const report = Result.try((): unknown => JSON.parse(stdout));
+  if (Result.isError(report)) {
+    return panic(`oxlint did not produce valid JSON:\n${output}`);
+  }
+  const diagnostics = isRecord(report.value)
+    ? report.value.diagnostics
+    : undefined;
   if (!isUnknownArray(diagnostics)) {
-    throw new Error(`oxlint reported no diagnostics array: ${stdout}`);
+    return panic(`oxlint reported no diagnostics array:\n${output}`);
   }
   return diagnostics
     .map(reportedLine)

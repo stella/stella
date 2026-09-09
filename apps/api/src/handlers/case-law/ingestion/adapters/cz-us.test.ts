@@ -716,10 +716,10 @@ describe("czUsAdapter.fetchPage", () => {
   });
 
   test("enriches listed decisions with abstracts and legal sentences", async () => {
-    const abstract =
-      "This abstract is long enough to pass the extraction threshold.";
-    const legalSentence =
-      "This legal sentence is also long enough to pass the extraction threshold.";
+    const abstract = "Neutral source value";
+    const legalSentence = "Neutral legal phrase";
+    expect(abstract).toHaveLength(20);
+    expect(legalSentence).toHaveLength(20);
     installSearchMock({
       rows: [
         {

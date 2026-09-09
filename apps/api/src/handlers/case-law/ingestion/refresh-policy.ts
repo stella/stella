@@ -46,6 +46,23 @@ const shouldSkipDetailDowngrade = ({
   );
 };
 
+const shouldRefreshChangedDetail = ({
+  existingMetadata,
+  incomingMetadata,
+}: Omit<
+  RefreshPolicyInput,
+  "existingSourceHash" | "incomingRawHash"
+>): boolean => {
+  const existingMarker = getCaseLawIngestionMetadata(existingMetadata);
+  const incomingMarker = getCaseLawIngestionMetadata(incomingMetadata);
+
+  return (
+    incomingMarker?.sourceTier === "detail" &&
+    incomingMarker.detailHash !== undefined &&
+    incomingMarker.detailHash !== existingMarker?.detailHash
+  );
+};
+
 export const shouldSkipRefresh = ({
   existingMetadata,
   existingSourceRawContentType,
@@ -72,6 +89,10 @@ export const shouldSkipRefresh = ({
 
   if (shouldSkipDetailDowngrade({ existingMetadata, incomingMetadata })) {
     return true;
+  }
+
+  if (shouldRefreshChangedDetail({ existingMetadata, incomingMetadata })) {
+    return false;
   }
 
   return !shouldUpgradeFromDumpToDetail({

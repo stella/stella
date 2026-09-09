@@ -20,6 +20,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  absentTextField,
+  presentTextField,
 } from "@/api/lib/case-law/decision-text";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1092,6 +1094,103 @@ if (!databaseUrl || !runPostgresTests) {
         court: "Initial content",
         sourceHash: "hash-Initial content",
         observationOrder: 32n,
+      });
+    });
+
+    test("a parse failure preserves text from the locked row", async () => {
+      const publisherId = "parse-failure-contention";
+      type DecisionWithAbstractOptions = {
+        rawHash: string;
+        text: string;
+      };
+      const decisionWithAbstract = ({
+        rawHash,
+        text,
+      }: DecisionWithAbstractOptions) => ({
+        ...decisionAt("Fixture court", publisherId),
+        textFields: {
+          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+          abstract: presentTextField(text),
+        },
+        rawHash,
+      });
+      const initial = decisionWithAbstract({
+        rawHash: "initial-hash",
+        text: "Initial abstract",
+      });
+      const intervening = decisionWithAbstract({
+        rawHash: "intervening-hash",
+        text: "Intervening abstract",
+      });
+      const parseFailure = {
+        ...decisionAt("Fixture court", publisherId),
+        textFields: {
+          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+          abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+        },
+        rawHash: "parse-failure-hash",
+      };
+
+      await processDecision({
+        input: initial,
+        observationOrder: 33n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2000-01-01T00:00:03.000Z"),
+      });
+
+      let releaseParseFailure = (): void => undefined;
+      const parseFailureMayContinue = new Promise<void>((resolve) => {
+        releaseParseFailure = resolve;
+      });
+      let parseFailureReadCompleted = (): void => undefined;
+      const parseFailureHasRead = new Promise<void>((resolve) => {
+        parseFailureReadCompleted = resolve;
+      });
+      let parseFailureCallCount = 0;
+      const parseFailureDb: ScopedDb = async (transactionWork) => {
+        const call = parseFailureCallCount;
+        parseFailureCallCount += 1;
+        const value = await scopedDb(transactionWork);
+        if (call === 0) {
+          parseFailureReadCompleted();
+          await parseFailureMayContinue;
+        }
+        return value;
+      };
+
+      const laterObservation = processDecision({
+        input: parseFailure,
+        observationOrder: 35n,
+        sourceId,
+        scopedDb: parseFailureDb,
+        observedAt: new Date("2000-01-01T00:00:05.000Z"),
+      });
+      await parseFailureHasRead;
+      await processDecision({
+        input: intervening,
+        observationOrder: 34n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2000-01-01T00:00:04.000Z"),
+      });
+      releaseParseFailure();
+      await laterObservation;
+
+      const row = (
+        await db.execute(
+          sql<{ abstract: string | null; observationOrder: bigint }>`
+          SELECT metadata ->> 'abstract' AS abstract,
+                 source_observation_order AS "observationOrder"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+        )
+      ).at(0);
+      expect(row).toMatchObject({
+        abstract: "Intervening abstract",
+        observationOrder: 35n,
       });
     });
 

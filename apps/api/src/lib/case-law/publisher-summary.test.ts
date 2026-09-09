@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  TEXT_ABSENCE_REASON,
+} from "@stll/api-contract/case-law-text-field";
 import type {
   Block,
   DocumentAst,
@@ -121,6 +125,37 @@ test("a key an adapter left absent falls through to the next source", () => {
       metadata: { keywords: ["Daně"] },
     }),
   ).toBeNull();
+});
+
+test("a declared absence suppresses a contradictory stored value", () => {
+  expect(
+    publisherHeadnoteOf({
+      documentAst: null,
+      metadata: {
+        [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+          {
+            field: "legalSentence",
+            reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+          },
+        ],
+        abstract: "Fallback text",
+        legalSentence: "Contradictory text",
+      },
+    }),
+  ).toBe("Fallback text");
+});
+
+test("a malformed absence sidecar suppresses stored decision text", () => {
+  expect(
+    publisherSummaryOf({
+      documentAst: null,
+      metadata: {
+        [DECISION_TEXT_ABSENCE_METADATA_KEY]: "invalid",
+        legalArea: "Fallback classification",
+        legalSentence: "Untrusted text",
+      },
+    }),
+  ).toBe("Fallback classification");
 });
 
 test("a value of the wrong JSON shape is skipped, not coerced", () => {

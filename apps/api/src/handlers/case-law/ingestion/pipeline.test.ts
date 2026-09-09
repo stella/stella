@@ -6,7 +6,11 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { plainTextOf } from "@/api/handlers/case-law/document-ast";
@@ -16,7 +20,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { decisionIdentifiersFromStoredMetadata } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  bareCitationKey,
+  decisionIdentifiersFromStoredMetadata,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   wrappedErrorDetail,
   processDecision,
@@ -29,7 +36,9 @@ import {
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
+  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { canonicalDecisionDate } from "@/api/lib/dates";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -94,7 +103,7 @@ describe("sanitizeResult — decision text fields", () => {
     );
   });
 
-  test("stores every declared absence as no metadata value", () => {
+  test("keeps text keys nullable while retaining every declared absence", () => {
     for (const reason of TEXT_ABSENCE_REASONS) {
       const sanitized = sanitizeResult({
         ...baseResult(EMPTY_AST),
@@ -105,7 +114,9 @@ describe("sanitizeResult — decision text fields", () => {
       });
 
       expect(sanitized.metadata["summary"]).toBeUndefined();
-      expect(sanitized.textFields.summary).toEqual(absentTextField(reason));
+      expect(
+        readDecisionTextMetadata(sanitized.metadata).textFields.summary,
+      ).toEqual(absentTextField(reason));
     }
   });
 });
@@ -784,21 +795,41 @@ describe("processDecision — fields on an existing row", () => {
     let updated: Record<string, unknown> | undefined;
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
-        // The identity the refresh replaces is read FOR UPDATE before the
-        // write. This suite asserts the decision row, so it reports no prior
-        // identity and the citation-graph branch stays out of the way.
+        // Return the locked row state used by the refresh path.
         select: () => ({
-          from: (table: unknown) => ({
-            where: () => ({
-              for: () => ({
-                limit: async () =>
-                  await Promise.resolve(
-                    table === caseLawSources ? [{ id: sourceId }] : [],
-                  ),
-              }),
-              limit: async () => await Promise.resolve([]),
-            }),
-          }),
+          from: (table: unknown) =>
+            table === caseLawDecisionIdentifiers
+              ? {
+                  where: async () => [
+                    {
+                      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                      normalizedValue: bareCitationKey("X/1/2026"),
+                    },
+                  ],
+                }
+              : {
+                  where: () => ({
+                    for: () => ({
+                      limit: async () =>
+                        await Promise.resolve(
+                          table === caseLawSources
+                            ? [{ id: sourceId }]
+                            : [
+                                {
+                                  citationKey: bareCitationKey("X/1/2026"),
+                                  country: "SVK",
+                                  decisionDate:
+                                    decisionDate === undefined
+                                      ? null
+                                      : canonicalDecisionDate(decisionDate),
+                                  metadata: storedMetadata,
+                                },
+                              ],
+                        ),
+                    }),
+                    limit: async () => await Promise.resolve([]),
+                  }),
+                },
         }),
         // The citation-graph settle the pipeline runs in the same
         // transaction is raw SQL; this suite asserts the decision row, so

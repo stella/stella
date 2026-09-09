@@ -19,7 +19,11 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  DECISION_TEXT_METADATA_KEYS,
+} from "@stll/api-contract/case-law-text-field";
 
 import {
   getPropertyName,
@@ -28,7 +32,12 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const PROTECTED_KEYS: ReadonlySet<string> = new Set(DECISION_TEXT_FIELD_KEYS);
+const DECISION_TEXT_FIELD_KEY_SET: ReadonlySet<string> = new Set(
+  DECISION_TEXT_FIELD_KEYS,
+);
+const DECISION_TEXT_METADATA_KEY_SET: ReadonlySet<string> = new Set(
+  DECISION_TEXT_METADATA_KEYS,
+);
 
 const METADATA_KEY = "metadata";
 const TEXT_FIELDS_KEY = "textFields";
@@ -123,7 +132,9 @@ const reportMetadataValue = (context, node, value: unknown) => {
       context.report({ node: property, messageId: "uncheckedMetadata" });
       continue;
     }
-    if (PROTECTED_KEYS.has(name)) {
+    if (name === DECISION_TEXT_ABSENCE_METADATA_KEY) {
+      context.report({ node: property, messageId: "reservedMetadata" });
+    } else if (DECISION_TEXT_METADATA_KEY_SET.has(name)) {
       context.report({ node: property, messageId: "metadataTextField" });
     }
   }
@@ -143,7 +154,10 @@ const reportRawTextFieldProperties = (context, value: unknown) => {
       context.report({ node: property, messageId: "rawTextField" });
       continue;
     }
-    if (!PROTECTED_KEYS.has(name) || !isRawTextLiteral(property.value)) {
+    if (
+      !DECISION_TEXT_FIELD_KEY_SET.has(name) ||
+      !isRawTextLiteral(property.value)
+    ) {
       continue;
     }
     context.report({ node: property, messageId: "rawTextField" });
@@ -181,13 +195,14 @@ const isObjectAssign = (node: unknown): boolean => {
 
 const protectedMemberTarget = (
   node: unknown,
+  protectedKeys: ReadonlySet<string>,
 ): { container: string; key: string } | null => {
   const member = peelExpression(node);
   if (member?.type !== "MemberExpression") {
     return null;
   }
   const key = staticPropertyName(member);
-  if (key === null || !PROTECTED_KEYS.has(key)) {
+  if (key === null || !protectedKeys.has(key)) {
     return null;
   }
   const container = containingMemberName(member.object);
@@ -203,6 +218,8 @@ export default eslintCompatPlugin({
         messages: {
           metadataTextField:
             "Decision text belongs under IngestionResult.textFields, not metadata. Wrap the source value with sourceTextField, presentTextField, or absentTextField.",
+          reservedMetadata:
+            "Decision text persistence metadata is pipeline-owned and cannot be written by adapters.",
           rawTextField:
             "Do not write raw string or template literals to IngestionResult.textFields. Use sourceTextField, presentTextField, or absentTextField.",
           uncheckedMetadata:
@@ -235,11 +252,17 @@ export default eslintCompatPlugin({
               reportRawTextFieldProperties(context, node.right);
             }
 
-            const target = protectedMemberTarget(node.left);
-            if (target?.container === METADATA_KEY) {
+            const metadataTarget = protectedMemberTarget(
+              node.left,
+              DECISION_TEXT_METADATA_KEY_SET,
+            );
+            if (metadataTarget?.container === METADATA_KEY) {
               context.report({
                 node: node.left,
-                messageId: "metadataTextField",
+                messageId:
+                  metadataTarget.key === DECISION_TEXT_ABSENCE_METADATA_KEY
+                    ? "reservedMetadata"
+                    : "metadataTextField",
               });
               return;
             }
@@ -253,7 +276,8 @@ export default eslintCompatPlugin({
               return;
             }
             if (
-              target?.container === TEXT_FIELDS_KEY &&
+              protectedMemberTarget(node.left, DECISION_TEXT_FIELD_KEY_SET)
+                ?.container === TEXT_FIELDS_KEY &&
               isRawTextLiteral(node.right)
             ) {
               context.report({ node: node.left, messageId: "rawTextField" });

@@ -1,9 +1,13 @@
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_METADATA_KEYS,
+} from "@stll/api-contract/case-law-text-field";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 const RULE_NAME = "no-raw-decision-text-fields";
@@ -75,14 +79,21 @@ const lint = async (source: string): Promise<number[]> => {
     ],
     { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
   );
-  const [stdout] = await Promise.all([
+  const [stdout, stderr] = await Promise.all([
     new Response(spawned.stdout).text(),
+    new Response(spawned.stderr).text(),
     spawned.exited,
   ]);
-  const report: unknown = JSON.parse(stdout);
-  const diagnostics = isRecord(report) ? report.diagnostics : undefined;
+  const output = `stdout:\n${stdout}\nstderr:\n${stderr}`;
+  const report = Result.try((): unknown => JSON.parse(stdout));
+  if (Result.isError(report)) {
+    return panic(`oxlint did not produce valid JSON:\n${output}`);
+  }
+  const diagnostics = isRecord(report.value)
+    ? report.value.diagnostics
+    : undefined;
   if (!isUnknownArray(diagnostics)) {
-    throw new Error(`oxlint reported no diagnostics array: ${stdout}`);
+    return panic(`oxlint reported no diagnostics array:\n${output}`);
   }
   return diagnostics
     .map(reportedLine)
@@ -91,13 +102,13 @@ const lint = async (source: string): Promise<number[]> => {
 
 describe.serial("no-raw-decision-text-fields", () => {
   test("rejects every decision text field written into metadata", async () => {
-    const source = DECISION_TEXT_FIELD_KEYS.map(
+    const source = DECISION_TEXT_METADATA_KEYS.map(
       (key) =>
         `const ${key}Row = { metadata: { ${key}: raw }, textFields: validTextFields };`,
     ).join("\n");
 
     expect(await lint(source)).toEqual(
-      DECISION_TEXT_FIELD_KEYS.map((_key, index) => index + 1),
+      DECISION_TEXT_METADATA_KEYS.map((_key, index) => index + 1),
     );
   });
 
@@ -107,12 +118,13 @@ describe.serial("no-raw-decision-text-fields", () => {
       'const computed = { metadata: { ["headnote"]: parsed }, textFields: validTextFields };',
       "decision.metadata.legalSentence = parsed;",
       'decision.metadata["summary"] = raw;',
+      `decision.metadata.${DECISION_TEXT_ABSENCE_METADATA_KEY} = forged;`,
       "decision.metadata = { abstract: parsed };",
       'decision["metadata"] = { summary: parsed };',
       "",
     ].join("\n");
 
-    expect(await lint(source)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(await lint(source)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   test("requires aliased and dynamic metadata to cross the checked boundary", async () => {
