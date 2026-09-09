@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
+
 import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
 import {
   loadShelfCourtEntries,
@@ -10,10 +12,7 @@ import {
   type ShelfCourt,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  readDecisionHeadnote,
-  type TextField,
-} from "@/api/lib/case-law/decision-text";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import {
   type PublicDecisionLanguageAlternate,
   readPublicDecisionLanguageAlternatesByGroup,
@@ -51,7 +50,7 @@ export type LatestDecision = {
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
   decisionDate: string | null;
   decisionType: string | null;
-  headnote: TextField;
+  headnote: DecisionHeadnotePreview;
   citationCount: number;
 };
 

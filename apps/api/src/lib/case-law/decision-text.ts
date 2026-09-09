@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
+  type DecisionHeadnotePreview,
   type DecisionTextFieldKey,
   type ReadDecisionTextFields,
   type TextAbsenceReason,
@@ -20,7 +21,7 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { DECISION_TEXT_FIELD, TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE };
-export type { TextAbsenceReason, TextField };
+export type { DecisionHeadnotePreview, TextAbsenceReason, TextField };
 
 export type DecisionTextFields = ReadDecisionTextFields;
 
@@ -29,7 +30,7 @@ const DECISION_TEXT_FIELD_KEY_SET = new Set<string>(DECISION_TEXT_FIELD_KEYS);
 const isDecisionTextFieldKey = (key: string): key is DecisionTextFieldKey =>
   DECISION_TEXT_FIELD_KEY_SET.has(key);
 
-export const absentTextField = (reason: TextAbsenceReason): TextField => ({
+export const absentTextField = (reason: TextAbsenceReason) => ({
   type: TEXT_FIELD_TYPE.ABSENT,
   reason,
 });
@@ -178,16 +179,22 @@ export const readTextField = (value: unknown): TextField => {
   return presentTextField(value);
 };
 
-export const readDecisionHeadnote = (value: unknown): TextField => {
+export const readDecisionHeadnote = (
+  value: unknown,
+): DecisionHeadnotePreview => {
   const field = readTextField(value);
   switch (field.type) {
     case TEXT_FIELD_TYPE.ABSENT:
       return field;
     case TEXT_FIELD_TYPE.PRESENT: {
-      const text = normalizeDecisionHeadnote(field.text);
-      return text === null
+      const preview = normalizeDecisionHeadnote(field.text);
+      return preview === null
         ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
-        : presentTextField(text);
+        : {
+            type: TEXT_FIELD_TYPE.PRESENT,
+            text: preview.text,
+            truncated: preview.truncated,
+          };
     }
     default: {
       field satisfies never;

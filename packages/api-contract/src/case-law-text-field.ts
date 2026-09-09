@@ -29,6 +29,13 @@ export type TextField =
       readonly reason: TextAbsenceReason;
     };
 
+/** A bounded publisher-summary preview returned for a public decision row. */
+export type DecisionHeadnotePreview =
+  | Extract<TextField, { readonly type: typeof TEXT_FIELD_TYPE.ABSENT }>
+  | (Extract<TextField, { readonly type: typeof TEXT_FIELD_TYPE.PRESENT }> & {
+      readonly truncated: boolean;
+    });
+
 export const DECISION_TEXT_FIELD = {
   ABSTRACT: "abstract",
   HEADNOTE: "headnote",

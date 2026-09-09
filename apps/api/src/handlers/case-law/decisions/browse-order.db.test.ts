@@ -198,8 +198,13 @@ test(
     expect(first?.headnote).toEqual({
       type: "present",
       text: "Právní věta.",
+      truncated: false,
     });
-    expect(second?.headnote).toEqual({ type: "present", text: "smlouva" });
+    expect(second?.headnote).toEqual({
+      type: "present",
+      text: "smlouva",
+      truncated: false,
+    });
     expect(undated?.headnote).toEqual({
       type: "absent",
       reason: "not_published",
