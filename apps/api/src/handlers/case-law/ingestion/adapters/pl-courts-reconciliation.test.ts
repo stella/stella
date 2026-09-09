@@ -25,6 +25,12 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -439,7 +445,7 @@ describe("pl-courts buildDecision", () => {
         body: JSON.stringify({
           data: {
             ...item,
-            textContent: "<p>POSTANOWIENIE z dnia 5 marca 2015 r.</p>",
+            textContent: "<p>Published decision text.</p>",
           },
         }),
       },
@@ -476,6 +482,7 @@ describe("pl-courts buildDecision", () => {
               code: "COMMON_COURT",
               judgmentUrl: "https://orzeczenia.bialystok.sr.gov.pl/content/1",
             },
+            summary: "Published summary.",
           },
         }),
       },
@@ -497,6 +504,14 @@ describe("pl-courts buildDecision", () => {
       sourceDocumentId: "130600",
       sourceUrl: "https://www.saos.org.pl/judgments/130600",
     });
+    expect(built.decision.textFields).toEqual({
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      summary: {
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text: "Published summary.",
+      },
+    });
+    expect(built.decision.metadata).not.toHaveProperty("summary");
     // The one identity rule: what the walk keyed this item on is what the
     // decision it builds actually stores.
     expect(listingIdentityKey(plCourtsListingIdentity(COMMON_COURT_ITEM))).toBe(
@@ -504,6 +519,93 @@ describe("pl-courts buildDecision", () => {
         type: "document",
         sourceDocumentId: built.decision.sourceDocumentId ?? "",
       }),
+    );
+  });
+
+  test("represents a missing publisher summary explicitly", async () => {
+    const item = {
+      id: 1,
+      href: "https://example.test/api/judgments/1",
+      courtType: "COMMON",
+      courtCases: [{ caseNumber: "Fixture 1" }],
+      judgmentType: "DECISION",
+      judgmentDate: "2020-01-01",
+      division: {
+        id: 1,
+        name: "Fixture division",
+        court: { id: 1, code: "fixture", name: "Fixture court" },
+      },
+    } as const satisfies SaosItem;
+    mockFetchWithBodies([
+      {
+        pattern: DETAIL_PATTERN,
+        body: JSON.stringify({
+          data: {
+            ...item,
+            textContent: "<p>Published decision text.</p>",
+          },
+        }),
+      },
+    ]);
+
+    const built = await reconciliation.buildDecision(item);
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.textFields).toEqual(
+      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    );
+    expect(built.decision.metadata).not.toHaveProperty("summary");
+  });
+
+  test("fingerprints detail changes separately from stable listing data", async () => {
+    const item = {
+      id: 2,
+      href: "https://example.test/api/judgments/2",
+      courtType: "COMMON",
+      courtCases: [{ caseNumber: "Fixture 2" }],
+      judgmentType: "DECISION",
+      judgmentDate: "2020-01-02",
+      division: {
+        id: 2,
+        name: "Fixture division",
+        court: { id: 2, code: "fixture", name: "Fixture court" },
+      },
+    } as const satisfies SaosItem;
+    const buildWithSummary = async (summary: string) => {
+      mockFetchWithBodies([
+        {
+          pattern: DETAIL_PATTERN,
+          body: JSON.stringify({
+            data: {
+              ...item,
+              summary,
+              textContent: "<p>Published decision text.</p>",
+            },
+          }),
+        },
+      ]);
+      return await reconciliation.buildDecision(item);
+    };
+
+    const first = await buildWithSummary("First published summary.");
+    const second = await buildWithSummary("Second published summary.");
+
+    expect(first.type).toBe("built");
+    expect(second.type).toBe("built");
+    if (first.type !== "built" || second.type !== "built") {
+      return;
+    }
+    expect(first.decision.rawHash).toBe(second.decision.rawHash);
+    expect(
+      getCaseLawIngestionMetadata(first.decision.metadata)?.detailHash,
+    ).not.toBe(
+      getCaseLawIngestionMetadata(second.decision.metadata)?.detailHash,
+    );
+    expect(first.decision.textFields.summary).not.toEqual(
+      second.decision.textFields.summary,
     );
   });
 

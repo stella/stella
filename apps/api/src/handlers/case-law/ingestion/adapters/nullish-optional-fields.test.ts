@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
 
 const { createAtCourtsAdapter } =
@@ -551,9 +552,25 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(first.isOk()).toBe(true);
     expect(second.isOk()).toBe(true);
-    expect(first.unwrap().decisions[0]?.rawHash).toBe(
-      second.unwrap().decisions[0]?.rawHash,
-    );
+    const firstDecision = first.unwrap().decisions.at(0);
+    const secondDecision = second.unwrap().decisions.at(0);
+    expect(firstDecision).toBeDefined();
+    expect(secondDecision).toBeDefined();
+    if (firstDecision === undefined || secondDecision === undefined) {
+      return;
+    }
+    const firstMarker = getCaseLawIngestionMetadata(firstDecision.metadata);
+    const secondMarker = getCaseLawIngestionMetadata(secondDecision.metadata);
+
+    expect(firstDecision.rawHash).toBe(secondDecision.rawHash);
+    expect(firstMarker?.dumpHash).toBe(firstDecision.rawHash);
+    expect(secondMarker?.dumpHash).toBe(secondDecision.rawHash);
+    expect(firstMarker?.detailHash).toEqual(expect.any(String));
+    expect(firstMarker?.sourceTier).toBe("detail");
+    expect(secondMarker).toEqual({
+      dumpHash: secondDecision.rawHash,
+      sourceTier: "dump",
+    });
   });
 
   test("PL Courts falls back to the dump item when detail JSON is malformed", async () => {

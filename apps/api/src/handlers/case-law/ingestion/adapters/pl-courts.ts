@@ -39,6 +39,12 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -841,6 +847,8 @@ const buildPlDecision = ({
 
   const rawPayload = JSON.stringify({ dumpItem, detail });
   const rawHash = hashContent(JSON.stringify(dumpItem));
+  const detailHash =
+    detail === null ? undefined : hashContent(JSON.stringify(detail));
 
   const publisherCitedCases = normalizeOptionalArray(
     item.referencedCourtCases,
@@ -867,7 +875,14 @@ const buildPlDecision = ({
     sourceUrl: publicSourceUrl(item.id ?? dumpItem.id),
     documentUrl,
     publisherCitedCases,
-    metadata: {
+    textFields: {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      summary: sourceTextField(
+        ADAPTER_KEYS.PL_COURTS,
+        item.summary ?? dumpItem.summary,
+      ),
+    },
+    metadata: checkedDecisionMetadata({
       caseNumber,
       court: courtName,
       decisionDate,
@@ -887,7 +902,6 @@ const buildPlDecision = ({
       source: effectiveSource,
       courtReporters,
       decision: toOptionalValue(item.decision ?? dumpItem.decision),
-      summary: toOptionalValue(item.summary ?? dumpItem.summary),
       legalBases: statutes,
       referencedRegulations: normalizeOptionalArray(
         item.referencedRegulations,
@@ -917,11 +931,12 @@ const buildPlDecision = ({
       ingestion: {
         dumpHash: rawHash,
         sourceTier: detail ? "detail" : "dump",
+        ...(detailHash === undefined ? {} : { detailHash }),
       },
       ...((additionalCaseNumbers?.length ?? 0) > 0 && {
         additionalCaseNumbers,
       }),
-    },
+    }),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
     documentAst,

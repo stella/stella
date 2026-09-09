@@ -1,5 +1,5 @@
 /** Version of the public REST request and response contract. */
-export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
+export const STELLA_REST_API_CONTRACT_VERSION = 2 as const;
 
 export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
 export type { AgendaItemKind, AgendaItemSource } from "./agenda";

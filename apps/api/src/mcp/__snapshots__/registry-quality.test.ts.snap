@@ -255,7 +255,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, explicit decision text fields, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read case-law decision",
       "readOnlyHint": true,
@@ -3615,7 +3615,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, explicit decision text fields, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read case-law decision",
       "readOnlyHint": true,

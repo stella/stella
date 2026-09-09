@@ -19,10 +19,19 @@ describe("case-law ingestion metadata", () => {
     });
   });
 
+  test("reads an optional detail fingerprint on its own", () => {
+    expect(
+      getCaseLawIngestionMetadata({
+        ingestion: { detailHash: "detail-1" },
+      }),
+    ).toEqual({ detailHash: "detail-1" });
+  });
+
   test("ignores malformed ingestion markers", () => {
     expect(
       getCaseLawIngestionMetadata({
         ingestion: {
+          detailHash: null,
           dumpHash: 123,
           sourceTier: "summary",
         },

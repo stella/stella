@@ -24,6 +24,10 @@ import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
+import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
@@ -383,6 +387,9 @@ describe("case-law source ingestion lease", () => {
             language: "cs",
             fulltext: "Lifecycle decision text.",
             metadata: {},
+            textFields: absentDecisionTextFields(
+              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            ),
             rawHash: "lifecycle-hash-1",
             documentAst: EMPTY_AST,
           },

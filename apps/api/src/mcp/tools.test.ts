@@ -20,6 +20,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -335,7 +336,7 @@ const createReadDecisionResult = () => ({
   fulltext: null,
   id: DECISION_ID,
   language: "cs",
-  metadata: { panel: "29 Cdo" },
+  ...readDecisionTextMetadata({ panel: "29 Cdo" }),
   slug: "stable-official-slug",
   source: {
     adapterKey: "cz-ns",
@@ -1585,6 +1586,12 @@ describe("OpenAI-compatible MCP tools", () => {
         ecli: null,
         language: "cs",
         metadata: { panel: "29 Cdo" },
+        textFields: {
+          abstract: { type: "absent", reason: "not_published" },
+          headnote: { type: "absent", reason: "not_published" },
+          legalSentence: { type: "absent", reason: "not_published" },
+          summary: { type: "absent", reason: "not_published" },
+        },
         source: {
           adapterKey: "cz-ns",
           allowsDerivedAi: true,
@@ -1682,6 +1689,12 @@ describe("OpenAI-compatible MCP tools", () => {
         ecli: null,
         language: "cs",
         metadata: { panel: "29 Cdo" },
+        textFields: {
+          abstract: { type: "absent", reason: "not_published" },
+          headnote: { type: "absent", reason: "not_published" },
+          legalSentence: { type: "absent", reason: "not_published" },
+          summary: { type: "absent", reason: "not_published" },
+        },
         source: {
           adapterKey: "cz-ns",
           allowsDerivedAi: true,

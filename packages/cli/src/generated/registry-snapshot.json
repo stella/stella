@@ -259,7 +259,7 @@
       "windowedText": true
     },
     "name": "read_case_law_decision",
-    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, explicit decision text fields, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id"],

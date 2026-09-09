@@ -1,5 +1,9 @@
 import { panic, Result } from "better-result";
 
+import type {
+  DecisionTextFieldKey,
+  ReadDecisionTextFields,
+} from "@stll/api-contract/case-law-text-field";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
@@ -95,6 +99,8 @@ export type IngestionResult = {
   sourceUrl?: string | undefined;
   documentUrl?: string | undefined;
   metadata: Record<string, unknown>;
+  /** Publisher text stored under its existing metadata keys by the pipeline. */
+  textFields: ReadDecisionTextFields;
   rawHash: string;
   /** Parsed document AST, or empty object for courts without a parser. */
   documentAst: DocumentAst | EmptyAst;
@@ -522,13 +528,15 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
 /**
  * Where a field the publisher states ends up once the decision is stored.
  *
- * A union rather than a string, because the four destinations are read back
- * differently: a metadata key is looked up by name, a result field is a column
- * of the row, and the last two are not fields at all.
+ * A union rather than a string, because the destinations are read back
+ * differently: ordinary metadata and decision text have separate boundaries,
+ * a result field is a column of the row, and the last two are not fields at all.
  */
 export type SourceFieldTarget =
   /** `metadata[key]` on the stored row. */
   | { readonly type: "metadata"; readonly key: string }
+  /** A publisher-authored field represented by the decision text contract. */
+  | { readonly type: "textField"; readonly key: DecisionTextFieldKey }
   /** A field of the ingestion result itself, spelled as the contract does. */
   | { readonly type: "result"; readonly key: keyof IngestionResult }
   /** Reaches the row inside the parsed document: AST, sections or fulltext. */

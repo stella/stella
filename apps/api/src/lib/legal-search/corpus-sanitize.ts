@@ -32,11 +32,12 @@ const sanitizeMetadataValue = (value: unknown): JsonValue => {
   }
 
   if (isRecord(value)) {
-    const sanitized: JsonObject = {};
-    for (const [key, nestedValue] of Object.entries(value)) {
-      sanitized[key] = sanitizeMetadataValue(nestedValue);
-    }
-    return sanitized;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        sanitizeMetadataValue(nestedValue),
+      ]),
+    );
   }
 
   return null;

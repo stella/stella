@@ -34,6 +34,10 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -420,6 +424,7 @@ const buildDecisionFromParts = ({
       restrictSkCourtDocumentUrl(
         toOptionalValue(detail?.dokument?.url) ?? "",
       )?.toString() ?? undefined,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       caseNumber,
       ecli,

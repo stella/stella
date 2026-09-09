@@ -4,6 +4,10 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
@@ -29,6 +33,7 @@ const itemToDecision = (item: TestItem): IngestionResult => ({
   court: "Test Court",
   country: "TST",
   language: "en",
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   metadata: {},
   documentAst: {},
   rawHash: `hash-${item.id}`,

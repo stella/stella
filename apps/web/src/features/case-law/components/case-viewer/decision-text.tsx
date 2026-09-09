@@ -4,6 +4,12 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  DECISION_TEXT_FIELD,
+  TEXT_FIELD_TYPE,
+  type ReadDecisionTextFields,
+  type TextField,
+} from "@stll/api-contract/case-law-text-field";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
@@ -46,7 +52,7 @@ type Decision = {
   language: string;
   fulltext: string | null;
   documentAst?: unknown;
-  metadata?: Record<string, unknown> | null;
+  textFields: ReadDecisionTextFields;
 };
 
 /** A reader's highlight or comment, as a span to draw over the text. */
@@ -126,38 +132,33 @@ const groupApparatusWrap = (
 const isHoldingBlock = (block: Block): boolean =>
   block.type === "paragraph" && block.role === "holding";
 
-/**
- * Source-level placeholder strings emitted by courts when an
- * editorial field is empty. We hide these at render time and
- * must also exclude them from search pieces so the find bar
- * doesn't report matches with no visible target.
- */
-const SUPPLEMENT_PLACEHOLDER_RE =
-  /\b(?:není k dispozici|nie je k dispozícii|niedostępn[ay])\b/iu;
-
-const cleanSupplement = (value: unknown): string | null => {
-  if (typeof value !== "string") {
-    return null;
+const supplementText = (field: TextField): string | null => {
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return null;
+    case TEXT_FIELD_TYPE.PRESENT:
+      return field.text;
+    default: {
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+    }
   }
-  const trimmed = value.trim();
-  if (trimmed === "" || SUPPLEMENT_PLACEHOLDER_RE.test(trimmed)) {
-    return null;
-  }
-  return trimmed;
 };
 
 const EditorialSupplement = ({
   activeMatchIndex,
-  metadata,
   rangesByPieceId,
+  textFields,
 }: {
   activeMatchIndex: number;
-  metadata: Record<string, unknown>;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
+  textFields: ReadDecisionTextFields;
 }) => {
   const t = useTranslations();
-  const abstract = cleanSupplement(metadata["abstract"]);
-  const legalSentence = cleanSupplement(metadata["legalSentence"]);
+  const abstract = supplementText(textFields[DECISION_TEXT_FIELD.ABSTRACT]);
+  const legalSentence = supplementText(
+    textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
+  );
 
   if (!abstract && !legalSentence) {
     return null;
@@ -588,27 +589,25 @@ export const DecisionText = ({
       },
     ];
 
-    const metadata = decision.metadata;
-    if (metadata !== null && metadata !== undefined) {
-      // Skip placeholder boilerplate ("není k dispozici" etc.)
-      // so the counter can't report matches in text the
-      // supplement renderer hides.
-      const legalSentence = cleanSupplement(metadata["legalSentence"]);
-      const abstract = cleanSupplement(metadata["abstract"]);
+    const legalSentence = supplementText(
+      decision.textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
+    );
+    const abstract = supplementText(
+      decision.textFields[DECISION_TEXT_FIELD.ABSTRACT],
+    );
 
-      if (legalSentence) {
-        pieces.push({
-          id: SUPPLEMENT_LEGAL_SENTENCE_ID,
-          text: legalSentence,
-        });
-      }
+    if (legalSentence) {
+      pieces.push({
+        id: SUPPLEMENT_LEGAL_SENTENCE_ID,
+        text: legalSentence,
+      });
+    }
 
-      if (abstract) {
-        pieces.push({
-          id: SUPPLEMENT_ABSTRACT_ID,
-          text: abstract,
-        });
-      }
+    if (abstract) {
+      pieces.push({
+        id: SUPPLEMENT_ABSTRACT_ID,
+        text: abstract,
+      });
     }
 
     if (visibleBlocks.length > 0) {
@@ -697,13 +696,11 @@ export const DecisionText = ({
             text={`${decision.court}, ${displayRef}`}
           />
         </p>
-        {decision.metadata !== null && decision.metadata !== undefined && (
-          <EditorialSupplement
-            activeMatchIndex={activeMatchIndex}
-            metadata={decision.metadata}
-            rangesByPieceId={searchResults.rangesByPieceId}
-          />
-        )}
+        <EditorialSupplement
+          activeMatchIndex={activeMatchIndex}
+          rangesByPieceId={searchResults.rangesByPieceId}
+          textFields={decision.textFields}
+        />
         {renderBlocksWithHoldingZone({
           activeMatchIndex,
           apparatusLabel: t("caseLaw.reader.headMatter"),
@@ -744,13 +741,11 @@ export const DecisionText = ({
             text={`${decision.court}, ${displayRef}`}
           />
         </p>
-        {decision.metadata !== null && decision.metadata !== undefined && (
-          <EditorialSupplement
-            activeMatchIndex={activeMatchIndex}
-            metadata={decision.metadata}
-            rangesByPieceId={searchResults.rangesByPieceId}
-          />
-        )}
+        <EditorialSupplement
+          activeMatchIndex={activeMatchIndex}
+          rangesByPieceId={searchResults.rangesByPieceId}
+          textFields={decision.textFields}
+        />
         <FulltextFallback
           activeMatchIndex={activeMatchIndex}
           rangesByPieceId={searchResults.rangesByPieceId}

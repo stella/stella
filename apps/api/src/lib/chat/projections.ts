@@ -1,6 +1,12 @@
 import * as v from "valibot";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
+import {
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASONS,
+  TEXT_FIELD_TYPE,
+  type DecisionTextFieldKey,
+} from "@stll/api-contract/case-law-text-field";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -1298,15 +1304,37 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
   totalCount: v.nullable(v.number()),
 });
 
+const decisionTextFieldProjection = v.variant("type", [
+  projectionBranch(
+    v.strictObject({
+      type: v.literal(TEXT_FIELD_TYPE.PRESENT),
+      text: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal(TEXT_FIELD_TYPE.ABSENT),
+      reason: v.picklist(TEXT_ABSENCE_REASONS),
+    }),
+  ),
+]);
+
+const decisionTextFieldProjections = {
+  [DECISION_TEXT_FIELD.ABSTRACT]: decisionTextFieldProjection,
+  [DECISION_TEXT_FIELD.HEADNOTE]: decisionTextFieldProjection,
+  [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: decisionTextFieldProjection,
+  [DECISION_TEXT_FIELD.SUMMARY]: decisionTextFieldProjection,
+} as const satisfies Record<
+  DecisionTextFieldKey,
+  typeof decisionTextFieldProjection
+>;
+
 /**
  * read_case_law_decision. Source of truth: `handleReadCaseLawDecisionTool`
  * (`stella-tools.ts`) mapping `readGatedDecisionWithDocument`. All ids are
- * public case-law corpus ids (decision, citation, source). `metadata` is
- * free-form public jsonb straight from the court source and cannot be
- * enumerated by path (same unenumerable-payload caveat as `list_audit_log`'s
- * `metadata`/`changes`, just over public rather than tenant data): declared
- * as an unenumerated subtree the walker skips, so the strict parse admits it
- * while the UUID backstop still guards every string inside, unlicensed.
+ * public case-law corpus ids (decision, citation, source). `metadata` is an
+ * unenumerated public jsonb subtree; publisher-authored decision text is
+ * declared separately under `textFields`.
  */
 export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
   // Opaque compound `[textOffset, citationsCursor]` cursor.
@@ -1341,6 +1369,7 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
     ecli: v.nullable(v.string()),
     language: v.string(),
     metadata: unenumeratedJson(),
+    textFields: v.strictObject(decisionTextFieldProjections),
     source: v.strictObject({
       id: passthroughId(),
       name: v.string(),

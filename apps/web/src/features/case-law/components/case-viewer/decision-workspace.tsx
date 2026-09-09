@@ -4,6 +4,7 @@ import { EyeOffIcon, SparklesIcon, UserRoundIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
+import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -57,7 +58,8 @@ type DecisionWorkspaceDecision = {
   ecli?: string | null;
   fulltext: string | null;
   language: string;
-  metadata?: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
+  textFields: ReadDecisionTextFields;
 };
 
 /** A signed-in reader's marks on the decision and the means to change them. */

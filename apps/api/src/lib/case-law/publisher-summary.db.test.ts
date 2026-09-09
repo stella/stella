@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
+
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  TEXT_ABSENCE_REASON,
+} from "@stll/api-contract/case-law-text-field";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   PUBLISHER_SUMMARY_SOURCES,
@@ -168,4 +175,125 @@ test("both readings still strip the whitespace the set does cover", async () => 
     "Právní věta",
   );
   expect(await readMetadataSummary(metadata)).toBe("Právní věta");
+});
+
+test("both readings preserve whitespace outside the shared trim set", async () => {
+  const metadata = { legalSentence: "\u00a0" };
+
+  expect(publisherSummaryOf({ documentAst: null, metadata })).toBe("\u00a0");
+  expect(await readMetadataSummary(metadata)).toBe("\u00a0");
+});
+
+test("both readings honor an explicit absence before falling through", async () => {
+  const metadata = {
+    [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+      {
+        field: "legalSentence",
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      },
+    ],
+    abstract: "Fallback text",
+    legalSentence: "Contradictory text",
+  };
+
+  expect(publisherSummaryOf({ documentAst: null, metadata })).toBe(
+    "Fallback text",
+  );
+  expect(await readMetadataSummary(metadata)).toBe("Fallback text");
+});
+
+test("both readings leave other text fields present", async () => {
+  const metadata = {
+    [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+      {
+        field: "abstract",
+        reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+      },
+    ],
+    abstract: "Suppressed text",
+    legalSentence: "Preferred text",
+  };
+
+  expect(publisherSummaryOf({ documentAst: null, metadata })).toBe(
+    "Preferred text",
+  );
+  expect(await readMetadataSummary(metadata)).toBe("Preferred text");
+});
+
+test("both readings fail closed on malformed absence sidecars", async () => {
+  const malformedSidecars = [
+    null,
+    "invalid",
+    {},
+    [null],
+    [{ field: "abstract" }],
+    [
+      {
+        field: "abstract",
+        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+      },
+    ],
+    [
+      {
+        field: "abstract",
+        reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+        unexpected: true,
+      },
+    ],
+    [{ field: "unknown", reason: TEXT_ABSENCE_REASON.PARSE_FAILED }],
+    [{ field: "abstract", reason: "unknown" }],
+    [
+      { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+      {
+        field: "abstract",
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      },
+    ],
+  ];
+
+  for (const sidecar of malformedSidecars) {
+    const metadata = {
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: sidecar,
+      legalArea: "Fallback classification",
+      legalSentence: "Untrusted text",
+    };
+    expect(publisherSummaryOf({ documentAst: null, metadata })).toBe(
+      "Fallback classification",
+    );
+    expect(await readMetadataSummary(metadata)).toBe("Fallback classification");
+  }
+});
+
+test("both readings agree for arbitrary stored absence shapes", async () => {
+  const safeString = fc
+    .string({ maxLength: 16 })
+    .filter((value) => !value.includes(String.fromCodePoint(0)));
+  const scalar = fc.oneof(
+    fc.constant(null),
+    fc.boolean(),
+    fc.integer(),
+    safeString,
+  );
+  const object = fc.dictionary(safeString, scalar, { maxKeys: 4 });
+  const sidecar = fc.oneof(
+    scalar,
+    object,
+    fc.array(fc.oneof(scalar, object, fc.array(scalar, { maxLength: 3 })), {
+      maxLength: 5,
+    }),
+  );
+
+  await fc.assert(
+    fc.asyncProperty(sidecar, safeString, async (value, candidateText) => {
+      const metadata = {
+        [DECISION_TEXT_ABSENCE_METADATA_KEY]: value,
+        legalArea: "Fallback classification",
+        legalSentence: candidateText,
+      };
+      expect(await readMetadataSummary(metadata)).toBe(
+        publisherSummaryOf({ documentAst: null, metadata }),
+      );
+    }),
+    propertyConfig({ numRuns: 100 }),
+  );
 });

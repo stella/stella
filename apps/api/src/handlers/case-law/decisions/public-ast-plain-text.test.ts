@@ -36,6 +36,10 @@ import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parser
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -54,6 +58,7 @@ const storedAst = (documentAst: DocumentAst, name = ""): DocumentAst => {
     country: "AT",
     language: "de",
     metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     rawHash: "0".repeat(64),
     documentAst,
   };

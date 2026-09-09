@@ -32,6 +32,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { isUuid } from "@/api/lib/custom-schema";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -537,6 +541,7 @@ const buildListingOnly = (
     decisionType: item.dokumenttyp.toLocaleLowerCase("de-AT"),
     sourceUrl: artifactUrl(item.pathPdf),
     documentUrl: artifactUrl(item.pathPdf),
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       collection,
       stammNr: item.stammNr,
@@ -640,6 +645,7 @@ const buildDecision = async ({
     fulltext: parsed.fulltext,
     sourceUrl: artifactUrl(item.pathPdf),
     documentUrl: artifactUrl(item.pathPdf),
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       collection,
       ecli: parsed.ecli,

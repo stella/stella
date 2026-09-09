@@ -23,6 +23,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
@@ -256,6 +257,9 @@ export const readDecisionHandler = definePublicLawSharedQuery(
 
     const source =
       decision.source ?? panic("Case-law decision has no source relation");
+    const { metadata, textFields } = readDecisionTextMetadata(
+      decision.metadata,
+    );
     const identifiers = decisionIdentifierProjection(decision.identifiers, {
       caseNumber: decision.caseNumber,
       ecli: decision.ecli,
@@ -376,7 +380,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       sections: decision.sections,
       sourceUrl: decision.sourceUrl,
       documentUrl: decision.documentUrl,
-      metadata: decision.metadata,
+      metadata,
+      textFields,
       createdAt: decision.createdAt,
       updatedAt: decision.updatedAt,
       source: {

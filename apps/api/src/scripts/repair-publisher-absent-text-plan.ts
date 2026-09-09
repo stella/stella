@@ -2,8 +2,18 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  TEXT_ABSENCE_REASON,
+} from "@stll/api-contract/case-law-text-field";
+
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  storedDecisionTextAbsenceEntriesSql,
+  storedDecisionTextAbsenceValidSql,
+} from "@/api/lib/case-law/decision-text-sql";
 import { PUBLISHER_SUMMARY_SOURCES } from "@/api/lib/case-law/publisher-summary";
 import {
   brandPersistedCaseLawDecisionId,
@@ -32,10 +42,14 @@ import { isRecord } from "@/api/lib/type-guards";
  * are left out on purpose: a marker is a sentence a source prints in place of
  * prose, and none is observed inside a keyword list.
  */
-const PUBLISHER_TEXT_METADATA_KEYS: readonly string[] =
-  PUBLISHER_SUMMARY_SOURCES.flatMap((source) =>
-    source.origin === "metadata" && source.shape === "text" ? [source.key] : [],
-  );
+const PUBLISHER_TEXT_METADATA_KEYS = DECISION_TEXT_FIELD_KEYS.filter((key) =>
+  PUBLISHER_SUMMARY_SOURCES.some(
+    (source) =>
+      source.kind === "headnote" &&
+      source.origin === "metadata" &&
+      source.key === key,
+  ),
+);
 
 const textArray = (values: readonly string[]): SQL =>
   sql`ARRAY[${sql.join(
@@ -44,6 +58,7 @@ const textArray = (values: readonly string[]): SQL =>
   )}]::text[]`;
 
 const PUBLISHER_TEXT_KEYS_SQL = textArray(PUBLISHER_TEXT_METADATA_KEYS);
+const DECISION_TEXT_KEYS_SQL = textArray(DECISION_TEXT_FIELD_KEYS);
 
 /**
  * The publisher-summary keys of one row whose value is one of the given
@@ -58,13 +73,28 @@ const PUBLISHER_TEXT_KEYS_SQL = textArray(PUBLISHER_TEXT_METADATA_KEYS);
 const absentPublisherTextKeys = (
   metadata: SQL,
   markers: readonly string[],
-): SQL => sql`(
-  SELECT coalesce(array_agg(candidate.key), ARRAY[]::text[])
-    FROM unnest(${PUBLISHER_TEXT_KEYS_SQL}) AS candidate(key)
-   WHERE btrim(
-           regexp_replace(${metadata} ->> candidate.key, '\\s+', ' ', 'g')
-         ) = ANY(${textArray(markers)})
-)`;
+): SQL => {
+  const entries = sql.raw("absence_entries.entries");
+  return sql`(
+    SELECT coalesce(
+             array_agg(candidate.key ORDER BY candidate.ordinality),
+             ARRAY[]::text[]
+           )
+      FROM (
+        SELECT absence_entries.entries,
+               ${storedDecisionTextAbsenceValidSql(metadata, entries)} AS valid
+          FROM (
+            SELECT ${storedDecisionTextAbsenceEntriesSql(metadata)} AS entries
+          ) AS absence_entries
+      ) AS absence_state
+      CROSS JOIN unnest(${PUBLISHER_TEXT_KEYS_SQL})
+           WITH ORDINALITY AS candidate(key, ordinality)
+     WHERE absence_state.valid
+       AND btrim(
+             regexp_replace(${metadata} ->> candidate.key, '\\s+', ' ', 'g')
+           ) = ANY(${textArray(markers)})
+  )`;
+};
 
 /** Where a walk of one source stands: the last row a page examined. */
 export type AbsentTextCursor = {
@@ -252,19 +282,52 @@ export const carriesAbsentPublisherText = (markers: readonly string[]): SQL =>
       )}) > 0`;
 
 /**
- * The row's metadata with the marker keys removed.
+ * The row's metadata with marker keys represented as declared absences.
  *
- * Removed rather than emptied, because that is what the fixed adapter now
- * writes: a field the source printed a marker in is a field the publisher did
- * not fill, and the read path resolves an absent key to the next source in its
- * list. Nothing else in the object is touched, and the stored raw payload is
- * untouched entirely, so the sentence stays recoverable from what the
- * publisher actually served.
+ * The raw keys are removed and a typed sidecar records why each one is absent.
+ * Existing absence entries are retained.
  */
-export const strippedPublisherMetadata = (
+export const publisherPlaceholderMetadata = (
   markers: readonly string[],
-): SQL<Record<string, unknown>> =>
-  sql`${caseLawDecisions.metadata} - ${absentPublisherTextKeys(
-    sql`${caseLawDecisions.metadata}`,
-    markers,
-  )}`;
+): SQL<Record<string, unknown>> => {
+  const entries = sql.raw("repair_state.entries");
+  const keys = sql.raw("repair_state.keys");
+  return sql`(
+    SELECT jsonb_set(
+             ${caseLawDecisions.metadata} - ${keys},
+             ARRAY[${DECISION_TEXT_ABSENCE_METADATA_KEY}]::text[],
+             (
+               SELECT jsonb_agg(
+                        combined.entry
+                        ORDER BY array_position(
+                          ${DECISION_TEXT_KEYS_SQL},
+                          combined.entry ->> 'field'
+                        )
+                      )
+                 FROM (
+                   SELECT existing.entry
+                     FROM jsonb_array_elements(${entries}) AS existing(entry)
+                   UNION ALL
+                   SELECT jsonb_build_object(
+                            'field', marked.key,
+                            'reason', ${TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER}::text
+                          )
+                     FROM unnest(${keys}) AS marked(key)
+                    WHERE NOT ${entries} @> jsonb_build_array(
+                      jsonb_build_object('field', marked.key)
+                    )
+                 ) AS combined(entry)
+             ),
+             true
+           )
+      FROM (
+        SELECT ${absentPublisherTextKeys(
+          sql`${caseLawDecisions.metadata}`,
+          markers,
+        )} AS keys,
+               ${storedDecisionTextAbsenceEntriesSql(
+                 sql`${caseLawDecisions.metadata}`,
+               )} AS entries
+      ) AS repair_state
+  )`;
+};

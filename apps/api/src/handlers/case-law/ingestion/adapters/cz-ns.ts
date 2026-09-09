@@ -43,6 +43,12 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+} from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
@@ -241,7 +247,7 @@ type CzNsSourceField = (typeof CZ_NS_SOURCE_FIELDS)[number];
 const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
   Anotace: {
     disposition: "stored",
-    target: { type: "metadata", key: "abstract" },
+    target: { type: "textField", key: "abstract" },
   },
   "Datum rozhodnutí": {
     disposition: "stored",
@@ -266,7 +272,7 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
   },
   "Právní věta": {
     disposition: "stored",
-    target: { type: "metadata", key: "legalSentence" },
+    target: { type: "textField", key: "legalSentence" },
   },
   "Senátní značka": excludedSourceField(
     "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
@@ -638,6 +644,7 @@ export const buildCzNsDecision = async (
     sourceDocumentId: unid,
     statedCourt: meta["court"],
   });
+  const publishedSummary = summaryOfLabels(meta);
 
   return {
     type: "built",
@@ -663,7 +670,18 @@ export const buildCzNsDecision = async (
       fulltext,
       sourceUrl: webUrl,
       documentUrl: webUrl,
-      metadata: {
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: sourceTextField(
+          ADAPTER_KEYS.CZ_NS,
+          publishedSummary.abstract,
+        ),
+        legalSentence: sourceTextField(
+          ADAPTER_KEYS.CZ_NS,
+          publishedSummary.legalSentence,
+        ),
+      },
+      metadata: checkedDecisionMetadata({
         caseNumber,
         ecli: meta["ecli"],
         court,
@@ -673,7 +691,7 @@ export const buildCzNsDecision = async (
         decisionType: meta["decisionType"]?.toLowerCase(),
         ...sourceMetadata,
         judge,
-        ...summaryOfLabels(meta),
+        category: publishedSummary.category,
         // Read from the detail page rather than left to the parser: the print
         // page the parser reads carries the court's other metadata rows but
         // not this one, so a row built from the print page alone never states
@@ -691,7 +709,7 @@ export const buildCzNsDecision = async (
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];
         }),
-      },
+      }),
       rawHash: hashContent(raw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
       documentAst,

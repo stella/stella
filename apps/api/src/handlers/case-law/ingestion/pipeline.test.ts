@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { plainTextOf } from "@/api/handlers/case-law/document-ast";
@@ -15,7 +20,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { decisionIdentifiersFromStoredMetadata } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  bareCitationKey,
+  decisionIdentifiersFromStoredMetadata,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   wrappedErrorDetail,
   processDecision,
@@ -23,6 +31,14 @@ import {
   sanitizeResult,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+  absentTextField,
+  presentTextField,
+  readDecisionTextMetadata,
+} from "@/api/lib/case-law/decision-text";
+import { canonicalDecisionDate } from "@/api/lib/dates";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -40,6 +56,7 @@ const baseResult = (
   country: "SK",
   language: "sk",
   metadata: {},
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "hash",
   documentAst,
 });
@@ -68,6 +85,40 @@ const testSourceLease = (
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
+});
+
+describe("sanitizeResult — decision text fields", () => {
+  test("stores present text and retains the boundary value", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: presentTextField("Published summary"),
+      },
+    });
+
+    expect(sanitized.metadata["summary"]).toBe("Published summary");
+    expect(sanitized.textFields.summary).toEqual(
+      presentTextField("Published summary"),
+    );
+  });
+
+  test("keeps text keys nullable while retaining every declared absence", () => {
+    for (const reason of TEXT_ABSENCE_REASONS) {
+      const sanitized = sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        textFields: {
+          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+          summary: absentTextField(reason),
+        },
+      });
+
+      expect(sanitized.metadata["summary"]).toBeUndefined();
+      expect(
+        readDecisionTextMetadata(sanitized.metadata).textFields.summary,
+      ).toEqual(absentTextField(reason));
+    }
+  });
 });
 
 describe("sanitizeResult — adapter-supplied sections", () => {
@@ -345,6 +396,40 @@ describe("sanitizeResult — documentAst text fields", () => {
       "Podľa § 193 ods.1 z a m i e t a obžalobu.",
     );
     expect(plainTextOf(plainPara.inlines)).toBe("Normálny text bez medzier.");
+  });
+
+  test("preserves external keys without changing nested prototypes", () => {
+    const ast: DocumentAst = {
+      version: 1,
+      source: { system: "test", documentId: "x", webUrl: "", printUrl: "" },
+      metadata: { ...astMetadata },
+      blocks: [],
+    };
+    Object.defineProperty(ast.metadata, "__proto__", {
+      configurable: true,
+      enumerable: true,
+      value: { label: "A\u0000B", polluted: true },
+      writable: true,
+    });
+
+    const sanitized = sanitizeResult(baseResult(ast));
+    if (!("blocks" in sanitized.documentAst)) {
+      throw new Error("sanitized documentAst should be a DocumentAst");
+    }
+
+    expect(Object.getPrototypeOf(sanitized.documentAst.metadata)).toBe(
+      Object.prototype,
+    );
+    expect(Object.hasOwn(sanitized.documentAst.metadata, "__proto__")).toBe(
+      true,
+    );
+    expect(Reflect.get(sanitized.documentAst.metadata, "__proto__")).toEqual({
+      label: "AB",
+      polluted: true,
+    });
+    expect(
+      Reflect.get(sanitized.documentAst.metadata, "polluted"),
+    ).toBeUndefined();
   });
 
   test("table cell plainText is collapsed, inline text stays verbatim", () => {
@@ -694,6 +779,7 @@ describe("processDecision — corpus storage off", () => {
         language: "sk",
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
@@ -714,16 +800,26 @@ describe("processDecision — corpus storage off", () => {
   });
 });
 
-describe("processDecision — decision date on an existing row", () => {
+describe("processDecision — fields on an existing row", () => {
   // An update omits an undefined column, so a rejected date has to be
   // distinguishable from an unstated one all the way to the write: the
   // first must clear whatever the row holds, the second must not.
-  const refreshedDecisionDate = async (
-    decisionDate: string | undefined,
-  ): Promise<Record<string, unknown> | undefined> => {
+  type RefreshedDecisionOptions = {
+    decisionDate?: string | undefined;
+    storedMetadata?: Record<string, unknown> | undefined;
+    textFields?: IngestionResult["textFields"] | undefined;
+  };
+
+  const refreshedDecision = async ({
+    decisionDate,
+    storedMetadata = {},
+    textFields = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  }: RefreshedDecisionOptions): Promise<
+    Record<string, unknown> | undefined
+  > => {
     const existing = {
       id: createSafeId<"caseLawDecision">(),
-      metadata: {},
+      metadata: storedMetadata,
       sourceHash: "old-hash",
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -733,21 +829,41 @@ describe("processDecision — decision date on an existing row", () => {
     let updated: Record<string, unknown> | undefined;
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
-        // The identity the refresh replaces is read FOR UPDATE before the
-        // write. This suite asserts the decision row, so it reports no prior
-        // identity and the citation-graph branch stays out of the way.
+        // Return the locked row state used by the refresh path.
         select: () => ({
-          from: (table: unknown) => ({
-            where: () => ({
-              for: () => ({
-                limit: async () =>
-                  await Promise.resolve(
-                    table === caseLawSources ? [{ id: sourceId }] : [],
-                  ),
-              }),
-              limit: async () => await Promise.resolve([]),
-            }),
-          }),
+          from: (table: unknown) =>
+            table === caseLawDecisionIdentifiers
+              ? {
+                  where: async () => [
+                    {
+                      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                      normalizedValue: bareCitationKey("X/1/2026"),
+                    },
+                  ],
+                }
+              : {
+                  where: () => ({
+                    for: () => ({
+                      limit: async () =>
+                        await Promise.resolve(
+                          table === caseLawSources
+                            ? [{ id: sourceId }]
+                            : [
+                                {
+                                  citationKey: bareCitationKey("X/1/2026"),
+                                  country: "SVK",
+                                  decisionDate:
+                                    decisionDate === undefined
+                                      ? null
+                                      : canonicalDecisionDate(decisionDate),
+                                  metadata: storedMetadata,
+                                },
+                              ],
+                        ),
+                    }),
+                    limit: async () => await Promise.resolve([]),
+                  }),
+                },
         }),
         // The citation-graph settle the pipeline runs in the same
         // transaction is raw SQL; this suite asserts the decision row, so
@@ -789,6 +905,7 @@ describe("processDecision — decision date on an existing row", () => {
         decisionDate,
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields,
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
@@ -802,21 +919,33 @@ describe("processDecision — decision date on an existing row", () => {
   };
 
   test("clears the column when the source restates an unusable date", async () => {
-    const updated = await refreshedDecisionDate("2944-04-30");
+    const updated = await refreshedDecision({ decisionDate: "2944-04-30" });
 
     expect(updated?.["decisionDate"]).toBeNull();
   });
 
   test("writes a usable date", async () => {
-    const updated = await refreshedDecisionDate("2026-04-15");
+    const updated = await refreshedDecision({ decisionDate: "2026-04-15" });
 
     expect(updated?.["decisionDate"]).toBe("2026-04-15");
   });
 
   test("writes nothing when the source states no date", async () => {
-    const updated = await refreshedDecisionDate(undefined);
+    const updated = await refreshedDecision({});
 
     expect(updated?.["decisionDate"]).toBeUndefined();
+  });
+
+  test("keeps stored decision text when parsing fails", async () => {
+    const updated = await refreshedDecision({
+      storedMetadata: { abstract: "Stored abstract" },
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      },
+    });
+
+    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
   });
 });
 
@@ -889,6 +1018,7 @@ describe("processDecision — source raw upload failure", () => {
         language: "sk",
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw,
@@ -969,6 +1099,7 @@ describe("processDecision — source raw upload failure", () => {
         language: "sk",
         fulltext: "Rozhodnutie o veci samej.",
         metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw: "<html></html>",

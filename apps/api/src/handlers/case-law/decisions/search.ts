@@ -41,8 +41,8 @@ import {
   loadCourtWeights,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
-import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import {
@@ -481,7 +481,7 @@ const searchPostgresDecisions = async (
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
-      headnote: normalizeDecisionHeadnote(row["headnote"]),
+      headnote: readDecisionHeadnote(row["headnote"]),
       headline: headline ? escapeAndHighlight(headline) : null,
       // Postgres FTS scores whole decisions, so there is no passage to anchor
       // the hit to. Kept on both paths so the response shape does not depend
@@ -1017,7 +1017,7 @@ const decisionHitsPage = ({
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
-        headnote: normalizeDecisionHeadnote(row.headnote),
+        headnote: readDecisionHeadnote(row.headnote),
         headline: snippetById.get(hit.id) ?? null,
         // Additive: the anchor of the passage the snippet came from, so a
         // result can open the decision scrolled to what matched. Null on a

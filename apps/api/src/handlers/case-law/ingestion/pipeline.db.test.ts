@@ -10,6 +10,10 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  TEXT_ABSENCE_REASON,
+  absentDecisionTextFields,
+} from "@/api/lib/case-law/decision-text";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
 type JsonbStorageRow = {
@@ -63,6 +67,7 @@ const ingestionResult = {
   sourceUrl: "https://example.test/web",
   documentUrl: "https://example.test/print",
   metadata: { source: "regression" },
+  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "jsonb-regression-hash",
   documentAst,
   parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],

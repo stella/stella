@@ -3,6 +3,7 @@ import { isRecord } from "@/api/lib/type-guards";
 type CaseLawSourceTier = "dump" | "detail";
 
 export type CaseLawIngestionMetadata = {
+  detailHash?: string;
   dumpHash?: string;
   sourceTier?: CaseLawSourceTier;
 };
@@ -26,15 +27,20 @@ export const getCaseLawIngestionMetadata = (
     typeof ingestion["dumpHash"] === "string"
       ? ingestion["dumpHash"]
       : undefined;
+  const detailHash =
+    typeof ingestion["detailHash"] === "string"
+      ? ingestion["detailHash"]
+      : undefined;
   const sourceTier = isSourceTier(ingestion["sourceTier"])
     ? ingestion["sourceTier"]
     : undefined;
 
-  if (!dumpHash && !sourceTier) {
+  if (!detailHash && !dumpHash && !sourceTier) {
     return null;
   }
 
   return {
+    ...(detailHash ? { detailHash } : {}),
     ...(dumpHash ? { dumpHash } : {}),
     ...(sourceTier ? { sourceTier } : {}),
   };

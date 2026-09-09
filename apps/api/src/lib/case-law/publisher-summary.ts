@@ -2,7 +2,17 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
+import {
+  DECISION_TEXT_FIELD,
+  type DecisionTextFieldKey,
+} from "@stll/api-contract/case-law-text-field";
 import type { ApparatusRole, DocumentAst } from "@stll/legal-ast/document-ast";
+
+import { readStoredDecisionTextAbsence } from "@/api/lib/case-law/decision-text";
+import {
+  storedDecisionTextAbsenceEntriesSql,
+  storedDecisionTextAbsenceValidSql,
+} from "@/api/lib/case-law/decision-text-sql";
 
 /**
  * What a publisher says about a decision, in the two kinds it comes in: the
@@ -45,18 +55,27 @@ type PublisherSummaryValueShape = "text" | "list";
  * a consumer that has to keep them apart — the corpus index gives each its own
  * field — asks for one list or the other instead of re-deciding per key.
  */
-type PublisherSummaryKind = "headnote" | "keywords";
-
-type PublisherSummarySourceOf<Kind extends PublisherSummaryKind> =
-  | { kind: Kind; origin: "ast"; roles: readonly ApparatusRole[] }
+type PublisherHeadnoteSource =
   | {
-      kind: Kind;
+      kind: "headnote";
+      origin: "ast";
+      roles: readonly ApparatusRole[];
+    }
+  | {
+      kind: "headnote";
       origin: "metadata";
-      key: string;
-      shape: PublisherSummaryValueShape;
+      key: DecisionTextFieldKey;
+      shape: "text";
     };
 
-type PublisherSummarySource = PublisherSummarySourceOf<PublisherSummaryKind>;
+type PublisherKeywordSource = {
+  kind: "keywords";
+  origin: "metadata";
+  key: string;
+  shape: PublisherSummaryValueShape;
+};
+
+type PublisherSummarySource = PublisherHeadnoteSource | PublisherKeywordSource;
 
 /**
  * Every place a headnote can live, best first. Each metadata key is one an
@@ -65,10 +84,25 @@ type PublisherSummarySource = PublisherSummarySourceOf<PublisherSummaryKind>;
  */
 const PUBLISHER_HEADNOTE_SOURCES = [
   { kind: "headnote", origin: "ast", roles: PUBLISHER_HEADNOTE_AST_ROLES },
-  { kind: "headnote", origin: "metadata", key: "legalSentence", shape: "text" },
-  { kind: "headnote", origin: "metadata", key: "abstract", shape: "text" },
-  { kind: "headnote", origin: "metadata", key: "summary", shape: "text" },
-] as const satisfies readonly PublisherSummarySourceOf<"headnote">[];
+  {
+    kind: "headnote",
+    origin: "metadata",
+    key: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+    shape: "text",
+  },
+  {
+    kind: "headnote",
+    origin: "metadata",
+    key: DECISION_TEXT_FIELD.ABSTRACT,
+    shape: "text",
+  },
+  {
+    kind: "headnote",
+    origin: "metadata",
+    key: DECISION_TEXT_FIELD.SUMMARY,
+    shape: "text",
+  },
+] as const satisfies readonly PublisherHeadnoteSource[];
 
 /**
  * Every place a decision's classification can live, best first: the subject
@@ -78,7 +112,7 @@ const PUBLISHER_KEYWORD_SOURCES = [
   { kind: "keywords", origin: "metadata", key: "keywords", shape: "list" },
   { kind: "keywords", origin: "metadata", key: "legalAreas", shape: "list" },
   { kind: "keywords", origin: "metadata", key: "legalArea", shape: "text" },
-] as const satisfies readonly PublisherSummarySourceOf<"keywords">[];
+] as const satisfies readonly PublisherKeywordSource[];
 
 /**
  * Both lists as one, headnotes first: the order the single line a reader sees
@@ -190,6 +224,35 @@ const METADATA_VALUE_SQL = {
   (metadata: SQLWrapper, key: string) => SQL
 >;
 
+const storedDecisionTextSql = (
+  metadata: SQLWrapper,
+  key: DecisionTextFieldKey,
+): SQL => sql`CASE
+  WHEN decision_text_absence.valid
+   AND NOT decision_text_absence.entries @> jsonb_build_array(
+     jsonb_build_object('field', ${key}::text)
+   )
+  THEN ${METADATA_VALUE_SQL.text(metadata, key)}
+END`;
+
+const storedDecisionText = (
+  absence: ReturnType<typeof readStoredDecisionTextAbsence>,
+  key: DecisionTextFieldKey,
+  value: unknown,
+): string | null => {
+  switch (absence.type) {
+    case "invalid":
+      return null;
+    case "valid":
+      return absence.entries.some((entry) => entry.field === key)
+        ? null
+        : READ_METADATA_VALUE.text(value);
+    default:
+      absence satisfies never;
+      return panic(`Unhandled stored text absence: ${String(absence)}`);
+  }
+};
+
 const astSummary = (
   documentAst: DocumentAst | null,
   roles: readonly ApparatusRole[],
@@ -223,6 +286,7 @@ const firstSourceText = (
   sources: readonly PublisherSummarySource[],
   { documentAst, metadata }: PublisherSummaryInput,
 ): string | null => {
+  const absence = readStoredDecisionTextAbsence(metadata);
   for (const source of sources) {
     switch (source.origin) {
       case "ast": {
@@ -233,7 +297,23 @@ const firstSourceText = (
         break;
       }
       case "metadata": {
-        const text = READ_METADATA_VALUE[source.shape](metadata?.[source.key]);
+        let text: string | null;
+        switch (source.kind) {
+          case "headnote":
+            text = storedDecisionText(
+              absence,
+              source.key,
+              metadata?.[source.key],
+            );
+            break;
+          case "keywords":
+            text = READ_METADATA_VALUE[source.shape](metadata?.[source.key]);
+            break;
+          default: {
+            source satisfies never;
+            return panic(`Unhandled summary source: ${String(source)}`);
+          }
+        }
         if (text !== null) {
           return text;
         }
@@ -285,9 +365,31 @@ export const publisherSummaryMetadataSql = (
 ): SQL<string | null> => {
   const arms: SQL[] = [];
   for (const source of PUBLISHER_SUMMARY_SOURCES) {
-    if (source.origin === "metadata") {
-      arms.push(METADATA_VALUE_SQL[source.shape](metadata, source.key));
+    if (source.origin !== "metadata") {
+      continue;
+    }
+    switch (source.kind) {
+      case "headnote":
+        arms.push(storedDecisionTextSql(metadata, source.key));
+        break;
+      case "keywords":
+        arms.push(METADATA_VALUE_SQL[source.shape](metadata, source.key));
+        break;
+      default: {
+        source satisfies never;
+        return panic(`Unhandled summary source: ${String(source)}`);
+      }
     }
   }
-  return sql<string | null>`coalesce(${sql.join(arms, sql`, `)})`;
+  const entries = sql.raw("absence_entries.entries");
+  return sql<string | null>`(
+    SELECT coalesce(${sql.join(arms, sql`, `)})
+      FROM (
+        SELECT absence_entries.entries,
+               ${storedDecisionTextAbsenceValidSql(metadata, entries)} AS valid
+          FROM (
+            SELECT ${storedDecisionTextAbsenceEntriesSql(metadata)} AS entries
+          ) AS absence_entries
+      ) AS decision_text_absence
+  )`;
 };

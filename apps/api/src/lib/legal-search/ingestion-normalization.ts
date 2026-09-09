@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -9,6 +10,16 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import {
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+  absentTextField,
+  presentTextField,
+  storeDecisionTextFields,
+  type DecisionTextFields,
+  type TextField,
+} from "@/api/lib/case-law/decision-text";
 import {
   isDocumentAst,
   withProjectedPlainText,
@@ -156,11 +167,12 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
       return value.map((item) => deepSanitize(item));
     }
     if (isRecord(value)) {
-      const sanitized: Record<string, unknown> = {};
-      for (const [entryKey, entryValue] of Object.entries(value)) {
-        sanitized[entryKey] = deepSanitize(entryValue);
-      }
-      return sanitized;
+      return Object.fromEntries(
+        Object.entries(value).map(([entryKey, entryValue]) => [
+          entryKey,
+          deepSanitize(entryValue),
+        ]),
+      );
     }
     return value;
   };
@@ -177,9 +189,43 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
+  const sanitizeTextField = (field: TextField): TextField => {
+    switch (field.type) {
+      case TEXT_FIELD_TYPE.ABSENT:
+        return field;
+      case TEXT_FIELD_TYPE.PRESENT: {
+        const text = stripDangerousChars(field.text).trim();
+        return text.length === 0
+          ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
+          : presentTextField(text);
+      }
+      default: {
+        field satisfies never;
+        return panic(`Unhandled decision text field: ${String(field)}`);
+      }
+    }
+  };
+  const textFields = {
+    [DECISION_TEXT_FIELD.ABSTRACT]: sanitizeTextField(
+      result.textFields[DECISION_TEXT_FIELD.ABSTRACT],
+    ),
+    [DECISION_TEXT_FIELD.HEADNOTE]: sanitizeTextField(
+      result.textFields[DECISION_TEXT_FIELD.HEADNOTE],
+    ),
+    [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: sanitizeTextField(
+      result.textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
+    ),
+    [DECISION_TEXT_FIELD.SUMMARY]: sanitizeTextField(
+      result.textFields[DECISION_TEXT_FIELD.SUMMARY],
+    ),
+  } as const satisfies DecisionTextFields;
+  const storedMetadata = storeDecisionTextFields({
+    metadata: result.metadata,
+    textFields,
+  });
   const metadata = storeDecisionIdentifiersInMetadata(
     Object.fromEntries(
-      Object.entries(sanitizeMetadata(result.metadata)).filter(
+      Object.entries(sanitizeMetadata(storedMetadata)).filter(
         ([key]) => key !== PARTIAL_OBSERVATION_KEY,
       ),
     ),
@@ -238,6 +284,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     sourceUrl: strip(result.sourceUrl),
     documentUrl: strip(result.documentUrl),
     metadata,
+    textFields,
     publisherCitedCases: result.publisherCitedCases?.map((cited) =>
       stripDangerousChars(cited),
     ),

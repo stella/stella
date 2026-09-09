@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  TEXT_FIELD_TYPE,
+  type TextField,
+} from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
@@ -39,7 +44,7 @@ export type Decision = {
   /** The search snippet, highlighted, when the row came from a search. */
   headline?: string | null;
   /** The publisher's one-line summary, when the source carries one. */
-  headnote: string | null;
+  headnote: TextField;
   /** Decisions in the corpus that cite this one. */
   citationCount: number;
   createdAt?: Date | string | undefined;
@@ -251,14 +256,22 @@ export const DecisionDateCell = ({ decision }: { decision: Decision }) => {
  * opened. Empty when the source supplies none.
  */
 export const HeadnoteCell = ({ decision }: { decision: Decision }) => {
-  if (decision.headnote === null) {
-    return "—";
+  switch (decision.headnote.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return "—";
+    case TEXT_FIELD_TYPE.PRESENT:
+      return (
+        <p className="text-muted-foreground line-clamp-2 text-xs">
+          {decision.headnote.text}
+        </p>
+      );
+    default: {
+      decision.headnote satisfies never;
+      return panic(
+        `Unhandled decision text field: ${String(decision.headnote)}`,
+      );
+    }
   }
-  return (
-    <p className="text-muted-foreground line-clamp-2 text-xs">
-      {decision.headnote}
-    </p>
-  );
 };
 
 export const CitedByCell = ({ decision }: { decision: Decision }) => {

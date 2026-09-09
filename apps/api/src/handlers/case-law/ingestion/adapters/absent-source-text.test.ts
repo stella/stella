@@ -3,14 +3,19 @@ import { expect, test } from "bun:test";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   SOURCE_ABSENT_TEXT,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   absentTextComparison,
-  sourceTextOrAbsent,
-} from "@/api/handlers/case-law/ingestion/adapters/absent-source-text";
+  sourceTextField,
+} from "@/api/lib/case-law/decision-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
 
 test("a declared marker reads as no text at all, for the source that prints it", () => {
   for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
-    expect(sourceTextOrAbsent(adapter, text)).toBeUndefined();
+    expect(sourceTextField(adapter, text)).toEqual({
+      type: TEXT_FIELD_TYPE.ABSENT,
+      reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+    });
   }
 });
 
@@ -21,7 +26,10 @@ test("another source's rows keep the same words", () => {
   // writes back on the next crawl.
   for (const { adapter, text } of SOURCE_ABSENT_TEXT) {
     expect(adapter).not.toBe(ADAPTER_KEYS.CZ_NS);
-    expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_NS, text)).toBe(text);
+    expect(sourceTextField(ADAPTER_KEYS.CZ_NS, text)).toEqual({
+      type: TEXT_FIELD_TYPE.PRESENT,
+      text,
+    });
   }
 });
 
@@ -29,11 +37,14 @@ test("the markup around a marker does not make it text", () => {
   // What a cell reads back as: the newlines the page indents its rows with,
   // and the runs of space a browser would collapse.
   expect(
-    sourceTextOrAbsent(
+    sourceTextField(
       ADAPTER_KEYS.CZ_US,
       "\r\n   Právní   věta\n není k dispozici.  \r\n",
     ),
-  ).toBeUndefined();
+  ).toEqual({
+    type: TEXT_FIELD_TYPE.ABSENT,
+    reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+  });
 });
 
 test("a publisher's own sentence is kept exactly as published", () => {
@@ -41,14 +52,21 @@ test("a publisher's own sentence is kept exactly as published", () => {
   // stored, indexed and displayed as the publisher wrote it, paragraphs and
   // all, so only the surrounding markup is trimmed away.
   const headnote = "Věta první.\n\n  Věta druhá.";
-  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, `\n${headnote}\n`)).toBe(
-    headnote,
-  );
+  expect(sourceTextField(ADAPTER_KEYS.CZ_US, `\n${headnote}\n`)).toEqual({
+    type: TEXT_FIELD_TYPE.PRESENT,
+    text: headnote,
+  });
 });
 
 test("an empty cell is absence, not an empty headnote", () => {
-  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, "")).toBeUndefined();
-  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, "  \n\t ")).toBeUndefined();
+  expect(sourceTextField(ADAPTER_KEYS.CZ_US, "")).toEqual({
+    type: TEXT_FIELD_TYPE.ABSENT,
+    reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  });
+  expect(sourceTextField(ADAPTER_KEYS.CZ_US, "  \n\t ")).toEqual({
+    type: TEXT_FIELD_TYPE.ABSENT,
+    reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  });
 });
 
 test("a sentence that only starts like a marker is text", () => {
@@ -56,7 +74,10 @@ test("a sentence that only starts like a marker is text", () => {
   // words is a headnote, and losing it would be worse than the defect.
   const headnote =
     "Právní věta není k dispozici v jazyce, ve kterém byla vydána.";
-  expect(sourceTextOrAbsent(ADAPTER_KEYS.CZ_US, headnote)).toBe(headnote);
+  expect(sourceTextField(ADAPTER_KEYS.CZ_US, headnote)).toEqual({
+    type: TEXT_FIELD_TYPE.PRESENT,
+    text: headnote,
+  });
 });
 
 test("every declared marker is a sentence its source is recorded printing", async () => {

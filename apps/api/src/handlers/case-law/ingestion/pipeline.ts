@@ -58,6 +58,7 @@ import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
@@ -1598,33 +1599,15 @@ const processDecisionAttempt = async ({
     });
   };
 
-  /**
-   * Everything about a decision the candidate join filters on, read from the
-   * row this transaction is about to overwrite.
-   *
-   * Not from the `existing` snapshot, which was read in an earlier transaction:
-   * the guarded update deliberately lets a newer observation intervene, so a
-   * row that went X → Y → X would compare equal against that snapshot and
-   * report no change, skipping the retraction the Y edges need. What matters is
-   * the identity actually replaced.
-   *
-   * `FOR UPDATE`, because reading it inside this transaction is not enough on
-   * its own: without the row lock another observation can still commit between
-   * this read and the update, and the comparison would again be against an
-   * identity this transaction did not replace. The lock holds the row until
-   * commit, so what is read here is what gets overwritten.
-   *
-   * All three fields travel together because all three are filters: a
-   * jurisdiction correction under an unchanged key invalidates exactly the
-   * same edges a new case number does.
-   */
-  const replacedResolutionIdentity = async (
+  /** Decision state locked immediately before this transaction overwrites it. */
+  const replacedDecisionState = async (
     tx: Transaction,
     id: SafeId<"caseLawDecision">,
   ): Promise<{
     citationKey: string | null;
     country: string;
     decisionDate: string | null;
+    metadata: Record<string, unknown> | null;
     identifiers: {
       type: (typeof identifierRows)[number]["type"];
       normalizedValue: string;
@@ -1635,6 +1618,7 @@ const processDecisionAttempt = async ({
         citationKey: caseLawDecisions.citationKey,
         country: caseLawDecisions.country,
         decisionDate: caseLawDecisions.decisionDate,
+        metadata: caseLawDecisions.metadata,
       })
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, id))
@@ -1725,9 +1709,9 @@ const processDecisionAttempt = async ({
         // Read inside this transaction, before the write: the identity this
         // update replaces is what decides whether the citation graph moved,
         // and the snapshot taken in an earlier transaction can no longer say.
-        const replacedIdentity = preservesExistingDetail
+        const replacedState = preservesExistingDetail
           ? null
-          : await replacedResolutionIdentity(tx, existing.id);
+          : await replacedDecisionState(tx, existing.id);
 
         const updated = await tx
           .update(caseLawDecisions)
@@ -1748,7 +1732,11 @@ const processDecisionAttempt = async ({
                   decisionType: result.decisionType,
                   sourceUrl: result.sourceUrl,
                   documentUrl: result.documentUrl,
-                  metadata: result.metadata,
+                  metadata: preserveStoredTextAfterParseFailure({
+                    incomingMetadata: result.metadata,
+                    storedMetadata: replacedState?.metadata ?? null,
+                    textFields: result.textFields,
+                  }),
                   sourceRaw: null,
                   sourceRawS3Key,
                   sourceRawContentType,
@@ -1853,8 +1841,8 @@ const processDecisionAttempt = async ({
         }
 
         if (
-          replacedIdentity !== null &&
-          resolutionIdentityChanged(replacedIdentity)
+          replacedState !== null &&
+          resolutionIdentityChanged(replacedState)
         ) {
           // Retract before announcing. The edges pointing here were decided
           // against the identity this decision no longer has, and the announce
@@ -1873,12 +1861,12 @@ const processDecisionAttempt = async ({
           // remaining holder unique.
           await reopenCitationsForKeys(
             tx,
-            [replacedIdentity.citationKey, incomingCitationKey].filter(
+            [replacedState.citationKey, incomingCitationKey].filter(
               (key) => key !== null,
             ),
           );
           const affectedIdentifiers = [
-            ...replacedIdentity.identifiers,
+            ...replacedState.identifiers,
             ...identifierRows,
           ].filter(
             (identifier, index, all) =>

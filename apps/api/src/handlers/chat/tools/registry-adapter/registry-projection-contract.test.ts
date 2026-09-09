@@ -1177,7 +1177,7 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
-              headnote: null,
+              headnote: { type: "absent", reason: "not_published" },
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               sourceUrl: "https://example.test/decision",
@@ -1243,6 +1243,12 @@ const CONTRACT_CORPUS = {
           languageGroupKey: null,
           languageAlternates: [],
           metadata: {},
+          textFields: {
+            abstract: { type: "absent", reason: "not_published" },
+            headnote: { type: "absent", reason: "not_published" },
+            legalSentence: { type: "absent", reason: "not_published" },
+            summary: { type: "absent", reason: "not_published" },
+          },
           slug: "ns-22-cdo-1000-2020",
           source: {
             id: toSafeId<"caseLawSource">(uid(59)),
