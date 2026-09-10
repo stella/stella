@@ -1,5 +1,12 @@
 # @stll/ui
 
+## 0.26.2
+
+### Patch Changes
+
+- [#3215](https://github.com/stella/stella/pull/3215) [`e87ce5f`](https://github.com/stella/stella/commit/e87ce5fd3bef938f09fb1db1aae950955ed5919c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep inspector rail scrollbars from narrowing the icon column and show a clear
+  resize grip on hover or focus without changing its layout width.
+
 ## 0.26.1
 
 ### Patch Changes
