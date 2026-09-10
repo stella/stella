@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+
 import {
   type CaseLawDecisionSearchHit,
   createCaseLawDecisionRouteParams,
@@ -40,11 +42,12 @@ const caseLawHit = ({
 
 describe("case-law decision routes", () => {
   test("defaults only an absent public country", () => {
+    const publicCountry = publicCaseLawCountry("CZE");
     expect(
       resolveCaseLawRouteCountry({ country: undefined, locale: "cs" }),
-    ).toBe("CZE");
+    ).toBe(publicCountry);
     expect(resolveCaseLawRouteCountry({ country: "cze", locale: "en" })).toBe(
-      "CZE",
+      publicCountry,
     );
     expect(
       resolveCaseLawRouteCountry({ country: "xaa", locale: "cs" }),
