@@ -7,7 +7,6 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import Tooltip from "@/components/tooltip";
 import {
   invalidateChatThread,
   matchesChatThread,
@@ -23,12 +22,14 @@ import { toSafeId } from "@/lib/safe-id";
 import { restoreChatWebSearchQuerySnapshots } from "./chat-web-search-toggle.logic";
 
 type ChatWebSearchToggleProps = {
+  disabled?: boolean;
   enabled: boolean;
   threadRef: ChatThreadRef;
   size?: "icon-sm" | "icon-xs" | undefined;
 };
 
 export const ChatWebSearchToggle = ({
+  disabled = false,
   enabled,
   threadRef,
   size = "icon-sm",
@@ -102,36 +103,33 @@ export const ChatWebSearchToggle = ({
     : "chat.webSearch.toggleOn";
 
   return (
-    <Tooltip
-      content={t(tooltipKey)}
-      render={
-        <Button
-          aria-label={t("chat.webSearch.toggleLabel")}
-          aria-pressed={enabled}
-          // Quiet status-row control: muted at rest, borderless, only the
-          // usual ghost hover surface. The enabled state speaks through
-          // the info-tinted icon, not a filled chip. `transition-colors`
-          // eases the on/off tint so the optimistic flip reads as a smooth
-          // turn-on rather than a blip.
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          data-pressed={enabled ? "" : undefined}
-          onClick={() => {
-            const next = !enabled;
-            setEnabledPreference(next);
-            mutate(next);
-          }}
-          size={size}
-          variant={enabled ? "secondary" : "ghost"}
-        >
-          <GlobeIcon
-            className={cn(
-              "transition-colors",
-              size === "icon-xs" ? "size-3.5" : "size-4",
-              enabled && "text-info",
-            )}
-          />
-        </Button>
-      }
-    />
+    <Button
+      aria-label={t("chat.webSearch.toggleLabel")}
+      aria-pressed={enabled}
+      // Quiet status-row control: muted at rest, borderless, only the
+      // usual ghost hover surface. The enabled state speaks through
+      // the info-tinted icon, not a filled chip. `transition-colors`
+      // eases the on/off tint so the optimistic flip reads as a smooth
+      // turn-on rather than a blip.
+      className="text-muted-foreground hover:text-foreground transition-colors"
+      data-pressed={enabled ? "" : undefined}
+      disabled={disabled}
+      onClick={() => {
+        const next = !enabled;
+        setEnabledPreference(next);
+        mutate(next);
+      }}
+      size={size}
+      tooltip={t(tooltipKey)}
+      variant={enabled ? "secondary" : "ghost"}
+    >
+      <GlobeIcon
+        className={cn(
+          "transition-colors",
+          size === "icon-xs" ? "size-3.5" : "size-4",
+          enabled && "text-info",
+        )}
+      />
+    </Button>
   );
 };

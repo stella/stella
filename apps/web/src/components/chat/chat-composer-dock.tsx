@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -23,43 +24,76 @@ import {
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
-type ChatComposerDockProps = {
+type ChatComposerDockCommonProps = {
   threadRef: ChatThreadRef;
   guideAnchorsEnabled?: boolean;
-  /**
-   * The already-available thread data (or the pre-thread draft meta).
-   * The dock reads only the fields that drive the row, so a surface
-   * passes its whole `data` and cannot forget to wire a control.
-   */
-  data: {
-    webSearchAvailable: boolean;
-    webSearchEnabled: boolean;
-    context: ChatContextUsage | null;
-  };
-  /**
-   * Start a fresh thread — rendered as the row's new-chat icon just
-   * before the meter, on every surface. Required (not optional) so a
-   * surface cannot forget the affordance; a surface with genuinely no
-   * new-thread concept (e.g. the new-chat hero, which already IS a
-   * fresh thread) writes an explicit `null`.
-   */
-  onNewThread: (() => void) | null;
   /**
    * Genuine per-surface leading context, rendered first in the start
    * cluster: the main-chat matter picker, or the file overlay's
    * current-file chip. Surfaces without matter/file scope omit it.
    */
   leadingContext?: ReactNode | undefined;
-  /**
-   * Extra controls appended after the shield, before the end-pinned
-   * meter. None today; the sanctioned seam for future per-surface
-   * controls so callers never reopen a free-form status row.
-   */
-  endExtras?: ReactNode | undefined;
-  /** Model picker rendered beside the context meter. */
-  models?: ComposerModelsMenuProps | undefined;
   /** Row positioning override, forwarded to `ComposerStatusRow`. */
   className?: string | undefined;
+};
+
+type ChatComposerDockProps = ChatComposerDockCommonProps &
+  (
+    | { status: "pending" }
+    | {
+        status: "ready";
+        data: {
+          webSearchAvailable: boolean;
+          webSearchEnabled: boolean;
+          context: ChatContextUsage | null;
+        };
+        onNewThread: (() => void) | null;
+        endExtras?: ReactNode | undefined;
+        models?: ComposerModelsMenuProps | undefined;
+      }
+  );
+
+type ChatComposerDockRenderState = {
+  data: {
+    webSearchAvailable: boolean;
+    webSearchEnabled: boolean;
+    context: ChatContextUsage | null;
+  };
+  disabled: boolean;
+  endExtras: ReactNode | undefined;
+  models?: ComposerModelsMenuProps | undefined;
+  onNewThread: (() => void) | null;
+};
+
+const resolveChatComposerDockRenderState = (
+  props: ChatComposerDockProps,
+): ChatComposerDockRenderState => {
+  switch (props.status) {
+    case "pending":
+      return {
+        data: {
+          context: null,
+          webSearchAvailable: true,
+          webSearchEnabled: false,
+        },
+        disabled: true,
+        endExtras: undefined,
+        models: undefined,
+        onNewThread: null,
+      };
+    case "ready":
+      return {
+        data: props.data,
+        disabled: false,
+        endExtras: props.endExtras,
+        models: props.models,
+        onNewThread: props.onNewThread,
+      };
+    default: {
+      props satisfies never;
+      return panic("Unhandled chat composer dock status");
+    }
+  }
 };
 
 // The one organism that assembles a chat surface's status row. It
@@ -73,16 +107,15 @@ type ChatComposerDockProps = {
 // `getSendMode` transport hook consults. Display and send are therefore
 // provably one source, so the shield can never show a state the next
 // request won't honour.
-export const ChatComposerDock = ({
-  threadRef,
-  guideAnchorsEnabled = false,
-  data,
-  onNewThread,
-  leadingContext,
-  endExtras,
-  models,
-  className,
-}: ChatComposerDockProps) => {
+export const ChatComposerDock = (props: ChatComposerDockProps) => {
+  const {
+    className,
+    guideAnchorsEnabled = false,
+    leadingContext,
+    threadRef,
+  } = props;
+  const { data, disabled, endExtras, models, onNewThread } =
+    resolveChatComposerDockRenderState(props);
   const t = useTranslations();
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
@@ -118,10 +151,15 @@ export const ChatComposerDock = ({
         // `icon-xs` toggles keep the whole row visually subordinate to
         // the composer input above it: the status row is quiet chrome
         // (muted text-xs, borderless controls), never a second toolbar.
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div
+          className="flex min-w-0 flex-1 items-center gap-1"
+          data-slot="chat-composer-dock"
+          data-status={props.status}
+        >
           {leadingContext}
           {data.webSearchAvailable && (
             <ChatWebSearchToggle
+              disabled={disabled}
               enabled={data.webSearchEnabled}
               size="icon-xs"
               threadRef={threadRef}
@@ -134,6 +172,7 @@ export const ChatComposerDock = ({
             className="inline-flex"
           >
             <ChatAnonymizedToggle
+              disabled={disabled}
               enabled={anonymized}
               onChange={setAnonymized}
               size="icon-xs"

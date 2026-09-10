@@ -1504,6 +1504,7 @@ const TemplateStudioChatInner = ({
             <ChatComposerDock
               data={data}
               onNewThread={hasMessages ? startNewThread : null}
+              status="ready"
               threadRef={threadRef}
             />
           }

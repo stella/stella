@@ -333,7 +333,7 @@ const DOC_FLOAT_SURFACE_CLASS =
  * The surface is solid on purpose: the separate pane veil softens document
  * content around the stack while the controls themselves remain crisp.
  */
-export const PromptBarShell = ({
+const PromptBarShell = ({
   children,
   className,
   ...rest
@@ -351,6 +351,35 @@ export const PromptBarShell = ({
   >
     {children}
   </div>
+);
+
+/**
+ * Complete prompt row rendered while the live editor hydrates. Known controls
+ * stay real and fixed in place; only data-owned content belongs in a skeleton.
+ * Keeping this beside `PromptBar` makes the attachment and send affordances a
+ * single owned pair instead of asking each loading shell to mirror them.
+ */
+export const PromptBarPending = ({ children }: { children: ReactNode }) => (
+  <PromptBarShell aria-hidden="true">
+    <ComposerControlSlot>
+      <ComposerPlusMenu disabled onOpenFilePicker={() => undefined} />
+    </ComposerControlSlot>
+    <div
+      className={cn(
+        COMPOSER_COMPACT_TEXT_CELL_CLASS,
+        "flex flex-1 items-center px-1.5",
+      )}
+    >
+      <PromptBarPlaceholderContent>{children}</PromptBarPlaceholderContent>
+    </div>
+    <ComposerControlSlot>
+      <ChatComposerActionButton
+        canSend={false}
+        isGenerating={false}
+        onSend={() => undefined}
+      />
+    </ComposerControlSlot>
+  </PromptBarShell>
 );
 
 /**

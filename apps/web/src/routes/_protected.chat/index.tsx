@@ -549,6 +549,7 @@ function ChatIndex() {
                   // The hero already IS a fresh thread; a new-chat
                   // affordance here would be a no-op, so opt out.
                   onNewThread={null}
+                  status="ready"
                   threadRef={threadRef}
                 />
               }

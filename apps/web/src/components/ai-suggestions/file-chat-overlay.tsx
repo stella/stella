@@ -2394,6 +2394,7 @@ const FileChatOverlayInner = ({
                   unsafe={docxEditSafety === "unsafe"}
                 />
               }
+              status="ready"
               threadRef={threadRef}
             />
           }

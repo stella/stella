@@ -91,13 +91,14 @@ describe("row rhythm", () => {
 });
 
 describe("rail", () => {
-  test("uses the subtle scrollbar treatment for rail content", () => {
-    expect(
-      classesOf(
-        renderToStaticMarkup(<InspectorRailContent />),
-        "inspector-rail-content",
-      ),
-    ).toContain("scrollbar-subtle");
+  test("hides the rail scrollbar without reducing the icon column", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<InspectorRailContent />),
+      "inspector-rail-content",
+    );
+
+    expect(classes).toContain("scrollbar-none");
+    expect(classes).not.toContain("scrollbar-subtle");
   });
 
   test("a tab fills the rail width and boxes itself like a rail cell", () => {

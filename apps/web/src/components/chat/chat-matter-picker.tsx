@@ -1,4 +1,5 @@
 import { useDeferredValue, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -14,6 +15,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { Skeleton } from "@stll/ui/skeleton";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -75,6 +77,78 @@ type Group = {
   allMatters: Matter[];
   matters: Matter[];
 };
+
+type MatterPickerTriggerContentProps =
+  | { status: "pending" }
+  | {
+      status: "ready";
+      allSelected: boolean;
+      extra: ReactNode;
+      selectedMatter: Matter | undefined;
+      triggerLabel: string;
+    };
+
+const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
+  let icon: ReactNode;
+  let label: ReactNode;
+  let extra: ReactNode;
+
+  switch (props.status) {
+    case "pending":
+      icon = <MatterIcon className="size-3 shrink-0" variant="none" />;
+      label = <Skeleton className="h-3 w-16" />;
+      extra = null;
+      break;
+    case "ready":
+      if (props.allSelected) {
+        icon = <MatterIcon className="size-3 shrink-0" variant="all" />;
+      } else if (props.selectedMatter) {
+        icon = (
+          <MatterIcon
+            className="size-3 shrink-0"
+            matter={{
+              color: props.selectedMatter.color,
+              id: props.selectedMatter.id,
+            }}
+          />
+        );
+      } else {
+        icon = <MatterIcon className="size-3 shrink-0" variant="none" />;
+      }
+      label = (
+        <span className="min-w-0 truncate" dir="auto">
+          {props.triggerLabel}
+        </span>
+      );
+      extra = props.extra;
+      break;
+    default: {
+      props satisfies never;
+      return panic("Unhandled matter picker trigger status");
+    }
+  }
+
+  return (
+    <>
+      {icon}
+      {label}
+      {extra}
+      <ChevronDownIcon
+        aria-hidden="true"
+        className="size-3 shrink-0 opacity-70"
+      />
+    </>
+  );
+};
+
+export const ChatMatterPickerPending = () => (
+  <span
+    aria-hidden="true"
+    className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
+  >
+    <MatterPickerTriggerContent status="pending" />
+  </span>
+);
 
 export const ChatMatterPicker = ({
   matterIds,
@@ -248,34 +322,21 @@ export const ChatMatterPicker = ({
             : triggerLabel
         }
       >
-        {(() => {
-          if (allSelected) {
-            return <MatterIcon className="size-3 shrink-0" variant="all" />;
+        <MatterPickerTriggerContent
+          allSelected={allSelected}
+          extra={
+            extraCount > 0 ? (
+              <span
+                className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
+                style={extraCountStyle}
+              >
+                +{format.number(extraCount)}
+              </span>
+            ) : null
           }
-          if (selected[0]) {
-            return (
-              <MatterIcon
-                className="size-3 shrink-0"
-                matter={{ id: selected[0].id, color: selected[0].color }}
-              />
-            );
-          }
-          return <MatterIcon className="size-3 shrink-0" variant="none" />;
-        })()}
-        <span className="min-w-0 truncate" dir="auto">
-          {triggerLabel}
-        </span>
-        {extraCount > 0 && (
-          <span
-            className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
-            style={extraCountStyle}
-          >
-            +{format.number(extraCount)}
-          </span>
-        )}
-        <ChevronDownIcon
-          aria-hidden="true"
-          className="size-3 shrink-0 opacity-70"
+          selectedMatter={selected.at(0)}
+          status="ready"
+          triggerLabel={triggerLabel}
         />
       </MenuTrigger>
       <MenuPopup align="start" className="w-72" sideOffset={6}>
