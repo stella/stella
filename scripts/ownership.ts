@@ -395,6 +395,11 @@ export const OWNERSHIP = [
         "@/features/chat/components/chat-anonymized-toggle",
         "@/features/chat/components/chat-web-search-toggle",
       ],
+      names: [
+        "ChatAnonymizedToggle",
+        "ChatContextMeter",
+        "ChatWebSearchToggle",
+      ],
       allowed: [],
     },
   },
