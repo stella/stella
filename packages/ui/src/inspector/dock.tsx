@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { EllipsisIcon } from "lucide-react";
+
 import { cn } from "../lib/utils";
 import { INSPECTOR_RAIL_WIDTH } from "./pane-width";
 
@@ -97,7 +99,7 @@ export const InspectorDock = ({
         {showPaneContent && (
           <div
             aria-label={resizeHandleLabel}
-            className="hover:bg-border active:bg-border focus-visible:bg-primary focus-visible:outline-primary absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s focus-visible:outline-2"
+            className="group focus-visible:outline-primary absolute inset-y-0 -start-1.5 z-20 flex w-3 cursor-col-resize items-center justify-center focus-visible:outline-2"
             data-slot="inspector-resize-handle"
             role="separator"
             {...resizeHandleProps}
@@ -106,7 +108,19 @@ export const InspectorDock = ({
             // reason the handle is operable without a pointer.
             tabIndex={0}
             onDoubleClick={onResetWidth}
-          />
+          >
+            <span
+              aria-hidden="true"
+              className="bg-border group-hover:bg-primary group-active:bg-primary absolute inset-y-0 start-1/2 w-px -translate-x-1/2"
+            />
+            <span
+              aria-hidden="true"
+              className="bg-background/80 text-foreground-placeholder ring-border/60 group-hover:bg-accent group-hover:text-foreground group-focus-visible:bg-accent group-focus-visible:text-foreground relative flex h-5 w-3 items-center justify-center rounded-full opacity-0 shadow-xs ring-1 backdrop-blur-sm transition-[color,background-color,opacity] group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"
+              data-slot="inspector-resize-grip"
+            >
+              <EllipsisIcon className="size-3 rotate-90" />
+            </span>
+          </div>
         )}
         {showPaneContent || rail === undefined ? (
           <div className="bg-sidebar flex h-full w-full flex-row">

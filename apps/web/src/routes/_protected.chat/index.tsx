@@ -475,6 +475,20 @@ function ChatIndex() {
     );
   };
 
+  const composerModels = {
+    activeOrganizationId,
+    threadRef,
+    selectedModel: chatDraftMeta?.model ?? null,
+    selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
+    selectModel: modelSelection.selectModel,
+  };
+  const matterPicker = (
+    <ChatMatterPicker
+      matterIds={contextMatterIds}
+      onChange={setContextMatterIds}
+    />
+  );
+
   return (
     <LandingLayout
       actions={
@@ -511,46 +525,38 @@ function ChatIndex() {
               guideAnchorsEnabled
               variant="large"
               mcpOrganizationId={activeOrganizationId}
-              models={{
-                activeOrganizationId,
-                threadRef,
-                selectedModel: chatDraftMeta?.model ?? null,
-                selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
-                selectModel: modelSelection.selectModel,
-              }}
+              models={composerModels}
               reservedCommands={{ hasPersistedThread: false }}
               skillsOrganizationId={activeOrganizationId}
               dock={
-                <ChatComposerDock
-                  data={{
-                    webSearchAvailable:
-                      chatDraftMeta?.webSearchAvailable ?? false,
-                    webSearchEnabled: chatDraftMeta?.webSearchEnabled ?? false,
-                    // The draft carries the same cache-stable floor its first
-                    // send will pay, so the meter shows the honest baseline
-                    // (~system prompt + tools) rather than 0% until send.
-                    context: chatDraftMeta?.context ?? null,
-                  }}
-                  guideAnchorsEnabled
-                  models={{
-                    activeOrganizationId,
-                    threadRef,
-                    selectedModel: chatDraftMeta?.model ?? null,
-                    selectedReasoningEffort:
-                      chatDraftMeta?.reasoningEffort ?? null,
-                    selectModel: modelSelection.selectModel,
-                  }}
-                  leadingContext={
-                    <ChatMatterPicker
-                      matterIds={contextMatterIds}
-                      onChange={setContextMatterIds}
-                    />
-                  }
-                  // The hero already IS a fresh thread; a new-chat
-                  // affordance here would be a no-op, so opt out.
-                  onNewThread={null}
-                  threadRef={threadRef}
-                />
+                chatDraftMeta === undefined ? (
+                  <ChatComposerDock
+                    guideAnchorsEnabled
+                    leadingContext={matterPicker}
+                    models={composerModels}
+                    status="pending"
+                    threadRef={threadRef}
+                  />
+                ) : (
+                  <ChatComposerDock
+                    data={{
+                      webSearchAvailable: chatDraftMeta.webSearchAvailable,
+                      webSearchEnabled: chatDraftMeta.webSearchEnabled,
+                      // The draft carries the same cache-stable floor its first
+                      // send will pay, so the meter shows the honest baseline
+                      // (~system prompt + tools) rather than 0% until send.
+                      context: chatDraftMeta.context,
+                    }}
+                    guideAnchorsEnabled
+                    leadingContext={matterPicker}
+                    models={composerModels}
+                    // The hero already IS a fresh thread; a new-chat
+                    // affordance here would be a no-op, so opt out.
+                    onNewThread={null}
+                    status="ready"
+                    threadRef={threadRef}
+                  />
+                )
               }
               onSubmit={handleSubmit}
               onFocusChange={setComposerFocused}

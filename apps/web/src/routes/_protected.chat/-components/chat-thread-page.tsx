@@ -819,6 +819,7 @@ export const ChatThreadPage = ({
                         onNewThread={
                           messages.length > 0 ? startNewThread : null
                         }
+                        status="ready"
                         threadRef={threadRef}
                       />
                     }

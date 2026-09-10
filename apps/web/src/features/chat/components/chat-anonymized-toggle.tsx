@@ -4,15 +4,15 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-import Tooltip from "@/components/tooltip";
-
 type ChatAnonymizedToggleProps = {
+  disabled?: boolean;
   enabled: boolean;
   onChange: (enabled: boolean) => void;
   size?: "icon-sm" | "icon-xs" | undefined;
 };
 
 export const ChatAnonymizedToggle = ({
+  disabled = false,
   enabled,
   onChange,
   size = "icon-sm",
@@ -21,31 +21,28 @@ export const ChatAnonymizedToggle = ({
   const Icon = enabled ? ShieldCheckIcon : ShieldIcon;
 
   return (
-    <Tooltip
-      content={t(
+    <Button
+      aria-label={t("chat.anonymizedMode")}
+      aria-pressed={enabled}
+      // Quiet status-row control: muted at rest, borderless, only the
+      // usual ghost hover surface. The enabled state speaks through
+      // the info-tinted icon, not a filled chip.
+      className="text-muted-foreground hover:text-foreground"
+      data-pressed={enabled ? "" : undefined}
+      disabled={disabled}
+      onClick={() => onChange(!enabled)}
+      size={size}
+      tooltip={t(
         enabled ? "chat.anonymizedModeEnabled" : "chat.anonymizedModeDisabled",
       )}
-      render={
-        <Button
-          aria-label={t("chat.anonymizedMode")}
-          aria-pressed={enabled}
-          // Quiet status-row control: muted at rest, borderless, only the
-          // usual ghost hover surface. The enabled state speaks through
-          // the info-tinted icon, not a filled chip.
-          className="text-muted-foreground hover:text-foreground"
-          data-pressed={enabled ? "" : undefined}
-          onClick={() => onChange(!enabled)}
-          size={size}
-          variant={enabled ? "secondary" : "ghost"}
-        >
-          <Icon
-            className={cn(
-              size === "icon-xs" ? "size-3.5" : "size-4",
-              enabled && "text-info",
-            )}
-          />
-        </Button>
-      }
-    />
+      variant={enabled ? "secondary" : "ghost"}
+    >
+      <Icon
+        className={cn(
+          size === "icon-xs" ? "size-3.5" : "size-4",
+          enabled && "text-info",
+        )}
+      />
+    </Button>
   );
 };

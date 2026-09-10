@@ -91,13 +91,14 @@ describe("row rhythm", () => {
 });
 
 describe("rail", () => {
-  test("uses the subtle scrollbar treatment for rail content", () => {
-    expect(
-      classesOf(
-        renderToStaticMarkup(<InspectorRailContent />),
-        "inspector-rail-content",
-      ),
-    ).toContain("scrollbar-subtle");
+  test("hides the rail scrollbar without reducing the icon column", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<InspectorRailContent />),
+      "inspector-rail-content",
+    );
+
+    expect(classes).toContain("scrollbar-none");
+    expect(classes).not.toContain("scrollbar-subtle");
   });
 
   test("a tab fills the rail width and boxes itself like a rail cell", () => {
@@ -170,9 +171,24 @@ describe("dock", () => {
   });
 
   test("exposes a col-resize handle only while the pane is expanded", () => {
-    expect(renderDock(true)).toContain('data-slot="inspector-resize-handle"');
+    const expandedMarkup = renderDock(true);
+
+    expect(expandedMarkup).toContain('data-slot="inspector-resize-handle"');
+    expect(classesOf(expandedMarkup, "inspector-resize-grip")).toEqual(
+      expect.arrayContaining([
+        "h-5",
+        "w-3",
+        "rounded-full",
+        "opacity-0",
+        "group-hover:opacity-100",
+        "group-focus-visible:opacity-100",
+      ]),
+    );
     expect(renderDock(false)).not.toContain(
       'data-slot="inspector-resize-handle"',
+    );
+    expect(renderDock(false)).not.toContain(
+      'data-slot="inspector-resize-grip"',
     );
   });
 
