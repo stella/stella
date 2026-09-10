@@ -19,6 +19,7 @@ export type AttachedTemplateRelationshipFinding = {
 
 type SanitizedAttachedTemplateRelationships = {
   findings: readonly AttachedTemplateRelationshipFinding[];
+  removedRelationshipIds: readonly string[];
   sourcePartPath: string | null;
   xml: string;
 };
@@ -28,33 +29,36 @@ type SanitizedAttachedTemplateSource = {
   xml: string;
 };
 
-const ATTACHED_TEMPLATE_RELATIONSHIP_TYPE = "/attachedtemplate";
+const PACKAGE_RELATIONSHIPS_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+const ATTACHED_TEMPLATE_RELATIONSHIP_TYPES = [
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/attachedTemplate",
+] as const;
+const WORDPROCESSINGML_NAMESPACES = [
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+  "http://purl.oclc.org/ooxml/wordprocessingml/main",
+] as const;
+const OFFICE_RELATIONSHIPS_NAMESPACES = [
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships",
+] as const;
 const RELATIONSHIPS_SUFFIX = ".rels";
-const ROOT_RELATIONSHIPS_PREFIX = "_rels/";
-const NESTED_RELATIONSHIPS_SEGMENT = "/_rels/";
+const RELATIONSHIPS_DIRECTORY = "_rels";
+const ROOT_RELATIONSHIPS_PATH = "_rels/.rels";
 const WINDOWS_DRIVE_PATH_RE = /^[a-z]:[\\/]/iu;
 const UNC_PATH_RE = /^(?:\\\\|\/\/)[^\\/]/u;
 
-const attributeByLocalName = (
-  element: slimdom.Element,
-  expectedName: string,
-): string | null => {
-  const expected = expectedName.toLowerCase();
-  return (
-    element.attributes.find(
-      ({ localName }) => localName.toLowerCase() === expected,
-    )?.value ?? null
-  );
-};
-
 const isAttachedTemplateRelationship = (element: slimdom.Element): boolean => {
-  if (element.localName.toLowerCase() !== "relationship") {
+  if (
+    element.localName !== "Relationship" ||
+    element.namespaceURI !== PACKAGE_RELATIONSHIPS_NAMESPACE
+  ) {
     return false;
   }
-  const type = attributeByLocalName(element, "Type")?.trim().toLowerCase();
-  return (
-    type === "attachedtemplate" ||
-    type?.endsWith(ATTACHED_TEMPLATE_RELATIONSHIP_TYPE) === true
+  const type = element.getAttribute("Type")?.trim();
+  return ATTACHED_TEMPLATE_RELATIONSHIP_TYPES.some(
+    (attachedTemplateType) => attachedTemplateType === type,
   );
 };
 
@@ -116,30 +120,46 @@ export const classifyAttachedTemplateTarget = (
 export const relationshipSourcePartPath = (
   relationshipsPartPath: string,
 ): string | null => {
-  if (!relationshipsPartPath.endsWith(RELATIONSHIPS_SUFFIX)) {
+  if (
+    relationshipsPartPath.includes("\\") ||
+    relationshipsPartPath.startsWith("/")
+  ) {
     return null;
   }
-  if (relationshipsPartPath === `${ROOT_RELATIONSHIPS_PREFIX}.rels`) {
+  if (relationshipsPartPath === ROOT_RELATIONSHIPS_PATH) {
     return null;
   }
-  if (relationshipsPartPath.startsWith(ROOT_RELATIONSHIPS_PREFIX)) {
-    return relationshipsPartPath
-      .slice(ROOT_RELATIONSHIPS_PREFIX.length)
-      .slice(0, -RELATIONSHIPS_SUFFIX.length);
+  const segments = relationshipsPartPath.split("/");
+  if (
+    segments.length < 2 ||
+    segments.some(
+      (segment) => segment === "" || segment === "." || segment === "..",
+    )
+  ) {
+    return null;
   }
-
-  const segmentIndex = relationshipsPartPath.lastIndexOf(
-    NESTED_RELATIONSHIPS_SEGMENT,
+  const relationshipDirectory = segments.at(-2);
+  const relationshipFileName = segments.at(-1);
+  if (
+    relationshipDirectory !== RELATIONSHIPS_DIRECTORY ||
+    relationshipFileName === undefined ||
+    !relationshipFileName.endsWith(RELATIONSHIPS_SUFFIX)
+  ) {
+    return null;
+  }
+  const sourceFileName = relationshipFileName.slice(
+    0,
+    -RELATIONSHIPS_SUFFIX.length,
   );
-  if (segmentIndex === -1) {
+  if (sourceFileName === "") {
     return null;
   }
-  const directory = relationshipsPartPath.slice(0, segmentIndex);
-  const fileName = relationshipsPartPath
-    .slice(segmentIndex + NESTED_RELATIONSHIPS_SEGMENT.length)
-    .slice(0, -RELATIONSHIPS_SUFFIX.length);
-  return fileName === "" ? null : `${directory}/${fileName}`;
+  const sourceDirectory = segments.slice(0, -2);
+  return [...sourceDirectory, sourceFileName].join("/");
 };
+
+export const isOpcRelationshipPartPath = (path: string): boolean =>
+  path === ROOT_RELATIONSHIPS_PATH || relationshipSourcePartPath(path) !== null;
 
 /**
  * Find and remove every attached-template relationship in one `.rels` part.
@@ -156,6 +176,7 @@ export const sanitizeAttachedTemplateRelationships = (
   if (relationships.length === 0) {
     return {
       findings: [],
+      removedRelationshipIds: [],
       sourcePartPath: relationshipSourcePartPath(relationshipsPartPath),
       xml,
     };
@@ -164,27 +185,60 @@ export const sanitizeAttachedTemplateRelationships = (
   const findings = relationships.map((relationship) => ({
     rule: ATTACHED_TEMPLATE_SECURITY_RULE,
     targetKind: classifyAttachedTemplateTarget(
-      attributeByLocalName(relationship, "Target"),
+      relationship.getAttribute("Target"),
     ),
   }));
+  const removedRelationshipIds = relationships.flatMap((relationship) => {
+    const id = relationship.getAttribute("Id")?.trim();
+    return id ? [id] : [];
+  });
   for (const relationship of relationships) {
     relationship.remove();
   }
 
   return {
     findings,
+    removedRelationshipIds,
     sourcePartPath: relationshipSourcePartPath(relationshipsPartPath),
     xml: slimdom.serializeToWellFormedString(document),
   };
 };
 
-/** Remove the WordprocessingML element that points at a removed relationship. */
+const relationshipReferenceId = (element: slimdom.Element): string | null => {
+  for (const namespace of OFFICE_RELATIONSHIPS_NAMESPACES) {
+    const id = element.getAttributeNS(namespace, "id");
+    if (id !== null) {
+      return id;
+    }
+  }
+  return null;
+};
+
+/** Remove WordprocessingML references to the relationships removed above. */
 export const sanitizeAttachedTemplateSource = (
   xml: string,
+  removedRelationshipIds: readonly string[],
 ): SanitizedAttachedTemplateSource => {
+  if (removedRelationshipIds.length === 0) {
+    return { removed: 0, xml };
+  }
   const document = slimdom.parseXmlDocument(xml);
+  const root = document.documentElement;
+  if (
+    root === null ||
+    root.localName !== "settings" ||
+    !WORDPROCESSINGML_NAMESPACES.some(
+      (namespace) => namespace === root.namespaceURI,
+    )
+  ) {
+    return { removed: 0, xml };
+  }
+  const relationshipIds = new Set(removedRelationshipIds);
   const references = descendantElements(document).filter(
-    ({ localName }) => localName.toLowerCase() === "attachedtemplate",
+    (element) =>
+      element.localName === "attachedTemplate" &&
+      element.namespaceURI === root.namespaceURI &&
+      relationshipIds.has(relationshipReferenceId(element) ?? ""),
   );
   if (references.length === 0) {
     return { removed: 0, xml };

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
@@ -9,8 +9,10 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { prepareAttachedTemplateFile } from "@/lib/files/attached-template-upload";
-import { requestAttachedTemplateRemoval } from "@/lib/files/attached-template-upload-store";
+import {
+  ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
+  preflightAttachedTemplateUpload,
+} from "@/lib/files/attached-template-upload-preflight";
 import { extensionMatches } from "@/lib/files/file-extension";
 import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -54,19 +56,25 @@ export const useUploadVersion = () => {
         );
       }
 
-      const attachedTemplate = await prepareAttachedTemplateFile(file);
-      if (
-        attachedTemplate !== null &&
-        !(await requestAttachedTemplateRemoval([attachedTemplate]))
-      ) {
-        return Result.err(
-          new ClientOperationError({
-            action: UPLOAD_VERSION_CANCELLED_ACTION,
-            message: "Upload cancelled before attached-template removal",
-          }),
-        );
+      const preflight = await preflightAttachedTemplateUpload([file]);
+      let fileToUpload: File;
+      switch (preflight.type) {
+        case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
+          return Result.err(
+            new ClientOperationError({
+              action: UPLOAD_VERSION_CANCELLED_ACTION,
+              message: "Upload cancelled before attached-template removal",
+            }),
+          );
+        case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
+          fileToUpload = preflight.replacements.get(file) ?? file;
+          break;
+        default:
+          preflight satisfies never;
+          return panic(
+            `Unhandled attached-template preflight: ${String(preflight)}`,
+          );
       }
-      const fileToUpload = attachedTemplate?.file ?? file;
 
       return await Result.tryPromise({
         try: async () =>

@@ -210,6 +210,8 @@ export type {
   ApiErrorObjectValue,
   ApiErrorValue,
   ApiFileSecurityIssue,
+  ApiFileSecurityRejection,
+  ApiFileSecurityRejectionDetails,
   ApiValidationErrorValue,
   FileSecurityRemediation,
   NormalizedApiError,

@@ -2,21 +2,17 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
-import type { ApiFileSecurityIssue } from "@stll/api-contract";
+import type {
+  ApiFileSecurityIssue,
+  ApiFileSecurityRejection,
+} from "@stll/api-contract";
 import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 
 import type { ScanResult } from "@/api/lib/file-scan/types";
 
-type FileSecurityRejection = {
-  code: typeof API_FILE_SECURITY_REJECTED_ERROR_CODE;
-  hint: string;
-  issues: ApiFileSecurityIssue[];
-  message: string;
-};
-
 export const fileSecurityRejection = (
   scanResult: ScanResult,
-): FileSecurityRejection | null => {
+): ApiFileSecurityRejection | null => {
   const rejected = scanResult.findings.filter(
     ({ severity }) => severity === "reject",
   );

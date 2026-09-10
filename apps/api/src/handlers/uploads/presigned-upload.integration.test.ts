@@ -7,6 +7,13 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import JSZip from "jszip";
+
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  FILE_SECURITY_REMEDIATION,
+} from "@stll/api-contract";
+import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 
 import { pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -41,6 +48,45 @@ let ids: TestIds;
 let fake: FakeS3;
 
 const seededUploadIds: SafeId<"pendingUpload">[] = [];
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const ATTACHED_TEMPLATE_MESSAGE =
+  "Document contains an external Word template link " +
+  "(potential template injection)";
+const ATTACHED_TEMPLATE_REJECTION_MESSAGE =
+  `File rejected by security rule ${ATTACHED_TEMPLATE_SECURITY_RULE}: ` +
+  ATTACHED_TEMPLATE_MESSAGE;
+
+const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      "</Types>",
+  );
+  zip.file(
+    "word/document.xml",
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
+  );
+  zip.file(
+    "word/settings.xml",
+    '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<w:attachedTemplate r:id="rId1"/></w:settings>',
+  );
+  zip.file(
+    "word/_rels/settings.xml.rels",
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" ' +
+      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" ' +
+      'Target="file:///C:/Templates/Contract.dotx" TargetMode="External"/>' +
+      "</Relationships>",
+  );
+  return await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+};
 
 beforeAll(async () => {
   fake = startFakeS3();
@@ -198,6 +244,85 @@ describe("presigned upload mutation flow", () => {
       code: 422,
       response: { message: "Aborted by client" },
     });
+  });
+
+  test("replays structured file-security rejection details after finalize", async () => {
+    const bytes = await makeAttachedTemplateDocx();
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "attached-template.docx",
+            mimeType: DOCX_MIME,
+            size: bytes.byteLength,
+            sha256Hex: new Bun.CryptoHasher("sha256")
+              .update(bytes)
+              .digest("hex"),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+
+    const grant = readPresignedUpload(presignResult);
+    const staged = await fetch(grant.url, {
+      method: "PUT",
+      body: bytes,
+      headers: grant.headers,
+    });
+    expect(staged.status).toBe(200);
+
+    const finalizeContext = () =>
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      );
+    const firstFinalize = await finalizeUpload.handler(finalizeContext());
+    const replayedFinalize = await finalizeUpload.handler(finalizeContext());
+    const rejectionDetails = {
+      code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+      hint: "Remove the attached Word template link and its source reference, then upload the sanitized copy.",
+      issues: [
+        {
+          code: ATTACHED_TEMPLATE_SECURITY_RULE,
+          message: ATTACHED_TEMPLATE_MESSAGE,
+          path: "file",
+          remediation: FILE_SECURITY_REMEDIATION.removeAttachedTemplate,
+        },
+      ],
+    } as const;
+
+    expect(firstFinalize).toEqual({
+      code: 422,
+      response: {
+        message: ATTACHED_TEMPLATE_REJECTION_MESSAGE,
+        ...rejectionDetails,
+      },
+    });
+    expect(replayedFinalize).toEqual(firstFinalize);
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { rejectReason: true, rejectionDetails: true, status: true },
+      }),
+    ).toEqual({
+      rejectReason: ATTACHED_TEMPLATE_REJECTION_MESSAGE,
+      rejectionDetails,
+      status: "rejected",
+    });
+    expect(
+      [...fake.objects.keys()].filter((key) => key.includes(uploadId)),
+    ).toEqual([]);
   });
 
   test("does not let workspace A abort workspace B upload IDs", async () => {

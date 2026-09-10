@@ -37,6 +37,10 @@ import { api } from "@/lib/api";
 import type { OptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
+import {
+  ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
+  preflightAttachedTemplateUpload,
+} from "@/lib/files/attached-template-upload-preflight";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceEntity, WorkspaceView } from "@/lib/types";
 import {
@@ -532,8 +536,25 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
 
+    const preflight = await preflightAttachedTemplateUpload(files);
+    let filesToUpload: File[];
+    switch (preflight.type) {
+      case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
+        return;
+      case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
+        filesToUpload = files.map(
+          (file) => preflight.replacements.get(file) ?? file,
+        );
+        break;
+      default:
+        preflight satisfies never;
+        return panic(
+          `Unhandled attached-template preflight: ${String(preflight)}`,
+        );
+    }
+
     const results = await uploadFileEntitiesBatched({
-      files,
+      files: filesToUpload,
       workspaceId,
       propertyId: filePropertyId,
       parentId: null,

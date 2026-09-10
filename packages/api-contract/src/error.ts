@@ -17,6 +17,18 @@ export type ApiFileSecurityIssue = {
   remediation?: FileSecurityRemediation | undefined;
 };
 
+export type ApiFileSecurityRejection = {
+  code: typeof API_FILE_SECURITY_REJECTED_ERROR_CODE;
+  hint: string;
+  issues: ApiFileSecurityIssue[];
+  message: string;
+};
+
+export type ApiFileSecurityRejectionDetails = Omit<
+  ApiFileSecurityRejection,
+  "message"
+>;
+
 /**
  * Machine-readable `code` on the 409 an optimistic-concurrency check returns
  * when the record moved under the caller. Shared so the handler that emits it

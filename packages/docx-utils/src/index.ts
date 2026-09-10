@@ -15,6 +15,7 @@ export {
   ATTACHED_TEMPLATE_SECURITY_RULE,
   ATTACHED_TEMPLATE_TARGET_KIND,
   classifyAttachedTemplateTarget,
+  isOpcRelationshipPartPath,
   relationshipSourcePartPath,
   sanitizeAttachedTemplateRelationships,
   sanitizeAttachedTemplateSource,

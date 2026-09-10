@@ -22,6 +22,9 @@ import type { Err } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
@@ -80,6 +83,23 @@ const config = {
 } satisfies HandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
+
+const fileSecurityRejectionDetails = (
+  error: UploadFinalizeError,
+): ApiFileSecurityRejectionDetails | null => {
+  if (
+    error.code !== API_FILE_SECURITY_REJECTED_ERROR_CODE ||
+    error.hint === undefined ||
+    error.issues === undefined
+  ) {
+    return null;
+  }
+  return {
+    code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+    hint: error.hint,
+    issues: error.issues,
+  };
+};
 
 const finalizeUpload = createSafeHandler(
   config,
@@ -183,6 +203,7 @@ const finalizeUpload = createSafeHandler(
           new HandlerError({
             status: 422,
             message: existing.rejectReason ?? "Upload was previously rejected",
+            ...(existing.rejectionDetails ?? {}),
           }),
         );
       }
@@ -255,6 +276,10 @@ const finalizeUpload = createSafeHandler(
             .set({
               status: terminalStatus,
               rejectReason: error.rejectReason ?? error.message,
+              rejectionDetails:
+                terminalStatus === "rejected"
+                  ? fileSecurityRejectionDetails(error)
+                  : null,
               finalizedAt: terminalStatus === "rejected" ? new Date() : null,
             })
             .where(

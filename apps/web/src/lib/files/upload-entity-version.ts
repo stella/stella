@@ -1,8 +1,14 @@
+import { panic } from "better-result";
+
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
+import {
+  ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
+  preflightAttachedTemplateUpload,
+} from "./attached-template-upload-preflight";
 import { completeEntityVersionUpload } from "./upload-entity-version.logic";
 
 // Stall ceiling, not a target duration: a healthy slow upload of a large file
@@ -15,6 +21,15 @@ type UploadEntityVersionOptions = {
   file: File;
   signal?: AbortSignal | undefined;
 };
+
+export const ENTITY_VERSION_UPLOAD_RESULT = {
+  cancelled: "cancelled",
+  uploaded: "uploaded",
+} as const;
+
+export type EntityVersionUploadResult =
+  | { type: typeof ENTITY_VERSION_UPLOAD_RESULT.cancelled }
+  | { type: typeof ENTITY_VERSION_UPLOAD_RESULT.uploaded };
 
 const hashFileSha256Hex = async (file: File): Promise<string> => {
   const buffer = await file.arrayBuffer();
@@ -48,9 +63,25 @@ export const uploadEntityVersion = async ({
   entityId,
   file,
   signal,
-}: UploadEntityVersionOptions): Promise<void> => {
+}: UploadEntityVersionOptions): Promise<EntityVersionUploadResult> => {
   signal?.throwIfAborted();
-  const sha256Hex = await hashFileSha256Hex(file);
+  const preflight = await preflightAttachedTemplateUpload([file]);
+  let fileToUpload: File;
+  switch (preflight.type) {
+    case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
+      return { type: ENTITY_VERSION_UPLOAD_RESULT.cancelled };
+    case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
+      fileToUpload = preflight.replacements.get(file) ?? file;
+      break;
+    default:
+      preflight satisfies never;
+      return panic(
+        `Unhandled attached-template preflight: ${String(preflight)}`,
+      );
+  }
+
+  signal?.throwIfAborted();
+  const sha256Hex = await hashFileSha256Hex(fileToUpload);
   signal?.throwIfAborted();
 
   const wsClient = api.uploads({
@@ -60,9 +91,9 @@ export const uploadEntityVersion = async ({
     {
       purpose: "entity_version",
       entityId: toSafeId<"entity">(entityId),
-      name: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
+      name: fileToUpload.name,
+      mimeType: fileToUpload.type || "application/octet-stream",
+      size: fileToUpload.size,
       sha256Hex,
     },
     signal ? { fetch: { signal } } : undefined,
@@ -84,9 +115,10 @@ export const uploadEntityVersion = async ({
       await fetchWithTimeout(url, {
         method: "PUT",
         headers,
-        body: file,
+        body: fileToUpload,
         signal,
         timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
       }),
   });
+  return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
 };

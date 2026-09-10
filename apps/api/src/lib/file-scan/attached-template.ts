@@ -3,15 +3,27 @@ import JSZip from "jszip";
 
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
+  isOpcRelationshipPartPath,
   sanitizeAttachedTemplateRelationships,
 } from "@stll/docx-utils";
 
-import type { Match, Scanner } from "@/api/lib/file-scan/scanner";
+import type {
+  Match,
+  Scanner,
+  ScanContext,
+} from "@/api/lib/file-scan/scanner";
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
 
 const MAX_ARCHIVE_ENTRIES = 1000;
 const MAX_RELATIONSHIPS_ENTRY_BYTES = 1024 * 1024;
 const MAX_RELATIONSHIPS_TOTAL_BYTES = 8 * 1024 * 1024;
+const WORD_OPENXML_MIME_TYPES: ReadonlySet<string> = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-word.document.macroenabled.12",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+  "application/vnd.ms-word.template.macroenabled.12",
+]);
+const WORD_OPENXML_EXTENSIONS = [".docx", ".docm", ".dotx", ".dotm"] as const;
 
 const ATTACHED_TEMPLATE_FINDING: Match = {
   rule: ATTACHED_TEMPLATE_SECURITY_RULE,
@@ -36,6 +48,24 @@ type RelationshipEntryRead =
   | { type: "ok"; xml: string }
   | { type: "too-large" }
   | { type: "unreadable" };
+
+const isWordOpenXmlUpload = (context: ScanContext | undefined): boolean => {
+  if (context === undefined) {
+    return false;
+  }
+  const mimeType = context.mimeType
+    .split(";", 1)
+    .at(0)
+    ?.trim()
+    .toLowerCase();
+  if (mimeType !== undefined && WORD_OPENXML_MIME_TYPES.has(mimeType)) {
+    return true;
+  }
+  const fileName = context.filename.toLowerCase();
+  return WORD_OPENXML_EXTENSIONS.some((extension) =>
+    fileName.endsWith(extension),
+  );
+};
 
 const readRelationshipEntry = async (
   entry: JSZip.JSZipObject,
@@ -86,8 +116,8 @@ const readRelationshipEntry = async (
  * with `attachedTemplate` text in another and become a false positive.
  */
 export const attachedTemplateScanner: Scanner = {
-  async scan(bytes) {
-    if (!hasZipMagic(bytes)) {
+  async scan(bytes, context) {
+    if (!isWordOpenXmlUpload(context) || !hasZipMagic(bytes)) {
       return [];
     }
 
@@ -108,7 +138,7 @@ export const attachedTemplateScanner: Scanner = {
 
     let remainingBytes = MAX_RELATIONSHIPS_TOTAL_BYTES;
     for (const entry of entries) {
-      if (entry.dir || !entry.name.endsWith(".rels")) {
+      if (entry.dir || !isOpcRelationshipPartPath(entry.name)) {
         continue;
       }
       if (remainingBytes <= 0) {

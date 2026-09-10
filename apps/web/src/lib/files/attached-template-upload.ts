@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
+  isOpcRelationshipPartPath,
   loadDocx,
   repackZip,
   sanitizeAttachedTemplateRelationships,
@@ -68,11 +69,11 @@ export const prepareAttachedTemplateFile = async (
       }
 
       const targetKinds = new Set<AttachedTemplateTargetKind>();
-      const sourcePartPaths = new Set<string>();
+      const sourceRelationshipIds = new Map<string, Set<string>>();
       let relationshipBytes = 0;
 
       for (const entry of entries) {
-        if (entry.dir || !entry.name.endsWith(".rels")) {
+        if (entry.dir || !isOpcRelationshipPartPath(entry.name)) {
           continue;
         }
         const declaredSize = declaredUncompressedSize(entry);
@@ -99,20 +100,30 @@ export const prepareAttachedTemplateFile = async (
         if (sanitized.findings.length === 0) {
           continue;
         }
+        if (
+          sanitized.sourcePartPath === null ||
+          sanitized.removedRelationshipIds.length !==
+            sanitized.findings.length
+        ) {
+          return null;
+        }
         zip.file(entry.name, sanitized.xml);
         for (const finding of sanitized.findings) {
           targetKinds.add(finding.targetKind);
         }
-        if (sanitized.sourcePartPath !== null) {
-          sourcePartPaths.add(sanitized.sourcePartPath);
+        const relationshipIds =
+          sourceRelationshipIds.get(sanitized.sourcePartPath) ?? new Set();
+        for (const relationshipId of sanitized.removedRelationshipIds) {
+          relationshipIds.add(relationshipId);
         }
+        sourceRelationshipIds.set(sanitized.sourcePartPath, relationshipIds);
       }
 
       if (targetKinds.size === 0) {
         return null;
       }
 
-      for (const sourcePartPath of sourcePartPaths) {
+      for (const [sourcePartPath, relationshipIds] of sourceRelationshipIds) {
         const source = zip.file(sourcePartPath);
         if (source === null) {
           continue;
@@ -131,7 +142,9 @@ export const prepareAttachedTemplateFile = async (
         ) {
           return null;
         }
-        const sanitized = sanitizeAttachedTemplateSource(sourceXml);
+        const sanitized = sanitizeAttachedTemplateSource(sourceXml, [
+          ...relationshipIds,
+        ]);
         if (sanitized.removed > 0) {
           zip.file(sourcePartPath, sanitized.xml);
         }

@@ -18,8 +18,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { prepareAttachedTemplateFiles } from "@/lib/files/attached-template-upload";
-import { useAttachedTemplateUploadStore } from "@/lib/files/attached-template-upload-store";
+import {
+  ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
+  preflightAttachedTemplateUpload,
+} from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
 import { toSafeId } from "@/lib/safe-id";
@@ -733,9 +735,6 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const askAboutReferencedFiles = useDocumentReferenceUploadStore(
     (store) => store.ask,
   );
-  const askAboutAttachedTemplates = useAttachedTemplateUploadStore(
-    (store) => store.ask,
-  );
 
   const ensureFileProperty = async (): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
@@ -892,28 +891,23 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const createFileEntitiesAfterAttachedTemplateCheck = async (
     input: CreateFileEntitiesInput,
   ): Promise<void> => {
-    const prepared = await prepareAttachedTemplateFiles(
+    const preflight = await preflightAttachedTemplateUpload(
       uploadInputFiles(input),
     );
-    if (prepared.length === 0) {
-      continueAfterAttachedTemplateCheck(input);
-      return;
-    }
-
-    askAboutAttachedTemplates({
-      files: prepared,
-      onApproved: () => {
-        const replacements = new Map(
-          prepared.map(({ originalFile, file }) => [originalFile, file]),
-        );
+    switch (preflight.type) {
+      case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
+        return;
+      case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
         continueAfterAttachedTemplateCheck(
-          withUploadInputFileReplacements(input, replacements),
+          withUploadInputFileReplacements(input, preflight.replacements),
         );
-      },
-      onCancelled: () => {
-        // Deliberate: unchanged files do not leave the user's device.
-      },
-    });
+        return;
+      default:
+        preflight satisfies never;
+        return panic(
+          `Unhandled attached-template preflight: ${String(preflight)}`,
+        );
+    }
   };
 
   const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
