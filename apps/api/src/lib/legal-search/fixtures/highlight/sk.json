@@ -1,0 +1,7 @@
+{
+  "mustMark": [
+    { "query": "rozsudkom", "passage": "rozsudkami" },
+    { "query": "sudu", "passage": "súdu" }
+  ],
+  "mustNotMark": [{ "query": "rady", "passage": "rád" }]
+}

@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "sopimukset", "passage": "sopimuksen" }],
+  "mustNotMark": [{ "query": "sopimukset", "passage": "tuomio" }]
+}

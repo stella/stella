@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "szerződés", "passage": "szerződések" }],
+  "mustNotMark": [{ "query": "szerződés", "passage": "bíróság" }]
+}

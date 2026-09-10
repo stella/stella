@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "overeenkomst", "passage": "overeenkomsten" }],
+  "mustNotMark": [{ "query": "overeenkomst", "passage": "vonnis" }]
+}

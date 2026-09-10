@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "sentencia", "passage": "sentencias" }],
+  "mustNotMark": [{ "query": "sentencia", "passage": "contrato" }]
+}

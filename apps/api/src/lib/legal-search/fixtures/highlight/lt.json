@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "sprendimas", "passage": "sprendimai" }],
+  "mustNotMark": [{ "query": "sprendimas", "passage": "teismas" }]
+}
