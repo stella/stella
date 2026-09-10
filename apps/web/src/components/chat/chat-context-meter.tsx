@@ -29,15 +29,18 @@ export type ChatContextUsage = {
   };
 };
 
-type ChatContextMeterProps = {
-  /**
-   * The next-send estimate, or `null` before the first message lands.
-   * A brand-new thread still renders the meter as an empty ring,
-   * so the affordance is present from the start; only the breakdown
-   * popover is withheld until there is a conversation to break down.
-   */
-  usage: ChatContextUsage | null;
-};
+type ChatContextMeterProps =
+  | { status: "pending" }
+  | {
+      status: "ready";
+      /**
+       * The next-send estimate, or `null` before the first message lands.
+       * A brand-new thread still renders the meter as an empty ring,
+       * so the affordance is present from the start; only the breakdown
+       * popover is withheld until there is a conversation to break down.
+       */
+      usage: ChatContextUsage | null;
+    };
 
 // The ring's tone escalates near the trigger.
 const WARNING_THRESHOLD = 80;
@@ -71,10 +74,23 @@ type ContextPart = {
   cached: boolean;
 };
 
-export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
+export const ChatContextMeter = (props: ChatContextMeterProps) => {
   const t = useTranslations("chat.contextMeter");
   const format = useFormatter();
 
+  if (props.status === "pending") {
+    return (
+      <span
+        aria-hidden="true"
+        className="text-muted-foreground inline-flex size-6 items-center justify-center"
+        data-status="pending"
+      >
+        <ContextRing percent={0} />
+      </span>
+    );
+  }
+
+  const { usage } = props;
   if (usage === null) {
     // Zero-state for a brand-new/empty thread: the empty ring in the
     // muted tone, with no popover — there is no conversation to break down
@@ -218,6 +234,7 @@ const ContextRing = ({ percent }: { percent: number }) => {
     <svg
       aria-hidden="true"
       className="size-3.5 -rotate-90"
+      data-slot="chat-context-ring"
       fill="none"
       viewBox="0 0 16 16"
     >

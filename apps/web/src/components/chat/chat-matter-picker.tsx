@@ -142,12 +142,12 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
 };
 
 export const ChatMatterPickerPending = () => (
-  <span
+  <div
     aria-hidden="true"
     className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
   >
     <MatterPickerTriggerContent status="pending" />
-  </span>
+  </div>
 );
 
 export const ChatMatterPicker = ({

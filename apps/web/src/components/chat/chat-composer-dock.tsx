@@ -55,16 +55,21 @@ type ChatComposerDockProps = ChatComposerDockCommonProps &
   );
 
 type ChatComposerDockRenderState = {
-  data: {
-    webSearchAvailable: boolean;
-    webSearchEnabled: boolean;
-    context: ChatContextUsage | null;
-  };
   disabled: boolean;
   endExtras: ReactNode | undefined;
   models?: ComposerModelsMenuProps | undefined;
   onNewThread: (() => void) | null;
-};
+} & (
+  | { status: "pending" }
+  | {
+      status: "ready";
+      data: {
+        webSearchAvailable: boolean;
+        webSearchEnabled: boolean;
+        context: ChatContextUsage | null;
+      };
+    }
+);
 
 const resolveChatComposerDockRenderState = (
   props: ChatComposerDockProps,
@@ -72,15 +77,11 @@ const resolveChatComposerDockRenderState = (
   switch (props.status) {
     case "pending":
       return {
-        data: {
-          context: null,
-          webSearchAvailable: true,
-          webSearchEnabled: false,
-        },
         disabled: true,
         endExtras: undefined,
         models: props.models,
         onNewThread: null,
+        status: "pending",
       };
     case "ready":
       return {
@@ -89,6 +90,7 @@ const resolveChatComposerDockRenderState = (
         endExtras: props.endExtras,
         models: props.models,
         onNewThread: props.onNewThread,
+        status: "ready",
       };
     default: {
       props satisfies never;
@@ -115,8 +117,12 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
     leadingContext,
     threadRef,
   } = props;
-  const { data, disabled, endExtras, models, onNewThread } =
-    resolveChatComposerDockRenderState(props);
+  const renderState = resolveChatComposerDockRenderState(props);
+  const { disabled, endExtras, models, onNewThread } = renderState;
+  const showWebSearch =
+    renderState.status === "pending" || renderState.data.webSearchAvailable;
+  const webSearchEnabled =
+    renderState.status === "ready" && renderState.data.webSearchEnabled;
   const t = useTranslations();
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
@@ -124,7 +130,10 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
     <ComposerStatusRow
       className={className}
       end={
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div
+          aria-hidden={disabled ? true : undefined}
+          className="flex shrink-0 items-center gap-0.5"
+        >
           {onNewThread !== null && (
             <Tooltip
               content={t("chat.newChat")}
@@ -145,7 +154,14 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}
-          <ChatContextMeter usage={data.context} />
+          {renderState.status === "pending" ? (
+            <ChatContextMeter status="pending" />
+          ) : (
+            <ChatContextMeter
+              status="ready"
+              usage={renderState.data.context}
+            />
+          )}
         </div>
       }
       start={
@@ -153,15 +169,16 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
         // the composer input above it: the status row is quiet chrome
         // (muted text-xs, borderless controls), never a second toolbar.
         <div
+          aria-hidden={disabled ? true : undefined}
           className="flex min-w-0 flex-1 items-center gap-1"
           data-slot="chat-composer-dock"
           data-status={props.status}
         >
           {leadingContext}
-          {data.webSearchAvailable && (
+          {showWebSearch && (
             <ChatWebSearchToggle
               disabled={disabled}
-              enabled={data.webSearchEnabled}
+              enabled={webSearchEnabled}
               size="icon-xs"
               threadRef={threadRef}
             />

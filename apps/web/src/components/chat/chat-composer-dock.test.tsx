@@ -35,7 +35,8 @@ describe("chat composer dock", () => {
     expect(markup).toContain("lucide-chevron-down");
     expect(markup).toContain("lucide-globe");
     expect(markup).toContain("lucide-shield");
-    expect(markup).toContain('role="status"');
+    expect(markup).toContain('data-slot="chat-context-ring"');
+    expect(markup).not.toContain('role="status"');
     expect(markup.match(/data-slot="skeleton"/gu)).toHaveLength(1);
   });
 
