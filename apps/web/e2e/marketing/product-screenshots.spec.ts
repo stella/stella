@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 
-import {
-  isPublicCaseLawCountry,
-} from "@stll/api-contract/case-law-launch-readiness";
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import { setFixedBrowserTime } from "../helpers/clock";
 
