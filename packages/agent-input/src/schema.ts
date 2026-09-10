@@ -290,7 +290,11 @@ const walkUnion = ({
   }
   const canonical = new Map<string, (typeof successful)[number]>();
   for (const result of successful) {
-    canonical.set(JSON.stringify(result.value), result);
+    const key = JSON.stringify(result.value);
+    if (key === undefined) {
+      return { status: "not-applicable" };
+    }
+    canonical.set(key, result);
   }
   if (canonical.size !== 1) {
     return { status: "not-applicable" };
