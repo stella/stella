@@ -1873,7 +1873,7 @@ describe("invoke_capability input normalization", () => {
         },
         validate_only: true,
       },
-      context: createContext(),
+      context: createContext({ grantedScopes: ["stella:templates"] }),
       toolName: "invoke_capability",
     });
     expect(errorEnvelope(result)).toMatchObject({
