@@ -3,4 +3,4 @@
 ---
 
 Keep inspector rail scrollbars from narrowing the icon column and show a clear
-resize grip without changing its layout width.
+resize grip on hover or focus without changing its layout width.

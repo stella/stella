@@ -175,7 +175,14 @@ describe("dock", () => {
 
     expect(expandedMarkup).toContain('data-slot="inspector-resize-handle"');
     expect(classesOf(expandedMarkup, "inspector-resize-grip")).toEqual(
-      expect.arrayContaining(["h-5", "w-3", "rounded-full", "ring-1"]),
+      expect.arrayContaining([
+        "h-5",
+        "w-3",
+        "rounded-full",
+        "opacity-0",
+        "group-hover:opacity-100",
+        "group-focus-visible:opacity-100",
+      ]),
     );
     expect(renderDock(false)).not.toContain(
       'data-slot="inspector-resize-handle"',
