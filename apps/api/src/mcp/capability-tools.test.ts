@@ -1714,11 +1714,11 @@ describe("invoke_capability argument shape validation", () => {
     expect(issues.some((i) => i.path === "input.params")).toBe(true);
   });
 
-  test("sibling meta-tools already reject mistyped args (no coercion)", async () => {
-    // list_capabilities limit must be a JSON integer, not a numeric string.
+  test("sibling meta-tools normalize declared numbers but not ordinary strings", async () => {
+    // list_capabilities shares the declared numeric normalization boundary.
     const list = await call("list_capabilities", { limit: "5" });
-    expect(errorEnvelope(list).code).toBe("validation_error");
-    // describe_capability's capability must be a string.
+    expect(parseToolPayload<{ limit: number }>(list).limit).toBe(5);
+    // Ordinary strings remain untouched: a numeric capability id is invalid.
     const described = await call("describe_capability", { capability: 42 });
     expect(errorEnvelope(described).code).toBe("validation_error");
   });
@@ -1862,13 +1862,12 @@ describe("invoke_capability input normalization", () => {
   test("unknown keys removed by the REST cleaner are rejected for agents", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "tasks.calendar",
+        capability: "templates.lookup-formats.create",
         input: {
-          params: { matterId: "ws_1" },
           body: {
-            dateFrom: "2026-01-01T00:00:00.000Z",
-            dateTo: "2026-01-31T00:00:00.000Z",
-            datePropertyIds: ["prop_1"],
+            registry: "ares",
+            name: "Company number",
+            format: "{value}",
             unknownExtra: "would fail additionalProperties:false without Clean",
           },
         },
@@ -1881,7 +1880,7 @@ describe("invoke_capability input normalization", () => {
       code: "validation_error",
       issues: [
         {
-          path: "input.body.unknownExtra",
+          path: "body.unknownExtra",
           message: "Unknown parameter: unknownExtra",
         },
       ],
@@ -1920,7 +1919,7 @@ describe("invoke_capability input normalization", () => {
       code: "validation_error",
       issues: [
         {
-          path: "input.query.asOf",
+          path: "query.asOf",
           message: '"01/02/2026" is not a calendar date.',
         },
       ],
