@@ -1,3 +1,4 @@
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
@@ -1173,6 +1174,9 @@ export const pendingUploads = p.pgTable(
       "finalized_result",
     ).$type<PendingUploadFinalizedResult | null>(),
     rejectReason: p.text("reject_reason"),
+    rejectionDetails: jsonb(
+      "rejection_details",
+    ).$type<ApiFileSecurityRejectionDetails | null>(),
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),

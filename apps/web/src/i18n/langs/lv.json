@@ -4765,6 +4765,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Pievienojiet faila rekvizītu, lai augšupielādētu failus",
+      "attachedTemplateUpload": {
+        "confirm": "Noņemt saiti un augšupielādēt",
+        "description": "{count, plural, zero {Šajos failos ir saites uz Word veidnēm ārpus dokumentiem.} one {Šajā failā ir saite uz Word veidni ārpus dokumenta.} other {Šajos failos ir saites uz Word veidnēm ārpus dokumentiem.}} stella bloķē nemainītu failu augšupielādi, jo Word ar šīm saitēm var ielādēt saturu vai makro.",
+        "effect": "Turpinot, veidnes saite tiek noņemta tikai no augšupielādējamās kopijas. Sākotnējais fails jūsu ierīcē netiek mainīts.",
+        "localLocation": "Veidnes atrašanās vieta: lokāls faila ceļš ārpus šī dokumenta",
+        "mixedLocation": "Veidņu atrašanās vietas: vairāku veidu ārējie ceļi",
+        "networkLocation": "Veidnes atrašanās vieta: tīkla vai interneta adrese",
+        "ruleLabel": "Drošības noteikums:",
+        "title": "Noņemt Word veidņu saites?",
+        "unknownLocation": "Veidnes atrašanās vieta: adrese, kuru stella nevar pārbaudīt"
+      },
       "defaultPropertyName": "Dokumenti",
       "desktopEdit": {
         "action": "Rediģēt datora lietotnē",

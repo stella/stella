@@ -4765,6 +4765,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Añada una propiedad de archivo para subir archivos",
+      "attachedTemplateUpload": {
+        "confirm": "Quitar enlace y subir",
+        "description": "{count, plural, one {Este archivo contiene un enlace a una plantilla de Word externa al documento.} other {Estos archivos contienen enlaces a plantillas de Word externas a los documentos.}} stella no los subirá sin cambios porque Word puede cargar contenido o macros mediante estos enlaces.",
+        "effect": "Al continuar, solo se quita el enlace a la plantilla de la copia que se sube. El archivo original de tu dispositivo no cambia.",
+        "localLocation": "Ubicación de la plantilla: una ruta de archivo local externa a este documento",
+        "mixedLocation": "Ubicaciones de plantillas: varios tipos de rutas externas",
+        "networkLocation": "Ubicación de la plantilla: una dirección de red o de Internet",
+        "ruleLabel": "Regla de seguridad:",
+        "title": "¿Quitar los enlaces a plantillas de Word?",
+        "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
+      },
       "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar en la app de escritorio",

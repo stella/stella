@@ -4765,6 +4765,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Pridajte vlastnosť typu súbor na nahrávanie súborov",
+      "attachedTemplateUpload": {
+        "confirm": "Odstrániť odkaz a nahrať",
+        "description": "{count, plural, one {Tento súbor obsahuje odkaz na vzor Wordu mimo dokumentu.} few {Tieto súbory obsahujú odkazy na vzory Wordu mimo dokumentov.} other {Tieto súbory obsahujú odkazy na vzory Wordu mimo dokumentov.}} stella blokuje nahratie bez zmien, pretože Word môže cez tieto odkazy načítať obsah alebo makrá.",
+        "effect": "Pokračovaním sa odkaz na vzor odstráni iba z nahrávanej kópie. Pôvodný súbor vo vašom zariadení sa nezmení.",
+        "localLocation": "Umiestnenie vzoru: lokálna cesta k súboru mimo tohto dokumentu",
+        "mixedLocation": "Umiestnenia vzorov: viac druhov externých ciest",
+        "networkLocation": "Umiestnenie vzoru: sieťová alebo internetová adresa",
+        "ruleLabel": "Bezpečnostné pravidlo:",
+        "title": "Odstrániť odkazy na vzory Wordu?",
+        "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
+      },
       "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upraviť v desktopovej aplikácii",

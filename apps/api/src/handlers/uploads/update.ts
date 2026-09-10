@@ -22,6 +22,9 @@ import type { Err } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
@@ -38,6 +41,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -79,6 +83,23 @@ const config = {
 } satisfies HandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
+
+const fileSecurityRejectionDetails = (
+  error: UploadFinalizeError,
+): ApiFileSecurityRejectionDetails | null => {
+  if (
+    error.code !== API_FILE_SECURITY_REJECTED_ERROR_CODE ||
+    error.hint === undefined ||
+    error.issues === undefined
+  ) {
+    return null;
+  }
+  return {
+    code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+    hint: error.hint,
+    issues: error.issues,
+  };
+};
 
 const finalizeUpload = createSafeHandler(
   config,
@@ -182,6 +203,7 @@ const finalizeUpload = createSafeHandler(
           new HandlerError({
             status: 422,
             message: existing.rejectReason ?? "Upload was previously rejected",
+            ...existing.rejectionDetails,
           }),
         );
       }
@@ -254,6 +276,10 @@ const finalizeUpload = createSafeHandler(
             .set({
               status: terminalStatus,
               rejectReason: error.rejectReason ?? error.message,
+              rejectionDetails:
+                terminalStatus === "rejected"
+                  ? fileSecurityRejectionDetails(error)
+                  : null,
               finalizedAt: terminalStatus === "rejected" ? new Date() : null,
             })
             .where(
@@ -282,7 +308,13 @@ const finalizeUpload = createSafeHandler(
         });
       }
       return Result.err(
-        new HandlerError({ status: error.status, message: error.message }),
+        new HandlerError({
+          status: error.status,
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          issues: error.issues,
+        }),
       );
     }
 
@@ -449,17 +481,15 @@ const runFinalize = async function* ({
     );
   }
   if (scanResult.value.verdict === "reject") {
-    const reasons: string[] = [];
-    for (const finding of scanResult.value.findings) {
-      if (finding.severity === "reject") {
-        reasons.push(finding.message);
-      }
+    const rejection = fileSecurityRejection(scanResult.value);
+    if (rejection === null) {
+      panic("Rejecting scan had no rejecting findings");
     }
     return Result.err(
       new UploadFinalizeError({
+        ...rejection,
         status: 422,
-        message: `File rejected: ${reasons.join("; ")}`,
-        rejectReason: reasons.join("; "),
+        rejectReason: rejection.message,
       }),
     );
   }

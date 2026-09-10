@@ -656,6 +656,8 @@ export const FileTabPanel = ({
       text: string;
       workspaceId: string;
     }) => {
+      // This path serializes editor text into a fixed Markdown file; it cannot
+      // carry user-supplied DOCX bytes that require attached-template preflight.
       const file = new File([text], fileName, { type: MARKDOWN_MIME });
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
