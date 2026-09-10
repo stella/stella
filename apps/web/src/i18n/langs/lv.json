@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchAskPrompt": "{query} (judikatūra, {country})",
-    "searchAskPromptAll": "{query} (judikatūra)",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
     "seo": {

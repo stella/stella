@@ -1,7 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { redirect } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
+import {
+  isPublicCaseLawCountry,
+  publicCaseLawCountryFromParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
   decisionCitationsInfiniteOptions,
@@ -167,6 +171,15 @@ const ensurePublicDecision = async <T>(load: () => Promise<T>): Promise<T> => {
   }
 };
 
+const ensureLaunchReadyDecision = <T extends { country: string }>(
+  decision: T,
+): T => {
+  if (!isPublicCaseLawCountry(decision.country)) {
+    throw notFound();
+  }
+  return decision;
+};
+
 const redirectToCanonicalDecisionPath = ({
   canonicalParams,
   search,
@@ -225,14 +238,20 @@ export const loadPublicCaseLawDecisionRoute = async ({
   queryClient,
   search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
+  if (publicCaseLawCountryFromParam(params.country) === null) {
+    throw notFound();
+  }
+
   const routeDecisionId = extractCaseLawDecisionIdFromIdRouteParam(params.slug);
   if (routeDecisionId) {
-    const decision = await ensurePublicDecision(
-      async () =>
-        await ensureRouteQueryData(
-          queryClient,
-          decisionOptions(extractId(routeDecisionId)),
-        ),
+    const decision = ensureLaunchReadyDecision(
+      await ensurePublicDecision(
+        async () =>
+          await ensureRouteQueryData(
+            queryClient,
+            decisionOptions(extractId(routeDecisionId)),
+          ),
+      ),
     );
     // A decision with a stored slug canonicalises to it; without one the
     // id form is canonical and no redirect happens.
@@ -260,16 +279,18 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const normalizedRouteLanguage = normalizeCaseLawLanguageSegment(
     params.language,
   );
-  const decision = await ensurePublicDecision(
-    async () =>
-      await ensureRouteQueryData(
-        queryClient,
-        decisionBySlugOptions(
-          params.language === undefined || normalizedRouteLanguage === null
-            ? { slug: params.slug }
-            : { language: normalizedRouteLanguage, slug: params.slug },
+  const decision = ensureLaunchReadyDecision(
+    await ensurePublicDecision(
+      async () =>
+        await ensureRouteQueryData(
+          queryClient,
+          decisionBySlugOptions(
+            params.language === undefined || normalizedRouteLanguage === null
+              ? { slug: params.slug }
+              : { language: normalizedRouteLanguage, slug: params.slug },
+          ),
         ),
-      ),
+    ),
   );
   const canonicalParams = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,

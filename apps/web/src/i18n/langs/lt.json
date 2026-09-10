@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchAskPrompt": "{query} (teismų praktika, {country})",
-    "searchAskPromptAll": "{query} (teismų praktika)",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
     "seo": {

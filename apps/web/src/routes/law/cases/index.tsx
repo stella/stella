@@ -3,11 +3,15 @@ import { useCallback, useState } from "react";
 import {
   keepPreviousData,
   useInfiniteQuery,
-  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  notFound,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -26,8 +30,9 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import {
-  CASE_LAW_ALL_COUNTRIES,
   defaultCaseLawCountryForLocale,
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
@@ -52,7 +57,6 @@ import {
   decisionFacetsOptions,
   decisionsInfiniteOptions,
 } from "@/features/case-law/queries/decisions";
-import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
 import { ResearchTableActions } from "@/features/case-law/research/research-actions";
 import { useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
@@ -74,9 +78,6 @@ import {
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
-
-/** Facet chips before any facet answer has arrived. */
-const NO_FACET_BUCKETS: CaseLawBrowseFacets["court"] = [];
 
 const optionalBrowseStringSchema = (maxLength: number) =>
   v.optional(
@@ -143,18 +144,20 @@ export const Route = createFileRoute("/law/cases/")({
   // This is a results screen, not an entry screen: with nothing to show
   // results for, the reader belongs on the home. A first visit also starts in
   // the jurisdiction the UI language points at, and the URL says so, so the
-  // page and its links agree on the scope; readers in other languages, and
-  // crawlers, start unscoped. Both are server-side redirects because this is
-  // a public SSR path: the throw becomes a real HTTP redirect for crawlers
-  // and no-JS clients. The blank-page race that no-beforeload-redirect guards
-  // against is specific to the client-only _protected subtree.
+  // page and its links agree on the scope. A locale without a matching public
+  // country uses the generated list's first entry. Both are server-side
+  // redirects because this is a public SSR path: the throw becomes a real
+  // HTTP redirect for crawlers and no-JS clients. The blank-page race that
+  // no-beforeload-redirect guards against is specific to the client-only
+  // _protected subtree.
   beforeLoad: ({ search }) => {
-    const localeDefault = defaultCaseLawCountryForLocale(getMessageLocale());
     const country =
-      search.country ??
-      (localeDefault === null
-        ? undefined
-        : toCaseLawCountryParam(localeDefault));
+      publicCaseLawCountryFromParam(search.country) ??
+      defaultCaseLawCountryForLocale(getMessageLocale());
+    if (country === null) {
+      throw notFound();
+    }
+    const countryParam = toCaseLawCountryParam(country);
 
     // Only a request that names nothing goes home; a jurisdiction alone is
     // the browse slice the home's country links and the crawler follow.
@@ -164,29 +167,31 @@ export const Route = createFileRoute("/law/cases/")({
       search.year === undefined &&
       search.country === undefined
     ) {
-      throw redirect({ to: "/law", search: { country }, replace: true });
+      throw redirect({
+        to: "/law",
+        search: { country: countryParam },
+        replace: true,
+      });
     }
 
-    if (search.country === undefined && country !== undefined) {
+    if (search.country !== countryParam) {
       throw redirect({
         to: "/law/cases",
-        search: { ...search, country },
+        search: { ...search, country: countryParam },
         replace: true,
       });
     }
   },
   loader: async ({ context: { queryClient }, deps }) => {
-    const scope = caseLawCountryScope(deps.country);
+    const scope =
+      publicCaseLawCountryFromParam(deps.country) ??
+      panic("The case-law route loaded without a launch-ready country.");
     const [decisionPages] = await Promise.all([
       ensureRouteInfiniteQueryData(
         queryClient,
         decisionsInfiniteOptions(createDecisionFiltersFromSearch(deps)),
       ),
-      // Unscoped for the pill's countries; scoped for the chips.
-      ensureRouteQueryData(queryClient, decisionFacetsOptions()),
-      scope === undefined
-        ? Promise.resolve()
-        : ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
+      ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
     ]);
 
     const firstPage = decisionPages.pages.at(0);
@@ -267,8 +272,10 @@ function PublicCaseLawIndex() {
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
 
-  const countryParam = search.country ?? CASE_LAW_ALL_COUNTRIES;
-  const scope = caseLawCountryScope(search.country);
+  const scope =
+    publicCaseLawCountryFromParam(search.country) ??
+    panic("The case-law route rendered without a launch-ready country.");
+  const countryParam = toCaseLawCountryParam(scope);
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const filters = createDecisionFiltersFromSearch(search);
 
@@ -308,11 +315,7 @@ function PublicCaseLawIndex() {
 
   const [hiddenColumnIds, setHiddenColumnIds] = useState<string[]>([]);
 
-  const { data: allFacets } = useSuspenseQuery(decisionFacetsOptions());
-  const { data: scopedFacets } = useQuery({
-    ...decisionFacetsOptions(scope),
-    enabled: scope !== undefined,
-  });
+  const { data: browseFacets } = useSuspenseQuery(decisionFacetsOptions(scope));
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
       ...decisionsInfiniteOptions(filters),
@@ -339,11 +342,8 @@ function PublicCaseLawIndex() {
 
   const searchFacets = data?.pages.at(0)?.facets ?? null;
   const searchTotal = data?.pages.at(0)?.total ?? SEARCH_TOTAL_NOT_COUNTED;
-  const browseFacets: CaseLawBrowseFacets | undefined =
-    scope === undefined ? allFacets : scopedFacets;
-  const courtBuckets =
-    searchFacets?.court ?? browseFacets?.court ?? NO_FACET_BUCKETS;
-  const yearBuckets = browseFacets?.year ?? NO_FACET_BUCKETS;
+  const courtBuckets = searchFacets?.court ?? browseFacets.court;
+  const yearBuckets = browseFacets.year;
 
   const selection: DecisionFilterSelection = {
     court: search.court,
@@ -397,7 +397,7 @@ function PublicCaseLawIndex() {
       </div>
 
       <CaseLawSearch
-        countries={allFacets.country.map((bucket) => bucket.value)}
+        countries={PUBLIC_CASE_LAW_COUNTRIES}
         country={countryParam}
         maxLength={MAX_QUERY_LENGTH}
         onCountryChange={(country) => {
@@ -465,7 +465,7 @@ function PublicCaseLawIndex() {
         </div>
       )}
 
-      <CaseLawBrowseLinks facets={allFacets} />
+      <CaseLawBrowseLinks facets={browseFacets} />
     </main>
   );
 }

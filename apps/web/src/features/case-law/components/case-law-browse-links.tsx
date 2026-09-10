@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { isPublicCaseLawCountry } from "@/features/case-law/case-law-jurisdiction";
 import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 
@@ -12,8 +13,8 @@ type BrowseSearch = {
 };
 
 /**
- * The crawlable way into the corpus: every country, court and year the facets
- * report, as links into the results route. Rendered below the fold on the
+ * The crawlable way into the corpus: each published country, court and year
+ * the scoped facets report, as links into the results route. Rendered below the
  * home and on the results screen, so a crawler reaches the same slices from
  * either entry point.
  */
@@ -23,9 +24,12 @@ export const CaseLawBrowseLinks = ({
   facets: CaseLawBrowseFacets;
 }) => {
   const t = useTranslations();
+  const countryBuckets = facets.country.filter(({ value }) =>
+    isPublicCaseLawCountry(value),
+  );
 
   if (
-    facets.country.length === 0 &&
+    countryBuckets.length === 0 &&
     facets.court.length === 0 &&
     facets.year.length === 0
   ) {
@@ -38,7 +42,7 @@ export const CaseLawBrowseLinks = ({
       className="border-border/45 bg-background/60 grid gap-4 border-y py-4 text-sm md:grid-cols-3"
     >
       <BrowseGroup
-        buckets={facets.country}
+        buckets={countryBuckets}
         createSearch={(value) => ({ country: value.toLowerCase() })}
         title={t("caseLaw.seo.countries")}
       />

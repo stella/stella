@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
     "searchAskPrompt": "{query} (Rechtsprechung, {country})",
-    "searchAskPromptAll": "{query} (Rechtsprechung)",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
     "seo": {

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { env } from "@/env";
+import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { apiUrl } from "@/lib/api-url";
 import {
   type CaseLawLanguageAlternateLink,
@@ -178,7 +179,9 @@ export const fetchPublicSitemapShards = async ({
     });
   }
 
-  return parseResult.output.items;
+  return parseResult.output.items.filter(
+    ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+  );
 };
 
 export const fetchPublicSitemapDecisions = async ({
@@ -186,6 +189,13 @@ export const fetchPublicSitemapDecisions = async ({
   shard,
   signal = AbortSignal.timeout(10_000),
 }: FetchSitemapDecisionsOptions): Promise<SitemapDecision[]> => {
+  if (publicCaseLawCountryFromParam(shard.country) === null) {
+    throw new ClientOperationError({
+      action: "fetchPublicCaseLawSitemap",
+      message: "The case-law sitemap shard is not published.",
+    });
+  }
+
   const url = new URL(apiUrl("/case/sitemap/decisions/shard"));
   url.searchParams.set("country", shard.country);
   url.searchParams.set("year", shard.year);
@@ -234,13 +244,16 @@ export const createPublicLawSitemapIndexXml = (
             options.publicToolsIndexingEnabled ?? isPublicToolsSitemapEnabled(),
         };
 
+  const publicShards = shards.filter(
+    ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+  );
   const lawEntries = publicLawIndexingEnabled
     ? [
         {
           loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
-          lastmod: shards.at(0)?.lastmod ?? null,
+          lastmod: publicShards.at(0)?.lastmod ?? null,
         },
-        ...shards.map((shard) => ({
+        ...publicShards.map((shard) => ({
           loc: createPublicLawCanonicalUrl(createCaseLawShardPath(shard)),
           lastmod: shard.lastmod,
         })),

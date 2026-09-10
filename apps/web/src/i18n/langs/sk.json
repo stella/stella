@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
     "searchAskPrompt": "{query} (judikatúra, {country})",
-    "searchAskPromptAll": "{query} (judikatúra)",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "seo": {

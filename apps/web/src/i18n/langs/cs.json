@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchAskPrompt": "{query} (judikatura, {country})",
-    "searchAskPromptAll": "{query} (judikatura)",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
     "seo": {

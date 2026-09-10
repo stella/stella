@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
     "searchAskPrompt": "{query} (kohtupraktika, {country})",
-    "searchAskPromptAll": "{query} (kohtupraktika)",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "seo": {

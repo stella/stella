@@ -2,7 +2,6 @@ import { useTranslations } from "use-intl";
 
 import { PublicLawSearch } from "@/components/public-law-search";
 import {
-  CASE_LAW_ALL_COUNTRIES,
   caseLawCountryRegion,
   fromCaseLawCountryParam,
   toCaseLawCountryParam,
@@ -47,20 +46,15 @@ export const CaseLawSearch = ({
   return (
     <PublicLawSearch
       askPrompt={(entry) =>
-        country === CASE_LAW_ALL_COUNTRIES
-          ? t("caseLaw.searchAskPromptAll", { query: entry })
-          : t("caseLaw.searchAskPrompt", {
-              country: countryName(fromCaseLawCountryParam(country)),
-              query: entry,
-            })
+        t("caseLaw.searchAskPrompt", {
+          country: countryName(fromCaseLawCountryParam(country)),
+          query: entry,
+        })
       }
-      countries={[
-        { label: t("common.all"), value: CASE_LAW_ALL_COUNTRIES },
-        ...countries.map((code) => ({
-          label: countryName(code),
-          value: toCaseLawCountryParam(code),
-        })),
-      ]}
+      countries={countries.map((code) => ({
+        label: countryName(code),
+        value: toCaseLawCountryParam(code),
+      }))}
       country={country}
       maxLength={maxLength}
       onCountryChange={onCountryChange}
