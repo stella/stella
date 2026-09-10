@@ -102,8 +102,7 @@ export const prepareAttachedTemplateFile = async (
         }
         if (
           sanitized.sourcePartPath === null ||
-          sanitized.removedRelationshipIds.length !==
-            sanitized.findings.length
+          sanitized.removedRelationshipIds.length !== sanitized.findings.length
         ) {
           return null;
         }

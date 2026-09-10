@@ -203,7 +203,7 @@ const finalizeUpload = createSafeHandler(
           new HandlerError({
             status: 422,
             message: existing.rejectReason ?? "Upload was previously rejected",
-            ...(existing.rejectionDetails ?? {}),
+            ...existing.rejectionDetails,
           }),
         );
       }

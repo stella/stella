@@ -52,8 +52,7 @@ const seededUploadIds: SafeId<"pendingUpload">[] = [];
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const ATTACHED_TEMPLATE_MESSAGE =
-  "Document contains an external Word template link " +
-  "(potential template injection)";
+  "Document contains an external Word template link (potential template injection)";
 const ATTACHED_TEMPLATE_REJECTION_MESSAGE =
   `File rejected by security rule ${ATTACHED_TEMPLATE_SECURITY_RULE}: ` +
   ATTACHED_TEMPLATE_MESSAGE;
