@@ -1153,7 +1153,7 @@ const CONTRACT_CORPUS = {
   search_case_law: [
     {
       mode: "search",
-      buildArgs: () => ({ query: "dobré mravy" }),
+      buildArgs: () => ({ country: "CZE", query: "dobré mravy" }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           facets: null,
