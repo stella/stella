@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import launchReadiness from "./launch-readiness.json";
+import launchReadiness from "./launch-readiness.json" with { type: "json" };
 
 /** Countries the public case-law browser has a complete routing/display model for. */
 export const CASE_LAW_BROWSER_COUNTRIES = ["CZE", "EU", "POL", "SVK"] as const;
