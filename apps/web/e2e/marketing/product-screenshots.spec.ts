@@ -198,11 +198,11 @@ test("capture landing product screenshots", async ({
       if ("country" in capture && !isPublicCaseLawCountry(capture.country)) {
         continue;
       }
-      // A decision capture searches through its country route so only a
+      // A decision capture scopes the search to its country so only a
       // matching decision is deterministically on screen.
       const searchedPath =
         "decisionText" in capture
-          ? `/law/${capture.country.toLowerCase()}/cases?q=${encodeURIComponent(
+          ? `/law/cases?country=${capture.country.toLowerCase()}&q=${encodeURIComponent(
               capture.decisionText,
             )}`
           : undefined;
