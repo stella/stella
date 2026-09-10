@@ -7,6 +7,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   canonicalDecisionDocket,
   DECISION_DOCKET_GRAMMARS,
+  decisionDocketGrammarForJurisdiction,
   formatDecisionDocket,
 } from "./decision-docket-grammar";
 import type { DecisionDocketJurisdiction } from "./decision-docket-grammar";
@@ -89,6 +90,13 @@ const canonicalDocketArbitraries = {
 } as const satisfies Record<DecisionDocketJurisdiction, Arbitrary<string>>;
 
 describe("declared decision docket grammars", () => {
+  test("scope lookup is case-insensitive and unknown scopes stay absent", () => {
+    expect(decisionDocketGrammarForJurisdiction("pol")).toBe(
+      DECISION_DOCKET_GRAMMARS.POL,
+    );
+    expect(decisionDocketGrammarForJurisdiction("unknown")).toBeNull();
+  });
+
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
     test(`${grammar.jurisdiction} format is a parse fixed point`, () => {
       fc.assert(

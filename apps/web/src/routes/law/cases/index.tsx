@@ -269,7 +269,7 @@ function PublicCaseLawIndex() {
 
   const countryParam = search.country ?? CASE_LAW_ALL_COUNTRIES;
   const scope = caseLawCountryScope(search.country);
-  const intent = readDecisionIntent(search.q);
+  const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const filters = createDecisionFiltersFromSearch(search);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");

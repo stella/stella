@@ -12,6 +12,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
   type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
 } from "@/api/lib/legal-search/ingestion-constants";
 
 type SourcePlaceholderPattern = {
@@ -86,6 +87,16 @@ const ADAPTER_JURISDICTIONS = {
     AdapterJurisdictionDeclaration,
     { readonly country: TJurisdiction }
   >;
+};
+
+export const decisionDocketGrammarForCountry = (
+  country: string,
+): DecisionDocketGrammar | null => {
+  const normalized = country.toUpperCase();
+  if (!isCaseLawJurisdiction(normalized)) {
+    return null;
+  }
+  return ADAPTER_JURISDICTIONS[normalized].identifierGrammar;
 };
 
 export const ADAPTER_MANIFESTS = {

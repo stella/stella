@@ -1,9 +1,11 @@
 import {
+  canonicalDecisionIdentifierKey,
   canonicalDecisionDocket,
   foldDecisionIdentifierInput,
   formatDecisionDocket,
   parseDecisionDocket,
 } from "./decision-docket-grammar";
+import type { DecisionDocketGrammar } from "./decision-docket-grammar";
 
 /**
  * What a case-law box entry asks for: a decision by its identifier (a docket
@@ -18,12 +20,12 @@ export type DecisionQueryIntent =
 const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
 
 type ParseDecisionQueryOptions = {
-  readonly jurisdiction?: string | undefined;
+  readonly grammar?: DecisionDocketGrammar | null | undefined;
 };
 
 export const parseDecisionQuery = (
   raw: string,
-  { jurisdiction }: ParseDecisionQueryOptions = {},
+  { grammar }: ParseDecisionQueryOptions = {},
 ): DecisionQueryIntent => {
   const text = raw.trim();
   if (text.length === 0) {
@@ -33,7 +35,7 @@ export const parseDecisionQuery = (
   if (ECLI_RE.test(folded)) {
     return { type: "identifier", kind: "ecli", value: folded };
   }
-  const docket = parseDecisionDocket(folded, { jurisdiction });
+  const docket = parseDecisionDocket(folded, { grammar });
   if (docket !== null) {
     return {
       type: "identifier",
@@ -49,17 +51,11 @@ export const parseDecisionQuery = (
  * dash style are theirs, not the docket's, and the sheet number names a page
  * of the file rather than the decision.
  */
-const compactIdentifier = (value: string): string =>
-  foldDecisionIdentifierInput(value)
-    .toLowerCase()
-    .replace(/-\d{1,4}$/u, "")
-    .replaceAll(" ", "");
-
 const decisionIdentifierComparisonKey = (value: string): string => {
   const docket = parseDecisionDocket(value);
   return docket === null
-    ? `other:${compactIdentifier(value)}`
-    : `docket:${canonicalDecisionDocket(docket)}`;
+    ? canonicalDecisionIdentifierKey(value)
+    : canonicalDecisionDocket(docket);
 };
 
 type DecisionHitIdentity = {

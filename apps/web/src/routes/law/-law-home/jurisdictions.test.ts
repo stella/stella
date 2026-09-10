@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 
 import { parseStatuteQuery } from "@/features/statutes/statute-query-intent";
@@ -51,9 +52,10 @@ describe("law home jurisdictions", () => {
   test("every decision example parses as an identifier", () => {
     for (const code of LAW_HOME_JURISDICTION_CODES) {
       for (const example of LAW_HOME_JURISDICTIONS[code].examples.decisions) {
+        const grammar = decisionDocketGrammarForJurisdiction(code);
         expect({
           example,
-          type: parseDecisionQuery(example, { jurisdiction: code }).type,
+          type: parseDecisionQuery(example, { grammar }).type,
         }).toEqual({ example, type: "identifier" });
       }
     }

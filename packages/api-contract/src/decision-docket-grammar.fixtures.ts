@@ -32,7 +32,7 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
     },
     {
       canonical: "IV. XÝ 999/99",
-      variants: ["iv.xy 999/99-999", " IV. XÝ 999/99 "],
+      variants: ["iv.xy 999/99-999", " IV. XÝ 999/99 ", "iv xy 999/99"],
     },
   ],
   EU: [
@@ -45,6 +45,10 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
     {
       canonical: "IV XYZ 999999/99",
       variants: ["iv xyz 999999/99"],
+    },
+    {
+      canonical: "III AUa 999999/99",
+      variants: ["iii a ua 999999/99", "III A/Ua 999999/99"],
     },
   ],
   SVK: [

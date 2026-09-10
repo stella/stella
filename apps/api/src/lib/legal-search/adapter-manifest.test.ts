@@ -8,7 +8,10 @@ import {
   EU_ECLI_COURTS,
   SK_ECLI_COURTS,
 } from "@/api/lib/case-law/ecli-court-codes";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  ADAPTER_MANIFESTS,
+  decisionDocketGrammarForCountry,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 describe("case-law adapter manifests", () => {
@@ -25,6 +28,12 @@ describe("case-law adapter manifests", () => {
       expect(manifest.identifierGrammar).toBe(
         DECISION_DOCKET_GRAMMARS[manifest.country],
       );
+      expect(decisionDocketGrammarForCountry(manifest.country)).toBe(
+        manifest.identifierGrammar,
+      );
+      expect(
+        decisionDocketGrammarForCountry(manifest.country.toLowerCase()),
+      ).toBe(manifest.identifierGrammar);
       const from = parsePlainDate(manifest.dateRange.fromInclusive);
       expect(from).not.toBeNull();
       if (from === null) {
@@ -65,6 +74,7 @@ describe("case-law adapter manifests", () => {
         expect(court.length).toBeGreaterThan(0);
       }
     }
+    expect(decisionDocketGrammarForCountry("unknown")).toBeNull();
   });
 
   test("share each jurisdiction's declared ECLI table", () => {

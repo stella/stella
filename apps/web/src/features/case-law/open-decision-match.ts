@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 
+import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
   type DecisionQueryIntent,
   exactDecisionMatches,
@@ -50,8 +51,16 @@ type ReadDecisionIntentOptions = {
 export const readDecisionIntent = (
   q: string | undefined,
   { jurisdiction }: ReadDecisionIntentOptions = {},
-): DecisionQueryIntent =>
-  q === undefined ? { type: "empty" } : parseDecisionQuery(q, { jurisdiction });
+): DecisionQueryIntent => {
+  if (q === undefined) {
+    return { type: "empty" };
+  }
+  const grammar =
+    jurisdiction === undefined
+      ? undefined
+      : decisionDocketGrammarForJurisdiction(jurisdiction);
+  return parseDecisionQuery(q, { grammar });
+};
 
 export const createDecisionFiltersFromSearch = ({
   country,
