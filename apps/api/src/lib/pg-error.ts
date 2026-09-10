@@ -168,10 +168,11 @@ const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
 /**
  * SQLSTATEs Postgres answers with when the backend can speak the protocol but
  * will not serve the connection: it is still starting up or in recovery
- * (`57P03`), an operator shut it down (`57P01`), or it is tearing down after
- * another backend crashed (`57P02`). The server refuses or terminates the
- * connection rather than rejecting the query, so the work never ran and is
- * retryable as-is, exactly like the driver codes above.
+ * (`57P03`), an operator shut it down (`57P01`), it is tearing down after
+ * another backend crashed (`57P02`), or an idle-session timeout retired it
+ * (`57P05`). The server refuses or terminates the connection rather than
+ * rejecting the query, so the work never ran and is retryable as-is, exactly
+ * like the driver codes above.
  *
  * These are the same conditions as `PG_DRIVER_ERROR`, seen from the other side
  * of a completed handshake. A restart surfaces as a driver code while the
@@ -179,14 +180,17 @@ const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
  * the backend is far enough along to reply, so neither set covers the
  * condition without the other.
  *
- * `57014` (`query_canceled`) shares the class and is deliberately absent: it
- * reports a statement the server cancelled, which says nothing about the
- * connection and carries its own replay semantics. It lives in `PG_ERROR`.
+ * `57014` (`query_canceled`) and `57P04` (`database_dropped`) share the class
+ * and are deliberately absent: the former reports a cancelled statement, and
+ * the latter names a permanently unavailable database. Neither is repaired by
+ * retrying the same work against a fresh connection. `57014` lives in
+ * `PG_ERROR`.
  */
 const CONNECTION_LIFECYCLE_SQL_STATES: ReadonlySet<string> = new Set([
   "57P01",
   "57P02",
   "57P03",
+  "57P05",
 ]);
 
 /**

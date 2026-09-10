@@ -2818,14 +2818,14 @@ export const runDocumentProcessingReconciliationPhases = async ({
  * one repeats it against a live connection. Capturing either would report a
  * healthy loop's own retry as a defect.
  */
+const isTransientDocumentProcessingStoreError = (error: unknown): boolean =>
+  isTransientRedisConnectionError(error) || isTransientPgConnectionError(error);
+
 export const handleDocumentProcessingReconcilePhaseFailure = (
   error: unknown,
   phase: ReconciliationPhaseName,
 ): void => {
-  if (
-    isTransientRedisConnectionError(error) ||
-    isTransientPgConnectionError(error)
-  ) {
+  if (isTransientDocumentProcessingStoreError(error)) {
     logger.warn("document_processing.reconcile_phase_disrupted", {
       "error.type": errorTag(error),
       phase,
@@ -2876,10 +2876,7 @@ const reconcileDocumentProcessing = async ({
     // `runTick` leaves reconciliation marked unfinished. Same rule the
     // idle check applies to a failed sample: never exit on uncertainty.
     // Both stores are graded here for the same reason they are per phase.
-    if (
-      isTransientRedisConnectionError(error) ||
-      isTransientPgConnectionError(error)
-    ) {
+    if (isTransientDocumentProcessingStoreError(error)) {
       logger.warn("document_processing.reconcile_disrupted", {
         "error.type": errorTag(error),
       });

@@ -370,10 +370,11 @@ describe("isTransientPgConnectionError", () => {
    * alone matches none of these.
    *
    * Source: Postgres' published class 57 (Operator Intervention). `57P01` is
-   * `admin_shutdown`, `57P02` `crash_shutdown`, `57P03` `cannot_connect_now`.
+   * `admin_shutdown`, `57P02` `crash_shutdown`, `57P03` `cannot_connect_now`,
+   * and `57P05` `idle_session_timeout`.
    */
   it("classifies every connection-lifecycle SQLSTATE the server reports", () => {
-    for (const sqlState of ["57P01", "57P02", "57P03"]) {
+    for (const sqlState of ["57P01", "57P02", "57P03", "57P05"]) {
       expect(
         isTransientPgConnectionError(
           drizzleError({
@@ -390,20 +391,22 @@ describe("isTransientPgConnectionError", () => {
   });
 
   /**
-   * `57014` is one subclass away from `57P01`-`57P03` and must not be swept in
-   * with them: a cancelled statement ran against a connection that is still
-   * good, so replaying it is the caller's decision rather than this
-   * predicate's.
+   * `57014` and `57P04` sit beside the transient lifecycle errors but must not
+   * be swept in with them: a cancelled statement ran against a connection
+   * that is still good, while a dropped database will not return on a fresh
+   * connection.
    */
-  it("does not match a statement the server cancelled", () => {
-    expect(
-      isTransientPgConnectionError(
-        drizzleError({
-          errno: PG_ERROR.QUERY_CANCELED,
-          code: "ERR_POSTGRES_SERVER_ERROR",
-        }),
-      ),
-    ).toBe(false);
+  it("does not match non-retryable operator interventions", () => {
+    for (const sqlState of [PG_ERROR.QUERY_CANCELED, "57P04"]) {
+      expect(
+        isTransientPgConnectionError(
+          drizzleError({
+            errno: sqlState,
+            code: "ERR_POSTGRES_SERVER_ERROR",
+          }),
+        ),
+      ).toBe(false);
+    }
   });
 
   /**
