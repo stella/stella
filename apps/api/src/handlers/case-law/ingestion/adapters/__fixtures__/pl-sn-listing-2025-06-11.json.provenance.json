@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "6d47907b24d74d97c98d91333d78088c60f55c17cf3bc80a660855219829975e",
+  "sourceUrl": "https://sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json&task=searchOrzeczenia&data_wydania_od=2025-06-11&data_wydania_do=2025-06-11&strona=1&rozmiar_strony=100",
+  "capturedAt": "2026-09-10T23:18:08.036Z",
+  "note": "one decision date, 100 rows asked for: the reconciliation slice listing's page size"
+}

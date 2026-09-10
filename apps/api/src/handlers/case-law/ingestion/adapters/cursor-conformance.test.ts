@@ -235,6 +235,16 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.PL_SN]: {
+    disposition: "exercised",
+    // The proxy answers a window it holds nothing for with an empty list
+    // inside its two envelopes. The crawl never reaches the detail or the
+    // document task from here, because it only follows listed rows.
+    exhaustedSource: () =>
+      jsonResponse({ success: true, data: [{ success: true, data: [] }] }),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
   [ADAPTER_KEYS.AT_COURTS]: AT_RIS_COVERAGE,
   [ADAPTER_KEYS.AT_VFGH]: AT_RIS_COVERAGE,
   [ADAPTER_KEYS.AT_VWGH]: AT_RIS_COVERAGE,

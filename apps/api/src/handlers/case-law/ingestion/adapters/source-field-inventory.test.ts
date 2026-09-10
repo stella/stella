@@ -37,6 +37,7 @@ import type {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { buildPlSnDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-field-inventory-baseline.json";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -333,6 +334,83 @@ const czNssFixture = (): InventoryFixture => ({
   },
 });
 
+// ── PL SN fixture ────────────────────────────────────────
+
+/** The listing row, as `searchOrzeczenia` states one. */
+const PL_SN_LISTING_ROW = {
+  sygnatura_sprawy: "I CSKP 40/26",
+  data_wydania: "2026-06-10",
+  forma_orzeczenia: "wyrok SN",
+  id: "0l6YSZcBZvGrB8P_kR8N",
+} as const;
+
+/**
+ * The detail response, carrying every field this proxy is known to label.
+ * Each one is given a value, because a disposition is only exercised where
+ * the decision built from the fixture can be checked for it.
+ */
+const PL_SN_DETAIL_PAYLOAD = JSON.stringify({
+  success: true,
+  message: null,
+  messages: null,
+  data: [
+    {
+      success: true,
+      message: null,
+      messages: null,
+      data: {
+        jednostka_obslugujaca_sprawe: "Izba Cywilna Wydział I",
+        izby_sn: ["Izba Cywilna"],
+        rodzaj_skladu_orzekajacego: "Skład 3-osobowy",
+        sklad_orzekajacy: ["Jan Kowalski", "Anna Nowak"],
+        sklad_orzekajacy_przewodniczacy: ["Jan Kowalski"],
+        sklad_orzekajacy_sprawozdawca: ["Anna Nowak"],
+        sklad_orzekajacy_wspolsprawozdawcy: ["Piotr Wiśniewski"],
+        sklad_orzekajacy_autor_uzasadnienia: "Anna Nowak",
+        zglaszajacy_zdanie_odrebne_orzeczenie: "Piotr Wiśniewski",
+        zglaszajacy_zdanie_odrebne_uzasadnienie: "Piotr Wiśniewski",
+        data_modyfikacji: "2026-06-20",
+        ...PL_SN_LISTING_ROW,
+      },
+    },
+  ],
+});
+
+/** What the proxy answers for a task this fixture states no payload for. */
+const PL_SN_EMPTY_ENVELOPE = JSON.stringify({
+  success: true,
+  data: [{ success: true, data: [] }],
+});
+
+const plSnFixture = (): InventoryFixture => ({
+  payload: PL_SN_DETAIL_PAYLOAD,
+  buildDecision: async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      // The document task answers nothing here: no declared field is stored
+      // through the document, so the fixture states only what the inventory
+      // reads, and the decision is built listing-only.
+      const body = url.includes("task=detailsOrzeczenie")
+        ? PL_SN_DETAIL_PAYLOAD
+        : PL_SN_EMPTY_ENVELOPE;
+      return await Promise.resolve(
+        new Response(body, {
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }),
+      );
+    });
+
+    const built = await buildPlSnDecision({
+      cursor: "2026-06:0",
+      item: { ...PL_SN_LISTING_ROW },
+      listingRaw: JSON.stringify(PL_SN_LISTING_ROW),
+    });
+    return built.type === "unkeyable"
+      ? panic("pl-sn fixture did not build")
+      : built.decision;
+  },
+});
+
 // ── Coverage declaration ─────────────────────────────────
 
 type InventoryFixture = {
@@ -365,6 +443,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.SK_COURTS]: PENDING,
   [ADAPTER_KEYS.SK_US]: PENDING,
   [ADAPTER_KEYS.PL_COURTS]: PENDING,
+  [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },
   [ADAPTER_KEYS.AT_COURTS]: PENDING,
   [ADAPTER_KEYS.AT_VFGH]: PENDING,
   [ADAPTER_KEYS.AT_VWGH]: PENDING,
