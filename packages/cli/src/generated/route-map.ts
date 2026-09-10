@@ -13016,6 +13016,8 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    description:
+                      'BCP-47 language tag for generated names and folder suggestions. Use a BCP-47 language tag, for example "cs" or "en-GB".',
                     flag: "--locale",
                     prop: "locale",
                     required: false,
@@ -36815,7 +36817,7 @@ export const generatedRouteMap: RouteNode = {
                     kind: "string",
                     repeatable: false,
                     description:
-                      "BCP-47 tag of the caller's interface language",
+                      'BCP-47 tag of the caller\'s interface language. Use a BCP-47 language tag, for example "cs" or "en-GB".',
                     flag: "--locale",
                     prop: "locale",
                     required: false,
@@ -36968,7 +36970,7 @@ export const generatedRouteMap: RouteNode = {
                     kind: "string",
                     repeatable: false,
                     description:
-                      "BCP-47 tag of the caller's interface language; packs in that language rank first",
+                      'BCP-47 tag of the caller\'s interface language; packs in that language rank first. Use a BCP-47 language tag, for example "cs" or "en-GB".',
                     flag: "--locale",
                     prop: "locale",
                     required: false,
