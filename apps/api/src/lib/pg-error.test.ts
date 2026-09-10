@@ -363,6 +363,53 @@ describe("isTransientPgConnectionError", () => {
   });
 
   /**
+   * Spelled as literals rather than read back from the predicate's own set, so
+   * a typo cannot agree with itself, and shaped the way the driver really
+   * delivers a server error: the SQLSTATE in `errno`, with `code` carrying the
+   * one generic category every server error shares. A predicate reading `code`
+   * alone matches none of these.
+   *
+   * Source: Postgres' published class 57 (Operator Intervention). `57P01` is
+   * `admin_shutdown`, `57P02` `crash_shutdown`, `57P03` `cannot_connect_now`,
+   * and `57P05` `idle_session_timeout`.
+   */
+  it("classifies every connection-lifecycle SQLSTATE the server reports", () => {
+    for (const sqlState of ["57P01", "57P02", "57P03", "57P05"]) {
+      expect(
+        isTransientPgConnectionError(
+          drizzleError({
+            errno: sqlState,
+            code: "ERR_POSTGRES_SERVER_ERROR",
+          }),
+        ),
+      ).toBe(true);
+      // The pg/PGlite convention puts the same SQLSTATE in `code`.
+      expect(
+        isTransientPgConnectionError(drizzleError({ code: sqlState })),
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * `57014` and `57P04` sit beside the transient lifecycle errors but must not
+   * be swept in with them: a cancelled statement ran against a connection
+   * that is still good, while a dropped database will not return on a fresh
+   * connection.
+   */
+  it("does not match non-retryable operator interventions", () => {
+    for (const sqlState of [PG_ERROR.QUERY_CANCELED, "57P04"]) {
+      expect(
+        isTransientPgConnectionError(
+          drizzleError({
+            errno: sqlState,
+            code: "ERR_POSTGRES_SERVER_ERROR",
+          }),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  /**
    * The load-bearing test for this predicate, and the only one that touches a
    * value this repo does not author: it drives the real `Bun.sql` pool against
    * a socket that accepts and closes before the Postgres handshake, then

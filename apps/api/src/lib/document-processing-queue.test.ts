@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -9,6 +9,7 @@ import {
   createDocumentProcessingLeaseRenewal,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
+  handleDocumentProcessingReconcilePhaseFailure,
   indexDocumentProjectionAtJobBoundary,
   readRepairScanCursor,
   RECONCILE_BATCH_SIZE,
@@ -46,7 +47,16 @@ import {
 } from "@/api/lib/document-processing-queue-policy";
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 const queueSource = await Bun.file(
   new URL("document-processing-queue.ts", import.meta.url),
@@ -1627,5 +1637,81 @@ describe("createReconciliationProgress", () => {
 
     expect(rejection).toBeInstanceOf(Error);
     expect(await progress.hasUnfinishedWork()).toBe(true);
+  });
+});
+
+describe("reconcile phase failure grading", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
+  // The driver files every server error under one generic `code` and puts the
+  // SQLSTATE in `errno`, so this is the shape a refused connection really
+  // arrives in. Built here rather than imported to keep the fixture honest
+  // about what the predicate has to read.
+  const serverError = (sqlState: string) =>
+    Object.assign(new Error("pg"), {
+      name: "PostgresError",
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: sqlState,
+    });
+
+  test("warns without capturing when the phase lost either store", () => {
+    const redisDropped = Object.assign(new Error("Connection closed"), {
+      code: "ERR_REDIS_CONNECTION_CLOSED",
+    });
+    // 57P03: the backend answered the startup packet and declined to serve
+    // the connection because it is not accepting them yet.
+    const pgRefused = serverError("57P03");
+
+    // Both fixtures must classify as transient through their own predicate,
+    // or the assertions below would pass through the wrong branch.
+    expect(isTransientRedisConnectionError(redisDropped)).toBe(true);
+    expect(isTransientPgConnectionError(pgRefused)).toBe(true);
+
+    handleDocumentProcessingReconcilePhaseFailure(redisDropped, "delivery");
+    handleDocumentProcessingReconcilePhaseFailure(pgRefused, "deadline-scout");
+
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("ERROR")).toEqual([]);
+    expect(logs.at("WARN")).toMatchObject([
+      {
+        message: "document_processing.reconcile_phase_disrupted",
+        attributes: { phase: "delivery" },
+      },
+      {
+        message: "document_processing.reconcile_phase_disrupted",
+        attributes: { phase: "deadline-scout" },
+      },
+    ]);
+  });
+
+  test("captures a phase failure neither store explains", () => {
+    // A query the server rejected: the connection was fine, so the phase
+    // failed on its own work and the next tick will fail the same way.
+    const defect = serverError("23505");
+    expect(isTransientPgConnectionError(defect)).toBe(false);
+
+    handleDocumentProcessingReconcilePhaseFailure(defect, "repair");
+
+    expect(logs.at("WARN")).toEqual([]);
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([{ phase: "repair" }]);
+    expect(logs.at("ERROR")).toMatchObject([
+      {
+        message: "document_processing.reconcile_phase_failed",
+        attributes: { phase: "repair" },
+      },
+    ]);
   });
 });
