@@ -219,7 +219,7 @@ export const runRegistryWriteTool = async (
         agentInputValidationError({
           failure: normalized,
           subject: `${toolName} arguments`,
-        }),
+        }).error,
       ),
     );
   }

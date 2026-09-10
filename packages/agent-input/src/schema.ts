@@ -278,7 +278,7 @@ const walkUnion = ({
         result.status === "invalid",
     );
     return invalid.length === 1
-      ? invalid[0]
+      ? (invalid.at(0) ?? { status: "not-applicable" })
       : { status: "not-applicable" };
   }
   const canonical = new Map<string, (typeof successful)[number]>();
@@ -420,10 +420,7 @@ const walkSchema = ({
   const types = isUnknownArray(schema["type"])
     ? schema["type"]
     : [schema["type"]];
-  if (
-    annotation !== undefined &&
-    !(value === null && types.includes("null"))
-  ) {
+  if (annotation !== undefined && !(value === null && types.includes("null"))) {
     const normalized = normalizeLeaf({ annotation, schema, value });
     if (!normalized.ok) {
       return {

@@ -75,7 +75,6 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
-  InternalToolErrorResult,
   InternalToolSuccess,
   McpTextFieldSpec,
   McpToolDefinition,

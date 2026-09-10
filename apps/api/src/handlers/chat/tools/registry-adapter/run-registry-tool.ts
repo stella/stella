@@ -173,7 +173,7 @@ export const runRegistryReadTool = async ({
         agentInputValidationError({
           failure: normalized,
           subject: `${toolName} arguments`,
-        }),
+        }).error,
       ),
     );
   }

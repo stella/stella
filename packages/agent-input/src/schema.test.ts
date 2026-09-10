@@ -62,10 +62,7 @@ describe("normalizeAgentInput", () => {
           properties: {
             amount: { type: "number" },
             due: {
-              anyOf: [
-                { type: "string", format: "date" },
-                { type: "null" },
-              ],
+              anyOf: [{ type: "string", format: "date" }, { type: "null" }],
             },
           },
         },
@@ -78,15 +75,13 @@ describe("normalizeAgentInput", () => {
           path: "amount",
           received: '"1,234"',
           expected: "a number",
-          hint:
-            '"1,234" reads as 1234 with "," grouping the thousands, or as 1.234 with "," as the decimal mark. Send 1234 or 1.234 as a JSON number.',
+          hint: '"1,234" reads as 1234 with "," grouping the thousands, or as 1.234 with "," as the decimal mark. Send 1234 or 1.234 as a JSON number.',
         },
         {
           path: "due",
           received: '"01/02/2026"',
           expected: "a calendar date",
-          hint:
-            'That reads as 2026-02-01 with the day first, or 2026-01-02 with the month first. Send "2026-02-01" or "2026-01-02".',
+          hint: 'That reads as 2026-02-01 with the day first, or 2026-01-02 with the month first. Send "2026-02-01" or "2026-01-02".',
         },
       ],
     });
