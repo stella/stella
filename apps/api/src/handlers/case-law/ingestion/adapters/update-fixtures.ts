@@ -141,7 +141,9 @@ const updateAdapter = async (
     // from, and a sidecar citing a URL nobody requested reads as verified
     // provenance forever after.
     if (firstUrl === undefined) {
-      return { error: `${adapterKey}: recorded no request to cite as a source` };
+      return {
+        error: `${adapterKey}: recorded no request to cite as a source`,
+      };
     }
 
     const page = result.unwrap(
