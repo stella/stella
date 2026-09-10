@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.7
+
+### Patch Changes
+
+- [#3211](https://github.com/stella/stella/pull/3211) [`d8dc3fd`](https://github.com/stella/stella/commit/d8dc3fd78a7adb0d0893ee6cbf331e6898d78e53) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Route CLI arguments through the server's shared schema-derived normalization and validation boundary.
+
 ## 1.2.6
 
 ### Patch Changes
