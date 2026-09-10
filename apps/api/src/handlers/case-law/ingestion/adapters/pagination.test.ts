@@ -155,6 +155,20 @@ describe("createPagePaginatedFetch", () => {
     expect(page.nextCursor).toBe("offset:3");
   });
 
+  test("names the listing request the page was read from", async () => {
+    await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 10));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+
+    const page = (await createTestFetch()(null, {})).unwrap();
+
+    // The recorder cites this as a fixture's provenance, so it has to be
+    // the request that served the listing rather than a URL rebuilt from
+    // the same inputs, which could drift from the one actually issued.
+    expect(page.sourceUrl).toBe("https://example.com/test-api?page=1");
+  });
+
   test("parks cursor at current offset when exhausted", async () => {
     await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
     restore = await mockFetchWithFixtures([

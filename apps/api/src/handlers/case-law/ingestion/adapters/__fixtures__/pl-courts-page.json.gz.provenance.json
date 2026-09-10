@@ -1,5 +1,6 @@
 {
-  "capture": "legacy",
-  "sha256": "234be8ec1b365f9561ccbd10e51be2b753d9cefe981c15af55b5e46a317c1ec6",
-  "note": "legacy capture, provenance unknown; recapture on next touch"
+  "capture": "recorded",
+  "sha256": "7b447583c62b16ecfd9fafd521ec96d4b06da1abd8920408e8f5ddc1681deb48",
+  "sourceUrl": "https://www.saos.org.pl/api/dump/judgments?pageSize=100&pageNumber=0&withGenerated=true",
+  "capturedAt": "2026-09-10T17:38:22.961Z"
 }

@@ -875,6 +875,9 @@ type FetchListingOptions = {
   courtFilter?: string | undefined;
 };
 
+/** A parsed listing beside the request that served it. */
+type RisListingFetch = RisListingPage & { url: string };
+
 const fetchListing = async ({
   cursor,
   dependencies,
@@ -883,9 +886,10 @@ const fetchListing = async ({
   signal,
   slice,
   courtFilter,
-}: FetchListingOptions): Promise<RisListingPage> => {
+}: FetchListingOptions): Promise<RisListingFetch> => {
+  const url = listingQuery(source, slice, page, courtFilter);
   const response = await dependencies.request(
-    listingQuery(source, slice, page, courtFilter),
+    url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
       adapterKey: source.key,
@@ -915,7 +919,7 @@ const fetchListing = async ({
       cursor,
     });
   }
-  return parsed;
+  return { ...parsed, url };
 };
 
 const nextSliceCursor = (
@@ -1212,6 +1216,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
                 collected,
                 total: expectedTotal,
               }),
+              sourceUrl: page.url,
             };
           }
           if (collected !== expectedTotal - foreign) {
@@ -1233,6 +1238,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
               expectedDigest: digest,
               expectedForeign: foreign,
             }),
+            sourceUrl: page.url,
           };
         },
         catch: adapterCatch(source.key, cursor),

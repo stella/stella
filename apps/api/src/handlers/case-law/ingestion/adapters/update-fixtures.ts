@@ -3,7 +3,8 @@ import { Temporal } from "@stll/time";
  * Update adapter test fixtures from live APIs.
  *
  * Records a fresh first-page response from each adapter
- * and saves it to __fixtures__/ for use in unit tests.
+ * and saves it to __fixtures__/ for use in unit tests,
+ * beside the `.provenance.json` sidecar pinning its bytes.
  * Run this periodically (or after a source changes) to
  * keep fixtures in sync with real API responses.
  *
@@ -18,6 +19,11 @@ import {
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
+import {
+  formatProvenance,
+  provenancePathOf,
+  sha256Of,
+} from "@/api/tests/fixture-provenance";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -38,13 +44,33 @@ type FixtureRecord = {
   page: SyncPage;
 };
 
+/**
+ * Write the fixture and the sidecar that pins its bytes.
+ *
+ * `fixture-provenance.test.ts` rehashes every capture on every run, so a
+ * refresh that rewrote only the archive would leave the sidecar naming
+ * bytes that no longer exist. The two are written together for the same
+ * reason the guard exists: they can never be committed apart.
+ */
 const writeFixture = async (
   adapter: string,
   data: FixtureRecord,
+  sourceUrl: string,
 ): Promise<string> => {
   const filename = `${adapter}-page.json.gz`;
-  const path = new URL(filename, FIXTURES_DIR);
-  await Bun.write(path, encodeGzipJson(data));
+  const bytes = encodeGzipJson(data);
+  await Promise.all([
+    Bun.write(new URL(filename, FIXTURES_DIR), bytes),
+    Bun.write(
+      new URL(provenancePathOf(filename), FIXTURES_DIR),
+      formatProvenance({
+        capture: "recorded",
+        sha256: sha256Of(bytes),
+        sourceUrl,
+        capturedAt: data.recordedAt,
+      }),
+    ),
+  ]);
   return filename;
 };
 
@@ -75,6 +101,16 @@ const updateAdapter = async (
     const page = result.unwrap(
       "Adapter page result was checked for an ingestion error",
     );
+
+    // Only the adapter can say which of its requests served the listing:
+    // a session bootstrap, a search POST and a per-decision fetch look
+    // alike from outside, and a sidecar citing the wrong one reads as
+    // verified provenance forever after.
+    if (page.sourceUrl === undefined) {
+      return {
+        error: `${adapterKey}: page names no listing request to cite as a source`,
+      };
+    }
     const record: FixtureRecord = {
       adapter: adapterKey,
       recordedAt: Temporal.Now.instant().toString({
@@ -86,7 +122,7 @@ const updateAdapter = async (
       },
     };
 
-    const filename = await writeFixture(adapterKey, record);
+    const filename = await writeFixture(adapterKey, record, page.sourceUrl);
     return { filename, count: page.decisions.length };
   } catch (error) {
     return {

@@ -1,5 +1,6 @@
 {
-  "capture": "legacy",
-  "sha256": "4bb8bc0e3b31d198fcfef2a96e050fe0712a06a712e7f057b301f0d2e994b66f",
-  "note": "legacy capture, provenance unknown; recapture on next touch"
+  "capture": "recorded",
+  "sha256": "a425231a45a0b9ae62a5b7b7da9bd0efe2d4dbad4354b558489274f7997bfecb",
+  "sourceUrl": "https://obcan.justice.sk/pilot/api/ress-isu-service/v1/rozhodnutie?page=1&size=100&sortProperty=datumVydania&sortDirection=ASC",
+  "capturedAt": "2026-09-10T17:37:44.312Z"
 }

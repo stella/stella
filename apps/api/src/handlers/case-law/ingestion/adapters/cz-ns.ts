@@ -1192,6 +1192,7 @@ export const czNsAdapter = defineSourceAdapter({
               return {
                 decisions,
                 nextCursor: String(start + i),
+                sourceUrl: listUrl,
               };
             }
             // Timeout: distinguish page-level from per-entry
@@ -1204,6 +1205,7 @@ export const czNsAdapter = defineSourceAdapter({
                 return {
                   decisions,
                   nextCursor: String(start + i),
+                  sourceUrl: listUrl,
                 };
               }
               // Per-entry timeout: skip this entry
@@ -1235,7 +1237,7 @@ export const czNsAdapter = defineSourceAdapter({
           ? String(start + entries.length)
           : String(Math.max(1, start + entries.length - PAGE_SIZE));
 
-        return { decisions, nextCursor };
+        return { decisions, nextCursor, sourceUrl: listUrl };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NS, cursor),
     });

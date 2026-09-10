@@ -1,5 +1,6 @@
 {
-  "capture": "legacy",
-  "sha256": "c3dfb41a25ff36fe0af45a339f3d2275e36fdb0a5c11cd356bdd1c472f656d35",
-  "note": "legacy capture, provenance unknown; recapture on next touch"
+  "capture": "recorded",
+  "sha256": "0f0bb488699d4aa8eebd4a9de7663b8faf62ac682a55317d110d735e47c64012",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Justiz&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2026-08-01&EntscheidungsdatumBis=2026-08-31",
+  "capturedAt": "2026-09-10T17:37:38.232Z"
 }

@@ -624,6 +624,16 @@ type SearchPage = {
   reported: number;
 };
 
+/**
+ * A search page beside the results request that served it.
+ *
+ * NALUS reaches its listing through a WebForms handshake — a bootstrap GET
+ * for the view state, a POST, then the results page — so nothing about the
+ * request order names the listing. This carries the one request whose
+ * response the rows were parsed from.
+ */
+type FetchedSearchPage = SearchPage & { url: string };
+
 class SearchPageDriftError extends TypeError {
   override name = "SearchPageDriftError";
 }
@@ -1093,7 +1103,7 @@ const fetchSearchPage = async ({
   state,
   pageSize,
   signal,
-}: FetchSearchPageOptions): Promise<SearchPage | null> => {
+}: FetchSearchPageOptions): Promise<FetchedSearchPage | null> => {
   const first = await fetchWithTimeout(SEARCH_URL, {
     headers: COMMON_HEADERS,
     redirect: "manual",
@@ -1169,11 +1179,14 @@ const fetchSearchPage = async ({
   if (!results.ok) {
     throw new TypeError(`NALUS results returned HTTP ${results.status}`);
   }
-  return parseResultPage({
-    html: await results.text(),
-    expectedPage: state.page,
-    pageSize,
-  });
+  return {
+    ...parseResultPage({
+      html: await results.text(),
+      expectedPage: state.page,
+      pageSize,
+    }),
+    url: pageUrl,
+  };
 };
 
 /**
@@ -1713,7 +1726,7 @@ export const czUsAdapter = defineSourceAdapter({
       try: async () => {
         const now = new Date();
         const state = cursor ? parseCursor(cursor, now) : historicalStart(now);
-        let page: SearchPage | null;
+        let page: FetchedSearchPage | null;
         try {
           page = await fetchSearchPage({
             state,
@@ -1778,6 +1791,7 @@ export const czUsAdapter = defineSourceAdapter({
               digest: DIGEST_SEED,
               expectedDigest: digest,
             }),
+            sourceUrl: page.url,
           };
         }
         return {
@@ -1787,6 +1801,7 @@ export const czUsAdapter = defineSourceAdapter({
             page: state.page + 1,
             digest,
           }),
+          sourceUrl: page.url,
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_US, cursor),
