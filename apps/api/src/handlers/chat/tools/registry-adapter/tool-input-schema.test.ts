@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
+
 import type { JsonSchema } from "@/api/mcp/tool-types";
 
 import { toToolInputSchema } from "./tool-input-schema";
@@ -45,6 +47,27 @@ describe("toToolInputSchema", () => {
 
     expect(schema.required).toEqual(["query"]);
     expect(schema.properties.query.enum).toEqual(["one", "two"]);
+  });
+
+  test("removes server-only normalization metadata but keeps its guidance", () => {
+    const schema = {
+      properties: {
+        locale: {
+          description: "Use a BCP-47 language tag.",
+          [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "locale" },
+          type: "string",
+        },
+      },
+      type: "object",
+    } as const satisfies JsonSchema;
+
+    expect(toToolInputSchema(schema).properties?.["locale"]).toEqual({
+      description: "Use a BCP-47 language tag.",
+      type: "string",
+    });
+    expect(schema.properties.locale[AGENT_INPUT_NORMALIZATION_KEY]).toEqual({
+      kind: "locale",
+    });
   });
 
   test("omits unavailable top-level properties without changing the source schema", () => {
