@@ -248,7 +248,7 @@ export const VersionsSidebar = ({
           return;
         default:
           result satisfies never;
-          return panic(`Unhandled entity version upload: ${String(result)}`);
+          panic(`Unhandled entity version upload: ${String(result)}`);
       }
     } finally {
       setIsUploading(false);

@@ -1429,7 +1429,7 @@ const VersionDropZone = ({
                   return;
                 default:
                   result satisfies never;
-                  return panic(
+                  panic(
                     `Unhandled entity version upload: ${String(result)}`,
                   );
               }

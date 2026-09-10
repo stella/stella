@@ -930,10 +930,10 @@ const LoadedPDFPageOrganizer = ({
           case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
             break;
           case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
-            return panic("Generated PDF version upload was cancelled");
+            panic("Generated PDF version upload was cancelled");
           default:
             uploadResult satisfies never;
-            return panic(
+            panic(
               `Unhandled entity version upload: ${String(uploadResult)}`,
             );
         }

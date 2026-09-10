@@ -548,7 +548,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         break;
       default:
         preflight satisfies never;
-        return panic(
+        panic(
           `Unhandled attached-template preflight: ${String(preflight)}`,
         );
     }
