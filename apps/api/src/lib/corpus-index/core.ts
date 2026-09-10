@@ -332,8 +332,7 @@ export type CorpusDocumentPayload = {
  * single provision or article and gains nothing from being cut further.
  */
 const CORPUS_INDEX_GRANULARITIES = ["document", "passage"] as const;
-type CorpusIndexGranularity =
-  (typeof CORPUS_INDEX_GRANULARITIES)[number];
+type CorpusIndexGranularity = (typeof CORPUS_INDEX_GRANULARITIES)[number];
 
 /**
  * Granularity-dependent half of the adapter. A union rather than an optional
