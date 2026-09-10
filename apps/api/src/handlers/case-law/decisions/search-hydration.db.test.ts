@@ -49,6 +49,7 @@ const sourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const czechId = createSafeId<"caseLawDecision">();
 const slovakId = createSafeId<"caseLawDecision">();
+const foreignId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
 const projectedId = createSafeId<"caseLawDecision">();
 const queuedId = createSafeId<"caseLawDecision">();
@@ -57,6 +58,7 @@ const queuedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
+const SEARCH_BODY = { country: "CZE", query: "promlčení" } as const;
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
@@ -126,14 +128,24 @@ beforeAll(
         id: slovakId,
         sourceId,
         caseNumber: "22 Cdo 1/2026",
-        court: "Najvyšší súd",
-        country: "SVK",
+        court: "Nejvyšší soud",
+        country: "CZE",
         language: "sk",
         languageGroupKey: "hydration-group",
         contentHash: "hash-svk",
         indexedHash: "hash-svk",
         citationAuthority: 1,
         citationCount: 3,
+      },
+      {
+        id: foreignId,
+        sourceId,
+        caseNumber: "1 Cdo 2/2026",
+        court: "Najvyšší súd",
+        country: "SVK",
+        language: "sk",
+        contentHash: "hash-foreign",
+        indexedHash: "hash-foreign",
       },
       {
         id: closedId,
@@ -251,7 +263,7 @@ afterAll(async () => {
 test("the blend read carries what ranking and the fold need, and nothing a card shows", async () => {
   const hydrated: HydratedRows = new Map();
   const ranking = await rehydrateCaseLawCandidates({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     candidates: candidatesOf(czechId, slovakId),
     caseLawDb,
     courtWeights,
@@ -279,7 +291,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
 test("a candidate is read once however many rounds ask for it", async () => {
   const hydrated: HydratedRows = new Map();
   await rehydrateCaseLawCandidates({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     candidates: candidatesOf(czechId),
     caseLawDb,
     courtWeights,
@@ -291,7 +303,7 @@ test("a candidate is read once however many rounds ask for it", async () => {
   // The second round accumulates the first round's candidates plus one more:
   // only the new id may reach the database.
   await rehydrateCaseLawCandidates({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     candidates: candidatesOf(czechId, slovakId),
     caseLawDb,
     courtWeights,
@@ -302,7 +314,7 @@ test("a candidate is read once however many rounds ask for it", async () => {
 
   // A round that adds nothing new asks the database for nothing at all.
   await rehydrateCaseLawCandidates({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     candidates: candidatesOf(czechId, slovakId),
     caseLawDb,
     courtWeights,
@@ -314,7 +326,7 @@ test("a candidate is read once however many rounds ask for it", async () => {
 
 test("the page read carries what a result card shows, for the page ids only", async () => {
   const rows = await readCaseLawPageDecisionRows({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     caseLawDb,
     generation: GENERATION,
     ids: [czechId],
@@ -332,7 +344,7 @@ test("the page read carries what a result card shows, for the page ids only", as
 
 test("an empty page reads nothing", async () => {
   const rows = await readCaseLawPageDecisionRows({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     caseLawDb,
     generation: GENERATION,
     ids: [],
@@ -344,7 +356,7 @@ test("an empty page reads nothing", async () => {
 
 test("a final-projection generation admits exactly what its projection state holds", async () => {
   const scoped = {
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     caseLawDb,
     courtWeights,
     generation: PROJECTED_GENERATION,
@@ -371,7 +383,7 @@ test("a final-projection generation admits exactly what its projection state hol
 
 test("a legacy generation still reads the projection row and the serving marker", async () => {
   const ranking = await rehydrateCaseLawCandidates({
-    body: { query: "promlčení" },
+    body: SEARCH_BODY,
     candidates: candidatesOf(projectedId, czechId),
     caseLawDb,
     courtWeights,
@@ -391,15 +403,15 @@ test("both reads reapply the request filters and the redistribution boundary", a
 
   const ranking = await rehydrateCaseLawCandidates({
     ...scoped,
-    candidates: candidatesOf(czechId, slovakId, closedId),
+    candidates: candidatesOf(czechId, foreignId, closedId),
   });
-  // The Slovak version no longer matches the country filter, and the closed
+  // The foreign decision no longer matches the country filter, and the closed
   // source is not redistributable, so neither can stand for the judgment.
   expect(ranking.ranked.map((hit) => hit.id)).toEqual([czechId]);
 
   const rows = await readCaseLawPageDecisionRows({
     ...scoped,
-    ids: [czechId, slovakId, closedId],
+    ids: [czechId, foreignId, closedId],
   });
   expect([...rows.keys()]).toEqual([czechId]);
 });

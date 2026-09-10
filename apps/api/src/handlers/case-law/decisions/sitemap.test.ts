@@ -49,10 +49,16 @@ beforeAll(
     db = drizzle({ client });
     const readDb = async <T>(
       read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
-    ) => await withPublicLawReaderRole(db, read);
+    ) =>
+      await withPublicLawReaderRole(db, async (roleTx) => {
+        // SAFETY: the role transaction supplies the select surface the reads use.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+        const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+        return await read(tx);
+      });
     // SAFETY: brand-only wrapper around the read-role transaction helper.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test database carries the production read boundary
-    caseLawDb = readDb as CaseLawPublicReadDb;
+    caseLawDb = readDb as unknown as CaseLawPublicReadDb;
 
     await db.insert(caseLawSources).values({
       id: sourceId,
@@ -196,6 +202,9 @@ test("sitemap shards reject countries outside the public list", async () => {
     { bucket: "all", country: "xaa", month: "03", year: "2020" },
     caseLawDb,
   );
+  if (!("code" in unavailable)) {
+    panic("Expected an unavailable-country response.");
+  }
   expect(unavailable.code).toBe(404);
 });
 

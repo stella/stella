@@ -108,8 +108,10 @@ const requireSavedQueryDecisionFilters = (
   switch (result.status) {
     case "available":
       return result.filters;
-    case "unavailable":
-      return notFound({ throw: true });
+    case "unavailable": {
+      notFound({ throw: true });
+      return panic("TanStack Router did not throw a not-found response.");
+    }
     default:
       return panic(result satisfies never);
   }

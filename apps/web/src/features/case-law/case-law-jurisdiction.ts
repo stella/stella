@@ -3,6 +3,7 @@ import {
   isPublicCaseLawCountry as isSharedPublicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES as SHARED_PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
+import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import type { UiLocale } from "@stll/locales";
 
 /**
@@ -29,13 +30,13 @@ export const PUBLIC_CASE_LAW_COUNTRIES = SHARED_PUBLIC_CASE_LAW_COUNTRIES;
 
 export const isPublicCaseLawCountry = (
   country: string,
-): country is CaseLawJurisdiction =>
+): country is PublicCaseLawCountry =>
   isCaseLawJurisdiction(country) && isSharedPublicCaseLawCountry(country);
 
 /** Resolve the route form to a launch-ready corpus country. */
 export const publicCaseLawCountryFromParam = (
   param: string | undefined,
-): CaseLawJurisdiction | null => {
+): PublicCaseLawCountry | null => {
   if (param === undefined) {
     return null;
   }
@@ -66,7 +67,7 @@ const DEFAULT_COUNTRY_BY_LOCALE = {
 
 export const defaultCaseLawCountryForLocale = (
   locale: UiLocale,
-): CaseLawJurisdiction | null => {
+): PublicCaseLawCountry | null => {
   const localeCountry = DEFAULT_COUNTRY_BY_LOCALE[locale];
   return localeCountry !== null && isPublicCaseLawCountry(localeCountry)
     ? localeCountry

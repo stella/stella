@@ -728,9 +728,7 @@ const caseLawSearchRowFilters = (
   if (body.court) {
     filters.push(eq(caseLawDecisions.court, body.court));
   }
-  if (body.country) {
-    filters.push(eq(caseLawDecisions.country, body.country));
-  }
+  filters.push(eq(caseLawDecisions.country, body.country));
   if (body.dateFrom) {
     filters.push(sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`);
   }

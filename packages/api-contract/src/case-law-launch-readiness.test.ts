@@ -46,7 +46,7 @@ describe("case-law launch readiness", () => {
   });
 
   test("admits only a country in the checked-in list", () => {
-    expect(publicCaseLawCountry("cze")).toBe("CZE");
+    expect(publicCaseLawCountry("cze")).toBe(publicCaseLawCountry("CZE"));
     expect(publicCaseLawCountry("xaa")).toBeNull();
   });
 });

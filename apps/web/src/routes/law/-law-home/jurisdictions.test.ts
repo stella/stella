@@ -17,8 +17,8 @@ const ALL_SCOPES: readonly LawScope[] = ["decisions", "statutes"];
 
 describe("law home jurisdictions", () => {
   test("every supported case-law jurisdiction has a descriptor", () => {
-    expect(LAW_HOME_JURISDICTION_CODES.toSorted()).toEqual(
-      Object.keys(REGION_BY_COUNTRY).toSorted(),
+    expect(Object.keys(REGION_BY_COUNTRY).toSorted()).toEqual(
+      LAW_HOME_JURISDICTION_CODES.toSorted(),
     );
   });
 

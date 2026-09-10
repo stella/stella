@@ -734,7 +734,10 @@ describe("public law sitemap", () => {
     );
 
     expect(chatOpenSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatOpenSource).toContain("defaultCaseLawCountryForLocale");
     expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
+    expect(chatMentionSource).toContain("defaultCaseLawCountryForLocale");
+    expect(chatMentionSource).toContain("country !== null");
     expect(searchSource).toContain("isPublicLawPreviewEnabled");
     expect(searchSource).toContain("usePublicLawPreviewEnabled");
   });

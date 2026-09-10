@@ -678,7 +678,7 @@ describe("public-law reader role", () => {
     expect(shard).toMatchObject({ items: [] });
 
     const search = await rehydrateCaseLawCandidates({
-      body: { query: "reader role census" },
+      body: { country: PUBLIC_COUNTRY, query: "reader role census" },
       candidates: [{ id: createSafeId<"caseLawDecision">(), score: 1 }],
       caseLawDb,
       // The census exercises the projection under the reader role; the court
@@ -692,7 +692,7 @@ describe("public-law reader role", () => {
     // A generation the final projection builds reads its projection state
     // instead of the projection row, so the census covers both predicates.
     const projectedSearch = await rehydrateCaseLawCandidates({
-      body: { query: "reader role census" },
+      body: { country: PUBLIC_COUNTRY, query: "reader role census" },
       candidates: [{ id: createSafeId<"caseLawDecision">(), score: 1 }],
       caseLawDb,
       courtWeights: new Map(),
@@ -703,7 +703,7 @@ describe("public-law reader role", () => {
     // Search reads twice: narrow rows for every candidate it blends, wide
     // rows for the ids the page emits. Both have to clear the reader role.
     const pageRows = await readCaseLawPageDecisionRows({
-      body: { query: "reader role census" },
+      body: { country: PUBLIC_COUNTRY, query: "reader role census" },
       caseLawDb,
       generation: "case_law_v3",
       ids: [createSafeId<"caseLawDecision">()],
@@ -711,7 +711,7 @@ describe("public-law reader role", () => {
     expect(pageRows.size).toBe(0);
 
     const projectedPageRows = await readCaseLawPageDecisionRows({
-      body: { query: "reader role census" },
+      body: { country: PUBLIC_COUNTRY, query: "reader role census" },
       caseLawDb,
       generation: "case_law_v6",
       ids: [createSafeId<"caseLawDecision">()],
