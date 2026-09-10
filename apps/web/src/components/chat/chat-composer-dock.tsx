@@ -27,6 +27,8 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 type ChatComposerDockCommonProps = {
   threadRef: ChatThreadRef;
   guideAnchorsEnabled?: boolean;
+  /** Model picker rendered beside the context meter when the surface has one. */
+  models?: ComposerModelsMenuProps | undefined;
   /**
    * Genuine per-surface leading context, rendered first in the start
    * cluster: the main-chat matter picker, or the file overlay's
@@ -49,7 +51,6 @@ type ChatComposerDockProps = ChatComposerDockCommonProps &
         };
         onNewThread: (() => void) | null;
         endExtras?: ReactNode | undefined;
-        models?: ComposerModelsMenuProps | undefined;
       }
   );
 
@@ -78,7 +79,7 @@ const resolveChatComposerDockRenderState = (
         },
         disabled: true,
         endExtras: undefined,
-        models: undefined,
+        models: props.models,
         onNewThread: null,
       };
     case "ready":
