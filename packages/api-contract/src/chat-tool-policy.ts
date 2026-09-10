@@ -35,9 +35,8 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   boe_search_legislation: CHAT_TOOL_POLICY_KIND.external,
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   business_registry_lookup: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  // Server-executed read-only comparisons and reviews resolve only resources
-  // already authorized for the caller, so they do not need per-call approval.
-  compare_versions: CHAT_TOOL_POLICY_KIND.internal,
+  // Server-executed read-only reviews resolve only resources already
+  // authorized for the caller, so they do not need per-call approval.
   review_folder_consistency: CHAT_TOOL_POLICY_KIND.internal,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,

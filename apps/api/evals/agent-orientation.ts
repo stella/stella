@@ -543,6 +543,61 @@ const TASKS: readonly Task[] = [
     },
   },
   {
+    id: "compare-document-versions",
+    request:
+      "Create a strict word-level tracked-changes comparison in matter " +
+      "11111111-1111-4111-8111-111111111111 for document " +
+      "22222222-2222-4222-8222-222222222222, comparing target version " +
+      "44444444-4444-4444-8444-444444444444 with its immediate predecessor. " +
+      "Keep tracked changes in the base, accept tracked changes in the target, " +
+      "and save the comparison as a derived version.",
+    mcp: {
+      toolName: "invoke_capability",
+      checkArgs: (args) => [
+        ...field(args, "capability", "documents.compare"),
+        ...nestedField(
+          args,
+          ["input", "params", "matterId"],
+          "11111111-1111-4111-8111-111111111111",
+        ),
+        ...nestedField(
+          args,
+          ["input", "params", "documentId"],
+          "22222222-2222-4222-8222-222222222222",
+        ),
+        ...nestedField(
+          args,
+          ["input", "body", "selection", "type"],
+          "previous",
+        ),
+        ...nestedField(
+          args,
+          ["input", "body", "selection", "targetVersionId"],
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        ...nestedField(args, ["input", "body", "mode"], "strict"),
+        ...nestedField(args, ["input", "body", "granularity"], "word"),
+        ...nestedField(args, ["input", "body", "baseTrackedChanges"], "keep"),
+        ...nestedField(
+          args,
+          ["input", "body", "targetTrackedChanges"],
+          "accept",
+        ),
+        ...nestedField(args, ["input", "body", "output", "type"], "version"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "documents", "compare"],
+      flags: {
+        "matter-id": "11111111-1111-4111-8111-111111111111",
+        "document-id": "22222222-2222-4222-8222-222222222222",
+        input:
+          '{"body":{"selection":{"type":"previous","targetVersionId":"44444444-4444-4444-8444-444444444444"},"mode":"strict","granularity":"word","baseTrackedChanges":"keep","targetTrackedChanges":"accept","output":{"type":"version"}}}',
+      },
+    },
+  },
+  {
     id: "start-workflow-extraction",
     request: "Start the extraction workflow in matter ws_acme_2024.",
     mcp: {

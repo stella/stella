@@ -10,6 +10,26 @@ describe("documentSourceSchema", () => {
     });
   });
 
+  test("accepts complete comparison provenance and rejects partial provenance", () => {
+    const comparison = {
+      kind: "comparison",
+      baseVersionId: "00000000-0000-4000-8000-000000000001",
+      targetVersionId: "00000000-0000-4000-8000-000000000002",
+      mode: "best-effort",
+      granularity: "character",
+      baseTrackedChanges: "reject",
+      targetTrackedChanges: "accept",
+    };
+
+    expect(v.parse(documentSourceSchema, comparison)).toEqual(comparison);
+    expect(
+      v.is(documentSourceSchema, {
+        ...comparison,
+        targetVersionId: undefined,
+      }),
+    ).toBe(false);
+  });
+
   test("accepts complete import provenance and rejects invalid sources", () => {
     expect(
       v.parse(documentSourceSchema, {

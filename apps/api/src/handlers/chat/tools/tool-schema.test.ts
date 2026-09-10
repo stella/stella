@@ -52,7 +52,6 @@ import {
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
-import { COMPARE_VERSIONS_TOOL_NAME } from "@/api/handlers/chat/tools/version-compare-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
@@ -964,124 +963,6 @@ describe("chat tool schemas", () => {
         requiresAnonymization: false,
       });
     }
-  });
-
-  test("registers the server-executed compare_versions tool when an active file field is available", () => {
-    const baseArgs = {
-      orgAIConfig: null,
-      memberRole: "owner",
-      organizationId,
-      requestWorkspaceId: workspaceId,
-      thirdPartyBoundary: { type: "raw" },
-      refRegistry: createChatRefRegistry(),
-      toolDefectMemo: createChatToolDefectMemo(),
-      safeDb: unusedSafeDb,
-      scopedDb: unusedScopedDb,
-      threadId,
-      workspaceId: null,
-      userId,
-      webSearchEnabled: false,
-      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
-      hasActiveDocxEditClient: false,
-      hasActiveDocxFileClient: false,
-      docxSuggestionSurface: "template-studio",
-    } as const;
-    const activeFile = {
-      entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
-      currentVersionId: toSafeId<"entityVersion">(
-        "55555555-5555-4555-8555-555555555556",
-      ),
-      fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
-      supportsDocxEdits: true,
-    } as const;
-
-    const withWorkspace = getChatTools({
-      ...baseArgs,
-      activeFile,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [workspaceId],
-      }),
-    });
-    const compareVersions = withWorkspace[COMPARE_VERSIONS_TOOL_NAME];
-    if (!compareVersions) {
-      throw new Error("Expected compare_versions to be registered");
-    }
-    // Server-executed, read-only: no approval gate.
-    expect(compareVersions.needsApproval).toBeUndefined();
-    expect(getChatToolPolicy(compareVersions)).toEqual({
-      kind: "internal",
-      needsApproval: false,
-      requiresAnonymization: false,
-    });
-
-    const withoutWorkspace = getChatTools({
-      ...baseArgs,
-      activeFile,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [],
-      }),
-    });
-    expect(withoutWorkspace).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
-  });
-
-  test("does not register compare_versions without an active file field", () => {
-    const tools = getChatTools({
-      orgAIConfig: null,
-      memberRole: "owner",
-      organizationId,
-      requestWorkspaceId: workspaceId,
-      thirdPartyBoundary: { type: "raw" },
-      refRegistry: createChatRefRegistry(),
-      toolDefectMemo: createChatToolDefectMemo(),
-      safeDb: unusedSafeDb,
-      scopedDb: unusedScopedDb,
-      threadId,
-      workspaceId: null,
-      userId,
-      webSearchEnabled: false,
-      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
-      hasActiveDocxEditClient: false,
-      hasActiveDocxFileClient: false,
-      docxSuggestionSurface: "template-studio",
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [workspaceId],
-      }),
-    });
-    expect(tools).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
-  });
-
-  test("does not register compare_versions for non-DOCX active files", () => {
-    const tools = getChatTools({
-      orgAIConfig: null,
-      memberRole: "owner",
-      organizationId,
-      requestWorkspaceId: workspaceId,
-      thirdPartyBoundary: { type: "raw" },
-      refRegistry: createChatRefRegistry(),
-      toolDefectMemo: createChatToolDefectMemo(),
-      safeDb: unusedSafeDb,
-      scopedDb: unusedScopedDb,
-      threadId,
-      workspaceId: null,
-      userId,
-      webSearchEnabled: false,
-      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
-      hasActiveDocxEditClient: false,
-      hasActiveDocxFileClient: false,
-      docxSuggestionSurface: "template-studio",
-      activeFile: {
-        entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
-        fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
-      },
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [workspaceId],
-      }),
-    });
-    expect(tools).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
   });
 
   test("only exposes current skill edit tools for editable active skill chats", () => {

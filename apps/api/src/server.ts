@@ -33,6 +33,7 @@ import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/pas
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
 import { documentTypesRoute } from "@/api/handlers/document-types/routes";
+import { documentsRoute } from "@/api/handlers/documents/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
@@ -633,6 +634,7 @@ const api = new Elysia()
       .use(documentReviewsRoute)
       .use(documentReviewPassagesRoute)
       .use(documentTranslationsRoute)
+      .use(documentsRoute)
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
       .use(flowsRoute)

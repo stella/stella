@@ -61,7 +61,6 @@ import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
-import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -90,7 +89,6 @@ import {
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { downloadFile } from "@/lib/utils";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
@@ -621,18 +619,6 @@ function RouteComponentInner({
     resetPdfViewerState();
   });
 
-  // Compare mode state
-  const [compareState, setCompareState] = useState<{
-    baseVersionLabel: string;
-    docxBuffer: ArrayBuffer;
-    docxBase64: string;
-    editsApplied: number;
-    targetVersionLabel: string;
-    wordsAdded: number;
-    wordsRemoved: number;
-    seq: number;
-  } | null>(null);
-  const [isComparing] = useState(false);
   const [, setDocxUnlocked] = useState(false);
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
@@ -728,7 +714,6 @@ function RouteComponentInner({
   const useDocxBrowserEditor = shouldUseDocxBrowserEditor({
     isDocxFile,
     hasFilePropertyId: filePropertyId !== undefined,
-    isComparing,
   });
   // A 404 from the field-file lookup means a stale/deleted/foreign field id;
   // fall through to "missing" (recover by navigating back to the matter)
@@ -752,10 +737,7 @@ function RouteComponentInner({
     return "missing";
   })();
   const shouldRenderDocxBrowserShell =
-    isDocxFile &&
-    filePropertyId !== undefined &&
-    !isComparing &&
-    compareState === null;
+    isDocxFile && filePropertyId !== undefined;
   const usesEmbeddedDocumentToolbar =
     shouldRenderDocxBrowserShell || officeViewerFormat !== null;
   const latestFileFieldForProperty =
@@ -984,22 +966,6 @@ function RouteComponentInner({
                 );
               }
 
-              if (compareState) {
-                return (
-                  <VersionDropZone
-                    disabled
-                    entityId={entityId}
-                    workspaceId={workspaceId}
-                  >
-                    <RedlineOverlay
-                      compareState={compareState}
-                      scaleOffset={scaleOffset}
-                      onClose={() => setCompareState(null)}
-                    />
-                  </VersionDropZone>
-                );
-              }
-
               if (officeViewerFormat !== null) {
                 return (
                   <VersionDropZone
@@ -1211,7 +1177,6 @@ const FullscreenDocxViewer = ({
   return (
     <ReadOnlyDocxDocumentViewer
       documentBuffer={fileQuery.data.buffer}
-      mode="viewing"
       scaleOffset={scaleOffset}
     />
   );
@@ -1219,11 +1184,9 @@ const FullscreenDocxViewer = ({
 
 const ReadOnlyDocxDocumentViewer = ({
   documentBuffer,
-  mode,
   scaleOffset,
 }: {
   documentBuffer: ArrayBuffer;
-  mode: "suggesting" | "viewing";
   scaleOffset: number;
 }) => {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -1252,102 +1215,12 @@ const ReadOnlyDocxDocumentViewer = ({
         autoOpenReviewSidebar={false}
         documentBuffer={documentBuffer}
         initialZoom={targetZoom}
-        mode={mode}
+        mode="viewing"
         preserveDocumentWhileLoading
         readOnly
         showToolbar={false}
         showZoomControl={false}
       />
-    </div>
-  );
-};
-
-// -- Redline comparison overlay --
-
-type RedlineOverlayProps = {
-  compareState: {
-    baseVersionLabel: string;
-    docxBuffer: ArrayBuffer;
-    docxBase64: string;
-    editsApplied: number;
-    targetVersionLabel: string;
-    wordsAdded: number;
-    wordsRemoved: number;
-    seq: number;
-  };
-  onClose: () => void;
-  scaleOffset: number;
-};
-
-const RedlineOverlay = ({
-  compareState,
-  onClose,
-  scaleOffset,
-}: RedlineOverlayProps) => {
-  const t = useTranslations();
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="bg-muted/30 flex min-w-0 items-center gap-2 border-b px-4 py-1.5">
-        <span className="text-foreground shrink-0 text-sm font-semibold tabular-nums">
-          {t("fileDetail.compareVersions", {
-            baseVersion: compareState.baseVersionLabel,
-            targetVersion: compareState.targetVersionLabel,
-          })}
-        </span>
-        <span className="text-muted-foreground min-w-0 truncate text-xs">
-          {t("fileDetail.redlinePreview")}
-        </span>
-        <Tooltip
-          content={`${String(compareState.wordsAdded)} ${t("fileDetail.wordsAdded")}`}
-          render={
-            <span className="text-success shrink-0 text-xs font-medium tabular-nums" />
-          }
-        >
-          +{compareState.wordsAdded}
-        </Tooltip>
-        <Tooltip
-          content={`${String(compareState.wordsRemoved)} ${t("fileDetail.wordsRemoved")}`}
-          render={
-            <span className="text-destructive shrink-0 text-xs font-medium tabular-nums" />
-          }
-        >
-          −{compareState.wordsRemoved}
-        </Tooltip>
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {t("fileDetail.changesDetected", {
-            count: compareState.editsApplied,
-          })}
-        </span>
-        <div className="ms-auto flex shrink-0 items-center gap-1.5">
-          <Button
-            onClick={() => {
-              downloadBase64AsFile(
-                compareState.docxBase64,
-                "redline.docx",
-                DOCX_MIME,
-              );
-            }}
-            size="xs"
-            variant="outline"
-          >
-            {t("fileDetail.downloadRedline")}
-          </Button>
-          <Button onClick={onClose} size="xs" variant="ghost">
-            {t("common.close")}
-          </Button>
-        </div>
-      </div>
-      <div className="bg-muted min-h-0 flex-1 overflow-auto">
-        <Suspense fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}>
-          <ReadOnlyDocxDocumentViewer
-            key={`redline-${String(compareState.seq)}`}
-            documentBuffer={compareState.docxBuffer}
-            mode="suggesting"
-            scaleOffset={scaleOffset}
-          />
-        </Suspense>
-      </div>
     </div>
   );
 };
@@ -1445,25 +1318,4 @@ const VersionDropZone = ({
       )}
     </div>
   );
-};
-
-const downloadBase64AsFile = (
-  base64: string,
-  fileName: string,
-  mimeType: string,
-) => {
-  downloadFile(
-    new Blob([decodeBase64ToArrayBuffer(base64)], { type: mimeType }),
-    fileName,
-  );
-};
-
-const decodeBase64ToArrayBuffer = (base64: string) => {
-  const binary = atob(base64);
-  const buffer = new ArrayBuffer(binary.length);
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.codePointAt(i) ?? 0;
-  }
-  return buffer;
 };

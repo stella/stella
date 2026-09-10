@@ -113,6 +113,12 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `document-types.reorder` | write              | stella:matters_write | —       | generic invoke → `stella capability document-types reorder` |
 | `document-types.update`  | write              | stella:matters_write | —       | generic invoke → `stella capability document-types update`  |
 
+## documents
+
+| Capability          | Access | Scope                  | Feature | Reachable via                                          |
+| ------------------- | ------ | ---------------------- | ------- | ------------------------------------------------------ |
+| `documents.compare` | write  | stella:documents_write | —       | generic invoke → `stella capability documents compare` |
+
 ## entities
 
 | Capability                            | Access             | Scope                  | Feature | Reachable via                                                                                                                                                                                                                                                                   |
@@ -120,7 +126,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.bilingual.create`           | write              | stella:matters_write   | —       | generic invoke → `stella capability entities bilingual-create`                                                                                                                                                                                                                  |
 | `entities.check-stamp`                | read               | stella:read            | —       | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the lookup reads a stamp out of the supplied document's bytes; no capability accepts the stamp on its own                                           |
 | `entities.clip`                       | write              | stella:matters_write   | —       | generic invoke → `stella capability entities clip`                                                                                                                                                                                                                              |
-| `entities.compare-versions`           | read               | stella:read            | —       | generic invoke → `stella capability entities compare-versions`                                                                                                                                                                                                                  |
 | `entities.copy-to-matter`             | write, destructive | stella:matters_write   | —       | generic invoke → `stella capability entities copy-to-matter`                                                                                                                                                                                                                    |
 | `entities.create`                     | write              | stella:documents_write | —       | curated tool `save_document`                                                                                                                                                                                                                                                    |
 | `entities.create-blank-document`      | write              | stella:documents_write | —       | generic invoke → `stella capability entities create-blank-document`                                                                                                                                                                                                             |

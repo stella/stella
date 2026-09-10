@@ -460,9 +460,8 @@ export const entityVersions = p.pgTable(
     createdBy: p.text("created_by"),
     /**
      * Provenance of this version's bytes (see {@link DocumentSource}). A
-     * discriminated union, not a boolean: `upload` / `desktop-edit` today,
-     * with a `sharepoint` branch reserved for the read-only Graph import
-     * slice. Null on legacy rows and creation paths not yet threaded.
+     * discriminated union, not a boolean. Null on legacy rows and creation
+     * paths not yet threaded.
      */
     source: jsonb("source").$type<DocumentSource | null>(),
     collaborationContributorUserIds: jsonb(

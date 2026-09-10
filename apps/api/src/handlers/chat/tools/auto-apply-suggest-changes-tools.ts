@@ -27,12 +27,12 @@ import {
   requireFolioToolDefinition,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
-import { resolveDocxEditAuthorName } from "@/api/handlers/chat/tools/resolve-docx-edit-author-name";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
+import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
@@ -76,22 +76,14 @@ const normalizationSchema = v.strictObject({
 });
 
 // ---------------------------------------------------------------------------
-// Output schema: minimal facts only -- no DOCX bytes/base64, no raw entity
-// id. `versionId` is the same class of value `compare_versions`' OWN input
-// schema already accepts directly from the model (a raw entity version id),
-// so returning the id of the version this tool just wrote is no wider a
-// surface than that existing tool's accepted input.
+// Output schema: minimal facts only -- no DOCX bytes/base64, no raw entity id.
 // ---------------------------------------------------------------------------
 
 const autoApplySuggestChangesSuccessSchema = v.strictObject({
   success: v.literal(true),
   versionId: v.pipe(
     v.string(),
-    v.description(
-      "Id of the new document version this tool just wrote. Pass this as " +
-        "`revisedVersionId` to `compare_versions` if the user asks what " +
-        "changed.",
-    ),
+    v.description("Id of the new document version this tool just wrote."),
   ),
   versionNumber: v.number(),
   fieldId: v.pipe(

@@ -308,7 +308,7 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.

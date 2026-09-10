@@ -11070,6 +11070,230 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        documents: {
+          kind: "route",
+          children: {
+            compare: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "documents", "compare"],
+                capabilityId: "documents.compare",
+                description:
+                  "Create tracked-changes DOCX redlines between stored versions of one document in a matter. Select an explicit base and up to 8 targets, or compare one target with its immediate predecessor. Strict mode refuses an unverified redline; best-effort returns it with explicit verification failures. Output preview compares without writing; output version explicitly saves each successful redline as a derived document version without replacing the current version. The operation may partially succeed across multiple targets, so inspect every result status.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--document-id",
+                    prop: "documentId",
+                    required: true,
+                    part: "params",
+                    partPath: "documentId",
+                  },
+                ],
+                inputOnly: [
+                  "body.selection",
+                  "body.mode",
+                  "body.granularity",
+                  "body.baseTrackedChanges",
+                  "body.targetTrackedChanges",
+                  "body.output",
+                ],
+                paginated: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: [
+                        "selection",
+                        "baseTrackedChanges",
+                        "targetTrackedChanges",
+                        "output",
+                      ],
+                      properties: {
+                        selection: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "baseVersionId",
+                                "targetVersionIds",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "versions",
+                                  type: "string",
+                                },
+                                baseVersionId: {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                                targetVersionIds: {
+                                  minItems: 1,
+                                  maxItems: 8,
+                                  type: "array",
+                                  items: {
+                                    minLength: 36,
+                                    maxLength: 36,
+                                    pattern:
+                                      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                    type: "string",
+                                  },
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["type", "targetVersionId"],
+                              properties: {
+                                type: {
+                                  const: "previous",
+                                  type: "string",
+                                },
+                                targetVersionId: {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        mode: {
+                          default: "strict",
+                          anyOf: [
+                            {
+                              const: "strict",
+                              type: "string",
+                            },
+                            {
+                              const: "best-effort",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        granularity: {
+                          default: "word",
+                          anyOf: [
+                            {
+                              const: "word",
+                              type: "string",
+                            },
+                            {
+                              const: "character",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        baseTrackedChanges: {
+                          anyOf: [
+                            {
+                              const: "keep",
+                              type: "string",
+                            },
+                            {
+                              const: "accept",
+                              type: "string",
+                            },
+                            {
+                              const: "reject",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        targetTrackedChanges: {
+                          anyOf: [
+                            {
+                              const: "keep",
+                              type: "string",
+                            },
+                            {
+                              const: "accept",
+                              type: "string",
+                            },
+                            {
+                              const: "reject",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        output: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "preview",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "version",
+                                  type: "string",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "documentId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        documentId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         entities: {
           kind: "route",
           children: {
@@ -11319,124 +11543,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["matterId"],
-                    },
-                  },
-                },
-              },
-            },
-            "compare-versions": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "compare-versions"],
-                capabilityId: "entities.compare-versions",
-                description:
-                  "Compare two versions of one DOCX document in a matter, returning a tracked-changes redline as a base64 DOCX along with the number of edits applied and the words added and removed. Both versions must carry a DOCX file. Accepting every change in the redline yields the target version, rejecting every change yields the base version. Use entities.version-diff for a plain-text diff against the immediate predecessor instead.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
-                    required: true,
-                    part: "params",
-                    partPath: "matterId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--params-entity-id",
-                    prop: "params.entityId",
-                    required: true,
-                    part: "params",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--base-version-id",
-                    prop: "baseVersionId",
-                    required: true,
-                    part: "body",
-                    partPath: "baseVersionId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--target-version-id",
-                    prop: "targetVersionId",
-                    required: true,
-                    part: "body",
-                    partPath: "targetVersionId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--body-entity-id",
-                    prop: "body.entityId",
-                    required: true,
-                    part: "body",
-                    partPath: "entityId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: [
-                        "baseVersionId",
-                        "targetVersionId",
-                        "entityId",
-                      ],
-                      properties: {
-                        baseVersionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        targetVersionId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["matterId", "entityId"],
-                      properties: {
-                        matterId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
                     },
                   },
                 },
@@ -14997,7 +15103,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "version-diff"],
                 capabilityId: "entities.version-diff",
                 description:
-                  "Return a plain-text, line-level diff of one document version's DOCX against its immediate predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed. Use entities.compare-versions for a DOCX redline between two versions you choose.",
+                  "Return a plain-text, line-level diff of one document version's DOCX against its immediate predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed. Use documents.compare for a DOCX redline between versions you choose.",
                 access: "read",
                 flags: [
                   {

@@ -176,7 +176,7 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "clauses-unlink",
   "clip",
   "clone-builtin",
-  "compare-versions",
+  "compare",
   "convert",
   "copy-to-matter",
   "create-batch",

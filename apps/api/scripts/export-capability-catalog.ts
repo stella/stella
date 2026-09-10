@@ -190,6 +190,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // A translation run reads a matter document and writes the translated one
   // back as a new document, so it takes the workspace write bucket.
   "document-translations": "stella:matters_write",
+  documents: "stella:documents_write",
   entities: "stella:matters_write",
   expenses: "stella:billing_write",
   fields: "stella:matters_write",
