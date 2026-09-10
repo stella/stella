@@ -7,7 +7,7 @@ import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   TEXT_ABSENCE_REASON,
 } from "@stll/api-contract/case-law-text-field";
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   PUBLISHER_SUMMARY_SOURCES,
@@ -70,7 +70,7 @@ beforeAll(
     client = await createTestPglite();
     db = drizzle({ client });
   },
-  { timeout: 120_000 },
+  { timeout: propertyTestTimeout(120_000) },
 );
 
 afterAll(async () => {
