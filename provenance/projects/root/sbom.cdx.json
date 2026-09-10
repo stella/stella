@@ -1903,6 +1903,21 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#1"
           },
           {
@@ -2882,7 +2897,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1125.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1126.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2935,13 +2950,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1125.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1126.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1125.0"
+      "version": "3.1126.0"
     },
     {
       "authors": [
@@ -2949,7 +2964,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1125.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1126.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3005,13 +3020,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1125.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1126.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1125.0"
+      "version": "3.1126.0"
     },
     {
       "authors": [
@@ -3019,7 +3034,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1125.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1126.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3072,13 +3087,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1125.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1126.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1125.0"
+      "version": "3.1126.0"
     },
     {
       "authors": [
@@ -3086,7 +3101,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1125.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1126.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3139,13 +3154,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1125.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1126.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1125.0"
+      "version": "3.1126.0"
     },
     {
       "authors": [
@@ -3153,7 +3168,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1125.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1126.0",
       "evidence": {
         "identity": [
           {
@@ -3205,13 +3220,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1125.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1126.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1125.0"
+      "version": "3.1126.0"
     },
     {
       "authors": [
@@ -5054,6 +5069,21 @@
           },
           {
             "location": "apps/web/src/routes/dev.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt.tsx#1"
           },
           {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#1"
@@ -9089,6 +9119,21 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#1"
           },
           {
@@ -9771,7 +9816,19 @@
             "location": "apps/api/scripts/export-capability-catalog.ts#37"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/signals/schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/api-handlers.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-headnote-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-headnote-schema.ts#2"
           },
           {
             "location": "apps/api/src/lib/conditions/contract.ts#9"
@@ -9790,6 +9847,12 @@
           },
           {
             "location": "apps/api/src/lib/permissive-route-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/search/total-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/total-schema.ts#2"
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#1"
@@ -9854,7 +9917,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@smithy/fetch-http-handler@5.7.2",
+      "bom-ref": "pkg:npm/@smithy/fetch-http-handler@5.8.0",
       "description": "Provides a way to make requests",
       "evidence": {
         "identity": [
@@ -9907,10 +9970,10 @@
           "value": "apps/api/node_modules/@smithy/fetch-http-handler/package.json"
         }
       ],
-      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.7.2",
+      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.8.0",
       "scope": "required",
       "type": "library",
-      "version": "5.7.2"
+      "version": "5.8.0"
     },
     {
       "authors": [
@@ -13925,6 +13988,9 @@
             "location": "apps/web/src/routes/dev.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/index.tsx#1"
           },
           {
@@ -14061,7 +14127,7 @@
             "location": "apps/web/src/lib/public-tools-github-content.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#2042"
+            "location": "apps/web/src/routeTree.gen.ts#2063"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -14565,7 +14631,7 @@
       "version": "2.11.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/core@3.31.2",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -14657,13 +14723,13 @@
           "value": "apps/web/node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.31.0",
+      "purl": "pkg:npm/%40tiptap/core@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.31.2",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -14722,13 +14788,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.31.2",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -14784,13 +14850,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.31.2",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -14843,13 +14909,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.31.2",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -14902,13 +14968,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.31.2",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -14967,13 +15033,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.31.2",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -15026,13 +15092,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.31.2",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -15085,13 +15151,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.31.2",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -15162,13 +15228,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.31.2",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -15227,13 +15293,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.31.2",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -15292,13 +15358,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.31.2",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -15357,13 +15423,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.31.0",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.31.2",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -15434,13 +15500,13 @@
           "value": "apps/web/node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.31.0",
+      "purl": "pkg:npm/%40tiptap/pm@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/react@3.31.2",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -17277,6 +17343,21 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#1"
           },
           {
@@ -17668,13 +17749,13 @@
           "value": "apps/web/node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.31.0",
+      "purl": "pkg:npm/%40tiptap/react@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.31.0",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.31.2",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -17745,10 +17826,10 @@
           "value": "apps/web/node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.31.0",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.31.2",
       "scope": "required",
       "type": "library",
-      "version": "3.31.0"
+      "version": "3.31.2"
     },
     {
       "authors": [
@@ -17979,7 +18060,7 @@
       "version": "0.0.2-0"
     },
     {
-      "bom-ref": "pkg:npm/@vscode/markdown-editor@0.0.2-87",
+      "bom-ref": "pkg:npm/@vscode/markdown-editor@0.0.2-88",
       "evidence": {
         "identity": [
           {
@@ -18043,10 +18124,10 @@
           "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
         }
       ],
-      "purl": "pkg:npm/%40vscode/markdown-editor@0.0.2-87",
+      "purl": "pkg:npm/%40vscode/markdown-editor@0.0.2-88",
       "scope": "required",
       "type": "library",
-      "version": "0.0.2-87"
+      "version": "0.0.2-88"
     },
     {
       "authors": [
@@ -18118,7 +18199,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.2.10",
+      "bom-ref": "pkg:npm/astro@7.3.1",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -18186,13 +18267,13 @@
           "value": "apps/landing/node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.2.10",
+      "purl": "pkg:npm/astro@7.3.1",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.2.10"
+      "version": "7.3.1"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.7.1",
@@ -18411,6 +18492,9 @@
           },
           {
             "location": "apps/api/scripts/export-capability-catalog.ts#38"
+          },
+          {
+            "location": "apps/api/scripts/export-mcp-tool-registry.ts#14"
           },
           {
             "location": "apps/api/scripts/generate-dd-report-template.ts#24"
@@ -19343,7 +19427,7 @@
             "location": "apps/api/src/handlers/external-preview/preview.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/feedback/intake.ts#31"
+            "location": "apps/api/src/handlers/feedback/intake.ts#27"
           },
           {
             "location": "apps/api/src/handlers/feedback/routes.ts#16"
@@ -20528,10 +20612,10 @@
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
           },
           {
-            "location": "apps/api/src/lib/api-handlers.ts#1"
+            "location": "apps/api/src/lib/api-handlers.ts#2"
           },
           {
-            "location": "apps/api/src/lib/api-handlers.ts#2"
+            "location": "apps/api/src/lib/api-handlers.ts#3"
           },
           {
             "location": "apps/api/src/lib/audit-log.ts#1"
@@ -20583,6 +20667,9 @@
           },
           {
             "location": "apps/api/src/lib/case-law/cz-ecli-courts.ts#22"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-text.ts#1"
           },
           {
             "location": "apps/api/src/lib/case-law/maintenance-lane.ts#1"
@@ -21035,6 +21122,9 @@
             "location": "apps/api/src/lib/legal-search/index-naming.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/ingestion-normalization.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#1"
           },
           {
@@ -21260,6 +21350,9 @@
             "location": "apps/api/src/lib/search/extract-content.ts#12"
           },
           {
+            "location": "apps/api/src/lib/search/highlight.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/search/index-entity.ts#1"
           },
           {
@@ -21461,7 +21554,7 @@
             "location": "apps/api/src/mcp/capability-context.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/capability-rate-limit.ts#19"
+            "location": "apps/api/src/mcp/capability-rate-limit.ts#18"
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#4"
@@ -21578,6 +21671,12 @@
             "location": "apps/api/src/scripts/corpus-index-query-diff.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/corpus-snippet-compare-report.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-snippet-compare.ts#1"
+          },
+          {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
           },
           {
@@ -21629,13 +21728,16 @@
             "location": "apps/api/src/scripts/repair-cz-ns-court-plan.ts#11"
           },
           {
-            "location": "apps/api/src/scripts/repair-cz-ns-court.ts#42"
+            "location": "apps/api/src/scripts/repair-cz-ns-court.ts#50"
           },
           {
             "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
           },
           {
             "location": "apps/api/src/scripts/repair-decision-dates.ts#68"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-publisher-absent-text-plan.ts#1"
           },
           {
             "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
@@ -22073,6 +22175,9 @@
             "location": "apps/web/src/routes/auth/-components/dev-quick-start.logic.ts#1"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verdict.ts#11"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/steps/ai-step.logic.ts#1"
           },
           {
@@ -22103,7 +22208,13 @@
             "location": "packages/api-contract/src/chat-source-citations.ts#1"
           },
           {
+            "location": "packages/api-contract/src/decision-docket-grammar.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/resource-link.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/search.ts#1"
           },
           {
             "location": "packages/business-registries/src/companies-house/normalized.ts#1"
@@ -22682,6 +22793,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#4"
           },
           {
+            "location": "apps/web/src/features/case-law/components/decision-cells.tsx#4"
+          },
+          {
             "location": "apps/web/src/features/case-law/decision-columns.tsx#3"
           },
           {
@@ -22844,7 +22958,16 @@
             "location": "apps/web/src/routes/auth/organization.tsx#17"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/law/$country/statutes/index.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/law/cases/index.tsx#11"
           },
           {
             "location": "apps/web/src/routes/law/cases/research/$tableId.tsx#11"
@@ -25448,6 +25571,12 @@
             "location": "apps/api/src/lib/case-law/decision-summaries.ts#1"
           },
           {
+            "location": "apps/api/src/lib/case-law/decision-text-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-text-sql.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/case-law/language-alternates.ts#1"
           },
           {
@@ -25793,10 +25922,13 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-route-sql.ts#2"
           },
           {
-            "location": "apps/api/src/lib/legal-search/ingestion-normalization.ts#1"
+            "location": "apps/api/src/lib/legal-search/corpus-passage-reader.ts#13"
           },
           {
             "location": "apps/api/src/lib/legal-search/ingestion-normalization.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/ingestion-normalization.ts#3"
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-corpus-projection.ts#2"
@@ -26273,10 +26405,10 @@
             "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#15"
           },
           {
-            "location": "apps/api/src/scripts/repair-publisher-absent-text-plan.ts#1"
+            "location": "apps/api/src/scripts/repair-publisher-absent-text-plan.ts#2"
           },
           {
-            "location": "apps/api/src/scripts/repair-publisher-absent-text-plan.ts#2"
+            "location": "apps/api/src/scripts/repair-publisher-absent-text-plan.ts#3"
           },
           {
             "location": "apps/api/src/scripts/repair-publisher-absent-text.ts#63"
@@ -26599,7 +26731,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#23"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#1"
+            "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search.ts#3"
@@ -27257,6 +27389,9 @@
           },
           {
             "location": "apps/api/src/handlers/legislation/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search-schema.ts#1"
           },
           {
             "location": "apps/api/src/handlers/legislation/search.ts#4"
@@ -28147,13 +28282,16 @@
             "location": "apps/api/src/handlers/workspaces/workspace-members-add.ts#4"
           },
           {
-            "location": "apps/api/src/lib/api-handlers.ts#8"
-          },
-          {
             "location": "apps/api/src/lib/api-handlers.ts#9"
           },
           {
+            "location": "apps/api/src/lib/api-handlers.ts#10"
+          },
+          {
             "location": "apps/api/src/lib/auth.ts#23"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/decision-headnote-schema.ts#3"
           },
           {
             "location": "apps/api/src/lib/clauses/body-schema.ts#1"
@@ -28202,6 +28340,9 @@
           },
           {
             "location": "apps/api/src/lib/resource-realtime-macro.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/total-schema.ts#3"
           },
           {
             "location": "apps/api/src/lib/security-canary.ts#2"
@@ -30270,6 +30411,21 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#21"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/avt-app.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#29"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#22"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#24"
+          },
+          {
             "location": "apps/web/src/routes/law/-case-detail.tsx#4"
           },
           {
@@ -30496,6 +30652,7 @@
       "purl": "pkg:npm/lucide-react@1.39.0",
       "scope": "required",
       "tags": [
+        "cloud",
         "network"
       ],
       "type": "library",
@@ -30837,7 +30994,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.425.1",
+      "bom-ref": "pkg:npm/posthog-js@1.426.2",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -30896,10 +31053,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.425.1",
+      "purl": "pkg:npm/posthog-js@1.426.2",
       "scope": "required",
       "type": "library",
-      "version": "1.425.1"
+      "version": "1.426.2"
     },
     {
       "authors": [
@@ -33768,6 +33925,21 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#1"
           },
           {
@@ -35338,7 +35510,7 @@
             "location": "apps/web/src/routes/law/$country/statutes/index.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/law/cases/index.tsx#11"
+            "location": "apps/web/src/routes/law/cases/index.tsx#12"
           }
         ]
       },
@@ -36168,7 +36340,7 @@
             "location": "apps/web/src/features/case-law/components/citation-year-strip.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-cells.tsx#4"
+            "location": "apps/web/src/features/case-law/components/decision-cells.tsx#5"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-chips.tsx#1"
@@ -36864,6 +37036,21 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#22"
           },
           {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/anchor-facts-panel.tsx#20"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/avt-app.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/claim-detail-panel.tsx#30"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/state-chip.tsx#23"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/verification-view.tsx#25"
+          },
+          {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#5"
           },
           {
@@ -36885,7 +37072,7 @@
             "location": "apps/web/src/routes/law/-law-home/law-scope-picker.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/law/cases/index.tsx#12"
+            "location": "apps/web/src/routes/law/cases/index.tsx#13"
           },
           {
             "location": "apps/web/src/routes/law/cases/research/$tableId.tsx#12"
@@ -37252,7 +37439,7 @@
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/feedback/intake.ts#32"
+            "location": "apps/api/src/handlers/feedback/intake.ts#28"
           },
           {
             "location": "apps/api/src/handlers/flows/validate-definition.ts#3"
@@ -37529,6 +37716,9 @@
           },
           {
             "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-snippet-compare-report.ts#2"
           },
           {
             "location": "apps/api/src/scripts/database-census.ts#17"
@@ -37822,7 +38012,7 @@
             "location": "apps/web/src/routes/law/$country/statutes/index.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/law/cases/index.tsx#13"
+            "location": "apps/web/src/routes/law/cases/index.tsx#14"
           },
           {
             "location": "apps/web/src/routes/law/index.tsx#24"
@@ -38203,6 +38393,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#13"
+          },
+          {
+            "location": "apps/web/src/routes/dev_.avt/-components/avt/avt-store.ts#10"
           },
           {
             "location": "apps/web/src/stores/config-store.ts#1"
