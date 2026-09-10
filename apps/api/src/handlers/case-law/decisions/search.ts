@@ -1049,7 +1049,7 @@ const decisionHitsPage = ({
   };
 };
 
-const searchCorpusIndexDecisions = async (
+export const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
