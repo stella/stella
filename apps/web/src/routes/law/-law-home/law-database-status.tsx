@@ -27,10 +27,10 @@ const UP_TO_DATE_WINDOW_SECONDS = 7 * 24 * 60 * 60;
  * Nothing is shown until the status is known; a dot that cannot say when
  * would be a decoration.
  */
-export const LawDatabaseStatus = () => {
+export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { data: status } = useQuery(caseLawCorpusStatusOptions());
+  const { data: status } = useQuery(caseLawCorpusStatusOptions(country));
 
   const updatedAt = status?.updatedAt ?? null;
   if (status === undefined || updatedAt === null) {

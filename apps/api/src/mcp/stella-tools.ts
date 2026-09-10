@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
@@ -591,12 +592,11 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.description("Filter by court name"),
       ),
     ),
-    country: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(3),
-        v.description("Filter by country code"),
-      ),
+    country: v.pipe(
+      v.string(),
+      v.minLength(2),
+      v.maxLength(3),
+      v.description("Required corpus country code"),
     ),
     language: v.optional(
       v.pipe(
@@ -760,9 +760,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Search the shared case-law corpus. Supports free-text search plus " +
-      "optional filters such as court, country, language, date range, and " +
-      "decision type. Each result includes a route-independent resourceName.",
+      "Search case law within one country. Filters include court, language, " +
+      "dates, and decision type. Results include a route-independent resourceName.",
     inputSchema: searchCaseLawArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -1645,6 +1644,10 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     source_id: sourceId,
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
+  const publicCountry = publicCaseLawCountry(country);
+  if (publicCountry === null) {
+    return notFoundResult("Case-law country not found");
+  }
 
   const result = await (
     context.testDependencies?.searchDecisionsHandler ??
@@ -1655,7 +1658,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       limit,
       ...(cursor === undefined ? {} : { cursor }),
       ...(court === undefined ? {} : { court }),
-      ...(country === undefined ? {} : { country }),
+      country: publicCountry,
       ...(language === undefined ? {} : { language }),
       ...(decisionType === undefined ? {} : { decisionType }),
       ...(sourceId === undefined

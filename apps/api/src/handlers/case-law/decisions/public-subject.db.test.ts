@@ -29,6 +29,7 @@ const openId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
 const missingId = createSafeId<"caseLawDecision">();
 const variantId = createSafeId<"caseLawDecision">();
+const unavailableCountryId = createSafeId<"caseLawDecision">();
 
 /** Same budget as the schema push below: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -117,6 +118,15 @@ beforeAll(
         slug: "variant-case",
         sourceId: openSourceId,
       },
+      {
+        caseNumber: "unavailable-country",
+        country: "XAA",
+        court: "Court",
+        id: unavailableCountryId,
+        language: "xx",
+        slug: "unavailable-country-case",
+        sourceId: openSourceId,
+      },
     ]);
   },
   { timeout: 120_000 },
@@ -171,8 +181,10 @@ test(
     for (const path of [
       `/d/${closedId}`,
       `/d/${missingId}`,
+      `/d/${unavailableCountryId}`,
       "/s/closed-case",
       "/s/no-such-slug",
+      "/s/unavailable-country-case",
       "/s/open-case?language=xx_notalanguage!",
     ]) {
       const response = await get(path);

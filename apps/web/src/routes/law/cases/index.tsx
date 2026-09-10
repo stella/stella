@@ -466,7 +466,7 @@ function PublicCaseLawIndex() {
         </div>
       )}
 
-      <CaseLawBrowseLinks facets={browseFacets} />
+      <CaseLawBrowseLinks countryParam={countryParam} facets={browseFacets} />
     </main>
   );
 }

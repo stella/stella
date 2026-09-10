@@ -40,6 +40,7 @@ const closedSourceId = createSafeId<"caseLawSource">();
 const subjectId = createSafeId<"caseLawDecision">();
 const openRelatedId = createSafeId<"caseLawDecision">();
 const closedRelatedId = createSafeId<"caseLawDecision">();
+const unavailableRelatedId = createSafeId<"caseLawDecision">();
 
 /** The summary of a visible decision; a 404 here is a test failure. */
 const summaryOf = async (
@@ -136,6 +137,14 @@ beforeAll(
         language: "cs",
         sourceId: closedSourceId,
       },
+      {
+        caseNumber: "unavailable-related",
+        country: "XAA",
+        court: "Synthetic court",
+        id: unavailableRelatedId,
+        language: "xx",
+        sourceId: openSourceId,
+      },
     ]);
 
     let nextId = 0;
@@ -197,6 +206,18 @@ beforeAll(
         citationText: "outgoing-restricted",
         id: citationId(nextId + 5),
         polarity: POLARITY.POSITIVE,
+      },
+      {
+        citedDecisionId: subjectId,
+        citingDecisionId: unavailableRelatedId,
+        citationText: "unavailable-incoming",
+        id: citationId(nextId + 6),
+      },
+      {
+        citedDecisionId: unavailableRelatedId,
+        citingDecisionId: subjectId,
+        citationText: "unavailable-outgoing",
+        id: citationId(nextId + 7),
       },
     );
     await db.insert(caseLawCitations).values(rows);
@@ -280,6 +301,7 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
     incoming.items.some(
       (item) =>
         item.citationText === "restricted-incoming" ||
+        item.citationText === "unavailable-incoming" ||
         item.citationText === "procedural-incoming",
     ),
   ).toBe(false);

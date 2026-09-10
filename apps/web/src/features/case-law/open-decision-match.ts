@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
@@ -64,11 +65,14 @@ export const createDecisionFiltersFromSearch = ({
   year,
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
+  if (scope === undefined) {
+    return panic("Case-law search requires a country.");
+  }
   const normalizedYear = validDecisionYear(year);
   const intent = readDecisionIntent(q, { jurisdiction: scope });
 
   return {
-    ...(scope === undefined ? {} : { country: scope }),
+    country: scope,
     ...(court ? { court } : {}),
     ...(normalizedYear
       ? {

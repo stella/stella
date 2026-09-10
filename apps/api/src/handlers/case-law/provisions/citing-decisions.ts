@@ -3,6 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
@@ -118,6 +120,10 @@ export const listCitingDecisionsHandler = async (
   query: ListCitingDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const jurisdiction = publicCaseLawCountry(query.jurisdiction);
+  if (jurisdiction === null) {
+    return status(404, { message: "Not Found" });
+  }
   const work = workCondition(query);
 
   if (work === null) {
@@ -130,7 +136,8 @@ export const listCitingDecisionsHandler = async (
     return status(400, { message: "Authority order has no cursor" });
   }
   const conditions: SQL[] = [
-    eq(caseLawProvisionCitations.jurisdiction, query.jurisdiction),
+    eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
+    eq(caseLawDecisions.country, jurisdiction),
     work,
     redistributableCaseLawSource,
   ];

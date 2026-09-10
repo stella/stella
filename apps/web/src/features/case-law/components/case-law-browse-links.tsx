@@ -19,8 +19,10 @@ type BrowseSearch = {
  * either entry point.
  */
 export const CaseLawBrowseLinks = ({
+  countryParam,
   facets,
 }: {
+  countryParam: string;
   facets: CaseLawBrowseFacets;
 }) => {
   const t = useTranslations();
@@ -48,12 +50,12 @@ export const CaseLawBrowseLinks = ({
       />
       <BrowseGroup
         buckets={facets.court}
-        createSearch={(value) => ({ court: value })}
+        createSearch={(value) => ({ country: countryParam, court: value })}
         title={t("caseLaw.seo.courts")}
       />
       <BrowseGroup
         buckets={facets.year}
-        createSearch={(value) => ({ year: value })}
+        createSearch={(value) => ({ country: countryParam, year: value })}
         title={t("caseLaw.seo.years")}
       />
     </nav>

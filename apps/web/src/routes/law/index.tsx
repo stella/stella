@@ -180,7 +180,7 @@ export const Route = createFileRoute("/law/")({
     const [latest] = await Promise.all([
       ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
       ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
-      ensureRouteQueryData(queryClient, caseLawCorpusStatusOptions()),
+      ensureRouteQueryData(queryClient, caseLawCorpusStatusOptions(scope)),
       statuteCountry === null
         ? Promise.resolve(null)
         : ensureRouteQueryData(queryClient, legislationShelfOptions(scope)),
@@ -413,7 +413,9 @@ function LawHome() {
 
   return (
     <LandingLayout
-      footer={<CaseLawBrowseLinks facets={facets} />}
+      footer={
+        <CaseLawBrowseLinks countryParam={countryParam} facets={facets} />
+      }
       hero={
         <>
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
@@ -457,7 +459,7 @@ function LawHome() {
             placeholder={t("lawHome.searchPlaceholder")}
             query={queryInput}
             searchLabel={t("lawHome.searchLabel")}
-            status={<LawDatabaseStatus />}
+            status={<LawDatabaseStatus country={scope} />}
           />
         </>
       }

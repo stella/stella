@@ -406,7 +406,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["case-law", "search"],
             toolName: "search_case_law",
-            description: "Search the shared case-law corpus.",
+            description: "Search case law within one country.",
             flags: [
               {
                 flag: "--query",
@@ -429,8 +429,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "country",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by country code",
-                required: false,
+                description: "Required corpus country code",
+                required: true,
               },
               {
                 flag: "--language",
@@ -482,7 +482,7 @@ export const generatedRouteMap: RouteNode = {
             scope: "search",
             inputSchema: {
               type: "object",
-              required: ["query"],
+              required: ["query", "country"],
               additionalProperties: false,
               properties: {
                 query: {
@@ -510,8 +510,9 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
+                  minLength: 2,
                   maxLength: 3,
-                  description: "Filter by country code",
+                  description: "Required corpus country code",
                 },
                 language: {
                   type: "string",

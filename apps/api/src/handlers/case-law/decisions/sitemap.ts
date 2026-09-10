@@ -3,6 +3,11 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import {
+  publicCaseLawCountry,
+  PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type {
@@ -183,7 +188,12 @@ export const readSitemapBucketShards = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(redistributableCaseLawSource)
+    .where(
+      and(
+        redistributableCaseLawSource,
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+      ),
+    )
     .groupBy(
       caseLawDecisions.country,
       decisionYearSql,
@@ -219,6 +229,7 @@ export const readSitemapDecisionAlternates = async (
     .where(
       and(
         inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
         redistributableCaseLawSource,
       ),
     )
@@ -242,7 +253,12 @@ export const listSitemapShardsHandler = async (
         caseLawSources,
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
-      .where(redistributableCaseLawSource)
+      .where(
+        and(
+          redistributableCaseLawSource,
+          inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        ),
+      )
       .groupBy(caseLawDecisions.country, decisionYearSql, decisionMonthSql)
       .orderBy(
         asc(caseLawDecisions.country),
@@ -345,7 +361,12 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const conditions = getShardConditions(query);
+  const country = publicCaseLawCountry(query.country);
+  if (country === null) {
+    return status(404, { message: "Not Found" });
+  }
+  const scopedQuery = { ...query, country };
+  const conditions = getShardConditions(scopedQuery);
   if ("error" in conditions) {
     return status(400, { message: "Invalid sitemap shard" });
   }
@@ -397,10 +418,10 @@ export const listSitemapShardDecisionsHandler = async (
       const batchRows = await readSitemapDecisionAlternates(tx, groupKeyBatch);
       if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
         logger.warn("case_law.sitemap.language_alternate_overflow", {
-          country: query.country,
-          year: query.year,
-          month: query.month,
-          bucket: query.bucket ?? SITEMAP_ALL_BUCKET,
+          country: scopedQuery.country,
+          year: scopedQuery.year,
+          month: scopedQuery.month,
+          bucket: scopedQuery.bucket ?? SITEMAP_ALL_BUCKET,
           groupKeys: groupKeyBatch.length,
           limit: SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT,
         });

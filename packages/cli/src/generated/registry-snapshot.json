@@ -158,10 +158,10 @@
       "itemsKey": "results"
     },
     "name": "search_case_law",
-    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
+    "description": "Search case law within one country. Filters include court, language, dates, and decision type. Results include a route-independent resourceName.",
     "inputSchema": {
       "type": "object",
-      "required": ["query"],
+      "required": ["query", "country"],
       "additionalProperties": false,
       "properties": {
         "query": {
@@ -188,8 +188,9 @@
         },
         "country": {
           "type": "string",
+          "minLength": 2,
           "maxLength": 3,
-          "description": "Filter by country code"
+          "description": "Required corpus country code"
         },
         "language": {
           "type": "string",

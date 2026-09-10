@@ -29,7 +29,7 @@ export const searchDecisionsBodySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
   court: t.Optional(t.String({ maxLength: 512 })),
-  country: t.Optional(t.String({ maxLength: 3 })),
+  country: t.String({ minLength: 2, maxLength: 3 }),
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),

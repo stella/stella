@@ -1,10 +1,11 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { Temporal } from "@stll/time";
 
 import {
@@ -203,6 +204,7 @@ const visibleFor = ({
   const resolvedAndOpen = sql`(
     ${relatedSource.id} IS NOT NULL
     AND ${redistributableCaseLawSourceFor(relatedSource.descriptor)}
+    AND ${inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
   )`;
   return keepsUnresolved
     ? sql<boolean>`(${related} IS NULL OR ${resolvedAndOpen})`
@@ -506,6 +508,7 @@ export const listLeadingCitationsHandler = async ({
       and(
         eq(spec.anchor, decisionId),
         precedentOnly,
+        inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
         redistributableCaseLawSourceFor(relatedSource.descriptor),
       ),
     )

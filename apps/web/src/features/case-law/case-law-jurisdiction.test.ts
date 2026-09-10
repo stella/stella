@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { UI_LOCALES } from "@stll/locales";
 
 import {
+  caseLawCountryRegion,
   defaultCaseLawCountryForLocale,
   isPublicCaseLawCountry,
-  parseCaseLawLaunchReadiness,
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
@@ -30,65 +30,9 @@ describe("case-law launch readiness", () => {
     expect(publicCaseLawCountryFromParam(undefined)).toBeNull();
   });
 
-  test("a listed country requires both readiness facts", () => {
-    expect(() =>
-      parseCaseLawLaunchReadiness([
-        {
-          country: "CZE",
-          evalSetExists: false,
-          lastCensusDate: "2026-01-01",
-          lastCensusGreen: true,
-        },
-      ]),
-    ).toThrow("Launch readiness must contain only complete entries");
-    expect(() =>
-      parseCaseLawLaunchReadiness([
-        {
-          country: "CZE",
-          evalSetExists: true,
-          lastCensusDate: "2026-01-01",
-          lastCensusGreen: false,
-        },
-      ]),
-    ).toThrow("Launch readiness must contain only complete entries");
-  });
-
-  test("the generated boundary rejects unsupported, repeated, and malformed rows", () => {
-    expect(() =>
-      parseCaseLawLaunchReadiness([
-        {
-          country: "XAA",
-          evalSetExists: true,
-          lastCensusDate: "2026-01-01",
-          lastCensusGreen: true,
-        },
-      ]),
-    ).toThrow("Launch readiness contains an unsupported country");
-    expect(() =>
-      parseCaseLawLaunchReadiness([
-        {
-          country: "CZE",
-          evalSetExists: true,
-          lastCensusDate: "2026-01-01",
-          lastCensusGreen: true,
-        },
-        {
-          country: "CZE",
-          evalSetExists: true,
-          lastCensusDate: "2026-01-02",
-          lastCensusGreen: true,
-        },
-      ]),
-    ).toThrow("Launch readiness countries must be unique and sorted");
-    expect(() =>
-      parseCaseLawLaunchReadiness([
-        {
-          country: "CZE",
-          evalSetExists: true,
-          lastCensusDate: "01/02/2026",
-          lastCensusGreen: true,
-        },
-      ]),
-    ).toThrow("Launch readiness must contain only complete entries");
+  test("every listed country is supported by the browser", () => {
+    for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
+      expect(caseLawCountryRegion(country)).not.toBeNull();
+    }
   });
 });

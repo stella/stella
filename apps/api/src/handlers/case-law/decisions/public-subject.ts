@@ -1,9 +1,10 @@
 /**
- * The redistribution gate for public decision reads, by construction.
+ * The publication gate for public decision reads, by construction.
  *
  * A public endpoint that names a decision must answer "not found" when the
- * decision's source may not be redistributed: its citation texts, graph
- * counts and provision references are as much its content as its full text.
+ * decision's country is outside the public list or its source may not be
+ * redistributed: its citation texts, graph counts and provision references
+ * are as much its content as its full text.
  * The gate used to be a check each handler remembered to make, and two
  * handlers shipped without it. Here it is the only way to obtain a
  * `RedistributableDecisionSubject`, and every read handler takes one instead
@@ -21,6 +22,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
+
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type {
@@ -87,9 +90,8 @@ const locatorCondition = (locator: DecisionSubjectLocator) => {
 };
 
 /**
- * The subject a locator names within `tx`, or null when it does not exist or
- * its source may not be redistributed. The two cases are deliberately one
- * answer: a restricted decision does not exist for the public.
+ * The subject a locator names within `tx`, or null when it is not public.
+ * Missing and unavailable subjects deliberately have one answer.
  */
 const resolveSubjectIn = async (
   tx: CaseLawPublicReadTransaction,
@@ -102,6 +104,7 @@ const resolveSubjectIn = async (
   const rows = await tx
     .select({
       id: caseLawDecisions.id,
+      country: caseLawDecisions.country,
       descriptor: caseLawSources.descriptor,
     })
     .from(caseLawDecisions)
@@ -109,7 +112,11 @@ const resolveSubjectIn = async (
     .where(condition)
     .limit(1);
   const row = rows.at(0);
-  if (row === undefined || !isRedistributable(row.descriptor)) {
+  if (
+    row === undefined ||
+    !isPublicCaseLawCountry(row.country) ||
+    !isRedistributable(row.descriptor)
+  ) {
     return null;
   }
   return subjectOf(row.id, tx);

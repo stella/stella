@@ -5,6 +5,10 @@ import type {
   CaseLawResearchDisposition,
   CaseLawResearchSavedQuery,
 } from "@stll/api-contract";
+import {
+  publicCaseLawCountry,
+  PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
 
 import type { DecisionListFilters } from "@/features/case-law/queries/decisions";
 import { api } from "@/lib/api";
@@ -263,21 +267,44 @@ export type ResearchTableSummary = Awaited<
   >
 >["items"][number];
 
+export type SavedQueryDecisionFilters =
+  | { status: "available"; filters: DecisionListFilters }
+  | { status: "unavailable" };
+
 /** The saved query as the decision list/search query expects its filters. */
 export const savedQueryToDecisionFilters = (
   savedQuery: CaseLawResearchSavedQuery,
-): DecisionListFilters => ({
-  search: savedQuery.query,
-  ...(savedQuery.country !== undefined && { country: savedQuery.country }),
-  ...(savedQuery.court !== undefined && { court: savedQuery.court }),
-  ...(savedQuery.dateFrom !== undefined && { dateFrom: savedQuery.dateFrom }),
-  ...(savedQuery.dateTo !== undefined && { dateTo: savedQuery.dateTo }),
-  ...(savedQuery.decisionType !== undefined && {
-    decisionType: savedQuery.decisionType,
-  }),
-  ...(savedQuery.language !== undefined && { language: savedQuery.language }),
-  ...(savedQuery.sourceId !== undefined && { sourceId: savedQuery.sourceId }),
-});
+): SavedQueryDecisionFilters => {
+  const country =
+    savedQuery.country === undefined
+      ? (PUBLIC_CASE_LAW_COUNTRIES.at(0) ?? null)
+      : publicCaseLawCountry(savedQuery.country);
+  if (country === null) {
+    return { status: "unavailable" };
+  }
+
+  return {
+    status: "available",
+    filters: {
+      country,
+      search: savedQuery.query,
+      ...(savedQuery.court !== undefined && { court: savedQuery.court }),
+      ...(savedQuery.dateFrom !== undefined && {
+        dateFrom: savedQuery.dateFrom,
+      }),
+      ...(savedQuery.dateTo !== undefined && { dateTo: savedQuery.dateTo }),
+      ...(savedQuery.decisionType !== undefined && {
+        decisionType: savedQuery.decisionType,
+      }),
+      ...(savedQuery.language !== undefined && {
+        language: savedQuery.language,
+      }),
+      ...(savedQuery.sourceId !== undefined && {
+        sourceId: savedQuery.sourceId,
+      }),
+    },
+  };
+};
 
 /** The current search, as the saved query a new research table stores. */
 export const decisionFiltersToSavedQuery = (
@@ -285,7 +312,7 @@ export const decisionFiltersToSavedQuery = (
 ): CaseLawResearchSavedQuery => ({
   version: 1,
   query: filters.search,
-  ...(filters.country !== undefined && { country: filters.country }),
+  country: filters.country,
   ...(filters.court !== undefined && { court: filters.court }),
   ...(filters.dateFrom !== undefined && { dateFrom: filters.dateFrom }),
   ...(filters.dateTo !== undefined && { dateTo: filters.dateTo }),

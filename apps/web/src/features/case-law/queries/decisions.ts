@@ -14,7 +14,7 @@ const DEFAULT_PAGE_SIZE = 50;
 
 export type DecisionListFilters = {
   court?: string;
-  country?: string;
+  country: string;
   dateFrom?: string;
   dateTo?: string;
   decisionType?: string;
@@ -35,7 +35,11 @@ const caseLawDecisionKeys = {
     "latest",
     { country },
   ],
-  status: () => [...caseLawDecisionKeys.all, "status"],
+  status: (country: string) => [
+    ...caseLawDecisionKeys.all,
+    "status",
+    { country },
+  ],
   list: (key: DecisionListFilters) => [
     ...caseLawDecisionKeys.all,
     "list",
@@ -78,12 +82,12 @@ export type CaseLawBrowseFacets = {
 };
 
 /** Facets of the whole corpus, or of one jurisdiction when `country` is given. */
-export const decisionFacetsOptions = (country?: string) =>
+export const decisionFacetsOptions = (country: string) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.facets(country),
     queryFn: async ({ signal }): Promise<CaseLawBrowseFacets> => {
       const response = await api.case.decisions.facets.get({
-        query: country === undefined ? {} : { country },
+        query: { country },
         fetch: { signal },
       });
 
@@ -115,11 +119,12 @@ export const latestDecisionsOptions = (country: string) =>
   });
 
 /** How much case law the database holds and when it last changed. */
-export const caseLawCorpusStatusOptions = () =>
+export const caseLawCorpusStatusOptions = (country: string) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.status(),
+    queryKey: caseLawDecisionKeys.status(country),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions.status.get({
+        query: { country },
         fetch: { signal },
       });
 
@@ -138,7 +143,7 @@ export type LatestDecisionsCourt = Awaited<
   ReturnType<NonNullable<ReturnType<typeof latestDecisionsOptions>["queryFn"]>>
 >["courts"][number];
 
-export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
+export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
   infiniteQueryOptions({
     queryKey: caseLawDecisionKeys.list(filters),
     queryFn: async ({ pageParam, signal }) => {
@@ -154,9 +159,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             ...(listFilters.court !== undefined && {
               court: listFilters.court,
             }),
-            ...(listFilters.country !== undefined && {
-              country: listFilters.country,
-            }),
+            country: listFilters.country,
             ...(listFilters.dateFrom !== undefined && {
               dateFrom: listFilters.dateFrom,
             }),
@@ -215,9 +218,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           ...(listFilters.court !== undefined && {
             court: listFilters.court,
           }),
-          ...(listFilters.country !== undefined && {
-            country: listFilters.country,
-          }),
+          country: listFilters.country,
           ...(listFilters.dateFrom !== undefined && {
             dateFrom: listFilters.dateFrom,
           }),

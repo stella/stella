@@ -662,6 +662,8 @@ describe("public law sitemap", () => {
     // and the results screen render.
     expect(browseSource).toContain('to="/law/cases"');
     expect(browseSource).toContain("isPublicCaseLawCountry");
+    expect(browseSource).toContain("{ country: countryParam, court: value }");
+    expect(browseSource).toContain("{ country: countryParam, year: value }");
   });
 
   test("public law home preloads its shelves for SSR", async () => {

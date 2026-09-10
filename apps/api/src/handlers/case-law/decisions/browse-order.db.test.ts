@@ -217,7 +217,7 @@ test(
   "a tampered cursor is rejected, not silently restarted",
   async () => {
     const result = await listDecisionsHandler(
-      { cursor: "not-a-cursor" },
+      { country: "CZE", cursor: "not-a-cursor" },
       caseLawDb,
     );
     expect("items" in result).toBe(false);

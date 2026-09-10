@@ -1,8 +1,10 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { getCollator } from "@stll/collation";
 
 import {
@@ -78,6 +80,8 @@ import type {
 } from "@/api/tests/security/test-utils";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
+const PUBLIC_COUNTRY =
+  publicCaseLawCountry("CZE") ?? panic("Expected a public test country.");
 const READER_ROLE = stellaPublicLawReader.name;
 const ROLLOUT_READER_ROLE = stellaCaseLawReader.name;
 const WRITE_PRIVILEGES = "INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER";
@@ -650,7 +654,10 @@ describe("public-law reader role", () => {
   test("executes list, sitemap, and search projections as the reader role", async () => {
     const caseLawDb = caseLawReaderDb();
 
-    const list = await listDecisionsHandler({}, caseLawDb);
+    const list = await listDecisionsHandler(
+      { country: PUBLIC_COUNTRY },
+      caseLawDb,
+    );
     expect(list).toMatchObject({ items: [] });
     await readPublicDecisionLanguageAlternatesByGroup({
       caseLawDb,
@@ -665,7 +672,7 @@ describe("public-law reader role", () => {
     });
 
     const shard = await listSitemapShardDecisionsHandler(
-      { country: "cz", year: "2026", month: "08" },
+      { country: "cze", year: "2026", month: "08" },
       caseLawDb,
     );
     expect(shard).toMatchObject({ items: [] });
@@ -784,7 +791,10 @@ describe("public-law reader role", () => {
           readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
         );
 
-        await readCaseLawCorpusStatusQuery(tx, { excludedSourceIds: [] });
+        await readCaseLawCorpusStatusQuery(tx, {
+          country: PUBLIC_COUNTRY,
+          excludedSourceIds: [],
+        });
         exercised.add(readCaseLawCorpusStatusQuery.publicLawSharedQuery);
 
         await readNonRedistributableLegislationSourceIdsQuery(tx);

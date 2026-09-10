@@ -832,7 +832,8 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         country: {
           type: "string",
-          description: "Filter by country code",
+          description: "Required corpus country code",
+          minLength: 2,
           maxLength: 3,
         },
         language: {
@@ -863,7 +864,7 @@ describe("OpenAI-compatible MCP tools", () => {
           maxLength: 10,
         },
       },
-      required: ["query"],
+      required: ["query", "country"],
       additionalProperties: false,
     });
   });
@@ -1353,7 +1354,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { query: "shareholder dispute" },
+      args: { country: "CZE", query: "shareholder dispute" },
       context: createContext(),
       mode: "anonymized",
       toolName: "search_case_law",
@@ -1446,7 +1447,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("rejects dispatch of a feature-gated tool when the flag is off outside dev", async () => {
     await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
       const result = await handleMcpToolCall({
-        args: { query: "shareholder dispute" },
+        args: { country: "CZE", query: "shareholder dispute" },
         context: createContext(),
         toolName: "search_case_law",
       });
@@ -1487,7 +1488,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
       const result = await handleMcpToolCall({
-        args: { query: "shareholder dispute" },
+        args: { country: "CZE", query: "shareholder dispute" },
         context: createContext(),
         toolName: "search_case_law",
       });
@@ -1512,6 +1513,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_case_law rejects invalid ISO dates", async () => {
     const result = await handleMcpToolCall({
       args: {
+        country: "CZE",
         date_from: "2024-02-30",
         query: "shareholder dispute",
       },
@@ -1560,6 +1562,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_case_law rejects invalid source IDs", async () => {
     const result = await handleMcpToolCall({
       args: {
+        country: "CZE",
         query: "shareholder dispute",
         source_id: "not-a-uuid",
       },
@@ -1575,6 +1578,20 @@ describe("OpenAI-compatible MCP tools", () => {
         message: 'Invalid UUID: Received "not-a-uuid"',
       },
     ]);
+    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("search_case_law rejects a country outside the public list", async () => {
+    const result = await handleMcpToolCall({
+      args: { country: "XAA", query: "synthetic" },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Case-law country not found",
+    });
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 

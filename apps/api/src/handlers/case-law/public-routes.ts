@@ -35,7 +35,10 @@ import {
   listSitemapShardsHandler,
   sitemapShardDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
+import {
+  readCaseLawCorpusStatusHandler,
+  readCaseLawCorpusStatusQuerySchema,
+} from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
 import {
   listCitingDecisionsHandler,
@@ -99,11 +102,13 @@ const listLatestDecisions = createSafePublicHandler(
 const readCaseLawCorpusStatus = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    query: readCaseLawCorpusStatusQuerySchema,
   },
-  async function* () {
+  async function* ({ query }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await readCaseLawCorpusStatusHandler(caseLawPublicReadDb),
+        async () =>
+          await readCaseLawCorpusStatusHandler(query, caseLawPublicReadDb),
       ),
     );
 
@@ -247,7 +252,9 @@ export const publicCaseLawRoute = new Elysia({
   .get("/decisions/facets", listDecisionFacets.handler, {
     query: listDecisionFacets.config.query,
   })
-  .get("/decisions/status", readCaseLawCorpusStatus.handler)
+  .get("/decisions/status", readCaseLawCorpusStatus.handler, {
+    query: readCaseLawCorpusStatus.config.query,
+  })
   .get("/decisions/latest", listLatestDecisions.handler, {
     query: listLatestDecisions.config.query,
   })

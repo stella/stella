@@ -1,20 +1,15 @@
-import { panic } from "better-result";
-import * as v from "valibot";
-
+import {
+  CASE_LAW_REGION_BY_COUNTRY,
+  isPublicCaseLawCountry as isSharedPublicCaseLawCountry,
+  PUBLIC_CASE_LAW_COUNTRIES as SHARED_PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
 import type { UiLocale } from "@stll/locales";
-
-import launchReadiness from "@/features/case-law/launch-readiness.json";
 
 /**
  * The corpus keys decisions by ISO 3166-1 alpha-3 (plus `EU`); display names
  * come from CLDR, which speaks alpha-2 (and knows `EU` as a region).
  */
-export const REGION_BY_COUNTRY = {
-  CZE: "CZ",
-  EU: "EU",
-  POL: "PL",
-  SVK: "SK",
-} as const satisfies Record<string, string>;
+export const REGION_BY_COUNTRY = CASE_LAW_REGION_BY_COUNTRY;
 
 /** The jurisdictions the case-law browser knows, as the corpus keys them. */
 export type CaseLawJurisdiction = keyof typeof REGION_BY_COUNTRY;
@@ -29,54 +24,13 @@ export const isCaseLawJurisdiction = (
   country: string,
 ): country is CaseLawJurisdiction => Object.hasOwn(REGION_BY_COUNTRY, country);
 
-const launchReadinessEntrySchema = v.strictObject({
-  country: v.string(),
-  evalSetExists: v.literal(true),
-  lastCensusDate: v.pipe(v.string(), v.isoDate()),
-  lastCensusGreen: v.literal(true),
-});
-
-const launchReadinessSchema = v.array(launchReadinessEntrySchema);
-
-/**
- * The generated artifact is an inclusion list: every row carries both facts
- * needed for its country to appear publicly. Sorted unique rows keep updates
- * deterministic and make a repeated country invalid rather than ambiguous.
- */
-export const parseCaseLawLaunchReadiness = (
-  value: unknown,
-): readonly CaseLawJurisdiction[] => {
-  const result = v.safeParse(launchReadinessSchema, value);
-  if (!result.success) {
-    return panic(
-      "Launch readiness must contain only complete entries with ISO dates.",
-    );
-  }
-
-  const countries: CaseLawJurisdiction[] = [];
-  let previous: CaseLawJurisdiction | null = null;
-  for (const { country } of result.output) {
-    if (!isCaseLawJurisdiction(country)) {
-      return panic("Launch readiness contains an unsupported country.");
-    }
-    if (previous !== null && previous >= country) {
-      return panic("Launch readiness countries must be unique and sorted.");
-    }
-    countries.push(country);
-    previous = country;
-  }
-
-  return countries;
-};
-
 /** The only case-law countries public search may enumerate or query. */
-export const PUBLIC_CASE_LAW_COUNTRIES =
-  parseCaseLawLaunchReadiness(launchReadiness);
+export const PUBLIC_CASE_LAW_COUNTRIES = SHARED_PUBLIC_CASE_LAW_COUNTRIES;
 
 export const isPublicCaseLawCountry = (
   country: string,
 ): country is CaseLawJurisdiction =>
-  PUBLIC_CASE_LAW_COUNTRIES.some((candidate) => candidate === country);
+  isCaseLawJurisdiction(country) && isSharedPublicCaseLawCountry(country);
 
 /** Resolve the route form to a launch-ready corpus country. */
 export const publicCaseLawCountryFromParam = (
