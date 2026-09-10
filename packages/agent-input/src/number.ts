@@ -26,8 +26,14 @@ const NUMBER_HINT =
 /** The separators a model uses to group thousands. `\s` covers the narrow and
  *  non-breaking spaces `Intl` itself emits. */
 const GROUPING_SPACE_RE = /[\s']/gu;
-/** A currency code or symbol beside the digits. */
-const CURRENCY_RE = /[\p{L}\p{Sc}]/gu;
+/** Currency notation is accepted only as one affix, never as prose interleaved
+ * with digits. ISO codes cover the portable spelling; this small set covers
+ * alphabetic symbols emitted by the locales exercised by Stella today. */
+const ISO_CURRENCY_CODES = new Set(Intl.supportedValuesOf("currency"));
+const ALPHABETIC_CURRENCY_SYMBOLS = new Set(["Kč", "zł", "kr", "lei", "Ft"]);
+const CURRENCY_TOKEN_RE = /[\p{L}\p{Sc}]+/gu;
+const CURRENCY_SYMBOL_RE = /^(?:[A-Z]{1,2})?\p{Sc}$/u;
+const ISO_CURRENCY_CODE_RE = /^[A-Za-z]{3}$/u;
 /** The accounting "and no cents" dash: `100.-`, `100,-`. */
 const ACCOUNTING_DASH_RE = /[.,]\s*-$/u;
 const SCIENTIFIC_RE = /^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/u;
@@ -90,6 +96,33 @@ const ambiguousAsk = (input: unknown, body: string, separator: string) => {
   });
 };
 
+const isCurrencyToken = (token: string): boolean =>
+  CURRENCY_SYMBOL_RE.test(token) ||
+  ALPHABETIC_CURRENCY_SYMBOLS.has(token) ||
+  (ISO_CURRENCY_CODE_RE.test(token) &&
+    ISO_CURRENCY_CODES.has(token.toUpperCase()));
+
+const withoutCurrencyAffix = (input: string): string | null => {
+  const tokens = [...input.matchAll(CURRENCY_TOKEN_RE)];
+  if (tokens.length === 0) {
+    return input;
+  }
+  if (tokens.length !== 1) {
+    return null;
+  }
+  const token = tokens.at(0);
+  if (token === undefined || !isCurrencyToken(token[0])) {
+    return null;
+  }
+  const index = token.index ?? 0;
+  const before = input.slice(0, index);
+  const after = input.slice(index + token[0].length);
+  if (/\d/u.test(before) && /\d/u.test(after)) {
+    return null;
+  }
+  return `${before}${after}`;
+};
+
 /** Read a number an agent spelled its own way. */
 export const normalizeNumber = (
   input: unknown,
@@ -116,8 +149,11 @@ export const normalizeNumber = (
       : askForFix({ input, expected: NUMBER_EXPECTED, hint: NUMBER_HINT });
   }
 
-  const stripped = trimmed
-    .replace(CURRENCY_RE, "")
+  const withoutCurrency = withoutCurrencyAffix(trimmed);
+  if (withoutCurrency === null) {
+    return askForFix({ input, expected: NUMBER_EXPECTED, hint: NUMBER_HINT });
+  }
+  const stripped = withoutCurrency
     .trim()
     .replace(ACCOUNTING_DASH_RE, "")
     .replace(GROUPING_SPACE_RE, "");

@@ -110,6 +110,78 @@ describe("normalizeAgentInput", () => {
     ).toEqual({ ok: true, value, notes: [] });
   });
 
+  test("normalizes applicable union branches and preserves nullable enums", () => {
+    expect(
+      normalizeAgentInput({
+        schema: {
+          type: "object",
+          properties: {
+            nullable: {
+              anyOf: [{ const: "primary", type: "string" }, { type: "null" }],
+            },
+            flexible: {
+              anyOf: [
+                { type: "string" },
+                { type: "string", enum: ["open", "closed"] },
+              ],
+            },
+          },
+        },
+        value: { nullable: null, flexible: " CLOSED " },
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: { nullable: null, flexible: "closed" },
+    });
+  });
+
+  test("normalizes values selected by pattern properties", () => {
+    expect(
+      normalizeAgentInput({
+        schema: {
+          type: "object",
+          patternProperties: {
+            "^clause-": {
+              type: "object",
+              properties: {
+                enabled: { type: "boolean" },
+                level: { type: "integer" },
+              },
+            },
+          },
+        },
+        value: {
+          "clause-a": { enabled: "ano", level: "1 000" },
+          untouched: { enabled: "ano", level: "1 000" },
+        },
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        "clause-a": { enabled: true, level: 1000 },
+        untouched: { enabled: "ano", level: "1 000" },
+      },
+    });
+  });
+
+  test("lets a repair-owning handler preserve an invalid annotated value", () => {
+    const schema = {
+      [AGENT_INPUT_NORMALIZATION_KEY]: {
+        kind: "date-format",
+        invalidValueDisposition: "handler-owned",
+      },
+    };
+    expect(normalizeAgentInput({ schema, value: "not-a-date-format" })).toEqual(
+      { ok: true, value: "not-a-date-format", notes: [] },
+    );
+    expect(normalizeAgentInput({ schema, value: "en-GB-short" })).toMatchObject(
+      {
+        ok: true,
+        value: { locale: "en-GB", style: "short" },
+      },
+    );
+  });
+
   test("derives schema guidance from the declared kind", () => {
     expect(
       agentInputNormalizationMetadata(

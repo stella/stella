@@ -566,10 +566,12 @@ const schemaWithoutField = (
  * agent sees `body.matterId`, not a bare `matterId` it cannot place.
  */
 const validatePart = ({
+  allowedRemovedPaths = [],
   part,
   schema,
   value,
 }: {
+  allowedRemovedPaths?: readonly string[];
   part: "body" | "params" | "query";
   schema: TSchema | undefined;
   value: unknown;
@@ -599,6 +601,7 @@ const validatePart = ({
   const coerced = Value.Convert(schema, withDefaults);
   const cleaned = Value.Clean(schema, coerced);
   const removedIssues = findRemovedInputIssues({
+    allowedRemovedPaths,
     before: normalized.value,
     after: cleaned,
     path: part,
@@ -1591,6 +1594,7 @@ const executeInvoke = async ({
   const validations = [
     validatePart({ part: "body", schema: bodySchema, value: input.body }),
     validatePart({
+      allowedRemovedPaths: isWorkspace ? ["params.workspaceId"] : [],
       part: "params",
       schema: advertised.params,
       value: input.params,

@@ -582,7 +582,10 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
     "applied.",
   inputSchema: configureTemplateFieldsArgsSchema,
   inputNormalization: {
-    "fields[].date_format": { kind: "date-format" },
+    "fields[].date_format": {
+      kind: "date-format",
+      invalidValueDisposition: "handler-owned",
+    },
   },
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite"],

@@ -15,7 +15,9 @@ JSON Schema. Standard number, boolean, string-enum, and `format: date` keywords
 are the annotations for those kinds; `x-stella-agent-input` names locale and
 date-format fields that JSON Schema cannot distinguish from ordinary strings or
 objects. `agentInputNormalizationMetadata` emits that annotation and its MCP/CLI
-guidance together.
+guidance together. `invalidValueDisposition: "handler-owned"` is reserved for
+handlers that deliberately repair invalid properties while applying valid
+siblings; valid spellings still normalize through the shared reader.
 
 ## What does not
 

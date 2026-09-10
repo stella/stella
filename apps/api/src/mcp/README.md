@@ -96,7 +96,9 @@ then the handler. Standard JSON Schema number, boolean, string-enum, and
 `x-stella-agent-input` names locale and date-format fields and generates the
 same guidance carried into MCP schemas and CLI artifacts. Ambiguous dates and
 numbers return field-level `validation_error` clarification instead of being
-guessed. Ordinary strings are untouched.
+guessed. Ordinary strings are untouched. A field may declare the narrow
+`handler-owned` invalid-value disposition only when its handler already repairs
+that property and reports a per-entry issue instead of rejecting valid siblings.
 
 The MCP transport, generic capability path, and chat registry adapters all call
 this boundary. Gateway tools from upstream MCP servers keep their upstream

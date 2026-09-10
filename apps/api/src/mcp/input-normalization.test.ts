@@ -7,22 +7,21 @@ import {
 
 describe("agent input dispatch normalization", () => {
   test("runs null omission before declared normalization", () => {
-    expect(
-      normalizeInputAtBoundary({
-        path: "body",
-        schema: {
-          type: "object",
-          properties: {
-            amount: { type: "number" },
-            due: { type: "string", format: "date" },
-          },
+    const result = normalizeInputAtBoundary({
+      path: "body",
+      schema: {
+        type: "object",
+        properties: {
+          amount: { type: "number" },
+          due: { type: "string", format: "date" },
         },
-        value: { amount: null, due: "1. 10. 2026" },
-      }),
-    ).toMatchObject({
-      ok: true,
-      value: { due: "2026-10-01" },
+      },
+      value: { amount: null, due: "1. 10. 2026" },
     });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ due: "2026-10-01" });
+    }
   });
 
   test("keeps security control booleans exact", () => {
@@ -51,6 +50,30 @@ describe("agent input dispatch normalization", () => {
         validate_only: "false",
       },
     });
+  });
+
+  test("omits optional nulls inside pattern-backed object values", () => {
+    const result = normalizeInputAtBoundary({
+      schema: {
+        type: "object",
+        patternProperties: {
+          "^row-": {
+            type: "object",
+            properties: {
+              amount: { type: "number" },
+              due: { type: "string", format: "date" },
+            },
+          },
+        },
+      },
+      value: {
+        "row-a": { amount: null, due: "1. 10. 2026" },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ "row-a": { due: "2026-10-01" } });
+    }
   });
 
   test("maps ambiguity to structured field issues and accepted formats", () => {

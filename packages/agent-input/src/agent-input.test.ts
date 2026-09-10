@@ -211,12 +211,21 @@ describe("numbers", () => {
     expect(valueOf(normalizeNumber("1.234", { locale: "cs" }))).toBe(1234);
   });
 
-  test.each(["", "abc", "1-2-3", "1e999", "-1e999", true, null, {}])(
-    "asks about %p",
-    (input) => {
-      expect(normalizeNumber(input).ok).toBe(false);
-    },
-  );
+  test.each([
+    "",
+    "abc",
+    "oops1",
+    "page 20",
+    "1 USD 2",
+    "1-2-3",
+    "1e999",
+    "-1e999",
+    true,
+    null,
+    {},
+  ])("asks about %p", (input) => {
+    expect(normalizeNumber(input).ok).toBe(false);
+  });
 });
 
 describe("booleans", () => {

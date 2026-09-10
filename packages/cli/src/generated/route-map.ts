@@ -3153,6 +3153,7 @@ export const generatedRouteMap: RouteNode = {
                           'Date rendering config. Use an object with a BCP-47 locale, such as {"locale":"en-GB","style":"short"}; an unambiguous combined string such as "en-GB-short" is normalized.',
                         "x-stella-agent-input": {
                           kind: "date-format",
+                          invalidValueDisposition: "handler-owned",
                         },
                       },
                     },

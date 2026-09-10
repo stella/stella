@@ -173,7 +173,10 @@ describe("Valibot-backed MCP tool definitions", () => {
         }),
       ),
       inputNormalization: {
-        "fields[].date_format": { kind: "date-format" },
+        "fields[].date_format": {
+          kind: "date-format",
+          invalidValueDisposition: "handler-owned",
+        },
       },
       name: "configure_example",
       scope: "stella:documents_write",
@@ -183,7 +186,10 @@ describe("Valibot-backed MCP tool definitions", () => {
       items: {
         properties: {
           date_format: {
-            "x-stella-agent-input": { kind: "date-format" },
+            "x-stella-agent-input": {
+              kind: "date-format",
+              invalidValueDisposition: "handler-owned",
+            },
             description: expect.stringContaining("BCP-47 locale"),
           },
         },

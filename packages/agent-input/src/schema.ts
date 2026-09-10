@@ -24,6 +24,8 @@ export type AgentInputNormalizationKind =
 
 export type AgentInputNormalizationAnnotation = {
   kind: AgentInputNormalizationKind;
+  /** Preserve invalid input only when the owning handler deliberately repairs it. */
+  invalidValueDisposition?: "handler-owned";
   /** Locale context disambiguates numeric grouping and adds named date months. */
   locale?: string;
 };
@@ -113,9 +115,14 @@ const annotationOf = (
     return undefined;
   }
   const locale = annotation["locale"];
-  return typeof locale === "string"
-    ? { kind: normalizedKind, locale }
-    : { kind: normalizedKind };
+  const invalidValueDisposition = annotation["invalidValueDisposition"];
+  return {
+    kind: normalizedKind,
+    ...(invalidValueDisposition === "handler-owned"
+      ? { invalidValueDisposition }
+      : {}),
+    ...(typeof locale === "string" ? { locale } : {}),
+  };
 };
 
 const stringEnumOf = (
@@ -269,10 +276,10 @@ const walkUnion = ({
     (result): result is Extract<WalkResult, { status: "normalized" }> =>
       result.status === "normalized",
   );
-  if (results.some((result) => result.status === "not-applicable")) {
-    return { status: "not-applicable" };
-  }
   if (successful.length === 0) {
+    if (results.some((result) => result.status === "not-applicable")) {
+      return { status: "not-applicable" };
+    }
     const invalid = results.filter(
       (result): result is Extract<WalkResult, { status: "invalid" }> =>
         result.status === "invalid",
@@ -416,13 +423,26 @@ const walkSchema = ({
     });
   }
 
-  const annotation = inferredAnnotationOf(schema);
+  const explicitAnnotation = annotationOf(schema);
+  if (explicitAnnotation === undefined) {
+    for (const keyword of ["anyOf", "oneOf"] as const) {
+      const branches = schema[keyword];
+      if (isUnknownArray(branches)) {
+        return walkUnion({ branches, value, path, context });
+      }
+    }
+  }
+
+  const annotation = explicitAnnotation ?? inferredAnnotationOf(schema);
   const types = isUnknownArray(schema["type"])
     ? schema["type"]
     : [schema["type"]];
   if (annotation !== undefined && !(value === null && types.includes("null"))) {
     const normalized = normalizeLeaf({ annotation, schema, value });
     if (!normalized.ok) {
+      if (annotation.invalidValueDisposition === "handler-owned") {
+        return { status: "not-applicable" };
+      }
       return {
         status: "invalid",
         issues: [{ path, ...normalized }],
@@ -443,28 +463,53 @@ const walkSchema = ({
   }
 
   const properties = schema["properties"];
-  if (isRecord(properties) && isRecord(value)) {
+  const patternProperties = schema["patternProperties"];
+  if (
+    isRecord(value) &&
+    (isRecord(properties) || isRecord(patternProperties))
+  ) {
     const output: Record<string, unknown> = { ...value };
     const notes: string[] = [];
     const issues: AgentInputNormalizationIssue[] = [];
-    for (const [key, childSchema] of Object.entries(properties)) {
-      if (!(key in value)) {
+    for (const [key, entry] of Object.entries(value)) {
+      const childSchemas: unknown[] = [];
+      if (isRecord(properties) && key in properties) {
+        childSchemas.push(properties[key]);
+      }
+      if (isRecord(patternProperties)) {
+        for (const [pattern, childSchema] of Object.entries(
+          patternProperties,
+        )) {
+          if (new RegExp(pattern).test(key)) {
+            childSchemas.push(childSchema);
+          }
+        }
+      }
+      const additionalProperties = schema["additionalProperties"];
+      if (childSchemas.length === 0 && isRecord(additionalProperties)) {
+        childSchemas.push(additionalProperties);
+      }
+      if (childSchemas.length === 0) {
         continue;
       }
-      const child = walkSchema({
-        schema: childSchema,
-        value: value[key],
-        path: joinPath(path, key),
-        context,
-      });
-      if (child.status === "invalid") {
-        issues.push(...child.issues);
-        continue;
+      let current = entry;
+      for (const childSchema of childSchemas) {
+        const child = walkSchema({
+          schema: childSchema,
+          value: current,
+          path: joinPath(path, key),
+          context,
+        });
+        if (child.status === "invalid") {
+          issues.push(...child.issues);
+          continue;
+        }
+        if (child.status === "normalized") {
+          current = child.value;
+          notes.push(...child.notes);
+        }
       }
-      if (child.status === "normalized") {
-        output[key] = child.value;
-        notes.push(...child.notes);
-      }
+      output[key] = current;
     }
     return issues.length > 0
       ? { status: "invalid", issues }

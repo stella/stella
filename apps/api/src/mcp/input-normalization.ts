@@ -75,6 +75,30 @@ const admitsNull = (schema: unknown): boolean => {
   return CONSTRAINING_KEYWORDS.every((keyword) => !(keyword in schema));
 };
 
+const objectChildSchemas = (
+  schema: Record<string, unknown>,
+  key: string,
+): unknown[] => {
+  const children: unknown[] = [];
+  const properties = schema["properties"];
+  if (isRecord(properties) && key in properties) {
+    children.push(properties[key]);
+  }
+  const patternProperties = schema["patternProperties"];
+  if (isRecord(patternProperties)) {
+    for (const [pattern, childSchema] of Object.entries(patternProperties)) {
+      if (new RegExp(pattern).test(key)) {
+        children.push(childSchema);
+      }
+    }
+  }
+  const additionalProperties = schema["additionalProperties"];
+  if (children.length === 0 && isRecord(additionalProperties)) {
+    children.push(additionalProperties);
+  }
+  return children;
+};
+
 /**
  * Apply the common optional-null rule before any agent-value coercion. The
  * decision comes from the same schema validation will use: nullable values keep
@@ -92,23 +116,29 @@ export const withNullOptionalsOmitted = (
   if (items !== undefined && isUnknownArray(value)) {
     return value.map((entry) => withNullOptionalsOmitted(items, entry));
   }
-  const properties = schema["properties"];
-  if (!isRecord(properties) || !isRecord(value)) {
+  if (!isRecord(value)) {
     return value;
   }
   const required = schema["required"];
   const requiredNames = new Set(isUnknownArray(required) ? required : []);
   const present: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
-    const property = properties[key];
-    if (property === undefined) {
+    const childSchemas = objectChildSchemas(schema, key);
+    if (childSchemas.length === 0) {
       present[key] = entry;
       continue;
     }
-    if (entry === null && !requiredNames.has(key) && !admitsNull(property)) {
+    if (
+      entry === null &&
+      !requiredNames.has(key) &&
+      childSchemas.some((childSchema) => !admitsNull(childSchema))
+    ) {
       continue;
     }
-    present[key] = withNullOptionalsOmitted(property, entry);
+    present[key] = childSchemas.reduce(
+      (current, childSchema) => withNullOptionalsOmitted(childSchema, current),
+      entry,
+    );
   }
   return present;
 };
@@ -120,10 +150,12 @@ export const withNullOptionalsOmitted = (
  * derived from the same schema operation that decides which keys are declared.
  */
 export const findRemovedInputIssues = ({
+  allowedRemovedPaths = [],
   before,
   after,
   path,
 }: {
+  allowedRemovedPaths?: readonly string[];
   before: unknown;
   after: unknown;
   path: string;
@@ -131,6 +163,7 @@ export const findRemovedInputIssues = ({
   if (isUnknownArray(before) && isUnknownArray(after)) {
     return before.flatMap((entry, index) =>
       findRemovedInputIssues({
+        allowedRemovedPaths,
         before: entry,
         after: after[index],
         path: `${path}.${index}`,
@@ -144,11 +177,15 @@ export const findRemovedInputIssues = ({
   for (const [key, value] of Object.entries(before)) {
     const fieldPath = path.length === 0 ? key : `${path}.${key}`;
     if (!(key in after)) {
+      if (allowedRemovedPaths.includes(fieldPath)) {
+        continue;
+      }
       issues.push({ path: fieldPath, message: `Unknown parameter: ${key}` });
       continue;
     }
     issues.push(
       ...findRemovedInputIssues({
+        allowedRemovedPaths,
         before: value,
         after: after[key],
         path: fieldPath,
