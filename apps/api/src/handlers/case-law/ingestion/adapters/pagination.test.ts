@@ -730,6 +730,38 @@ describe("traversal cursors survive the paths that write them", () => {
 });
 
 /**
+ * A cursor is split on its first colon, so a walk whose name carries one is
+ * unfindable: every cursor it writes decodes as "no walk", and the crawl
+ * restarts at the first walk on every step while its logs and its cursors
+ * both look plausible. Refusing the name is the only point at which that is
+ * visible.
+ */
+test("a walk whose name carries the cursor separator is refused", () => {
+  const withName = (name: string) =>
+    createPagePaginatedFetch<TestResponse>({
+      adapterKey: "test",
+      pageSize: 3,
+      firstPage: 0,
+      buildRequest: () => ({ url: "https://example.com/test-api?page=0" }),
+      traversal: [
+        {
+          name,
+          buildRequest: () => ({ url: "https://example.com/test-api?page=0" }),
+          followedBy: null,
+        },
+      ],
+      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
+    });
+
+  expect(() => withName("m:2014-03")).toThrow(
+    /traversal walk "m:2014-03" contains :/u,
+  );
+  expect(() => withName("m-2014-03")).not.toThrow();
+});
+
+/**
  * A walk with nowhere to go next can either park at the end of the collection
  * or start itself over. Naming itself as its successor is how it says the
  * latter, which is what a walk over a filtered window that keeps refilling

@@ -71,7 +71,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * {@link PL_COURTS_RECENT_LOOKBACK_DAYS} days and, having no successor but
  * itself, restarts from its own head each time it runs dry.
  *
- * Cursor format: `<shard>:<item offset>` (e.g. "m:2014-03:1200"). A cursor
+ * Cursor format: `<shard>:<item offset>` (e.g. "m-2014-03:1200"). A cursor
  * naming no shard, including one written before the shards existed
  * ("offset:1927900"), restarts the walk at the first shard.
  */
@@ -180,7 +180,13 @@ const dumpRequest = (
   init: { headers: { Accept: JSON_MEDIA_TYPE } },
 });
 
-/** One shard's judgment-date filter; an absent bound is open on that side. */
+/**
+ * One shard's judgment-date filter; an absent bound is open on that side.
+ *
+ * A name carries no colon: it becomes a cursor prefix, and the cursor is
+ * split on the first one. `createPagePaginatedFetch` rejects a name that
+ * would collide with the separator.
+ */
 type DumpShard = {
   name: string;
   judgmentStartDate?: string;
@@ -200,7 +206,7 @@ const dumpShardRanges = (): DumpShard[] => {
 
   for (let year = firstDay.year; year <= YEARLY_SHARD_LAST_YEAR; year++) {
     shards.push({
-      name: `y:${year}`,
+      name: `y-${year}`,
       // The corpus opens mid-1986, and the catch-all above owns everything
       // before that day, so the first yearly shard starts there rather than
       // on 1 January: the shards then partition the calendar exactly.
@@ -224,7 +230,7 @@ const dumpShardRanges = (): DumpShard[] => {
     for (let month = 1; month <= 12; month++) {
       const first = Temporal.PlainDate.from({ year, month, day: 1 });
       shards.push({
-        name: `m:${year}-${String(month).padStart(2, "0")}`,
+        name: `m-${year}-${String(month).padStart(2, "0")}`,
         judgmentStartDate: first.toString(),
         judgmentEndDate: first.with({ day: first.daysInMonth }).toString(),
       });

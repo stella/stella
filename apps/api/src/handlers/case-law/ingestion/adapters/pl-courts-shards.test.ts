@@ -117,11 +117,24 @@ describe("the dump's date shards partition the calendar", () => {
     const names = PL_COURTS_DUMP_SHARDS.map((mode) => mode.name);
     expect(new Set(names).size).toBe(names.length);
   });
+
+  /**
+   * A cursor is `<walk>:<offset>` split on the first colon, so a name
+   * carrying one decodes as some other walk — in practice as none, which
+   * restarts the crawl at the first shard on every step.
+   */
+  test("no name collides with the cursor separator", () => {
+    expect(
+      PL_COURTS_DUMP_SHARDS.map((mode) => mode.name).filter((name) =>
+        name.includes(":"),
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe("what each walk asks the dump for", () => {
   test("a yearly shard bounds the whole calendar year", () => {
-    expect(Object.fromEntries(paramsOf("y:1995", 7))).toEqual({
+    expect(Object.fromEntries(paramsOf("y-1995", 7))).toEqual({
       pageSize: "100",
       pageNumber: "7",
       withGenerated: "true",
@@ -131,7 +144,7 @@ describe("what each walk asks the dump for", () => {
   });
 
   test("a monthly shard ends on the month's own last day", () => {
-    expect(Object.fromEntries(paramsOf("m:2014-03"))).toEqual({
+    expect(Object.fromEntries(paramsOf("m-2014-03"))).toEqual({
       pageSize: "100",
       pageNumber: "0",
       withGenerated: "true",
@@ -139,8 +152,8 @@ describe("what each walk asks the dump for", () => {
       judgmentEndDate: "2014-03-31",
     });
     // Month length is the calendar's answer, not the year's shape.
-    expect(paramsOf("m:2012-02").get("judgmentEndDate")).toBe("2012-02-29");
-    expect(paramsOf("m:2013-02").get("judgmentEndDate")).toBe("2013-02-28");
+    expect(paramsOf("m-2012-02").get("judgmentEndDate")).toBe("2012-02-29");
+    expect(paramsOf("m-2013-02").get("judgmentEndDate")).toBe("2013-02-28");
   });
 
   test("the head catch-all bounds only the end of its window", () => {
@@ -219,10 +232,12 @@ describe("where each walk hands over", () => {
  * at the first shard is how a crawl carrying such a cursor recovers.
  */
 test("a cursor from the offset walk restarts at the first shard", () => {
+  const [firstShard] = PL_COURTS_DUMP_SHARDS;
+  if (firstShard === undefined) {
+    throw new Error("pl-courts declares no walks");
+  }
+
   expect(
     decodeTraversalCursor("offset:1927900", PL_COURTS_DUMP_SHARDS),
-  ).toEqual({
-    mode: PL_COURTS_DUMP_SHARDS[0],
-    offset: 0,
-  });
+  ).toEqual({ mode: firstShard, offset: 0 });
 });

@@ -7,7 +7,7 @@
  * multi-language) should implement fetchPage directly.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -29,7 +29,10 @@ import { logger } from "@/api/lib/observability/logger";
  */
 /** One ordered walk over a collection, named so a cursor can carry it. */
 export type TraversalMode = {
-  /** Persisted as the cursor prefix. Stable: changing it restarts the walk. */
+  /**
+   * Persisted as the cursor prefix. Stable: changing it restarts the walk,
+   * and it may not contain {@link TRAVERSAL_CURSOR_SEPARATOR}.
+   */
   name: string;
   /** Request for a page within this walk. */
   buildRequest: (page: number) => { url: string; init?: RequestInit };
@@ -203,6 +206,16 @@ const SERVER_ERROR_RETRIES = 2;
  * a page that answers this way forever holds its cursor forever.
  */
 const BAD_GATEWAY_STATUS = 502;
+
+/**
+ * What divides a walk's name from its offset in a cursor. A cursor is split
+ * on the FIRST one, so a name containing it names a walk that does not
+ * exist: every cursor the walk writes then decodes as "no walk", which
+ * restarts the crawl from the first walk on every step, silently and
+ * forever. `assertNamesCarryNoSeparator` refuses that at construction.
+ */
+const TRAVERSAL_CURSOR_SEPARATOR = ":";
+
 const OFFSET_CURSOR_PREFIX = "offset:";
 const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
@@ -267,7 +280,7 @@ export const decodeTraversalCursor = (
   if (cursor === null) {
     return { mode: first, offset: 0 };
   }
-  const separator = cursor.indexOf(":");
+  const separator = cursor.indexOf(TRAVERSAL_CURSOR_SEPARATOR);
   const named = modes.find((mode) => mode.name === cursor.slice(0, separator));
   if (separator === -1 || named === undefined) {
     return { mode: first, offset: 0 };
@@ -279,7 +292,20 @@ export const decodeTraversalCursor = (
 };
 
 export const encodeTraversalCursor = (mode: string, offset: number): string =>
-  `${mode}:${offset}`;
+  `${mode}${TRAVERSAL_CURSOR_SEPARATOR}${offset}`;
+
+const assertNamesCarryNoSeparator = (
+  adapterKey: string,
+  modes: readonly TraversalMode[],
+): void => {
+  for (const { name } of modes) {
+    if (name.includes(TRAVERSAL_CURSOR_SEPARATOR)) {
+      panic(
+        `${adapterKey}: traversal walk "${name}" contains ${TRAVERSAL_CURSOR_SEPARATOR}, which its cursors are split on`,
+      );
+    }
+  }
+};
 
 type ParsedPageItems = {
   decisions: IngestionResult[];
@@ -386,6 +412,9 @@ export const createPagePaginatedFetch = <TResponse>(
 ) => {
   const { firstPage } = opts;
   const modes = opts.traversal;
+  if (modes !== undefined) {
+    assertNamesCarryNoSeparator(opts.adapterKey, modes);
+  }
 
   return async (
     cursor: string | null,
