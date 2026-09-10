@@ -1,0 +1,7 @@
+{
+  "mustMark": [
+    { "query": "wyrok", "passage": "wyroku" },
+    { "query": "sadu", "passage": "sądu" }
+  ],
+  "mustNotMark": [{ "query": "zadając", "passage": "żąda" }]
+}

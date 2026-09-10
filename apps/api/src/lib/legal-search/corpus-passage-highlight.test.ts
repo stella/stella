@@ -7,6 +7,29 @@ import {
 } from "@/api/lib/legal-search/corpus-passage-highlight";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import csHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/cs.json";
+import daHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/da.json";
+import deHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/de.json";
+import elHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/el.json";
+import enHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/en.json";
+import esHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/es.json";
+import etHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/et.json";
+import fiHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/fi.json";
+import frHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/fr.json";
+import gaHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/ga.json";
+import huHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/hu.json";
+import itHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/it.json";
+import ltHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/lt.json";
+import nlHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/nl.json";
+import plHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/pl.json";
+import ptHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/pt.json";
+import roHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/ro.json";
+import skHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/sk.json";
+import svHighlightFixture from "@/api/lib/legal-search/fixtures/highlight/sv.json";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/stem";
 import {
   searchHighlightMarks,
   stripSearchHighlightMarkup,
@@ -16,6 +39,51 @@ import {
  * Window selection, the forms a word is matched by, the mark format, and the
  * cuts: whole words only, budget respected, empty passage empty.
  */
+
+type HighlightFixtureCase = {
+  readonly query: string;
+  readonly passage: string;
+};
+
+type HighlightFixture = {
+  readonly mustMark: readonly HighlightFixtureCase[];
+  readonly mustNotMark: readonly HighlightFixtureCase[];
+};
+
+const HIGHLIGHT_FIXTURES = {
+  cs: csHighlightFixture,
+  da: daHighlightFixture,
+  de: deHighlightFixture,
+  el: elHighlightFixture,
+  en: enHighlightFixture,
+  es: esHighlightFixture,
+  et: etHighlightFixture,
+  fi: fiHighlightFixture,
+  fr: frHighlightFixture,
+  ga: gaHighlightFixture,
+  hu: huHighlightFixture,
+  it: itHighlightFixture,
+  lt: ltHighlightFixture,
+  nl: nlHighlightFixture,
+  pl: plHighlightFixture,
+  pt: ptHighlightFixture,
+  ro: roHighlightFixture,
+  sk: skHighlightFixture,
+  sv: svHighlightFixture,
+} as const satisfies Record<MorphologyLanguage, HighlightFixture>;
+
+type FixtureMarksOptions = HighlightFixtureCase & {
+  readonly language: MorphologyLanguage;
+};
+
+const fixtureMarks = ({ language, passage, query }: FixtureMarksOptions) =>
+  searchHighlightMarks(
+    markCorpusFragment({
+      text: passage,
+      tokens: tokenizeCorpusFreeText(query),
+      language,
+    }),
+  );
 
 const highlight = (
   passage: string,
@@ -176,6 +244,33 @@ describe("stem matching", () => {
       "bytu",
     ]);
   });
+});
+
+describe("language marking fixtures", () => {
+  test("cover every declared stemming language exactly once", () => {
+    expect(Object.keys(HIGHLIGHT_FIXTURES).toSorted()).toEqual(
+      [...MORPHOLOGY_LANGUAGES].toSorted(),
+    );
+  });
+
+  for (const language of MORPHOLOGY_LANGUAGES) {
+    test(`${language} applies required and excluded marks`, () => {
+      const fixture = HIGHLIGHT_FIXTURES[language];
+      expect(fixture.mustMark.length).toBeGreaterThan(0);
+      expect(fixture.mustNotMark.length).toBeGreaterThan(0);
+
+      for (const { passage, query } of fixture.mustMark) {
+        expect(corpusTokens(query)).toEqual([query]);
+        expect(corpusTokens(passage)).toEqual([passage]);
+        expect(fixtureMarks({ language, passage, query })).toEqual([passage]);
+      }
+      for (const { passage, query } of fixture.mustNotMark) {
+        expect(corpusTokens(query)).toEqual([query]);
+        expect(corpusTokens(passage)).toEqual([passage]);
+        expect(fixtureMarks({ language, passage, query })).toEqual([]);
+      }
+    });
+  }
 });
 
 describe("markCorpusFragment", () => {

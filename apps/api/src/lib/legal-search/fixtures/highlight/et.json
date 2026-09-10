@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "lepingud", "passage": "lepingu" }],
+  "mustNotMark": [{ "query": "lepingud", "passage": "kohus" }]
+}

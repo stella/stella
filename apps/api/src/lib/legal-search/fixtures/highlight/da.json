@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "dom", "passage": "dommene" }],
+  "mustNotMark": [{ "query": "dom", "passage": "aftale" }]
+}

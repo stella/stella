@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "απόφαση", "passage": "αποφάσεις" }],
+  "mustNotMark": [{ "query": "απόφαση", "passage": "σύμβαση" }]
+}

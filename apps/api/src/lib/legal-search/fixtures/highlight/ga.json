@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "comhaontacht", "passage": "comhaontachta" }],
+  "mustNotMark": [{ "query": "comhaontacht", "passage": "cúirt" }]
+}

@@ -1,0 +1,4 @@
+{
+  "mustMark": [{ "query": "hotărâri", "passage": "hotărârile" }],
+  "mustNotMark": [{ "query": "hotărâri", "passage": "contract" }]
+}
