@@ -41,6 +41,7 @@ import {
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
+const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
 // (seed-test-user.ts writes it there). The route walk owns its own browser
@@ -209,6 +210,10 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   // (threads, contacts created by earlier routes) shapes the recorded network
   // baseline. Append new routes here so existing routes keep their group.
   staticRoute("/contacts/import"),
+  {
+    template: "/verify/$code",
+    path: () => `/verify/${NONEXISTENT_VERIFICATION_CODE}`,
+  },
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
