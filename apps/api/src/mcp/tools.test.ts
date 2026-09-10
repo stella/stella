@@ -1546,6 +1546,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     await handleMcpToolCall({
       args: {
+        country: "CZE",
         date_from: "1. 10. 2026",
         query: "shareholder dispute",
       },
