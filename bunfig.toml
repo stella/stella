@@ -42,7 +42,6 @@ minimumReleaseAgeExcludes = [
   # rules used by Ultracite 7.10.7. Keep every native binding in the same
   # temporary exception so Bun cannot silently omit the executable.
   # Remove these exceptions after 2026-09-06T15:22:06.857Z.
-  "bun-types", # quarantine-expires: 2026-09-10T06:00:22.737Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
