@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.8
+
+### Patch Changes
+
+- [#3210](https://github.com/stella/stella/pull/3210) [`d1f836f`](https://github.com/stella/stella/commit/d1f836f71183efd04f11c14beb973c44517f9550) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require a country when searching public case law.
+
 ## 1.2.7
 
 ### Patch Changes
