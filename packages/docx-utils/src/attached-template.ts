@@ -225,8 +225,7 @@ export const sanitizeAttachedTemplateSource = (
   const document = slimdom.parseXmlDocument(xml);
   const root = document.documentElement;
   if (
-    root === null ||
-    root.localName !== "settings" ||
+    root?.localName !== "settings" ||
     !WORDPROCESSINGML_NAMESPACES.some(
       (namespace) => namespace === root.namespaceURI,
     )

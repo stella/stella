@@ -13,6 +13,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 
 import { pendingUploads } from "@/api/db/schema";
@@ -303,7 +304,7 @@ describe("presigned upload mutation flow", () => {
           remediation: FILE_SECURITY_REMEDIATION.removeAttachedTemplate,
         },
       ],
-    } as const;
+    } satisfies ApiFileSecurityRejectionDetails;
 
     expect(firstFinalize).toEqual({
       code: 422,
