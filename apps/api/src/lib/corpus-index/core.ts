@@ -331,8 +331,8 @@ export type CorpusDocumentPayload = {
  * the relevant holding is a paragraph, while a legislation row is already a
  * single provision or article and gains nothing from being cut further.
  */
-export const CORPUS_INDEX_GRANULARITIES = ["document", "passage"] as const;
-export type CorpusIndexGranularity =
+const CORPUS_INDEX_GRANULARITIES = ["document", "passage"] as const;
+type CorpusIndexGranularity =
   (typeof CORPUS_INDEX_GRANULARITIES)[number];
 
 /**
@@ -358,7 +358,7 @@ export type CorpusJobInput<TBrand extends SafeIdType> = {
 };
 
 /** Lazy Postgres fulltext fallback for rows without a canonical S3 object. */
-export type FetchFulltext<TBrand extends SafeIdType> = (
+type FetchFulltext<TBrand extends SafeIdType> = (
   id: SafeId<TBrand>,
 ) => Promise<string | null>;
 

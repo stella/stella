@@ -89,7 +89,7 @@ import { panic } from "better-result";
  *   a deliberate divergence from upstream, not a bug fix. `slovak.test.ts`
  *   pins its full cost against upstream's own vectors.
  */
-export type SlovakStemmerVariant = "faithful" | "extended";
+type SlovakStemmerVariant = "faithful" | "extended";
 
 /** Final vowels the case pass strips from a stem longer than three chars. */
 const FINAL_VOWELS = {
