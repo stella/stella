@@ -172,8 +172,12 @@ describe("dock", () => {
 
   test("exposes a col-resize handle only while the pane is expanded", () => {
     expect(renderDock(true)).toContain('data-slot="inspector-resize-handle"');
+    expect(renderDock(true)).toContain('data-slot="inspector-resize-grip"');
     expect(renderDock(false)).not.toContain(
       'data-slot="inspector-resize-handle"',
+    );
+    expect(renderDock(false)).not.toContain(
+      'data-slot="inspector-resize-grip"',
     );
   });
 
