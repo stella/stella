@@ -6,7 +6,6 @@ import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import checkStamp from "@/api/handlers/entities/check-stamp";
 import checkpointFolioCollabRoom from "@/api/handlers/entities/checkpoint-folio-collab-room";
 import clipEndpoint from "@/api/handlers/entities/clip";
-import compareVersions from "@/api/handlers/entities/compare-versions";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
 import createEntities from "@/api/handlers/entities/create";
 import createBlankDocument from "@/api/handlers/entities/create-blank-document";
@@ -300,11 +299,6 @@ export const entitiesRoute = new Elysia({
       permissions: versionSummarize.config.permissions,
     },
   )
-  .post("/entity/:entityId/compare", compareVersions.handler, {
-    body: compareVersions.config.body,
-    params: compareVersions.config.params,
-    permissions: compareVersions.config.permissions,
-  })
   .patch(
     "/entity/:entityId/versions/:versionId/label",
     updateVersionLabel.handler,

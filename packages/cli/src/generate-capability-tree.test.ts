@@ -224,7 +224,7 @@ describe("deriveCapabilityLeaf: flags", () => {
   test("a cross-part name collision part-prefixes both flags", () => {
     const { spec, flagCollisions } = deriveCapabilityLeaf(
       entry({
-        id: "entities.compare-versions",
+        id: "entities.update",
         handlerKind: "root",
         inputSchema: {
           params: objectSchema({ entityId: { type: "string" } }),

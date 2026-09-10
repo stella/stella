@@ -272,6 +272,48 @@ describe("first file version persistence", () => {
     ).toBe(2);
   });
 
+  test("appends a derived version without replacing the current document", async () => {
+    const entityId = await createEmptyEntity("document");
+    const source = await writeTestFile(entityId);
+    if (Result.isError(source)) {
+      throw source.error;
+    }
+    if (source.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${source.value.status}`);
+    }
+    const current = await writeTestFile(entityId);
+    if (Result.isError(current)) {
+      throw current.error;
+    }
+    if (current.value.status !== "ok") {
+      throw new Error(`Current write failed: ${current.value.status}`);
+    }
+
+    const derived = await writeTestFile(entityId, {
+      writePolicy: {
+        type: "append-derived-file-from-version",
+        expectedCurrentVersionId: current.value.entityVersionId,
+        sourceVersionId: source.value.entityVersionId,
+      },
+    });
+    if (Result.isError(derived)) {
+      throw derived.error;
+    }
+    expect(derived.value.status).toBe("ok");
+
+    const after = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(after?.currentVersionId).toBe(current.value.entityVersionId);
+    expect(
+      await testDb.$count(
+        entityVersions,
+        eq(entityVersions.entityId, entityId),
+      ),
+    ).toBe(4);
+  });
+
   test("publishes collaboration metadata through the targeted canonical writer", async () => {
     const entityId = await createEmptyEntity("document");
     const initialWrite = await writeTestFile(entityId);

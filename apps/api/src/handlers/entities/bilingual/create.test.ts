@@ -69,6 +69,7 @@ const loadEntityVersionDocxBufferMock = mock(async () =>
     buffer: sourceDocx,
     fileName: "Smlouva.docx",
     mimeType: DOCX_MIME_TYPE,
+    sizeBytes: sourceDocx.byteLength,
     filePropertyId: propertyId,
   }),
 );
