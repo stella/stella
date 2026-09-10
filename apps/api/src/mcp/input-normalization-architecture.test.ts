@@ -16,9 +16,10 @@ describe("agent input normalization architecture", () => {
     } as const;
 
     for (const [file, call] of Object.entries(boundaryCalls)) {
-      expect(readMcpSource(file), `${file} bypasses shared normalization`).toContain(
-        call,
-      );
+      expect(
+        readMcpSource(file),
+        `${file} bypasses shared normalization`,
+      ).toContain(call);
     }
   });
 

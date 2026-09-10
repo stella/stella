@@ -70,8 +70,7 @@ describe("agent input dispatch normalization", () => {
           message: '"01/02/2026" is not a calendar date.',
         },
       ],
-      hint:
-        'due: That reads as 2026-02-01 with the day first, or 2026-01-02 with the month first. Send "2026-02-01" or "2026-01-02".',
+      hint: 'due: That reads as 2026-02-01 with the day first, or 2026-01-02 with the month first. Send "2026-02-01" or "2026-01-02".',
     });
   });
 });

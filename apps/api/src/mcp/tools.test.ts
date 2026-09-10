@@ -1519,7 +1519,9 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe("search_case_law arguments need clarification");
+    expect(error["message"]).toBe(
+      "search_case_law arguments need clarification",
+    );
     expect(error["issues"]).toEqual([
       {
         path: "date_from",

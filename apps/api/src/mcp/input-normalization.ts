@@ -25,12 +25,10 @@ const toBoundaryNormalizationFailure = (
   }[],
 ): BoundaryNormalizationFailure => ({
   ok: false,
-  issues: issues.map(
-    ({ path, received, expected }): McpValidationIssue => ({
-      path,
-      message: `${received} is not ${expected}.`,
-    }),
-  ),
+  issues: issues.map(({ path, received, expected }): McpValidationIssue => ({
+    path,
+    message: `${received} is not ${expected}.`,
+  })),
   hint: issues
     .map(({ path, hint }) => (path.length === 0 ? hint : `${path}: ${hint}`))
     .join(" "),

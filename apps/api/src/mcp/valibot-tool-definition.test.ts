@@ -179,9 +179,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       scope: "stella:documents_write",
     });
 
-    expect(
-      definition.inputSchema.properties?.["fields"],
-    ).toMatchObject({
+    expect(definition.inputSchema.properties?.["fields"]).toMatchObject({
       items: {
         properties: {
           date_format: {
