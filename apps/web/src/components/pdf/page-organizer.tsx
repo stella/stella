@@ -930,11 +930,10 @@ const LoadedPDFPageOrganizer = ({
           case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
             break;
           case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
-            panic("Generated PDF version upload was cancelled");
-            break;
+            return panic("Generated PDF version upload was cancelled");
           default:
             uploadResult satisfies never;
-            panic(
+            return panic(
               `Unhandled entity version upload: ${String(uploadResult)}`,
             );
         }
@@ -950,6 +949,7 @@ const LoadedPDFPageOrganizer = ({
         });
         savedRef.current = true;
         onClose();
+        return uploadResult.type;
       },
       () => {
         abortRef.current = null;

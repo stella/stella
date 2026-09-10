@@ -548,9 +548,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         break;
       default:
         preflight satisfies never;
-        panic(
-          `Unhandled attached-template preflight: ${String(preflight)}`,
-        );
+        panic(`Unhandled attached-template preflight: ${String(preflight)}`);
     }
 
     const results = await uploadFileEntitiesBatched({
