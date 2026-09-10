@@ -4,7 +4,6 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES as SHARED_PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
-import type { UiLocale } from "@stll/locales";
 
 /**
  * The corpus keys decisions by ISO 3166-1 alpha-3 (plus `EU`); display names
@@ -42,36 +41,6 @@ export const publicCaseLawCountryFromParam = (
   }
   const country = fromCaseLawCountryParam(param);
   return isPublicCaseLawCountry(country) ? country : null;
-};
-
-/**
- * The jurisdiction a reader most likely wants, from the language the UI runs
- * in. A locale without a launch-ready match falls back to the first country
- * in the generated list, so public queries always carry an explicit scope.
- */
-const DEFAULT_COUNTRY_BY_LOCALE = {
-  ar: null,
-  cs: "CZE",
-  de: null,
-  en: null,
-  es: null,
-  et: null,
-  fr: null,
-  hu: null,
-  lt: null,
-  lv: null,
-  pl: "POL",
-  "pt-BR": null,
-  sk: "SVK",
-} as const satisfies Record<UiLocale, CaseLawJurisdiction | null>;
-
-export const defaultCaseLawCountryForLocale = (
-  locale: UiLocale,
-): PublicCaseLawCountry | null => {
-  const localeCountry = DEFAULT_COUNTRY_BY_LOCALE[locale];
-  return localeCountry !== null && isPublicCaseLawCountry(localeCountry)
-    ? localeCountry
-    : (PUBLIC_CASE_LAW_COUNTRIES.at(0) ?? null);
 };
 
 /** The URL form of a corpus country code, and back. */

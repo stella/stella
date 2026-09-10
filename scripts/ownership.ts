@@ -534,6 +534,7 @@ export const OWNERSHIP = [
     owner: [
       "packages/api-contract/src/case-law-launch-readiness.ts",
       "packages/api-contract/src/launch-readiness.json",
+      "apps/web/src/lib/case-law-route.ts",
     ],
     summary:
       "One checked-in inclusion list carries complete readiness evidence for each public country. " +

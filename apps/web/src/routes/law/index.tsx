@@ -40,7 +40,6 @@ import { stellaToast } from "@stll/ui/toast";
 
 import {
   caseLawCountryRegion,
-  defaultCaseLawCountryForLocale,
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
@@ -69,6 +68,7 @@ import { getMessageLocale } from "@/i18n/i18n-store";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
+  defaultCaseLawCountryForLocale,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";

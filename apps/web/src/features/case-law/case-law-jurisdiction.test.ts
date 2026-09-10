@@ -4,11 +4,11 @@ import { UI_LOCALES } from "@stll/locales";
 
 import {
   caseLawCountryRegion,
-  defaultCaseLawCountryForLocale,
   isPublicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
+import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 
 describe("case-law launch readiness", () => {
   test("every locale defaults to a launch-ready country", () => {

@@ -1,6 +1,5 @@
 import { stellaToast } from "@stll/ui/toast";
 
-import { defaultCaseLawCountryForLocale } from "@/features/case-law/case-law-jurisdiction";
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -8,6 +7,7 @@ import { api } from "@/lib/api";
 import {
   createCaseLawDecisionRouteParams,
   decodeCaseLawDecisionRef,
+  defaultCaseLawCountryForLocale,
   isCaseLawDecisionId,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";

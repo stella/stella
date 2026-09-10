@@ -7,12 +7,12 @@ import type {
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
-import { defaultCaseLawCountryForLocale } from "@/features/case-law/case-law-jurisdiction";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 import {
   PublicLawUnavailableError,
   toPublicLawError,
