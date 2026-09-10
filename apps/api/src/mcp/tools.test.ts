@@ -852,11 +852,13 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         date_from: {
           type: "string",
+          format: "date",
           description: "Filter decisions from this ISO date (YYYY-MM-DD)",
           maxLength: 10,
         },
         date_to: {
           type: "string",
+          format: "date",
           description: "Filter decisions up to this ISO date (YYYY-MM-DD)",
           maxLength: 10,
         },
