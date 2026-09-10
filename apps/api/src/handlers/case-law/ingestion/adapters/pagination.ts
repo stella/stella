@@ -36,6 +36,12 @@ export type TraversalMode = {
   /**
    * Where to continue once this walk reaches the end of the collection, or
    * null to stay in it.
+   *
+   * A walk may name itself. The handover writes `<successor>:0` either way,
+   * so naming itself restarts this same walk from its own head — which is
+   * what a walk that has to keep re-reading the same filtered window wants,
+   * and what `null` cannot express: `null` parks the cursor at the end
+   * instead, where the next cycle re-reads only the tail.
    */
   followedBy: string | null;
   /**

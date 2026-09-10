@@ -728,3 +728,53 @@ describe("traversal cursors survive the paths that write them", () => {
     expect(bounded[0]).not.toHaveProperty("windowItems");
   });
 });
+
+/**
+ * A walk with nowhere to go next can either park at the end of the collection
+ * or start itself over. Naming itself as its successor is how it says the
+ * latter, which is what a walk over a filtered window that keeps refilling
+ * needs: parking would leave it re-reading only the tail.
+ */
+describe("a walk that names itself as its successor", () => {
+  let restore: (() => void) | undefined;
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  const selfRestartingFetch = (followedBy: string | null) =>
+    createPagePaginatedFetch<TestResponse>({
+      adapterKey: "test",
+      pageSize: 3,
+      firstPage: 0,
+      buildRequest: (page) => ({
+        url: `https://example.com/test-api?page=${page}`,
+      }),
+      traversal: [
+        {
+          name: "recent",
+          buildRequest: (page) => ({
+            url: `https://example.com/test-api?page=${page}`,
+          }),
+          followedBy,
+        },
+      ],
+      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
+    });
+
+  test("returns to its own head once a page comes up short", async () => {
+    await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+
+    const restarted = await selfRestartingFetch("recent")("recent:9", {});
+    const parked = await selfRestartingFetch(null)("recent:9", {});
+
+    expect(restarted.unwrap().nextCursor).toBe("recent:0");
+    expect(parked.unwrap().nextCursor).toBe("recent:10");
+  });
+});
