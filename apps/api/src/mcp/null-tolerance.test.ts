@@ -401,7 +401,6 @@ describe("invoke_capability accepts explicit null on nullable fields", () => {
       capability: "contacts.update",
       input: {
         params: {
-          matterId: "ws_1",
           contactId: "00000000-0000-0000-0000-000000000000",
         },
         body: { firstName: null },

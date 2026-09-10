@@ -532,6 +532,8 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   }
 
   // Search mode.
+  // agent-input-normalization-ignore: cursor is an opaque server token, not a
+  // caller-authored numeric field; decoding it remains owned by this tool.
   const offset =
     input.cursor === undefined ? undefined : Number.parseInt(input.cursor, 10);
   const result = await Result.tryPromise({

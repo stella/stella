@@ -86,6 +86,25 @@ The OpenAI-compatible `search`/`fetch` tools keep their bespoke
 `compatSearch`/`compatFetch` plans (workspaceId stripping, anonymization
 metadata).
 
+## One agent-input boundary
+
+First-party calls normalize from the canonical input schema in
+`input-normalization.ts` before strict validation and dispatch. The order is
+optional-null handling, declared normalization, coercion/defaults, validation,
+then the handler. Standard JSON Schema number, boolean, string-enum, and
+`format: date` fields supply their own normalization kind;
+`x-stella-agent-input` names locale and date-format fields and generates the
+same guidance carried into MCP schemas and CLI artifacts. Ambiguous dates and
+numbers return field-level `validation_error` clarification instead of being
+guessed. Ordinary strings are untouched. A field may declare the narrow
+`handler-owned` invalid-value disposition only when its handler already repairs
+that property and reports a per-entry issue instead of rejecting valid siblings.
+
+The MCP transport, generic capability path, and chat registry adapters all call
+this boundary. Gateway tools from upstream MCP servers keep their upstream
+contracts. Confirmation controls (`confirm`, `validate_only`) retain literal
+JSON-boolean semantics and are never normalized from strings.
+
 ## Structured error envelope
 
 This server is driven almost entirely by AI agents (and the companion CLI), so

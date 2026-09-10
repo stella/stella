@@ -3624,6 +3624,49 @@ describe("MCP template tools", () => {
     expect(received).toEqual([{ path: "company", label: "Company" }]);
   });
 
+  test("configure_template_fields normalizes valid date formats and repairs invalid ones", async () => {
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "company",
+            label: "Company",
+            date_format: "not a date format",
+          },
+          { path: "signed_on", date_format: "en-GB-short" },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const { issues } = asTestRaw<{
+      issues: { path: string; index: number; message: string }[];
+    }>(parseToolPayload(result));
+    expect(issues).toMatchObject([{ path: "fields.0.date_format", index: 0 }]);
+    expect(received).toEqual([
+      { path: "company", label: "Company" },
+      {
+        path: "signed_on",
+        dateFormat: { locale: "en-GB", style: "short" },
+      },
+    ]);
+  });
+
   test("configure_template_fields forbids members without template:update permission", async () => {
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID, fields: [{ path: "company" }] },

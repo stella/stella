@@ -8,8 +8,6 @@
 import { Result } from "better-result";
 
 import type { Context } from "./context.js";
-import { expandSchemaDefs } from "./expand-schema-defs.js";
-import { validateAgainstSchema } from "./json-schema-validate.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityLeafSpec } from "./route-types.js";
@@ -107,29 +105,9 @@ export const runCapabilityCommand = async ({
   }
   const input = built.args;
 
-  // Validate the COMPOSED input (JSON base + overlaid flags) against the snapshot
-  // schema, only when `--input` supplied JSON. Flags-only requests keep relying on
-  // the required-flag check plus server validation (unchanged surface). The
-  // baked schema is `$defs`-compacted, so inline its refs first; expansion is
-  // per-command and only on this path, never at startup.
-  if (typeof inputRaw === "string") {
-    const schema = expandSchemaDefs(spec.inputSchema);
-    if (schema === null) {
-      writers.stderr(
-        `Cannot validate --input: the baked schema for ${spec.capabilityId} has unresolvable $defs references.\n`,
-      );
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    const validation = validateAgainstSchema(schema, input);
-    if (!validation.valid) {
-      writers.stderr(
-        `--input invalid at ${validation.path}: ${validation.message}\n`,
-      );
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-  }
+  // The shared server boundary owns semantic normalization and strict schema
+  // validation for both JSON and flags. Keeping a snapshot validator here would
+  // reject lenient spellings before the canonical reader sees them.
 
   // Client-side scope precheck (spec S3): fail before any server call.
   const scopeFailure = scopePreflightFailure({

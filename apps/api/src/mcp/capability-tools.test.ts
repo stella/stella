@@ -1714,11 +1714,11 @@ describe("invoke_capability argument shape validation", () => {
     expect(issues.some((i) => i.path === "input.params")).toBe(true);
   });
 
-  test("sibling meta-tools already reject mistyped args (no coercion)", async () => {
-    // list_capabilities limit must be a JSON integer, not a numeric string.
+  test("sibling meta-tools normalize declared numbers but not ordinary strings", async () => {
+    // list_capabilities shares the declared numeric normalization boundary.
     const list = await call("list_capabilities", { limit: "5" });
-    expect(errorEnvelope(list).code).toBe("validation_error");
-    // describe_capability's capability must be a string.
+    expect(parseToolPayload<{ limit: number }>(list).limit).toBe(5);
+    // Ordinary strings remain untouched: a numeric capability id is invalid.
     const described = await call("describe_capability", { capability: 42 });
     expect(errorEnvelope(described).code).toBe("validation_error");
   });
@@ -1856,25 +1856,42 @@ describe("invoke_capability enforces the advertised input schema", () => {
   });
 });
 
-// --- Elysia-boundary input normalization (Value.Clean parity) ----------------
+// --- Shared agent-boundary input normalization --------------------------------
 
 describe("invoke_capability input normalization", () => {
-  test("unknown keys on a closed schema are stripped, not rejected (REST parity)", async () => {
-    // tasks.calendar's body schema is additionalProperties: false; the Elysia
-    // boundary CLEANS unknown keys before validation (verified empirically),
-    // so the generic path must accept-and-strip too, not reject.
+  test("unknown keys removed by the REST cleaner are rejected for agents", async () => {
     const result = await handleMcpToolCall({
       args: {
-        capability: "tasks.calendar",
+        capability: "templates.lookup-formats.create",
         input: {
-          params: { matterId: "ws_1" },
           body: {
-            dateFrom: "2026-01-01T00:00:00.000Z",
-            dateTo: "2026-01-31T00:00:00.000Z",
-            datePropertyIds: ["prop_1"],
+            registry: "ares",
+            name: "Company number",
+            format: "{value}",
             unknownExtra: "would fail additionalProperties:false without Clean",
           },
         },
+        validate_only: true,
+      },
+      context: createContext({ grantedScopes: ["stella:templates"] }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [
+        {
+          path: "body.unknownExtra",
+          message: "Unknown parameter: unknownExtra",
+        },
+      ],
+    });
+  });
+
+  test("normalizes a declared date before strict capability validation", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "work-obligations.queues.list",
+        input: { query: { asOf: "1. 10. 2026" } },
         validate_only: true,
       },
       context: createContext(),
@@ -1882,7 +1899,32 @@ describe("invoke_capability input normalization", () => {
     });
     expect(
       parseToolPayload<{ valid: boolean; capability: string }>(result),
-    ).toEqual({ valid: true, capability: "tasks.calendar" });
+    ).toEqual({
+      valid: true,
+      capability: "work-obligations.queues.list",
+    });
+  });
+
+  test("returns a field-level clarification for an ambiguous date", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "work-obligations.queues.list",
+        input: { query: { asOf: "01/02/2026" } },
+        validate_only: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [
+        {
+          path: "query.asOf",
+          message: '"01/02/2026" is not a calendar date.',
+        },
+      ],
+      hint: expect.stringContaining("2026-02-01"),
+    });
   });
 
   test("workspaceId still resolves when the config params schema omits it", async () => {

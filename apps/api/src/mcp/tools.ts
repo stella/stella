@@ -25,6 +25,10 @@ import {
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
 import {
+  agentInputValidationError,
+  normalizeObjectInputAtBoundary,
+} from "@/api/mcp/input-normalization";
+import {
   DEFAULT_MCP_TOOL_SETS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
@@ -271,11 +275,29 @@ export const handleMcpToolCall = async ({
     );
   }
 
+  const normalized = normalizeObjectInputAtBoundary({
+    exactProperties: ["confirm", "validate_only"],
+    schema: staticTool.inputSchema,
+    value: args,
+  });
+  if (!normalized.ok) {
+    return serializeToolResult(
+      agentInputValidationError({
+        failure: normalized,
+        subject: `${toolName} arguments`,
+      }),
+    );
+  }
+  const normalizedArgs = normalized.value;
+
   // Resolve confirmation from the registry's canonical destructive behavior.
   // Capability-catalog and upstream tools defer the final decision to their
   // owning dispatch boundary because the selected target determines risk.
-  const requiresConfirmation = requiresTransportConfirmation(staticTool, args);
-  if (requiresConfirmation && args["confirm"] !== true) {
+  const requiresConfirmation = requiresTransportConfirmation(
+    staticTool,
+    normalizedArgs,
+  );
+  if (requiresConfirmation && normalizedArgs["confirm"] !== true) {
     return serializeToolResult(
       structuredErrorResult({
         code: "confirmation_required",
@@ -307,7 +329,7 @@ export const handleMcpToolCall = async ({
   const finished = await Result.tryPromise({
     try: async () => {
       const response = await handler({
-        args,
+        args: normalizedArgs,
         context: executionContext,
       });
       return await finalizeToolEgress(

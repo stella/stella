@@ -75,7 +75,6 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
-  InternalToolErrorResult,
   InternalToolSuccess,
   McpTextFieldSpec,
   McpToolDefinition,
@@ -89,6 +88,7 @@ import {
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  ISO_DATE_SCHEMA,
   MAX_CURSOR_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
@@ -146,8 +146,6 @@ type StellaToolName =
   | "search_case_law"
   | "search_across_matters"
   | "set_practice_jurisdictions";
-
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
 
@@ -617,14 +615,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     source_id: v.optional(uuidInputSchema("Filter by source ID")),
     date_from: v.optional(
       v.pipe(
-        v.string(),
+        ISO_DATE_SCHEMA,
         v.maxLength(10),
         v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
       ),
     ),
     date_to: v.optional(
       v.pipe(
-        v.string(),
+        ISO_DATE_SCHEMA,
         v.maxLength(10),
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),
@@ -1241,35 +1239,6 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
-/**
- * Calendar validity of a `YYYY-MM-DD` filter, which the shape-only schema
- * cannot express: a pattern accepts 2024-02-30, the round-trip does not.
- * Returns the validation envelope for a bad date, `null` for a usable one.
- */
-const isoDateIssue = (
-  key: string,
-  value: string | undefined,
-): InternalToolErrorResult | null => {
-  if (value === undefined) {
-    return null;
-  }
-  const parsed = new Date(value);
-  if (
-    ISO_DATE_PATTERN.test(value) &&
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().slice(0, 10) === value
-  ) {
-    return null;
-  }
-  const message = `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`;
-  return structuredErrorResult({
-    code: "validation_error",
-    message,
-    issues: [{ path: key, message }],
-    hint: `Set '${key}' to a calendar date formatted as YYYY-MM-DD.`,
-  });
-};
-
 const getResultMessage = (value: unknown): string | null => {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -1676,15 +1645,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     source_id: sourceId,
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
-
-  const dateFromIssue = isoDateIssue("date_from", dateFrom);
-  if (dateFromIssue) {
-    return dateFromIssue;
-  }
-  const dateToIssue = isoDateIssue("date_to", dateTo);
-  if (dateToIssue) {
-    return dateToIssue;
-  }
 
   const result = await (
     context.testDependencies?.searchDecisionsHandler ??

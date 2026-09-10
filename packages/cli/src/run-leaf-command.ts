@@ -16,7 +16,6 @@ import type { Context } from "./context.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
 import { normalizeInputKeyCasing } from "./input-key-casing.js";
-import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
   callTool,
   type CallToolResult,
@@ -175,9 +174,9 @@ const hasInputPath = (
 const parseBoundedInt = (
   spec: FlagSpec,
   raw: string,
-): Result<number, string> => {
+): Result<number | string, string> => {
   if (!/^-?\d+$/u.test(raw.trim())) {
-    return Result.err(`${spec.flag} expects an integer`);
+    return Result.ok(raw);
   }
   const value = Number.parseInt(raw.trim(), 10);
   if (spec.min !== undefined && value < spec.min) {
@@ -192,10 +191,10 @@ const parseBoundedInt = (
 const parseBoundedNumber = (
   spec: FlagSpec,
   raw: string,
-): Result<number, string> => {
+): Result<number | string, string> => {
   const value = Number(raw.trim());
   if (!Number.isFinite(value)) {
-    return Result.err(`${spec.flag} expects a number`);
+    return Result.ok(raw);
   }
   if (spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
@@ -226,18 +225,9 @@ const coerceArrayFlag = (
     return Result.ok(raw);
   }
   if (flagSpec.kind === "enum-array") {
-    const enumValues = flagSpec.enum;
-    const allowedValues = enumValues ? new Set(enumValues) : null;
-    for (const element of raw) {
-      if (allowedValues && !allowedValues.has(element)) {
-        return Result.err(
-          `${flagSpec.flag} values must each be one of ${enumValues?.join(", ")}`,
-        );
-      }
-    }
     return Result.ok(raw);
   }
-  const ints: number[] = [];
+  const ints: (number | string)[] = [];
   for (const element of raw) {
     const parsed = parseBoundedInt(flagSpec, element);
     if (Result.isError(parsed)) {
@@ -285,12 +275,7 @@ const coerceFlagValue = async (
   if (flagSpec.kind === "number") {
     return parseBoundedNumber(flagSpec, raw);
   }
-  // enum
-  if (flagSpec.enum && !flagSpec.enum.includes(raw)) {
-    return Result.err(
-      `${flagSpec.flag} must be one of ${flagSpec.enum.join(", ")}`,
-    );
-  }
+  // Enum spellings are normalized and validated at the shared server boundary.
   return Result.ok(raw);
 };
 
@@ -385,10 +370,10 @@ export const parseInputObject = async ({
     writers.stderr("--input must be a JSON object.\n");
     return undefined;
   }
-  // Parse only: schema validation runs on the COMPOSED args (after value flags
-  // overlay their paths), never on the raw `--input` alone. Validating here would
-  // reject a `--input` that legitimately omits a required flag-backed path (e.g.
-  // a `matter_id` supplied by `--matter-id`), defeating the compose semantics.
+  // Parse only. Value flags overlay their paths next, then the shared server
+  // boundary normalizes and validates the composed object. Validating here
+  // would reject lenient agent spellings before that canonical reader sees
+  // them.
   return parsed.value;
 };
 
@@ -1175,20 +1160,9 @@ export const runLeafCommand = async ({
     args = { ...args, ...spec.discriminatorInject };
   }
 
-  // Validate the COMPOSED args (JSON base + overlaid flags + injected
-  // discriminator) against the schema, only when `--input` supplied JSON.
-  // Flags-only requests keep relying on the required-flag check plus server
-  // validation (unchanged surface).
-  if (typeof inputRaw === "string") {
-    const validation = validateAgainstSchema(spec.inputSchema, args);
-    if (!validation.valid) {
-      writers.stderr(
-        `--input invalid at ${validation.path}: ${validation.message}\n`,
-      );
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-  }
+  // The shared server boundary owns semantic normalization and strict schema
+  // validation for both JSON and flags. Keeping a second client validator here
+  // would reject lenient spellings before the canonical reader sees them.
 
   // Client-side scope precheck (spec S3): fail before any server call. Opaque
   // tokens still defer to the server, which enforces the same full set.

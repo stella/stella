@@ -2,6 +2,11 @@ import { toJsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
 import type * as v from "valibot";
 
+import {
+  agentInputNormalizationMetadata,
+  type AgentInputNormalizationAnnotation,
+} from "@stll/agent-input";
+
 import type {
   McpToolDefinition,
   McpToolInputSchema,
@@ -23,15 +28,98 @@ type JsonSchemaProjectionWaiver = {
 
 type ValibotMcpToolInput = Omit<McpToolDefinition, "inputSchema"> & {
   inputSchema: NullAsAbsentInputSchema;
+  /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
+  inputNormalization?: Readonly<
+    Record<string, AgentInputNormalizationAnnotation>
+  >;
   jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
 };
 
 type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,
-  "inputSchema" | "jsonSchemaProjectionWaiver"
+  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
 > & {
   inputSchema: McpToolInputSchema;
   inputSchemaSource: TDefinition["inputSchema"];
+};
+
+const appendGuidance = (
+  schema: Record<string, unknown>,
+  annotation: AgentInputNormalizationAnnotation,
+): void => {
+  const description = schema["description"];
+  Object.assign(
+    schema,
+    agentInputNormalizationMetadata(
+      annotation,
+      typeof description === "string" ? description : undefined,
+    ),
+  );
+};
+
+const annotateSchemaPath = ({
+  schema,
+  path,
+  annotation,
+}: {
+  schema: Record<string, unknown>;
+  path: readonly string[];
+  annotation: AgentInputNormalizationAnnotation;
+}): boolean => {
+  const segment = path.at(0);
+  if (segment === undefined) {
+    appendGuidance(schema, annotation);
+    return true;
+  }
+  let found = false;
+  for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
+    const branches = schema[keyword];
+    if (!Array.isArray(branches)) {
+      continue;
+    }
+    for (const branch of branches) {
+      if (isSchemaRecord(branch)) {
+        found =
+          annotateSchemaPath({ schema: branch, path, annotation }) || found;
+      }
+    }
+  }
+  const arraySegment = segment.endsWith("[]");
+  const propertyName = arraySegment ? segment.slice(0, -2) : segment;
+  const properties = schema["properties"];
+  const property = isSchemaRecord(properties) ? properties[propertyName] : null;
+  if (!isSchemaRecord(property)) {
+    return found;
+  }
+  const target = arraySegment ? property["items"] : property;
+  return isSchemaRecord(target)
+    ? annotateSchemaPath({
+        schema: target,
+        path: path.slice(1),
+        annotation,
+      }) || found
+    : found;
+};
+
+const applyInputNormalizationPlan = (
+  schema: McpToolInputSchema,
+  plan: Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined,
+): McpToolInputSchema => {
+  if (plan === undefined) {
+    return schema;
+  }
+  for (const [path, annotation] of Object.entries(plan)) {
+    if (
+      !annotateSchemaPath({
+        schema,
+        path: path.split("."),
+        annotation,
+      })
+    ) {
+      return panic(`Agent input normalization path does not exist: ${path}`);
+    }
+  }
+  return schema;
 };
 
 const deriveMcpInputSchema = (
@@ -183,13 +271,20 @@ export const defineValibotMcpTool = <
 >(
   definition: TDefinition,
 ): ValibotMcpToolDefinition<TDefinition> => {
-  const { inputSchema, jsonSchemaProjectionWaiver, ...toolDefinition } =
-    definition;
+  const {
+    inputNormalization,
+    inputSchema,
+    jsonSchemaProjectionWaiver,
+    ...toolDefinition
+  } = definition;
   return {
     ...toolDefinition,
-    inputSchema: deriveMcpInputSchema(
-      inputSchema.advertisedSchema,
-      jsonSchemaProjectionWaiver,
+    inputSchema: applyInputNormalizationPlan(
+      deriveMcpInputSchema(
+        inputSchema.advertisedSchema,
+        jsonSchemaProjectionWaiver,
+      ),
+      inputNormalization,
     ),
     inputSchemaSource: inputSchema,
   };

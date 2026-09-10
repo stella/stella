@@ -121,7 +121,7 @@ describe("buildArgsFromFlags (S3)", () => {
     expect(result).toEqual({ ok: true, args: { first_name: "Ada" } });
   });
 
-  test("enum rejects an out-of-set value", async () => {
+  test("enum spelling reaches the shared server normalizer", async () => {
     const spec = specWith([
       {
         flag: "--type",
@@ -132,10 +132,10 @@ describe("buildArgsFromFlags (S3)", () => {
         repeatable: false,
       },
     ]);
-    const bad = await buildArgsFromFlags(spec, { type: "robot" });
-    expect(bad.ok).toBe(false);
-    const good = await buildArgsFromFlags(spec, { type: "person" });
-    expect(good).toEqual({ ok: true, args: { type: "person" } });
+    expect(await buildArgsFromFlags(spec, { type: " PERSON " })).toEqual({
+      ok: true,
+      args: { type: " PERSON " },
+    });
   });
 
   test("int enforces min/max and accepts a negative parsed via `=`", async () => {
@@ -160,6 +160,22 @@ describe("buildArgsFromFlags (S3)", () => {
     expect(await buildArgsFromFlags(spec, { padding: "3" })).toEqual({
       ok: true,
       args: { padding: 3 },
+    });
+  });
+
+  test("localized numeric spelling reaches the shared server normalizer", async () => {
+    const spec = specWith([
+      {
+        flag: "--amount",
+        prop: "amount",
+        kind: "number",
+        required: false,
+        repeatable: false,
+      },
+    ]);
+    expect(await buildArgsFromFlags(spec, { amount: "1 234,50" })).toEqual({
+      ok: true,
+      args: { amount: "1 234,50" },
     });
   });
 
@@ -424,7 +440,7 @@ const makeTtyContext = ({
   };
 };
 
-describe("--input composes with flags before schema validation (S5.5)", () => {
+describe("--input composes with flags before server validation (S5.5)", () => {
   // Same class as the capability executor: the schema marks `matter_id`
   // required; --input omits it and the --matter-id flag supplies it. Validating
   // the RAW --input would reject it at `matter_id` before the flag overlays the

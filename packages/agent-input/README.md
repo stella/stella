@@ -10,10 +10,20 @@ fill value. Each reads the spellings that carry a single meaning (`4 000`,
 spelling carries two (`01/02/2026`, a bare `1,234`), so no call site grows its
 own parser or its own wording.
 
+`normalizeAgentInput` derives a recursive normalization plan from the canonical
+JSON Schema. Standard number, boolean, string-enum, and `format: date` keywords
+are the annotations for those kinds; `x-stella-agent-input` names locale and
+date-format fields that JSON Schema cannot distinguish from ordinary strings or
+objects. `agentInputNormalizationMetadata` emits that annotation and its MCP/CLI
+guidance together. `invalidValueDisposition: "handler-owned"` is reserved for
+handlers that deliberately repair invalid properties while applying valid
+siblings; valid spellings still normalize through the shared reader.
+
 ## What does not
 
-Schema validation, transport, and persistence. A reader answers what one
-spelling means; the surface that called it decides what to do with the answer.
+Transport, strict schema validation, and persistence. First-party agent
+transports call the shared API dispatch boundary; upstream MCP servers keep
+their own contracts. Ordinary strings are never normalized heuristically.
 
 ## License
 

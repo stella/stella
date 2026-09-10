@@ -111,9 +111,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // Explicit destructive/read-only hints on every tool add only their required
 // wire metadata: measured 72_683 default and 23_758 anonymized. Pin the exact
 // new sizes so this submission fix does not create unrelated growth headroom.
+// Shared agent-input metadata and generated guidance, plus explicit date
+// formats on the case-law range, measure 72_962 default and 23_790 anonymized.
+// Pin those exact sizes so future schema growth remains reviewable.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 72_683,
-  anonymized: 23_758,
+  default: 72_962,
+  anonymized: 23_790,
 };
 
 // Longest description measured after plan 047: the template authoring tool at

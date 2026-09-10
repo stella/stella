@@ -213,11 +213,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "date_from": {
           "type": "string",
+          "format": "date",
           "maxLength": 10,
           "description": "Filter decisions from this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
+          "format": "date",
           "maxLength": 10,
           "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
         }
@@ -1281,7 +1283,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "style"
                 ],
                 "additionalProperties": false,
-                "description": "Date rendering config"
+                "description": "Date rendering config. Use an object with a BCP-47 locale, such as {\\"locale\\":\\"en-GB\\",\\"style\\":\\"short\\"}; an unambiguous combined string such as \\"en-GB-short\\" is normalized.",
+                "x-stella-agent-input": {
+                  "kind": "date-format",
+                  "invalidValueDisposition": "handler-owned"
+                }
               }
             },
             "required": [
@@ -3641,11 +3647,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "date_from": {
           "type": "string",
+          "format": "date",
           "maxLength": 10,
           "description": "Filter decisions from this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
+          "format": "date",
           "maxLength": 10,
           "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
         }

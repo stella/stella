@@ -254,7 +254,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(tty.stderrText()).toContain("--code");
   });
 
-  test("--input passes the whole input object through, validated", async () => {
+  test("--input passes the whole input object through for server validation", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "a.b",
@@ -283,7 +283,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(lastInvoke(server.calls)["input"]).toEqual({ body: { name: "ok" } });
   });
 
-  test("--input rejects an unknown field via the synthesized schema (exit 2)", async () => {
+  test("--input leaves unknown-field rejection to the shared server boundary", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "a.b",
@@ -309,8 +309,8 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
       spec,
     });
     server.stop();
-    expect(tty.exitCode()).toBe(EXIT_CODES.validation);
-    expect(server.calls).toHaveLength(0);
+    expect(tty.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["input"]).toEqual({ nope: 1 });
   });
 
   test("value flags COMPOSE with --input; the explicit flag wins over its path", async () => {

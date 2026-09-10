@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import { TEMPLATE_PACK_SLUG_PATTERN } from "@stll/template-packs/schema";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
@@ -31,10 +31,14 @@ export const templatePackParamsSchema = t.Object({
 
 const getTemplatePackQuerySchema = t.Object({
   locale: t.Optional(
-    withDescription(
-      t.String({ minLength: 2, maxLength: 35 }),
-      "BCP-47 tag of the caller's interface language",
-    ),
+    t.String({
+      minLength: 2,
+      maxLength: 35,
+      ...agentInputNormalizationMetadata(
+        { kind: "locale" },
+        "BCP-47 tag of the caller's interface language",
+      ),
+    }),
   ),
 });
 

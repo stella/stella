@@ -852,11 +852,13 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         date_from: {
           type: "string",
+          format: "date",
           description: "Filter decisions from this ISO date (YYYY-MM-DD)",
           maxLength: 10,
         },
         date_to: {
           type: "string",
+          format: "date",
           description: "Filter decisions up to this ISO date (YYYY-MM-DD)",
           maxLength: 10,
         },
@@ -1520,16 +1522,39 @@ describe("OpenAI-compatible MCP tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(error["message"]).toBe(
-      "Invalid parameter: date_from. Expected an ISO date in YYYY-MM-DD format",
+      "search_case_law arguments need clarification",
     );
     expect(error["issues"]).toEqual([
       {
         path: "date_from",
-        message:
-          "Invalid parameter: date_from. Expected an ISO date in YYYY-MM-DD format",
+        message: '"2024-02-30" is not a calendar date.',
       },
     ]);
+    expect(error["hint"]).toContain("YYYY-MM-DD");
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("search_case_law normalizes an unambiguous localized date", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      facets: {},
+      hits: [],
+      nextCursor: null,
+      totalCount: 0,
+    });
+
+    await handleMcpToolCall({
+      args: {
+        date_from: "1. 10. 2026",
+        query: "shareholder dispute",
+      },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ dateFrom: "2026-10-01" }),
+      caseLawPublicReadDb,
+    );
   });
 
   test("search_case_law rejects invalid source IDs", async () => {

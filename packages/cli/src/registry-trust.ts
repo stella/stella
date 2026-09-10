@@ -103,6 +103,7 @@ const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   "source",
   "title",
   "type",
+  "x-stella-agent-input",
 ]);
 
 const UNSUPPORTED_SCHEMA_KEYWORDS = [

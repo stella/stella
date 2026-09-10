@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import capabilityCatalog from "@stll/cli/capability-catalog.json";
 
-import { withNullOptionalsOmitted } from "@/api/mcp/capability-tools";
+import { withNullOptionalsOmitted } from "@/api/mcp/input-normalization";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
