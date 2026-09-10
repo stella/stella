@@ -87,7 +87,7 @@ const objectChildSchemas = (
   const patternProperties = schema["patternProperties"];
   if (isRecord(patternProperties)) {
     for (const [pattern, childSchema] of Object.entries(patternProperties)) {
-      if (new RegExp(pattern).test(key)) {
+      if (new RegExp(pattern, "u").test(key)) {
         children.push(childSchema);
       }
     }

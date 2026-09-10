@@ -632,8 +632,13 @@ describe("value flags and validation (S3)", () => {
     expect(server.requests).toHaveLength(0);
   });
 
-  test("an out-of-enum value exits 2 client-side", async () => {
-    const server = startMockServer(() => ({ toolPayload: {} }));
+  test("an out-of-enum value reaches server validation", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        error: { code: "validation_error", message: "Invalid registry" },
+      },
+      isError: true,
+    }));
     const result = await runCli({
       args: [
         "contact",
@@ -648,7 +653,10 @@ describe("value flags and validation (S3)", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(2);
-    expect(server.requests).toHaveLength(0);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      query: "Acme",
+      registry: "not-a-registry",
+    });
   });
 
   test("nullable-string `null` is sent as JSON null", async () => {
@@ -741,8 +749,13 @@ describe("--input escape hatch (S3)", () => {
     });
   });
 
-  test("--input failing schema validation exits 2", async () => {
-    const server = startMockServer(() => ({ toolPayload: {} }));
+  test("--input defers schema validation to the server", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        error: { code: "validation_error", message: "Invalid status" },
+      },
+      isError: true,
+    }));
     const result = await runCli({
       args: ["matter", "save", "--input", '{"status":"bogus"}'],
       url: server.url,
@@ -750,8 +763,10 @@ describe("--input escape hatch (S3)", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain("--input invalid");
-    expect(server.requests).toHaveLength(0);
+    expect(result.stderr).toContain("Invalid status");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      status: "bogus",
+    });
   });
 });
 

@@ -114,7 +114,7 @@ const withoutCurrencyAffix = (input: string): string | null => {
   if (token === undefined || !isCurrencyToken(token[0])) {
     return null;
   }
-  const index = token.index ?? 0;
+  const index = token.index;
   const before = input.slice(0, index);
   const after = input.slice(index + token[0].length);
   if (/\d/u.test(before) && /\d/u.test(after)) {
