@@ -47,6 +47,15 @@ const stateScope = ({
     eq(corpusIndexProjectionStates.generation, generation),
   );
 
+const intentScope = ({
+  family,
+  generation,
+}: CorpusIndexProjectionConvergenceTarget) =>
+  and(
+    eq(corpusIndexProjectionIntents.family, family),
+    eq(corpusIndexProjectionIntents.generation, generation),
+  );
+
 const rowsOf = (result: unknown): unknown[] => {
   if (Array.isArray(result)) {
     return result;
@@ -58,19 +67,79 @@ const rowsOf = (result: unknown): unknown[] => {
 };
 
 /**
- * Constant-time PostgreSQL precondition for a fresh zero-drift engine census.
- * The publish probe runs only once the queue is otherwise converged, so the
- * common answer still costs one round trip.
+ * Whether any revision of the generation can still change the engine, asked
+ * only once the state queue is quiet.
+ *
+ * "Outstanding" is unchanged: a blocking revision, or an `applied` revision
+ * that no state row names as authoritative. Read as an anti-join, the second
+ * half probes the state index once per applied revision, so it grew with the
+ * generation while holding the exclusive mutation fence. The same question is
+ * a count identity, and two index-only scans answer it:
+ *
+ * - `applied_revision` is a foreign key carrying family, generation, entity,
+ *   epoch, fingerprint and index id, and the applied shape check makes those
+ *   columns non-null exactly when `applied_revision` is, so every reference
+ *   names a revision of this generation and neither count leaves the scope.
+ * - `corpus_index_projection_states_applied_revision_uidx` is unique, so
+ *   distinct states name distinct revisions and the reference count is the
+ *   number of referenced revisions.
+ * - Every path that takes a referenced revision out of `applied` (replacement
+ *   preparation, erasure claim, census drift repair) leaves that entity's
+ *   state needing work or blocked in the same transaction, and the reference
+ *   is repointed or cleared only when the state converges again. Reaching
+ *   this question means no such state exists, so the referenced revisions are
+ *   a subset of the applied ones and the counts agree exactly when every
+ *   applied revision is referenced.
+ */
+const readOutstandingCorpusProjectionIntentTx = async (
+  tx: Transaction,
+  target: CorpusIndexProjectionConvergenceTarget,
+): Promise<boolean> => {
+  const result: unknown = await tx.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM ${corpusIndexProjectionIntents}
+      WHERE ${intentScope(target)}
+        AND ${inArray(
+          corpusIndexProjectionIntents.status,
+          CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES,
+        )}
+    ) OR (
+      SELECT count(*)
+      FROM ${corpusIndexProjectionIntents}
+      WHERE ${intentScope(target)}
+        AND ${corpusIndexProjectionIntents.status} = 'applied'
+    ) <> (
+      SELECT count(*)
+      FROM ${corpusIndexProjectionStates}
+      WHERE ${stateScope(target)}
+        -- The applied shape check makes these two conjuncts one condition.
+        -- Spelling both is what the applied-census partial index requires to
+        -- answer the count without touching the table.
+        AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
+        AND ${corpusIndexProjectionStates.appliedRevision} IS NOT NULL
+    ) AS "hasOutstandingIntent"
+  `);
+  const observation = rowsOf(result).at(0);
+  if (
+    !isRecord(observation) ||
+    typeof observation["hasOutstandingIntent"] !== "boolean"
+  ) {
+    return panic("Corpus projection intent probe returned malformed row");
+  }
+  return observation["hasOutstandingIntent"];
+};
+
+/**
+ * PostgreSQL precondition for a fresh zero-drift engine census. The state
+ * queue answers in one round trip; the intent and publish probes run only once
+ * it is quiet, so a generation with work left still costs one round trip.
  */
 export const readCorpusIndexProjectionConvergenceTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
 ): Promise<CorpusIndexProjectionConvergenceStatus> => {
   const scope = stateScope(target);
-  const intentScope = and(
-    eq(corpusIndexProjectionIntents.family, target.family),
-    eq(corpusIndexProjectionIntents.generation, target.generation),
-  );
   const result: unknown = await tx.execute(sql`
     SELECT EXISTS (
       SELECT 1 FROM ${corpusIndexProjectionStates} WHERE ${scope}
@@ -88,36 +157,14 @@ export const readCorpusIndexProjectionConvergenceTx = async (
       FROM ${corpusIndexProjectionStates}
       WHERE ${scope}
         AND ${corpusIndexProjectionNeedsWork(corpusIndexProjectionStates)}
-    ) AS "hasPendingState",
-    EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionIntents}
-      WHERE ${intentScope}
-        AND (
-          ${inArray(
-            corpusIndexProjectionIntents.status,
-            CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES,
-          )}
-          OR (
-            ${corpusIndexProjectionIntents.status} = 'applied'
-            AND NOT EXISTS (
-              SELECT 1
-              FROM ${corpusIndexProjectionStates}
-              WHERE ${scope}
-                AND ${corpusIndexProjectionStates.appliedRevision} =
-                    ${corpusIndexProjectionIntents.id}
-            )
-          )
-        )
-    ) AS "hasOutstandingIntent"
+    ) AS "hasPendingState"
   `);
   const observation = rowsOf(result).at(0);
   if (
     !isRecord(observation) ||
     typeof observation["hasState"] !== "boolean" ||
     typeof observation["hasBlockedState"] !== "boolean" ||
-    typeof observation["hasPendingState"] !== "boolean" ||
-    typeof observation["hasOutstandingIntent"] !== "boolean"
+    typeof observation["hasPendingState"] !== "boolean"
   ) {
     return panic("Corpus projection convergence probe returned malformed row");
   }
@@ -130,7 +177,7 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   if (observation["hasPendingState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
   }
-  if (observation["hasOutstandingIntent"]) {
+  if (await readOutstandingCorpusProjectionIntentTx(tx, target)) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
   }
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
@@ -143,7 +190,7 @@ export const readCorpusIndexProjectionConvergenceTx = async (
     .from(corpusIndexProjectionIntents)
     .where(
       and(
-        intentScope,
+        intentScope(target),
         eq(corpusIndexProjectionIntents.status, "applied"),
         sql`NOT ${corpusProjectionAppendIsPublished(manifest)}`,
       ),

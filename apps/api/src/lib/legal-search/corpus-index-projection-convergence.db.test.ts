@@ -32,8 +32,17 @@ const CLEANUP_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
 const ORPHAN_APPLIED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000304",
 );
+const ERASING_ENTITY_ID = "0198e331-e578-7000-8000-000000000305";
+const SETTLED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
+  "0198e331-e578-7000-8000-000000000306",
+);
+const UNREFERENCED_ENTITY_ID = "0198e331-e578-7000-8000-000000000307";
+const UNREFERENCED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
+  "0198e331-e578-7000-8000-000000000308",
+);
 const INDEX_ID = "case_law_v5_cs_sk";
 const FINGERPRINT = "a".repeat(64);
+const ERASING_FINGERPRINT = "d".repeat(64);
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -209,5 +218,73 @@ test("the launch probe waits out the engine publish delay", async () => {
       appliedAt: published,
     })
     .where(eq(corpusIndexProjectionIntents.id, APPLIED_INTENT_ID));
+  expect(await readStatus()).toBe("ready_for_census");
+});
+
+// An entity whose erasure is still settling keeps its exact revision pointer
+// until every revision of that entity is proven deleted, so its state names a
+// revision that is no longer `applied`. Counting applied revisions against
+// referenced ones must not let that reference offset an unreferenced applied
+// revision elsewhere in the generation and read as convergence.
+test("a settling erasure cannot offset an unreferenced applied revision", async () => {
+  expect(await readStatus()).toBe("ready_for_census");
+
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: SETTLED_INTENT_ID,
+    ...TARGET,
+    entityId: ERASING_ENTITY_ID,
+    epoch: 1n,
+    fingerprint: ERASING_FINGERPRINT,
+    indexId: INDEX_ID,
+    status: "settled",
+    appendStartedAt: NOW,
+    appendCommittedAt: NOW,
+    appendPublishBarrierAt: NOW,
+    cleanupNotBefore: NOW,
+    cleanupStartedAt: NOW,
+    deleteOpstamp: 42n,
+    deleteTaskCreatedAt: NOW,
+    settledAt: NOW,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    ...TARGET,
+    entityId: ERASING_ENTITY_ID,
+    desiredAction: "erase",
+    desiredEpoch: 2n,
+    appliedAction: "upsert",
+    appliedEpoch: 1n,
+    appliedRevision: SETTLED_INTENT_ID,
+    appliedFingerprint: ERASING_FINGERPRINT,
+    appliedIndexId: INDEX_ID,
+    appliedAt: NOW,
+  });
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: UNREFERENCED_INTENT_ID,
+    ...TARGET,
+    entityId: UNREFERENCED_ENTITY_ID,
+    epoch: 1n,
+    fingerprint: "c".repeat(64),
+    indexId: INDEX_ID,
+    status: "applied",
+    appendStartedAt: NOW,
+    appendCommittedAt: NOW,
+    expectedDocumentCount: 1,
+    appliedAt: NOW,
+  });
+  // Two applied revisions and two referenced ones, and the census still waits:
+  // the erasure owes the index an exact action.
+  expect(await readStatus()).toBe("pending");
+
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, ERASING_ENTITY_ID));
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, SETTLED_INTENT_ID));
+  expect(await readStatus()).toBe("intent_outstanding");
+
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, UNREFERENCED_INTENT_ID));
   expect(await readStatus()).toBe("ready_for_census");
 });
