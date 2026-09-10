@@ -7,7 +7,7 @@
  * rather than quietly changing what these assertions are about.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
@@ -359,9 +359,7 @@ describe("walking decision-date months oldest first", () => {
     const result = await plSnAdapter.fetchPage(cursor, {});
     return Result.isOk(result)
       ? result.value
-      : (() => {
-          throw result.error;
-        })();
+      : panic(`the walk was refused: ${result.error.message}`);
   };
 
   test("empty months are stepped over inside one page rather than one per cycle", async () => {
@@ -397,6 +395,20 @@ describe("walking decision-date months oldest first", () => {
     const page = await walk("1994-03:0");
 
     expect(page.nextCursor).toBe("1994-04:0");
+  });
+
+  test("a refused listing is the page's error, and moves no cursor", async () => {
+    // The whole walk reports the publisher through its `Result`: a page that
+    // answered with an error object must not read as a month with nothing in
+    // it, or the cursor would step past records nobody listed.
+    globalThis.fetch = asFetchMock(
+      async () =>
+        await Promise.resolve(jsonResponse(envelope({ status: 500 }))),
+    );
+
+    const result = await plSnAdapter.fetchPage("1994-03:0", {});
+
+    expect(Result.isError(result)).toBe(true);
   });
 
   test("a listed row whose document the proxy withholds is still stored", async () => {

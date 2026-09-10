@@ -318,19 +318,28 @@ type ProxyResponse = {
   url: string;
 };
 
-/** One proxy request: its verbatim body, and the payload inside the envelope. */
+/**
+ * One proxy request: its verbatim body, and the payload inside the envelope.
+ *
+ * Every refusal this function can recognise comes back as an `Err`. What it
+ * cannot recognise — a dropped connection, an exhausted retry budget, a
+ * cycle abort — is raised by `fetchWithRetry` and converted once, where the
+ * caller's own contract says how a failure is reported.
+ */
 const requestProxy = async ({
   cursor,
   params,
   signal,
   task,
   timeoutMs,
-}: ProxyRequestOptions): Promise<ProxyResponse> => {
+}: ProxyRequestOptions): Promise<Result<ProxyResponse, AdapterFetchError>> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_SN_HOST_POLICY,
     rawUrl: proxyUrl(task, params),
   });
   if (target === null) {
+    // Every URL here is built from a fixed origin and an opaque publisher id,
+    // so a rejection means the construction above changed, not the publisher.
     return panic("sn.pl request escaped the publisher origin");
   }
 
@@ -345,10 +354,12 @@ const requestProxy = async ({
     },
   );
   if (!response.ok) {
-    throw proxyError(
-      cursor,
-      `${task} answered ${response.status}`,
-      response.status,
+    return Result.err(
+      proxyError(
+        cursor,
+        `${task} answered ${response.status}`,
+        response.status,
+      ),
     );
   }
 
@@ -359,9 +370,11 @@ const requestProxy = async ({
   }).unwrapOr(null);
   const payload = readPlSnEnvelope(parsed);
   if (payload === null) {
-    throw proxyError(cursor, `${task} answered no readable envelope`);
+    return Result.err(
+      proxyError(cursor, `${task} answered no readable envelope`),
+    );
   }
-  return { raw, payload, url: target.toString() };
+  return Result.ok({ raw, payload, url: target.toString() });
 };
 
 type ListWindowOptions = {
@@ -393,8 +406,8 @@ const listWindow = async ({
   pageSize,
   signal,
   to,
-}: ListWindowOptions): Promise<ListedWindow> => {
-  const { payload, url } = await requestProxy({
+}: ListWindowOptions): Promise<Result<ListedWindow, AdapterFetchError>> => {
+  const requested = await requestProxy({
     cursor,
     params: {
       data_wydania_od: from,
@@ -406,17 +419,23 @@ const listWindow = async ({
     task: PROXY_TASK.SEARCH,
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const { payload, url } = requested.value;
 
   // An array is the publisher's only statement about what a window holds; the
   // error object it answers past its 10,000-record window is not an empty one.
   if (!Array.isArray(payload)) {
-    throw proxyError(
-      cursor,
-      `${PROXY_TASK.SEARCH} answered ${JSON.stringify(payload).slice(0, 200)} for ${from}..${to} at ${offset}`,
+    return Result.err(
+      proxyError(
+        cursor,
+        `${PROXY_TASK.SEARCH} answered ${JSON.stringify(payload).slice(0, 200)} for ${from}..${to} at ${offset}`,
+      ),
     );
   }
   const rows: unknown[] = payload;
-  return { rows: rows.filter(isRecord), url };
+  return Result.ok({ rows: rows.filter(isRecord), url });
 };
 
 type DecisionIdOptions = {
@@ -429,17 +448,23 @@ const fetchDetail = async ({
   cursor,
   id,
   signal,
-}: DecisionIdOptions): Promise<{ detail: PlSnDetail; raw: string } | null> => {
-  const { payload, raw } = await requestProxy({
+}: DecisionIdOptions): Promise<
+  Result<{ detail: PlSnDetail; raw: string } | null, AdapterFetchError>
+> => {
+  const requested = await requestProxy({
     cursor,
     params: { id },
     signal,
     task: PROXY_TASK.DETAILS,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
-  return isRecord(payload)
-    ? { detail: normalizePlSnDetail(payload), raw }
-    : null;
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const { payload, raw } = requested.value;
+  return Result.ok(
+    isRecord(payload) ? { detail: normalizePlSnDetail(payload), raw } : null,
+  );
 };
 
 /** Every PDF starts with this; nothing else the proxy serves does. */
@@ -477,17 +502,21 @@ const fetchDocument = async ({
   id,
   signal,
 }: DecisionIdOptions): Promise<
-  { bytes: Uint8Array; raw: string } | undefined
+  Result<{ bytes: Uint8Array; raw: string } | undefined, AdapterFetchError>
 > => {
-  const { payload, raw } = await requestProxy({
+  const requested = await requestProxy({
     cursor,
     params: { id },
     signal,
     task: PROXY_TASK.DOCUMENT,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const { payload, raw } = requested.value;
   const bytes = decodePlSnDocument(payload);
-  return bytes === undefined ? undefined : { bytes, raw };
+  return Result.ok(bytes === undefined ? undefined : { bytes, raw });
 };
 
 // ── Normalization ────────────────────────────────────────
@@ -664,32 +693,38 @@ const assemblePlSnDecision = async ({
   const decisionType = plSnDecisionType(decisionForm);
   const decisionDate = isoDate(record.data_wydania ?? item.data_wydania);
 
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
-  let fulltext: string | undefined;
-  if (documentBytes !== undefined) {
-    try {
-      const parsed = await parsePlSnDecisionPdf({
-        pdfBytes: documentBytes,
-        caseNumber,
-        court,
-        decisionDate,
-        decisionType,
-        sourceUrl: decisionUrl(id),
-        documentUrl: documentUrlOf(id),
-        documentId: id,
-      });
-      documentAst = parsed.documentAst;
-      fulltext = parsed.fulltext;
-    } catch (error) {
-      // The document is stored verbatim below, so its text is recoverable by
-      // re-parsing what was kept rather than by asking the court again.
-      logger.warn("case_law.ingestion.document_parse_failed", {
-        adapterKey: ADAPTER_KEYS.PL_SN,
-        caseNumber,
-        "error.type": errorTag(error),
-      });
-    }
+  // A parse failure is deliberately not the decision's failure: the document
+  // is stored verbatim below, so its text is recoverable by re-parsing what
+  // was kept rather than by asking the court again. The error is carried as
+  // its structural tag, which is all the report below states about it.
+  const parsed =
+    documentBytes === undefined
+      ? null
+      : await Result.tryPromise({
+          try: async () =>
+            await parsePlSnDecisionPdf({
+              pdfBytes: documentBytes,
+              caseNumber,
+              court,
+              decisionDate,
+              decisionType,
+              sourceUrl: decisionUrl(id),
+              documentUrl: documentUrlOf(id),
+              documentId: id,
+            }),
+          catch: errorTag,
+        });
+  if (parsed !== null && Result.isError(parsed)) {
+    logger.warn("case_law.ingestion.document_parse_failed", {
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      caseNumber,
+      "error.type": parsed.error,
+    });
   }
+  const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
+  const documentAst: DocumentAst | EmptyAst =
+    document?.documentAst ?? EMPTY_AST;
+  const fulltext = document?.fulltext;
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
@@ -749,30 +784,51 @@ type FetchPlSnDecisionOptions = {
   signal?: AbortSignal | undefined;
 };
 
-/** Fetch the detail and the document for a listed item, then assemble it. */
+/**
+ * Fetch the detail and the document for a listed item, then assemble it.
+ *
+ * A refused request is the item's failure rather than its absence: the
+ * publisher was asked and did not answer, so the caller holds its cursor and
+ * asks again instead of storing a row that says the document does not exist.
+ */
 export const buildPlSnDecision = async ({
   cursor,
   item,
   listingRaw,
   signal,
-}: FetchPlSnDecisionOptions): Promise<PlSnBuildResult> => {
+}: FetchPlSnDecisionOptions): Promise<
+  Result<PlSnBuildResult, AdapterFetchError>
+> => {
   const { id } = item;
   if (id === undefined || !isPersistableSourceDocumentId(id)) {
-    return { type: "unkeyable" };
+    return Result.ok({ type: "unkeyable" });
   }
 
   const fetched = await fetchDetail({ cursor, id, signal });
-  const document = await fetchDocument({ cursor, id, signal });
-  return await assemblePlSnDecision({
-    item,
-    detail: fetched?.detail ?? null,
-    documentBytes: document?.bytes,
-    rawParts: {
-      [RAW_PART.LISTING]: listingRaw,
-      ...(fetched === null ? {} : { [RAW_PART.DETAIL]: fetched.raw }),
-      ...(document === undefined ? {} : { [RAW_PART.DOCUMENT]: document.raw }),
-    },
-  });
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const requested = await fetchDocument({ cursor, id, signal });
+  if (Result.isError(requested)) {
+    return requested;
+  }
+  const detail = fetched.value;
+  const document = requested.value;
+
+  return Result.ok(
+    await assemblePlSnDecision({
+      item,
+      detail: detail?.detail ?? null,
+      documentBytes: document?.bytes,
+      rawParts: {
+        [RAW_PART.LISTING]: listingRaw,
+        ...(detail === null ? {} : { [RAW_PART.DETAIL]: detail.raw }),
+        ...(document === undefined
+          ? {}
+          : { [RAW_PART.DOCUMENT]: document.raw }),
+      },
+    }),
+  );
 };
 
 /**
@@ -1032,7 +1088,7 @@ const listPlSnSlicePage = async ({
   signal,
   slice,
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  const { rows } = await listWindow({
+  const listed = await listWindow({
     cursor: slice,
     from: slice,
     offset: page * LISTING_PAGE_SIZE,
@@ -1040,6 +1096,14 @@ const listPlSnSlicePage = async ({
     signal,
     to: slice,
   });
+  if (Result.isError(listed)) {
+    // A slice listing reports its publisher through the promise it returns:
+    // the reconciliation engine holds the slice's previous ledger row on a
+    // rejection, and would settle the slice over the outage if a refusal came
+    // back as a page instead.
+    return await Promise.reject(listed.error);
+  }
+  const { rows } = listed.value;
 
   const items = rows.map((row) => {
     const item = normalizePlSnListingItem(row);
@@ -1073,12 +1137,19 @@ const buildPlSnFromPayload = async (
     return { type: "unkeyable" };
   }
   const item = normalizePlSnListingItem(payload);
-  const built = await buildPlSnDecision({
+  const attempted = await buildPlSnDecision({
     cursor: item.data_wydania ?? "",
     item,
     listingRaw: JSON.stringify(payload),
     ...(signal === undefined ? {} : { signal }),
   });
+  if (Result.isError(attempted)) {
+    // Same contract as the slice listing above: the engine reads a refused
+    // item off the promise, and reporting it as an outcome would mark the
+    // identity handled while the publisher never answered for it.
+    return await Promise.reject(attempted.error);
+  }
+  const built = attempted.value;
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };
@@ -1118,7 +1189,7 @@ type CrawlWindow = {
 const advanceToPopulatedWindow = async (
   start: PlSnCursor,
   signal?: AbortSignal,
-): Promise<CrawlWindow> => {
+): Promise<Result<CrawlWindow, AdapterFetchError>> => {
   let { month, offset } = start;
   let url = "";
   for (let step = 0; step <= MAX_EMPTY_MONTH_SKIPS; step += 1) {
@@ -1131,48 +1202,59 @@ const advanceToPopulatedWindow = async (
       signal,
       to,
     });
-    url = listed.url;
-    if (listed.rows.length > 0) {
-      return { month, offset, rows: listed.rows, url };
+    if (Result.isError(listed)) {
+      return listed;
+    }
+    url = listed.value.url;
+    if (listed.value.rows.length > 0) {
+      return Result.ok({ month, offset, rows: listed.value.rows, url });
     }
     const next = monthAfter(month);
     if (next === null) {
       // The present month, with nothing after this offset: park here so the
       // next cycle re-reads this month's tail and nothing older (rule 13).
-      return { month, offset, rows: [], url };
+      return Result.ok({ month, offset, rows: [], url });
     }
     month = next;
     offset = 0;
   }
-  return { month, offset, rows: [], url };
+  return Result.ok({ month, offset, rows: [], url });
 };
 
 const plSnFetchPage = async (
   cursor: string | null,
   signal?: AbortSignal,
-): Promise<SyncPage> => {
-  const window = await advanceToPopulatedWindow(
+): Promise<Result<SyncPage, AdapterFetchError>> => {
+  const advanced = await advanceToPopulatedWindow(
     parsePlSnCursor(cursor),
     signal,
   );
+  if (Result.isError(advanced)) {
+    return advanced;
+  }
+  const window = advanced.value;
   const decisions: IngestionResult[] = [];
 
   for (const row of window.rows) {
     if (signal?.aborted) {
       break;
     }
-    const built = await buildPlSnDecision({
+    const attempted = await buildPlSnDecision({
       cursor: encodePlSnCursor(window),
       item: normalizePlSnListingItem(row),
       listingRaw: JSON.stringify(row),
       signal,
     });
+    if (Result.isError(attempted)) {
+      return attempted;
+    }
+    const built = attempted.value;
     switch (built.type) {
       case "unkeyable":
         break;
       // The cursor moves past this document either way, so the crawl keeps
-      // the listing-only row a failed document still describes; only the
-      // reconciliation refuses it.
+      // the listing-only row a document the proxy served nothing for still
+      // describes; only the reconciliation refuses it.
       case "detail-unavailable":
       case "built":
         decisions.push(built.decision);
@@ -1185,25 +1267,25 @@ const plSnFetchPage = async (
   }
 
   if (window.rows.length >= CRAWL_PAGE_SIZE) {
-    return {
+    return Result.ok({
       decisions,
       sourceUrl: window.url,
       nextCursor: encodePlSnCursor({
         month: window.month,
         offset: window.offset + window.rows.length,
       }),
-    };
+    });
   }
 
   const next = monthAfter(window.month);
-  return {
+  return Result.ok({
     decisions,
     sourceUrl: window.url,
     nextCursor:
       next === null
         ? encodePlSnCursor(window)
         : encodePlSnCursor({ month: next, offset: 0 }),
-  };
+  });
 };
 
 // ── Adapter ──────────────────────────────────────────────
@@ -1247,10 +1329,17 @@ export const plSnAdapter = defineSourceAdapter({
     buildDecision: buildPlSnFromPayload,
   },
 
+  /**
+   * The page's own refusals come back as `Err` from the walk; this wrapper is
+   * for what the fetch layer raises instead of returning — a dropped
+   * connection, an exhausted retry budget, a cycle abort.
+   */
   async fetchPage(cursor, _config, signal) {
-    return await Result.tryPromise({
-      try: async () => await plSnFetchPage(cursor, signal),
-      catch: adapterCatch(ADAPTER_KEYS.PL_SN, cursor),
-    });
+    return Result.flatten(
+      await Result.tryPromise({
+        try: async () => await plSnFetchPage(cursor, signal),
+        catch: adapterCatch(ADAPTER_KEYS.PL_SN, cursor),
+      }),
+    );
   },
 });

@@ -23,7 +23,7 @@
  *    stating it was kept.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -400,11 +400,15 @@ const plSnFixture = (): InventoryFixture => ({
       );
     });
 
-    const built = await buildPlSnDecision({
+    const attempted = await buildPlSnDecision({
       cursor: "2026-06:0",
       item: { ...PL_SN_LISTING_ROW },
       listingRaw: JSON.stringify(PL_SN_LISTING_ROW),
     });
+    if (Result.isError(attempted)) {
+      return panic(`pl-sn fixture was refused: ${attempted.error.message}`);
+    }
+    const built = attempted.value;
     return built.type === "unkeyable"
       ? panic("pl-sn fixture did not build")
       : built.decision;
