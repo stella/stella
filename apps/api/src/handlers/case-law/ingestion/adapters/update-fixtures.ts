@@ -3,7 +3,8 @@ import { Temporal } from "@stll/time";
  * Update adapter test fixtures from live APIs.
  *
  * Records a fresh first-page response from each adapter
- * and saves it to __fixtures__/ for use in unit tests.
+ * and saves it to __fixtures__/ for use in unit tests,
+ * beside the `.provenance.json` sidecar pinning its bytes.
  * Run this periodically (or after a source changes) to
  * keep fixtures in sync with real API responses.
  *
@@ -18,6 +19,11 @@ import {
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
+import {
+  formatProvenance,
+  provenancePathOf,
+  sha256Of,
+} from "@/api/tests/fixture-provenance";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -38,14 +44,74 @@ type FixtureRecord = {
   page: SyncPage;
 };
 
+/**
+ * Write the fixture and the sidecar that pins its bytes.
+ *
+ * `fixture-provenance.test.ts` rehashes every capture on every run, so a
+ * refresh that rewrote only the archive would leave the sidecar naming
+ * bytes that no longer exist. The two are written together for the same
+ * reason the guard exists: they can never be committed apart.
+ */
 const writeFixture = async (
   adapter: string,
   data: FixtureRecord,
+  sourceUrl: string,
 ): Promise<string> => {
   const filename = `${adapter}-page.json.gz`;
-  const path = new URL(filename, FIXTURES_DIR);
-  await Bun.write(path, encodeGzipJson(data));
+  const bytes = encodeGzipJson(data);
+  await Promise.all([
+    Bun.write(new URL(filename, FIXTURES_DIR), bytes),
+    Bun.write(
+      new URL(provenancePathOf(filename), FIXTURES_DIR),
+      formatProvenance({
+        capture: "recorded",
+        sha256: sha256Of(bytes),
+        sourceUrl,
+        capturedAt: data.recordedAt,
+      }),
+    ),
+  ]);
   return filename;
+};
+
+/**
+ * Run a recording while watching the requests it makes.
+ *
+ * A page fixture is not one document: the adapter reads a listing and may
+ * follow it per decision, so no single URL is declared anywhere for the
+ * sidecar to cite. The listing request the recorder actually issued is
+ * that URL, and watching the traffic is the only way to name it without
+ * guessing one.
+ */
+const recordingRequestsOf = async <TResult>(
+  run: () => Promise<TResult>,
+): Promise<{ result: TResult; firstUrl: string | undefined }> => {
+  const originalFetch = globalThis.fetch;
+  let firstUrl: string | undefined;
+
+  const urlOf = (input: string | URL | Request): string => {
+    if (typeof input === "string") {
+      return input;
+    }
+    return input instanceof URL ? input.href : input.url;
+  };
+
+  globalThis.fetch = Object.assign(
+    async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      firstUrl ??= urlOf(input);
+      return await originalFetch(input, init);
+    },
+    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  );
+
+  try {
+    return { result: await run(), firstUrl };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 };
 
 const updateAdapter = async (
@@ -60,16 +126,22 @@ const updateAdapter = async (
     // Generous budget: adapters that rate-limit per-decision detail
     // fetches (cz-us) need several minutes for a full first page, and a
     // truncated capture weakens the fixture-based parser coverage.
-    const result = await adapter.fetchPage(
-      null,
-      {},
-      AbortSignal.timeout(600_000),
+    const { result, firstUrl } = await recordingRequestsOf(
+      async () =>
+        await adapter.fetchPage(null, {}, AbortSignal.timeout(600_000)),
     );
 
     if (result.isErr()) {
       return {
         error: `${adapterKey}: ${result.error.message}`,
       };
+    }
+
+    // A recording that reached no source cannot say where its bytes came
+    // from, and a sidecar citing a URL nobody requested reads as verified
+    // provenance forever after.
+    if (firstUrl === undefined) {
+      return { error: `${adapterKey}: recorded no request to cite as a source` };
     }
 
     const page = result.unwrap(
@@ -86,7 +158,7 @@ const updateAdapter = async (
       },
     };
 
-    const filename = await writeFixture(adapterKey, record);
+    const filename = await writeFixture(adapterKey, record, firstUrl);
     return { filename, count: page.decisions.length };
   } catch (error) {
     return {

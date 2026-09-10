@@ -1,5 +1,6 @@
 {
-  "capture": "legacy",
-  "sha256": "cd75b06f87cc68d49f74396277c01ec04631974487802547fe1cef0263596a78",
-  "note": "legacy capture, provenance unknown; recapture on next touch"
+  "capture": "recorded",
+  "sha256": "4928db74f6395ed3d9af619d6a1cb2cf7bc9c483f8f8fdc35287ab1b5b1bbd75",
+  "sourceUrl": "https://nalus.usoud.cz/Search/Search.aspx",
+  "capturedAt": "2026-09-10T17:38:43.108Z"
 }

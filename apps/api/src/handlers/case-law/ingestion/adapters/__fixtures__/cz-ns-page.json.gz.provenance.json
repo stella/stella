@@ -1,5 +1,6 @@
 {
-  "capture": "legacy",
-  "sha256": "d602c265d40414df3b56cad19764492b602ab08976e2d66defcb764955e74fdf",
-  "note": "legacy capture, provenance unknown; recapture on next touch"
+  "capture": "recorded",
+  "sha256": "66010949a8499fb42079da7e6030bdd786efb3e2a5aabe4015fa72200a66996a",
+  "sourceUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch?ReadViewEntries&Count=40&Start=1&OutputFormat=JSON",
+  "capturedAt": "2026-09-10T17:37:42.802Z"
 }
