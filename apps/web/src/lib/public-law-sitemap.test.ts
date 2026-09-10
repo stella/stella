@@ -160,7 +160,7 @@ describe("public law sitemap", () => {
       return new Response();
     };
 
-    await expect(
+    expect(
       fetchPublicSitemapDecisions({
         fetchImpl,
         shard: {

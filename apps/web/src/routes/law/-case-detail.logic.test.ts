@@ -68,8 +68,8 @@ const UNPUBLISHED_DECISION = {
 } satisfies DecisionBySlug;
 
 describe("public case-law decision route readiness", () => {
-  test("rejects a route outside the generated country list", async () => {
-    await expect(
+  test("rejects a route outside the generated country list", () => {
+    expect(
       loadPublicCaseLawDecisionRoute({
         params: {
           country: "xaa",
@@ -82,7 +82,7 @@ describe("public case-law decision route readiness", () => {
     ).rejects.toMatchObject({ isNotFound: true });
   });
 
-  test("rejects a fetched decision outside the generated country list", async () => {
+  test("rejects a fetched decision outside the generated country list", () => {
     const queryClient = new QueryClient();
     const options = decisionBySlugOptions({
       country: PUBLIC_COUNTRY,
@@ -90,7 +90,7 @@ describe("public case-law decision route readiness", () => {
     });
     queryClient.setQueryData(options.queryKey, UNPUBLISHED_DECISION);
 
-    await expect(
+    expect(
       loadPublicCaseLawDecisionRoute({
         params: {
           country: "cze",
