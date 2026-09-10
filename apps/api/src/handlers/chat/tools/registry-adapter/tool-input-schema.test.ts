@@ -50,11 +50,14 @@ describe("toToolInputSchema", () => {
   });
 
   test("removes server-only normalization metadata but keeps its guidance", () => {
+    const normalizationMetadata = {
+      [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "locale" },
+    } as const;
     const schema = {
       properties: {
         locale: {
           description: "Use a BCP-47 language tag.",
-          [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "locale" },
+          ...normalizationMetadata,
           type: "string",
         },
       },
