@@ -8,6 +8,7 @@ import {
 import {
   createFileRoute,
   Link,
+  notFound,
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
@@ -38,9 +39,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  CASE_LAW_ALL_COUNTRIES,
   caseLawCountryRegion,
-  defaultCaseLawCountryForLocale,
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
@@ -48,10 +49,7 @@ import {
   decisionLinkElement,
   formatDecisionDate,
 } from "@/features/case-law/components/decision-cells";
-import {
-  caseLawCountryScope,
-  openDecisionMatch,
-} from "@/features/case-law/open-decision-match";
+import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import {
   caseLawCorpusStatusOptions,
   decisionFacetsOptions,
@@ -70,6 +68,7 @@ import { getMessageLocale } from "@/i18n/i18n-store";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
+  resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
@@ -82,7 +81,6 @@ import {
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
-  LAW_HOME_JURISDICTION_CODES,
   type LawScope,
   lawHomeDescriptor,
   statuteCountryOf,
@@ -129,23 +127,6 @@ const createLawHomePath = ({ country }: LawHomeSearch): `/law${string}` =>
 const HOME_DESCRIPTION =
   "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.";
 
-/**
- * The pill's jurisdictions: the ones the home describes, then any other the
- * facets report. The described ones are always offered, so the pill names
- * the route's jurisdiction even while the facets are unavailable.
- */
-const pillJurisdictions = (
-  facetCountries: readonly { value: string }[],
-): string[] => {
-  const codes: string[] = [...LAW_HOME_JURISDICTION_CODES];
-  for (const bucket of facetCountries) {
-    if (!codes.includes(bucket.value)) {
-      codes.push(bucket.value);
-    }
-  }
-  return codes;
-};
-
 /** Whether the entry belongs to the legislation corpus rather than case law. */
 const wantsStatutes = (
   scope: LawHomeScope,
@@ -169,44 +150,45 @@ export const Route = createFileRoute("/law/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
   // A first visit starts in the jurisdiction the UI language points at, and
-  // the URL says so, so the page and its columns agree on the scope. Readers
-  // in other languages, and crawlers, start unscoped. Server-side, because
-  // /law is a public SSR path: the throw becomes a real HTTP redirect rather
-  // than a client-only navigation that would serve crawlers an empty shell.
+  // the URL says so, so the page and its columns agree on the scope. Other
+  // locales use the generated list's first country. Server-side, because /law
+  // is a public SSR path: the throw becomes a real HTTP redirect rather than a
+  // client-only navigation that would serve crawlers an empty shell.
   beforeLoad: ({ search }) => {
-    if (search.country !== undefined) {
+    const country = resolveCaseLawRouteCountry({
+      country: search.country,
+      locale: getMessageLocale(),
+    });
+    if (country === null) {
+      notFound({ throw: true });
       return;
     }
-    const country = defaultCaseLawCountryForLocale(getMessageLocale());
-    if (country === null) {
+    const countryParam = toCaseLawCountryParam(country);
+    if (search.country === countryParam) {
       return;
     }
     throw redirect({
       to: "/law",
-      search: { ...search, country: toCaseLawCountryParam(country) },
+      search: { ...search, country: countryParam },
       replace: true,
     });
   },
   loader: async ({ context: { queryClient }, deps }) => {
-    const scope = caseLawCountryScope(deps.country);
+    const scope =
+      publicCaseLawCountryFromParam(deps.country) ??
+      panic("The law route loaded without a launch-ready country.");
     const statuteCountry = statuteCountryOf(scope);
     const [latest] = await Promise.all([
-      scope === undefined
-        ? Promise.resolve(null)
-        : ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
-      // Unscoped: the pill offers every jurisdiction the corpus holds.
-      ensureRouteQueryData(queryClient, decisionFacetsOptions()),
-      ensureRouteQueryData(queryClient, caseLawCorpusStatusOptions()),
-      scope === undefined || statuteCountry === null
+      ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
+      ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
+      ensureRouteQueryData(queryClient, caseLawCorpusStatusOptions(scope)),
+      statuteCountry === null
         ? Promise.resolve(null)
         : ensureRouteQueryData(queryClient, legislationShelfOptions(scope)),
     ]);
 
     return {
-      decisions:
-        latest === null
-          ? []
-          : latest.courts.flatMap((group) => group.decisions),
+      decisions: latest.courts.flatMap((group) => group.decisions),
     };
   },
   head: ({ loaderData, match }) => {
@@ -294,10 +276,12 @@ function LawHome() {
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();
   const country = Route.useSearch({ select: (search) => search.country });
-  const notFound = Route.useSearch({ select: (search) => search.notFound });
+  const decisionNotFound = Route.useSearch({
+    select: (search) => search.notFound,
+  });
 
   useExternalSyncEffect(() => {
-    if (!notFound) {
+    if (!decisionNotFound) {
       return;
     }
     stellaToast.add({ title: t("caseLaw.decisionNotFound"), type: "error" });
@@ -308,18 +292,18 @@ function LawHome() {
       }),
       "law-home.clear-not-found",
     );
-  }, [notFound, routeNavigate, t]);
+  }, [decisionNotFound, routeNavigate, t]);
 
-  const countryParam = country ?? CASE_LAW_ALL_COUNTRIES;
-  const scope = caseLawCountryScope(country);
+  const scope =
+    publicCaseLawCountryFromParam(country) ??
+    panic("The law route rendered without a launch-ready country.");
+  const countryParam = toCaseLawCountryParam(scope);
   const statuteCountry = statuteCountryOf(scope);
   const descriptor = lawHomeDescriptor(scope);
 
   const [queryInput, setQueryInput] = useState("");
   const [requestedScope, setRequestedScope] = useState<LawHomeScope>("all");
 
-  // Unscoped, the pill spans every jurisdiction and only case law is common
-  // to all of them, so the box reads an entry as case law.
   const corpora: readonly LawScope[] =
     descriptor === null ? ["decisions"] : descriptor.scopes;
   // A jurisdiction switch can retire the chosen scope; fall back rather than
@@ -329,14 +313,11 @@ function LawHome() {
       ? "all"
       : requestedScope;
 
-  const { data: facets } = useSuspenseQuery(decisionFacetsOptions());
-  const { data: latest } = useQuery({
-    ...latestDecisionsOptions(scope ?? ""),
-    enabled: scope !== undefined,
-  });
+  const { data: facets } = useSuspenseQuery(decisionFacetsOptions(scope));
+  const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
   const { data: shelf } = useQuery({
-    ...legislationShelfOptions(scope ?? ""),
-    enabled: scope !== undefined && statuteCountry !== null,
+    ...legislationShelfOptions(scope),
+    enabled: statuteCountry !== null,
   });
   const history = useLawSearchHistory();
 
@@ -399,15 +380,12 @@ function LawHome() {
     detached(runEntry(entry), "law-home.recent-search");
   };
 
-  const topCourtRows =
-    latest === undefined
-      ? []
-      : latest.courts.flatMap((group) =>
-          group.decisions.slice(0, DECISIONS_PER_COURT).map((decision) => ({
-            decision,
-            court: group.court,
-          })),
-        );
+  const topCourtRows = latest.courts.flatMap((group) =>
+    group.decisions.slice(0, DECISIONS_PER_COURT).map((decision) => ({
+      decision,
+      court: group.court,
+    })),
+  );
   // What moved in the law lately: acts that just came into force, then acts
   // about to. Court signals join here once the corpus reports them.
   const signalRows =
@@ -436,18 +414,18 @@ function LawHome() {
 
   return (
     <LandingLayout
-      footer={<CaseLawBrowseLinks facets={facets} />}
+      footer={
+        <CaseLawBrowseLinks countryParam={countryParam} facets={facets} />
+      }
       hero={
         <>
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
           <LawEntryBox
             askPrompt={(entry) =>
-              scope === undefined
-                ? t("caseLaw.searchAskPromptAll", { query: entry })
-                : t("caseLaw.searchAskPrompt", {
-                    country: countryName(scope),
-                    query: entry,
-                  })
+              t("caseLaw.searchAskPrompt", {
+                country: countryName(scope),
+                query: entry,
+              })
             }
             maxLength={MAX_QUERY_LENGTH}
             onQueryChange={setQueryInput}
@@ -466,13 +444,10 @@ function LawHome() {
                       "law-home.switch-country",
                     );
                   }}
-                  options={[
-                    { label: t("common.all"), value: CASE_LAW_ALL_COUNTRIES },
-                    ...pillJurisdictions(facets.country).map((code) => ({
-                      label: countryName(code),
-                      value: toCaseLawCountryParam(code),
-                    })),
-                  ]}
+                  options={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
+                    label: countryName(code),
+                    value: toCaseLawCountryParam(code),
+                  }))}
                   value={countryParam}
                 />
                 <LawScopePicker
@@ -485,52 +460,50 @@ function LawHome() {
             placeholder={t("lawHome.searchPlaceholder")}
             query={queryInput}
             searchLabel={t("lawHome.searchLabel")}
-            status={<LawDatabaseStatus />}
+            status={<LawDatabaseStatus country={scope} />}
           />
         </>
       }
     >
-      {scope !== undefined && (
-        <LandingSection
-          heading={
-            <Link
-              className={LANDING_SECTION_HEADING_CLASS}
-              search={{ country: countryParam }}
-              to="/law/cases"
-            >
-              <ScaleIcon className="size-4" />
-              {t("lawHome.topCourts")}
-            </Link>
-          }
-        >
-          {topCourtRows.map(({ court, decision }) => {
-            const date =
-              decision.decisionDate === null
-                ? null
-                : formatDecisionDate(decision.decisionDate, format);
-            return (
-              <Fragment key={decision.id}>
-                {decisionLinkElement(
-                  createCaseLawDecisionRouteParams({
-                    caseNumber: decision.caseNumber,
-                    country: decision.country,
-                    court: decision.court,
-                    decisionId: decision.id,
-                    language: decision.language,
-                    languageAlternates: decision.languageAlternates,
-                    slug: decision.slug,
-                  }),
-                  LANDING_ROW_CLASS,
-                  <LandingItemText
-                    meta={date === null ? court : `${court} · ${date}`}
-                    title={decision.caseNumber}
-                  />,
-                )}
-              </Fragment>
-            );
-          })}
-        </LandingSection>
-      )}
+      <LandingSection
+        heading={
+          <Link
+            className={LANDING_SECTION_HEADING_CLASS}
+            search={{ country: countryParam }}
+            to="/law/cases"
+          >
+            <ScaleIcon className="size-4" />
+            {t("lawHome.topCourts")}
+          </Link>
+        }
+      >
+        {topCourtRows.map(({ court, decision }) => {
+          const date =
+            decision.decisionDate === null
+              ? null
+              : formatDecisionDate(decision.decisionDate, format);
+          return (
+            <Fragment key={decision.id}>
+              {decisionLinkElement(
+                createCaseLawDecisionRouteParams({
+                  caseNumber: decision.caseNumber,
+                  country: decision.country,
+                  court: decision.court,
+                  decisionId: decision.id,
+                  language: decision.language,
+                  languageAlternates: decision.languageAlternates,
+                  slug: decision.slug,
+                }),
+                LANDING_ROW_CLASS,
+                <LandingItemText
+                  meta={date === null ? court : `${court} · ${date}`}
+                  title={decision.caseNumber}
+                />,
+              )}
+            </Fragment>
+          );
+        })}
+      </LandingSection>
       <LandingSection
         heading={
           statuteCountry === null ? (

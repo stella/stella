@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchAskPrompt": "{query} (jurisprudencia de {country})",
-    "searchAskPromptAll": "{query} (jurisprudencia)",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
     "seo": {

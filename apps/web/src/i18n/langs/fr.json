@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchAskPrompt": "{query} (jurisprudence, {country})",
-    "searchAskPromptAll": "{query} (jurisprudence)",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
     "seo": {

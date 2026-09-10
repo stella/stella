@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 
 import { api } from "@/lib/api";
@@ -14,7 +15,7 @@ const DEFAULT_PAGE_SIZE = 50;
 
 export type DecisionListFilters = {
   court?: string;
-  country?: string;
+  country: string;
   dateFrom?: string;
   dateTo?: string;
   decisionType?: string;
@@ -35,7 +36,11 @@ const caseLawDecisionKeys = {
     "latest",
     { country },
   ],
-  status: () => [...caseLawDecisionKeys.all, "status"],
+  status: (country: string) => [
+    ...caseLawDecisionKeys.all,
+    "status",
+    { country },
+  ],
   list: (key: DecisionListFilters) => [
     ...caseLawDecisionKeys.all,
     "list",
@@ -54,11 +59,12 @@ const caseLawDecisionKeys = {
   bySlug: (key: DecisionBySlugKey) => [
     ...caseLawDecisionKeys.all,
     "slug",
-    { language: key.language, slug: key.slug },
+    { country: key.country, language: key.language, slug: key.slug },
   ],
 };
 
 type DecisionBySlugKey = {
+  country: PublicCaseLawCountry;
   language?: string;
   slug: string;
 };
@@ -78,12 +84,12 @@ export type CaseLawBrowseFacets = {
 };
 
 /** Facets of the whole corpus, or of one jurisdiction when `country` is given. */
-export const decisionFacetsOptions = (country?: string) =>
+export const decisionFacetsOptions = (country: string) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.facets(country),
     queryFn: async ({ signal }): Promise<CaseLawBrowseFacets> => {
       const response = await api.case.decisions.facets.get({
-        query: country === undefined ? {} : { country },
+        query: { country },
         fetch: { signal },
       });
 
@@ -115,11 +121,12 @@ export const latestDecisionsOptions = (country: string) =>
   });
 
 /** How much case law the database holds and when it last changed. */
-export const caseLawCorpusStatusOptions = () =>
+export const caseLawCorpusStatusOptions = (country: string) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.status(),
+    queryKey: caseLawDecisionKeys.status(country),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions.status.get({
+        query: { country },
         fetch: { signal },
       });
 
@@ -138,7 +145,7 @@ export type LatestDecisionsCourt = Awaited<
   ReturnType<NonNullable<ReturnType<typeof latestDecisionsOptions>["queryFn"]>>
 >["courts"][number];
 
-export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
+export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
   infiniteQueryOptions({
     queryKey: caseLawDecisionKeys.list(filters),
     queryFn: async ({ pageParam, signal }) => {
@@ -154,9 +161,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             ...(listFilters.court !== undefined && {
               court: listFilters.court,
             }),
-            ...(listFilters.country !== undefined && {
-              country: listFilters.country,
-            }),
+            country: listFilters.country,
             ...(listFilters.dateFrom !== undefined && {
               dateFrom: listFilters.dateFrom,
             }),
@@ -215,9 +220,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           ...(listFilters.court !== undefined && {
             court: listFilters.court,
           }),
-          ...(listFilters.country !== undefined && {
-            country: listFilters.country,
-          }),
+          country: listFilters.country,
           ...(listFilters.dateFrom !== undefined && {
             dateFrom: listFilters.dateFrom,
           }),
@@ -268,14 +271,21 @@ export const decisionOptions = (decisionId: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
+export const decisionBySlugOptions = ({
+  country,
+  language,
+  slug,
+}: DecisionBySlugKey) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.bySlug(
-      language === undefined ? { slug } : { language, slug },
+      language === undefined ? { country, slug } : { country, language, slug },
     ),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions["by-slug"]({ slug }).get({
-        ...(language !== undefined && { query: { language } }),
+        query: {
+          country,
+          ...(language !== undefined && { language }),
+        },
         fetch: { signal },
       });
 

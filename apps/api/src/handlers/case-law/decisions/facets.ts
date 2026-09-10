@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -19,7 +21,7 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 export const listDecisionFacetsQuerySchema = t.Object({
-  country: t.Optional(t.String({ maxLength: 3 })),
+  country: t.String({ minLength: 2, maxLength: 3 }),
 });
 
 type ListDecisionFacetsQuery = Static<typeof listDecisionFacetsQuerySchema>;
@@ -38,20 +40,21 @@ const browseFacets = createBrowseFacetsCache({
 export const listDecisionFacetsHandler = async ({
   country,
 }: ListDecisionFacetsQuery) => {
-  if (country !== undefined && !isCorpusIndexJurisdiction(country)) {
-    return status(400, { message: "Invalid country" });
+  const publicCountry = publicCaseLawCountry(country);
+  if (publicCountry === null || !isCorpusIndexJurisdiction(publicCountry)) {
+    return status(404, { message: "Not Found" });
   }
 
-  return await readBrowseFacets(country);
+  return await readBrowseFacets(publicCountry);
 };
 
 /**
- * Cached facets for a validated jurisdiction (or the whole corpus). Degrades
+ * Cached facets for a validated jurisdiction. Degrades
  * to an empty set on any failure: facets are navigation chrome, and the
  * callers (the facets route, the newest-decisions shelf) render without them.
  */
 export const readBrowseFacets = async (
-  country: string | undefined,
+  country: string,
 ): Promise<LegalBrowseFacets> => {
   // Read ahead of the cache, not inside it: source policy is an input to the
   // answer, so a revocation has to change the cache key. Reading it behind the
@@ -71,7 +74,7 @@ export const readBrowseFacets = async (
   // once here is what keeps the two answering the same question — and keeps
   // one jurisdiction to one cache entry.
   const result = await browseFacets({
-    ...(country === undefined ? {} : { jurisdiction: country.toUpperCase() }),
+    jurisdiction: country.toUpperCase(),
     excludedSourceIds: excludedSourceIds.value,
     limit: LIMITS.caseLawFacetLimit,
   });

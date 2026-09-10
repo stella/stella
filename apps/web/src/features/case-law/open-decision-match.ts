@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
@@ -8,10 +9,7 @@ import {
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
 
-import {
-  CASE_LAW_ALL_COUNTRIES,
-  fromCaseLawCountryParam,
-} from "@/features/case-law/case-law-jurisdiction";
+import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
@@ -22,7 +20,7 @@ import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */
 export type CaseLawSearchScope = {
-  /** The pill's value: a country param, `all`, or nothing yet. */
+  /** The pill's country param, or nothing before route canonicalisation. */
   country?: string | undefined;
   court?: string | undefined;
   q?: string | undefined;
@@ -34,15 +32,13 @@ export const validDecisionYear = (
 ): string | undefined => (/^\d{4}$/u.test(year ?? "") ? year : undefined);
 
 /**
- * The corpus country the pill names: none for `all`, else the code. A URL
- * without a country is scoped by `beforeLoad` before this is ever read.
+ * The corpus country the pill names. A URL without a country is scoped by
+ * `beforeLoad` before public search calls this helper.
  */
 export const caseLawCountryScope = (
   country: string | undefined,
 ): string | undefined =>
-  country === undefined || country === CASE_LAW_ALL_COUNTRIES
-    ? undefined
-    : fromCaseLawCountryParam(country);
+  country === undefined ? undefined : fromCaseLawCountryParam(country);
 
 type ReadDecisionIntentOptions = {
   readonly jurisdiction?: string | undefined;
@@ -69,11 +65,14 @@ export const createDecisionFiltersFromSearch = ({
   year,
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
+  if (scope === undefined) {
+    return panic("Case-law search requires a country.");
+  }
   const normalizedYear = validDecisionYear(year);
   const intent = readDecisionIntent(q, { jurisdiction: scope });
 
   return {
-    ...(scope === undefined ? {} : { country: scope }),
+    country: scope,
     ...(court ? { court } : {}),
     ...(normalizedYear
       ? {

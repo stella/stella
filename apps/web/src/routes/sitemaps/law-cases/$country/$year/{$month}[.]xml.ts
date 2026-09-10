@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { isPublicLawSitemapEnabled } from "@/lib/public-law-launch";
 import {
   createPublicCaseLawSitemapXml,
@@ -13,7 +14,10 @@ export const Route = createFileRoute(
   server: {
     handlers: {
       GET: async ({ params }) => {
-        if (!isPublicLawSitemapEnabled()) {
+        if (
+          !isPublicLawSitemapEnabled() ||
+          publicCaseLawCountryFromParam(params.country) === null
+        ) {
           return new Response("Not Found", { status: 404 });
         }
 

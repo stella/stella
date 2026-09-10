@@ -698,7 +698,6 @@ type Messages = {
     };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
     "searchAskPrompt": "{query} (case law of {country})";
-    "searchAskPromptAll": "{query} (case law)";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
     "seo": {

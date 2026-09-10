@@ -155,7 +155,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
+    "description": "Search case law within one country. Filters include court, language, dates, and decision type. Results include a route-independent resourceName.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -165,7 +165,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "inputSchema": {
       "type": "object",
       "required": [
-        "query"
+        "query",
+        "country"
       ],
       "additionalProperties": false,
       "properties": {
@@ -193,8 +194,9 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "country": {
           "type": "string",
+          "minLength": 2,
           "maxLength": 3,
-          "description": "Filter by country code"
+          "description": "Required corpus country code"
         },
         "language": {
           "type": "string",
@@ -3589,7 +3591,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:search_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
+    "description": "Search case law within one country. Filters include court, language, dates, and decision type. Results include a route-independent resourceName.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -3599,7 +3601,8 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "query"
+        "query",
+        "country"
       ],
       "additionalProperties": false,
       "properties": {
@@ -3627,8 +3630,9 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "country": {
           "type": "string",
+          "minLength": 2,
           "maxLength": 3,
-          "description": "Filter by country code"
+          "description": "Required corpus country code"
         },
         "language": {
           "type": "string",

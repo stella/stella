@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
 
 import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
@@ -288,10 +289,11 @@ export const listLatestDecisionsHandler = async (
   { country }: ListLatestDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  if (!isCorpusIndexJurisdiction(country)) {
-    return status(400, { message: "Invalid country" });
+  const publicCountry = publicCaseLawCountry(country);
+  if (publicCountry === null || !isCorpusIndexJurisdiction(publicCountry)) {
+    return status(404, { message: "Not Found" });
   }
-  const jurisdiction = country.toUpperCase();
+  const jurisdiction = publicCountry;
   const empty: LatestDecisions = { country: jurisdiction, courts: [] };
 
   const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();

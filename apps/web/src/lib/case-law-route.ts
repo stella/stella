@@ -1,6 +1,56 @@
 import { panic } from "better-result";
 
+import {
+  isPublicCaseLawCountry,
+  publicCaseLawCountry,
+  PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
+import type {
+  CaseLawBrowserCountry,
+  PublicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
+import type { UiLocale } from "@stll/locales";
 import { stripDiacriticsForSlug } from "@stll/text-normalize";
+
+const DEFAULT_COUNTRY_BY_LOCALE = {
+  ar: null,
+  cs: "CZE",
+  de: null,
+  en: null,
+  es: null,
+  et: null,
+  fr: null,
+  hu: null,
+  lt: null,
+  lv: null,
+  pl: "POL",
+  "pt-BR": null,
+  sk: "SVK",
+} as const satisfies Record<UiLocale, CaseLawBrowserCountry | null>;
+
+/** Pick a launch-ready public country from the UI locale, then list order. */
+export const defaultCaseLawCountryForLocale = (
+  locale: UiLocale,
+): PublicCaseLawCountry | null => {
+  const localeCountry = DEFAULT_COUNTRY_BY_LOCALE[locale];
+  return localeCountry !== null && isPublicCaseLawCountry(localeCountry)
+    ? localeCountry
+    : (PUBLIC_CASE_LAW_COUNTRIES.at(0) ?? null);
+};
+
+type ResolveCaseLawRouteCountryOptions = {
+  country: string | undefined;
+  locale: UiLocale;
+};
+
+/** Default an absent country, but reject an explicitly unpublished one. */
+export const resolveCaseLawRouteCountry = ({
+  country,
+  locale,
+}: ResolveCaseLawRouteCountryOptions): PublicCaseLawCountry | null =>
+  country === undefined
+    ? defaultCaseLawCountryForLocale(locale)
+    : publicCaseLawCountry(country);
 
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;

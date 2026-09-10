@@ -29,6 +29,7 @@ const openId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
 const missingId = createSafeId<"caseLawDecision">();
 const variantId = createSafeId<"caseLawDecision">();
+const unavailableCountryId = createSafeId<"caseLawDecision">();
 
 /** Same budget as the schema push below: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -117,6 +118,15 @@ beforeAll(
         slug: "variant-case",
         sourceId: openSourceId,
       },
+      {
+        caseNumber: "unavailable-country",
+        country: "XAA",
+        court: "Court",
+        id: unavailableCountryId,
+        language: "xx",
+        slug: "unavailable-country-case",
+        sourceId: openSourceId,
+      },
     ]);
   },
   { timeout: 120_000 },
@@ -141,11 +151,15 @@ const app = () => {
     config: {
       mcp: { type: "internal", reason: "public_indexing" },
       params: t.Object({ slug: t.String() }),
-      query: t.Object({ language: t.Optional(t.String()) }),
+      query: t.Object({
+        country: t.String(),
+        language: t.Optional(t.String()),
+      }),
     } satisfies PublicHandlerConfig,
     caseLawDb,
-    locate: ({ params: { slug }, query: { language } }) => ({
+    locate: ({ params: { slug }, query: { country, language } }) => ({
       kind: "slug",
+      country,
       slug,
       language,
     }),
@@ -171,9 +185,12 @@ test(
     for (const path of [
       `/d/${closedId}`,
       `/d/${missingId}`,
-      "/s/closed-case",
-      "/s/no-such-slug",
-      "/s/open-case?language=xx_notalanguage!",
+      `/d/${unavailableCountryId}`,
+      "/s/closed-case?country=CZE",
+      "/s/no-such-slug?country=CZE",
+      "/s/unavailable-country-case?country=CZE",
+      "/s/open-case?country=XAA",
+      "/s/open-case?country=CZE&language=xx_notalanguage!",
     ]) {
       const response = await get(path);
       expect(response.status).toBe(404);
@@ -188,8 +205,8 @@ test(
   async () => {
     for (const path of [
       `/d/${openId}`,
-      "/s/open-case",
-      "/s/open-case?language=CS",
+      "/s/open-case?country=CZE",
+      "/s/open-case?country=cze&language=CS",
     ]) {
       const response = await get(path);
       expect(response.status).toBe(200);
@@ -203,16 +220,18 @@ test(
   "slug language matching normalises separator and case on both sides",
   async () => {
     for (const path of [
-      "/s/variant-case?language=pt-br",
-      "/s/variant-case?language=PT_BR",
-      "/s/variant-case?language=pt_br",
+      "/s/variant-case?country=CZE&language=pt-br",
+      "/s/variant-case?country=CZE&language=PT_BR",
+      "/s/variant-case?country=CZE&language=pt_br",
     ]) {
       const response = await get(path);
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ reached: variantId });
     }
     // A different tag must still miss, so the normalisation is not a wildcard.
-    expect((await get("/s/variant-case?language=pt")).status).toBe(404);
+    expect((await get("/s/variant-case?country=CZE&language=pt")).status).toBe(
+      404,
+    );
   },
   DB_TEST_TIMEOUT_MS,
 );

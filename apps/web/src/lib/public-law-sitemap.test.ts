@@ -127,6 +127,13 @@ describe("public law sitemap", () => {
               month: "04",
               year: "2026",
             },
+            {
+              bucket: "all",
+              country: "xaa",
+              lastmod: "2026-01-02",
+              month: "06",
+              year: "2026",
+            },
           ],
           limit: 50_000,
           nextCursor: null,
@@ -146,6 +153,27 @@ describe("public law sitemap", () => {
     ]);
   });
 
+  test("refuses a sitemap request outside the generated country list", async () => {
+    let requested = false;
+    const fetchImpl = async () => {
+      requested = true;
+      return new Response();
+    };
+
+    expect(
+      fetchPublicSitemapDecisions({
+        fetchImpl,
+        shard: {
+          bucket: "all",
+          country: "xaa",
+          month: "01",
+          year: "2026",
+        },
+      }),
+    ).rejects.toThrow("The case-law sitemap shard is not published");
+    expect(requested).toBe(false);
+  });
+
   test("serializes the root sitemap index", () => {
     const xml = createPublicLawSitemapIndexXml(
       [
@@ -163,6 +191,13 @@ describe("public law sitemap", () => {
           month: "04",
           year: "2026",
         },
+        {
+          bucket: "all",
+          country: "xaa",
+          lastmod: "2026-01-02",
+          month: "06",
+          year: "2026",
+        },
       ],
       { publicLawIndexingEnabled: true },
     );
@@ -177,6 +212,7 @@ describe("public law sitemap", () => {
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
     expect(xml).not.toContain("cursor=");
+    expect(xml).not.toContain("/xaa/");
     expect(xml).not.toContain("workspace");
     expect(xml).not.toContain("organization");
     expect(xml).not.toContain("matter");
@@ -615,14 +651,19 @@ describe("public law sitemap", () => {
     expect(source).toContain("loader:");
     expect(source).toContain("ensureRouteInfiniteQueryData");
     expect(source).toContain(
-      "ensureRouteQueryData(queryClient, decisionFacetsOptions())",
+      "ensureRouteQueryData(queryClient, decisionFacetsOptions(scope))",
     );
+    expect(source).not.toContain("decisionFacetsOptions()");
+    expect(source).toContain("PUBLIC_CASE_LAW_COUNTRIES");
     expect(source).toContain("decisionsInfiniteOptions(");
     expect(source).toContain("validateSearch: searchSchema");
     expect(source).toContain("CaseLawBrowseLinks");
     // The crawlable facet links moved to the shared component both the home
     // and the results screen render.
     expect(browseSource).toContain('to="/law/cases"');
+    expect(browseSource).toContain("isPublicCaseLawCountry");
+    expect(browseSource).toContain("{ country: countryParam, court: value }");
+    expect(browseSource).toContain("{ country: countryParam, year: value }");
   });
 
   test("public law home preloads its shelves for SSR", async () => {
@@ -693,7 +734,10 @@ describe("public law sitemap", () => {
     );
 
     expect(chatOpenSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatOpenSource).toContain("defaultCaseLawCountryForLocale");
     expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
+    expect(chatMentionSource).toContain("defaultCaseLawCountryForLocale");
+    expect(chatMentionSource).toContain("country !== null");
     expect(searchSource).toContain("isPublicLawPreviewEnabled");
     expect(searchSource).toContain("usePublicLawPreviewEnabled");
   });

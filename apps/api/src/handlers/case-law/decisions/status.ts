@@ -1,6 +1,12 @@
 import { Result, TaggedError } from "better-result";
-import { inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
+import {
+  publicCaseLawCountry,
+  type PublicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -19,7 +25,7 @@ import {
 
 /** How much public case law the database holds and when it last changed. */
 export type CaseLawCorpusStatus = {
-  /** The planner's row estimate less the withheld sources' rows: a magnitude, not a ledger. */
+  /** The number of public decisions in the requested country. */
   decisions: number;
   /** ISO 8601, or null while the public table is empty. */
   updatedAt: string | null;
@@ -31,39 +37,44 @@ class CorpusStatusError extends TaggedError("CorpusStatusError")<{
 }> {}
 
 type CorpusStatusLoad = {
+  country: PublicCaseLawCountry;
   /** The sources a public surface may not count, as the other public reads exclude them. */
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
 };
 
+export const readCaseLawCorpusStatusQuerySchema = t.Object({
+  country: t.String({ minLength: 2, maxLength: 3 }),
+});
+
+type ReadCaseLawCorpusStatusQuery = Static<
+  typeof readCaseLawCorpusStatusQuerySchema
+>;
+
 /**
- * One indexed aggregate and one catalogue read: `max(updated_at)` walks the
- * end of its index, and `reltuples` is what the planner already knows. A
- * withheld source's rows come off through the same predicate every public
- * read applies, so the status describes the corpus a reader can reach. An
- * exact `count(*)` would read every row for a number nobody compares.
+ * One country-scoped aggregate. The country index bounds the scan, and the
+ * short-lived cache keeps it off the request path after the first read.
  */
 export const readCaseLawCorpusStatusQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCorpusStatus,
   async (
     tx: CaseLawPublicReadTransaction,
-    { excludedSourceIds }: CorpusStatusLoad,
+    { country, excludedSourceIds }: CorpusStatusLoad,
   ): Promise<CaseLawCorpusStatus> => {
-    const withheldRows =
-      excludedSourceIds.length === 0
-        ? sql`0`
-        : sql`(SELECT count(*) FROM ${caseLawDecisions} WHERE ${inArray(caseLawDecisions.sourceId, [...excludedSourceIds])})`;
     const [row] = await tx
       .select({
-        decisions: sql<number>`greatest(greatest((SELECT reltuples FROM pg_class WHERE oid = 'case_law_decisions'::regclass), 0)::bigint - ${withheldRows}, 0)::int`,
+        decisions: sql<number>`count(*)::int`,
         updatedAt: sql<
           string | null
         >`to_json(max(${caseLawDecisions.updatedAt})) #>> '{}'`,
       })
       .from(caseLawDecisions)
       .where(
-        excludedSourceIds.length === 0
-          ? undefined
-          : notInArray(caseLawDecisions.sourceId, [...excludedSourceIds]),
+        and(
+          eq(caseLawDecisions.country, country),
+          excludedSourceIds.length === 0
+            ? undefined
+            : notInArray(caseLawDecisions.sourceId, [...excludedSourceIds]),
+        ),
       );
 
     return {
@@ -84,8 +95,13 @@ let cached: {
 const EMPTY_STATUS: CaseLawCorpusStatus = { decisions: 0, updatedAt: null };
 
 export const readCaseLawCorpusStatusHandler = async (
+  { country }: ReadCaseLawCorpusStatusQuery,
   caseLawDb: CaseLawPublicReadDb,
-): Promise<CaseLawCorpusStatus> => {
+) => {
+  const publicCountry = publicCaseLawCountry(country);
+  if (publicCountry === null) {
+    return status(404, { message: "Not Found" });
+  }
   // Read ahead of the cache: source policy is an input to the answer, so a
   // revocation changes the key rather than waiting out the window.
   const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
@@ -95,7 +111,7 @@ export const readCaseLawCorpusStatusHandler = async (
     });
     return EMPTY_STATUS;
   }
-  const key = excludedSourceIds.value.toSorted().join(",");
+  const key = `${publicCountry}:${excludedSourceIds.value.toSorted().join(",")}`;
   const now = Temporal.Now.instant().epochMilliseconds;
   if (cached?.key === key && now - cached.readAt < STATUS_CACHE_TTL_MS) {
     return cached.value;
@@ -106,6 +122,7 @@ export const readCaseLawCorpusStatusHandler = async (
       await caseLawDb(
         async (tx) =>
           await readCaseLawCorpusStatusQuery(tx, {
+            country: publicCountry,
             excludedSourceIds: excludedSourceIds.value,
           }),
       ),

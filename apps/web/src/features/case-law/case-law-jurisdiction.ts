@@ -1,45 +1,17 @@
-import type { UiLocale } from "@stll/locales";
-
-/** URL value of the jurisdiction pill meaning "every country in the corpus". */
-export const CASE_LAW_ALL_COUNTRIES = "all";
-
-/**
- * The jurisdiction a reader most likely wants, from the language the UI runs
- * in. Only where the language maps to one legal system the corpus covers; a
- * reader in any other language starts unscoped and picks.
- */
-const DEFAULT_COUNTRY_BY_LOCALE = {
-  ar: null,
-  cs: "CZE",
-  de: null,
-  en: null,
-  es: null,
-  et: null,
-  fr: null,
-  hu: null,
-  lt: null,
-  lv: null,
-  pl: "POL",
-  "pt-BR": null,
-  sk: "SVK",
-} as const satisfies Record<UiLocale, string | null>;
-
-export const defaultCaseLawCountryForLocale = (
-  locale: UiLocale,
-): string | null => DEFAULT_COUNTRY_BY_LOCALE[locale];
+import {
+  CASE_LAW_REGION_BY_COUNTRY,
+  isPublicCaseLawCountry as isSharedPublicCaseLawCountry,
+  PUBLIC_CASE_LAW_COUNTRIES as SHARED_PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
+import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 /**
  * The corpus keys decisions by ISO 3166-1 alpha-3 (plus `EU`); display names
  * come from CLDR, which speaks alpha-2 (and knows `EU` as a region).
  */
-export const REGION_BY_COUNTRY = {
-  CZE: "CZ",
-  EU: "EU",
-  POL: "PL",
-  SVK: "SK",
-} as const satisfies Record<string, string>;
+export const REGION_BY_COUNTRY = CASE_LAW_REGION_BY_COUNTRY;
 
-/** The jurisdictions the public law browsers know, as the corpus keys them. */
+/** The jurisdictions the case-law browser knows, as the corpus keys them. */
 export type CaseLawJurisdiction = keyof typeof REGION_BY_COUNTRY;
 
 const REGIONS: Readonly<Record<string, string>> = REGION_BY_COUNTRY;
@@ -51,6 +23,25 @@ export const caseLawCountryRegion = (country: string): string | null =>
 export const isCaseLawJurisdiction = (
   country: string,
 ): country is CaseLawJurisdiction => Object.hasOwn(REGION_BY_COUNTRY, country);
+
+/** The only case-law countries public search may enumerate or query. */
+export const PUBLIC_CASE_LAW_COUNTRIES = SHARED_PUBLIC_CASE_LAW_COUNTRIES;
+
+export const isPublicCaseLawCountry = (
+  country: string,
+): country is PublicCaseLawCountry =>
+  isCaseLawJurisdiction(country) && isSharedPublicCaseLawCountry(country);
+
+/** Resolve the route form to a launch-ready corpus country. */
+export const publicCaseLawCountryFromParam = (
+  param: string | undefined,
+): PublicCaseLawCountry | null => {
+  if (param === undefined) {
+    return null;
+  }
+  const country = fromCaseLawCountryParam(param);
+  return isPublicCaseLawCountry(country) ? country : null;
+};
 
 /** The URL form of a corpus country code, and back. */
 export const toCaseLawCountryParam = (country: string): string =>

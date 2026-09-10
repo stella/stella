@@ -1,12 +1,13 @@
 import { stellaToast } from "@stll/ui/toast";
 
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
-import { getTranslator } from "@/i18n/i18n-store";
+import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
   createCaseLawDecisionRouteParams,
   decodeCaseLawDecisionRef,
+  defaultCaseLawCountryForLocale,
   isCaseLawDecisionId,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
@@ -53,7 +54,13 @@ const resolveCaseLawDecisionRouteParams = async (
     });
   }
 
+  const country = defaultCaseLawCountryForLocale(getMessageLocale());
+  if (country === null) {
+    return null;
+  }
+
   const response = await api.case.decisions.search.post({
+    country,
     query: decisionRef,
     limit: CASE_LAW_LINK_SEARCH_LIMIT,
   });

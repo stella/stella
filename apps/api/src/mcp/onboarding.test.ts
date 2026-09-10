@@ -492,7 +492,7 @@ describe("empty-result onboarding hints", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { query: "anything" },
+      args: { country: "CZE", query: "anything" },
       context,
       toolName: "search_case_law",
     });
@@ -534,7 +534,7 @@ describe("empty-result onboarding hints", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { query: "shareholder" },
+      args: { country: "CZE", query: "shareholder" },
       context,
       toolName: "search_case_law",
     });
@@ -557,7 +557,7 @@ describe("empty-result onboarding hints", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { query: "shareholder" },
+      args: { country: "CZE", query: "shareholder" },
       context,
       toolName: "search_case_law",
     });

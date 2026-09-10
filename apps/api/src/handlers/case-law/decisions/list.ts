@@ -5,6 +5,8 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -34,7 +36,7 @@ export const listDecisionsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
   court: t.Optional(t.String({ maxLength: 512 })),
-  country: t.Optional(t.String({ maxLength: 3 })),
+  country: t.String({ minLength: 2, maxLength: 3 }),
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),
@@ -121,9 +123,7 @@ const decisionFilterConditions = (
   if (query.court) {
     conditions.push(eq(decision.court, query.court));
   }
-  if (query.country) {
-    conditions.push(eq(decision.country, query.country));
-  }
+  conditions.push(eq(decision.country, query.country));
   if (query.dateFrom) {
     conditions.push(sql`${decision.decisionDate} >= ${query.dateFrom}`);
   }
@@ -146,10 +146,15 @@ export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const country = publicCaseLawCountry(query.country);
+  if (country === null) {
+    return status(404, { message: "Not Found" });
+  }
+  const scopedQuery = { ...query, country };
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const conditions: SQL[] = [
     redistributableCaseLawSource,
-    ...decisionFilterConditions(query, caseLawDecisions),
+    ...decisionFilterConditions(scopedQuery, caseLawDecisions),
   ];
 
   if (query.cursor) {
@@ -211,7 +216,7 @@ export const listDecisionsHandler = async (
                     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
                     sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
                     redistributableCaseLawSourceFor(siblingSource.descriptor),
-                    ...decisionFilterConditions(query, sibling),
+                    ...decisionFilterConditions(scopedQuery, sibling),
                   ),
                 ),
             ),

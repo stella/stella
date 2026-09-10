@@ -46,9 +46,9 @@ if (!databaseUrl || !runPostgresTests) {
         .values({
           sourceId,
           caseNumber: `state-${fulltext === null ? "null" : fulltext.length}-${suffix}`,
-          court: "Okresný súd",
-          country: "SVK",
-          language: "sk",
+          court: "Synthetic court",
+          country: "CZE",
+          language: "cs",
           fulltext,
           documentUrl: "https://example.test/state.pdf",
         })
@@ -82,7 +82,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     beforeAll(async () => {
       const existing = await db.query.caseLawSources.findFirst({
-        where: { adapterKey: { eq: ADAPTER_KEYS.SK_COURTS } },
+        where: { adapterKey: { eq: ADAPTER_KEYS.CZ_REGIONAL } },
         columns: { id: true },
       });
       if (existing) {
@@ -92,8 +92,8 @@ if (!databaseUrl || !runPostgresTests) {
       const [source] = await db
         .insert(caseLawSources)
         .values({
-          adapterKey: ADAPTER_KEYS.SK_COURTS,
-          name: "SK courts read-state test",
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          name: "Public decision read-state test",
           enabled: false,
         })
         .returning({ id: caseLawSources.id });
@@ -130,7 +130,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("a decision with its document is neither", async () => {
       expect(
-        await readState(await insertDecision("Rozsudok\n\nOdôvodnenie.")),
+        await readState(await insertDecision("Decision\n\nReasons.")),
       ).toEqual({ pending: false, unavailable: false });
     });
   });

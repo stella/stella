@@ -695,7 +695,6 @@
     },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
     "searchAskPrompt": "{query} (joggyakorlat, {country})",
-    "searchAskPromptAll": "{query} (joggyakorlat)",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
     "seo": {

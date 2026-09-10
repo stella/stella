@@ -1,16 +1,32 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  publicCaseLawCountry,
+  PUBLIC_CASE_LAW_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import {
   decisionBucketSql,
   decisionMonthSql,
   decisionYearSql,
+  listSitemapShardDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
 import { createSafeId } from "@/api/lib/branded-types";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 // Regression: the sitemap-shard queries render the year/month/bucket fragments
 // into both the SELECT list and the GROUP BY (and ORDER BY). Each drizzle `sql`
@@ -23,6 +39,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+let caseLawDb: CaseLawPublicReadDb;
 
 const sourceId = createSafeId<"caseLawSource">();
 
@@ -30,6 +47,18 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    const readDb = async <T>(
+      read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+    ) =>
+      await withPublicLawReaderRole(db, async (roleTx) => {
+        // SAFETY: the role transaction supplies the select surface the reads use.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+        const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+        return await read(tx);
+      });
+    // SAFETY: brand-only wrapper around the read-role transaction helper.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test database carries the production read boundary
+    caseLawDb = readDb as unknown as CaseLawPublicReadDb;
 
     await db.insert(caseLawSources).values({
       id: sourceId,
@@ -76,6 +105,15 @@ beforeAll(
         language: "cs",
         decisionDate: null,
       },
+      {
+        id: createSafeId<"caseLawDecision">(),
+        sourceId,
+        caseNumber: "synthetic-hidden",
+        court: "Synthetic Court",
+        country: "XAA",
+        language: "xx",
+        decisionDate: "2020-03-15",
+      },
     ]);
   },
   { timeout: 120_000 },
@@ -95,7 +133,12 @@ test("natural-shard query groups by year/month without a GROUP BY mismatch", asy
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(redistributableCaseLawSource)
+    .where(
+      and(
+        redistributableCaseLawSource,
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+      ),
+    )
     .groupBy(caseLawDecisions.country, decisionYearSql, decisionMonthSql)
     .orderBy(
       asc(caseLawDecisions.country),
@@ -127,7 +170,12 @@ test("bucket-shard query groups by the hashed bucket without a GROUP BY mismatch
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(redistributableCaseLawSource)
+    .where(
+      and(
+        redistributableCaseLawSource,
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+      ),
+    )
     .groupBy(
       caseLawDecisions.country,
       decisionYearSql,
@@ -147,4 +195,35 @@ test("bucket-shard query groups by the hashed bucket without a GROUP BY mismatch
   expect(rows.every((row) => row.total === 1)).toBe(true);
   // The bucket is a zero-padded two-character token from the fragment's lpad.
   expect(rows.every((row) => /^[0-9]{2}$/u.test(row.bucket))).toBe(true);
+});
+
+test("sitemap shards reject countries outside the public list", async () => {
+  const unavailable = await listSitemapShardDecisionsHandler(
+    { bucket: "all", country: "xaa", month: "03", year: "2020" },
+    caseLawDb,
+  );
+  if (!("code" in unavailable)) {
+    panic("Expected an unavailable-country response.");
+  }
+  expect(unavailable.code).toBe(404);
+});
+
+test("public list and status reads stay inside the country boundary", async () => {
+  const country =
+    publicCaseLawCountry("CZE") ?? panic("Expected a public test country.");
+  const listed = await listDecisionsHandler({ country, limit: 10 }, caseLawDb);
+  expect("items" in listed).toBe(true);
+  if ("items" in listed) {
+    expect(listed.items).toHaveLength(4);
+    expect(listed.items.every((item) => item.country === country)).toBe(true);
+  }
+
+  const corpusStatus = await caseLawDb(
+    async (tx) =>
+      await readCaseLawCorpusStatusQuery(tx, {
+        country,
+        excludedSourceIds: [],
+      }),
+  );
+  expect(corpusStatus.decisions).toBe(4);
 });

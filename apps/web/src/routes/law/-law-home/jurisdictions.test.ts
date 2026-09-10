@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 
+import { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdiction";
 import { parseStatuteQuery } from "@/features/statutes/statute-query-intent";
 import { STATUTE_COUNTRIES } from "@/lib/statute-route";
 import {
@@ -15,8 +16,10 @@ import {
 const ALL_SCOPES: readonly LawScope[] = ["decisions", "statutes"];
 
 describe("law home jurisdictions", () => {
-  test("every jurisdiction the case-law pill offers has a descriptor", () => {
-    expect(LAW_HOME_JURISDICTION_CODES).toEqual(["CZE", "EU", "POL", "SVK"]);
+  test("every supported case-law jurisdiction has a descriptor", () => {
+    expect(Object.keys(REGION_BY_COUNTRY).toSorted()).toEqual(
+      LAW_HOME_JURISDICTION_CODES.toSorted(),
+    );
   });
 
   test("the statutes scope is exactly the statutes browser's coverage", () => {

@@ -1,4 +1,5 @@
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import { useChatEditorExtensions } from "@/components/chat-editor-provider";
 import type {
@@ -8,8 +9,10 @@ import type {
 import { useMentionProviders } from "@/components/chat-mention-providers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 import {
   PublicLawUnavailableError,
   toPublicLawError,
@@ -23,9 +26,15 @@ const GLOBAL_CHAT_MENTION_CATEGORIES: MentionCategory[] = ["workspace"];
 const CASE_LAW_SEARCH_LIMIT = 5;
 const CASE_LAW_SEARCH_MIN_LENGTH = 2;
 
-const searchCaseLawMentions = async (
-  query: string,
-): Promise<ChatMentionOption[]> => {
+type SearchCaseLawMentionsOptions = {
+  country: PublicCaseLawCountry;
+  query: string;
+};
+
+const searchCaseLawMentions = async ({
+  country,
+  query,
+}: SearchCaseLawMentionsOptions): Promise<ChatMentionOption[]> => {
   const trimmed = query.trim();
   if (
     trimmed.length < CASE_LAW_SEARCH_MIN_LENGTH ||
@@ -35,6 +44,7 @@ const searchCaseLawMentions = async (
   }
 
   const response = await api.case.decisions.search.post({
+    country,
     query: trimmed,
     limit: CASE_LAW_SEARCH_LIMIT,
   });
@@ -71,6 +81,8 @@ export const useGlobalChatMentionRegistration = () => {
   const { registerExtension } = useChatEditorExtensions();
   const mentionProviders = useMentionProviders();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const locale = useI18nStore((state) => state.loadedLang);
+  const country = defaultCaseLawCountryForLocale(locale);
 
   useExternalSyncEffect(() => {
     const unregister = registerExtension(GLOBAL_CHAT_MENTION_EXTENSION_ID, {
@@ -79,9 +91,10 @@ export const useGlobalChatMentionRegistration = () => {
           id: GLOBAL_CHAT_MENTION_EXTENSION_ID,
           getItems: async () =>
             await mentionProviders.getItems(GLOBAL_CHAT_MENTION_CATEGORIES),
-          searchItems: publicLawPreviewEnabled
-            ? searchCaseLawMentions
-            : undefined,
+          searchItems:
+            publicLawPreviewEnabled && country !== null
+              ? async (query) => await searchCaseLawMentions({ country, query })
+              : undefined,
         },
       ],
     });
@@ -89,5 +102,5 @@ export const useGlobalChatMentionRegistration = () => {
     return () => {
       unregister();
     };
-  }, [mentionProviders, publicLawPreviewEnabled, registerExtension]);
+  }, [country, mentionProviders, publicLawPreviewEnabled, registerExtension]);
 };

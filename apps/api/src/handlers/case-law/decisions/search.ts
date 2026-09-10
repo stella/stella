@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   type DecisionQueryIntent,
   parseDecisionQuery,
@@ -144,11 +145,16 @@ export const searchDecisionsHandler = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const country = publicCaseLawCountry(body.country);
+  if (country === null) {
+    return status(404, { message: "Not Found" });
+  }
+  const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
-    return await searchCorpusIndexDecisions(body, caseLawDb);
+    return await searchCorpusIndexDecisions(scopedBody, caseLawDb);
   }
 
-  return await searchPostgresDecisions(body, caseLawDb);
+  return await searchPostgresDecisions(scopedBody, caseLawDb);
 };
 
 const searchPostgresDecisions = async (
@@ -178,9 +184,7 @@ const searchPostgresDecisions = async (
 
   // Optional filters on the decisions table
   const courtFilter = body.court ? sql`AND d.court = ${body.court}` : sql``;
-  const countryFilter = body.country
-    ? sql`AND d.country = ${body.country}`
-    : sql``;
+  const countryFilter = sql`AND d.country = ${body.country}`;
   const dateFromFilter = body.dateFrom
     ? sql`AND d.decision_date >= ${body.dateFrom}`
     : sql``;
@@ -724,9 +728,7 @@ const caseLawSearchRowFilters = (
   if (body.court) {
     filters.push(eq(caseLawDecisions.court, body.court));
   }
-  if (body.country) {
-    filters.push(eq(caseLawDecisions.country, body.country));
-  }
+  filters.push(eq(caseLawDecisions.country, body.country));
   if (body.dateFrom) {
     filters.push(sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`);
   }
@@ -1047,7 +1049,7 @@ const decisionHitsPage = ({
   };
 };
 
-const searchCorpusIndexDecisions = async (
+export const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
@@ -1062,7 +1064,7 @@ const searchCorpusIndexDecisions = async (
     }
   }
 
-  if (body.country !== undefined && !isCorpusIndexJurisdiction(body.country)) {
+  if (!isCorpusIndexJurisdiction(body.country)) {
     return status(400, { message: "Invalid country" });
   }
 
@@ -1076,10 +1078,7 @@ const searchCorpusIndexDecisions = async (
   // candidates the whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
   let pageRowsRead = 0;
-  const grammar =
-    body.country === undefined
-      ? undefined
-      : decisionDocketGrammarForCountry(body.country);
+  const grammar = decisionDocketGrammarForCountry(body.country);
   const intent = parseDecisionQuery(body.query, { grammar });
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {

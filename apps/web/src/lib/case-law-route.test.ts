@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+
 import {
   type CaseLawDecisionSearchHit,
   createCaseLawDecisionRouteParams,
@@ -14,6 +16,7 @@ import {
   normalizeCaseLawLanguageSegment,
   normalizeCaseLawStoredSlug,
   pickCaseLawDecisionHit,
+  resolveCaseLawRouteCountry,
   resolveCaseLawDecisionRouteIdentity,
   shouldUseCaseLawLanguageSegment,
   slugifyCaseLawCaseNumber,
@@ -38,6 +41,19 @@ const caseLawHit = ({
 });
 
 describe("case-law decision routes", () => {
+  test("defaults only an absent public country", () => {
+    const publicCountry = publicCaseLawCountry("CZE");
+    expect(
+      resolveCaseLawRouteCountry({ country: undefined, locale: "cs" }),
+    ).toBe(publicCountry);
+    expect(resolveCaseLawRouteCountry({ country: "cze", locale: "en" })).toBe(
+      publicCountry,
+    );
+    expect(
+      resolveCaseLawRouteCountry({ country: "xaa", locale: "cs" }),
+    ).toBeNull();
+  });
+
   test("routes a decision without a stored slug by id, never by case number", () => {
     expect(slugifyCaseLawCaseNumber("20 Cdo 470/2017")).toBe("20-cdo-470-2017");
     expect(

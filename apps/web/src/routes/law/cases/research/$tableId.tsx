@@ -7,7 +7,12 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  redirect,
+} from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -69,6 +74,7 @@ import type {
   ResearchColumn,
   ResearchTableDetail,
   RunResearchAnswersScope,
+  SavedQueryDecisionFilters,
 } from "@/features/case-law/research/queries";
 import { ResearchQuestionDialog } from "@/features/case-law/research/research-question-dialog";
 import type { ResearchQuestionDraft } from "@/features/case-law/research/research-question-dialog";
@@ -96,6 +102,21 @@ import {
 } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 
+const requireSavedQueryDecisionFilters = (
+  result: SavedQueryDecisionFilters,
+) => {
+  switch (result.status) {
+    case "available":
+      return result.filters;
+    case "unavailable": {
+      notFound({ throw: true });
+      return panic("TanStack Router did not throw a not-found response.");
+    }
+    default:
+      return panic(result satisfies never);
+  }
+};
+
 export const Route = createFileRoute("/law/cases/research/$tableId")({
   beforeLoad: async ({ context: { queryClient }, location }) => {
     const auth = await loadAuthContext(queryClient);
@@ -116,15 +137,16 @@ export const Route = createFileRoute("/law/cases/research/$tableId")({
       queryClient,
       researchTableOptions({ activeOrganizationId, tableId }),
     );
+    const decisionFilters = requireSavedQueryDecisionFilters(
+      savedQueryToDecisionFilters(detail.table.savedQuery),
+    );
     // The rows are the saved query re-run; start it in the loader so the
     // table and its first page arrive in one round.
     await ensureRouteInfiniteQueryData(
       queryClient,
-      decisionsInfiniteOptions(
-        savedQueryToDecisionFilters(detail.table.savedQuery),
-      ),
+      decisionsInfiniteOptions(decisionFilters),
     );
-    return { name: detail.table.name };
+    return { decisionFilters, name: detail.table.name };
   },
   // A member's private working set: never crawled, never shared as a card.
   head: ({ loaderData, params }) =>
@@ -204,10 +226,11 @@ function ResearchTablePage() {
   const { data: detail } = useSuspenseQuery(
     researchTableOptions({ activeOrganizationId, tableId }),
   );
+  const decisionFilters = Route.useLoaderData({
+    select: (data) => data.decisionFilters,
+  });
   const decisionsQuery = useInfiniteQuery(
-    decisionsInfiniteOptions(
-      savedQueryToDecisionFilters(detail.table.savedQuery),
-    ),
+    decisionsInfiniteOptions(decisionFilters),
   );
   const inspector = useInspectorView();
 

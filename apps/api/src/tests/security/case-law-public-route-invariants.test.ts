@@ -41,6 +41,12 @@ const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
 const SEARCH_DECISIONS_SCHEMA_FILE =
   "apps/api/src/handlers/case-law/decisions/search-schema.ts";
+const LATEST_DECISIONS_FILE =
+  "apps/api/src/handlers/case-law/decisions/latest.ts";
+const STATUS_DECISIONS_FILE =
+  "apps/api/src/handlers/case-law/decisions/status.ts";
+const CITATION_GRAPH_FILE =
+  "apps/api/src/handlers/case-law/decisions/citation-graph.ts";
 const LANGUAGE_ALTERNATES_FILE =
   "apps/api/src/lib/case-law/language-alternates.ts";
 const SITEMAP_DECISIONS_FILE =
@@ -50,6 +56,8 @@ const DECISION_PROVISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/list-for-decision.ts";
 const CITING_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/citing-decisions.ts";
+const LAUNCH_READINESS_FILE =
+  "packages/api-contract/src/case-law-launch-readiness.ts";
 
 /**
  * Every route this slice mounts, sorted.
@@ -390,6 +398,37 @@ describe("public case-law route boundary", () => {
 
     expect(source).toContain('const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$"');
     expect(source).toContain("country.toUpperCase()");
+  });
+
+  test("every public case-law read enforces the shared country boundary", async () => {
+    const scopedSources = await Promise.all(
+      [
+        LIST_DECISIONS_FILE,
+        FACETS_DECISIONS_FILE,
+        LATEST_DECISIONS_FILE,
+        SEARCH_DECISIONS_FILE,
+        STATUS_DECISIONS_FILE,
+        CITING_DECISIONS_FILE,
+      ].map(readSource),
+    );
+    for (const source of scopedSources) {
+      expect(source).toContain("publicCaseLawCountry(");
+    }
+
+    const [subject, sitemap, alternates, citations, readiness] =
+      await Promise.all([
+        readPublicSubjectSource(),
+        readSitemapSource(),
+        readLanguageAlternatesSource(),
+        readSource(CITATION_GRAPH_FILE),
+        readSource(LAUNCH_READINESS_FILE),
+      ]);
+    expect(subject).toContain("!isPublicCaseLawCountry(row.country)");
+    for (const source of [sitemap, alternates, citations]) {
+      expect(source).toContain("PUBLIC_CASE_LAW_COUNTRIES");
+    }
+    expect(readiness).toContain("evalSetExists: v.literal(true)");
+    expect(readiness).toContain("lastCensusGreen: v.literal(true)");
   });
 
   test("every public decision surface enforces the redistribution gate", async () => {

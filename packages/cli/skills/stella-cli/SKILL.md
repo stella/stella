@@ -152,7 +152,8 @@ are omitted here.
   - `--decision-id` — Case-law decision ID (string)
 - `stella case-law search`
   - `--query` — Search query (string)
-  - optional: --court, --country, --language, --decision-type, --source-id, --date-from, --date-to
+  - `--country` — Required corpus country code (string)
+  - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
