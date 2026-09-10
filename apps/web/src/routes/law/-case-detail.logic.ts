@@ -177,10 +177,14 @@ const launchReadinessNotFound = (): never => {
   return panic("TanStack Router did not throw a not-found response.");
 };
 
-const ensureLaunchReadyDecision = <T extends { country: string }>(
+const ensureRouteCountryDecision = <T extends { country: string }>(
   decision: T,
+  routeCountry: string,
 ): T => {
-  if (!isPublicCaseLawCountry(decision.country)) {
+  if (
+    !isPublicCaseLawCountry(decision.country) ||
+    decision.country !== routeCountry
+  ) {
     return launchReadinessNotFound();
   }
   return decision;
@@ -244,13 +248,14 @@ export const loadPublicCaseLawDecisionRoute = async ({
   queryClient,
   search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
-  if (publicCaseLawCountryFromParam(params.country) === null) {
+  const routeCountry = publicCaseLawCountryFromParam(params.country);
+  if (routeCountry === null) {
     return launchReadinessNotFound();
   }
 
   const routeDecisionId = extractCaseLawDecisionIdFromIdRouteParam(params.slug);
   if (routeDecisionId) {
-    const decision = ensureLaunchReadyDecision(
+    const decision = ensureRouteCountryDecision(
       await ensurePublicDecision(
         async () =>
           await ensureRouteQueryData(
@@ -258,6 +263,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
             decisionOptions(extractId(routeDecisionId)),
           ),
       ),
+      routeCountry,
     );
     // A decision with a stored slug canonicalises to it; without one the
     // id form is canonical and no redirect happens.
@@ -285,18 +291,23 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const normalizedRouteLanguage = normalizeCaseLawLanguageSegment(
     params.language,
   );
-  const decision = ensureLaunchReadyDecision(
+  const decision = ensureRouteCountryDecision(
     await ensurePublicDecision(
       async () =>
         await ensureRouteQueryData(
           queryClient,
           decisionBySlugOptions(
             params.language === undefined || normalizedRouteLanguage === null
-              ? { slug: params.slug }
-              : { language: normalizedRouteLanguage, slug: params.slug },
+              ? { country: routeCountry, slug: params.slug }
+              : {
+                  country: routeCountry,
+                  language: normalizedRouteLanguage,
+                  slug: params.slug,
+                },
           ),
         ),
     ),
+    routeCountry,
   );
   const canonicalParams = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,

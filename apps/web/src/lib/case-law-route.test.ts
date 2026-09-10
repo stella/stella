@@ -14,6 +14,7 @@ import {
   normalizeCaseLawLanguageSegment,
   normalizeCaseLawStoredSlug,
   pickCaseLawDecisionHit,
+  resolveCaseLawRouteCountry,
   resolveCaseLawDecisionRouteIdentity,
   shouldUseCaseLawLanguageSegment,
   slugifyCaseLawCaseNumber,
@@ -38,6 +39,18 @@ const caseLawHit = ({
 });
 
 describe("case-law decision routes", () => {
+  test("defaults only an absent public country", () => {
+    expect(
+      resolveCaseLawRouteCountry({ country: undefined, locale: "cs" }),
+    ).toBe("CZE");
+    expect(resolveCaseLawRouteCountry({ country: "cze", locale: "en" })).toBe(
+      "CZE",
+    );
+    expect(
+      resolveCaseLawRouteCountry({ country: "xaa", locale: "cs" }),
+    ).toBeNull();
+  });
+
   test("routes a decision without a stored slug by id, never by case number", () => {
     expect(slugifyCaseLawCaseNumber("20 Cdo 470/2017")).toBe("20-cdo-470-2017");
     expect(

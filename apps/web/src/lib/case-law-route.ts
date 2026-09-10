@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import {
   isPublicCaseLawCountry,
+  publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type {
@@ -36,6 +37,20 @@ export const defaultCaseLawCountryForLocale = (
     ? localeCountry
     : (PUBLIC_CASE_LAW_COUNTRIES.at(0) ?? null);
 };
+
+type ResolveCaseLawRouteCountryOptions = {
+  country: string | undefined;
+  locale: UiLocale;
+};
+
+/** Default an absent country, but reject an explicitly unpublished one. */
+export const resolveCaseLawRouteCountry = ({
+  country,
+  locale,
+}: ResolveCaseLawRouteCountryOptions): PublicCaseLawCountry | null =>
+  country === undefined
+    ? defaultCaseLawCountryForLocale(locale)
+    : publicCaseLawCountry(country);
 
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;

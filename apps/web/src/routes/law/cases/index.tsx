@@ -62,7 +62,7 @@ import { getMessageLocale } from "@/i18n/i18n-store";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
-  defaultCaseLawCountryForLocale,
+  resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
@@ -151,9 +151,10 @@ export const Route = createFileRoute("/law/cases/")({
   // no-beforeload-redirect guards against is specific to the client-only
   // _protected subtree.
   beforeLoad: ({ search }) => {
-    const country =
-      publicCaseLawCountryFromParam(search.country) ??
-      defaultCaseLawCountryForLocale(getMessageLocale());
+    const country = resolveCaseLawRouteCountry({
+      country: search.country,
+      locale: getMessageLocale(),
+    });
     if (country === null) {
       notFound({ throw: true });
       return;

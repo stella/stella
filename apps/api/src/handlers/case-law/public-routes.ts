@@ -138,13 +138,15 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
     query: t.Composite([
       readDecisionQuerySchema,
       t.Object({
+        country: t.String({ minLength: 2, maxLength: 3 }),
         language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
       }),
     ]),
   },
   caseLawDb: caseLawPublicReadDb,
-  locate: ({ params: { slug }, query: { language } }) => ({
+  locate: ({ params: { slug }, query: { country, language } }) => ({
     kind: "slug",
+    country,
     slug,
     language,
   }),

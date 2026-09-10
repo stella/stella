@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
@@ -11,6 +13,9 @@ const ABSENT_TEXT_FIELD = {
   reason: "not_published",
   type: "absent",
 } as const;
+
+const PUBLIC_COUNTRY =
+  publicCaseLawCountry("CZE") ?? panic("Expected a public test country.");
 
 type DecisionBySlug = Awaited<
   ReturnType<NonNullable<ReturnType<typeof decisionBySlugOptions>["queryFn"]>>
@@ -63,8 +68,8 @@ const UNPUBLISHED_DECISION = {
 } satisfies DecisionBySlug;
 
 describe("public case-law decision route readiness", () => {
-  test("rejects a route outside the generated country list", () => {
-    expect(
+  test("rejects a route outside the generated country list", async () => {
+    await expect(
       loadPublicCaseLawDecisionRoute({
         params: {
           country: "xaa",
@@ -77,12 +82,15 @@ describe("public case-law decision route readiness", () => {
     ).rejects.toMatchObject({ isNotFound: true });
   });
 
-  test("rejects a fetched decision outside the generated country list", () => {
+  test("rejects a fetched decision outside the generated country list", async () => {
     const queryClient = new QueryClient();
-    const options = decisionBySlugOptions({ slug: "synthetic-decision" });
+    const options = decisionBySlugOptions({
+      country: PUBLIC_COUNTRY,
+      slug: "synthetic-decision",
+    });
     queryClient.setQueryData(options.queryKey, UNPUBLISHED_DECISION);
 
-    expect(
+    await expect(
       loadPublicCaseLawDecisionRoute({
         params: {
           country: "cze",

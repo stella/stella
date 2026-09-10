@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 
 import { api } from "@/lib/api";
@@ -58,11 +59,12 @@ const caseLawDecisionKeys = {
   bySlug: (key: DecisionBySlugKey) => [
     ...caseLawDecisionKeys.all,
     "slug",
-    { language: key.language, slug: key.slug },
+    { country: key.country, language: key.language, slug: key.slug },
   ],
 };
 
 type DecisionBySlugKey = {
+  country: PublicCaseLawCountry;
   language?: string;
   slug: string;
 };
@@ -269,14 +271,21 @@ export const decisionOptions = (decisionId: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
+export const decisionBySlugOptions = ({
+  country,
+  language,
+  slug,
+}: DecisionBySlugKey) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.bySlug(
-      language === undefined ? { slug } : { language, slug },
+      language === undefined ? { country, slug } : { country, language, slug },
     ),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions["by-slug"]({ slug }).get({
-        ...(language !== undefined && { query: { language } }),
+        query: {
+          country,
+          ...(language !== undefined && { language }),
+        },
         fetch: { signal },
       });
 

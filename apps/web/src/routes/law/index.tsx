@@ -68,7 +68,7 @@ import { getMessageLocale } from "@/i18n/i18n-store";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
-  defaultCaseLawCountryForLocale,
+  resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
@@ -155,9 +155,10 @@ export const Route = createFileRoute("/law/")({
   // is a public SSR path: the throw becomes a real HTTP redirect rather than a
   // client-only navigation that would serve crawlers an empty shell.
   beforeLoad: ({ search }) => {
-    const country =
-      publicCaseLawCountryFromParam(search.country) ??
-      defaultCaseLawCountryForLocale(getMessageLocale());
+    const country = resolveCaseLawRouteCountry({
+      country: search.country,
+      locale: getMessageLocale(),
+    });
     if (country === null) {
       notFound({ throw: true });
       return;

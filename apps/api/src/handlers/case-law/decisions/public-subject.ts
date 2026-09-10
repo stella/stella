@@ -23,7 +23,10 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
 
-import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  isPublicCaseLawCountry,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type {
@@ -64,20 +67,33 @@ const subjectOf = (
 /** How a request names its subject. */
 export type DecisionSubjectLocator =
   | { kind: "id"; id: SafeId<"caseLawDecision"> }
-  | { kind: "slug"; slug: string; language: string | undefined };
+  | {
+      kind: "slug";
+      country: string;
+      slug: string;
+      language: string | undefined;
+    };
 
 const locatorCondition = (locator: DecisionSubjectLocator) => {
   switch (locator.kind) {
     case "id":
       return eq(caseLawDecisions.id, locator.id);
     case "slug": {
+      const country = publicCaseLawCountry(locator.country);
       const language = normalizePublicDecisionLanguage(locator.language);
-      if (locator.language !== undefined && language === null) {
+      if (
+        country === null ||
+        (locator.language !== undefined && language === null)
+      ) {
         return null;
       }
       return language === null
-        ? eq(caseLawDecisions.slug, locator.slug)
+        ? and(
+            eq(caseLawDecisions.country, country),
+            eq(caseLawDecisions.slug, locator.slug),
+          )
         : and(
+            eq(caseLawDecisions.country, country),
             eq(caseLawDecisions.slug, locator.slug),
             sql`replace(lower(${caseLawDecisions.language}), '_', '-') = ${language}`,
           );
