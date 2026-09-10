@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
 import {
   exactDecisionMatches,
   parseDecisionQuery,
@@ -87,6 +88,37 @@ describe("reading a case-law box entry", () => {
     );
   });
 
+  test("a scoped entry is claimed only by that jurisdiction's grammar", () => {
+    expect(
+      parseDecisionQuery("C-9999/99", {
+        grammar: DECISION_DOCKET_GRAMMARS.EU,
+      }),
+    ).toMatchObject({
+      type: "identifier",
+      kind: "docket",
+    });
+    expect(
+      parseDecisionQuery("C-9999/99", {
+        grammar: DECISION_DOCKET_GRAMMARS.POL,
+      }),
+    ).toEqual({
+      type: "text",
+      text: "C-9999/99",
+    });
+    expect(parseDecisionQuery("C-9999/99", { grammar: null })).toEqual({
+      type: "text",
+      text: "C-9999/99",
+    });
+    expect(
+      parseDecisionQuery("ECLI:EU:C:2099:999", {
+        grammar: DECISION_DOCKET_GRAMMARS.POL,
+      }),
+    ).toMatchObject({
+      type: "identifier",
+      kind: "ecli",
+    });
+  });
+
   test("prose is text, verbatim", () => {
     const word = fc.stringMatching(/^[a-záčďéěíňóřšťúůýž]{2,12}$/u);
     fc.assert(
@@ -129,6 +161,18 @@ describe("the hits that are the named decision", () => {
     );
     expect(
       exactDecisionMatches("21 Cdo 470/2017-28", [hit("21 Cdo 470/2017")]),
+    ).toHaveLength(1);
+  });
+
+  test("structural separators keep otherwise similar dockets distinct", () => {
+    expect(
+      exactDecisionMatches("G 1/2099", [hit("G 1/2099"), hit("G/1/2099")]),
+    ).toEqual([hit("G 1/2099")]);
+  });
+
+  test("a Polish division split across tokens keeps the same identity", () => {
+    expect(
+      exactDecisionMatches("III AUa 999999/99", [hit("III A Ua 999999/99")]),
     ).toHaveLength(1);
   });
 

@@ -59,6 +59,7 @@ import {
   redistributableSourceJoin,
 } from "@/api/lib/case-law/search-sql";
 import { isUuid } from "@/api/lib/custom-schema";
+import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
   caseLawCorpusProjectionJoin,
@@ -1075,7 +1076,11 @@ const searchCorpusIndexDecisions = async (
   // candidates the whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
   let pageRowsRead = 0;
-  const intent = parseDecisionQuery(body.query);
+  const grammar =
+    body.country === undefined
+      ? undefined
+      : decisionDocketGrammarForCountry(body.country);
+  const intent = parseDecisionQuery(body.query, { grammar });
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
     reportCaseLawSearchCompleted({

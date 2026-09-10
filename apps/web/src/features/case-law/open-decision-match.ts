@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 
+import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
   type DecisionQueryIntent,
   exactDecisionMatches,
@@ -43,10 +44,23 @@ export const caseLawCountryScope = (
     ? undefined
     : fromCaseLawCountryParam(country);
 
+type ReadDecisionIntentOptions = {
+  readonly jurisdiction?: string | undefined;
+};
+
 export const readDecisionIntent = (
   q: string | undefined,
-): DecisionQueryIntent =>
-  q === undefined ? { type: "empty" } : parseDecisionQuery(q);
+  { jurisdiction }: ReadDecisionIntentOptions = {},
+): DecisionQueryIntent => {
+  if (q === undefined) {
+    return { type: "empty" };
+  }
+  const grammar =
+    jurisdiction === undefined
+      ? undefined
+      : decisionDocketGrammarForJurisdiction(jurisdiction);
+  return parseDecisionQuery(q, { grammar });
+};
 
 export const createDecisionFiltersFromSearch = ({
   country,
@@ -56,7 +70,7 @@ export const createDecisionFiltersFromSearch = ({
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
   const normalizedYear = validDecisionYear(year);
-  const intent = readDecisionIntent(q);
+  const intent = readDecisionIntent(q, { jurisdiction: scope });
 
   return {
     ...(scope === undefined ? {} : { country: scope }),
@@ -92,7 +106,9 @@ export const openDecisionMatch = async ({
   search,
   uiLocale,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
-  const intent = readDecisionIntent(search.q);
+  const intent = readDecisionIntent(search.q, {
+    jurisdiction: caseLawCountryScope(search.country),
+  });
   if (intent.type !== "identifier") {
     return false;
   }
