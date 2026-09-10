@@ -30,7 +30,6 @@ export const createSMTPTransport = (
     });
   }
 
-  const hasAuth = config.username && config.password;
   const implicitTLS = config.port === 465;
 
   const transporter = createTransport({
@@ -41,12 +40,14 @@ export const createSMTPTransport = (
     greetingTimeout: 10_000,
     socketTimeout: 10_000,
     ...(!implicitTLS && config.requireTLS && { requireTLS: true }),
-    ...(hasAuth && {
-      auth: {
-        user: config.username,
-        pass: config.password,
-      },
-    }),
+    ...(config.username && config.password
+      ? {
+          auth: {
+            user: config.username,
+            pass: config.password,
+          },
+        }
+      : {}),
   });
 
   return {
