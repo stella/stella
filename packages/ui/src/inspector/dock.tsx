@@ -115,7 +115,7 @@ export const InspectorDock = ({
             />
             <span
               aria-hidden="true"
-              className="bg-sidebar text-muted-foreground group-hover:text-foreground group-focus-visible:text-foreground relative flex size-4 items-center justify-center rounded-full"
+              className="bg-sidebar text-muted-foreground group-hover:border-primary/40 group-hover:bg-accent group-hover:text-foreground group-focus-visible:border-primary/40 group-focus-visible:bg-accent group-focus-visible:text-foreground relative flex h-7 w-4 items-center justify-center rounded-full border shadow-xs transition-colors"
               data-slot="inspector-resize-grip"
             >
               <EllipsisIcon className="size-3.5 rotate-90" />
