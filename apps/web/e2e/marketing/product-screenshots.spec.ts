@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 
+import {
+  isPublicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
+
 import { setFixedBrowserTime } from "../helpers/clock";
 
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
@@ -69,6 +73,7 @@ const captures = [
   {
     name: "story-public-data-1",
     prepare: "open-decision",
+    country: "CZE",
     decisionText: "IV.ÚS 1394/24",
     readyText: "Case Law",
     clip: { x: 0, y: 0, width: 1440, height: 760 },
@@ -76,6 +81,7 @@ const captures = [
   {
     name: "story-public-data-2",
     prepare: "open-decision",
+    country: "POL",
     decisionText: "IV C 1273/16",
     readyText: "Case Law",
     clip: { x: 0, y: 0, width: 1440, height: 760 },
@@ -83,6 +89,7 @@ const captures = [
   {
     name: "story-public-data-3",
     prepare: "open-decision",
+    country: "SVK",
     decisionText: "25Cbr/166/2024",
     readyText: "Case Law",
     clip: { x: 0, y: 0, width: 1440, height: 760 },
@@ -115,6 +122,7 @@ const captures = [
   {
     name: "public-data",
     prepare: "open-decision",
+    country: "CZE",
     decisionText: "IV.ÚS 1394/24",
     readyText: "Case Law",
   },
@@ -189,12 +197,16 @@ test("capture landing product screenshots", async ({
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
-      // A decision capture searches for its own decision: `/law/cases` with
-      // nothing to show results for redirects to the home, and only a
-      // searched decision is deterministically on screen.
+      if ("country" in capture && !isPublicCaseLawCountry(capture.country)) {
+        continue;
+      }
+      // A decision capture searches through its country route so only a
+      // matching decision is deterministically on screen.
       const searchedPath =
         "decisionText" in capture
-          ? `/law/cases?q=${encodeURIComponent(capture.decisionText)}`
+          ? `/law/${capture.country.toLowerCase()}/cases?q=${encodeURIComponent(
+              capture.decisionText,
+            )}`
           : undefined;
       const declaredPath = "path" in capture ? capture.path : agentThreadPath;
       const capturePath = searchedPath ?? declaredPath;
