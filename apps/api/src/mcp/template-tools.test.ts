@@ -3644,7 +3644,7 @@ describe("MCP template tools", () => {
           {
             path: "company",
             label: "Company",
-            date_format: "not-a-date-format",
+            date_format: "not a date format",
           },
           { path: "signed_on", date_format: "en-GB-short" },
         ],

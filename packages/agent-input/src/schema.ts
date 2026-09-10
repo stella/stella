@@ -443,9 +443,10 @@ const walkSchema = ({
       if (annotation.invalidValueDisposition === "handler-owned") {
         return { status: "not-applicable" };
       }
+      const { expected, hint, received } = normalized;
       return {
         status: "invalid",
-        issues: [{ path, ...normalized }],
+        issues: [{ path, received, expected, hint }],
       };
     }
     return {

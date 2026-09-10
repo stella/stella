@@ -135,10 +135,11 @@ export const withNullOptionalsOmitted = (
     ) {
       continue;
     }
-    present[key] = childSchemas.reduce(
-      (current, childSchema) => withNullOptionalsOmitted(childSchema, current),
-      entry,
-    );
+    let current = entry;
+    for (const childSchema of childSchemas) {
+      current = withNullOptionalsOmitted(childSchema, current);
+    }
+    present[key] = current;
   }
   return present;
 };

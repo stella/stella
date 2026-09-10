@@ -171,8 +171,8 @@ describe("normalizeAgentInput", () => {
         invalidValueDisposition: "handler-owned",
       },
     };
-    expect(normalizeAgentInput({ schema, value: "not-a-date-format" })).toEqual(
-      { ok: true, value: "not-a-date-format", notes: [] },
+    expect(normalizeAgentInput({ schema, value: "not a date format" })).toEqual(
+      { ok: true, value: "not a date format", notes: [] },
     );
     expect(normalizeAgentInput({ schema, value: "en-GB-short" })).toMatchObject(
       {
