@@ -599,10 +599,11 @@ const validatePart = ({
   // exactly as it would from a client that omitted the property.
   const withDefaults = Value.Default(schema, normalized.value);
   const coerced = Value.Convert(schema, withDefaults);
+  const beforeClean = structuredClone(coerced);
   const cleaned = Value.Clean(schema, coerced);
   const removedIssues = findRemovedInputIssues({
     allowedRemovedPaths,
-    before: normalized.value,
+    before: beforeClean,
     after: cleaned,
     path: part,
   });
