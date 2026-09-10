@@ -157,10 +157,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           {renderState.status === "pending" ? (
             <ChatContextMeter status="pending" />
           ) : (
-            <ChatContextMeter
-              status="ready"
-              usage={renderState.data.context}
-            />
+            <ChatContextMeter status="ready" usage={renderState.data.context} />
           )}
         </div>
       }
