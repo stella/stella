@@ -4750,6 +4750,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
+      "attachedTemplateUpload": {
+        "confirm": "Hivatkozás eltávolítása és feltöltés",
+        "description": "{count, plural, one {Ez a fájl a dokumentumon kívüli Word-sablonra mutató hivatkozást tartalmaz.} other {Ezek a fájlok a dokumentumokon kívüli Word-sablonokra mutató hivatkozásokat tartalmaznak.}} A stella nem tölti fel őket változatlanul, mert a Word ezeken keresztül tartalmat vagy makrókat tölthet be.",
+        "effect": "Folytatáskor csak a feltöltött példányból távolítjuk el a sablonhivatkozást. Az eszközön lévő eredeti fájl nem változik.",
+        "localLocation": "A sablon helye: helyi fájlútvonal ezen a dokumentumon kívül",
+        "mixedLocation": "A sablonok helye: többféle külső útvonal",
+        "networkLocation": "A sablon helye: hálózati vagy internetes cím",
+        "ruleLabel": "Biztonsági szabály:",
+        "title": "Eltávolítja a Word-sablonok hivatkozásait?",
+        "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
+      },
       "defaultPropertyName": "Dokumentumok",
       "desktopEdit": {
         "action": "Szerkesztés az asztali alkalmazásban",

@@ -4750,6 +4750,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
+      "attachedTemplateUpload": {
+        "confirm": "Supprimer le lien et importer",
+        "description": "{count, plural, one {Ce fichier contient un lien vers un modèle Word externe au document.} other {Ces fichiers contiennent des liens vers des modèles Word externes aux documents.}} stella ne les importera pas tels quels, car Word peut charger du contenu ou des macros via ces liens.",
+        "effect": "En continuant, seul le lien vers le modèle est supprimé de la copie importée. Le fichier d’origine sur votre appareil n’est pas modifié.",
+        "localLocation": "Emplacement du modèle : un chemin de fichier local externe à ce document",
+        "mixedLocation": "Emplacements des modèles : plusieurs types de chemins externes",
+        "networkLocation": "Emplacement du modèle : une adresse réseau ou Internet",
+        "ruleLabel": "Règle de sécurité :",
+        "title": "Supprimer les liens vers des modèles Word ?",
+        "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
+      },
       "defaultPropertyName": "Documents",
       "desktopEdit": {
         "action": "Modifier dans l’app de bureau",

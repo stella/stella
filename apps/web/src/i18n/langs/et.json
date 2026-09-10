@@ -4750,6 +4750,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",
+      "attachedTemplateUpload": {
+        "confirm": "Eemalda link ja laadi üles",
+        "description": "{count, plural, one {See fail sisaldab linki väljaspool dokumenti asuvale Wordi mallile.} other {Need failid sisaldavad linke väljaspool dokumente asuvatele Wordi mallidele.}} stella ei laadi neid muutmata üles, sest Word võib nende linkide kaudu sisu või makrosid laadida.",
+        "effect": "Jätkamisel eemaldatakse mallilink ainult üleslaaditavast koopiast. Teie seadmes olev algne fail ei muutu.",
+        "localLocation": "Malli asukoht: kohalik failitee väljaspool seda dokumenti",
+        "mixedLocation": "Mallide asukohad: mitut liiki välised teed",
+        "networkLocation": "Malli asukoht: võrgu- või internetiaadress",
+        "ruleLabel": "Turbereegel:",
+        "title": "Kas eemaldada Wordi mallide lingid?",
+        "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
+      },
       "defaultPropertyName": "Dokumendid",
       "desktopEdit": {
         "action": "Muuda töölauarakenduses",

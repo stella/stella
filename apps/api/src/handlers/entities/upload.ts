@@ -45,6 +45,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import {
   allocateFileObject,
@@ -866,16 +867,14 @@ const uploadEntityHandler = async function* ({
   }
 
   if (scanResult.value.verdict === "reject") {
-    const reasons: string[] = [];
-    for (const f of scanResult.value.findings) {
-      if (f.severity === "reject") {
-        reasons.push(f.message);
-      }
+    const rejection = fileSecurityRejection(scanResult.value);
+    if (rejection === null) {
+      panic("Rejecting scan had no rejecting findings");
     }
     return Result.err(
       new HandlerError({
+        ...rejection,
         status: 422,
-        message: `File rejected: ${reasons.join("; ")}`,
       }),
     );
   }

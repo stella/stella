@@ -4750,6 +4750,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",
+      "attachedTemplateUpload": {
+        "confirm": "Verknüpfung entfernen und hochladen",
+        "description": "{count, plural, one {Diese Datei enthält eine Verknüpfung zu einer Word-Vorlage außerhalb des Dokuments.} other {Diese Dateien enthalten Verknüpfungen zu Word-Vorlagen außerhalb der Dokumente.}} stella lädt sie nicht unverändert hoch, da Word über diese Verknüpfungen Inhalte oder Makros laden kann.",
+        "effect": "Beim Fortfahren wird nur die Vorlagenverknüpfung aus der hochgeladenen Kopie entfernt. Die Originaldatei auf Ihrem Gerät bleibt unverändert.",
+        "localLocation": "Vorlagenspeicherort: ein lokaler Dateipfad außerhalb dieses Dokuments",
+        "mixedLocation": "Vorlagenspeicherorte: mehrere Arten externer Pfade",
+        "networkLocation": "Vorlagenspeicherort: eine Netzwerk- oder Internetadresse",
+        "ruleLabel": "Sicherheitsregel:",
+        "title": "Word-Vorlagenverknüpfungen entfernen?",
+        "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
+      },
       "defaultPropertyName": "Dokumente",
       "desktopEdit": {
         "action": "Im Desktop bearbeiten",

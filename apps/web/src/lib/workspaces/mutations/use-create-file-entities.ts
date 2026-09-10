@@ -18,6 +18,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
+import {
+  ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
+  preflightAttachedTemplateUpload,
+} from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
 import { toSafeId } from "@/lib/safe-id";
@@ -668,6 +672,31 @@ const hasUploadInputItems = (input: CreateFileEntitiesInput): boolean => {
 const uploadInputFiles = (input: CreateFileEntitiesInput): File[] =>
   "tree" in input ? input.tree.files.map(({ file }) => file) : [...input.files];
 
+const withUploadInputFileReplacements = (
+  input: CreateFileEntitiesInput,
+  replacements: ReadonlyMap<File, File>,
+): CreateFileEntitiesInput => {
+  if ("tree" in input) {
+    return {
+      tree: {
+        files: input.tree.files.map(({ file, pathSegments }) => ({
+          file: replacements.get(file) ?? file,
+          pathSegments,
+        })),
+        directoryPaths: input.tree.directoryPaths,
+      },
+      parentId: input.parentId,
+      referenceCheck: input.referenceCheck,
+    };
+  }
+
+  return {
+    files: input.files.map((file) => replacements.get(file) ?? file),
+    parentId: input.parentId,
+    referenceCheck: input.referenceCheck,
+  };
+};
+
 /**
  * The same upload minus the files the user chose to file as versions. A
  * dropped folder keeps its directories: they are created whether or not any
@@ -846,10 +875,9 @@ export const useCreateFileEntities = (workspaceId: string) => {
     });
   };
 
-  const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
-    if (isPending || !hasUploadInputItems(input)) {
-      return;
-    }
+  const continueAfterAttachedTemplateCheck = (
+    input: CreateFileEntitiesInput,
+  ) => {
     if (input.referenceCheck === REFERENCE_CHECK.skip) {
       mutate(input);
       return;
@@ -857,6 +885,38 @@ export const useCreateFileEntities = (workspaceId: string) => {
     detached(
       createFileEntitiesAfterReferenceCheck(input),
       "use-create-file-entities.reference-check",
+    );
+  };
+
+  const createFileEntitiesAfterAttachedTemplateCheck = async (
+    input: CreateFileEntitiesInput,
+  ): Promise<void> => {
+    const preflight = await preflightAttachedTemplateUpload(
+      uploadInputFiles(input),
+    );
+    switch (preflight.type) {
+      case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
+        return;
+      case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
+        continueAfterAttachedTemplateCheck(
+          withUploadInputFileReplacements(input, preflight.replacements),
+        );
+        return;
+      default:
+        preflight satisfies never;
+        return panic(
+          `Unhandled attached-template preflight: ${String(preflight)}`,
+        );
+    }
+  };
+
+  const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
+    if (isPending || !hasUploadInputItems(input)) {
+      return;
+    }
+    detached(
+      createFileEntitiesAfterAttachedTemplateCheck(input),
+      "use-create-file-entities.attached-template-check",
     );
   };
 

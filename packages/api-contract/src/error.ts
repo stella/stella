@@ -1,5 +1,34 @@
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
+export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
+  "file_security_rejected" as const;
+
+export const FILE_SECURITY_REMEDIATION = {
+  removeAttachedTemplate: "remove_attached_template",
+} as const;
+
+export type FileSecurityRemediation =
+  (typeof FILE_SECURITY_REMEDIATION)[keyof typeof FILE_SECURITY_REMEDIATION];
+
+export type ApiFileSecurityIssue = {
+  code: string;
+  message: string;
+  path: "file";
+  remediation?: FileSecurityRemediation | undefined;
+};
+
+export type ApiFileSecurityRejection = {
+  code: typeof API_FILE_SECURITY_REJECTED_ERROR_CODE;
+  hint: string;
+  issues: ApiFileSecurityIssue[];
+  message: string;
+};
+
+export type ApiFileSecurityRejectionDetails = Omit<
+  ApiFileSecurityRejection,
+  "message"
+>;
+
 /**
  * Machine-readable `code` on the 409 an optimistic-concurrency check returns
  * when the record moved under the caller. Shared so the handler that emits it

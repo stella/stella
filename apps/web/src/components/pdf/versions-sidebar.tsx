@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   CheckIcon,
   DownloadIcon,
@@ -40,7 +40,10 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys } from "@/lib/files/queries";
-import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
+import {
+  ENTITY_VERSION_UPLOAD_RESULT,
+  uploadEntityVersion,
+} from "@/lib/files/upload-entity-version";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -236,9 +239,17 @@ export const VersionsSidebar = ({
   const handleUploadVersion = async (file: File) => {
     setIsUploading(true);
     try {
-      await uploadEntityVersion({ workspaceId, entityId, file });
-
-      await invalidateVersions();
+      const result = await uploadEntityVersion({ workspaceId, entityId, file });
+      switch (result.type) {
+        case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
+          return;
+        case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
+          await invalidateVersions();
+          return;
+        default:
+          result satisfies never;
+          panic(`Unhandled entity version upload: ${String(result)}`);
+      }
     } finally {
       setIsUploading(false);
     }

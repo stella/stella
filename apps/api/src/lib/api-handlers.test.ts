@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import type { ApiFileSecurityIssue } from "@stll/api-contract";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -429,6 +432,39 @@ describe("a mapped status survives the transport wrapper", () => {
       status: 503,
       message: "Search is temporarily unavailable",
     });
+
+  test("preserves actionable hints and issues on safe error responses", async () => {
+    const issues: ApiFileSecurityIssue[] = [
+      {
+        code: "ooxml_attached_template",
+        message: "Document contains an external Word template link",
+        path: "file",
+        remediation: "remove_attached_template",
+      },
+    ];
+    const response = await runEndpoint(async function* () {
+      return Result.err(
+        new HandlerError({
+          code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+          status: 422,
+          message: "File rejected by a security rule",
+          hint: "Remove the attached template link and upload again.",
+          issues,
+        }),
+      );
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(422);
+    expect(response.response).toEqual({
+      code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+      message: "File rejected by a security rule",
+      hint: "Remove the attached template link and upload again.",
+      issues,
+    });
+  });
 
   // Result.tryPromise answers a throw with UnhandledException, so an upstream
   // status mapped deep inside the wrapped call reaches the boundary nested.

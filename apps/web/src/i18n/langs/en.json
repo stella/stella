@@ -4750,6 +4750,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files",
+      "attachedTemplateUpload": {
+        "confirm": "Remove link and upload",
+        "description": "{count, plural, one {This file contains a link to a Word template outside the document.} other {These files contain links to Word templates outside the documents.}} stella blocks unchanged uploads because Word can load content or macros through these links.",
+        "effect": "Continuing removes only the template link from the uploaded copy. The original file on your device is not changed.",
+        "localLocation": "Template location: a local file path outside this document",
+        "mixedLocation": "Template locations: more than one kind of external path",
+        "networkLocation": "Template location: a network or internet address",
+        "ruleLabel": "Security rule:",
+        "title": "Remove Word template links?",
+        "unknownLocation": "Template location: an address stella cannot verify"
+      },
       "defaultPropertyName": "Documents",
       "desktopEdit": {
         "action": "Edit in desktop",
