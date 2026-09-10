@@ -59,6 +59,7 @@ import {
   useSidebar,
   useSidebarInlineSize,
 } from "@/components/sidebar";
+import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-template-upload-dialog";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
@@ -404,6 +405,7 @@ function ProtectedComponent() {
                 <Outlet />
               </WorkspaceFrame>
               <CreateMatterDialog />
+              <AttachedTemplateUploadDialog />
               <DocumentReferenceUploadDialog />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />

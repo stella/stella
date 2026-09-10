@@ -38,6 +38,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -282,7 +283,13 @@ const finalizeUpload = createSafeHandler(
         });
       }
       return Result.err(
-        new HandlerError({ status: error.status, message: error.message }),
+        new HandlerError({
+          status: error.status,
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          issues: error.issues,
+        }),
       );
     }
 
@@ -449,17 +456,15 @@ const runFinalize = async function* ({
     );
   }
   if (scanResult.value.verdict === "reject") {
-    const reasons: string[] = [];
-    for (const finding of scanResult.value.findings) {
-      if (finding.severity === "reject") {
-        reasons.push(finding.message);
-      }
+    const rejection = fileSecurityRejection(scanResult.value);
+    if (rejection === null) {
+      panic("Rejecting scan had no rejecting findings");
     }
     return Result.err(
       new UploadFinalizeError({
+        ...rejection,
         status: 422,
-        message: `File rejected: ${reasons.join("; ")}`,
-        rejectReason: reasons.join("; "),
+        rejectReason: rejection.message,
       }),
     );
   }

@@ -35,6 +35,7 @@ import type {
   HandlerErrorConfirmationDetail,
   HandlerErrorMissingRequiredField,
   HandlerErrorStatusCode,
+  HandlerErrorValidationIssue,
 } from "@/api/lib/errors/tagged-errors";
 import {
   errorFingerprint,
@@ -440,6 +441,10 @@ type SafeHandlerError =
 type SafeErrorBody = {
   code?: HandlerErrorCode;
   message: string;
+  /** Corrective next step for programmatic clients. */
+  hint?: string;
+  /** Field-scoped reasons the request was rejected. */
+  issues?: HandlerErrorValidationIssue[];
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -1175,6 +1180,8 @@ const createSafeDirectHandler = <
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
+  ...(error.hint ? { hint: error.hint } : {}),
+  ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage

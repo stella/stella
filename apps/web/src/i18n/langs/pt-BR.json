@@ -4727,6 +4727,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Adicione uma propriedade de arquivo para fazer upload de arquivos",
+      "attachedTemplateUpload": {
+        "confirm": "Remover link e enviar",
+        "description": "{count, plural, one {Este arquivo contém um link para um modelo do Word fora do documento.} other {Estes arquivos contêm links para modelos do Word fora dos documentos.}} A stella não os enviará sem alterações porque o Word pode carregar conteúdo ou macros por esses links.",
+        "effect": "Ao continuar, somente o link do modelo é removido da cópia enviada. O arquivo original no seu dispositivo não é alterado.",
+        "localLocation": "Local do modelo: um caminho de arquivo local fora deste documento",
+        "mixedLocation": "Locais dos modelos: mais de um tipo de caminho externo",
+        "networkLocation": "Local do modelo: um endereço de rede ou da Internet",
+        "ruleLabel": "Regra de segurança:",
+        "title": "Remover links para modelos do Word?",
+        "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
+      },
       "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar no desktop",

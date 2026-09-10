@@ -11,3 +11,13 @@ export {
   ensureContentType,
   ensureRelationship,
 } from "./relationships.ts";
+export {
+  ATTACHED_TEMPLATE_SECURITY_RULE,
+  ATTACHED_TEMPLATE_TARGET_KIND,
+  classifyAttachedTemplateTarget,
+  relationshipSourcePartPath,
+  sanitizeAttachedTemplateRelationships,
+  sanitizeAttachedTemplateSource,
+  type AttachedTemplateRelationshipFinding,
+  type AttachedTemplateTargetKind,
+} from "./attached-template.ts";

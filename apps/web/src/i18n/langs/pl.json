@@ -4727,6 +4727,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",
+      "attachedTemplateUpload": {
+        "confirm": "Usuń łącze i prześlij",
+        "description": "{count, plural, one {Ten plik zawiera łącze do szablonu programu Word znajdującego się poza dokumentem.} few {Te pliki zawierają łącza do szablonów programu Word znajdujących się poza dokumentami.} many {Te pliki zawierają łącza do szablonów programu Word znajdujących się poza dokumentami.} other {Te pliki zawierają łącza do szablonów programu Word znajdujących się poza dokumentami.}} stella blokuje przesyłanie bez zmian, ponieważ program Word może przez te łącza wczytać zawartość lub makra.",
+        "effect": "Kontynuowanie usuwa łącze do szablonu tylko z przesyłanej kopii. Oryginalny plik na urządzeniu nie zostanie zmieniony.",
+        "localLocation": "Lokalizacja szablonu: lokalna ścieżka pliku poza tym dokumentem",
+        "mixedLocation": "Lokalizacje szablonów: różne rodzaje ścieżek zewnętrznych",
+        "networkLocation": "Lokalizacja szablonu: adres sieciowy lub internetowy",
+        "ruleLabel": "Reguła bezpieczeństwa:",
+        "title": "Usunąć łącza do szablonów programu Word?",
+        "unknownLocation": "Lokalizacja szablonu: adres, którego stella nie może zweryfikować"
+      },
       "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Edytuj w aplikacji desktopowej",

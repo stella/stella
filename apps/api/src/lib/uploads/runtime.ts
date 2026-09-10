@@ -9,6 +9,8 @@
  */
 import { Result, TaggedError } from "better-result";
 
+import type { ApiFileSecurityIssue } from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -63,8 +65,11 @@ export const sha256Base64ToHex = (base64: string): string =>
   Buffer.from(base64, "base64").toString("hex");
 
 export class UploadFinalizeError extends TaggedError("UploadFinalizeError")<{
+  code?: string;
   status: 400 | 404 | 409 | 422 | 500;
   message: string;
+  hint?: string;
+  issues?: ApiFileSecurityIssue[];
   /** Optional reason persisted on the pending_uploads row. */
   rejectReason?: string;
 }> {}

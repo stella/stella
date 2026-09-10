@@ -4727,6 +4727,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",
+      "attachedTemplateUpload": {
+        "confirm": "Odebrat odkaz a nahrát",
+        "description": "{count, plural, one {Tento soubor obsahuje odkaz na vzor Wordu mimo dokument.} few {Tyto soubory obsahují odkazy na vzory Wordu mimo dokumenty.} other {Tyto soubory obsahují odkazy na vzory Wordu mimo dokumenty.}} stella blokuje nahrání beze změn, protože Word může přes tyto odkazy načíst obsah nebo makra.",
+        "effect": "Pokračováním se odkaz na vzor odebere pouze z nahrávané kopie. Původní soubor ve vašem zařízení se nezmění.",
+        "localLocation": "Umístění vzoru: místní cesta k souboru mimo tento dokument",
+        "mixedLocation": "Umístění vzorů: více druhů externích cest",
+        "networkLocation": "Umístění vzoru: síťová nebo internetová adresa",
+        "ruleLabel": "Bezpečnostní pravidlo:",
+        "title": "Odebrat odkazy na vzory Wordu?",
+        "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
+      },
       "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upravit v desktopu",

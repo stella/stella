@@ -720,6 +720,7 @@
       "version": "0.1.1",
       "dependencies": {
         "jszip": "catalog:",
+        "slimdom": "^4.3.5",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",

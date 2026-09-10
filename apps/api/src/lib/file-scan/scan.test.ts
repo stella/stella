@@ -752,7 +752,7 @@ describe("ooxml threats", () => {
     expect(r.findings.some((f) => f.rule.includes("ooxml_ole"))).toBe(true);
   });
 
-  test("DOCX with remote template reference → reject", async () => {
+  test("DOCX with network template reference → reject with the structural rule", async () => {
     const buffer = await makeThreatDocx({
       relsXml:
         '<?xml version="1.0"?>' +
@@ -769,9 +769,61 @@ describe("ooxml threats", () => {
       }),
     );
     expect(r.verdict).toBe("reject");
+    expect(r.findings.some((f) => f.rule === "ooxml_attached_template")).toBe(
+      true,
+    );
+  });
+
+  test("DOCX with a local attached template → reject without calling it remote", async () => {
+    const buffer = await makeThreatDocx({
+      relsXml:
+        '<?xml version="1.0"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" ' +
+        'Target="file:///C:\\Users\\person\\Template\\Contract.dotx" TargetMode="External"/>' +
+        "</Relationships>",
+    });
+    const result = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "local-template.docx",
+      }),
+    );
+
+    expect(result.verdict).toBe("reject");
+    expect(result.findings).toContainEqual({
+      rule: "ooxml_attached_template",
+      severity: "reject",
+      message:
+        "Document contains an external Word template link " +
+        "(potential template injection)",
+    });
+  });
+
+  test("attachedTemplate text and an unrelated HTTP namespace do not correlate across parts", async () => {
+    const buffer = await makeThreatDocx({
+      extraFiles: {
+        "word/settings.xml":
+          '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+          '<w:compat/><w:docVar w:name="attachedTemplate" w:val="off"/>' +
+          "</w:settings>",
+      },
+    });
+    const result = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "unrelated-text.docx",
+      }),
+    );
+
     expect(
-      r.findings.some((f) => f.rule.includes("ooxml_remote_template")),
-    ).toBe(true);
+      result.findings.some((finding) =>
+        finding.rule.includes("attached_template"),
+      ),
+    ).toBe(false);
   });
 });
 
