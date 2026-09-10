@@ -87,6 +87,31 @@ describe("reading a case-law box entry", () => {
     );
   });
 
+  test("a scoped entry is claimed only by that jurisdiction's grammar", () => {
+    expect(
+      parseDecisionQuery("C-9999/99", { jurisdiction: "EU" }),
+    ).toMatchObject({
+      type: "identifier",
+      kind: "docket",
+    });
+    expect(parseDecisionQuery("C-9999/99", { jurisdiction: "POL" })).toEqual({
+      type: "text",
+      text: "C-9999/99",
+    });
+    expect(
+      parseDecisionQuery("C-9999/99", { jurisdiction: "unknown" }),
+    ).toEqual({
+      type: "text",
+      text: "C-9999/99",
+    });
+    expect(
+      parseDecisionQuery("ECLI:EU:C:2099:999", { jurisdiction: "POL" }),
+    ).toMatchObject({
+      type: "identifier",
+      kind: "ecli",
+    });
+  });
+
   test("prose is text, verbatim", () => {
     const word = fc.stringMatching(/^[a-záčďéěíňóřšťúůýž]{2,12}$/u);
     fc.assert(

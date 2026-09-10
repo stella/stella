@@ -1075,7 +1075,9 @@ const searchCorpusIndexDecisions = async (
   // candidates the whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
   let pageRowsRead = 0;
-  const intent = parseDecisionQuery(body.query);
+  const intent = parseDecisionQuery(body.query, {
+    jurisdiction: body.country,
+  });
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
     reportCaseLawSearchCompleted({

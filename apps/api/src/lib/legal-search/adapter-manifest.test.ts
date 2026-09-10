@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { Temporal, parsePlainDate } from "@stll/time";
 
 import {
@@ -21,6 +22,9 @@ describe("case-law adapter manifests", () => {
   test("carry valid bounded source facts", () => {
     for (const manifest of Object.values(ADAPTER_MANIFESTS)) {
       expect(manifest.name.trim().length).toBeGreaterThan(0);
+      expect(manifest.identifierGrammar).toBe(
+        DECISION_DOCKET_GRAMMARS[manifest.country],
+      );
       const from = parsePlainDate(manifest.dateRange.fromInclusive);
       expect(from).not.toBeNull();
       if (from === null) {

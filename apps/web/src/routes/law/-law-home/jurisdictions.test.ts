@@ -51,10 +51,10 @@ describe("law home jurisdictions", () => {
   test("every decision example parses as an identifier", () => {
     for (const code of LAW_HOME_JURISDICTION_CODES) {
       for (const example of LAW_HOME_JURISDICTIONS[code].examples.decisions) {
-        expect({ example, type: parseDecisionQuery(example).type }).toEqual({
+        expect({
           example,
-          type: "identifier",
-        });
+          type: parseDecisionQuery(example, { jurisdiction: code }).type,
+        }).toEqual({ example, type: "identifier" });
       }
     }
   });

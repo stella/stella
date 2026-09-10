@@ -43,10 +43,15 @@ export const caseLawCountryScope = (
     ? undefined
     : fromCaseLawCountryParam(country);
 
+type ReadDecisionIntentOptions = {
+  readonly jurisdiction?: string | undefined;
+};
+
 export const readDecisionIntent = (
   q: string | undefined,
+  { jurisdiction }: ReadDecisionIntentOptions = {},
 ): DecisionQueryIntent =>
-  q === undefined ? { type: "empty" } : parseDecisionQuery(q);
+  q === undefined ? { type: "empty" } : parseDecisionQuery(q, { jurisdiction });
 
 export const createDecisionFiltersFromSearch = ({
   country,
@@ -56,7 +61,7 @@ export const createDecisionFiltersFromSearch = ({
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
   const normalizedYear = validDecisionYear(year);
-  const intent = readDecisionIntent(q);
+  const intent = readDecisionIntent(q, { jurisdiction: scope });
 
   return {
     ...(scope === undefined ? {} : { country: scope }),
@@ -92,7 +97,9 @@ export const openDecisionMatch = async ({
   search,
   uiLocale,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
-  const intent = readDecisionIntent(search.q);
+  const intent = readDecisionIntent(search.q, {
+    jurisdiction: caseLawCountryScope(search.country),
+  });
   if (intent.type !== "identifier") {
     return false;
   }

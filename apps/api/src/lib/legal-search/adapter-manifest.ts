@@ -1,4 +1,9 @@
 import {
+  DECISION_DOCKET_GRAMMARS,
+  type DecisionDocketGrammar,
+} from "@stll/api-contract/decision-docket-grammar";
+
+import {
   CZ_ECLI_COURTS,
   EU_ECLI_COURTS,
   SK_ECLI_COURTS,
@@ -30,14 +35,23 @@ type AdapterDateRange =
       readonly through: DateRangeEnd;
     };
 
+type AdapterJurisdictionDeclaration = {
+  readonly [TJurisdiction in CaseLawJurisdiction]: {
+    readonly country: TJurisdiction;
+    readonly identifierGrammar: Extract<
+      DecisionDocketGrammar,
+      { readonly jurisdiction: TJurisdiction }
+    >;
+  };
+}[CaseLawJurisdiction];
+
 type AdapterManifest<TKey extends AdapterKey> = {
   readonly key: TKey;
   readonly name: string;
-  readonly country: CaseLawJurisdiction;
   readonly ecliCourtCodes: Readonly<Record<string, string>>;
   readonly placeholderPatterns: readonly SourcePlaceholderPattern[];
   readonly dateRange: AdapterDateRange;
-};
+} & AdapterJurisdictionDeclaration;
 
 type AdapterManifestMap = {
   readonly [TKey in AdapterKey]: AdapterManifest<TKey>;
@@ -46,12 +60,39 @@ type AdapterManifestMap = {
 const NO_DECLARED_ECLI_COURT_CODES = {} as const;
 const NO_PLACEHOLDER_PATTERNS = [] as const;
 const OPEN_RANGE = { type: "open" } as const;
+const ADAPTER_JURISDICTIONS = {
+  AUT: {
+    country: "AUT",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.AUT,
+  },
+  CZE: {
+    country: "CZE",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.CZE,
+  },
+  EU: {
+    country: "EU",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.EU,
+  },
+  POL: {
+    country: "POL",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.POL,
+  },
+  SVK: {
+    country: "SVK",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.SVK,
+  },
+} as const satisfies {
+  readonly [TJurisdiction in CaseLawJurisdiction]: Extract<
+    AdapterJurisdictionDeclaration,
+    { readonly country: TJurisdiction }
+  >;
+};
 
 export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
     key: ADAPTER_KEYS.CZ_REGIONAL,
     name: "Czech Regional Courts",
-    country: "CZE",
+    ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -63,7 +104,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_NS]: {
     key: ADAPTER_KEYS.CZ_NS,
     name: "Czech Supreme Court",
-    country: "CZE",
+    ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -75,7 +116,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_NSS]: {
     key: ADAPTER_KEYS.CZ_NSS,
     name: "Czech Supreme Administrative Court",
-    country: "CZE",
+    ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -87,7 +128,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_US]: {
     key: ADAPTER_KEYS.CZ_US,
     name: "Czech Constitutional Court",
-    country: "CZE",
+    ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
     placeholderPatterns: [
       { type: "exact", text: "Abstrakt není k dispozici." },
@@ -102,7 +143,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.SK_COURTS]: {
     key: ADAPTER_KEYS.SK_COURTS,
     name: "Slovak Courts",
-    country: "SVK",
+    ...ADAPTER_JURISDICTIONS.SVK,
     ecliCourtCodes: SK_ECLI_COURTS,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -114,7 +155,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.SK_US]: {
     key: ADAPTER_KEYS.SK_US,
     name: "Slovak Constitutional Court",
-    country: "SVK",
+    ...ADAPTER_JURISDICTIONS.SVK,
     ecliCourtCodes: SK_ECLI_COURTS,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -126,7 +167,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.PL_COURTS]: {
     key: ADAPTER_KEYS.PL_COURTS,
     name: "Polish Courts (SAOS)",
-    country: "POL",
+    ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -138,7 +179,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -150,7 +191,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_VFGH]: {
     key: ADAPTER_KEYS.AT_VFGH,
     name: "Austrian Constitutional Court (RIS VfGH)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -162,7 +203,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_VWGH]: {
     key: ADAPTER_KEYS.AT_VWGH,
     name: "Austrian Administrative Court (RIS VwGH)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -174,7 +215,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_BVWG]: {
     key: ADAPTER_KEYS.AT_BVWG,
     name: "Austrian Federal Administrative Court (RIS BVwG)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -186,7 +227,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_LVWG]: {
     key: ADAPTER_KEYS.AT_LVWG,
     name: "Austrian State Administrative Courts (RIS LVwG)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -198,7 +239,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_ASYLGH]: {
     key: ADAPTER_KEYS.AT_ASYLGH,
     name: "Austrian Asylum Court (RIS AsylGH)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -210,7 +251,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_UBAS]: {
     key: ADAPTER_KEYS.AT_UBAS,
     name: "Austrian Federal Asylum Senate (RIS UBAS)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -222,7 +263,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_UVS]: {
     key: ADAPTER_KEYS.AT_UVS,
     name: "Austrian Independent Administrative Senates (RIS UVS)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -234,7 +275,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_VERG]: {
     key: ADAPTER_KEYS.AT_VERG,
     name: "Austrian Procurement Review Bodies (RIS Verg)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -246,7 +287,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_UMSE]: {
     key: ADAPTER_KEYS.AT_UMSE,
     name: "Austrian Environmental Senate (RIS Umweltsenat)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -258,7 +299,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_BKS]: {
     key: ADAPTER_KEYS.AT_BKS,
     name: "Austrian Federal Communications Senate (RIS BKS)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -270,7 +311,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_FINDOK]: {
     key: ADAPTER_KEYS.AT_FINDOK,
     name: "Austrian Fiscal Courts (Findok BFG and UFS)",
-    country: "AUT",
+    ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
@@ -282,7 +323,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     name: "Court of Justice of the EU (CJEU)",
-    country: "EU",
+    ...ADAPTER_JURISDICTIONS.EU,
     ecliCourtCodes: EU_ECLI_COURTS,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
