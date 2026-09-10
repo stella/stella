@@ -91,7 +91,7 @@ test.describe("workspace view switcher chrome", () => {
 });
 
 for (const theme of ["light", "dark"]) {
-  test(`uses thin scrollbars with transparent tracks in ${theme} mode`, async ({
+  test(`keeps the rail scrollbar hidden and content scrollbar thin in ${theme} mode`, async ({
     page,
   }) => {
     await openFixture(page, { direction: "ltr", dark: theme === "dark" });
@@ -124,7 +124,7 @@ for (const theme of ["light", "dark"]) {
           slot: "inspector-rail-content",
           overflowing: true,
           track: "rgba(0, 0, 0, 0)",
-          width: "thin",
+          width: "none",
         },
         {
           slot: "inspector-content",
