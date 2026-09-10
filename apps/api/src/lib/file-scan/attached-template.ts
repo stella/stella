@@ -7,11 +7,7 @@ import {
   sanitizeAttachedTemplateRelationships,
 } from "@stll/docx-utils";
 
-import type {
-  Match,
-  Scanner,
-  ScanContext,
-} from "@/api/lib/file-scan/scanner";
+import type { Match, Scanner, ScanContext } from "@/api/lib/file-scan/scanner";
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
 
 const MAX_ARCHIVE_ENTRIES = 1000;
@@ -53,11 +49,7 @@ const isWordOpenXmlUpload = (context: ScanContext | undefined): boolean => {
   if (context === undefined) {
     return false;
   }
-  const mimeType = context.mimeType
-    .split(";", 1)
-    .at(0)
-    ?.trim()
-    .toLowerCase();
+  const mimeType = context.mimeType.split(";", 1).at(0)?.trim().toLowerCase();
   if (mimeType !== undefined && WORD_OPENXML_MIME_TYPES.has(mimeType)) {
     return true;
   }

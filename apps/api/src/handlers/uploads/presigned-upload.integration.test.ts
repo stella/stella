@@ -85,7 +85,10 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       'Target="file:///C:/Templates/Contract.dotx" TargetMode="External"/>' +
       "</Relationships>",
   );
-  return await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  return await zip.generateAsync({
+    type: "uint8array",
+    compression: "DEFLATE",
+  });
 };
 
 beforeAll(async () => {
