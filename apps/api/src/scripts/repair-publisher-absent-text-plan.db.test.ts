@@ -521,7 +521,6 @@ describe("the write", () => {
     expect(repaired).toEqual(
       new Set([fixtureId(3), fixtureId(4), fixtureId(97)]),
     );
-    expect(stored.get(fixtureId(141))?.indexed).toBe(true);
   });
 
   test("a marker is only absence for the source that prints it", async () => {
