@@ -155,7 +155,8 @@ export const Route = createFileRoute("/law/cases/")({
       publicCaseLawCountryFromParam(search.country) ??
       defaultCaseLawCountryForLocale(getMessageLocale());
     if (country === null) {
-      throw notFound();
+      notFound({ throw: true });
+      return;
     }
     const countryParam = toCaseLawCountryParam(country);
 

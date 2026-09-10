@@ -189,24 +189,23 @@ export const fetchPublicSitemapDecisions = async ({
   shard,
   signal = AbortSignal.timeout(10_000),
 }: FetchSitemapDecisionsOptions): Promise<SitemapDecision[]> => {
-  if (publicCaseLawCountryFromParam(shard.country) === null) {
-    throw new ClientOperationError({
-      action: "fetchPublicCaseLawSitemap",
-      message: "The case-law sitemap shard is not published.",
-    });
-  }
-
   const url = new URL(apiUrl("/case/sitemap/decisions/shard"));
   url.searchParams.set("country", shard.country);
   url.searchParams.set("year", shard.year);
   url.searchParams.set("month", shard.month);
   url.searchParams.set("bucket", shard.bucket);
 
-  const response = await fetchImpl(url, { signal });
-  if (!response.ok) {
+  const response =
+    publicCaseLawCountryFromParam(shard.country) === null
+      ? null
+      : await fetchImpl(url, { signal });
+  if (response === null || !response.ok) {
     throw new ClientOperationError({
       action: "fetchPublicCaseLawSitemap",
-      message: `Failed to fetch public case-law sitemap data: ${response.status}`,
+      message:
+        response === null
+          ? "The case-law sitemap shard is not published."
+          : `Failed to fetch public case-law sitemap data: ${response.status}`,
     });
   }
 

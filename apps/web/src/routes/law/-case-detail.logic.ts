@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { notFound, redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -171,11 +172,16 @@ const ensurePublicDecision = async <T>(load: () => Promise<T>): Promise<T> => {
   }
 };
 
+const launchReadinessNotFound = (): never => {
+  notFound({ throw: true });
+  return panic("TanStack Router did not throw a not-found response.");
+};
+
 const ensureLaunchReadyDecision = <T extends { country: string }>(
   decision: T,
 ): T => {
   if (!isPublicCaseLawCountry(decision.country)) {
-    throw notFound();
+    return launchReadinessNotFound();
   }
   return decision;
 };
@@ -239,7 +245,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
   if (publicCaseLawCountryFromParam(params.country) === null) {
-    throw notFound();
+    return launchReadinessNotFound();
   }
 
   const routeDecisionId = extractCaseLawDecisionIdFromIdRouteParam(params.slug);
