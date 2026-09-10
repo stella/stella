@@ -14,8 +14,8 @@ const MARK_COLUMN_WIDTH = "5rem";
 
 const CELL_CLASS = "py-1.5 text-sm leading-6";
 
-export type EnumerationDelta = Extract<ReviewDelta, { kind: "enumeration" }>;
-export type PresenceDelta = Extract<ReviewDelta, { kind: "presence" }>;
+type EnumerationDelta = Extract<ReviewDelta, { kind: "enumeration" }>;
+type PresenceDelta = Extract<ReviewDelta, { kind: "presence" }>;
 
 type PresenceMatrixRow = {
   key: string;
