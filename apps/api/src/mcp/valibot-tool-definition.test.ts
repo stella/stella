@@ -150,6 +150,70 @@ describe("Valibot-backed MCP tool definitions", () => {
     expect(serialized).not.toContain('"const"');
   });
 
+  test("binds explicit normalization metadata to the projected field", () => {
+    const definition = defineValibotMcpTool({
+      access: "write",
+      annotations: {
+        title: "Configure example",
+        destructiveHint: false,
+        openWorldHint: false,
+        readOnlyHint: false,
+      },
+      anonymized: { exposure: "excluded", reason: "write" },
+      description: "Configure an example.",
+      inputSchema: nullAsAbsent(
+        v.strictObject({
+          fields: v.array(
+            v.strictObject({
+              date_format: v.optional(
+                v.strictObject({ locale: v.string(), style: v.string() }),
+              ),
+            }),
+          ),
+        }),
+      ),
+      inputNormalization: {
+        "fields[].date_format": { kind: "date-format" },
+      },
+      name: "configure_example",
+      scope: "stella:documents_write",
+    });
+
+    expect(
+      definition.inputSchema.properties?.["fields"],
+    ).toMatchObject({
+      items: {
+        properties: {
+          date_format: {
+            "x-stella-agent-input": { kind: "date-format" },
+            description: expect.stringContaining("BCP-47 locale"),
+          },
+        },
+      },
+    });
+    expect(definition).not.toHaveProperty("inputNormalization");
+  });
+
+  test("rejects an explicit normalization path that does not exist", () => {
+    expect(() =>
+      defineValibotMcpTool({
+        access: "read",
+        annotations: {
+          title: "Read example",
+          destructiveHint: false,
+          openWorldHint: false,
+          readOnlyHint: true,
+        },
+        anonymized: { exposure: "passthrough" },
+        description: "Read an example.",
+        inputSchema: nullAsAbsent(v.strictObject({ value: v.string() })),
+        inputNormalization: { missing: { kind: "locale" } },
+        name: "read_example",
+        scope: "stella:read",
+      }),
+    ).toThrow("Agent input normalization path does not exist: missing");
+  });
+
   test("rejects an unsupported action without an explicit projection waiver", () => {
     expect(() =>
       defineValibotMcpTool({

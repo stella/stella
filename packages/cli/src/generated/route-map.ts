@@ -530,12 +530,14 @@ export const generatedRouteMap: RouteNode = {
                 },
                 date_from: {
                   type: "string",
+                  format: "date",
                   maxLength: 10,
                   description:
                     "Filter decisions from this ISO date (YYYY-MM-DD)",
                 },
                 date_to: {
                   type: "string",
+                  format: "date",
                   maxLength: 10,
                   description:
                     "Filter decisions up to this ISO date (YYYY-MM-DD)",
@@ -3147,7 +3149,11 @@ export const generatedRouteMap: RouteNode = {
                         },
                         required: ["locale", "style"],
                         additionalProperties: false,
-                        description: "Date rendering config",
+                        description:
+                          'Date rendering config. Use an object with a BCP-47 locale, such as {"locale":"en-GB","style":"short"}; an unambiguous combined string such as "en-GB-short" is normalized.',
+                        "x-stella-agent-input": {
+                          kind: "date-format",
+                        },
                       },
                     },
                     required: ["path"],
@@ -13090,6 +13096,11 @@ export const generatedRouteMap: RouteNode = {
                         },
                         locale: {
                           maxLength: 16,
+                          "x-stella-agent-input": {
+                            kind: "locale",
+                          },
+                          description:
+                            'BCP-47 language tag for generated names and folder suggestions. Use a BCP-47 language tag, for example "cs" or "en-GB".',
                           type: "string",
                         },
                         userInstructions: {
@@ -36838,9 +36849,12 @@ export const generatedRouteMap: RouteNode = {
                         locale: {
                           minLength: 2,
                           maxLength: 35,
-                          type: "string",
+                          "x-stella-agent-input": {
+                            kind: "locale",
+                          },
                           description:
-                            "BCP-47 tag of the caller's interface language",
+                            'BCP-47 tag of the caller\'s interface language. Use a BCP-47 language tag, for example "cs" or "en-GB".',
+                          type: "string",
                         },
                       },
                     },
@@ -36989,9 +37003,12 @@ export const generatedRouteMap: RouteNode = {
                         locale: {
                           minLength: 2,
                           maxLength: 35,
-                          type: "string",
+                          "x-stella-agent-input": {
+                            kind: "locale",
+                          },
                           description:
-                            "BCP-47 tag of the caller's interface language; packs in that language rank first",
+                            'BCP-47 tag of the caller\'s interface language; packs in that language rank first. Use a BCP-47 language tag, for example "cs" or "en-GB".',
+                          type: "string",
                         },
                       },
                     },

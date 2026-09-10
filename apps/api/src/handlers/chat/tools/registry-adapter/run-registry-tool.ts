@@ -13,6 +13,10 @@ import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
+import {
+  agentInputValidationError,
+  normalizeObjectInputAtBoundary,
+} from "@/api/mcp/input-normalization";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
@@ -159,8 +163,23 @@ export const runRegistryReadTool = async ({
     return Result.err(dehydrated.error);
   }
 
+  const normalized = normalizeObjectInputAtBoundary({
+    schema: staticDefinition.inputSchema,
+    value: dehydrated.value.args,
+  });
+  if (!normalized.ok) {
+    return Result.err(
+      toRegistryChatToolError(
+        agentInputValidationError({
+          failure: normalized,
+          subject: `${toolName} arguments`,
+        }),
+      ),
+    );
+  }
+
   const response = await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-    args: dehydrated.value.args,
+    args: normalized.value,
     context,
   });
   const finished = await finalizeToolEgress({

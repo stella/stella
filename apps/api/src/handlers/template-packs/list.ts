@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -10,7 +11,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, withDescription } from "@/api/lib/custom-schema";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -38,10 +39,14 @@ const listTemplatePacksQuerySchema = t.Object({
   ),
   cursor: t.Optional(tPaginationCursor({ maxChars: 128 })),
   locale: t.Optional(
-    withDescription(
-      t.String({ minLength: 2, maxLength: 35 }),
-      "BCP-47 tag of the caller's interface language; packs in that language rank first",
-    ),
+    t.String({
+      minLength: 2,
+      maxLength: 35,
+      ...agentInputNormalizationMetadata(
+        { kind: "locale" },
+        "BCP-47 tag of the caller's interface language; packs in that language rank first",
+      ),
+    }),
   ),
 });
 

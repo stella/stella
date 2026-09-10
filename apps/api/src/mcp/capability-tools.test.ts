@@ -1856,13 +1856,10 @@ describe("invoke_capability enforces the advertised input schema", () => {
   });
 });
 
-// --- Elysia-boundary input normalization (Value.Clean parity) ----------------
+// --- Shared agent-boundary input normalization --------------------------------
 
 describe("invoke_capability input normalization", () => {
-  test("unknown keys on a closed schema are stripped, not rejected (REST parity)", async () => {
-    // tasks.calendar's body schema is additionalProperties: false; the Elysia
-    // boundary CLEANS unknown keys before validation (verified empirically),
-    // so the generic path must accept-and-strip too, not reject.
+  test("unknown keys removed by the REST cleaner are rejected for agents", async () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "tasks.calendar",
@@ -1880,9 +1877,55 @@ describe("invoke_capability input normalization", () => {
       context: createContext(),
       toolName: "invoke_capability",
     });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [
+        {
+          path: "input.body.unknownExtra",
+          message: "Unknown parameter: unknownExtra",
+        },
+      ],
+    });
+  });
+
+  test("normalizes a declared date before strict capability validation", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "work-obligations.queues.list",
+        input: { query: { asOf: "1. 10. 2026" } },
+        validate_only: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
     expect(
       parseToolPayload<{ valid: boolean; capability: string }>(result),
-    ).toEqual({ valid: true, capability: "tasks.calendar" });
+    ).toEqual({
+      valid: true,
+      capability: "work-obligations.queues.list",
+    });
+  });
+
+  test("returns a field-level clarification for an ambiguous date", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "work-obligations.queues.list",
+        input: { query: { asOf: "01/02/2026" } },
+        validate_only: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [
+        {
+          path: "input.query.asOf",
+          message: '"01/02/2026" is not a calendar date.',
+        },
+      ],
+      hint: expect.stringContaining("2026-02-01"),
+    });
   });
 
   test("workspaceId still resolves when the config params schema omits it", async () => {

@@ -4,6 +4,8 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { agentInputNormalizationMetadata } from "@stll/agent-input";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
@@ -55,7 +57,15 @@ const organizeSuggestionsBodySchema = t.Object({
     minItems: 1,
     maxItems: MAX_ORGANIZE_FILES,
   }),
-  locale: t.Optional(t.String({ maxLength: 16 })),
+  locale: t.Optional(
+    t.String({
+      maxLength: 16,
+      ...agentInputNormalizationMetadata(
+        { kind: "locale" },
+        "BCP-47 language tag for generated names and folder suggestions",
+      ),
+    }),
+  ),
   userInstructions: t.Optional(
     t.String({ maxLength: MAX_USER_INSTRUCTIONS_CHARS }),
   ),

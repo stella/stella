@@ -40,6 +40,10 @@ import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import {
+  findRemovedInputIssues,
+  normalizeInputAtBoundary,
+} from "@/api/mcp/input-normalization";
+import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
@@ -523,25 +527,8 @@ const errorToIssues = (
 
 type PartValidation =
   | { ok: true; value: unknown }
-  | { ok: false; issues: McpValidationIssue[] };
+  | { ok: false; issues: McpValidationIssue[]; hint?: string };
 
-/**
- * Validate one input part (`body`/`params`/`query`) against the live handler
- * config's TypeBox schema, mirroring what the Elysia route boundary hands the
- * handler: Default -> Convert -> Clean -> Check, over a value a strict
- * tool-schema client's nulls have first been read out of (see
- * {@link withNullOptionalsOmitted}). The Clean step matches
- * Elysia's default input normalization, verified empirically on this repo's
- * Elysia (1.4.29): unknown keys on a schema'd part are STRIPPED before
- * validation — for closed (`additionalProperties: false`) schemas too, which
- * are cleaned-then-accepted at REST, never rejected. Without Clean this path
- * would both leak undeclared keys through to handlers (mass-assignment shape)
- * and reject closed-schema payloads REST accepts. A missing schema means the
- * part is not normalized at REST either (Elysia only normalizes schema'd
- * parts), so the raw value passes through. Issue paths are prefixed with the
- * part name so an agent sees `body.matterId`, not a bare `matterId` it cannot
- * place.
- */
 /**
  * The part's schema with one property removed, for a fileless-mode call. Returns
  * the schema untouched when there is nothing to remove or it is not an object
@@ -569,109 +556,56 @@ const schemaWithoutField = (
 };
 
 /**
- * Keywords that constrain what a schema accepts. A schema carrying none of
- * them (`t.Any()`, `t.Unknown()`) accepts every value, null included.
+ * Validate one input part (`body`/`params`/`query`) against the live handler
+ * config's TypeBox schema. The agent boundary first applies shared null and
+ * declared-value normalization, then mirrors Elysia's Default -> Convert ->
+ * Clean -> Check chain. Clean prevents undeclared keys reaching a handler; the
+ * comparison around it deliberately makes the agent surface stricter than REST
+ * by reporting every removed key as a typo instead of silently accepting it. A
+ * missing schema passes through unchanged. Issue paths are part-prefixed so an
+ * agent sees `body.matterId`, not a bare `matterId` it cannot place.
  */
-const CONSTRAINING_KEYWORDS = [
-  "type",
-  "anyOf",
-  "oneOf",
-  "allOf",
-  "enum",
-  "const",
-  "$ref",
-] as const;
-
-/** True when the schema accepts an explicit null: `t.Null()`, a union with a
- * null branch, a `type` list including "null", or an unconstrained schema. */
-const admitsNull = (schema: unknown): boolean => {
-  if (!isRecord(schema)) {
-    return true;
-  }
-  const type = schema["type"];
-  if (type === "null" || (isUnknownArray(type) && type.includes("null"))) {
-    return true;
-  }
-  for (const keyword of ["anyOf", "oneOf"] as const) {
-    const branches = schema[keyword];
-    if (isUnknownArray(branches) && branches.some(admitsNull)) {
-      return true;
-    }
-  }
-  return CONSTRAINING_KEYWORDS.every((keyword) => !(keyword in schema));
-};
-
-/**
- * Read one input part with `null` under a declared optional property meaning
- * absence, the rule `nullAsAbsent` applies to native tool inputs. A strict
- * tool-schema client must send every property a schema declares, so it sends
- * null for the ones it is not setting, and null is not a value here.
- *
- * The rule comes off the schema, never a list: a property qualifies when the
- * schema lets it be omitted (it is not in `required`) and does not itself admit
- * null. A "pass null to clear" nullable therefore keeps its null, a required
- * property set to null still fails Check, and a null under an undeclared key is
- * left for Clean to strip exactly as before. Nested objects and arrays of
- * objects are read the same way; a union branch is not, because which branch a
- * value belongs to is not decided yet.
- *
- * Exported so the registry-wide guard can run it over the committed catalog,
- * whose part schemas are the same `advertisedSchemas` projection this validates
- * against. Reading JSON Schema keywords rather than TypeBox's `Kind` symbols is
- * what lets one function serve both.
- */
-export const withNullOptionalsOmitted = (
-  schema: unknown,
-  value: unknown,
-): unknown => {
-  if (!isRecord(schema)) {
-    return value;
-  }
-  const items = schema["items"];
-  if (items !== undefined && isUnknownArray(value)) {
-    return value.map((entry) => withNullOptionalsOmitted(items, entry));
-  }
-  const properties = schema["properties"];
-  if (!isRecord(properties) || !isRecord(value)) {
-    return value;
-  }
-  const required = schema["required"];
-  const requiredNames = new Set(isUnknownArray(required) ? required : []);
-  const present: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    const property = properties[key];
-    if (property === undefined) {
-      present[key] = entry;
-      continue;
-    }
-    if (entry === null && !requiredNames.has(key) && !admitsNull(property)) {
-      continue;
-    }
-    present[key] = withNullOptionalsOmitted(property, entry);
-  }
-  return present;
-};
-
-const validatePart = (
-  part: "body" | "params" | "query",
-  schema: TSchema | undefined,
-  value: unknown,
-): PartValidation => {
+const validatePart = ({
+  part,
+  schema,
+  value,
+}: {
+  part: "body" | "params" | "query";
+  schema: TSchema | undefined;
+  value: unknown;
+}): PartValidation => {
   if (schema === undefined) {
     return { ok: true, value };
   }
   // Object schemas are the norm; default an absent value to `{}` so required
   // fields surface as issues rather than a whole-object "expected object" error.
   const base = value === undefined ? {} : structuredClone(value);
+  const normalized = normalizeInputAtBoundary({
+    path: part,
+    schema,
+    value: base,
+  });
+  if (!normalized.ok) {
+    return {
+      ok: false,
+      issues: [...normalized.issues],
+      hint: normalized.hint,
+    };
+  }
   // Ahead of the chain, not just ahead of Check: a dropped null must take the
   // property's declared default and must never reach Convert, so the part reads
   // exactly as it would from a client that omitted the property.
-  const withDefaults = Value.Default(
-    schema,
-    withNullOptionalsOmitted(schema, base),
-  );
+  const withDefaults = Value.Default(schema, normalized.value);
   const coerced = Value.Convert(schema, withDefaults);
   const cleaned = Value.Clean(schema, coerced);
+  const removedIssues = findRemovedInputIssues({
+    before: normalized.value,
+    after: cleaned,
+    path: part,
+  });
+  if (removedIssues.length > 0) {
+    return { ok: false, issues: removedIssues };
+  }
   if (Value.Check(schema, cleaned)) {
     return { ok: true, value: cleaned };
   }
@@ -1196,8 +1130,8 @@ const invokeArgIssues = (
  *    make the result depend on JSON key order when a caller sends both.
  *
  * A node that already owns the public name (`expenses.create` body declares
- * its own `matterId`) declares no internal name, so it is left alone and an
- * unrecognized key there is stripped by `Value.Clean`, exactly as at REST.
+ * its own `matterId`) declares no internal name, so it is left alone. Any
+ * unrecognized sibling is later reported by the agent-boundary Clean guard.
  *
  * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
  */
@@ -1597,8 +1531,9 @@ const executeInvoke = async ({
   // 6. Input validation against the schemas describe_capability advertises
   // (same `advertisedSchemas` projection of the live endpoint config, so a
   // bound an agent read is a bound this gate enforces), run Default -> Convert
-  // -> Clean -> Check to mirror the Elysia boundary; see validatePart. A
-  // matter-scoped capability takes its matter as `input.params.matterId`; at
+  // -> Clean -> Check, with agent-only unknown-key rejection around Clean; see
+  // validatePart. A matter-scoped capability takes its matter as
+  // `input.params.matterId`; at
   // REST that param belongs to the route macro's schema, not the handler
   // config's, so it is resolved from the RAW params below (Clean would strip it
   // from configs that do not declare it) and re-merged into the params the
@@ -1654,20 +1589,34 @@ const executeInvoke = async ({
     filelessOnlyField(entry.transport),
   );
   const validations = [
-    validatePart("body", bodySchema, input.body),
-    validatePart("params", advertised.params, input.params),
-    validatePart("query", advertised.query, input.query),
+    validatePart({ part: "body", schema: bodySchema, value: input.body }),
+    validatePart({
+      part: "params",
+      schema: advertised.params,
+      value: input.params,
+    }),
+    validatePart({
+      part: "query",
+      schema: advertised.query,
+      value: input.query,
+    }),
   ] as const;
 
   const issues = validations.flatMap((result) =>
     result.ok ? [] : result.issues.map(toPublicIssue),
   );
   if (issues.length > 0) {
+    const clarificationHints = validations.flatMap((result) =>
+      !result.ok && result.hint !== undefined ? [result.hint] : [],
+    );
     return structuredErrorResult({
       code: "validation_error",
       message: "Capability input failed validation",
       issues,
-      hint: "Fix the fields named in issues[] and retry.",
+      hint:
+        clarificationHints.length > 0
+          ? clarificationHints.join(" ")
+          : "Fix the fields named in issues[] and retry.",
     });
   }
 

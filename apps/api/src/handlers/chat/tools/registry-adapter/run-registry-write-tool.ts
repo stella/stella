@@ -11,6 +11,10 @@ import { finalizeToolEgress } from "@/api/mcp/egress";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
+import {
+  agentInputValidationError,
+  normalizeObjectInputAtBoundary,
+} from "@/api/mcp/input-normalization";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
@@ -204,9 +208,25 @@ export const runRegistryWriteTool = async (
     return Result.err(dehydrated.error);
   }
 
+  const normalized = normalizeObjectInputAtBoundary({
+    exactProperties: ["confirm", "validate_only"],
+    schema: staticDefinition.inputSchema,
+    value: dehydrated.value.args,
+  });
+  if (!normalized.ok) {
+    return Result.err(
+      toRegistryChatToolError(
+        agentInputValidationError({
+          failure: normalized,
+          subject: `${toolName} arguments`,
+        }),
+      ),
+    );
+  }
+
   const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
     args: applyChatApprovalConfirmation({
-      args: dehydrated.value.args,
+      args: normalized.value,
       toolName,
     }),
     context,
