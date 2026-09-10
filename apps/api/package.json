@@ -140,7 +140,7 @@
     "entities": "^8.0.0",
     "franc": "catalog:",
     "ip-address": "^10.7.0",
-    "jose": "^6.2.10",
+    "jose": "^6.2.11",
     "jszip": "catalog:",
     "nodemailer": "^9.1.1",
     "onnxruntime-node": "1.29.0",
