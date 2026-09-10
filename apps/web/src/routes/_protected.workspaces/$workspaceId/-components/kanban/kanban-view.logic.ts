@@ -58,13 +58,12 @@ export type WorkspaceKanbanGrouping = KanbanGrouping<
 >;
 
 /** All task statuses in the order they should appear as groups. */
-export { TASK_STATUS_ORDER };
 
 /** Every status carries a label. A partial map would render a raw column
  *  heading such as "in_progress" to the user. */
-export type TaskStatusLabels = Record<TaskStatus, string>;
+type TaskStatusLabels = Record<TaskStatus, string>;
 
-export type EntityKindLabels = Record<EntityKind, string>;
+type EntityKindLabels = Record<EntityKind, string>;
 
 const STATUS_OPTION_COLORS = {
   open: "gray",
@@ -234,7 +233,7 @@ const assigneeGroupValue = (userId: string): string =>
   `${WORKSPACE_USER_LANE_PREFIX}${userId}`;
 
 /** The user id behind an assignee lane value, or `null` for Unassigned. */
-export const parseAssigneeLaneUserId = (value: string | null): string | null =>
+const parseAssigneeLaneUserId = (value: string | null): string | null =>
   value?.startsWith(WORKSPACE_USER_LANE_PREFIX)
     ? value.slice(WORKSPACE_USER_LANE_PREFIX.length)
     : null;

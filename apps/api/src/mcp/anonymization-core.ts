@@ -28,7 +28,7 @@ import { buildFieldMarkers } from "@/api/mcp/field-markers";
  * back to a per-call read, and a database-backed call cannot supply half a
  * catalog and silently redact against the other half's default.
  */
-export type AnonymizationCatalogSource =
+type AnonymizationCatalogSource =
   | {
       type: "database";
       /**

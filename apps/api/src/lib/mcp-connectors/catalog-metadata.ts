@@ -20,7 +20,7 @@ type McpConnectorCatalogMetadata = {
 
 type RecommendedJurisdictionCode = CountryCode | "EU";
 
-export type NativeToolCatalogItem = {
+type NativeToolCatalogItem = {
   slug: string;
   displayName: string;
   description: string;
@@ -147,7 +147,7 @@ const isNativeToolDefaultEnabledForCodes = (
  * cleared in the catalogue, while a jurisdiction miss also clears by adding the
  * tool's jurisdiction to the org's practice jurisdictions.
  */
-export type NativeToolDisabledReason =
+type NativeToolDisabledReason =
   | "disabled_by_override"
   | "jurisdiction_mismatch";
 

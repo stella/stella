@@ -48,7 +48,7 @@ import { detached } from "@/lib/detached";
 /** Room above the words for the bar, so it never covers what was selected. */
 const BAR_OFFSET_PX = 44;
 
-export type AnnotationToolbarDecision = {
+type AnnotationToolbarDecision = {
   caseNumber: string;
   country: string;
   court: string;

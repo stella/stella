@@ -208,7 +208,7 @@ const SEARCH_RESULTS_MIN_WIDTH = 320;
 
 /** A document chosen in pick mode, resolved to the file field the caller can
  *  pin: the hit's own when it names one, else the entity's current file. */
-export type PickedSearchDocument = {
+type PickedSearchDocument = {
   workspaceId: string;
   /** `null` when the index carries no matter name for the hit. */
   workspaceName: string | null;
@@ -222,7 +222,7 @@ export type PickedSearchDocument = {
  * document back to the caller instead, so another surface (a reference
  * picker) can reuse the whole search without navigating away.
  */
-export type SearchDialogMode =
+type SearchDialogMode =
   | { type: "browse" }
   | {
       type: "pick";

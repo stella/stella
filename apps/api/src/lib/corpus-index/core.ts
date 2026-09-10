@@ -311,9 +311,8 @@ export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
 
 /**
  * Canonical payload one row contributes to the index. `ast` is loaded only by
- * passage-granularity families (see {@link CorpusIndexGranularity}) and is
- * `null` everywhere else, so a family that indexes whole documents never pays
- * for a second object read.
+ * passage-granularity families and is `null` everywhere else, so a family that
+ * indexes whole documents never pays for a second object read.
  */
 export type CorpusDocumentPayload = {
   text: string;
@@ -331,10 +330,6 @@ export type CorpusDocumentPayload = {
  * the relevant holding is a paragraph, while a legislation row is already a
  * single provision or article and gains nothing from being cut further.
  */
-export const CORPUS_INDEX_GRANULARITIES = ["document", "passage"] as const;
-export type CorpusIndexGranularity =
-  (typeof CORPUS_INDEX_GRANULARITIES)[number];
-
 /**
  * Granularity-dependent half of the adapter. A union rather than an optional
  * hook: a passage family cannot compile without the AST read it needs, and a
@@ -358,7 +353,7 @@ export type CorpusJobInput<TBrand extends SafeIdType> = {
 };
 
 /** Lazy Postgres fulltext fallback for rows without a canonical S3 object. */
-export type FetchFulltext<TBrand extends SafeIdType> = (
+type FetchFulltext<TBrand extends SafeIdType> = (
   id: SafeId<TBrand>,
 ) => Promise<string | null>;
 
