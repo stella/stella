@@ -176,6 +176,9 @@ describe("Austrian RIS adapter", () => {
       ),
     ).toBe("true");
     expect(urls[1]).toBe(documentUrl(SOURCE_ID, "xml"));
+    // Provenance cites the listing this page was read from, not the
+    // per-decision document fetch that followed it.
+    expect(firstPage.sourceUrl).toBe(urls[0]);
 
     const verified = await adapter.fetchPage(firstPage.nextCursor, {});
     expect(verified.isOk()).toBe(true);

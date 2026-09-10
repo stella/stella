@@ -340,6 +340,25 @@ describe("czUsAdapter.fetchPage", () => {
     expect(verified.nextCursor).toBe(historicalCursor(1994));
   });
 
+  test("names the results listing, not the session bootstrap, as its source", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "1001",
+          sz: "1-1-1993",
+          caseNumber: "I.ÚS 1/1993",
+          date: "1. 3. 1993",
+        },
+      ],
+    });
+
+    const page = unwrap(await czUsAdapter.fetchPage(null, {}));
+
+    // The first request of this handshake fetches the WebForms state from
+    // Search.aspx and carries no decision; the rows come from Results.aspx.
+    expect(page.sourceUrl).toBe("https://nalus.usoud.cz/Search/Results.aspx");
+  });
+
   test("keeps multiple published decisions under one docket distinct", async () => {
     const rows = [
       {

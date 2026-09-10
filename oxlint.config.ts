@@ -3180,14 +3180,6 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-              // The fixture recorder runs from a developer shell, never in the
-              // API runtime, and originates no target of its own: it wraps
-              // global fetch to name the listing URL its sidecar cites and
-              // forwards the adapter's own request unchanged. Routing it
-              // through safeOutboundFetch* would record traffic ingestion
-              // never performs (no redirect following, HTTPS only, capped
-              // bytes), which is the one property a fixture must preserve.
-              "apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
               "apps/api/src/handlers/sharepoint/graph-oauth.ts",
               "apps/api/src/lib/deepl/client.ts",
               "apps/api/src/lib/document-processing-provider.ts",

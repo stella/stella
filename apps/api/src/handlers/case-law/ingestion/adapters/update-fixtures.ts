@@ -74,46 +74,6 @@ const writeFixture = async (
   return filename;
 };
 
-/**
- * Run a recording while watching the requests it makes.
- *
- * A page fixture is not one document: the adapter reads a listing and may
- * follow it per decision, so no single URL is declared anywhere for the
- * sidecar to cite. The listing request the recorder actually issued is
- * that URL, and watching the traffic is the only way to name it without
- * guessing one.
- */
-const recordingRequestsOf = async <TResult>(
-  run: () => Promise<TResult>,
-): Promise<{ result: TResult; firstUrl: string | undefined }> => {
-  const originalFetch = globalThis.fetch;
-  let firstUrl: string | undefined;
-
-  const urlOf = (input: string | URL | Request): string => {
-    if (typeof input === "string") {
-      return input;
-    }
-    return input instanceof URL ? input.href : input.url;
-  };
-
-  globalThis.fetch = Object.assign(
-    async (
-      input: string | URL | Request,
-      init?: RequestInit,
-    ): Promise<Response> => {
-      firstUrl ??= urlOf(input);
-      return await originalFetch(input, init);
-    },
-    { preconnect: originalFetch.preconnect.bind(originalFetch) },
-  );
-
-  try {
-    return { result: await run(), firstUrl };
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-};
-
 const updateAdapter = async (
   adapterKey: string,
 ): Promise<{ filename: string; count: number } | { error: string }> => {
@@ -126,9 +86,10 @@ const updateAdapter = async (
     // Generous budget: adapters that rate-limit per-decision detail
     // fetches (cz-us) need several minutes for a full first page, and a
     // truncated capture weakens the fixture-based parser coverage.
-    const { result, firstUrl } = await recordingRequestsOf(
-      async () =>
-        await adapter.fetchPage(null, {}, AbortSignal.timeout(600_000)),
+    const result = await adapter.fetchPage(
+      null,
+      {},
+      AbortSignal.timeout(600_000),
     );
 
     if (result.isErr()) {
@@ -137,18 +98,19 @@ const updateAdapter = async (
       };
     }
 
-    // A recording that reached no source cannot say where its bytes came
-    // from, and a sidecar citing a URL nobody requested reads as verified
-    // provenance forever after.
-    if (firstUrl === undefined) {
-      return {
-        error: `${adapterKey}: recorded no request to cite as a source`,
-      };
-    }
-
     const page = result.unwrap(
       "Adapter page result was checked for an ingestion error",
     );
+
+    // Only the adapter can say which of its requests served the listing:
+    // a session bootstrap, a search POST and a per-decision fetch look
+    // alike from outside, and a sidecar citing the wrong one reads as
+    // verified provenance forever after.
+    if (page.sourceUrl === undefined) {
+      return {
+        error: `${adapterKey}: page names no listing request to cite as a source`,
+      };
+    }
     const record: FixtureRecord = {
       adapter: adapterKey,
       recordedAt: Temporal.Now.instant().toString({
@@ -160,7 +122,7 @@ const updateAdapter = async (
       },
     };
 
-    const filename = await writeFixture(adapterKey, record, firstUrl);
+    const filename = await writeFixture(adapterKey, record, page.sourceUrl);
     return { filename, count: page.decisions.length };
   } catch (error) {
     return {

@@ -626,7 +626,7 @@ export const createPagePaginatedFetch = <TResponse>(
           nextCursor = encodeTraversalCursor(successor, 0);
         }
 
-        return { decisions, nextCursor };
+        return { decisions, nextCursor, sourceUrl: url };
       },
       catch: adapterCatch(opts.adapterKey, cursor),
     });
