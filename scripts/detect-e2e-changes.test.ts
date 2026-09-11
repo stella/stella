@@ -91,6 +91,11 @@ const workflowStep = (job: string, stepName: string): string =>
 const actionStep = (action: string, stepName: string): string =>
   stepOf(action, stepName, 4);
 
+const expectPullRequestAndMergeGroup = (source: string) => {
+  expect(source).toContain("github.event_name == 'pull_request'");
+  expect(source).toContain("github.event_name == 'merge_group'");
+};
+
 const workflowStepRun = (job: string, stepName: string): string => {
   const step = workflowStep(job, stepName);
   const runMarker = "\n        run: ";
@@ -384,7 +389,7 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    expect(releaseTypecheck).toContain("github.event_name == 'pull_request'");
+    expectPullRequestAndMergeGroup(releaseTypecheck);
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck && bun run typecheck:repo",
     );
@@ -397,6 +402,17 @@ describe("detect-e2e-changes", () => {
     );
     expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "failure"');
     expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "cancelled"');
+  });
+
+  test("revalidates release invariants on the merge queue tree", () => {
+    const ciChecks = workflowJob("ci-checks");
+    for (const stepName of [
+      "Release changelog guard",
+      "Release CLI coupling guard",
+      "Release marketing freshness warning",
+    ]) {
+      expectPullRequestAndMergeGroup(workflowStep(ciChecks, stepName));
+    }
   });
 
   test("checks the generated model rates only when their inputs change", () => {

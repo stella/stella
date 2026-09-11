@@ -4,8 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   # The merge queue builds main plus one pull request and merges only if this
-  # workflow reports `ci-result` success on that commit, so every check below
-  # also runs on the tree that will actually land.
+  # workflow reports `ci-result` success on that commit, so release-boundary
+  # checks must include merge_group and validate the tree that will land.
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
@@ -683,7 +683,9 @@ jobs:
         run: bun run i18n:check
 
       - name: Release changelog guard
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
@@ -691,13 +693,17 @@ jobs:
       # Same verdict the tag workflow gives after merge, delivered while the
       # release pull request can still wait for the Version Packages one.
       - name: Release CLI coupling guard
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
       - name: Release marketing freshness warning
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
@@ -1503,7 +1509,8 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
-      github.event_name == 'pull_request'
+      (github.event_name == 'pull_request'
+       || github.event_name == 'merge_group')
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
     runs-on: ubuntu-latest
