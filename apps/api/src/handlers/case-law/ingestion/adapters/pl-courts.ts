@@ -32,6 +32,7 @@ import type { TraversalMode } from "@/api/handlers/case-law/ingestion/adapters/p
 import {
   hashContent,
   INGESTION_USER_AGENT,
+  isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -482,6 +483,9 @@ type SaosDumpResponse = {
   } | null;
 };
 
+/** A dump answer the crawl will read: `items` stated, whatever it holds. */
+type SaosDumpPage = SaosDumpResponse & { items: SaosItem[] };
+
 type SaosSearchResponse = {
   info?: {
     totalResults?: number | null;
@@ -650,8 +654,18 @@ export const normalizeSaosDumpItem = (
   ),
 });
 
-const isSaosDumpResponse = (value: unknown): value is SaosDumpResponse =>
-  isRecord(value) && isNullishArrayOf(value["items"], isRecord);
+/**
+ * A page of the dump, as opposed to anything else the endpoint may answer
+ * with under a 200.
+ *
+ * `items` has to be present and an array. Reading a payload that lacks it
+ * as a page of no judgments is what makes a malformed answer dangerous
+ * here: an empty page is the signal a date shard is finished, so one such
+ * answer would hand the walk to the next shard and leave the rest of the
+ * current one unread until a later sweep.
+ */
+const isSaosDumpPage = (value: unknown): value is SaosDumpPage =>
+  isRecord(value) && isArrayOf(value["items"], isRecord);
 
 const isSaosSearchResponse = (value: unknown): value is SaosSearchResponse =>
   isRecord(value) &&
@@ -1404,7 +1418,7 @@ export const plCourtsAdapter = defineSourceAdapter({
     buildDecision: buildPlCourtsFromPayload,
   },
 
-  fetchPage: createPagePaginatedFetch<SaosDumpResponse>({
+  fetchPage: createPagePaginatedFetch<SaosDumpPage>({
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     pageSize: PAGE_SIZE,
     legacyPageSize: LEGACY_PAGE_SIZE,
@@ -1415,14 +1429,23 @@ export const plCourtsAdapter = defineSourceAdapter({
     buildRequest: (page) => dumpRequest(page, {}),
     traversal: PL_COURTS_DUMP_SHARDS,
 
+    // Refused rather than read as an empty page: throwing here fails the
+    // page, so the cursor holds and the shard is asked again next cycle
+    // instead of being abandoned half-read.
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      return isSaosDumpResponse(json) ? json : {};
+      if (!isSaosDumpPage(json)) {
+        throw new AdapterFetchError({
+          message: "SAOS dump API returned a payload with no items array",
+          adapterKey: ADAPTER_KEYS.PL_COURTS,
+          // Reading a page is not told which cursor asked for it.
+          cursor: null,
+        });
+      }
+      return json;
     },
 
-    extractItems: (data) => ({
-      items: normalizeOptionalArray(data.items),
-    }),
+    extractItems: (data) => ({ items: data.items }),
 
     parseItem: parseItemWithDetail,
   }),

@@ -13,7 +13,8 @@
  * is asserted here is what the publisher would be asked for.
  */
 
-import { describe, expect, test } from "bun:test";
+import { Result } from "better-result";
+import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -24,8 +25,10 @@ import {
   PL_COURTS_DUMP_SHARDS,
   PL_COURTS_FIRST_SLICE,
   PL_COURTS_RECENT_LOOKBACK_DAYS,
+  plCourtsAdapter,
   plCourtsRecentSince,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const RECENT_MODE = "recent";
 const HEAD_SHARD = "before-1986";
@@ -224,6 +227,63 @@ describe("where each walk hands over", () => {
     const last = PL_COURTS_DUMP_SHARDS.at(-1);
     expect(last?.name).toBe(RECENT_MODE);
     expect(last?.followedBy).toBe(RECENT_MODE);
+  });
+});
+
+/**
+ * What a shard walk does with an answer it cannot read.
+ *
+ * An empty page is how a shard says it is finished, so a payload read as
+ * empty is a payload that ends a shard. A malformed answer must therefore
+ * not be read as empty: it has to fail the page, which holds the cursor and
+ * asks the same shard again next cycle, rather than handing over and leaving
+ * the rest of that shard unread until some later sweep.
+ */
+describe("a dump answer the crawl cannot read", () => {
+  const MID_SHARD_CURSOR = "m-2014-03:0";
+  let restore: (() => void) | undefined;
+
+  const answerWith = (body: unknown) => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = asFetchMock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(body), {
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }),
+      ),
+    );
+    restore = () => {
+      globalThis.fetch = originalFetch;
+    };
+  };
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  test("a page with no items array fails instead of ending the shard", async () => {
+    answerWith({ queryTemplate: {} });
+
+    const result = await plCourtsAdapter.fetchPage(MID_SHARD_CURSOR, {});
+
+    expect(Result.isOk(result)).toBe(false);
+    if (Result.isOk(result)) {
+      return;
+    }
+    expect(result.error.message).toContain("no items array");
+  });
+
+  test("a page that states no judgments does end the shard", async () => {
+    answerWith({ items: [] });
+
+    const result = await plCourtsAdapter.fetchPage(MID_SHARD_CURSOR, {});
+
+    expect(Result.isOk(result)).toBe(true);
+    if (!Result.isOk(result)) {
+      return;
+    }
+    expect(result.value.nextCursor).toBe("m-2014-04:0");
   });
 });
 
