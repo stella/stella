@@ -262,7 +262,14 @@ const focusTimeline = (node: HTMLDivElement | null) => {
 const clipboardInputDirection = (input: HTMLInputElement) =>
   getComputedStyle(input).direction === "rtl" ? "rtl" : "ltr";
 
-const focusCard = (rail: HTMLDivElement | null, id: string) => {
+type CardRevealOptions = {
+  rail: HTMLDivElement | null;
+  id: string;
+  /** Move keyboard focus onto the card, or only scroll it into the rail. */
+  focus: boolean;
+};
+
+const revealCard = ({ rail, id, focus }: CardRevealOptions) => {
   if (!rail) {
     return;
   }
@@ -272,9 +279,11 @@ const focusCard = (rail: HTMLDivElement | null, id: string) => {
   if (!card) {
     return;
   }
-  card
-    .querySelector<HTMLElement>("[data-clipboard-card-trigger]")
-    ?.focus({ preventScroll: true });
+  if (focus) {
+    card
+      .querySelector<HTMLElement>("[data-clipboard-card-trigger]")
+      ?.focus({ preventScroll: true });
+  }
 
   const railBounds = rail.getBoundingClientRect();
   const cardBounds = card.getBoundingClientRect();
@@ -1587,7 +1596,11 @@ const ClipboardApp = () => {
   useEffect(() => {
     const focusActiveCard = () => {
       if (activeItemId) {
-        focusCard(timelineRailRef.current, activeItemId);
+        revealCard({
+          rail: timelineRailRef.current,
+          id: activeItemId,
+          focus: true,
+        });
         return;
       }
       timelineRef.current?.focus();
@@ -1617,7 +1630,11 @@ const ClipboardApp = () => {
         activeGroupId,
       ).at(0);
       if (newestItem) {
-        focusCard(timelineRailRef.current, newestItem.id);
+        revealCard({
+          rail: timelineRailRef.current,
+          id: newestItem.id,
+          focus: true,
+        });
         return;
       }
       timelineRef.current?.focus();
@@ -1877,7 +1894,24 @@ const ClipboardApp = () => {
     flushSync(() => setSelectedIndex(index));
     const item = filteredItems.at(index);
     if (item) {
-      focusCard(timelineRailRef.current, item.id);
+      revealCard({ rail: timelineRailRef.current, id: item.id, focus: true });
+    }
+  };
+  // The search field keeps focus while the horizontal arrows walk the rail,
+  // so typing and Enter continue to act on the highlighted card.
+  const highlightAdjacent = (direction: "next" | "previous") => {
+    const nextIndex = adjacentClipboardIndex(
+      activeIndex,
+      direction,
+      filteredItems.length,
+    );
+    if (nextIndex === null) {
+      return;
+    }
+    flushSync(() => setSelectedIndex(nextIndex));
+    const item = filteredItems.at(nextIndex);
+    if (item) {
+      revealCard({ rail: timelineRailRef.current, id: item.id, focus: false });
     }
   };
 
@@ -2084,8 +2118,14 @@ const ClipboardApp = () => {
           valueLength: event.target.value.length,
         })
       ) {
-        event.preventDefault();
-        handleControlsKeyDown(event, event.target);
+        const direction = clipboardControlsKeyAction({
+          direction: railDirection,
+          key: event.key,
+        });
+        if (direction) {
+          event.preventDefault();
+          highlightAdjacent(direction);
+        }
       }
       return;
     }

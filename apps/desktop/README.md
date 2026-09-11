@@ -78,7 +78,8 @@ Packaged builds should set these environment variables before building:
 Clipboard keyboard model:
 
 - Type anywhere to search; the search field takes the keystroke.
-- ← / → move across the results, or across the footer controls when one is focused.
+- ← / → move the highlighted result, also from the search field at its text edges;
+  the footer controls are reached with Tab.
 - ↑ / ↓ switch the search scope: all clips, external registries, saved groups.
   Clicking the scope icon beside the field steps through them too.
 - Enter copies the highlighted result; Esc closes an open overlay, then the window.
