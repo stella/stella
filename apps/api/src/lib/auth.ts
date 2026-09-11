@@ -35,7 +35,6 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { desktopRegistryKeyConfig } from "@/api/handlers/desktop-registry/config";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
@@ -58,6 +57,7 @@ import {
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { desktopRegistryKeyConfig } from "@/api/lib/business-registries/desktop/config";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";

@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { getAuth } from "@/api/lib/auth";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_SECONDS,
   DESKTOP_REGISTRY_PERMISSION,
-} from "@/api/handlers/desktop-registry/config";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { getAuth } from "@/api/lib/auth";
+} from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export default createSafeRootHandler(

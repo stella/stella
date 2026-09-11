@@ -4,10 +4,10 @@ import { Temporal } from "@stll/time";
 
 import { apikey } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/handlers/desktop-registry/config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;

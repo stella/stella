@@ -441,80 +441,43 @@ export const connectSelfHostedDesktop = async ({
   throw new DesktopBridgeUnavailableError();
 };
 
-export const linkDesktopAccount = async (request: LinkAccountRequest) => {
-  const health =
-    (await readBridgeHealth(500)) ?? (await wakeDesktopAndReadBridgeHealth());
-  if (!health) {
-    throw new DesktopBridgeUnavailableError();
-  }
-
-  assertCompatibleDesktopBridge(health, {
-    requiredCapability: DESKTOP_ACCOUNT_LINK_CAPABILITY,
-  });
-
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      `${DESKTOP_BRIDGE_URL}/v1/link-account`,
-      loopback({
-        body: JSON.stringify(request),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-        timeoutMs: 10_000,
-      }),
-    );
-  } catch {
-    throw new DesktopBridgeUnavailableError();
-  }
-
-  if (response.ok) {
-    return;
-  }
-
-  const payload = await parseBridgeResponse(response);
-  if (payload?.message) {
-    throw new FetchBoundaryError({
-      message: payload.message,
-      status: response.status,
-      statusText: response.statusText,
-      url: `${DESKTOP_BRIDGE_URL}/v1/link-account`,
-    });
-  }
-
-  throw new DesktopBridgeUnavailableError();
+type BridgeRequirement = {
+  requiredCapability: string;
+  signalUpdateCheck: boolean;
+  readHealth: () => Promise<BridgeHealth | null>;
 };
 
-export const connectDesktopRegistry = async ({
-  apiBaseUrl,
-  nonce,
-}: DesktopRegistryConnectInput) => {
-  const health = await readBridgeHealth(500);
+const requireCompatibleBridge = async ({
+  requiredCapability,
+  signalUpdateCheck,
+  readHealth,
+}: BridgeRequirement) => {
+  const health = await readHealth();
   if (!health) {
     throw new DesktopBridgeUnavailableError();
   }
   assertCompatibleDesktopBridge(health, {
-    requiredCapability: DESKTOP_REGISTRY_CAPABILITY,
-    signalUpdateCheck: false,
+    requiredCapability,
+    signalUpdateCheck,
   });
+};
 
-  const grant = unwrapEden(
-    await api["desktop-registry"].grant.post({}),
-  ) satisfies DesktopRegistryGrant;
-  const bridgeUrl = `${DESKTOP_BRIDGE_URL}/v1/registry-connect`;
+type BridgeCommand = {
+  path: string;
+  body: unknown;
+};
 
+// One failure boundary for every POST that drives the desktop bridge: an
+// unreachable bridge and a rejected command surface through the same errors
+// regardless of the command.
+const postBridgeCommand = async ({ path, body }: BridgeCommand) => {
+  const url = `${DESKTOP_BRIDGE_URL}${path}`;
   let response: Response;
   try {
     response = await fetchWithTimeout(
-      bridgeUrl,
+      url,
       loopback({
-        body: JSON.stringify({
-          apiBaseUrl,
-          expiresAt: grant.expiresAt,
-          key: grant.key,
-          nonce,
-        }),
+        body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
         method: "POST",
         timeoutMs: 10_000,
@@ -534,11 +497,46 @@ export const connectDesktopRegistry = async ({
       message: payload.message,
       status: response.status,
       statusText: response.statusText,
-      url: bridgeUrl,
+      url,
     });
   }
 
   throw new DesktopBridgeUnavailableError();
+};
+
+export const linkDesktopAccount = async (request: LinkAccountRequest) => {
+  await requireCompatibleBridge({
+    requiredCapability: DESKTOP_ACCOUNT_LINK_CAPABILITY,
+    signalUpdateCheck: true,
+    readHealth: async () =>
+      (await readBridgeHealth(500)) ?? (await wakeDesktopAndReadBridgeHealth()),
+  });
+  await postBridgeCommand({ path: "/v1/link-account", body: request });
+};
+
+// The grant is minted only once the bridge is known to accept it, so an
+// absent desktop never leaves an unused credential behind.
+export const connectDesktopRegistry = async ({
+  apiBaseUrl,
+  nonce,
+}: DesktopRegistryConnectInput) => {
+  await requireCompatibleBridge({
+    requiredCapability: DESKTOP_REGISTRY_CAPABILITY,
+    signalUpdateCheck: false,
+    readHealth: async () => await readBridgeHealth(500),
+  });
+  const grant = unwrapEden(
+    await api["desktop-registry"].grant.post({}),
+  ) satisfies DesktopRegistryGrant;
+  await postBridgeCommand({
+    path: "/v1/registry-connect",
+    body: {
+      apiBaseUrl,
+      expiresAt: grant.expiresAt,
+      key: grant.key,
+      nonce,
+    },
+  });
 };
 
 const openFileViaBridge = async ({

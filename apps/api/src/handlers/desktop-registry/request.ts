@@ -15,9 +15,9 @@ import {
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/auth";
+import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { authorizeDesktopRegistry } from "@/api/lib/desktop-registry-auth";
-import { revokeDesktopRegistryCredential } from "@/api/lib/desktop-registry-revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);

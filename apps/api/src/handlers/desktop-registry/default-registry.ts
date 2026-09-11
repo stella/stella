@@ -10,7 +10,7 @@ const sole = <T>(entries: T[]): T | null => {
 
 type DefaultRegistryOptions = {
   registries: DesktopRegistryConfig["registries"];
-  practiceJurisdictions: PracticeJurisdiction[];
+  practiceJurisdictions: readonly PracticeJurisdiction[];
 };
 
 export const getDefaultDesktopRegistry = ({

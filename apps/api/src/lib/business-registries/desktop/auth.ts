@@ -6,14 +6,14 @@ import { Temporal } from "@stll/time";
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_PERMISSION,
   desktopRegistryMetadata,
-} from "@/api/handlers/desktop-registry/config";
-import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";

@@ -27,7 +27,10 @@ import {
   stripLookupMarkdown,
 } from "@/api/lib/docx/lookup-fields";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isNativeToolEnabledForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
+import {
+  arrayOrEmpty,
+  isNativeToolEnabledForOrg,
+} from "@/api/lib/mcp-connectors/catalog-metadata";
 
 import { getDefaultDesktopRegistry } from "./default-registry";
 
@@ -51,13 +54,18 @@ const invalidRegistry = () =>
 const loadSettings = async ({
   organizationId,
   scopedDb,
-}: DesktopRegistryContext) =>
-  await scopedDb((tx) =>
+}: DesktopRegistryContext) => {
+  const row = await scopedDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
       columns: { practiceJurisdictions: true, nativeToolOverrides: true },
     }),
   );
+  return {
+    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+    nativeToolOverrides: row?.nativeToolOverrides ?? {},
+  };
+};
 
 const registryIsEnabled = async (
   context: DesktopRegistryContext,
@@ -66,8 +74,8 @@ const registryIsEnabled = async (
   const settings = await loadSettings(context);
   return isNativeToolEnabledForOrg({
     slug: BUSINESS_REGISTRY_DISPATCH[registry].nativeToolSlug,
-    practiceJurisdictions: settings?.practiceJurisdictions ?? [],
-    nativeToolOverrides: settings?.nativeToolOverrides ?? {},
+    practiceJurisdictions: settings.practiceJurisdictions,
+    nativeToolOverrides: settings.nativeToolOverrides,
   });
 };
 
@@ -144,8 +152,8 @@ export const getDesktopRegistryConfig = async (
     if (
       !isNativeToolEnabledForOrg({
         slug: handler.nativeToolSlug,
-        practiceJurisdictions: settings?.practiceJurisdictions ?? [],
-        nativeToolOverrides: settings?.nativeToolOverrides ?? {},
+        practiceJurisdictions: settings.practiceJurisdictions,
+        nativeToolOverrides: settings.nativeToolOverrides,
       })
     ) {
       return null;
@@ -159,7 +167,7 @@ export const getDesktopRegistryConfig = async (
     registries: enabledRegistries,
     defaultRegistryId: getDefaultDesktopRegistry({
       registries: enabledRegistries,
-      practiceJurisdictions: settings?.practiceJurisdictions ?? [],
+      practiceJurisdictions: settings.practiceJurisdictions,
     }),
   });
 };

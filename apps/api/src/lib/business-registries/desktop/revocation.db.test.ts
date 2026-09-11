@@ -5,9 +5,9 @@ import { eq } from "drizzle-orm";
 import { apikey } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { auditLogs } from "@/api/db/schema";
-import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/handlers/desktop-registry/config";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { revokeDesktopRegistryCredential } from "@/api/lib/desktop-registry-revocation";
+import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
+import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {

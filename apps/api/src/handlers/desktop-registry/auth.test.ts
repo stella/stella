@@ -10,7 +10,7 @@ import {
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_KEY_SECONDS,
   desktopRegistryKeyConfig,
-} from "@/api/handlers/desktop-registry/config";
+} from "@/api/lib/business-registries/desktop/config";
 
 const createTestAuth = (sessionForKeys = false) =>
   betterAuth({
