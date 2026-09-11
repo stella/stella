@@ -83,11 +83,11 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
-  McpToolResponse,
   TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -2045,7 +2045,7 @@ type DocumentVersionUploadTargetResult =
       entityId: SafeId<"entity">;
       workspaceId: SafeId<"workspace">;
     }
-  | { status: "error"; response: McpToolResponse };
+  | { status: "error"; response: InternalToolErrorResult };
 
 const resolveDocumentVersionUploadTarget = async ({
   context,

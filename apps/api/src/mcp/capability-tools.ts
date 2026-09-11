@@ -291,9 +291,9 @@ type RenderedTransport = {
   /** Body field carrying bytes, and whether it is required. */
   fileField: string | null;
   fileFieldRequired: boolean | null;
-  fileMediaTypes: readonly string[];
+  fileMediaTypes: string[];
   /** Media types the success payload would be, for a file-returning capability. */
-  responseMediaTypes: readonly string[];
+  responseMediaTypes: string[];
   /** Where the work can be done instead, as one sentence. */
   alternative: string | null;
 };
@@ -304,8 +304,6 @@ type RenderedTransport = {
  * capability has a fileless mode, so an agent can tell "cannot be called" from
  * "can be called without the file" before spending a round trip.
  */
-const NO_MEDIA_TYPES: readonly string[] = [];
-
 const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
   const input = transportFileInput(transport);
   const response = transportFileResponse(transport);
@@ -315,9 +313,8 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
     invocable: isTransportInvocable(transport),
     fileField: input === undefined ? null : input.field,
     fileFieldRequired: input === undefined ? null : input.required,
-    fileMediaTypes: input === undefined ? NO_MEDIA_TYPES : input.mediaTypes,
-    responseMediaTypes:
-      response === undefined ? NO_MEDIA_TYPES : response.mediaTypes,
+    fileMediaTypes: input === undefined ? [] : [...input.mediaTypes],
+    responseMediaTypes: response === undefined ? [] : [...response.mediaTypes],
     alternative:
       alternative === undefined
         ? null
@@ -782,7 +779,7 @@ const DESCRIBE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({
   feature: v.nullable(v.string()),
   permissions: v.nullable(v.unknown()),
   disposition: CAPABILITY_DISPOSITION_OUTPUT_SCHEMA,
-  inputSchema: v.looseObject({}),
+  inputSchema: v.unknown(),
 });
 
 const INVOKE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({ result: v.unknown() });

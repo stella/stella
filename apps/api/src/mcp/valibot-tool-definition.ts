@@ -178,7 +178,8 @@ const deriveMcpOutputSchema = (
             if (valibotSchema.type !== "custom") {
               return undefined;
             }
-            const message = valibotSchema.message;
+            const message =
+              "message" in valibotSchema ? valibotSchema.message : undefined;
             return typeof message === "string" &&
               CHAT_STRING_ID_CUSTOM_SCHEMA_MESSAGES.has(message)
               ? { type: "string" }

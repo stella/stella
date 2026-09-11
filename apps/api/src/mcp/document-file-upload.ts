@@ -16,7 +16,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
-import type { McpToolResponse } from "@/api/mcp/tool-types";
+import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
   nullAsAbsent,
@@ -90,7 +90,7 @@ export type UploadDocumentVersionInput = v.InferOutput<
 
 type CapabilityResult =
   | { status: "ok"; payload: unknown }
-  | { status: "error"; result: Exclude<McpToolResponse, { egress: string }> };
+  | { status: "error"; result: InternalToolErrorResult };
 
 const invokeCapability = async ({
   args,
@@ -104,7 +104,16 @@ const invokeCapability = async ({
     context,
   });
   if (!isMcpEgressPlan(response)) {
-    return { status: "error", result: response };
+    return response.status === "error"
+      ? { status: "error", result: response }
+      : {
+          status: "error",
+          result: internalFailureResult(
+            new Error(
+              "Upload capability returned an unexpected success result",
+            ),
+          ),
+        };
   }
   if (response.egress !== "structured") {
     return {
