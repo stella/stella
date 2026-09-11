@@ -26,6 +26,8 @@ import { TauriEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 import {
+  Building2Icon,
+  ChevronsUpDownIcon,
   ClipboardIcon,
   CircleHelpIcon,
   CopyPlusIcon,
@@ -49,6 +51,7 @@ import {
   VideoIcon,
   XIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
@@ -203,6 +206,17 @@ const CLIPBOARD_RAIL_OVERSCAN = 3;
 const CLIPBOARD_RAIL_PADDING = 20;
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
+
+// The search field shows which scope it searches; the up/down glyph beside
+// the icon is the affordance for the arrow keys that switch it.
+const CLIPBOARD_SCOPE_PRESENTATION = {
+  clips: { icon: ClipboardIcon, label: "allClips" },
+  registry: { icon: Building2Icon, label: "externalRegistry" },
+  groups: { icon: TagsIcon, label: "groups" },
+} as const satisfies Record<
+  ClipboardSearchScope,
+  { icon: LucideIcon; label: "allClips" | "externalRegistry" | "groups" }
+>;
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
@@ -1943,6 +1957,7 @@ const ClipboardApp = () => {
     activeGroupId,
     source: searchSource,
   });
+  const ScopeIcon = CLIPBOARD_SCOPE_PRESENTATION[searchScope].icon;
   const availableScopes: readonly ClipboardSearchScope[] =
     snapshot.groups.length === 0
       ? CLIPBOARD_SEARCH_SCOPES.filter((scope) => scope !== "groups")
@@ -2450,7 +2465,17 @@ const ClipboardApp = () => {
 
               <InputGroup className="clipboard-search h-11 w-full rounded-full">
                 <InputGroupAddon className="text-foreground/65">
-                  <SearchIcon aria-hidden="true" className="size-4" />
+                  <span
+                    className="flex items-center gap-0.5"
+                    data-clipboard-scope={searchScope}
+                    title={t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
+                  >
+                    <ScopeIcon aria-hidden="true" className="size-4" />
+                    <ChevronsUpDownIcon aria-hidden="true" className="size-3" />
+                    <span className="sr-only">
+                      {t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
+                    </span>
+                  </span>
                 </InputGroupAddon>
                 <InputGroupInput
                   aria-label={t("search")}

@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import {
-  Building2Icon,
-  ChevronDownIcon,
-  CircleAlertIcon,
-  EllipsisVerticalIcon,
-  SearchIcon,
-} from "lucide-react";
+import { Building2Icon, ChevronDownIcon, CircleAlertIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -22,6 +16,7 @@ import {
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
 
@@ -394,7 +389,7 @@ export const RegistrySearch = ({
                 <Button
                   variant="ghost"
                   className="h-11 max-w-48 min-w-0 text-xs"
-                  disabled={!connected || connection.registries.length === 0}
+                  disabled={!connected}
                 />
               }
               aria-label={t("registrySelect")}
@@ -423,37 +418,13 @@ export const RegistrySearch = ({
                     ))
                   : null}
               </MenuRadioGroup>
-            </MenuPopup>
-          </Menu>
-          <Button
-            variant="ghost"
-            className="size-11 shrink-0"
-            size="icon"
-            aria-label={t("registrySearch")}
-            disabled={!connected || !registryId || !trimmedQuery || composing}
-            onClick={() => setAttempt((current) => current + 1)}
-          >
-            <SearchIcon aria-hidden="true" className="size-4" />
-          </Button>
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  className="size-11 shrink-0"
-                  variant="ghost"
-                  size="icon"
-                />
-              }
-              aria-label={t("moreOptions")}
-            >
-              <EllipsisVerticalIcon aria-hidden="true" className="size-4" />
-            </MenuTrigger>
-            <MenuPopup align="end">
-              <MenuItem onClick={connect}>{t("registryConnect")}</MenuItem>
               {connected ? (
-                <MenuItem onClick={disconnect}>
-                  {t("registryDisconnect")}
-                </MenuItem>
+                <>
+                  <MenuSeparator />
+                  <MenuItem onClick={disconnect}>
+                    {t("registryDisconnect")}
+                  </MenuItem>
+                </>
               ) : null}
             </MenuPopup>
           </Menu>
