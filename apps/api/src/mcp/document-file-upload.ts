@@ -16,7 +16,10 @@ import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
-import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  McpToolResponse,
+} from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
   nullAsAbsent,

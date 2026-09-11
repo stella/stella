@@ -273,11 +273,11 @@ const DISPATCH_BY_ID = new Map<string, CapabilityDispatchEntry>(
 
 const capabilityDomain = (id: string): string => id.split(".").at(0) ?? id;
 const capabilityLeaf = (id: string): string => id.split(".").at(-1) ?? id;
-const additionalScopesOf = (entry: CatalogEntry): readonly string[] => {
+const additionalScopesOf = (entry: CatalogEntry): string[] => {
   if (entry.additionalScopes === undefined) {
     return [];
   }
-  return entry.additionalScopes;
+  return [...entry.additionalScopes];
 };
 const requiredScopesOf = (entry: CatalogEntry): readonly string[] => [
   entry.scope,
