@@ -57,6 +57,7 @@ import {
   DOCUMENT_PANE_SEARCH_VALUES,
 } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
+import { getEntityFileDownloadRenditions } from "@/components/inspector/file-download-service.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -715,6 +716,10 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  const downloadRenditions = getEntityFileDownloadRenditions({
+    entityData: entity,
+    fieldId,
+  });
   // The panes have traded places: the findings get this column's full width
   // and the document moves to the inspector's preview. Only a DOCX has a
   // review to show, so anything else reads as the default arrangement.
@@ -853,6 +858,7 @@ function RouteComponentInner({
               >
                 <PdfViewerControls
                   currentPage={pageNumber}
+                  downloadRenditions={downloadRenditions}
                   extraControls={
                     <TranslateDocumentDialog
                       disabled={!canCreateEntity}
@@ -925,6 +931,7 @@ function RouteComponentInner({
                         actionBarControls={
                           <PdfViewerControls
                             currentPage={pageNumber}
+                            downloadRenditions={downloadRenditions}
                             extraControls={
                               <TranslateDocumentDialog
                                 disabled={!canCreateEntity}
