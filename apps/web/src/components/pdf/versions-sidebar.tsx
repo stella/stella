@@ -750,6 +750,11 @@ const VersionItem = ({
 
 const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
 
+// Keys the surrounding menu keeps: Escape closes it and the arrows move
+// between items. Every other key, Enter included, stays in the field so the
+// menu's typeahead cannot eat the typed label and Enter submits the form.
+const MENU_OWNED_KEYS = new Set(["Escape", "ArrowDown", "ArrowUp"]);
+
 // Uncontrolled custom-label field (the form action reads it via FormData). It
 // is free text in any language, so resolve direction from the typed content
 // (empty inherits the UI direction; first character sets LTR vs RTL).
@@ -767,6 +772,11 @@ const VersionLabelInput = ({ placeholder }: { placeholder: string }) => {
       maxLength={128}
       name="customLabel"
       onChange={(event) => labelDir.trackValue(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (!MENU_OWNED_KEYS.has(event.key)) {
+          event.stopPropagation();
+        }
+      }}
       placeholder={placeholder}
     />
   );
