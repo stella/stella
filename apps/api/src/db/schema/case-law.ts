@@ -1341,12 +1341,8 @@ export const caseLawProvisionCitations = p.pgTable(
 export const caseLawStatuteCitationMemberships = p.pgTable(
   "case_law_statute_citation_memberships",
   {
-    decisionId: safeUuid<"caseLawDecision">("decision_id")
-      .notNull()
-      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .notNull()
-      .references(() => caseLawSources.id),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     jurisdiction: p.varchar({ length: 3 }).notNull(),
     workEli: p.varchar("work_eli", { length: 512 }).notNull(),
     targetType: p
@@ -1356,6 +1352,18 @@ export const caseLawStatuteCitationMemberships = p.pgTable(
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
+    p
+      .foreignKey({
+        name: "case_law_statute_memberships_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p.foreignKey({
+      name: "case_law_statute_memberships_source_fk",
+      columns: [t.sourceId],
+      foreignColumns: [caseLawSources.id],
+    }),
     p.primaryKey({
       name: "case_law_statute_citation_memberships_pkey",
       columns: [
@@ -1386,9 +1394,7 @@ export const caseLawStatuteCitationMemberships = p.pgTable(
 export const caseLawStatuteCitationCounts = p.pgTable(
   "case_law_statute_citation_counts",
   {
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .notNull()
-      .references(() => caseLawSources.id),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     jurisdiction: p.varchar({ length: 3 }).notNull(),
     workEli: p.varchar("work_eli", { length: 512 }).notNull(),
     targetType: p
@@ -1399,6 +1405,11 @@ export const caseLawStatuteCitationCounts = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
+    p.foreignKey({
+      name: "case_law_statute_counts_source_fk",
+      columns: [t.sourceId],
+      foreignColumns: [caseLawSources.id],
+    }),
     p.primaryKey({
       name: "case_law_statute_citation_counts_pkey",
       columns: [t.jurisdiction, t.workEli, t.targetType, t.anchor, t.sourceId],

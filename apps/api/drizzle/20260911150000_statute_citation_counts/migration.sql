@@ -3,13 +3,17 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 CREATE TABLE "case_law_statute_citation_memberships" (
-  "decision_id" uuid NOT NULL REFERENCES "case_law_decisions"("id") ON DELETE CASCADE,
-  "source_id" uuid NOT NULL REFERENCES "case_law_sources"("id"),
+  "decision_id" uuid NOT NULL,
+  "source_id" uuid NOT NULL,
   "jurisdiction" varchar(3) NOT NULL,
   "work_eli" varchar(512) NOT NULL,
   "target_type" text NOT NULL,
   "anchor" varchar(256) NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "case_law_statute_memberships_decision_fk"
+    FOREIGN KEY ("decision_id") REFERENCES "case_law_decisions"("id") ON DELETE CASCADE,
+  CONSTRAINT "case_law_statute_memberships_source_fk"
+    FOREIGN KEY ("source_id") REFERENCES "case_law_sources"("id"),
   CONSTRAINT "case_law_statute_citation_memberships_pkey"
     PRIMARY KEY ("decision_id", "jurisdiction", "work_eli", "target_type", "anchor"),
   CONSTRAINT "case_law_statute_citation_memberships_target_type_values"
@@ -29,13 +33,15 @@ CREATE INDEX "case_law_statute_citation_memberships_source_idx"
   ON "case_law_statute_citation_memberships" ("source_id");--> statement-breakpoint
 
 CREATE TABLE "case_law_statute_citation_counts" (
-  "source_id" uuid NOT NULL REFERENCES "case_law_sources"("id"),
+  "source_id" uuid NOT NULL,
   "jurisdiction" varchar(3) NOT NULL,
   "work_eli" varchar(512) NOT NULL,
   "target_type" text NOT NULL,
   "anchor" varchar(256) NOT NULL,
   "decision_count" integer NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "case_law_statute_counts_source_fk"
+    FOREIGN KEY ("source_id") REFERENCES "case_law_sources"("id"),
   CONSTRAINT "case_law_statute_citation_counts_pkey"
     PRIMARY KEY ("jurisdiction", "work_eli", "target_type", "anchor", "source_id"),
   CONSTRAINT "case_law_statute_citation_counts_target_type_values"
@@ -339,9 +345,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_statute_citation_counts" TO "stella_ingestion";--> statement-breakpoint
 GRANT SELECT, UPDATE
   ON TABLE "case_law_statute_citation_count_state" TO "stella_ingestion";--> statement-breakpoint
+GRANT SELECT
+  ON TABLE
+    "case_law_statute_citation_memberships",
+    "case_law_statute_citation_counts",
+    "case_law_statute_citation_count_state"
+  TO "stella";--> statement-breakpoint
 GRANT SELECT ("source_id", "jurisdiction", "work_eli", "target_type", "anchor", "decision_count", "updated_at")
   ON TABLE "case_law_statute_citation_counts"
-  TO "stella", "stella_public_law_reader";--> statement-breakpoint
+  TO "stella_public_law_reader";--> statement-breakpoint
 GRANT SELECT ("key", "status", "updated_at")
   ON TABLE "case_law_statute_citation_count_state"
-  TO "stella", "stella_public_law_reader";
+  TO "stella_public_law_reader";
