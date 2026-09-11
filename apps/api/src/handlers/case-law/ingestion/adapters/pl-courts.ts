@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
@@ -28,9 +28,11 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import type { TraversalMode } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   hashContent,
   INGESTION_USER_AGENT,
+  isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -61,7 +63,18 @@ import { isRecord } from "@/api/lib/type-guards";
  * referenced cases, reporters, publication metadata, and the
  * original court document URL.
  *
- * Cursor format: item offset as string (e.g. "offset:100").
+ * The crawl walks the dump one judgment-date shard at a time rather than as
+ * one offset walk over the whole collection: see {@link PL_COURTS_DUMP_SHARDS}
+ * for why the collection has to be cut into bounded pieces and why the pieces
+ * are fixed. A shard ends where the publisher answers a page short of the
+ * page size, and the walk hands over to the next shard; the last shard hands
+ * over to a `recent` lane that asks for everything modified in the last
+ * {@link PL_COURTS_RECENT_LOOKBACK_DAYS} days and, having no successor but
+ * itself, restarts from its own head each time it runs dry.
+ *
+ * Cursor format: `<shard>:<item offset>` (e.g. "m-2014-03:1200"). A cursor
+ * naming no shard, including one written before the shards existed
+ * ("offset:1927900"), restarts the walk at the first shard.
  */
 
 const DUMP_URL = "https://www.saos.org.pl/api/dump/judgments";
@@ -130,11 +143,185 @@ export const PL_COURTS_LANGUAGE = "pl";
  * adjudicating in 1986, so the corpus has nothing genuinely older. The single
  * row the sort puts ahead of it carries a mangled four-digit year and is a
  * publisher typo rather than a judgment from that year; the crawl still
- * ingests it, since `fetchPage` walks the dump in id order and never consults
- * a date.
+ * ingests it, because the shard walk below opens with a catch-all for every
+ * date before this one.
  */
 export const PL_COURTS_FIRST_SLICE =
   ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].dateRange.fromInclusive;
+
+/** Last year the shard list covers with a single yearly shard. */
+const YEARLY_SHARD_LAST_YEAR = 2011;
+
+/**
+ * Last year the shard list names at all. Everything after it is one catch-all.
+ */
+const MONTHLY_SHARD_HORIZON_YEAR = 2030;
+
+/** The `recent` lane's name, which is also its own successor. */
+const RECENT_MODE = "recent";
+
+/**
+ * How far back the `recent` lane asks for modifications.
+ *
+ * Wider than the time a full shard walk takes, so a judgment edited while the
+ * walk was elsewhere is still listed when the lane comes round again.
+ */
+export const PL_COURTS_RECENT_LOOKBACK_DAYS = 45;
+
+const dumpRequest = (
+  page: number,
+  filters: Record<string, string>,
+): { url: string; init: RequestInit } => ({
+  url: `${DUMP_URL}?${new URLSearchParams({
+    pageSize: String(PAGE_SIZE),
+    pageNumber: String(page),
+    withGenerated: "true",
+    ...filters,
+  }).toString()}`,
+  init: { headers: { Accept: JSON_MEDIA_TYPE } },
+});
+
+/**
+ * One shard's judgment-date filter; an absent bound is open on that side.
+ *
+ * A name carries no colon: it becomes a cursor prefix, and the cursor is
+ * split on the first one. `createPagePaginatedFetch` rejects a name that
+ * would collide with the separator.
+ */
+type DumpShard = {
+  name: string;
+  judgmentStartDate?: string;
+  judgmentEndDate?: string;
+};
+
+const dumpShardRanges = (): DumpShard[] => {
+  const firstDay =
+    parsePlainDate(PL_COURTS_FIRST_SLICE) ??
+    panic(`pl-courts: unreadable first slice ${PL_COURTS_FIRST_SLICE}`);
+  const shards: DumpShard[] = [
+    {
+      name: `before-${firstDay.year}`,
+      judgmentEndDate: firstDay.subtract({ days: 1 }).toString(),
+    },
+  ];
+
+  for (let year = firstDay.year; year <= YEARLY_SHARD_LAST_YEAR; year++) {
+    shards.push({
+      name: `y-${year}`,
+      // The corpus opens mid-1986, and the catch-all above owns everything
+      // before that day, so the first yearly shard starts there rather than
+      // on 1 January: the shards then partition the calendar exactly.
+      judgmentStartDate:
+        year === firstDay.year
+          ? firstDay.toString()
+          : Temporal.PlainDate.from({ year, month: 1, day: 1 }).toString(),
+      judgmentEndDate: Temporal.PlainDate.from({
+        year,
+        month: 12,
+        day: 31,
+      }).toString(),
+    });
+  }
+
+  for (
+    let year = YEARLY_SHARD_LAST_YEAR + 1;
+    year <= MONTHLY_SHARD_HORIZON_YEAR;
+    year++
+  ) {
+    for (let month = 1; month <= 12; month++) {
+      const first = Temporal.PlainDate.from({ year, month, day: 1 });
+      shards.push({
+        name: `m-${year}-${String(month).padStart(2, "0")}`,
+        judgmentStartDate: first.toString(),
+        judgmentEndDate: first.with({ day: first.daysInMonth }).toString(),
+      });
+    }
+  }
+
+  shards.push({
+    name: `after-${MONTHLY_SHARD_HORIZON_YEAR}`,
+    judgmentStartDate: Temporal.PlainDate.from({
+      year: MONTHLY_SHARD_HORIZON_YEAR + 1,
+      month: 1,
+      day: 1,
+    }).toString(),
+  });
+
+  return shards;
+};
+
+/**
+ * The date the `recent` lane asks the publisher to list modifications from.
+ *
+ * Taken from a calendar day rather than an instant so the request is stable
+ * for the whole day and the lane cannot ask for a narrower window each time
+ * it restarts.
+ */
+export const plCourtsRecentSince = (today: Temporal.PlainDate): string =>
+  `${today.subtract({ days: PL_COURTS_RECENT_LOOKBACK_DAYS }).toString()}T00:00:00.000`;
+
+/** The shards in list order, each followed by the next, then the lane. */
+const buildDumpShardWalks = (): TraversalMode[] => {
+  const ranges = dumpShardRanges();
+  return [
+    ...ranges.map((shard, index) => ({
+      name: shard.name,
+      buildRequest: (page: number) =>
+        dumpRequest(page, {
+          ...(shard.judgmentStartDate === undefined
+            ? {}
+            : { judgmentStartDate: shard.judgmentStartDate }),
+          ...(shard.judgmentEndDate === undefined
+            ? {}
+            : { judgmentEndDate: shard.judgmentEndDate }),
+        }),
+      followedBy: ranges[index + 1]?.name ?? RECENT_MODE,
+    })),
+    {
+      name: RECENT_MODE,
+      buildRequest: (page: number) =>
+        dumpRequest(page, {
+          sinceModificationDate: plCourtsRecentSince(
+            Temporal.Now.plainDateISO("UTC"),
+          ),
+        }),
+      followedBy: RECENT_MODE,
+    },
+  ];
+};
+
+/**
+ * The ordered walks the crawl makes over the dump.
+ *
+ * The dump is a single collection of several hundred thousand judgments
+ * with no end the walker can recognise from inside it, so one offset walk
+ * over the whole thing is unbounded: every event that advances the cursor
+ * without reading a page (a timeout, a publisher-side 5xx) pushes it
+ * further past the tail, where each request costs seconds and answers with
+ * nothing. Filtering by judgment date bounds each walk instead. A shard's
+ * last page is short, which is the signal the pagination helper hands over
+ * on, so a walk that runs out of judgments moves to the next shard rather
+ * than deeper into empty offsets. A page that answers zero items in the
+ * middle of a shard hands over too: giving up the remainder of one shard is
+ * bounded loss, which giving up on an unbounded walk was not.
+ *
+ * The list is deliberately static and the horizon deliberately fixed. Shard
+ * names are persisted as cursor prefixes, so a cursor written in one month
+ * has to still name a shard in the next; a list derived from the current date
+ * renames its own tail as time passes and silently restarts the crawl. Empty
+ * months up to the horizon cost about a second each per full walk, which is
+ * cheaper than any scheme that keeps the list current.
+ *
+ * `judgmentDate` is publisher data and a few records carry years no judgment
+ * can hold, in both directions. The two catch-alls are open-ended so those
+ * records are still reachable: no date puts a judgment outside every shard.
+ *
+ * The tail catch-all is followed by {@link RECENT_MODE}, which names itself
+ * as its own successor and so restarts from its own head whenever it runs
+ * dry. That is where the crawl stays once the collection has been seen.
+ */
+export const PL_COURTS_DUMP_SHARDS: readonly TraversalMode[] =
+  buildDumpShardWalks();
 
 /**
  * Slices near the tip the reconciliation re-walks on a fast cadence.
@@ -295,6 +482,9 @@ type SaosDumpResponse = {
     pageSize?: { value?: number | null } | null;
   } | null;
 };
+
+/** A dump answer the crawl will read: `items` stated, whatever it holds. */
+type SaosDumpPage = SaosDumpResponse & { items: SaosItem[] };
 
 type SaosSearchResponse = {
   info?: {
@@ -464,8 +654,18 @@ export const normalizeSaosDumpItem = (
   ),
 });
 
-const isSaosDumpResponse = (value: unknown): value is SaosDumpResponse =>
-  isRecord(value) && isNullishArrayOf(value["items"], isRecord);
+/**
+ * A page of the dump, as opposed to anything else the endpoint may answer
+ * with under a 200.
+ *
+ * `items` has to be present and an array. Reading a payload that lacks it
+ * as a page of no judgments is what makes a malformed answer dangerous
+ * here: an empty page is the signal a date shard is finished, so one such
+ * answer would hand the walk to the next shard and leave the rest of the
+ * current one unread until a later sweep.
+ */
+const isSaosDumpPage = (value: unknown): value is SaosDumpPage =>
+  isRecord(value) && isArrayOf(value["items"], isRecord);
 
 const isSaosSearchResponse = (value: unknown): value is SaosSearchResponse =>
   isRecord(value) &&
@@ -1218,7 +1418,7 @@ export const plCourtsAdapter = defineSourceAdapter({
     buildDecision: buildPlCourtsFromPayload,
   },
 
-  fetchPage: createPagePaginatedFetch<SaosDumpResponse>({
+  fetchPage: createPagePaginatedFetch<SaosDumpPage>({
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     pageSize: PAGE_SIZE,
     legacyPageSize: LEGACY_PAGE_SIZE,
@@ -1226,25 +1426,27 @@ export const plCourtsAdapter = defineSourceAdapter({
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,
 
-    buildRequest: (page) => ({
-      url: `${DUMP_URL}?${new URLSearchParams({
-        pageSize: String(PAGE_SIZE),
-        pageNumber: String(page),
-        withGenerated: "true",
-      }).toString()}`,
-      init: {
-        headers: { Accept: "application/json" },
-      },
-    }),
+    buildRequest: (page) => dumpRequest(page, {}),
+    traversal: PL_COURTS_DUMP_SHARDS,
 
+    // Refused rather than read as an empty page: throwing here fails the
+    // page, so the cursor holds and the shard is asked again next cycle
+    // instead of being abandoned half-read.
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      return isSaosDumpResponse(json) ? json : {};
+      return isSaosDumpPage(json)
+        ? Result.ok(json)
+        : Result.err(
+            new AdapterFetchError({
+              message: "SAOS dump API returned a payload with no items array",
+              adapterKey: ADAPTER_KEYS.PL_COURTS,
+              // Reading a page is not told which cursor asked for it.
+              cursor: null,
+            }),
+          );
     },
 
-    extractItems: (data) => ({
-      items: normalizeOptionalArray(data.items),
-    }),
+    extractItems: (data) => ({ items: data.items }),
 
     parseItem: parseItemWithDetail,
   }),

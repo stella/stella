@@ -180,6 +180,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
   EDGAR_USER_AGENT: "stella admin@example.com",
+  INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
@@ -310,6 +311,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "HTTPS, a loopback sidecar, or a private deployment network.",
   GOTENBERG_USERNAME:
     "Username for the Gotenberg sidecar's HTTP basic authentication.",
+  INGESTION_USER_AGENT:
+    "User-Agent sent to court publishers. Defaults to a stella product " +
+    "identifier with the build version and a contact URL; set it so a fork " +
+    "does not identify as the upstream project. Browser-like values are " +
+    "refused by publishers that gate bots.",
   MICROSOFT_AUTH_CLIENT_ID:
     "Microsoft OAuth client ID; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_CLIENT_SECRET:

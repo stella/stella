@@ -7,7 +7,7 @@
  * multi-language) should implement fetchPage directly.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -29,13 +29,22 @@ import { logger } from "@/api/lib/observability/logger";
  */
 /** One ordered walk over a collection, named so a cursor can carry it. */
 export type TraversalMode = {
-  /** Persisted as the cursor prefix. Stable: changing it restarts the walk. */
+  /**
+   * Persisted as the cursor prefix. Stable: changing it restarts the walk,
+   * and it may not contain {@link TRAVERSAL_CURSOR_SEPARATOR}.
+   */
   name: string;
   /** Request for a page within this walk. */
   buildRequest: (page: number) => { url: string; init?: RequestInit };
   /**
    * Where to continue once this walk reaches the end of the collection, or
    * null to stay in it.
+   *
+   * A walk may name itself. The handover writes `<successor>:0` either way,
+   * so naming itself restarts this same walk from its own head — which is
+   * what a walk that has to keep re-reading the same filtered window wants,
+   * and what `null` cannot express: `null` parks the cursor at the end
+   * instead, where the next cycle re-reads only the tail.
    */
   followedBy: string | null;
   /**
@@ -106,10 +115,23 @@ type PagePaginationOptions<TResponse> = {
    */
   traversal?: readonly TraversalMode[] | undefined;
   /**
-   * Parse the raw response into a typed result.
-   * Should throw on unexpected response shapes.
+   * Read the publisher's body into a typed page.
+   *
+   * An answer this adapter will not read is `Result.err`, not an exception:
+   * the page then fails and its cursor is held, so the same page is asked
+   * for again next cycle rather than being passed on as something it is not.
+   * Reading a malformed body as an empty page is the failure this shape
+   * exists to prevent — for a walk that hands over on a short page, an empty
+   * page means the collection ended.
+   *
+   * A body that is not the declared format at all still rejects, because
+   * `response.json()` does; that one keeps its single retry below, since a
+   * publisher under load answers a 200 with an HTML notice and then answers
+   * properly.
    */
-  parseResponse: (response: Response) => Promise<TResponse>;
+  parseResponse: (
+    response: Response,
+  ) => Promise<Result<TResponse, AdapterFetchError>>;
   /**
    * Extract items from the parsed response.
    * Return the items and optional total count.
@@ -158,7 +180,7 @@ type PagePaginationOptions<TResponse> = {
  *     buildRequest: (page) => ({
  *       url: `https://api.example.com/search?page=${page}`,
  *     }),
- *     parseResponse: async (resp) => resp.json(),
+ *     parseResponse: async (resp) => Result.ok(await resp.json()),
  *     extractItems: (data) => ({
  *       items: data.results,
  *       total: data.totalCount,
@@ -197,6 +219,16 @@ const SERVER_ERROR_RETRIES = 2;
  * a page that answers this way forever holds its cursor forever.
  */
 const BAD_GATEWAY_STATUS = 502;
+
+/**
+ * What divides a walk's name from its offset in a cursor. A cursor is split
+ * on the FIRST one, so a name containing it names a walk that does not
+ * exist: every cursor the walk writes then decodes as "no walk", which
+ * restarts the crawl from the first walk on every step, silently and
+ * forever. `assertNamesCarryNoSeparator` refuses that at construction.
+ */
+const TRAVERSAL_CURSOR_SEPARATOR = ":";
+
 const OFFSET_CURSOR_PREFIX = "offset:";
 const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
@@ -261,7 +293,7 @@ export const decodeTraversalCursor = (
   if (cursor === null) {
     return { mode: first, offset: 0 };
   }
-  const separator = cursor.indexOf(":");
+  const separator = cursor.indexOf(TRAVERSAL_CURSOR_SEPARATOR);
   const named = modes.find((mode) => mode.name === cursor.slice(0, separator));
   if (separator === -1 || named === undefined) {
     return { mode: first, offset: 0 };
@@ -273,7 +305,20 @@ export const decodeTraversalCursor = (
 };
 
 export const encodeTraversalCursor = (mode: string, offset: number): string =>
-  `${mode}:${offset}`;
+  `${mode}${TRAVERSAL_CURSOR_SEPARATOR}${offset}`;
+
+const assertNamesCarryNoSeparator = (
+  adapterKey: string,
+  modes: readonly TraversalMode[],
+): void => {
+  for (const { name } of modes) {
+    if (name.includes(TRAVERSAL_CURSOR_SEPARATOR)) {
+      panic(
+        `${adapterKey}: traversal walk "${name}" contains ${TRAVERSAL_CURSOR_SEPARATOR}, which its cursors are split on`,
+      );
+    }
+  }
+};
 
 type ParsedPageItems = {
   decisions: IngestionResult[];
@@ -380,14 +425,17 @@ export const createPagePaginatedFetch = <TResponse>(
 ) => {
   const { firstPage } = opts;
   const modes = opts.traversal;
+  if (modes !== undefined) {
+    assertNamesCarryNoSeparator(opts.adapterKey, modes);
+  }
 
   return async (
     cursor: string | null,
     _config: Record<string, unknown>,
     signal?: AbortSignal,
-  ): Promise<Result<SyncPage, AdapterFetchError>> =>
-    await Result.tryPromise({
-      try: async () => {
+  ): Promise<Result<SyncPage, AdapterFetchError>> => {
+    const attempt = await Result.tryPromise({
+      try: async (): Promise<Result<SyncPage, AdapterFetchError>> => {
         const walk = modes ? decodeTraversalCursor(cursor, modes) : null;
         const offset = walk
           ? walk.offset
@@ -450,10 +498,10 @@ export const createPagePaginatedFetch = <TResponse>(
               page: String(page),
               retries: String(SERVER_ERROR_RETRIES),
             });
-            return {
+            return Result.ok({
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
-            };
+            });
           }
           throw error;
         }
@@ -478,10 +526,10 @@ export const createPagePaginatedFetch = <TResponse>(
               httpStatus: String(response.status),
               page: String(page),
             });
-            return {
+            return Result.ok({
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
-            };
+            });
           }
 
           throw new AdapterFetchError({
@@ -492,13 +540,27 @@ export const createPagePaginatedFetch = <TResponse>(
           });
         }
 
-        let data: TResponse;
-        try {
-          data = await opts.parseResponse(response);
-        } catch (parseError) {
-          // Some court APIs return HTML error pages with 200 status
-          // (rate limits, maintenance). Retry once after a delay.
-          if (parseError instanceof SyntaxError) {
+        const retryFailed = (detail: string): AdapterFetchError =>
+          new AdapterFetchError({
+            message: `${opts.adapterKey}: page ${page} retry ${detail}`,
+            adapterKey: opts.adapterKey,
+            cursor,
+          });
+
+        // A refusal comes back as Err and ends the page here: the adapter
+        // read the body and will not have it, which one more request cannot
+        // change. Only a body that would not parse at all is retried.
+        const readPage = async (): Promise<
+          Result<TResponse, AdapterFetchError>
+        > => {
+          try {
+            return await opts.parseResponse(response);
+          } catch (parseError) {
+            // Some court APIs return HTML error pages with 200 status
+            // (rate limits, maintenance). Retry once after a delay.
+            if (!(parseError instanceof SyntaxError)) {
+              throw parseError;
+            }
             const contentType =
               response.headers.get("content-type") ?? "unknown";
             logger.warn("case_law.ingestion.page_unparseable_retry", {
@@ -513,32 +575,41 @@ export const createPagePaginatedFetch = <TResponse>(
               adapterKey: opts.adapterKey,
             });
             if (!retryResponse.ok) {
-              throw new AdapterFetchError({
-                message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
-                adapterKey: opts.adapterKey,
-                cursor,
-                httpStatus: retryResponse.status,
-              });
+              return Result.err(
+                new AdapterFetchError({
+                  message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
+                  adapterKey: opts.adapterKey,
+                  cursor,
+                  httpStatus: retryResponse.status,
+                }),
+              );
             }
             try {
-              data = await opts.parseResponse(retryResponse);
+              const retried = await opts.parseResponse(retryResponse);
+              return Result.isError(retried)
+                ? Result.err(
+                    retryFailed(`validation failed: ${retried.error.message}`),
+                  )
+                : retried;
             } catch (retryParseError) {
               const retryContentType =
                 retryResponse.headers.get("content-type") ?? "unknown";
-              const detail =
-                retryParseError instanceof SyntaxError
-                  ? `unparseable (content-type: ${retryContentType})`
-                  : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
-              throw new AdapterFetchError({
-                message: `${opts.adapterKey}: page ${page} retry ${detail}`,
-                adapterKey: opts.adapterKey,
-                cursor,
-              });
+              return Result.err(
+                retryFailed(
+                  retryParseError instanceof SyntaxError
+                    ? `unparseable (content-type: ${retryContentType})`
+                    : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`,
+                ),
+              );
             }
-          } else {
-            throw parseError;
           }
+        };
+
+        const parsed = await readPage();
+        if (Result.isError(parsed)) {
+          return parsed;
         }
+        const data = parsed.value;
         const fetchMs = Math.round(performance.now() - fetchT0);
         const { items: fetchedItems, total } = opts.extractItems(data);
         const items = fetchedItems.slice(itemsAlreadyFetched);
@@ -626,8 +697,13 @@ export const createPagePaginatedFetch = <TResponse>(
           nextCursor = encodeTraversalCursor(successor, 0);
         }
 
-        return { decisions, nextCursor, sourceUrl: url };
+        return Result.ok({ decisions, nextCursor, sourceUrl: url });
       },
       catch: adapterCatch(opts.adapterKey, cursor),
     });
+
+    // The walk's own refusals and the thrown ones arrive nested one level
+    // apart; both are the same failure to the caller.
+    return attempt.andThen((page) => page);
+  };
 };

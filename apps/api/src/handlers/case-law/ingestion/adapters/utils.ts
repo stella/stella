@@ -1,15 +1,23 @@
 /** Shared utilities for case-law ingestion adapters. */
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { APP_VERSION } from "@/api/lib/version";
 
 /**
  * User-Agent sent on all court website requests.
+ *
+ * A product identifier with a version and a contact URL, not a browser
+ * string. Publishers increasingly put a bot challenge in front of anything
+ * claiming to be a browser, and answer it with an HTML page under a 4xx that
+ * no adapter can parse; identifying the crawler for what it is both clears
+ * those gates and gives the publisher someone to reach.
  *
  * Configurable via INGESTION_USER_AGENT env var so forks don't
  * accidentally identify as the upstream project.
  */
 export const INGESTION_USER_AGENT =
-  process.env["INGESTION_USER_AGENT"] ?? "Mozilla/5.0 (compatible)";
+  process.env["INGESTION_USER_AGENT"] ??
+  `stella-ingestion/${APP_VERSION} (+https://github.com/stella/stella)`;
 
 const CE_DATE_PATTERN =
   /^(?<day>\d{1,2})\.\s*(?<month>\d{1,2})\.\s*(?<year>\d{4})$/;
