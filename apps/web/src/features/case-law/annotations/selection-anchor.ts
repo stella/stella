@@ -18,16 +18,71 @@ export type SelectionAnchor = {
   startOffset: number;
 };
 
-const isChrome = (node: Node): boolean => {
-  const element = node instanceof Element ? node : node.parentElement;
-  return element?.closest(`[${READER_CHROME_ATTRIBUTE}]`) !== null;
+export type ReaderSelectionContainmentAction =
+  | "ignore"
+  | "remember"
+  | "restore";
+
+type ReaderAnnotationActivationState = {
+  selection: "collapsed" | "range";
+  target: "annotation" | "other";
 };
 
-const textNodesOf = (block: HTMLElement): Text[] => {
-  const walker = block.ownerDocument.createTreeWalker(
-    block,
+/** A drag over a mark selects text; only a plain click activates the mark. */
+export const readerAnnotationActivationAction = ({
+  selection,
+  target,
+}: ReaderAnnotationActivationState): "activate" | "ignore" =>
+  target === "annotation" && selection === "collapsed" ? "activate" : "ignore";
+
+type ReaderSelectionContainmentState = {
+  anchor: "inside" | "outside";
+  drag: "active" | "inactive";
+  focus: "inside" | "outside";
+  snapshot: "available" | "empty";
+};
+
+/**
+ * Keep a pointer selection that began in the reader from crossing into
+ * adjacent application chrome. Selections that begin elsewhere are ignored,
+ * so Inspector and chat text remain independently selectable.
+ */
+export const readerSelectionContainmentAction = ({
+  anchor,
+  drag,
+  focus,
+  snapshot,
+}: ReaderSelectionContainmentState): ReaderSelectionContainmentAction => {
+  if (anchor === "outside") {
+    return "ignore";
+  }
+  if (focus === "inside") {
+    return "remember";
+  }
+  return drag === "active" && snapshot === "available" ? "restore" : "ignore";
+};
+
+type ReaderChromeParent = Pick<Element, "closest">;
+
+/** Whether a text node's element parent belongs to non-document reader UI. */
+export const isReaderChromeParent = (
+  element: ReaderChromeParent | null,
+): boolean =>
+  element !== null && element.closest(`[${READER_CHROME_ATTRIBUTE}]`) !== null;
+
+const isChrome = (node: Node): boolean => {
+  const element = node instanceof Element ? node : node.parentElement;
+  return isReaderChromeParent(element);
+};
+
+const textNodesOf = (root: Node): Text[] => {
+  const walker = root.ownerDocument?.createTreeWalker(
+    root,
     NodeFilter.SHOW_TEXT,
   );
+  if (walker === undefined) {
+    return [];
+  }
   const nodes: Text[] = [];
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if (node instanceof Text && !isChrome(node)) {
@@ -52,22 +107,13 @@ const offsetWithin = (
   container: Node,
   offset: number,
 ): number => {
-  let total = 0;
-  for (const node of textNodesOf(block)) {
-    if (node === container) {
-      return total + offset;
-    }
-    if (container instanceof Element && container.contains(node)) {
-      const before = Array.from(container.childNodes)
-        .slice(0, offset)
-        .some((child) => child === node || child.contains(node));
-      if (!before) {
-        return total;
-      }
-    }
-    total += node.data.length;
-  }
-  return total;
+  const beforeBoundary = block.ownerDocument.createRange();
+  beforeBoundary.setStart(block, 0);
+  beforeBoundary.setEnd(container, offset);
+  return textNodesOf(beforeBoundary.cloneContents()).reduce(
+    (total, node) => total + node.data.length,
+    0,
+  );
 };
 
 /**

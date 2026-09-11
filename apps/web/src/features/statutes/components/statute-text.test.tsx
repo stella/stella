@@ -102,6 +102,8 @@ const renderStatute = (
       documentId={DOCUMENT_ID}
       fulltext={null}
       language="cs"
+      masthead={null}
+      provisionCitationCounts={new Map()}
       statuteTitle={STATUTE_TITLE}
       versionCount={1}
       versionValidFrom="2024-01-01"
@@ -155,6 +157,37 @@ describe("StatuteText", () => {
       const opening = markup.slice(markup.indexOf(`<${tag} class="`));
       expect(opening.slice(0, opening.indexOf(">"))).toContain("text-center");
     }
+  });
+
+  test("a provision keeps its action beside the designation and its title below", () => {
+    const provision = {
+      anchorId: "par-1",
+      id: "provision-1",
+      inlines: [
+        { text: "§ 1", type: "text" },
+        { type: "line-break" },
+        { text: "Introductory provisions", type: "text" },
+      ],
+      level: 1,
+      plainText: "§ 1\nIntroductory provisions",
+      type: "heading",
+    } satisfies Block;
+    const markup = renderStatute({
+      blocks: [provision],
+      citationWork: CITATION_WORK,
+      provisionCitationCounts: new Map([[provision.anchorId, 2]]),
+    });
+
+    const designationIndex = markup.indexOf("§ 1");
+    const actionIndex = markup.indexOf(detailsActionFor(provision.plainText));
+    const titleIndex = markup.indexOf("Introductory provisions");
+
+    expect(designationIndex).toBeGreaterThan(-1);
+    expect(actionIndex).toBeGreaterThan(designationIndex);
+    expect(titleIndex).toBeGreaterThan(actionIndex);
+    expect(markup).toContain("text-foreground");
+    expect(markup).toContain("h-8");
+    expect(markup).toContain("2 decisions");
   });
 
   test("every block offers exactly one permalink to its own anchor", () => {
@@ -221,6 +254,8 @@ describe("StatuteText", () => {
             documentId={DOCUMENT_ID}
             fulltext={null}
             language="cs"
+            masthead={null}
+            provisionCitationCounts={new Map()}
             statuteTitle={STATUTE_TITLE}
             versionCount={3}
             versionValidFrom="2024-01-01"

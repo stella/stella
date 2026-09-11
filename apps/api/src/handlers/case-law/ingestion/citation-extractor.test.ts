@@ -37,6 +37,21 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("č.j. 5 As 123/2020");
   });
 
+  test("extracts the contracted čj. prefix used in Czech judgments", () => {
+    const text =
+      "Tento závěr je v rozporu s rozsudkem Krajského soudu v Praze ze dne 27. 3. 2015, čj. 52 A 22/2024-32.";
+    const citations = extractCitations([{ index: 0, text }]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({
+      citationText: "čj. 52 A 22/2024",
+      citedCourtHint: "Krajského soudu v Praze",
+    });
+    expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
+      bareCitationKey("č. j. 52 A 22/2024"),
+    );
+  });
+
   test("keeps distinct case numbers from sp. zn. and č. j.", () => {
     const text = "sp. zn. 21 Cdo 1234/2020 a č. j. 5 As 999/2021";
     const citations = extractCitations([{ index: 0, text }]);
@@ -1995,6 +2010,32 @@ describe("stored decision identifier projection", () => {
       {
         type: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
         value: "[2024] Test 12",
+      },
+    ]);
+  });
+
+  test("expands a persisted NSS composite label into its citable collection reference", () => {
+    const metadata = storeDecisionIdentifiersInMetadata({}, [
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "1 Azs 4/2026-79, č. 4600/2026 Sb. NSS",
+      },
+    ]);
+
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        caseNumber: "1 Azs 4/2026",
+        ecli: null,
+        metadata,
+      }),
+    ).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "1 Azs 4/2026",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "č. 4600/2026 Sb. NSS",
       },
     ]);
   });

@@ -6,7 +6,12 @@ import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
-import type { Block, HeadingLevel, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  HeadingLevel,
+  Inline,
+  ParagraphListDepth,
+} from "@stll/legal-ast/document-ast";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -518,23 +523,87 @@ const renderInlineChildren = ({
 };
 
 const NO_ANCHORS: TextAnchor[] = [];
+const BARE_HTTP_URL_RE = /https?:\/\/[^\s<>"']+/giu;
+const BARE_URL_TRAILING_PUNCTUATION = "),.;:!?";
+
+const trimBareUrlPunctuation = (value: string): string => {
+  let end = value.length;
+  while (end > 0) {
+    const character = value.at(end - 1);
+    if (
+      character === undefined ||
+      !BARE_URL_TRAILING_PUNCTUATION.includes(character)
+    ) {
+      break;
+    }
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+const bareUrlAnchors = (
+  text: string,
+  reserved: readonly TextAnchor[],
+  initialOffset: number,
+): TextAnchor[] => {
+  const anchors: TextAnchor[] = [];
+  for (const match of text.matchAll(BARE_HTTP_URL_RE)) {
+    const start = initialOffset + match.index;
+    const url = trimBareUrlPunctuation(match[0]);
+    const end = start + url.length;
+    const safeHref = sanitizeHref(url);
+    if (
+      safeHref === undefined ||
+      url === "" ||
+      reserved.some((anchor) => anchor.end > start && anchor.start < end)
+    ) {
+      continue;
+    }
+    anchors.push({
+      end,
+      key: `bare-url-${String(start)}`,
+      render: (children) => (
+        <a
+          className="text-primary decoration-primary/60 hover:decoration-primary underline underline-offset-2"
+          href={sanitizeHref(url)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          {children}
+        </a>
+      ),
+      start,
+    });
+  }
+  return anchors;
+};
 
 export const InlineContent = ({
   activeMatchIndex,
   anchors = NO_ANCHORS,
+  initialOffset = 0,
   inlines,
   pieceId,
   ranges,
 }: {
   activeMatchIndex: number;
   anchors?: TextAnchor[] | undefined;
+  /** Offset of this inline slice within the complete search piece. */
+  initialOffset?: number | undefined;
   inlines: Inline[];
   pieceId: string;
   ranges: SearchMatchRange[];
 }) => {
-  const offset: OffsetRef = { value: 0 };
-  const context: HighlightContext = {
+  const offset: OffsetRef = { value: initialOffset };
+  const automaticLinks = bareUrlAnchors(
+    inlinesToPlainText(inlines),
     anchors,
+    initialOffset,
+  );
+  const context: HighlightContext = {
+    anchors: [...anchors, ...automaticLinks].sort(
+      (left, right) => left.start - right.start,
+    ),
     pieceId,
     ranges,
     activeMatchIndex,
@@ -548,12 +617,15 @@ export const HighlightedText = ({
   className,
   pieceId,
   ranges,
+  segmentStart = 0,
   text,
 }: {
   activeMatchIndex: number;
   className?: string | undefined;
   pieceId: string;
   ranges: SearchMatchRange[];
+  /** Offset of this slice within the complete search piece. */
+  segmentStart?: number | undefined;
   text: string;
 }) => (
   <span className={className}>
@@ -561,7 +633,7 @@ export const HighlightedText = ({
       activeMatchIndex,
       pieceId,
       ranges,
-      segmentStart: 0,
+      segmentStart,
       text,
     })}
   </span>
@@ -613,6 +685,13 @@ export const HEADING_CLASS = {
     6: "mt-[var(--reader-heading-gap-6)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1rem] leading-snug font-semibold",
   },
 } as const satisfies Record<ReaderVariant, Record<HeadingLevel, string>>;
+
+const PARAGRAPH_LIST_INDENT_CLASS = {
+  1: "ms-4 sm:ms-8",
+  2: "ms-8 sm:ms-16",
+  3: "ms-12 sm:ms-24",
+  4: "ms-16 sm:ms-32",
+} as const satisfies Record<ParagraphListDepth, string>;
 
 /**
  * A block's own address, as a link the reader can take with them.
@@ -726,16 +805,25 @@ const footnoteTextCarriesLabel = (
 
 export const BlockRenderer = ({
   activeMatchIndex,
+  anchorPresentation = "document",
   anchorsByPieceId,
   block,
+  headingPresentation,
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
   variant,
 }: {
   activeMatchIndex: number;
+  /** Embedded excerpts must not duplicate the document's global DOM ids. */
+  anchorPresentation?: "document" | "embedded" | undefined;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
+  /** A provision has a designation line, a title line and an optional
+   * action beside the designation. Other headings keep source layout. */
+  headingPresentation?:
+    | { accessory?: ReactNode | undefined; type: "provision" }
+    | undefined;
   /**
    * Render the return arrow: this is the last paragraph of a footnote, and
    * the value is the anchor of its first paragraph, where the jump lands.
@@ -750,25 +838,73 @@ export const BlockRenderer = ({
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   variant: ReaderVariant;
 }) => {
+  const documentAnchorProps = {
+    "data-anchor": block.anchorId,
+    id: anchorPresentation === "document" ? block.anchorId : undefined,
+  };
+  const permalink =
+    anchorPresentation === "document" ? (
+      <BlockPermalink anchorId={block.anchorId} />
+    ) : null;
+
   if (block.type === "heading") {
     const Tag = `h${block.level}` as const;
+    const lineBreakIndex = block.inlines.findIndex(
+      (inline) => inline.type === "line-break",
+    );
+    const isProvision = headingPresentation?.type === "provision";
+    const leadingInlines = isProvision
+      ? block.inlines.slice(
+          0,
+          lineBreakIndex === -1 ? undefined : lineBreakIndex,
+        )
+      : [];
+    const trailingInlines =
+      isProvision && lineBreakIndex !== -1
+        ? block.inlines.slice(lineBreakIndex + 1)
+        : [];
+    const sharedInlineProps = {
+      activeMatchIndex,
+      anchors: anchorsForPiece(anchorsByPieceId, block.id),
+      pieceId: block.id,
+      ranges: rangesForPiece(rangesByPieceId, block.id),
+    };
+
     return (
       <Tag
         className={cn(
           "group relative scroll-mt-[var(--reader-anchor-offset)]",
           HEADING_CLASS[variant][block.level],
+          isProvision &&
+            "text-[1rem] leading-snug font-semibold tracking-normal",
         )}
-        data-anchor={block.anchorId}
-        id={block.anchorId}
+        {...documentAnchorProps}
       >
-        <BlockPermalink anchorId={block.anchorId} />
-        <InlineContent
-          activeMatchIndex={activeMatchIndex}
-          anchors={anchorsForPiece(anchorsByPieceId, block.id)}
-          inlines={block.inlines}
-          pieceId={block.id}
-          ranges={rangesForPiece(rangesByPieceId, block.id)}
-        />
+        {permalink}
+        {isProvision ? (
+          <>
+            <span className="flex flex-wrap items-center justify-center gap-2">
+              <span className="text-foreground text-[1.35rem] leading-none font-medium">
+                <InlineContent
+                  {...sharedInlineProps}
+                  inlines={leadingInlines}
+                />
+              </span>
+              {headingPresentation.accessory}
+            </span>
+            {trailingInlines.length > 0 && (
+              <span className="mt-3 block">
+                <InlineContent
+                  {...sharedInlineProps}
+                  initialOffset={inlinesToPlainText(leadingInlines).length + 1}
+                  inlines={trailingInlines}
+                />
+              </span>
+            )}
+          </>
+        ) : (
+          <InlineContent {...sharedInlineProps} inlines={block.inlines} />
+        )}
       </Tag>
     );
   }
@@ -822,16 +958,17 @@ export const BlockRenderer = ({
           block.role === "closing" && "mt-8 text-center",
           block.role === "signature" &&
             "reader-signature text-muted-foreground mt-1 text-end",
+          block.listDepth !== undefined &&
+            PARAGRAPH_LIST_INDENT_CLASS[block.listDepth],
           // Courts that number their paragraphs are cited by that
           // number, so it hangs in the margin rather than running into
           // the sentence, the way the published decision prints it.
           block.number !== undefined && "ps-8",
         )}
-        data-anchor={block.anchorId}
+        {...documentAnchorProps}
         data-note={block.note?.type}
-        id={block.anchorId}
       >
-        <BlockPermalink anchorId={block.anchorId} />
+        {permalink}
         {showNoteLabel && (
           <button
             className="reader-note-label"
@@ -877,10 +1014,9 @@ export const BlockRenderer = ({
     return (
       <figure
         className="group relative my-4 scroll-mt-[var(--reader-anchor-offset)]"
-        data-anchor={block.anchorId}
-        id={block.anchorId}
+        {...documentAnchorProps}
       >
-        <BlockPermalink anchorId={block.anchorId} />
+        {permalink}
         <img
           alt={block.alt ?? ""}
           className="mx-auto h-auto max-w-full"
@@ -899,11 +1035,10 @@ export const BlockRenderer = ({
   // what every deep link already written points at.
   return (
     <div className="group relative">
-      <BlockPermalink anchorId={block.anchorId} />
+      {permalink}
       <table
         className="my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] font-sans text-[0.88rem]"
-        data-anchor={block.anchorId}
-        id={block.anchorId}
+        {...documentAnchorProps}
       >
         <tbody>
           {block.rows.map((row, rowIndex) => (
@@ -946,10 +1081,12 @@ export const BlockRenderer = ({
 
 export const FulltextFallback = ({
   activeMatchIndex,
+  anchorsByPieceId,
   rangesByPieceId,
   text,
 }: {
   activeMatchIndex: number;
+  anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   text: string;
 }) => {
@@ -963,13 +1100,16 @@ export const FulltextFallback = ({
         return (
           <p
             className="mb-[var(--reader-paragraph-gap)] last:mb-0"
+            data-anchor={pieceId}
+            id={pieceId}
             key={pieceId}
           >
-            <HighlightedText
+            <InlineContent
               activeMatchIndex={activeMatchIndex}
+              anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
+              inlines={[{ text: paragraph, type: "text" }]}
               pieceId={pieceId}
               ranges={rangesForPiece(rangesByPieceId, pieceId)}
-              text={paragraph}
             />
           </p>
         );

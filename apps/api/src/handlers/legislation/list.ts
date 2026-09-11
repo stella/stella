@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import {
+  caseLawStatuteCitationCountState,
   LEGISLATION_TITLE_SORT_KEY_CHARS,
   legislationDocuments,
   legislationSources,
@@ -11,9 +12,13 @@ import {
   legislationTitleName,
   legislationTitleSortKey,
 } from "@/api/db/schema";
+import {
+  statuteCitationCaseCount,
+  statuteCitationCountStateJoin,
+} from "@/api/handlers/legislation/citation-count";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import {
-  inForceToday,
+  inForceOn,
   versionSortKey,
 } from "@/api/handlers/legislation/validity-window";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -42,6 +47,8 @@ export const listStatutesQuerySchema = t.Object({
   number: t.Optional(t.String({ pattern: ACT_NUMBER_PATTERN.source })),
   /** The collection the number was published in, when the caller knows it. */
   collection: t.Optional(t.String({ pattern: COLLECTION_PATTERN.source })),
+  /** Calendar date whose applicable consolidation each work should return. */
+  asOf: t.Optional(t.String({ format: "date" })),
   language: t.Optional(t.String({ maxLength: 8 })),
   limit: t.Optional(tPaginationLimit(LIMITS.legislationListPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
@@ -120,31 +127,29 @@ const decodeListCursor = (cursor: string): ListCursor | null => {
 };
 
 /**
- * Keeps only the version in force for its work: no other in-force row of the
- * same work (source, ELI and language, the key the unique indexes use) has a
- * later validity window. An anti-join rather than `DISTINCT ON` so the query
- * stays flat and Postgres can stop at the page limit.
+ * The one applicable consolidation of a work: no later window covering the
+ * same date exists for its `(source, eli, language)`. The anti-join keeps the
+ * list flat, so Postgres can stop at the page limit.
  */
-/**
- * The one in-force consolidation of a Work the listing shows: no later
- * in-force window of the same `(source, eli, language)` exists.
- */
-export const isCurrentVersionOfWork = sql`NOT EXISTS (
-  SELECT 1
-  FROM legislation_documents AS newer
-  WHERE newer.source_id = ${legislationDocuments.sourceId}
-    AND newer.eli = ${legislationDocuments.eli}
-    AND newer.language = ${legislationDocuments.language}
-    AND newer.id <> ${legislationDocuments.id}
-    AND (${inForceToday(sql`newer.version_valid_from`, sql`newer.version_valid_to`)})
-    AND (
-      ${versionSortKey(sql`newer.version_valid_from`)},
-      newer.id
-    ) > (
-      ${versionSortKey(legislationDocuments.versionValidFrom)},
-      ${legislationDocuments.id}
-    )
-)`;
+const isVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`NOT EXISTS (
+    SELECT 1
+    FROM legislation_documents AS newer
+    WHERE newer.source_id = ${legislationDocuments.sourceId}
+      AND newer.eli = ${legislationDocuments.eli}
+      AND newer.language = ${legislationDocuments.language}
+      AND newer.id <> ${legislationDocuments.id}
+      AND (${inForceOn(sql`newer.version_valid_from`, sql`newer.version_valid_to`, asOf)})
+      AND (
+        ${versionSortKey(sql`newer.version_valid_from`)},
+        newer.id
+      ) > (
+        ${versionSortKey(legislationDocuments.versionValidFrom)},
+        ${legislationDocuments.id}
+      )
+  )`;
+
+/** The version each work's ordinary, present-day listing shows. */
+export const isCurrentVersionOfWork = isVersionOfWorkAt(sql`CURRENT_DATE`);
 
 /**
  * The work an act number names. ELIs end in `/<collection>/<year>/<number>`
@@ -197,14 +202,17 @@ export const listStatutesHandler = async (
   if (query.cursor !== undefined && cursor === null) {
     return status(400, { message: "Invalid cursor" });
   }
+  const asOf =
+    query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
   const conditions: SQL[] = [
     redistributableLegislationSource,
     eq(legislationDocuments.country, query.country.toUpperCase()),
-    inForceToday(
+    inForceOn(
       legislationDocuments.versionValidFrom,
       legislationDocuments.versionValidTo,
+      asOf,
     ),
-    isCurrentVersionOfWork,
+    isVersionOfWorkAt(asOf),
   ];
 
   if (query.language) {
@@ -280,11 +288,16 @@ export const listStatutesHandler = async (
           versionValidTo: legislationDocuments.versionValidTo,
           sourceUrl: legislationDocuments.sourceUrl,
           documentUrl: legislationDocuments.documentUrl,
+          citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
         })
         .from(legislationDocuments)
         .innerJoin(
           legislationSources,
           eq(legislationSources.id, legislationDocuments.sourceId),
+        )
+        .leftJoin(
+          caseLawStatuteCitationCountState,
+          statuteCitationCountStateJoin,
         )
         .where(and(...conditions))
         .orderBy(...ordering.orderBy)

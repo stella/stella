@@ -25,6 +25,7 @@ export const HIGH_VOLUME_TABLES = [
   // grows with the corpus and with every rebuild of it.
   "case_law_index_jobs",
   "case_law_provision_citations",
+  "case_law_statute_citation_memberships",
   "case_law_search_document_preview_passages",
   "case_law_search_documents",
   "corpus_index_projection_intents",

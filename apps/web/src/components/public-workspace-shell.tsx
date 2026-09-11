@@ -74,12 +74,6 @@ const SidebarUserMenu = lazy(async () => {
   return { default: module.SidebarUserMenu };
 });
 
-// Routes reachable without authentication. Their nav entries render as
-// real <Link>s (crawlable, no sign-in prompt); every other primary-nav
-// destination routes anonymous users through the sign-in dialog.
-const isPublicPrimaryNavRoute = (to: string): boolean =>
-  to === "/law/cases" || to === "/tools";
-
 type PublicWorkspaceShellProps = {
   /**
    * The surface's own inspector dock. It replaces the anonymous rail, so a
@@ -296,7 +290,7 @@ const PublicSidebar = ({
                 );
               }
 
-              if (isPublicPrimaryNavRoute(item.to)) {
+              if (item.audience === "public") {
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton asChild tooltip={label}>

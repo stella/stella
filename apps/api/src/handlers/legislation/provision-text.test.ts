@@ -64,6 +64,21 @@ describe("extractProvisionText", () => {
     expect(extractProvisionText(blocks, "sec-404")).toBeNull();
   });
 
+  test("resolves an unambiguous provision nested under a structural prefix", () => {
+    const annexed = [
+      heading("annex-cl_7", 2, "Čl. 7"),
+      paragraph(
+        "annex-cl_7-odst_1",
+        "Nedotknutelnost osoby a jejího soukromí je zaručena.",
+      ),
+      heading("annex-cl_8", 2, "Čl. 8"),
+    ];
+
+    expect(extractProvisionText(annexed, "cl_7")).toBe(
+      "Čl. 7\nNedotknutelnost osoby a jejího soukromí je zaručena.",
+    );
+  });
+
   test("ignores an anchor that belongs to a paragraph, not a heading", () => {
     // Only a heading opens a provision; a paragraph anchor is a deep-link
     // target inside one.

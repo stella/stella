@@ -1,29 +1,32 @@
 import { useCallback, useId, useRef, useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  parseDocumentAst,
+  resolveDocumentAnchor,
+} from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
 import { OutlineRail } from "@stll/ui/outline-rail";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
   filterOutlineItems,
   findProvisionAnchorId,
   jumpToAnchor,
-  outlineFromHeadings,
   parseOutlineJump,
   resolveAnchorPct,
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
-  withProvisionRanges,
+  statuteOutlineFromHeadings,
 } from "@/components/legal-reader/reader-outline";
-import { StatuteStatusPill } from "@/features/statutes/components/statute-status-pill";
 import { StatuteText } from "@/features/statutes/components/statute-text";
-import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
+import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
+import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
 import {
   statuteAsOfOptions,
   statuteOptions,
@@ -34,11 +37,11 @@ import type {
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
 import {
-  EM_DASH,
-  formatValidityDate,
-} from "@/features/statutes/statute-format";
+  prepareStatuteReader,
+  provisionCitationCountByBlockAnchor,
+} from "@/features/statutes/statute-reader-blocks";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useFormatter } from "@/i18n/formatting-context";
+import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -47,7 +50,6 @@ import {
   createStatuteJsonLd,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   createStatutePath,
   toStatuteCountrySegment,
@@ -247,11 +249,13 @@ const StatuteReader = ({
   work,
 }: StatuteReaderProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const navigate = Route.useNavigate();
   const asOfLabelId = useId();
   const asOf = Route.useSearch({ select: (search) => search.asOf });
   const requestedJump = Route.useSearch({ select: (search) => search.jump });
+  const routeHash = useRouterState({
+    select: (state) => state.location.hash,
+  });
   const readerRef = useRef<HTMLDivElement>(null);
 
   const header = statute ?? work;
@@ -294,8 +298,12 @@ const StatuteReader = ({
   // An unparseable or absent AST is a real state: the reader then renders
   // the plain fulltext instead of blocks.
   const ast = statute ? parseDocumentAst(statute.documentAst) : null;
-  const blocks = ast ? ast.blocks : [];
-  const outline = withProvisionRanges(outlineFromHeadings(blocks));
+  const preparedReader = prepareStatuteReader({
+    blocks: ast === null ? [] : ast.blocks,
+    statuteTitle: header.title,
+  });
+  const blocks = preparedReader.blocks;
+  const outline = statuteOutlineFromHeadings(blocks);
   const jump = parseOutlineJump(jumpValue);
   const visibleOutline = filterOutlineItems(outline, jump);
   const jumpAnchorId = findProvisionAnchorId(outline, jump);
@@ -316,24 +324,74 @@ const StatuteReader = ({
     jumpToAnchor(jumpAnchorId, container);
   });
 
+  // Citation extractors state the local provision id (`cl_7`), while a
+  // publisher may namespace it under a structural container
+  // (`prilohy-cl_7`). Resolve that unambiguous suffix once the AST is present.
+  useMountEffect(() => {
+    const container = readerRef.current;
+    const requestedAnchorId = routeHash.startsWith("#")
+      ? routeHash.slice(1)
+      : routeHash;
+    if (container === null || requestedAnchorId === "") {
+      return;
+    }
+    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
+    if (resolved === null || resolved.anchorId === requestedAnchorId) {
+      return;
+    }
+    jumpToAnchor(resolved.anchorId, container);
+  });
+
   // The keys a provision's incoming citations are filed under. Both come off
   // the document itself: nothing about the work is inferred here.
   const eli = statute?.eli.trim() ?? "";
   const jurisdiction = statute?.country.trim().toUpperCase() ?? "";
   const citationWork =
     eli === "" || jurisdiction === "" ? null : { eli, jurisdiction };
-
-  const validFrom = formatValidityDate(
-    statute?.versionValidFrom ?? null,
-    format,
+  const citationCounts = useQuery({
+    ...statuteCitationCountsOptions(
+      citationWork ?? { eli: "", jurisdiction: "" },
+    ),
+    enabled:
+      citationWork !== null && typeof statute?.citationCaseCount === "number",
+  });
+  const provisionCitationCounts = provisionCitationCountByBlockAnchor(
+    blocks,
+    citationCounts.data?.status === "ready"
+      ? citationCounts.data.provisions
+      : [],
   );
-  const validTo = formatValidityDate(statute?.versionValidTo ?? null, format);
+
   const sourceHref = statute
     ? (statute.documentUrl ?? statute.sourceUrl)
     : null;
 
   return (
     <main className="relative min-h-0 flex-1">
+      <ChromeHeaderActions>
+        {(versions.length > 1 || asOf !== undefined) && (
+          <div className="flex min-w-0 items-center gap-1">
+            <span
+              className="text-muted-foreground sr-only text-xs xl:not-sr-only xl:shrink-0"
+              id={asOfLabelId}
+            >
+              {t("statutes.asOf")}
+            </span>
+            <DatePickerPopover
+              labelledBy={asOfLabelId}
+              onChange={handleAsOfChange}
+              placeholderLabel={t("common.today")}
+              value={asOf ?? null}
+            />
+          </div>
+        )}
+        <StatuteVersionMenu
+          currentVersionId={statute?.id ?? documentId}
+          onVersionChange={handleVersionChange}
+          versions={versions}
+        />
+        <OpenOriginalButton href={sourceHref} />
+      </ChromeHeaderActions>
       {/* The rail hides itself when a document has no outline to show. */}
       <OutlineRail
         ariaLabel={t("statutes.outline")}
@@ -365,68 +423,10 @@ const StatuteReader = ({
         scrollContainerRef={readerRef}
       />
       <div className="reader-scroll h-full overflow-y-auto" ref={readerRef}>
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-          <header className="flex flex-col gap-3 border-b pb-4">
-            <h1 className="text-xl font-semibold">{header.title}</h1>
-            <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-              <span>{header.eli}</span>
-              {statute !== null && (
-                <StatuteStatusPill status={statute.status} />
-              )}
-              {statute !== null && (
-                <span>
-                  {t("statutes.validity", {
-                    from: validFrom ?? EM_DASH,
-                    to: validTo ?? t("statutes.openEnded"),
-                  })}
-                </span>
-              )}
-              {sanitizeHref(sourceHref) !== undefined && (
-                <a
-                  className="underline underline-offset-2"
-                  href={sanitizeHref(sourceHref)}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  {t("common.viewSource")}
-                </a>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <StatuteVersionSwitcher
-                currentVersionId={statute?.id ?? ""}
-                onVersionChange={handleVersionChange}
-                versions={versions}
-              />
-              {/* Reachable whenever a date is set, or a single-version act
-                  opened with one would strand the reader on an empty text
-                  with no way to clear it. */}
-              {(versions.length > 1 || asOf !== undefined) && (
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-muted-foreground text-xs"
-                    id={asOfLabelId}
-                  >
-                    {t("statutes.asOf")}
-                  </span>
-                  <DatePickerPopover
-                    labelledBy={asOfLabelId}
-                    onChange={handleAsOfChange}
-                    placeholderLabel={t("common.today")}
-                    value={asOf ?? null}
-                  />
-                </div>
-              )}
-            </div>
-            <Link
-              className="text-muted-foreground hover:text-foreground w-fit text-xs underline underline-offset-2"
-              params={{ country: toStatuteCountrySegment(header.country) }}
-              to="/law/$country/statutes"
-            >
-              {t("statutes.backToList")}
-            </Link>
-          </header>
-
+        <div
+          className="flex flex-col gap-4 py-6"
+          data-slot="reader-document-column"
+        >
           {statute === null ? (
             <p className="text-muted-foreground py-16 text-center text-sm">
               {t("statutes.noVersionInForce")}
@@ -438,6 +438,8 @@ const StatuteReader = ({
               documentId={statute.id}
               fulltext={statute.fulltext}
               language={statute.language}
+              masthead={preparedReader.masthead}
+              provisionCitationCounts={provisionCitationCounts}
               statuteTitle={statute.title}
               versionCount={versions.length}
               versionValidFrom={statute.versionValidFrom}

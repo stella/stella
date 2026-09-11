@@ -13,7 +13,15 @@ const navIds = (overrides: Partial<typeof ALL_GATES_OPEN>) =>
     (item) => item.id,
   );
 
+const publicNavIds = getWorkspacePrimaryNavItems(ALL_GATES_OPEN)
+  .filter((item) => item.audience === "public")
+  .map((item) => item.id);
+
 describe("workspace primary nav", () => {
+  test("keeps guest access beside the canonical destination", () => {
+    expect(publicNavIds).toEqual(["caseLaw", "tools"]);
+  });
+
   test("keeps every entry while all three gates are open", () => {
     expect(navIds({})).toEqual([
       "search",

@@ -89,6 +89,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // workers write to without pause, in transactions that outlast a short
   // wait.
   "20260902100000_case_law_decision_date_ceiling/migration.sql:d799f99eb97532f1f3819aae3e325fcc65d123f2a3bc7b98d4e9f41e417f8491",
+  // Acquires the two hot corpus tables in writer order before installing the
+  // citation-count triggers. The static body retries only lock_not_available
+  // under a bounded statement budget and changes no rows.
+  "20260911150000_statute_citation_counts/migration.sql:e82e24a5004eec55ebf7ec2b84be5e201e227a8cacda299b4c612aab0b703ed1",
   // Fails the Better Auth cutover before any constraint or index state is
   // committed when the trusted issuer backfill is incomplete. The static body
   // performs one bounded existence read and raises; it executes no dynamic SQL.

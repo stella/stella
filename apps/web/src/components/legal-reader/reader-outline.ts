@@ -237,6 +237,20 @@ export const withProvisionRanges = (
   });
 
 /**
+ * A statute's navigable structure: provisions and the containers that own
+ * them. Publishers sometimes promote mastheads and every preamble clause to
+ * headings; those blocks remain visible in the document, but do not become a
+ * flat list of prose in its table of contents.
+ */
+export const statuteOutlineFromHeadings = (
+  blocks: readonly Block[],
+): OutlineItem[] =>
+  withProvisionRanges(outlineFromHeadings(blocks)).filter(
+    (item) =>
+      parseProvisionDesignation(item.label) !== null || item.meta !== undefined,
+  );
+
+/**
  * The span between two designations. A container that numbers sections and
  * articles alike states the marker at both ends: `§ 1` through `Art. 2` is
  * not two sections, and dropping the second marker would say it was.

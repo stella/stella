@@ -26,20 +26,24 @@ import { cn } from "@stll/ui/utils";
 
 import { writeDecisionPassage } from "@/components/chat-decision-passage";
 import Tooltip from "@/components/tooltip";
-import { askAboutSelection } from "@/features/case-law/annotations/ask-about-selection";
-import { selectionAnchorsFrom } from "@/features/case-law/annotations/selection-anchor";
-import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import {
   ANNOTATION_COLORS,
   ANNOTATION_STYLES,
-} from "@/features/case-law/annotations/use-decision-annotations";
+} from "@/features/case-law/annotations/annotation-types";
 import type {
   AnnotationColor,
   AnnotationStyle,
   AnnotationVisibility,
   CreateAnnotationInput,
   UpdateAnnotationInput,
-} from "@/features/case-law/annotations/use-decision-annotations";
+} from "@/features/case-law/annotations/annotation-types";
+import { askAboutSelection } from "@/features/case-law/annotations/ask-about-selection";
+import {
+  readerAnnotationActivationAction,
+  readerSelectionContainmentAction,
+  selectionAnchorsFrom,
+} from "@/features/case-law/annotations/selection-anchor";
+import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -62,9 +66,9 @@ type AnnotationToolbarDecision = {
 };
 
 export type AnnotationToolbarController = {
-  create: (input: CreateAnnotationInput) => Promise<unknown>;
-  remove: (id: string) => Promise<unknown>;
-  update: (input: UpdateAnnotationInput) => Promise<unknown>;
+  create: (input: CreateAnnotationInput) => unknown;
+  remove: (id: string) => unknown;
+  update: (input: UpdateAnnotationInput) => unknown;
 };
 
 type AnnotationToolbarProps = {
@@ -74,6 +78,7 @@ type AnnotationToolbarProps = {
   activeSpans: readonly SelectionAnchor[];
   controller: AnnotationToolbarController;
   decision: AnnotationToolbarDecision;
+  mode: "authenticated" | "guest";
   onClearActive: () => void;
   /** The reader clicked a mark in the text. */
   onActivateAnnotation: (id: string) => void;
@@ -93,6 +98,13 @@ type Selected = {
   /** Reporter page the selection starts on, from the last page marker
    * before it; null before the first marker or in unpaginated documents. */
   pincite: string | null;
+};
+
+type ReaderSelectionSnapshot = {
+  anchorNode: Node;
+  anchorOffset: number;
+  focusNode: Node;
+  focusOffset: number;
 };
 
 /** Chrome that must never leak into a quotation. */
@@ -203,6 +215,7 @@ export const AnnotationToolbar = ({
   activeSpans,
   controller,
   decision,
+  mode,
   onActivateAnnotation,
   onClearActive,
   onCompose,
@@ -233,7 +246,77 @@ export const AnnotationToolbar = ({
     const ownerDoc = root.ownerDocument;
     setDoc(ownerDoc);
     let frame = 0;
+    let readerDragActive = false;
+    let restoringReaderSelection = false;
+    let readerSelectionSnapshot: ReaderSelectionSnapshot | null = null;
+    const isInsideReader = (node: Node | null): boolean =>
+      node !== null && root.contains(node);
+    const isValidSelectionPoint = (node: Node, offset: number): boolean =>
+      root.contains(node) &&
+      offset <=
+        (node instanceof CharacterData
+          ? node.data.length
+          : node.childNodes.length);
+    const containReaderSelection = (selection: Selection): void => {
+      if (restoringReaderSelection || selection.rangeCount === 0) {
+        return;
+      }
+      const action = readerSelectionContainmentAction({
+        anchor: isInsideReader(selection.anchorNode) ? "inside" : "outside",
+        drag: readerDragActive ? "active" : "inactive",
+        focus: isInsideReader(selection.focusNode) ? "inside" : "outside",
+        snapshot: readerSelectionSnapshot === null ? "empty" : "available",
+      });
+      switch (action) {
+        case "ignore":
+          return;
+        case "remember":
+          if (selection.anchorNode === null || selection.focusNode === null) {
+            return;
+          }
+          readerSelectionSnapshot = {
+            anchorNode: selection.anchorNode,
+            anchorOffset: selection.anchorOffset,
+            focusNode: selection.focusNode,
+            focusOffset: selection.focusOffset,
+          };
+          return;
+        case "restore": {
+          if (
+            readerSelectionSnapshot === null ||
+            !isValidSelectionPoint(
+              readerSelectionSnapshot.anchorNode,
+              readerSelectionSnapshot.anchorOffset,
+            ) ||
+            !isValidSelectionPoint(
+              readerSelectionSnapshot.focusNode,
+              readerSelectionSnapshot.focusOffset,
+            )
+          ) {
+            readerSelectionSnapshot = null;
+            return;
+          }
+          restoringReaderSelection = true;
+          selection.setBaseAndExtent(
+            readerSelectionSnapshot.anchorNode,
+            readerSelectionSnapshot.anchorOffset,
+            readerSelectionSnapshot.focusNode,
+            readerSelectionSnapshot.focusOffset,
+          );
+          restoringReaderSelection = false;
+          return;
+        }
+        default: {
+          action satisfies never;
+          return panic(`Unhandled selection action: ${String(action)}`);
+        }
+      }
+    };
     const readSelection = () => {
+      const currentSelection = ownerDoc.getSelection();
+      if (currentSelection !== null) {
+        containReaderSelection(currentSelection);
+      }
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const selection = ownerDoc.getSelection();
@@ -287,25 +370,44 @@ export const AnnotationToolbar = ({
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
+      readerDragActive =
+        event.button === 0 && target instanceof Node && root.contains(target);
+      readerSelectionSnapshot = null;
       if (!(target instanceof Node) || barRef.current?.contains(target)) {
         return;
       }
+      onClearActive();
+    };
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
       let element: Element | null = null;
       if (target instanceof Element) {
         element = target;
-      } else if (target.parentNode instanceof Element) {
-        element = target.parentNode;
+      } else if (
+        target instanceof Node &&
+        target.parentElement instanceof Element
+      ) {
+        element = target.parentElement;
       }
-      const mark = element?.closest("[data-annotation-id]") ?? null;
-      const id =
-        mark instanceof HTMLElement
-          ? (mark.dataset["annotationId"] ?? null)
-          : null;
-      if (mark !== null && id !== null && root.contains(mark)) {
-        onActivateAnnotation(id);
+      const mark =
+        element?.closest<HTMLElement>("[data-annotation-id]") ?? null;
+      const id = mark?.dataset["annotationId"];
+      if (mark === null || id === undefined || !root.contains(mark)) {
         return;
       }
-      onClearActive();
+      const selection = ownerDoc.getSelection();
+      const action = readerAnnotationActivationAction({
+        selection:
+          selection === null || selection.isCollapsed ? "collapsed" : "range",
+        target: "annotation",
+      });
+      if (action === "activate") {
+        onActivateAnnotation(id);
+      }
+    };
+    const onPointerEnd = () => {
+      readerDragActive = false;
+      readerSelectionSnapshot = null;
     };
     // Dragging selected words carries the passage with its decision, so a
     // drop on the chat composer lands as chips rather than loose text.
@@ -330,12 +432,18 @@ export const AnnotationToolbar = ({
     ownerDoc.addEventListener("selectionchange", readSelection);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
+    ownerDoc.addEventListener("pointercancel", onPointerEnd);
+    ownerDoc.addEventListener("pointerup", onPointerEnd);
+    root.addEventListener("click", onClick);
     root.addEventListener("dragstart", onDragStart);
     return () => {
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", readSelection);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
+      ownerDoc.removeEventListener("pointercancel", onPointerEnd);
+      ownerDoc.removeEventListener("pointerup", onPointerEnd);
+      root.removeEventListener("click", onClick);
       root.removeEventListener("dragstart", onDragStart);
     };
   });
@@ -510,19 +618,21 @@ export const AnnotationToolbar = ({
               <span className="bg-border mx-1 h-4 w-px" />
             </>
           )}
-          <VisibilityToggle
-            onChange={(next) => {
-              detached(
-                controller.update({
-                  change: "visibility",
-                  id: activeAnnotation.id,
-                  visibility: next,
-                }),
-                "case-law.annotation-visibility",
-              );
-            }}
-            value={activeAnnotation.visibility}
-          />
+          {mode === "authenticated" && (
+            <VisibilityToggle
+              onChange={(next) => {
+                detached(
+                  controller.update({
+                    change: "visibility",
+                    id: activeAnnotation.id,
+                    visibility: next,
+                  }),
+                  "case-law.annotation-visibility",
+                );
+              }}
+              value={activeAnnotation.visibility}
+            />
+          )}
           <Tooltip
             content={removeLabel}
             render={
@@ -599,12 +709,12 @@ export const AnnotationToolbar = ({
                   </PreviewPane>
                 }
               >
-                {COPY_MODES.map((mode) => (
+                {COPY_MODES.map((copyMode) => (
                   <button
                     className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
-                    key={mode}
+                    key={copyMode}
                     onClick={() => {
-                      const text = copyTextFor(mode, selected, decision);
+                      const text = copyTextFor(copyMode, selected, decision);
                       detached(
                         (async () => {
                           const copied = await copyToClipboard(text);
@@ -625,35 +735,39 @@ export const AnnotationToolbar = ({
                       setCopyOpen(false);
                       clearSelection();
                     }}
-                    onFocus={() => setCopyPreviewMode(mode)}
+                    onFocus={() => setCopyPreviewMode(copyMode)}
                     onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => setCopyPreviewMode(mode)}
+                    onMouseEnter={() => setCopyPreviewMode(copyMode)}
                     type="button"
                   >
-                    {t(`caseLaw.copyMenu.${mode}`)}
+                    {t(`caseLaw.copyMenu.${copyMode}`)}
                   </button>
                 ))}
               </MenuPreviewLayout>
             </div>
           )}
         </div>
-        <span className="bg-border mx-1 h-4 w-px" />
-        <Button
-          onClick={() => {
-            askAboutSelection({
-              caseNumber: decision.caseNumber,
-              court: decision.court,
-              decisionId: decision.id,
-              quote: selected.text,
-            });
-            clearSelection();
-          }}
-          size="sm"
-          variant="ghost"
-        >
-          <SparklesIcon className="size-3.5" />
-          {t("common.askAI")}
-        </Button>
+        {mode === "authenticated" && (
+          <>
+            <span className="bg-border mx-1 h-4 w-px" />
+            <Button
+              onClick={() => {
+                askAboutSelection({
+                  caseNumber: decision.caseNumber,
+                  court: decision.court,
+                  decisionId: decision.id,
+                  quote: selected.text,
+                });
+                clearSelection();
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <SparklesIcon className="size-3.5" />
+              {t("common.askAI")}
+            </Button>
+          </>
+        )}
         {spans.length > 0 && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />

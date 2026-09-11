@@ -9,6 +9,8 @@ import { toSafeId } from "@/lib/safe-id";
 const PROVISIONS_PAGE_SIZE = 50;
 /** One work resolves to one act; the extra rows absorb a loose title match. */
 const STATUTE_LOOKUP_PAGE_SIZE = 5;
+const ELI_ACT_TAIL_RE =
+  /\/(?<collection>[a-z0-9]{1,8})\/(?<year>[0-9]{4})\/(?<number>[0-9]{1,5})\/?$/u;
 /**
  * Consolidations read in one request, the endpoint's own maximum. An act
  * amended more times than this leaves its oldest versions unread, and a
@@ -26,7 +28,7 @@ const decisionProvisionKeys = {
   statuteByEli: (key: StatuteByEliKey) => [
     ...decisionProvisionKeys.all,
     "statute",
-    { country: key.country, eli: key.eli },
+    { asOf: key.asOf, country: key.country, eli: key.eli },
   ],
   statuteVersions: (documentId: string) => [
     ...decisionProvisionKeys.all,
@@ -64,9 +66,33 @@ export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
   });
 
 export type StatuteByEliKey = {
+  /** Date whose applicable consolidation must resolve the cited work. */
+  asOf: string;
   /** Jurisdiction of the cited work, which need not be the court's own. */
   country: string;
   eli: string;
+};
+
+/**
+ * Prefer the exact act-number path when an ELI exposes its collection tail.
+ * A free-text ELI query ranks `20/1993` ahead of `2/1993`, so a bounded result
+ * page can omit the exact work even though the corpus holds it.
+ */
+const statuteLookupQuery = ({ asOf, country, eli }: StatuteByEliKey) => {
+  const match = ELI_ACT_TAIL_RE.exec(eli);
+  const collection = match?.groups?.["collection"];
+  const year = match?.groups?.["year"];
+  const number = match?.groups?.["number"];
+  if (collection === undefined || year === undefined || number === undefined) {
+    return { asOf, country, limit: STATUTE_LOOKUP_PAGE_SIZE, query: eli };
+  }
+  return {
+    asOf,
+    collection,
+    country,
+    limit: STATUTE_LOOKUP_PAGE_SIZE,
+    number: `${number}/${year}`,
+  };
 };
 
 /**
@@ -79,16 +105,12 @@ export type StatuteByEliKey = {
  * The list read matches loosely (it is a search), so the answer is kept only
  * on an exact ELI.
  */
-export const statuteByEliOptions = ({ country, eli }: StatuteByEliKey) =>
+export const statuteByEliOptions = ({ asOf, country, eli }: StatuteByEliKey) =>
   queryOptions({
-    queryKey: decisionProvisionKeys.statuteByEli({ country, eli }),
+    queryKey: decisionProvisionKeys.statuteByEli({ asOf, country, eli }),
     queryFn: async ({ signal }) => {
       const response = await api.law.statutes.get({
-        query: {
-          country,
-          limit: STATUTE_LOOKUP_PAGE_SIZE,
-          query: eli,
-        },
+        query: statuteLookupQuery({ asOf, country, eli }),
         fetch: { signal },
       });
 

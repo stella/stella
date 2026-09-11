@@ -578,6 +578,13 @@
       "colorViolet": "Violetinė",
       "colorYellow": "Geltona",
       "commentPlaceholder": "Rašykite komentarą…",
+      "createFreeAccount": "Sukurti nemokamą paskyrą",
+      "guestAuthor": "Jūs",
+      "guestLimitReached": "Šiame skirtuke galima laikyti iki {count} paryškinimų ir pastabų. Norėdami išsaugoti daugiau, sukurkite paskyrą.",
+      "guestMigrationComplete": "Paryškinimai ir pastabos išsaugoti.",
+      "guestMigrationFailed": "Kai kurių paryškinimų ir pastabų nepavyko išsaugoti. Jie liks šiame skirtuke kitam bandymui.",
+      "guestSavePrompt": "Jūsų paryškinimai ir pastabos bus išsaugoti sukūrus nemokamą paskyrą.",
+      "guestStorageUnavailable": "Paryškinimų ir pastabų nepavyko išsaugoti šiame skirtuke.",
       "highlight": "Paryškinti",
       "removeHighlight": "Pašalinti paryškinimą",
       "sharedBadge": "Bendrinama",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Galiojantis",
       "draft": "Projektinis",
+      "future": "Būsimas",
       "historical": "Pakeistas",
       "repealed": "Panaikintas"
     },

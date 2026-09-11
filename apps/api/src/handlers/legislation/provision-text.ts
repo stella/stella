@@ -1,3 +1,4 @@
+import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 /**
@@ -13,17 +14,13 @@ export const extractProvisionText = (
   blocks: readonly Block[],
   anchorId: string,
 ): string | null => {
-  const start = blocks.findIndex(
-    (block) => block.type === "heading" && block.anchorId === anchorId,
-  );
-
-  if (start === -1) {
+  const heading = resolveDocumentHeadingAnchor(blocks, anchorId);
+  if (heading === null) {
     return null;
   }
 
-  const heading = blocks.at(start);
-
-  if (heading?.type !== "heading") {
+  const start = blocks.indexOf(heading);
+  if (start === -1) {
     return null;
   }
 

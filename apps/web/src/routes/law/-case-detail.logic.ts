@@ -252,7 +252,6 @@ export const loadPublicCaseLawDecisionRoute = async ({
   if (routeCountry === null) {
     return launchReadinessNotFound();
   }
-
   const routeDecisionId = extractCaseLawDecisionIdFromIdRouteParam(params.slug);
   if (routeDecisionId) {
     const decision = ensureRouteCountryDecision(

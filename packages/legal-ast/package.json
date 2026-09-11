@@ -31,6 +31,14 @@
       "types": "./src/analysis.ts",
       "import": "./src/analysis.ts"
     },
+    "./case-law-heading": {
+      "types": "./src/case-law-heading.ts",
+      "import": "./src/case-law-heading.ts"
+    },
+    "./czech-document-roles": {
+      "types": "./src/czech-document-roles.ts",
+      "import": "./src/czech-document-roles.ts"
+    },
     "./document-ast": {
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"

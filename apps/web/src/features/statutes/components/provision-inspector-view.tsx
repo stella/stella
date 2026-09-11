@@ -12,6 +12,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import {
   CitingDecisionItem,
@@ -20,6 +21,7 @@ import {
 import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
+import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { topCitingDecisionsOptions } from "@/features/statutes/queries/citing-decisions";
@@ -51,6 +53,10 @@ export const ProvisionInspectorView = ({
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const { data: versions } = useQuery(
     statuteVersionsOptions(payload.documentId),
+  );
+  const availableVersions = optionalArray(versions);
+  const selectedVersion = availableVersions.find(
+    (version) => version.id === payload.documentId,
   );
   // The tab keeps its identity across versions: the reader is still looking
   // at the same provision, in another consolidation's wording.
@@ -84,13 +90,26 @@ export const ProvisionInspectorView = ({
       <InspectorTabHeader label={tab.label} onClose={onClose} />
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-6 p-4">
+          {selectedVersion !== undefined && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <StatuteValidityIndicator
+                status={selectedVersion.status}
+                validFrom={selectedVersion.versionValidFrom}
+                validTo={selectedVersion.versionValidTo}
+              />
+              <OpenOriginalButton
+                href={selectedVersion.documentUrl ?? selectedVersion.sourceUrl}
+              />
+            </div>
+          )}
+
           {/* The tab header already names the provision and the act; this
-              row only offers the consolidation to read and the way out. */}
+              row offers the consolidation to read and the way out. */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <StatuteVersionSwitcher
               currentVersionId={payload.documentId}
               onVersionChange={switchVersion}
-              versions={optionalArray(versions)}
+              versions={availableVersions}
             />
             <Link
               className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"

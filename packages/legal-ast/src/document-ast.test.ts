@@ -12,6 +12,8 @@ import {
   parseDocumentAst,
   parseUsableDocumentAst,
   persistedAstDegradations,
+  resolveDocumentAnchor,
+  resolveDocumentHeadingAnchor,
   withProjectedPlainText,
 } from "./document-ast";
 import type {
@@ -62,6 +64,61 @@ const documentAst = {
     },
   ],
 } satisfies DocumentAst;
+
+describe("document anchor resolution", () => {
+  const blocks = [
+    {
+      id: "h-main",
+      anchorId: "cl_7",
+      type: "heading",
+      level: 2,
+      inlines: [{ type: "text", text: "Čl. 7" }],
+      plainText: "Čl. 7",
+    },
+    {
+      id: "h-annex",
+      anchorId: "prilohy-cl_7",
+      type: "heading",
+      level: 2,
+      inlines: [{ type: "text", text: "Čl. 7" }],
+      plainText: "Čl. 7",
+    },
+    {
+      id: "p-annex",
+      anchorId: "prilohy-cl_7-odst_1",
+      type: "paragraph",
+      inlines: [{ type: "text", text: "First paragraph." }],
+      plainText: "First paragraph.",
+    },
+  ] satisfies Block[];
+
+  test("an exact anchor wins over a structurally qualified suffix", () => {
+    expect(resolveDocumentHeadingAnchor(blocks, "cl_7")?.id).toBe("h-main");
+  });
+
+  test("a unique structural suffix resolves for headings and subdivisions", () => {
+    expect(resolveDocumentHeadingAnchor(blocks.slice(1), "cl_7")?.id).toBe(
+      "h-annex",
+    );
+    expect(resolveDocumentAnchor(blocks, "cl_7-odst_1")?.id).toBe("p-annex");
+  });
+
+  test("an ambiguous structural suffix resolves nowhere", () => {
+    const repeated = [
+      ...blocks.slice(1),
+      {
+        id: "h-second",
+        anchorId: "schedule-cl_7",
+        type: "heading",
+        level: 2,
+        inlines: [{ type: "text", text: "Čl. 7" }],
+        plainText: "Čl. 7",
+      },
+    ] satisfies Block[];
+
+    expect(resolveDocumentHeadingAnchor(repeated, "cl_7")).toBeNull();
+  });
+});
 
 describe("isDocumentAst", () => {
   test("accepts a well-formed v1 document AST", () => {
@@ -252,6 +309,27 @@ describe("parseDocumentAst", () => {
 
     expect(parseDocumentAst(JSON.stringify(withFootnote))).toEqual(
       withFootnote,
+    );
+  });
+
+  test("round-trips additive list depth on a v1 paragraph", () => {
+    const withListDepth = {
+      ...documentAst,
+      blocks: [
+        ...documentAst.blocks,
+        {
+          id: "li1",
+          anchorId: "par_2-odst_1-pism_a",
+          type: "paragraph",
+          listDepth: 1,
+          inlines: [{ type: "text", text: "a) provider" }],
+          plainText: "a) provider",
+        },
+      ],
+    } as const satisfies DocumentAst;
+
+    expect(parseDocumentAst(JSON.stringify(withListDepth))).toEqual(
+      withListDepth,
     );
   });
 });

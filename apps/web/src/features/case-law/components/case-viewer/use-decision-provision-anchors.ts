@@ -14,6 +14,7 @@ import {
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
 import { optionalArray } from "@/lib/arrays";
+import { decisionDateToIso } from "@/lib/decision-date";
 import type { SafeId } from "@/lib/safe-id";
 
 /**
@@ -25,10 +26,12 @@ const LINKED_WORKS_LIMIT = 12;
 export type DecisionProvisionAnchor =
   ProvisionAnchorSource<CitedProvisionTarget>;
 
-type WorkKey = { eli: string; jurisdiction: string };
+type WorkKey = { asOf: string; eli: string; jurisdiction: string };
 
-const workKeyOf = ({ eli, jurisdiction }: WorkKey): string =>
-  `${jurisdiction}/${eli}`;
+const workKeyOf = ({
+  eli,
+  jurisdiction,
+}: Pick<WorkKey, "eli" | "jurisdiction">): string => `${jurisdiction}/${eli}`;
 
 /**
  * The heading a cited subdivision belongs to: `par_90-odst_5` is filed, cited
@@ -45,6 +48,7 @@ export const provisionHeadingAnchor = (anchor: string): string =>
  */
 export const useDecisionProvisionAnchors = (
   decisionId: SafeId<"caseLawDecision">,
+  decisionDate: Date | string | null,
 ): DecisionProvisionAnchor[] => {
   const renderPart = useProvisionPartRenderer();
   const { data } = useInfiniteQuery(
@@ -54,8 +58,13 @@ export const useDecisionProvisionAnchors = (
 
   const works: WorkKey[] = [];
   const seen = new Set<string>();
+  const decisionAsOf = decisionDateToIso(decisionDate);
   for (const row of rows) {
     if (row.workEli === null) {
+      continue;
+    }
+    const asOf = row.versionValidFrom ?? decisionAsOf;
+    if (asOf === null) {
       continue;
     }
     const key = workKeyOf({ eli: row.workEli, jurisdiction: row.jurisdiction });
@@ -63,12 +72,16 @@ export const useDecisionProvisionAnchors = (
       continue;
     }
     seen.add(key);
-    works.push({ eli: row.workEli, jurisdiction: row.jurisdiction });
+    works.push({ asOf, eli: row.workEli, jurisdiction: row.jurisdiction });
   }
 
   const statutes = useQueries({
     queries: works.map((work) =>
-      statuteByEliOptions({ country: work.jurisdiction, eli: work.eli }),
+      statuteByEliOptions({
+        asOf: work.asOf,
+        country: work.jurisdiction,
+        eli: work.eli,
+      }),
     ),
   });
   const statuteByWork = new Map<
@@ -130,6 +143,7 @@ export const useDecisionProvisionAnchors = (
       id: `${row.anchor}-${String(row.spanStart)}`,
       reference: row,
       sentenceText: row.sentenceText,
+      spanStart: row.spanStart,
       target: {
         document: { country: document.country, id: document.id },
         payload: {

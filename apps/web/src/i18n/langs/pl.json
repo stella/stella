@@ -578,6 +578,13 @@
       "colorViolet": "Fioletowy",
       "colorYellow": "Żółty",
       "commentPlaceholder": "Napisz komentarz…",
+      "createFreeAccount": "Utwórz bezpłatne konto",
+      "guestAuthor": "Ty",
+      "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
+      "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
+      "guestMigrationFailed": "Niektórych wyróżnień i notatek nie udało się zapisać. Pozostaną na tej karcie do kolejnej próby.",
+      "guestSavePrompt": "Twoje wyróżnienia i notatki zostaną zapisane po utworzeniu bezpłatnego konta.",
+      "guestStorageUnavailable": "Nie udało się zapisać wyróżnień i notatek na tej karcie.",
       "highlight": "Wyróżnij",
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Obowiązujący",
       "draft": "Projektowany",
+      "future": "Przyszły",
       "historical": "Zastąpiony",
       "repealed": "Uchylony"
     },

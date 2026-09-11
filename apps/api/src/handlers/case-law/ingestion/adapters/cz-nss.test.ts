@@ -19,6 +19,8 @@ import {
   test,
 } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNssDecision,
@@ -209,6 +211,7 @@ const detailField = (fieldId: string, value: string): string =>
   `<span class="det-textval" data-toggle="tooltip" title="${value}"> ${value}</span></div>`;
 
 type DetailPageOptions = {
+  citation?: string | undefined;
   ecli: string;
   /**
    * The court's headnote, which the portal prints only for the decisions it
@@ -218,9 +221,14 @@ type DetailPageOptions = {
   legalSentence?: string | undefined;
 };
 
-const detailPage = ({ ecli, legalSentence }: DetailPageOptions): string => {
+const detailPage = ({
+  citation,
+  ecli,
+  legalSentence,
+}: DetailPageOptions): string => {
   const fields = [
     detailField("ecli", ecli),
+    ...(citation === undefined ? [] : [detailField("citace", citation)]),
     detailField("druhdokumentuavyrokrozhodnuti", "Rozsudek"),
     detailField("datumvydanirozhodnuti", "10.06.2026"),
     ...(legalSentence === undefined
@@ -248,6 +256,8 @@ type StubOptions = {
   detailStatus?: number;
   /** The headnote the detail page states, if the court wrote one. */
   legalSentence?: string | undefined;
+  /** The portal's composite docket and collection label. */
+  citation?: string | undefined;
 };
 
 const htmlResponse = (body: string, status = 200): Response =>
@@ -261,6 +271,7 @@ const utf16Response = (body: string): Response =>
   new Response(Buffer.from(body, "utf16le"));
 
 const installStub = ({
+  citation,
   continuation = [],
   documentStatus = 200,
   detailStatus = documentStatus,
@@ -299,6 +310,7 @@ const installStub = ({
           return detailStatus === 200
             ? htmlResponse(
                 detailPage({
+                  citation,
                   ecli: "ECLI:CZ:MSPH:2026:1.Az.4.2026.79",
                   legalSentence,
                 }),
@@ -1187,6 +1199,27 @@ describe("cz-nss buildDecision", () => {
     expect(built.decision.sourceUrl).toBe(
       `${BASE_URL}/DokumentDetail/Index/${MUNICIPAL_ROW.documentId}`,
     );
+  });
+
+  test("projects the collection reference from the portal's composite citation", async () => {
+    const payload = await listedRow();
+    installStub({
+      citation: "1 Az 4/2026-79, č. 4600/2026 Sb. NSS",
+      search: [],
+    });
+
+    const built = await reconciliation.buildDecision(payload);
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.identifiers).toEqual([
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "č. 4600/2026 Sb. NSS",
+      },
+    ]);
   });
 
   test("a payload parked before the sheet was kept still builds", async () => {

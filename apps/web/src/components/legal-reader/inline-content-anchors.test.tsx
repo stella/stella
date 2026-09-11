@@ -141,6 +141,33 @@ const renderInlines = (nodes: Inline[]) =>
   );
 
 describe("InlineContent kinds", () => {
+  test("turns a bare external URL into a distinguished safe link", () => {
+    const html = renderInlines([
+      {
+        text: "Data jsou na http://example.test/report/1). Další text.",
+        type: "text",
+      },
+    ]);
+
+    expect(html).toContain(
+      'href="http://example.test/report/1" rel="noopener noreferrer" target="_blank"',
+    );
+    expect(html).toContain("text-primary");
+    expect(html).toContain("</a>). Další text.");
+  });
+
+  test("does not nest an automatic URL inside an existing source link", () => {
+    const html = renderInlines([
+      {
+        children: [{ text: "https://example.test/report", type: "text" }],
+        href: "https://example.test/report",
+        type: "link",
+      },
+    ]);
+
+    expect(html.match(/<a /gu)).toHaveLength(1);
+  });
+
   test("emphasis kinds render as the elements the source printed", () => {
     expect(
       renderInlines([

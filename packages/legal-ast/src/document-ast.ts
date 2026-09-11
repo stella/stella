@@ -140,6 +140,10 @@ export type ParagraphNote = {
   noteId?: string | undefined;
 };
 
+/** Visual nesting of an enumerated paragraph. Its printed marker remains in
+ * the inline text; this field preserves only the publisher's indentation. */
+export type ParagraphListDepth = 1 | 2 | 3 | 4;
+
 export type ParagraphBlock = {
   id: string;
   anchorId: string;
@@ -150,6 +154,7 @@ export type ParagraphBlock = {
    * occur in any positional section.
    */
   note?: ParagraphNote | undefined;
+  listDepth?: ParagraphListDepth | undefined;
   /**
    * Paragraph number assigned by the publishing court, when the source
    * numbers its paragraphs (CJEU judgments, opinions and orders do).
@@ -224,6 +229,49 @@ const BLOCK_CARRIES_INLINES = {
 
 export const hasBlockInlines = (block: Block): block is InlineBlock =>
   BLOCK_CARRIES_INLINES[block.type];
+
+/**
+ * Resolve an AST anchor stated without its structural parent path. Exact
+ * anchors win; a suffix alias is usable only when it identifies one block.
+ * This lets a legal reference such as `cl_7` reach `prilohy-cl_7` without
+ * guessing when several annexes repeat the same local designation.
+ */
+const resolveAnchorCandidate = <TBlock extends Block>(
+  blocks: readonly TBlock[],
+  requestedAnchorId: string,
+): TBlock | null => {
+  const exact = blocks.find(({ anchorId }) => anchorId === requestedAnchorId);
+  if (exact !== undefined) {
+    return exact;
+  }
+
+  const suffix = `-${requestedAnchorId}`;
+  let resolved: TBlock | null = null;
+  for (const block of blocks) {
+    if (!block.anchorId.endsWith(suffix)) {
+      continue;
+    }
+    if (resolved !== null) {
+      return null;
+    }
+    resolved = block;
+  }
+  return resolved;
+};
+
+export const resolveDocumentAnchor = (
+  blocks: readonly Block[],
+  requestedAnchorId: string,
+): Block | null => resolveAnchorCandidate(blocks, requestedAnchorId);
+
+export const resolveDocumentHeadingAnchor = (
+  blocks: readonly Block[],
+  requestedAnchorId: string,
+): HeadingBlock | null =>
+  resolveAnchorCandidate(
+    blocks.filter((block): block is HeadingBlock => block.type === "heading"),
+    requestedAnchorId,
+  );
 
 /** The roles each block type may carry; total over `Block["type"]`. */
 export const BLOCK_ROLES = {
@@ -558,6 +606,7 @@ const paragraphEntries = {
       }),
     ]),
   ),
+  listDepth: v.optional(v.picklist([1, 2, 3, 4])),
   number: v.optional(v.pipe(v.number(), v.finite())),
   inlines: inlineArraySchema,
 };

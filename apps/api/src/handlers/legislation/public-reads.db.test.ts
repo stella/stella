@@ -240,7 +240,6 @@ beforeAll(
         },
       },
     ]);
-
     await db.insert(legislationDocuments).values([
       seedDocument({
         id: civilCodeSuperseded,
@@ -592,7 +591,12 @@ describe("legislation shelf", () => {
 });
 
 type StatutePage = {
-  items: { id: string; title: string; versionValidFrom: string | null }[];
+  items: {
+    citationCaseCount: number | null;
+    id: string;
+    title: string;
+    versionValidFrom: string | null;
+  }[];
   nextCursor: string | null;
 };
 
@@ -672,6 +676,7 @@ describe("public statute list", () => {
 
     expect(longOfficialTitle.length).toBeGreaterThan(1024);
     expect(page.items.map((item) => item.id)).toEqual(recencyOrder);
+    expect(page.items.every((item) => item.citationCaseCount === 0)).toBe(true);
     expect(
       page.items.every(
         (item) =>
@@ -688,6 +693,17 @@ describe("public statute list", () => {
     );
 
     expect(page.items.map((item) => item.id)).not.toContain(sunsetAct);
+  });
+
+  test("returns a historical work when the requested date covers it", async () => {
+    const page = expectPage(
+      await listStatutesHandler(
+        { asOf: yesterday, country: "CZE", number: "222/1998" },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([sunsetAct]);
   });
 
   test("narrows the page to one language", async () => {
@@ -1043,6 +1059,7 @@ describe("public statute read", () => {
     });
     expect(publicRead).not.toHaveProperty("metadata");
     expect(publicRead).toHaveProperty("title", "Civil Code");
+    expect(publicRead).toHaveProperty("citationCaseCount", 0);
   });
 
   test("returns full text only as the AST fallback", async () => {

@@ -84,6 +84,11 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Provision references extracted from decision text: global legal data read
   // by the public case-law reads, written only by the extraction loop.
   "case_law_provision_citations",
+  // Distinct-decision statute citation projections: request code reads the
+  // rollups and completion receipt; ingestion triggers own every mutation.
+  "case_law_statute_citation_memberships",
+  "case_law_statute_citation_counts",
+  "case_law_statute_citation_count_state",
   // Publisher-stated decision identifiers: global legal data read by public
   // case-law projections, written only by ingestion and the bounded backfill.
   "case_law_decision_identifiers",

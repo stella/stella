@@ -19,6 +19,8 @@ export type ProvisionAnchorSource<T = unknown> = {
     "letter" | "section" | "sectionSuffix" | "subsection" | "unit"
   >;
   sentenceText: string;
+  /** Global source offset; distinguishes repeated references in one sentence. */
+  spanStart: number;
   target: T;
 };
 
@@ -109,12 +111,32 @@ export const locateProvisionAnchors = <T>({
   }
 
   const hitsByBlock = new Map<string, ProvisionAnchorSpan<T>[]>();
-  for (const source of provisions) {
+  const occurrenceByReference = new Map<
+    string,
+    { ordinal: number; spanStart: number }
+  >();
+  const orderedProvisions = [...provisions].sort(
+    (left, right) => left.spanStart - right.spanStart,
+  );
+  for (const source of orderedProvisions) {
     const head = sentenceHeadPattern(source.sentenceText);
     if (head === null) {
       continue;
     }
     const reference = referencePattern(source.reference);
+    const occurrenceKey = `${source.sentenceText}\u0000${reference.source}`;
+    const previousOccurrence = occurrenceByReference.get(occurrenceKey);
+    let ordinal = 0;
+    if (previousOccurrence !== undefined) {
+      ordinal = previousOccurrence.ordinal;
+      if (source.spanStart !== previousOccurrence.spanStart) {
+        ordinal += 1;
+      }
+    }
+    occurrenceByReference.set(occurrenceKey, {
+      ordinal,
+      spanStart: source.spanStart,
+    });
     for (const { block, text } of texts) {
       const sentenceStart = head.exec(text)?.index;
       if (sentenceStart === undefined) {
@@ -126,9 +148,17 @@ export const locateProvisionAnchors = <T>({
         sentenceStart,
         sentenceStart + Math.ceil(source.sentenceText.length * 1.5) + 40,
       );
-      const match = reference.exec(window);
+      const occurrencePattern = new RegExp(reference.source, "gu");
+      let match = occurrencePattern.exec(window);
+      for (
+        let occurrenceIndex = 0;
+        match !== null && occurrenceIndex < ordinal;
+        occurrenceIndex += 1
+      ) {
+        match = occurrencePattern.exec(window);
+      }
       if (match === null) {
-        break;
+        continue;
       }
       const start = sentenceStart + match.index;
       const spans = hitsByBlock.get(block.id);

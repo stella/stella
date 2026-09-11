@@ -1,5 +1,3 @@
-import { Fragment } from "react";
-
 import { useTranslations } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -11,6 +9,7 @@ import {
 } from "@/components/legal-reader/document-ast-text";
 import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
+import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 
 /**
  * What a provision's incoming citations are filed under: the work's own
@@ -31,6 +30,8 @@ type StatuteTextProps = {
   documentId: string;
   fulltext: string | null;
   language: string;
+  masthead: StatuteMastheadData | null;
+  provisionCitationCounts: ReadonlyMap<string, number>;
   statuteTitle: string;
   /** A Work with a single consolidation has no history to offer. */
   versionCount: number;
@@ -57,6 +58,34 @@ const READER_STYLE = {
 const NO_RANGES = {};
 const NO_ACTIVE_MATCH = -1;
 
+const StatuteMasthead = ({ masthead }: { masthead: StatuteMastheadData }) => (
+  <header
+    className="group relative mx-auto mb-12 max-w-5xl scroll-mt-[var(--reader-anchor-offset)] text-center"
+    data-anchor={masthead.anchorId}
+    id={masthead.anchorId}
+  >
+    <p className="mb-4 font-sans text-[1.55rem] leading-tight font-bold">
+      {masthead.citation}
+    </p>
+    <p className="font-sans text-[1.35rem] leading-tight font-bold tracking-wide">
+      {masthead.instrument}
+    </p>
+    {masthead.issuer !== null && (
+      <p className="mt-2 font-sans text-[1.25rem] leading-snug font-semibold">
+        {masthead.issuer}
+      </p>
+    )}
+    {masthead.date !== null && (
+      <p className="mt-3 font-sans text-[1.05rem] leading-relaxed">
+        {masthead.date}
+      </p>
+    )}
+    <h1 className="mt-2 text-[1.15rem] leading-relaxed font-semibold text-balance">
+      {masthead.title}
+    </h1>
+  </header>
+);
+
 /**
  * Reading column for one consolidated statute version. Renders the same
  * `DocumentAst` blocks as the case-law viewer, so a provision's `anchorId`
@@ -68,6 +97,8 @@ export const StatuteText = ({
   documentId,
   fulltext,
   language,
+  masthead,
+  provisionCitationCounts,
   statuteTitle,
   versionCount,
   versionValidFrom,
@@ -82,16 +113,13 @@ export const StatuteText = ({
         lang={language}
         style={READER_STYLE}
       >
-        {blocks.map((block) => (
-          <Fragment key={block.id}>
-            <BlockRenderer
-              activeMatchIndex={NO_ACTIVE_MATCH}
-              block={block}
-              rangesByPieceId={NO_RANGES}
-              variant="statute"
-            />
-            {isProvisionHeading(block) && citationWork !== null && (
+        {masthead !== null && <StatuteMasthead masthead={masthead} />}
+        {blocks.map((block) => {
+          const provisionHeading = isProvisionHeading(block);
+          const detailsAction =
+            provisionHeading && citationWork !== null ? (
               <ProvisionDetailsAction
+                citationCount={provisionCitationCounts.get(block.anchorId)}
                 onOpen={() => {
                   open(
                     createProvisionViewTab({
@@ -108,9 +136,28 @@ export const StatuteText = ({
                 }}
                 provision={block.plainText}
               />
-            )}
-          </Fragment>
-        ))}
+            ) : undefined;
+
+          return (
+            <BlockRenderer
+              activeMatchIndex={NO_ACTIVE_MATCH}
+              block={block}
+              headingPresentation={
+                provisionHeading
+                  ? { accessory: detailsAction, type: "provision" }
+                  : undefined
+              }
+              key={block.id}
+              noteBackJumpTo={
+                block.type === "paragraph" && block.note?.type === "footnote"
+                  ? block.anchorId
+                  : undefined
+              }
+              rangesByPieceId={NO_RANGES}
+              variant="statute"
+            />
+          );
+        })}
       </article>
     );
   }
@@ -122,6 +169,9 @@ export const StatuteText = ({
         lang={language}
         style={READER_STYLE}
       >
+        <h1 className="mb-10 text-center font-sans text-xl font-semibold text-balance">
+          {statuteTitle}
+        </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
           rangesByPieceId={NO_RANGES}
@@ -141,6 +191,7 @@ export const StatuteText = ({
 };
 
 type ProvisionDetailsActionProps = {
+  citationCount: number | undefined;
   onOpen: () => void;
   /** The heading's own text, so the control names the provision it opens. */
   provision: string;
@@ -151,6 +202,7 @@ type ProvisionDetailsActionProps = {
  * on wide screens only, so the control is offered there only.
  */
 const ProvisionDetailsAction = ({
+  citationCount,
   onOpen,
   provision,
 }: ProvisionDetailsActionProps) => {
@@ -159,11 +211,16 @@ const ProvisionDetailsAction = ({
   return (
     <button
       aria-label={t("statutes.provisionDetailsFor", { provision })}
-      className="text-muted-foreground hover:text-foreground hover:border-foreground-disabled focus-visible:ring-ring mx-auto mb-[var(--reader-heading-gap-bottom)] hidden rounded-full border px-2 py-0.5 font-sans text-[0.7rem] font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:block print:hidden"
+      className="border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 font-sans text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
       onClick={onOpen}
       type="button"
     >
-      {t("common.details")}
+      <span>{t("common.details")}</span>
+      {citationCount !== undefined && citationCount > 0 && (
+        <span className="text-muted-foreground ms-2 tabular-nums">
+          {t("caseLaw.citation.decisionCount", { count: citationCount })}
+        </span>
+      )}
     </button>
   );
 };

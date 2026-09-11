@@ -32,7 +32,28 @@ export const citingDecisionKeys = {
       jurisdiction: key.jurisdiction,
     },
   ],
+  countsForWork: (key: Pick<CitingDecisionsKey, "eli" | "jurisdiction">) => [
+    ...citingDecisionKeys.all,
+    "counts",
+    { eli: key.eli, jurisdiction: key.jurisdiction },
+  ],
 };
+
+export const statuteCitationCountsOptions = (
+  key: Pick<CitingDecisionsKey, "eli" | "jurisdiction">,
+) =>
+  queryOptions({
+    queryKey: citingDecisionKeys.countsForWork(key),
+    queryFn: async ({ signal }) => {
+      const response = await api.case.provisions["citation-counts"].get({
+        query: key,
+        fetch: { signal },
+      });
+
+      return unwrapPublicLawEden(response, "readStatuteCitationCounts");
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
 
 /** How many of the most authoritative citing decisions the view leads with. */
 const TOP_CITING_LIMIT = 5;

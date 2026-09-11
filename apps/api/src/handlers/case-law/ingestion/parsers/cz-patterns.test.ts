@@ -4,7 +4,7 @@ import {
   CZ_CLOSING_RE,
   CZ_JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE,
-} from "./cz-patterns";
+} from "@stll/legal-ast/czech-document-roles";
 
 describe("CZ_CLOSING_RE", () => {
   const matches = [

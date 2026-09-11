@@ -35,6 +35,7 @@ export const REHEARSAL_ROWS_PER_DECISION = {
   case_law_decisions: 1,
   case_law_index_jobs: 1,
   case_law_provision_citations: 2,
+  case_law_statute_citation_memberships: 2,
   case_law_search_document_preview_passages: 2,
   case_law_search_documents: 1,
   corpus_index_projection_intents: 1,
@@ -190,6 +191,28 @@ export const REHEARSAL_SEEDERS = {
            0.9
     FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_provision_citations)}) AS g(k)
     JOIN rehearsal_decisions d ON d.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_provision_citations)}`,
+  // This table is introduced by the pending citation-count migration. Keep
+  // the statement conditional until that migration is part of the promoted
+  // base schema used by upgrade rehearsals.
+  case_law_statute_citation_memberships: (decisions) => `
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_statute_citation_memberships') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_statute_citation_memberships
+            (decision_id, source_id, jurisdiction, work_eli, target_type, anchor)
+          SELECT d.id,
+                 '${SOURCE_ID}',
+                 'CZE',
+                 '/cz/act/2012/' || (g.k % 500 + 1),
+                 'provision',
+                 'par_' || (g.k % 3000 + 1)
+          FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_statute_citation_memberships)}) AS g(k)
+          JOIN rehearsal_decisions d ON d.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_statute_citation_memberships)}
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
   case_law_search_documents: () => `
     INSERT INTO case_law_search_documents
       (decision_id, title, searchable_text, language, regconfig, preview_generation)
@@ -250,6 +273,7 @@ export const REHEARSAL_SEED_ORDER = [
   "case_law_decision_identifiers",
   "case_law_citations",
   "case_law_provision_citations",
+  "case_law_statute_citation_memberships",
   "case_law_search_documents",
   "case_law_search_document_preview_passages",
   "corpus_index_projection_states",
@@ -292,7 +316,10 @@ export const rehearsalSeedSteps = (
     })),
     { statement: rehearsalFutureDatedCohortStatement(), table: null },
     ...REHEARSAL_SEED_ORDER.map((table) => ({
-      statement: `ANALYZE ${table}`,
+      statement:
+        table === "case_law_statute_citation_memberships"
+          ? `DO $rehearsal$ BEGIN IF to_regclass('${table}') IS NOT NULL THEN EXECUTE 'ANALYZE ${table}'; END IF; END $rehearsal$`
+          : `ANALYZE ${table}`,
       table: null,
     })),
   ];

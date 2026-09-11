@@ -25,6 +25,7 @@ import {
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
+import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
@@ -86,9 +87,11 @@ const groupByWork = (rows: readonly ProvisionRow[]): WorkGroup[] => {
  * decision, and resolving each cited work to its act costs a read per work.
  */
 export const ProvisionsCited = ({
+  decisionDate,
   decisionId,
   isHydrated,
 }: {
+  decisionDate: Date | string | null;
   decisionId: SafeId<"caseLawDecision">;
   isHydrated?: boolean;
 }) => {
@@ -154,6 +157,7 @@ export const ProvisionsCited = ({
           )}
           {groups.map((group, index) => (
             <WorkReferences
+              decisionDate={decisionDate}
               group={group}
               isLinked={index < LINKED_WORKS_LIMIT}
               key={group.key}
@@ -180,20 +184,27 @@ export const ProvisionsCited = ({
 };
 
 const WorkReferences = ({
+  decisionDate,
   group,
   isLinked,
   renderPart,
 }: {
+  decisionDate: Date | string | null;
   group: WorkGroup;
   isLinked: boolean;
   renderPart: RenderProvisionPart;
 }) => {
+  const asOf =
+    group.rows.find((row) => row.versionValidFrom !== null)?.versionValidFrom ??
+    decisionDateToIso(decisionDate);
   const { data: statute } = useQuery({
     ...statuteByEliOptions({
+      // The query is disabled when neither source supplied a legal date.
+      asOf: asOf ?? "0001-01-01",
       country: group.jurisdiction,
       eli: group.workEli ?? "",
     }),
-    enabled: isLinked && group.workEli !== null,
+    enabled: isLinked && group.workEli !== null && asOf !== null,
   });
 
   // A reference to wording the current consolidation still carries is

@@ -8,10 +8,98 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
+  annotationsOverlappingTextSpan,
   apparatusBlockIds,
+  editorialSupplementBlocks,
   footnoteParts,
   visibleDecisionBlocks,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
+
+describe("annotations crossing links", () => {
+  test("keeps every intersecting mark over the linked text", () => {
+    const annotations = [
+      { id: "contains", startOffset: 2, endOffset: 20 },
+      { id: "starts-inside", startOffset: 8, endOffset: 18 },
+      { id: "ends-inside", startOffset: 0, endOffset: 7 },
+      { id: "before", startOffset: 0, endOffset: 5 },
+      { id: "after", startOffset: 10, endOffset: 14 },
+    ];
+
+    expect(
+      annotationsOverlappingTextSpan(annotations, { start: 5, end: 10 }).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["contains", "starts-inside", "ends-inside"]);
+  });
+});
+
+describe("editorial supplement blocks", () => {
+  test("uses publisher-preserved blank lines as the authoritative boundaries", () => {
+    const source =
+      "Analytická právní věta\n\nPlošné údaje eJustice zpracovala.Nespojená věta zůstává v témže zdrojovém bloku.\n\nNávrh a řízení před Ústavním soudem";
+
+    expect(
+      editorialSupplementBlocks(source).map(({ text, type }) => ({
+        text,
+        type,
+      })),
+    ).toEqual([
+      { text: "Analytická právní věta", type: "heading" },
+      {
+        text: "Plošné údaje eJustice zpracovala.Nespojená věta zůstává v témže zdrojovém bloku.",
+        type: "paragraph",
+      },
+      {
+        text: "Návrh a řízení před Ústavním soudem",
+        type: "heading",
+      },
+    ]);
+  });
+
+  test("recovers NALUS headings and paragraph boundaries without changing offsets", () => {
+    const source =
+      "Analytická právní větaPlošné shromažďování údajů je nepřípustné.Návrh a řízení před Ústavním soudemPlénum návrhu vyhovělo.Dle navrhovatelů šlo o zásah.Odůvodnění rozhodnutí Ústavního souduV souvislosti s návrhem soud rozhodl.";
+    const blocks = editorialSupplementBlocks(source);
+
+    expect(blocks.map(({ text, type }) => ({ text, type }))).toEqual([
+      { text: "Analytická právní věta", type: "heading" },
+      {
+        text: "Plošné shromažďování údajů je nepřípustné.",
+        type: "paragraph",
+      },
+      {
+        text: "Návrh a řízení před Ústavním soudem",
+        type: "heading",
+      },
+      { text: "Plénum návrhu vyhovělo.", type: "paragraph" },
+      { text: "Dle navrhovatelů šlo o zásah.", type: "paragraph" },
+      {
+        text: "Odůvodnění rozhodnutí Ústavního soudu",
+        type: "heading",
+      },
+      {
+        text: "V souvislosti s návrhem soud rozhodl.",
+        type: "paragraph",
+      },
+    ]);
+    for (const block of blocks) {
+      expect(source.slice(block.start, block.end)).toBe(block.text);
+    }
+  });
+
+  test("does not split an early mixed-case word", () => {
+    expect(
+      editorialSupplementBlocks("Služba eJustice zůstala dostupná."),
+    ).toEqual([
+      {
+        end: "Služba eJustice zůstala dostupná.".length,
+        start: 0,
+        text: "Služba eJustice zůstala dostupná.",
+        type: "paragraph",
+      },
+    ]);
+  });
+});
 
 const ast = {
   version: 1,
@@ -66,6 +154,65 @@ describe("visible decision blocks", () => {
     expect(visibleDecisionBlocks(ast).map((block) => block.id)).toEqual([
       "title",
       "body",
+    ]);
+  });
+
+  test("repairs legacy same-line Roman headings after Odůvodnění", () => {
+    const legacyAst = {
+      ...ast,
+      blocks: [
+        {
+          anchorId: "reasoning",
+          id: "reasoning",
+          inlines: [{ text: "Odůvodnění:", type: "text" }],
+          level: 2,
+          plainText: "Odůvodnění:",
+          role: "section-heading",
+          type: "heading",
+        },
+        {
+          anchorId: "p-127",
+          id: "b127",
+          inlines: [{ text: "VIII. Vlastní přezkum", type: "text" }],
+          plainText: "VIII. Vlastní přezkum",
+          type: "paragraph",
+        },
+        {
+          anchorId: "p-128",
+          id: "b128",
+          inlines: [{ text: "VIII. A) Tzv. data retention", type: "text" }],
+          plainText: "VIII. A) Tzv. data retention",
+          type: "paragraph",
+        },
+      ],
+    } as const satisfies DocumentAst;
+
+    expect(
+      visibleDecisionBlocks(legacyAst).map((block) => ({
+        anchorId: block.anchorId,
+        level: block.type === "heading" ? block.level : null,
+        text: block.plainText,
+        type: block.type,
+      })),
+    ).toEqual([
+      {
+        anchorId: "reasoning",
+        level: 2,
+        text: "Odůvodnění:",
+        type: "heading",
+      },
+      {
+        anchorId: "p-127",
+        level: 3,
+        text: "VIII. Vlastní přezkum",
+        type: "heading",
+      },
+      {
+        anchorId: "p-128",
+        level: 4,
+        text: "VIII. A) Tzv. data retention",
+        type: "heading",
+      },
     ]);
   });
 });

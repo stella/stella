@@ -1,5 +1,5 @@
 /**
- * Margin notes positioned alongside their anchor paragraphs.
+ * Margin notes positioned alongside their exact text anchors.
  *
  * "card" items have a heading + optional annotation text, "annotation"
  * items are standalone AI annotation summaries, and "comment" items are a
@@ -72,9 +72,27 @@ type MarginNotesProps = {
 
 type PositionedItem = MarginItem & {
   top: number;
-  /** Where the note's paragraph actually is; `top` may sit lower when
+  /** Where the note's text anchor actually is; `top` may sit lower when
    * earlier notes pushed it down. The gap is bridged by a leader line. */
   anchorTop: number;
+};
+
+/** A human comment belongs to the selected words, not merely their paragraph. */
+const resolveItemAnchor = (
+  scrollContainer: HTMLElement,
+  item: MarginItem,
+): HTMLElement | null => {
+  if (item.kind === "comment") {
+    const annotation = scrollContainer.querySelector<HTMLElement>(
+      `[data-annotation-id="${CSS.escape(item.id)}"]`,
+    );
+    if (annotation !== null) {
+      return annotation;
+    }
+  }
+  return scrollContainer.querySelector<HTMLElement>(
+    `#${CSS.escape(item.startAnchorId)}`,
+  );
 };
 
 export const MarginNotes = ({
@@ -97,13 +115,13 @@ export const MarginNotes = ({
     }
 
     const wrapperRect = wrapper.getBoundingClientRect();
-    // Notes stack downwards from where their paragraph is, so they are laid
+    // Notes stack downwards from where their selected text is, so they are laid
     // out in reading order regardless of the order they were handed in;
     // otherwise a later item (a comment being written) lands below every
     // earlier one instead of beside its own paragraph.
     const anchored: { item: MarginItem; anchorTop: number }[] = [];
     for (const item of items) {
-      const el = sc.querySelector(`#${CSS.escape(item.startAnchorId)}`);
+      const el = resolveItemAnchor(sc, item);
       if (!el) {
         continue;
       }
@@ -170,12 +188,12 @@ export const MarginNotes = ({
     };
   }, [scrollContainerRef, recalc]);
 
-  const scrollTo = (anchorId: string) => {
+  const scrollTo = (item: MarginItem) => {
     const sc = scrollContainerRef.current;
     if (!sc) {
       return;
     }
-    const el = sc.querySelector<HTMLElement>(`#${CSS.escape(anchorId)}`);
+    const el = resolveItemAnchor(sc, item);
     if (!el) {
       return;
     }
@@ -195,9 +213,8 @@ export const MarginNotes = ({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const noteHover = (item: MarginItem, on: boolean) => {
     setHoveredId(on ? item.id : null);
-    const el = scrollContainerRef.current?.querySelector<HTMLElement>(
-      `#${CSS.escape(item.startAnchorId)}`,
-    );
+    const sc = scrollContainerRef.current;
+    const el = sc === null ? null : resolveItemAnchor(sc, item);
     if (!el) {
       return;
     }
@@ -259,7 +276,7 @@ export const MarginNotes = ({
                 key={item.id}
                 measureRef={measureRef}
                 onHover={(on) => noteHover(item, on)}
-                onJump={() => scrollTo(item.startAnchorId)}
+                onJump={() => scrollTo(item)}
                 presence={notePresence(item)}
               />
             );
@@ -277,7 +294,7 @@ export const MarginNotes = ({
                 key={item.id}
                 measureRef={measureRef}
                 onHover={(on) => noteHover(item, on)}
-                onJump={() => scrollTo(item.startAnchorId)}
+                onJump={() => scrollTo(item)}
                 presence={notePresence(item)}
               />
             );
