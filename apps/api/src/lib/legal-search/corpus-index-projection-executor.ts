@@ -970,9 +970,9 @@ const processPreparedStream = async ({
 };
 
 /**
- * Execute one bounded append cycle. Plane chooses scope, cadence, limits,
- * concurrency, and what an acceptance means; this primitive owns durable
- * ordering and exact outcomes. A queued cycle no longer waits a commit period
+ * Execute one bounded append cycle. The operator chooses scope, cadence,
+ * limits, concurrency, and what an acceptance means; this primitive owns
+ * durable ordering and exact outcomes. A queued cycle no longer waits a commit period
  * per request, so a backlog is bounded by payload and index throughput rather
  * than by in-flight requests times the commit period.
  */
