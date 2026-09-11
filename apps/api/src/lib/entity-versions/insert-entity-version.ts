@@ -1,8 +1,9 @@
 import { panic } from "better-result";
-import { isNotNull } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { entityVersions } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { generateVerificationCode } from "@/api/lib/document-reference";
 
@@ -106,3 +107,84 @@ export const insertEntityVersion = async (
   tx: Transaction,
   values: EntityVersionValues,
 ): Promise<void> => await insertEntityVersions(tx, [values]);
+
+/** One source version and the row that replaces it. */
+type VerificationCodeTransfer = {
+  sourceVersionId: SafeId<"entityVersion">;
+  targetVersionId: SafeId<"entityVersion">;
+};
+
+/**
+ * Move each source version's verification code onto the row that replaces it.
+ *
+ * A code printed into a downloaded DOCX must keep resolving for the life of
+ * the document, so re-homing a document across matters re-homes its codes with
+ * it instead of retiring them. `entity_versions_vcode_uidx` is global, so a
+ * code lives on exactly one row: the sources are cleared first, then the
+ * targets take what they carried. The caller deletes the source rows later in
+ * this same transaction, which is the only reason clearing them is a write and
+ * not a loss.
+ *
+ * Codes stay owned by this module — a caller names the two rows, never a code.
+ * A source with no stamp carries no code and is simply not among the rows read.
+ */
+export const carryVerificationCodes = async (
+  tx: Transaction,
+  transfers: readonly VerificationCodeTransfer[],
+): Promise<void> => {
+  if (transfers.length === 0) {
+    return;
+  }
+
+  // FOR UPDATE holds the source rows for the rest of the transaction, so no
+  // concurrent writer can replace a code between this read and the clear. A
+  // tombstoned version resolves to nothing by design, so its code is left
+  // where it is rather than given a live row to resolve to.
+  const sourceRows = await tx
+    .select({
+      id: entityVersions.id,
+      verificationCode: entityVersions.verificationCode,
+    })
+    .from(entityVersions)
+    .where(
+      and(
+        inArray(
+          entityVersions.id,
+          transfers.map(({ sourceVersionId }) => sourceVersionId),
+        ),
+        isNotNull(entityVersions.verificationCode),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .for("update");
+
+  const codeBySourceId = new Map(
+    sourceRows.map(({ id, verificationCode }) => [id, verificationCode]),
+  );
+  const carried = transfers.flatMap(({ sourceVersionId, targetVersionId }) => {
+    const code = codeBySourceId.get(sourceVersionId);
+    return code ? [sql`(${targetVersionId}::uuid, ${code}::varchar)`] : [];
+  });
+  if (carried.length === 0) {
+    return;
+  }
+
+  // The same predicate the codes were read under, so the clear is the exact
+  // set that was locked: live rows, keyed by id.
+  await tx
+    .update(entityVersions)
+    .set({ verificationCode: null })
+    .where(
+      and(
+        inArray(entityVersions.id, [...codeBySourceId.keys()]),
+        isNull(entityVersions.deletedAt),
+      ),
+    );
+
+  await tx.execute(sql`
+    UPDATE ${entityVersions} AS target
+       SET verification_code = carried.verification_code
+      FROM (VALUES ${sql.join(carried, sql`, `)})
+           AS carried(target_id, verification_code)
+     WHERE target.id = carried.target_id`);
+};

@@ -5,6 +5,7 @@ import { t } from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { transactionAbortError } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
@@ -13,11 +14,16 @@ import {
   copyEntities,
   type CopyEntitiesDependencies,
   copyFileObjects,
+  CURRENT_VERSION_SELECT,
+  ENTITY_SNAPSHOT_COLUMNS,
   type EntitySnapshot,
+  type EntityTransfer,
+  EVERY_LIVE_VERSION_SELECT,
   type FileMapping,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
+  snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -103,15 +109,79 @@ const collectPropertyIds = (
   const propertyIds = new Set<SafeId<"property">>();
 
   for (const entity of sourceEntities) {
-    if (!entity.currentVersion) {
-      continue;
-    }
-    for (const field of entity.currentVersion.fields) {
-      propertyIds.add(field.propertyId);
+    for (const version of entity.versions) {
+      for (const field of version.fields) {
+        propertyIds.add(field.propertyId);
+      }
     }
   }
 
   return propertyIds;
+};
+
+type ReadSourceEntityOptions = {
+  tx: Transaction;
+  sourceWorkspaceId: SafeId<"workspace">;
+  sourceEntityId: SafeId<"entity">;
+  transfer: EntityTransfer;
+};
+
+const readSourceEntity = async ({
+  tx,
+  sourceWorkspaceId,
+  sourceEntityId,
+  transfer,
+}: ReadSourceEntityOptions): Promise<EntitySnapshot | undefined> => {
+  const where = {
+    id: { eq: sourceEntityId },
+    workspaceId: { eq: sourceWorkspaceId },
+  } as const;
+
+  if (transfer.type === "move") {
+    return await tx.query.entities.findFirst({
+      where,
+      columns: ENTITY_SNAPSHOT_COLUMNS,
+      with: EVERY_LIVE_VERSION_SELECT,
+    });
+  }
+
+  const entity = await tx.query.entities.findFirst({
+    where,
+    columns: ENTITY_SNAPSHOT_COLUMNS,
+    with: CURRENT_VERSION_SELECT,
+  });
+  return entity && snapshotOfCurrentVersion(entity);
+};
+
+type ReadWorkspaceEntitiesOptions = {
+  tx: Transaction;
+  sourceWorkspaceId: SafeId<"workspace">;
+  transfer: EntityTransfer;
+};
+
+const readWorkspaceEntities = async ({
+  tx,
+  sourceWorkspaceId,
+  transfer,
+}: ReadWorkspaceEntitiesOptions): Promise<EntitySnapshot[]> => {
+  const where = { workspaceId: { eq: sourceWorkspaceId } } as const;
+
+  if (transfer.type === "move") {
+    return await tx.query.entities.findMany({
+      where,
+      columns: ENTITY_SNAPSHOT_COLUMNS,
+      with: EVERY_LIVE_VERSION_SELECT,
+      limit: LIMITS.entitiesCount,
+    });
+  }
+
+  const rows = await tx.query.entities.findMany({
+    where,
+    columns: ENTITY_SNAPSHOT_COLUMNS,
+    with: CURRENT_VERSION_SELECT,
+    limit: LIMITS.entitiesCount,
+  });
+  return rows.map(snapshotOfCurrentVersion);
 };
 
 type PropertyMappingRow = {
@@ -212,28 +282,20 @@ const remapPropertyIds = (
   sourceEntities: EntitySnapshot[],
   propertyIdMap: Map<SafeId<"property">, SafeId<"property">>,
 ): EntitySnapshot[] =>
-  sourceEntities.map((entity) => {
-    if (!entity.currentVersion) {
-      return entity;
-    }
-
-    const remappedFields = entity.currentVersion.fields.flatMap((field) => {
-      const targetPropertyId = propertyIdMap.get(field.propertyId);
-      if (!targetPropertyId) {
-        // Property not available in target workspace; drop this field
-        return [];
-      }
-      return [{ ...field, propertyId: targetPropertyId }];
-    });
-
-    return {
-      ...entity,
-      currentVersion: {
-        ...entity.currentVersion,
-        fields: remappedFields,
-      },
-    };
-  });
+  sourceEntities.map((entity) => ({
+    ...entity,
+    versions: entity.versions.map((version) => ({
+      ...version,
+      fields: version.fields.flatMap((field) => {
+        const targetPropertyId = propertyIdMap.get(field.propertyId);
+        if (!targetPropertyId) {
+          // Property not available in target workspace; drop this field
+          return [];
+        }
+        return [{ ...field, propertyId: targetPropertyId }];
+      }),
+    })),
+  }));
 
 type CleanupMovedSourceFilesOptions = {
   safeDb: SafeDb;
@@ -303,42 +365,23 @@ const copyToWorkspaceHandler = async function* ({
   },
   dependencies,
 }: CopyToWorkspaceHandlerProps) {
+  // One reading of the operation for the whole handler: `deleteSource` still
+  // drives the deletion and its audit rows, while the transfer decides what
+  // the target versions are.
+  const transfer = (
+    deleteSource ? { type: "move" } : { type: "copy" }
+  ) satisfies EntityTransfer;
+
   // Fetch source entity
   const source = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
-        where: {
-          id: { eq: sourceEntityId },
-          workspaceId: { eq: sourceWorkspaceId },
-        },
-        columns: {
-          id: true,
-          kind: true,
-          name: true,
-          parentId: true,
-          readOnly: true,
-        },
-        with: {
-          currentVersion: {
-            columns: { id: true },
-            with: {
-              // Ascending field id is ascending creation order, the order
-              // `findExtractionFileField` requires, so the copy resolves the
-              // same extraction source as the entity it came from. At most
-              // one field per property bounds the read.
-              fields: {
-                columns: {
-                  id: true,
-                  propertyId: true,
-                  content: true,
-                },
-                orderBy: { id: "asc" },
-                limit: LIMITS.propertiesCount,
-              },
-            },
-          },
-        },
-      }),
+    safeDb(
+      async (tx) =>
+        await readSourceEntity({
+          tx,
+          sourceWorkspaceId,
+          sourceEntityId,
+          transfer,
+        }),
     ),
   );
 
@@ -361,34 +404,9 @@ const copyToWorkspaceHandler = async function* ({
   let sourceEntities: EntitySnapshot[] = [source];
   if (source.kind === "folder") {
     const workspaceEntities = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findMany({
-          where: { workspaceId: { eq: sourceWorkspaceId } },
-          columns: {
-            id: true,
-            kind: true,
-            name: true,
-            parentId: true,
-            readOnly: true,
-          },
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: {
-                    id: true,
-                    propertyId: true,
-                    content: true,
-                  },
-                  orderBy: { id: "asc" },
-                  limit: LIMITS.propertiesCount,
-                },
-              },
-            },
-          },
-          limit: LIMITS.entitiesCount,
-        }),
+      safeDb(
+        async (tx) =>
+          await readWorkspaceEntities({ tx, sourceWorkspaceId, transfer }),
       ),
     );
 
@@ -465,14 +483,13 @@ const copyToWorkspaceHandler = async function* ({
     sourceEntities,
     propertyIdMap,
   );
-  const sourceFileRefs = sourceEntities.flatMap((entity) => {
-    const currentVersion =
-      entity.currentVersion ??
-      panic("Source entity is missing its current version");
-    return currentVersion.fields.flatMap((field) =>
-      extractFieldFileRefs(field.content),
-    );
-  });
+  // Every version the move carries leaves its objects behind, so the cleanup
+  // considers all of them, not just the ones the document currently shows.
+  const sourceFileRefs = sourceEntities.flatMap((entity) =>
+    entity.versions.flatMap((version) =>
+      version.fields.flatMap((field) => extractFieldFileRefs(field.content)),
+    ),
+  );
 
   // Collect file objects for S3 copy after property remapping, so
   // files from dropped fields do not leave orphaned target objects.
@@ -522,7 +539,7 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntityId,
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
-      deleteSource,
+      transfer,
       fieldMapping:
         sourceFieldId === undefined
           ? { type: "omit" }
@@ -646,11 +663,12 @@ const copyToWorkspaceHandler = async function* ({
 const config = {
   description:
     "Copy a document or folder subtree into another matter, or move it with " +
-    "deleteSource, which permanently deletes the source documents, their " +
-    "version history, and their no-longer-referenced files. Fields whose " +
-    "property has no counterpart in the target matter are dropped rather than " +
-    "remapped, so a move can lose column values; read-only entities are " +
-    "refused.",
+    "deleteSource, which permanently deletes the source documents and their " +
+    "no-longer-referenced files. A copy starts a new version history; a move " +
+    "carries the existing one across, so every printed reference keeps " +
+    "resolving. Fields whose property has no counterpart in the target matter " +
+    "are dropped rather than remapped, so a move can lose column values; " +
+    "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: copyToWorkspaceBodySchema,
