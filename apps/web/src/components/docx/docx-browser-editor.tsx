@@ -160,7 +160,6 @@ type DocxBrowserEditorBaseProps = {
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
   onSaved?: ((fieldId: string) => void) | undefined;
-  onReadonlyEditAttempt?: (() => void) | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   collaboration?: DocxEditorCollaboration | undefined;
   scaleOffset?: number | undefined;
@@ -242,7 +241,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onBlockedUnlock,
     onUnlockedChange,
     onSaved,
-    onReadonlyEditAttempt,
     onScrollTopChange,
     scaleOffset = 0,
     showActionBar = true,
@@ -1589,9 +1587,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (isUnlocked) {
       return;
     }
-    onReadonlyEditAttempt?.();
     handleUnlock();
-  }, [handleUnlock, isUnlocked, onReadonlyEditAttempt]);
+  }, [handleUnlock, isUnlocked]);
 
   const handleToggleLock = useCallback(() => {
     if (!isUnlocked) {
