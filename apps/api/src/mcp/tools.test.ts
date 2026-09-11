@@ -1538,10 +1538,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_case_law normalizes an unambiguous localized date", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
-      facets: {},
+      facets: null,
       hits: [],
       nextCursor: null,
-      totalCount: 0,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
     });
 
     await handleMcpToolCall({
