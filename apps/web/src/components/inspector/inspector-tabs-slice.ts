@@ -285,9 +285,7 @@ export const createInspectorTabsSlice = (
       }
       if (
         groupId !== null &&
-        !(
-          groupId.startsWith("matter:") && groupId.length > "matter:".length
-        ) &&
+        !(groupId.startsWith("matter:") && groupId.length > "matter:".length) &&
         !state.groups.some((group) => group.id === groupId)
       ) {
         panic("Cannot assign an Inspector tab to a missing group");
