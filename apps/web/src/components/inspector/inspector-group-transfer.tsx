@@ -392,7 +392,7 @@ export const useInspectorGroupTransfer = (
                 }}
                 variant="outline"
               >
-                {t("inspector.groups.keepReference")}
+                {t("inspector.groups.groupOnly")}
               </Button>
               <Button
                 disabled={isSubmitting}
