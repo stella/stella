@@ -23,6 +23,7 @@
     "code-check": "bun run env:check && bun run assets:check && bun scripts/check-oxlint-plugin-registry.ts && bash scripts/lint-oxlint-fixtures.sh && bash scripts/lint-root-scripts.sh && bun --cwd apps/landing typecheck && bun apps/landing/scripts/check-logical-properties.ts && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware --type-check .claude/mcp apps packages && bun run typecheck:repo",
     "code-check:affected": "bun scripts/code-check-affected.ts",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
+    "secrets:check:pushed": "bash scripts/check-pushed-secrets.sh",
     "dependencies:dedupe": "bun --no-env-file dedupe",
     "dependencies:dedupe:check": "bun --no-env-file dedupe --check",
     "dependencies:diff": "bun --no-env-file scripts/dependency-diff.ts",
