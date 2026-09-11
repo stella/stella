@@ -275,10 +275,15 @@ const openClipboard = async (
   await page.goto("/");
   await expect(page.locator("[data-clipboard-card-trigger]")).toBeVisible();
 };
+const switchScope = async (page: Page, key: "ArrowDown" | "ArrowUp") => {
+  await page.locator("[data-clipboard-scope]").focus();
+  await page.keyboard.press(key);
+  await page.keyboard.press("Tab");
+  await expect(searchBox(page)).toBeFocused();
+};
 const activateRegistry = async (page: Page, query = "Stella Example") => {
   await searchBox(page).fill(query);
-  await searchBox(page).press("ArrowDown");
-  await expect(searchBox(page)).toBeFocused();
+  await switchScope(page, "ArrowDown");
   await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
     "data-clipboard-scope",
     "registry",
@@ -343,8 +348,7 @@ test("keyboard activation retains the input and Enter never copies a hidden clip
 }) => {
   await openClipboard(page);
   await searchBox(page).fill("Privileged");
-  await searchBox(page).press("ArrowDown");
-  await expect(searchBox(page)).toBeFocused();
+  await switchScope(page, "ArrowDown");
   await expect.poll(async () => (await searches(page)).length).toBe(1);
   await searchBox(page).press("Enter");
   expect(
@@ -765,7 +769,7 @@ for (const language of ["en", "ar"] as const) {
         page.getByRole("heading", { name: "Stella Example s.r.o." }),
       ).toBeVisible();
       const before = await searches(page);
-      await searchBox(page).press("ArrowUp");
+      await switchScope(page, "ArrowUp");
       await expect(searchBox(page)).toHaveValue("Privileged");
       await expect(searchBox(page)).toBeFocused();
       await expect(page.locator("[data-clipboard-card-trigger]")).toBeVisible();

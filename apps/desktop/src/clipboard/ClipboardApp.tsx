@@ -8,6 +8,7 @@ import {
 } from "react";
 import type {
   CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
@@ -2000,10 +2001,15 @@ const ClipboardApp = () => {
       current: searchScope,
     });
     if (next !== null) {
-      applyScope(next);
+      applyScope({ next, focusSearch: false });
     }
   };
-  const applyScope = (next: ClipboardSearchScope) => {
+  type ApplyScopeOptions = {
+    next: ClipboardSearchScope;
+    /** A click hands focus to the field; the keyboard keeps the switcher. */
+    focusSearch: boolean;
+  };
+  const applyScope = ({ next, focusSearch }: ApplyScopeOptions) => {
     setContextMenu({ type: "closed" });
     switch (next) {
       case "clips":
@@ -2025,7 +2031,9 @@ const ClipboardApp = () => {
         next satisfies never;
         panic("Unknown clipboard search scope.");
     }
-    searchInputRef.current?.focus();
+    if (focusSearch) {
+      searchInputRef.current?.focus();
+    }
   };
   // The pointer path through the scopes: a click steps forward and wraps.
   const cycleScope = () => {
@@ -2034,30 +2042,15 @@ const ClipboardApp = () => {
     if (next === undefined) {
       return;
     }
-    applyScope(next);
+    applyScope({ next, focusSearch: true });
   };
-  const handleScopeKey = (event: KeyboardEvent) => {
+  const handleSwitcherKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     const action = clipboardScopeKeyAction(event.key);
-    if (
-      !action ||
-      event.isComposing ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.shiftKey ||
-      !(event.target instanceof HTMLElement) ||
-      // Open popups, dialogs, and multi-line editors keep their own arrows.
-      event.target.closest(
-        '[role="menu"], [role="dialog"], textarea, select, [contenteditable="true"]',
-      ) ||
-      (event.target instanceof HTMLInputElement &&
-        isClipboardNameInput(event.target.dataset))
-    ) {
-      return false;
+    if (!action || event.nativeEvent.isComposing) {
+      return;
     }
     event.preventDefault();
     switchScope(action);
-    return true;
   };
 
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -2075,9 +2068,6 @@ const ClipboardApp = () => {
       event.preventDefault();
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
-      return;
-    }
-    if (handleScopeKey(event)) {
       return;
     }
     if (handleRegistryKeyDown(event)) {
@@ -2154,7 +2144,10 @@ const ClipboardApp = () => {
     const interactiveTarget = target?.closest(
       "button, a, input, textarea, select, [contenteditable='true']",
     );
-    if (interactiveTarget && !cardTrigger) {
+    // Typing on the scope switcher still reaches the search field; every
+    // other key there belongs to the switcher itself.
+    const scopeSwitcher = target?.closest("[data-clipboard-scope]");
+    if (interactiveTarget && !cardTrigger && !scopeSwitcher) {
       return;
     }
     if (cardTrigger && event.key === " ") {
@@ -2168,6 +2161,9 @@ const ClipboardApp = () => {
       setQuery((currentQuery) => currentQuery + event.key);
       setSelectedIndex(0);
       searchInputRef.current?.focus();
+      return;
+    }
+    if (scopeSwitcher) {
       return;
     }
     const keyAction = clipboardTimelineKeyAction({
@@ -2514,10 +2510,11 @@ const ClipboardApp = () => {
                     aria-label={t(
                       CLIPBOARD_SCOPE_PRESENTATION[searchScope].label,
                     )}
-                    className="flex items-center gap-0.5 rounded-full"
+                    aria-keyshortcuts="ArrowUp ArrowDown"
+                    className="focus-visible:ring-ring ms-1.5 flex h-8 items-center gap-1 rounded-full px-1.5 outline-none focus-visible:ring-2"
                     data-clipboard-scope={searchScope}
                     onClick={cycleScope}
-                    tabIndex={-1}
+                    onKeyDown={handleSwitcherKeyDown}
                     title={t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
                     type="button"
                   >

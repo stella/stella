@@ -278,7 +278,9 @@ for (const {
         if (activation === "pointer") {
           await page.locator("[data-clipboard-scope]").click();
         } else {
+          await page.locator("[data-clipboard-scope]").focus();
           await page.keyboard.press("ArrowDown");
+          await page.keyboard.press("Tab");
         }
         await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
           "data-clipboard-scope",
@@ -339,11 +341,12 @@ for (const {
       ).not.toBeFocused();
     });
 
-    test("vertical arrows switch the search scope and never move rows", async ({
+    test("vertical arrows switch the scope only on the focused switcher", async ({
       page,
     }) => {
       const cards = await openClipboard(page, language);
       const search = page.getByRole("searchbox");
+      const switcher = page.locator("[data-clipboard-scope]");
       // The groups rail yields to the registry chooser in registry scope.
       const groupsRail = page.locator(".clipboard-groups-rail");
       const pressedGroup = page.locator(
@@ -352,17 +355,23 @@ for (const {
       await page.keyboard.press(nextCardKey);
       await expect(cards.nth(1)).toBeFocused();
       await page.keyboard.press("ArrowDown");
-      await expect(search).toBeFocused();
-      await expect(groupsRail).toBeHidden();
+      await expect(cards.nth(1)).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await search.focus();
       await page.keyboard.press("ArrowDown");
       await expect(search).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await switcher.focus();
+      await page.keyboard.press("ArrowDown");
+      await expect(switcher).toBeFocused();
+      await expect(groupsRail).toBeHidden();
+      await page.keyboard.press("ArrowDown");
       await expect(groupsRail).toBeVisible();
       await expect(pressedGroup).not.toHaveAttribute(
         "data-clipboard-group-id",
         "__no_group__",
       );
       await page.keyboard.press("ArrowDown");
-      await expect(search).toBeFocused();
       await expect(groupsRail).toBeVisible();
       await page.keyboard.press("ArrowUp");
       await expect(groupsRail).toBeHidden();
@@ -372,16 +381,14 @@ for (const {
         "data-clipboard-group-id",
         "__no_group__",
       );
-      await expect(search).toBeFocused();
+      await expect(switcher).toBeFocused();
       await expect(
         page.locator('[data-clipboard-id="clip-2"]'),
       ).toHaveAttribute("aria-current", "true");
-      // Enter in the field acts on the highlighted card, so it stays lit.
-      await expect
-        .poll(
-          async () => (await readCardEmphasis(page, "clip-2")).selectionOpacity,
-        )
-        .toBe("1");
+      // Typing on the switcher lands in the field like everywhere else.
+      await page.keyboard.press("C");
+      await expect(search).toBeFocused();
+      await expect(search).toHaveValue("C");
       expect(await invocationCount(page, "registry_search")).toBe(0);
     });
 
@@ -485,6 +492,8 @@ for (const {
       await expect(page.getByRole("searchbox")).toBeFocused();
 
       await page.keyboard.press(tabBack);
+      await expect(page.locator("[data-clipboard-scope]")).toBeFocused();
+      await page.keyboard.press(tabBack);
       await expect(
         page.getByRole("link", { name: "Stella", exact: true }),
       ).toBeFocused();
@@ -539,9 +548,10 @@ for (const {
             );
           }
         },
-        [nextCardKey, "ArrowDown"],
+        [nextCardKey, "C"],
       );
       await expect(search).toBeFocused();
+      await expect(search).toHaveValue("C");
       await page.evaluate(
         async () =>
           new Promise<void>((resolve) => {
@@ -553,11 +563,6 @@ for (const {
           }),
       );
       await expect(search).toBeFocused();
-      await page.keyboard.press("ArrowUp");
-      await expect(search).toBeFocused();
-      await expect(
-        page.locator('[data-clipboard-id="clip-2"]'),
-      ).toHaveAttribute("aria-current", "true");
     });
   });
 }
@@ -599,6 +604,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
         (control) => getComputedStyle(control, "::after").borderTopColor,
       );
     await page.keyboard.press(tabBack);
+    await page.keyboard.press(tabBack);
     await expect(
       page.getByRole("link", { name: "Stella", exact: true }),
     ).toBeFocused();
@@ -627,13 +633,12 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   await expect(screenCaptureSetting).toBeHidden();
   await expect(moreOptions).toBeFocused();
 
-  // Vertical arrows are scope keys even on a closed menu trigger.
+  // A closed menu trigger keeps the standard menu-button arrows.
   await page.keyboard.press("ArrowDown");
-  await expect(search).toBeFocused();
+  await expect(screenCaptureSetting).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(screenCaptureSetting).toBeHidden();
-  await page.keyboard.press("ArrowUp");
-  await expect(search).toBeFocused();
-  await moreOptions.focus();
+  await expect(moreOptions).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   const workGroup = page.locator('[data-clipboard-group-id="work"]');
   await expect(workGroup).toBeFocused();
@@ -664,6 +669,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   await expect(footerControls.nth(1)).toBeFocused();
   // Arrows never leave the search field for the footer; Tab does.
   await page.keyboard.press(tabBack);
+  await page.keyboard.press(tabBack);
   await expect(footerControls.first()).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(footerControls.nth(1)).toBeFocused();
@@ -672,6 +678,9 @@ test("restores footer arrow navigation after changing a menu setting", async ({
     await expect(footerControls.nth(index)).toBeFocused();
   }
   for (let index = footerControlCount - 2; index >= 0; index -= 1) {
+    if (index === 0) {
+      await page.keyboard.press(tabBack);
+    }
     await page.keyboard.press(index === 0 ? tabBack : "ArrowLeft");
     await expect(footerControls.nth(index)).toBeFocused();
   }
