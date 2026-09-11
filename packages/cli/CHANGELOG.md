@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.9
+
+### Patch Changes
+
+- [#3057](https://github.com/stella/stella/pull/3057) [`0913e83`](https://github.com/stella/stella/commit/0913e8385107e8195bbf4ef0baf17a2cd4599114) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the source field selector when copying an entity to another matter.
+
 ## 1.2.8
 
 ### Patch Changes
