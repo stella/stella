@@ -55,12 +55,12 @@ const isCallExpression = (node: unknown): node is CallExpressionNode =>
   Array.isArray(node.arguments) &&
   "callee" in node;
 
-const isSafeHandlerMember = (node: unknown) =>
+const isSafeHandlerMember = (node: unknown): node is MemberExpressionNode =>
   isMemberExpression(node) &&
   !node.computed &&
   getPropertyName(node.property) === "handler";
 
-const isDirectHandlerConfig = (node: unknown) =>
+const isDirectHandlerConfig = (node: unknown): node is MemberExpressionNode =>
   isMemberExpression(node) &&
   !node.computed &&
   getPropertyName(node.property) === "config";
