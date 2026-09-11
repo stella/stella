@@ -25,6 +25,13 @@ export const RECONCILIATION_TURN = {
   IDLE: "idle",
   /** Another writer holds the source. Not an error; asked again next turn. */
   LEASED: "leased",
+  /**
+   * The source states something no unit can act on. Nothing was asked of the
+   * publisher and nothing will be until an operator changes the row, so the
+   * turn is neither work nor an idle source: counted on its own, or a
+   * misconfigured source would read as a settled one.
+   */
+  MISCONFIGURED: "misconfigured",
 } as const;
 
 export type ReconciliationTurn =
@@ -77,6 +84,8 @@ export type ReconciliationSweepSummary = ReconciliationCounts & {
   idle: number;
   /** Turns that found the source held by another writer. */
   leased: number;
+  /** Turns that found the source stating something no unit can act on. */
+  misconfigured: number;
   /** Turns that threw, wherever the throw came from. */
   errored: number;
   /**
@@ -99,6 +108,7 @@ const emptySummary = (): ReconciliationSweepSummary => ({
   worked: 0,
   idle: 0,
   leased: 0,
+  misconfigured: 0,
   errored: 0,
   lastError: undefined,
   erroredSources: [],
@@ -122,8 +132,10 @@ const emptySummary = (): ReconciliationSweepSummary => ({
  */
 const summaryIsEmpty = ({
   errored,
+  misconfigured,
   worked,
-}: ReconciliationSweepSummary): boolean => worked === 0 && errored === 0;
+}: ReconciliationSweepSummary): boolean =>
+  worked === 0 && errored === 0 && misconfigured === 0;
 
 const addCounts = (
   summary: ReconciliationSweepSummary,
@@ -277,6 +289,9 @@ export const runCaseLawReconciliationLoop = async ({
             break;
           case RECONCILIATION_TURN.LEASED:
             summary.leased += 1;
+            break;
+          case RECONCILIATION_TURN.MISCONFIGURED:
+            summary.misconfigured += 1;
             break;
           default:
             break;

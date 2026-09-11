@@ -13,6 +13,7 @@
  * ledger depends on.
  */
 
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -31,12 +32,14 @@ import {
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
   SLICE_WALK_REASON,
+  floorSliceWalk,
   isSliceSettled,
   partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import {
   listingIdentityKey,
   parseListingIdentityKey,
@@ -126,6 +129,106 @@ describe("tipWindowSlices", () => {
     expect(reconciliation.nextSlice("2026-03-28")).toBe("2026-03-29");
     expect(reconciliation.previousSlice(reconciliation.firstSlice)).toBeNull();
     expect(reconciliation.nextSlice(toUtcDateString(new Date()))).toBeNull();
+  });
+});
+
+/**
+ * The floor a deployment puts under a source's sweep.
+ *
+ * Every failure here is silent. A floor that is obeyed where it should be
+ * refused sweeps a range nobody asked for; one that is ignored where it
+ * should be obeyed keeps re-listing history the deployment excluded, and
+ * every unit still reports success. The floor is also the only input that
+ * reaches the walk from outside the code, so the shapes an operator can
+ * actually type are the cases worth stating.
+ */
+describe("floorSliceWalk", () => {
+  const CONFIGURED_FLOOR = "2024-01-01";
+  const floor = (config: unknown) =>
+    floorSliceWalk({
+      adapterKey: "cz-regional",
+      config,
+      now: NOW,
+      walk: reconciliation,
+    });
+
+  test("a source that states no floor walks the adapter's own history", () => {
+    // Including a configuration that states everything else a source needs:
+    // the floor is one key among whatever that row carries.
+    for (const config of [
+      {},
+      { walks: [{ name: "recent", kind: "window" }] },
+    ]) {
+      expect(floor(config).unwrap()).toBe(reconciliation);
+    }
+  });
+
+  test("a configured floor later than the adapter's is where the sweep stops", () => {
+    // The fixture only tests the floor if the adapter would have gone below
+    // it, which is the whole point of configuring one.
+    expect(reconciliation.previousSlice(CONFIGURED_FLOOR)).toBe("2023-12-31");
+
+    const floored = floor({
+      reconciliation: { firstSlice: CONFIGURED_FLOOR },
+    }).unwrap();
+
+    expect(floored.firstSlice).toBe(CONFIGURED_FLOOR);
+    expect(floored.previousSlice(CONFIGURED_FLOOR)).toBeNull();
+    expect(floored.previousSlice("2024-01-02")).toBe(CONFIGURED_FLOOR);
+    // The tip window is bounded by the same floor, so nothing the ledger is
+    // asked to cover — the window, the frontier it bounds, the sweep below
+    // it — reaches the range the source excluded.
+    expect(
+      tipWindowSlices(floored, new Date(`${CONFIGURED_FLOOR}T12:00:00.000Z`)),
+    ).toEqual([CONFIGURED_FLOOR]);
+  });
+
+  test("a configured floor earlier than the adapter's cannot widen the sweep", () => {
+    // The publisher does not serve it, so asking for it would sweep slices
+    // that can only ever come back empty.
+    const floored = floor({ reconciliation: { firstSlice: "2019-01-01" } });
+
+    expect(floored.unwrap()).toBe(reconciliation);
+  });
+
+  test("a floor nothing can walk holds the source rather than being ignored", () => {
+    // The in-range values below are only a test of the shape check while they
+    // sort inside the source's own range: ordering already refuses anything
+    // above the tip.
+    expect(reconciliation.firstSlice < "2024-foo").toBe(true);
+    expect(toUtcDateString(NOW) > "2024-foo").toBe(true);
+
+    const unusable = [
+      // Not a slice at all: obeyed as written it sorts above every slice the
+      // source has and stops the sweep dead, in silence.
+      { reconciliation: { firstSlice: "yesterday" } },
+      // Worse, because ordering alone accepts it: it sorts between the feed's
+      // first slice and today's, so it would quietly floor the sweep at
+      // whatever "2024-" sorts against rather than at a day anyone chose.
+      { reconciliation: { firstSlice: "2024-foo" } },
+      { reconciliation: { firstSlice: "2024-01" } },
+      { reconciliation: { firstSlice: "2026-09-31" } },
+      { reconciliation: { firstSlice: "" } },
+      { reconciliation: { firstSlice: 20_240_101 } },
+      { reconciliation: "2024-01-01" },
+    ];
+
+    for (const config of unusable) {
+      const refused = floor(config);
+      expect(Result.isError(refused)).toBe(true);
+      if (Result.isError(refused)) {
+        expect(refused.error).toBeInstanceOf(ConfigurationError);
+        expect(refused.error.message).toContain("cz-regional");
+      }
+    }
+  });
+
+  test("a configuration that is not an object states no floor", () => {
+    // The column is JSON and older rows hold a string; a value that cannot
+    // carry the key is a source without a floor, not a broken one.
+    for (const config of ["cz-regional", null, 7, ["2024-01-01"]]) {
+      expect(floor(config).unwrap()).toBe(reconciliation);
+    }
   });
 });
 

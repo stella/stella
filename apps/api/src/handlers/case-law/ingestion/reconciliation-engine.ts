@@ -23,7 +23,7 @@
  * counted them could never settle.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -41,6 +41,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
   caseLawDecisions,
+  caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
 import {
@@ -63,6 +64,7 @@ import {
   RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
+  floorSliceWalk,
   partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
@@ -233,7 +235,15 @@ const emptySummary = (
 export type ReconciliationUnitOutcome =
   | { type: "worked"; summary: ReconciliationUnitSummary }
   | { type: "idle" }
-  | { type: "leased" };
+  | { type: "leased" }
+  /**
+   * The source states something no unit can act on — today, a sweep floor
+   * that is no slice of this source. Nothing was walked, and nothing will be
+   * until an operator changes the row: obeying the value would sweep a range
+   * nobody chose, and ignoring it would sweep the range the source excluded
+   * while every turn still reported success.
+   */
+  | { type: "misconfigured" };
 
 /**
  * How long this process holds a slice whose walk threw before offering it
@@ -524,6 +534,13 @@ type SelectStaleShortSlicesOptions = {
   sourceId: SafeId<"caseLawSource">;
   staleBefore: Date;
   /**
+   * The source's effective first slice. Every read of the ledger's backlog
+   * shares it: a row below the floor records history this deployment no
+   * longer sweeps, and selecting one would re-list the range the floor
+   * excluded — forever, since a short row below it can never settle.
+   */
+  fromSlice: string;
+  /**
    * Slices held for retry, excluded in the query rather than by the caller.
    * The read is a bounded oldest-first window, so a held row filtered
    * afterwards still occupies a place in it: enough of them fill the window
@@ -539,7 +556,12 @@ type SelectStaleShortSlicesOptions = {
  */
 const selectStaleShortSlices = async (
   scopedDb: ScopedDb,
-  { heldSlices, sourceId, staleBefore }: SelectStaleShortSlicesOptions,
+  {
+    fromSlice,
+    heldSlices,
+    sourceId,
+    staleBefore,
+  }: SelectStaleShortSlicesOptions,
 ): Promise<LedgerSlice[]> => {
   const rows = await scopedDb(
     async (tx) =>
@@ -554,6 +576,7 @@ const selectStaleShortSlices = async (
         .where(
           and(
             eq(caseLawCoverageSlices.sourceId, sourceId),
+            gte(caseLawCoverageSlices.slice, fromSlice),
             lt(caseLawCoverageSlices.collected, caseLawCoverageSlices.reported),
             // A short row whose later walk failed belongs to the retry arm.
             isNull(caseLawCoverageSlices.walkError),
@@ -602,6 +625,13 @@ type SelectRecheckCandidateOptions = {
   /** The tip window's own start; slices at or above it are re-walked anyway. */
   belowSlice: string;
   /**
+   * The source's effective first slice. Every read of the ledger's backlog
+   * shares it: a row below the floor records history this deployment no
+   * longer sweeps, and selecting one would re-list the range the floor
+   * excluded — forever, since a short row below it can never settle.
+   */
+  fromSlice: string;
+  /**
    * Held slices, excluded here for the same reason the backlog query excludes
    * them: this read is `LIMIT 1`, so a held row filtered afterwards is the
    * whole candidate set and the source reports idle while a later settled row
@@ -613,7 +643,12 @@ type SelectRecheckCandidateOptions = {
 
 const selectRecheckCandidate = async (
   scopedDb: ScopedDb,
-  { belowSlice, heldSlices, sourceId }: SelectRecheckCandidateOptions,
+  {
+    belowSlice,
+    fromSlice,
+    heldSlices,
+    sourceId,
+  }: SelectRecheckCandidateOptions,
 ): Promise<LedgerSlice | null> => {
   const row = (
     await scopedDb(
@@ -629,6 +664,7 @@ const selectRecheckCandidate = async (
           .where(
             and(
               eq(caseLawCoverageSlices.sourceId, sourceId),
+              gte(caseLawCoverageSlices.slice, fromSlice),
               lt(caseLawCoverageSlices.slice, belowSlice),
               gte(
                 caseLawCoverageSlices.collected,
@@ -649,6 +685,13 @@ const selectRecheckCandidate = async (
 
 type SelectFailedSliceCandidateOptions = {
   sourceId: SafeId<"caseLawSource">;
+  /**
+   * The source's effective first slice. Every read of the ledger's backlog
+   * shares it: a row below the floor records history this deployment no
+   * longer sweeps, and selecting one would re-list the range the floor
+   * excluded — forever, since a short row below it can never settle.
+   */
+  fromSlice: string;
   /** Held slices, excluded for the same reason the recheck excludes them. */
   heldSlices: string[];
 };
@@ -660,7 +703,7 @@ type SelectFailedSliceCandidateOptions = {
  */
 const selectFailedSliceCandidate = async (
   scopedDb: ScopedDb,
-  { heldSlices, sourceId }: SelectFailedSliceCandidateOptions,
+  { fromSlice, heldSlices, sourceId }: SelectFailedSliceCandidateOptions,
 ): Promise<FailedSliceCandidate | null> =>
   (
     await scopedDb(
@@ -674,6 +717,7 @@ const selectFailedSliceCandidate = async (
           .where(
             and(
               eq(caseLawCoverageSlices.sourceId, sourceId),
+              gte(caseLawCoverageSlices.slice, fromSlice),
               isNotNull(caseLawCoverageSlices.walkError),
               heldSlices.length === 0
                 ? undefined
@@ -685,8 +729,14 @@ const selectFailedSliceCandidate = async (
     )
   ).at(0) ?? null;
 
+type SelectOldestLedgerSliceOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  /** The source's effective first slice; see the backlog reads above. */
+  fromSlice: string;
+};
+
 /**
- * The oldest slice this source has any ledger row for.
+ * The oldest slice at or above the floor that this source has a ledger row for.
  *
  * The historical sweep fills downward and contiguously from the tip window, so
  * this single aggregate is its frontier: the slice below it is the newest one
@@ -695,7 +745,7 @@ const selectFailedSliceCandidate = async (
  */
 const selectOldestLedgerSlice = async (
   scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
+  { fromSlice, sourceId }: SelectOldestLedgerSliceOptions,
 ): Promise<string | null> => {
   const row = (
     await scopedDb(
@@ -703,12 +753,39 @@ const selectOldestLedgerSlice = async (
         await tx
           .select({ oldest: min(caseLawCoverageSlices.slice) })
           .from(caseLawCoverageSlices)
-          .where(eq(caseLawCoverageSlices.sourceId, sourceId))
+          .where(
+            and(
+              eq(caseLawCoverageSlices.sourceId, sourceId),
+              gte(caseLawCoverageSlices.slice, fromSlice),
+            ),
+          )
           .limit(1),
     )
   ).at(0);
   return row?.oldest ?? null;
 };
+
+/**
+ * The source's configuration as of this unit.
+ *
+ * Read per unit rather than handed in once: the floor it carries is operator
+ * input, and a daemon that read it at startup would hold a narrowed sweep
+ * open, or a widened one shut, until the process was replaced.
+ */
+const selectSourceConfig = async (
+  scopedDb: ScopedDb,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<unknown> =>
+  (
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select({ config: caseLawSources.config })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .limit(1),
+    )
+  ).at(0)?.config;
 
 /** Whether any parked item for this source has come due. */
 const hasDueParkedItems = async (
@@ -1118,7 +1195,7 @@ export const runReconciliationWorkUnit = async ({
   adapterKey,
   fetchDelayMs,
   now,
-  reconciliation,
+  reconciliation: adapterReconciliation,
   scopedDb,
   sleep,
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
@@ -1135,6 +1212,28 @@ export const runReconciliationWorkUnit = async ({
     );
   }
   const startedAt = now();
+
+  // Everything below reads the floored walk, so the configured floor is
+  // applied here rather than at each place that would otherwise have to
+  // remember it: the tip window, the sweep, and the frontier between them.
+  const floored = floorSliceWalk({
+    adapterKey,
+    config: await selectSourceConfig(scopedDb, sourceId),
+    now: startedAt,
+    walk: adapterReconciliation,
+  });
+  if (Result.isError(floored)) {
+    // Logged here because the loop's window tally counts these turns without
+    // saying what cannot be used: the value an operator has to fix leaves
+    // the process only through this record.
+    logger.error("case_law.reconciliation.floor_rejected", {
+      adapterKey,
+      reason: floored.error.message,
+    });
+    return { type: "misconfigured" };
+  }
+  const reconciliation = floored.value;
+
   const tipSlices = tipWindowSlices(reconciliation, startedAt);
   const staleBefore = new Date(
     startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,
@@ -1143,6 +1242,12 @@ export const runReconciliationWorkUnit = async ({
   // sweep and the recheck may reach for: the tip is re-walked on its own
   // cadence and needs neither.
   const tipStart = tipSlices.at(-1) ?? reconciliation.sliceOf(startedAt);
+  // The floor under every read of the ledger below, so the backlog, the retry
+  // arm, the recheck and the sweep's frontier all describe the same range.
+  // Rows below it are history the source once swept and no longer covers:
+  // left selectable, a short one among them can never settle and would be
+  // re-listed on every turn.
+  const fromSlice = reconciliation.firstSlice;
 
   // Dropped as they come due rather than left to accumulate: the map is the
   // process's memory of what it has just failed to walk, and an expired entry
@@ -1165,8 +1270,13 @@ export const runReconciliationWorkUnit = async ({
     failedCandidate,
   ] = await Promise.all([
     selectTipCheckedAt(scopedDb, sourceId, tipSlices),
-    selectStaleShortSlices(scopedDb, { sourceId, staleBefore, heldSlices }),
-    selectOldestLedgerSlice(scopedDb, sourceId),
+    selectStaleShortSlices(scopedDb, {
+      sourceId,
+      staleBefore,
+      heldSlices,
+      fromSlice,
+    }),
+    selectOldestLedgerSlice(scopedDb, { sourceId, fromSlice }),
     hasDueParkedItems(scopedDb, sourceId, startedAt),
     // Asked every turn rather than only once the higher priorities come up
     // empty: idle is the steady state of a surveyed source, so the branch
@@ -1176,8 +1286,9 @@ export const runReconciliationWorkUnit = async ({
       sourceId,
       belowSlice: tipStart,
       heldSlices,
+      fromSlice,
     }),
-    selectFailedSliceCandidate(scopedDb, { sourceId, heldSlices }),
+    selectFailedSliceCandidate(scopedDb, { sourceId, heldSlices, fromSlice }),
   ]);
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(

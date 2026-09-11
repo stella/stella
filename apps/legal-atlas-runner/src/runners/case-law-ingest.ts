@@ -1440,6 +1440,8 @@ export const runCaseLawIngest = async (
               return { turn: RECONCILIATION_TURN.LEASED };
             case "idle":
               return { turn: RECONCILIATION_TURN.IDLE };
+            case "misconfigured":
+              return { turn: RECONCILIATION_TURN.MISCONFIGURED };
             default: {
               outcome satisfies never;
               return panic(
@@ -1468,6 +1470,7 @@ export const runCaseLawIngest = async (
             `worked=${summary.worked} ` +
             `idle=${summary.idle} ` +
             `leased=${summary.leased} ` +
+            `misconfigured=${summary.misconfigured} ` +
             `listed=${summary.listed} ` +
             `keyable=${summary.keyable} ` +
             `unidentifiable=${summary.unidentifiable} ` +
