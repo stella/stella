@@ -53,8 +53,10 @@ services:
 
   rustfs-setup:
     profiles: [dev]
-    # RustFS documents `mc` as its supported non-interactive S3 client.
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    # RustFS documents `mc` as its supported non-interactive S3 client. Pulled
+    # from quay.io: Docker Hub no longer serves the minio/mc repository. Same
+    # release, same manifest digest.
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     depends_on:
       rustfs:
         condition: service_healthy
