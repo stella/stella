@@ -279,8 +279,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       // eslint-disable-next-line react/memo-dependencies -- docxActionsRef.current read at call time in a load-bearing callback (compiler-bailout component). react-compiler and react-hooks/exhaustive-deps disagree on this ref: exhaustive-deps requires it in the dep array (kept), the compiler flags it as unlistable — suppress the compiler side.
       const action = docxActionsRef.current.get(tabId);
       if (editingDocxTabId === tabId && action) {
+        // Closing the tab is leaving the document: the session
+        // finalizes into a version when it changed anything.
         action
-          .cancel()
+          .leave()
           .then(() => {
             docxActionsRef.current.delete(tabId);
             setEditingDocxTabId((current) =>

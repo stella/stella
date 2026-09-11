@@ -247,11 +247,12 @@ test.describe("DOCX upload + inspector", () => {
       { waitUntil: "domcontentloaded" },
     );
 
-    const saveButton = page.getByRole("button", {
-      exact: true,
-      name: "Save",
+    // The autosave indicator is the editor's readiness signal now that
+    // the edit session versions itself on exit.
+    const autosaveIndicator = page.getByRole("status", {
+      name: /^(Synced|Syncing)$/u,
     });
-    await expect(saveButton).toBeEnabled({ timeout: 45_000 });
+    await expect(autosaveIndicator).toBeVisible({ timeout: 45_000 });
 
     const firstParagraphText = page.locator(".layout-run-text", {
       hasText: "Stella E2E test document.",
@@ -264,6 +265,12 @@ test.describe("DOCX upload + inspector", () => {
       page.locator(".layout-run-text", { hasText: editToken }),
     ).toBeVisible({ timeout: 20_000 });
 
+    // The typed text must reach the server as a checkpoint before the
+    // exit: finalize versions the last checkpoint, not the live editor.
+    await expect(
+      page.getByRole("status", { exact: true, name: "Synced" }),
+    ).toBeVisible({ timeout: 45_000 });
+
     const finalizeResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
@@ -271,7 +278,11 @@ test.describe("DOCX upload + inspector", () => {
         response.url().endsWith("/finalize"),
       { timeout: 45_000 },
     );
-    await saveButton.click();
+    // Leaving the document ends the session; there is no Save button.
+    await page
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { exact: true, name: "Matters" })
+      .click();
     expect((await finalizeResponse).ok()).toBe(true);
 
     await expect

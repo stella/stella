@@ -8,7 +8,8 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Result, TaggedError } from "better-result";
+import type { QueryClient } from "@tanstack/react-query";
+import { panic, Result, TaggedError } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import { useLatest } from "@stll/ui/use-latest";
@@ -17,6 +18,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -27,6 +29,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import { selectStableArrayBuffer } from "./array-buffer-utils";
+import { resolveEditSessionExit } from "./docx-edit-mode.logic";
 
 export type EditSessionState =
   | { status: "idle" }
@@ -79,6 +82,9 @@ type UseEditSessionOptions = {
 };
 
 const CHECKPOINT_DEBOUNCE_MS = 5000;
+// A keepalive request outlives the page; the timeout only bounds the
+// promise the unload handler is not waiting on anyway.
+const UNLOAD_FINALIZE_TIMEOUT_MS = 30_000;
 
 type EditSessionReleaseContext = {
   workspaceId: string;
@@ -119,6 +125,109 @@ const releaseEditSession = async ({
   return true;
 };
 
+type InvalidateFinalizedEditSessionOptions = {
+  fieldId: string;
+  /** The field the new version landed on; equals `fieldId` when nothing was written. */
+  finalizedFieldId: string;
+  queryClient: QueryClient;
+  workspaceId: string;
+};
+
+const invalidateFinalizedEditSessionQueries = async ({
+  fieldId,
+  finalizedFieldId,
+  queryClient,
+  workspaceId,
+}: InvalidateFinalizedEditSessionOptions) => {
+  const fieldIds =
+    finalizedFieldId === fieldId ? [fieldId] : [fieldId, finalizedFieldId];
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all(workspaceId),
+    }),
+    ...fieldIds.flatMap((id) => [
+      queryClient.invalidateQueries({
+        queryKey: filesKeys.byFieldId({
+          workspaceId,
+          fieldId: id,
+          purpose: "native-display",
+        }),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: filesKeys.metadataByFieldId({
+          workspaceId,
+          fieldId: id,
+          purpose: "native-display",
+        }),
+      }),
+    ]),
+  ]);
+};
+
+type EditSessionHandle = {
+  sessionId: string;
+  sessionToken: string;
+};
+
+type FinalizeAbandonedEditSessionOptions = EditSessionHandle & {
+  fieldId: string;
+  queryClient: QueryClient;
+  workspaceId: string;
+};
+
+/**
+ * Unmount fallback for an editor that went away without an explicit
+ * leave. The server turns the session's last checkpoint into a
+ * version and writes nothing when that checkpoint matches the base,
+ * so this cannot mint an empty version.
+ */
+const finalizeAbandonedEditSession = async ({
+  fieldId,
+  queryClient,
+  sessionId,
+  sessionToken,
+  workspaceId,
+}: FinalizeAbandonedEditSessionOptions) => {
+  const response = await api["desktop-edit-sessions"]({
+    sessionId,
+  }).finalize.post({ sessionToken });
+
+  if (response.error) {
+    getAnalytics().captureError(toAPIError(response.error));
+    return;
+  }
+
+  await invalidateFinalizedEditSessionQueries({
+    fieldId,
+    finalizedFieldId:
+      response.data.outcome === "finalized" ? response.data.fieldId : fieldId,
+    queryClient,
+    workspaceId,
+  });
+};
+
+/**
+ * Tab-close path. The Eden client cannot set `keepalive`, and a
+ * normal fetch is cancelled the moment the document unloads, so the
+ * finalize POST is issued directly here.
+ */
+const finalizeEditSessionOnUnload = async ({
+  sessionId,
+  sessionToken,
+}: EditSessionHandle) => {
+  await fetchWithTimeout(
+    apiUrl(`/desktop-edit-sessions/${sessionId}/finalize`),
+    {
+      body: JSON.stringify({ sessionToken }),
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      keepalive: true,
+      method: "POST",
+      timeoutMs: UNLOAD_FINALIZE_TIMEOUT_MS,
+    },
+  );
+};
+
 const getEditSessionErrorReason = (error: {
   status: number;
 }): EditSessionErrorReason => {
@@ -156,11 +265,23 @@ export const useEditSession = ({
   } | null>(null);
   const checkpointQueueRef = useRef<Promise<void> | null>(null);
   checkpointQueueRef.current ??= Promise.resolve();
-  const releaseContextRef = useLatest({ workspaceId, entityId, propertyId });
+  const sessionContextRef = useLatest({
+    workspaceId,
+    entityId,
+    fieldId,
+    propertyId,
+  });
+  // Whether this session has produced anything worth versioning. Set
+  // the moment the document is marked dirty, so an edit inside the
+  // checkpoint debounce window still finalizes; cleared only when the
+  // session ends.
+  const hasCheckpointedChangesRef = useRef(false);
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;
 
-  // Warn the user before closing the tab with unsaved changes
+  // Only the edits that have not reached the server yet would be lost
+  // on a tab close; anything already checkpointed is finalized by the
+  // pagehide handler below.
   useExternalSyncEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (isDirty) {
@@ -171,12 +292,45 @@ export const useEditSession = ({
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
+  useMountEffect(() => {
+    const handler = () => {
+      const session = sessionRef.current;
+      if (!session) {
+        return;
+      }
+      const exit = resolveEditSessionExit({
+        hasCheckpointedChanges: hasCheckpointedChangesRef.current,
+      });
+      switch (exit.action) {
+        case "finalize": {
+          detached(
+            finalizeEditSessionOnUnload(session),
+            "use-edit-session.finalize-on-unload",
+          );
+          return;
+        }
+        case "release": {
+          // The lock expires on its own; an unload has no time to
+          // wait for a release round-trip.
+          return;
+        }
+        default: {
+          exit satisfies never;
+          panic(`Unhandled edit-session exit: ${String(exit)}`);
+        }
+      }
+    };
+    window.addEventListener("pagehide", handler);
+    return () => window.removeEventListener("pagehide", handler);
+  });
+
   const open = async (force?: boolean) => {
     const releaseContext: EditSessionReleaseContext = {
       workspaceId,
       entityId,
       propertyId,
     };
+    hasCheckpointedChangesRef.current = false;
     setState({ status: "opening" });
 
     const response = await api
@@ -277,6 +431,7 @@ export const useEditSession = ({
     if (response.error) {
       if (response.error.status === 409) {
         sessionRef.current = null;
+        hasCheckpointedChangesRef.current = false;
         setIsDirty(false);
         setState({
           status: "error",
@@ -295,6 +450,7 @@ export const useEditSession = ({
         sessionToken: response.data.rotatedSessionToken,
       };
     }
+    hasCheckpointedChangesRef.current = true;
     setIsDirty(false);
     return true;
   };
@@ -329,20 +485,52 @@ export const useEditSession = ({
       }
 
       sessionRef.current = null;
-      const context = releaseContextRef.current;
-      detached(
-        releaseEditSession(context),
-        "use-edit-session.release-edit-session",
-      );
+      const context = sessionContextRef.current;
+      const exit = resolveEditSessionExit({
+        hasCheckpointedChanges: hasCheckpointedChangesRef.current,
+      });
+      hasCheckpointedChangesRef.current = false;
+
+      switch (exit.action) {
+        case "finalize": {
+          // The editor vanished without going through `leave` (a
+          // remount, an error boundary). The session still owes the
+          // user their one version.
+          detached(
+            finalizeAbandonedEditSession({
+              fieldId: context.fieldId,
+              queryClient,
+              sessionId: session.sessionId,
+              sessionToken: session.sessionToken,
+              workspaceId: context.workspaceId,
+            }),
+            "use-edit-session.finalize-abandoned-session",
+          );
+          return;
+        }
+        case "release": {
+          detached(
+            releaseEditSession(context),
+            "use-edit-session.release-edit-session",
+          );
+          return;
+        }
+        default: {
+          exit satisfies never;
+          panic(`Unhandled edit-session exit: ${String(exit)}`);
+        }
+      }
     };
   });
 
   const markDirtyAndCheckpoint = (buffer: ArrayBuffer) => {
+    hasCheckpointedChangesRef.current = true;
     setIsDirty(true);
     debouncedCheckpoint(buffer);
   };
 
   const markDirty = useCallback(() => {
+    hasCheckpointedChangesRef.current = true;
     setIsDirty(true);
   }, []);
 
@@ -363,6 +551,7 @@ export const useEditSession = ({
     });
 
     sessionRef.current = null;
+    hasCheckpointedChangesRef.current = false;
     setIsDirty(false);
 
     if (response.error) {
@@ -375,47 +564,13 @@ export const useEditSession = ({
       return;
     }
 
-    const finalizedFieldId =
-      response.data.outcome === "finalized" ? response.data.fieldId : fieldId;
-    await Promise.all(
-      [
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: filesKeys.byFieldId({
-            workspaceId,
-            fieldId,
-            purpose: "native-display",
-          }),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: filesKeys.metadataByFieldId({
-            workspaceId,
-            fieldId,
-            purpose: "native-display",
-          }),
-        }),
-        finalizedFieldId !== fieldId
-          ? queryClient.invalidateQueries({
-              queryKey: filesKeys.byFieldId({
-                workspaceId,
-                fieldId: finalizedFieldId,
-                purpose: "native-display",
-              }),
-            })
-          : null,
-        finalizedFieldId !== fieldId
-          ? queryClient.invalidateQueries({
-              queryKey: filesKeys.metadataByFieldId({
-                workspaceId,
-                fieldId: finalizedFieldId,
-                purpose: "native-display",
-              }),
-            })
-          : null,
-      ].filter((promise) => promise !== null),
-    );
+    await invalidateFinalizedEditSessionQueries({
+      fieldId,
+      finalizedFieldId:
+        response.data.outcome === "finalized" ? response.data.fieldId : fieldId,
+      queryClient,
+      workspaceId,
+    });
 
     setState({ status: "idle" });
     onFinalized?.(response.data);
@@ -431,7 +586,7 @@ export const useEditSession = ({
 
     debouncedCheckpoint.cancel();
 
-    const context = releaseContextRef.current;
+    const context = sessionContextRef.current;
     const released = await releaseEditSession(context);
     if (!released) {
       throw new EditSessionReleaseError({
@@ -440,6 +595,7 @@ export const useEditSession = ({
     }
 
     sessionRef.current = null;
+    hasCheckpointedChangesRef.current = false;
     setIsDirty(false);
     setState({ status: "idle" });
     await queryClient.invalidateQueries({

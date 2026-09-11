@@ -9,6 +9,7 @@ import {
   dedupeDetectedAnonymizationTerms,
   mergeAnonymizationTerms,
   resolveCheckpointAutosaveStatus,
+  resolveEditSessionExit,
 } from "./docx-edit-mode.logic";
 
 /** Resolve every queued microtask (and the current macrotask). */
@@ -73,6 +74,20 @@ describe("checkpoint autosave status", () => {
         checkpointSaved: true,
       }),
     ).toBe("synced");
+  });
+});
+
+describe("edit session exit", () => {
+  test("finalizes a session that changed something", () => {
+    expect(resolveEditSessionExit({ hasCheckpointedChanges: true })).toEqual({
+      action: "finalize",
+    });
+  });
+
+  test("releases a session that changed nothing, so no empty version", () => {
+    expect(resolveEditSessionExit({ hasCheckpointedChanges: false })).toEqual({
+      action: "release",
+    });
   });
 });
 

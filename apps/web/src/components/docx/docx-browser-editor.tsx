@@ -20,7 +20,6 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
-  CheckIcon,
   EyeIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
@@ -186,8 +185,15 @@ type PendingCollaborationPublication = {
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
 
 export type DocxBrowserEditorActions = {
-  cancel: () => Promise<void>;
+  /** Collaboration's explicit "Create version" button. */
   finalize: () => void;
+  /**
+   * End the edit session because the user is leaving the document.
+   * A session with changes becomes exactly one version; a session
+   * without changes is released and writes none. Idempotent: it
+   * resolves immediately once the session is gone.
+   */
+  leave: () => Promise<void>;
   /**
    * Force-checkpoint any pending in-flight edits to the server,
    * bypassing the debounce. Call this before navigating away from
@@ -1590,14 +1596,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     handleUnlock();
   }, [handleUnlock, isUnlocked]);
 
-  const handleToggleLock = useCallback(() => {
-    if (!isUnlocked) {
-      handleUnlock();
-      return;
-    }
-    detached(handleFinalize(), "docx-browser-editor.finalize");
-  }, [handleFinalize, handleUnlock, isUnlocked]);
-
   // Registers this render's action handles into the parent-provided ref
   // and/or keyed map. Wrapped in useCallback (stable unless actionsKey /
   // actionsMapRef / actionsRef change) so useImperativeHandle only
@@ -1634,13 +1632,24 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   useImperativeHandle(
     registerActions,
     () => ({
-      cancel: handleCancel,
       finalize: () => {
         if (isCollaborativeEditing || state.status === "editing") {
           detached(handleFinalize(), "docx-browser-editor.finalize");
         }
       },
       flushPendingChanges,
+      leave: async () => {
+        // Collaboration keeps its own explicit Create version / Close
+        // buttons, so leaving a room closes it without minting one.
+        if (isCollaborativeEditing) {
+          await handleCancel();
+          return;
+        }
+        if (state.status !== "editing") {
+          return;
+        }
+        await handleFinalize();
+      },
       print: () => {
         editorRef.current?.print();
       },
@@ -1720,25 +1729,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             </>
           )}
           {showActionBar && isUnlocked && !isCollaborativeEditing && (
-            <>
-              <Button
-                aria-label={t("common.save")}
-                className="px-2"
-                disabled={
-                  state.status === "opening" ||
-                  state.status === "saving" ||
-                  collaborationState.status === "connecting"
-                }
-                onClick={handleToggleLock}
-                size="sm"
-                tooltip={t("common.save")}
-                variant="ghost"
-              >
-                <CheckIcon />
-                <span>{t("common.save")}</span>
-              </Button>
-              <AutosaveIndicator status={autosaveStatus} />
-            </>
+            <AutosaveIndicator status={autosaveStatus} />
           )}
         </>
       );

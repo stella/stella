@@ -31,6 +31,23 @@ export const resolveCheckpointAutosaveStatus = ({
   return checkpointSaved ? "synced" : "pending";
 };
 
+type EditSessionExit = { action: "finalize" } | { action: "release" };
+
+type ResolveEditSessionExitOptions = {
+  hasCheckpointedChanges: boolean;
+};
+
+/**
+ * How an edit session ends when the user leaves the document. A
+ * session that changed something becomes exactly one version; a
+ * session that changed nothing releases its lock and writes none,
+ * so browsing a DOCX never mints an empty version.
+ */
+export const resolveEditSessionExit = ({
+  hasCheckpointedChanges,
+}: ResolveEditSessionExitOptions): EditSessionExit =>
+  hasCheckpointedChanges ? { action: "finalize" } : { action: "release" };
+
 type TrailingSingleFlightOptions = {
   run: () => Promise<void>;
   onError?: (error: unknown) => void;

@@ -20,8 +20,9 @@ import {
   Navigate,
   createFileRoute,
   stripSearchParams,
+  useBlocker,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -50,6 +51,7 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import {
@@ -529,6 +531,12 @@ function RouteComponent() {
   );
 }
 
+/** The document a location points at; the search may carry neither key. */
+const readDocumentTarget = (search: object) => ({
+  entity: "entity" in search ? search.entity : undefined,
+  field: "field" in search ? search.field : undefined,
+});
+
 function RouteComponentInner({
   workspaceId,
   viewId,
@@ -637,9 +645,41 @@ function RouteComponentInner({
     seq: number;
   } | null>(null);
   const [isComparing] = useState(false);
-  const [, setDocxUnlocked] = useState(false);
+  const [docxUnlocked, setDocxUnlocked] = useState(false);
+  const docxActionsRef = useRef<DocxBrowserEditorActions | null>(null);
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
+
+  // Navigating away is how a browser edit session ends: it finalizes
+  // into a version when the document changed and is released when it
+  // did not, so the navigation itself is never refused. Only a change
+  // of document counts as leaving; page, zoom, and pane search updates
+  // keep the session open.
+  useBlocker({
+    disabled: !docxUnlocked,
+    enableBeforeUnload: false,
+    shouldBlockFn: async ({ current, next }) => {
+      if (
+        next.pathname === current.pathname &&
+        readDocumentTarget(next.search).entity ===
+          readDocumentTarget(current.search).entity &&
+        readDocumentTarget(next.search).field ===
+          readDocumentTarget(current.search).field
+      ) {
+        return false;
+      }
+      const left = await Result.tryPromise(
+        async () => await docxActionsRef.current?.leave(),
+      );
+      if (Result.isError(left)) {
+        // The editor already surfaced the failure and the lock
+        // expires on its own; a failed exit must not trap the user
+        // on this page.
+        getAnalytics().captureError(left.error);
+      }
+      return false;
+    },
+  });
   const setIsPDFPageOrganizerOpen = (open: boolean) => {
     detached(
       navigate({
@@ -948,6 +988,7 @@ function RouteComponentInner({
                             workspaceId={workspaceId}
                           />
                         }
+                        actionsRef={docxActionsRef}
                         canUnlock={useDocxBrowserEditor}
                         entityId={entityId}
                         fieldId={fieldId}

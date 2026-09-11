@@ -54,9 +54,11 @@ export const useDocxTabEditSession = ({
       }
 
       if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
+        // Editing moves to another document, so the previous one is
+        // left: its session finalizes when it changed anything.
         const currentAction = docxActionsRef.current.get(editingDocxTabId);
         if (currentAction !== undefined) {
-          await currentAction.cancel();
+          await currentAction.leave();
         }
         docxActionsRef.current.delete(editingDocxTabId);
         setEditingDocxTabId((current) =>

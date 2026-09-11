@@ -776,28 +776,21 @@ export const FileTabPanel = ({
     );
   })();
 
+  // A plain edit session versions itself when the user leaves the
+  // document; only collaboration cuts versions on demand.
   const editToggle = (() => {
-    if (isEditingNativeDocx) {
+    if (isCollaboratingNativeDocx) {
       return (
         <Button
-          className={cn(
-            "transition-colors",
-            isCollaboratingNativeDocx && "min-h-11",
-          )}
-          disabled={isCollaboratingNativeDocx && !isCollaborationPublishable}
+          className="min-h-11 transition-colors"
+          disabled={!isCollaborationPublishable}
           onClick={() => {
             docxActionsRef.current.get(tab.id)?.finalize();
           }}
           size="xs"
         >
-          {isCollaboratingNativeDocx ? (
-            <GitCommitHorizontalIcon className="size-3.5" />
-          ) : (
-            <CheckIcon className="size-3.5" />
-          )}
-          {isCollaboratingNativeDocx
-            ? t("folio.createVersion")
-            : t("common.save")}
+          <GitCommitHorizontalIcon className="size-3.5" />
+          {t("folio.createVersion")}
         </Button>
       );
     }
