@@ -18,7 +18,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
-  McpToolResponse,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
@@ -282,7 +282,9 @@ export const uploadRemoteDocumentVersion = async ({
   file: UploadDocumentVersionInput["file"];
   workspaceId: string;
 }): Promise<
-  McpToolResponse<v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>>
+  TypedMcpToolResponse<
+    v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>
+  >
 > => {
   const downloaded = await dependencies.download({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
