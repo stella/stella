@@ -14,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
+import { isRecord } from "@/api/lib/type-guards";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -137,6 +138,17 @@ type InsertedField = {
   content: FieldContent;
 };
 
+type InsertedVersion = {
+  id: SafeId<"entityVersion">;
+  entityId: SafeId<"entity">;
+  versionNumber: number;
+  stamp: string | null;
+  label?: string | null;
+};
+
+/** A verification code printed on the source version before the move. */
+const sourceVerificationCode = "K7M2QTX9PB";
+
 type CopyToWorkspaceContext = Parameters<typeof copyToWorkspace.handler>[0];
 
 const isInsertedEntity = (value: unknown): value is InsertedEntity =>
@@ -153,6 +165,9 @@ const isInsertedField = (value: unknown): value is InsertedField =>
   "workspaceId" in value &&
   "propertyId" in value &&
   "content" in value;
+
+const isInsertedVersion = (value: unknown): value is InsertedVersion =>
+  isRecord(value) && "versionNumber" in value && "entityId" in value;
 
 let fake: FakeS3;
 
@@ -1201,17 +1216,26 @@ describe("copy-to-workspace", () => {
     let nextDocumentSequence = 0;
     let selectCallCount = 0;
     let deletedEntityCount = 0;
+    let clearedSourceCodes = 0;
+    const insertedVersions: InsertedVersion[] = [];
 
+    const sourceVersionId = toSafeId<"entityVersion">("version_1");
     const sourceEntity = {
       id: documentId,
       kind: "document" as const,
       name: "Move.pdf",
       parentId: null,
       readOnly: false,
-      currentVersion: {
-        id: toSafeId<"entityVersion">("version_1"),
-        fields: [{ propertyId: sourceFilePropertyId, content: fileContent }],
-      },
+      currentVersionId: sourceVersionId,
+      versions: [
+        {
+          id: sourceVersionId,
+          versionNumber: 3,
+          stamp: "2026/001/015.v3",
+          label: "Final version",
+          fields: [{ propertyId: sourceFilePropertyId, content: fileContent }],
+        },
+      ],
     };
 
     const tx = {
@@ -1253,24 +1277,44 @@ describe("copy-to-workspace", () => {
         selectCallCount += 1;
 
         return {
-          from: () => ({
-            innerJoin: () => ({
-              where: async () => {
-                throw new Error("cleanup lookup failed");
-              },
-            }),
-            where: async () => {
-              if (selectCallCount === 1) {
-                return [];
-              }
-              throw new Error("unexpected lookup");
-            },
-          }),
+          from: (table: unknown) =>
+            table === entityVersions
+              ? {
+                  // The code carry reads the source rows FOR UPDATE.
+                  where: () => ({
+                    for: async () => [
+                      {
+                        id: sourceVersionId,
+                        verificationCode: sourceVerificationCode,
+                      },
+                    ],
+                  }),
+                }
+              : {
+                  innerJoin: () => ({
+                    where: async () => {
+                      throw new Error("cleanup lookup failed");
+                    },
+                  }),
+                  where: async () => {
+                    if (selectCallCount === 1) {
+                      return [];
+                    }
+                    throw new Error("unexpected lookup");
+                  },
+                },
         };
       },
       insert: (table: unknown) => ({
         values: (value: unknown) => {
           if (table === entityVersions) {
+            if (Array.isArray(value)) {
+              for (const row of value) {
+                if (isInsertedVersion(row)) {
+                  insertedVersions.push(row);
+                }
+              }
+            }
             return entityVersionInsertResult(value);
           }
           if (table === documentCounters) {
@@ -1287,9 +1331,17 @@ describe("copy-to-workspace", () => {
           return undefined;
         },
       }),
-      update: () => ({
-        set: () => ({
-          where: async () => {},
+      update: (table: unknown) => ({
+        set: (value: unknown) => ({
+          where: async () => {
+            if (
+              table === entityVersions &&
+              isRecord(value) &&
+              value["verificationCode"] === null
+            ) {
+              clearedSourceCodes += 1;
+            }
+          },
         }),
       }),
       delete: () => ({
@@ -1314,6 +1366,12 @@ describe("copy-to-workspace", () => {
       field: null,
     });
     expect(deletedEntityCount).toBe(1);
+    // The moved version keeps the number and stamp already printed on it, and
+    // its code is cleared on the source before the target takes it.
+    expect(insertedVersions).toMatchObject([
+      { versionNumber: 3, stamp: "2026/001/015.v3", label: "Final version" },
+    ]);
+    expect(clearedSourceCodes).toBe(1);
     const movedKeys = requestKeys("COPY");
     expect(movedKeys).toHaveLength(1);
     // The move succeeded, so the copy stays: a failed source-cleanup lookup

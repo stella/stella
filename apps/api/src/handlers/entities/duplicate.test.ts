@@ -99,7 +99,6 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
   const rejection: unknown = await copyFileObject({
     sourceEntityId: documentId,
     sourceFileId: fileContent.id,
-    sourcePropertyId: propertyId,
     sourceKey,
     mimeType: fileContent.mimeType,
     organizationId,
@@ -152,7 +151,10 @@ const sourceEntities = [
     kind: "folder" as const,
     name: "Root",
     parentId: null,
-    currentVersion: { fields: [] },
+    currentVersion: {
+      id: toSafeId<"entityVersion">("version_root"),
+      fields: [],
+    },
   },
   {
     id: documentId,
@@ -160,6 +162,7 @@ const sourceEntities = [
     name: "Child.docx",
     parentId: rootFolderId,
     currentVersion: {
+      id: toSafeId<"entityVersion">("version_child"),
       fields: [{ propertyId, content: fileContent }],
     },
   },
@@ -168,7 +171,10 @@ const sourceEntities = [
     kind: "folder" as const,
     name: "Nested",
     parentId: rootFolderId,
-    currentVersion: { fields: [] },
+    currentVersion: {
+      id: toSafeId<"entityVersion">("version_nested"),
+      fields: [],
+    },
   },
 ];
 
