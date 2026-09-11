@@ -39,6 +39,7 @@ import {
   AlertDialogTrigger,
 } from "@stll/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbEllipsis,
@@ -234,6 +235,10 @@ const COMBOBOX_OPTIONS: ComboboxOption[] = [
   { id: "charlie", label: "Charlie Novak", detail: "Witness" },
   { id: "delta", label: "Delta Finance", detail: "Lender" },
 ];
+
+// Mixed LTR/RTL legal strings so bidi isolation is visible against unwrapped text.
+const BIDI_MIXED_PARTY = "شركة النور (C-123/45).";
+const BIDI_MIXED_CITATION = "حكم رقم Smith v Jones لعام.";
 
 const TABLE_ROWS = [
   {
@@ -1215,6 +1220,71 @@ export function UiPlayground() {
                     <span>Left</span>
                     <Separator orientation="vertical" />
                     <span>Right</span>
+                  </div>
+                </div>
+              </PlaygroundSection>
+
+              <PlaygroundSection
+                description="dir isolation for mixed LTR/RTL user text. Compare an unwrapped string with BidiText so punctuation and neighboring runs stay in place."
+                title="BidiText"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground text-xs">
+                      Unwrapped
+                    </span>
+                    <div className="rounded-lg border px-3 py-2 text-sm">
+                      {BIDI_MIXED_PARTY}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground text-xs">
+                      Isolated
+                    </span>
+                    <div className="rounded-lg border px-3 py-2 text-sm">
+                      <BidiText>{BIDI_MIXED_PARTY}</BidiText>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground text-xs">
+                    {'as="span" next to surrounding LTR'}
+                  </span>
+                  <p className="rounded-lg border px-3 py-2 text-sm">
+                    Filed against{" "}
+                    <BidiText as="span">{BIDI_MIXED_PARTY}</BidiText> yesterday.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 text-sm">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground text-xs">
+                      {'as="div"'}
+                    </span>
+                    <BidiText as="div">{BIDI_MIXED_CITATION}</BidiText>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground text-xs">
+                      {'as="p"'}
+                    </span>
+                    <BidiText as="p">{BIDI_MIXED_CITATION}</BidiText>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground text-xs">
+                      {'direction="rtl"'}
+                    </span>
+                    <BidiText as="div" direction="rtl">
+                      {BIDI_MIXED_CITATION}
+                    </BidiText>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground text-xs">
+                      {'direction="ltr"'}
+                    </span>
+                    <BidiText as="div" direction="ltr">
+                      {BIDI_MIXED_CITATION}
+                    </BidiText>
                   </div>
                 </div>
               </PlaygroundSection>
