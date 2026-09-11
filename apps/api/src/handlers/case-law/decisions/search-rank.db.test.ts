@@ -73,7 +73,7 @@ beforeAll(
         caseLawSourceRow({ adapterKey: "open", id: sourceId, name: "open" }),
       ]);
     const indexed = { contentHash: "rank-hash" };
-    await db.insert(caseLawDecisions).values([
+    const decisions = [
       {
         ...indexed,
         id: supremeId,
@@ -121,7 +121,8 @@ beforeAll(
         language: "en",
         languageGroupKey: "rank-group",
       },
-    ]);
+    ];
+    await db.insert(caseLawDecisions).values(decisions);
 
     await db.insert(corpusIndexGenerations).values({
       family: "case_law",
@@ -133,15 +134,11 @@ beforeAll(
       status: "building",
     });
     // Rehydration serves a decision only where this generation has applied
-    // what it wants, in the index the decision's country routes to.
+    // what it wants, in the index the decision's country routes to, so the
+    // held rows derive that country from the decision instead of repeating it.
     const appliedAt = new Date();
-    const held = [
-      { country: "CZE", entityId: supremeId },
-      { country: "CZE", entityId: districtId },
-      { country: "EU", entityId: groupCsId },
-      { country: "EU", entityId: groupEnId },
-    ].map(({ country, entityId }) => ({
-      entityId,
+    const held = decisions.map(({ country, id }) => ({
+      entityId: id,
       indexId: corpusIndexId(GENERATION, country),
       intentId: createSafeId<"corpusIndexProjectionIntent">(),
     }));
