@@ -2525,6 +2525,28 @@
       "anonymization": "Anonüümimine",
       "previewInFullViewToast": "Eelvaade on siin põhivaade. Klõpsa minimeerimisnuppu, et näha seda metaandmete kõrval."
     },
+    "groups": {
+      "addContext": "Lisa kontekst",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> rühmitatakse toimiku <bdi>{matterName}</bdi> alla. Lisa toimik vestluse konteksti, et vestlus saaks kasutada selle faile ja teavet.",
+      "chatMoveTitle": "Kas lisada see toimik vestlusse?",
+      "collapse": "Ahenda {groupName}",
+      "color": "Rühma värv",
+      "colorOption": "Värv {number}",
+      "copyIntoMatter": "Kopeeri toimikusse",
+      "expand": "Laienda {groupName}",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> kuulub toimikusse <bdi>{sourceMatterName}</bdi>. Kopeeri see toimikusse <bdi>{matterName}</bdi> või säilita olemasolev fail viitena.",
+      "fileMoveTitle": "Kas kopeerida see fail toimikusse?",
+      "groupOnly": "Ainult rühmita",
+      "keepReference": "Säilita viitena",
+      "moveToGroup": "Teisalda rühma",
+      "name": "Rühma nimi",
+      "newGroup": "Uus rühm",
+      "remove": "Tühista vahelehtede rühmitamine",
+      "rename": "Nimeta rühm ümber",
+      "saveFailed": "Vaheleherühmi ei saanud selles brauseris salvestada.",
+      "tabCount": "{count, plural, one {# vaheleht} other {# vahelehte}}",
+      "ungroup": "Eemalda rühmast"
+    },
     "hidePane": "Peida paneel",
     "matterPicker": {
       "allMatters": "Kõik toimikud",

@@ -2525,6 +2525,28 @@
       "anonymization": "Anonymisation",
       "previewInFullViewToast": "L'aperçu est la vue principale ici. Cliquez sur le bouton de réduction pour l'afficher à côté des métadonnées."
     },
+    "groups": {
+      "addContext": "Ajouter le contexte",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> sera regroupé sous <bdi>{matterName}</bdi>. Ajoutez le dossier au contexte du chat afin qu’il puisse utiliser ses fichiers et ses informations.",
+      "chatMoveTitle": "Ajouter ce dossier au chat ?",
+      "collapse": "Réduire {groupName}",
+      "color": "Couleur du groupe",
+      "colorOption": "Couleur {number}",
+      "copyIntoMatter": "Copier dans le dossier",
+      "expand": "Développer {groupName}",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> appartient à <bdi>{sourceMatterName}</bdi>. Copiez-le dans <bdi>{matterName}</bdi>, ou conservez le fichier existant comme référence.",
+      "fileMoveTitle": "Copier ce fichier dans le dossier ?",
+      "groupOnly": "Regrouper uniquement",
+      "keepReference": "Conserver comme référence",
+      "moveToGroup": "Déplacer vers le groupe",
+      "name": "Nom du groupe",
+      "newGroup": "Nouveau groupe",
+      "remove": "Dissocier les onglets",
+      "rename": "Renommer le groupe",
+      "saveFailed": "Impossible d’enregistrer les groupes d’onglets dans ce navigateur.",
+      "tabCount": "{count, plural, one {# onglet} other {# onglets}}",
+      "ungroup": "Retirer du groupe"
+    },
     "hidePane": "Masquer le volet",
     "matterPicker": {
       "allMatters": "Tous les dossiers",

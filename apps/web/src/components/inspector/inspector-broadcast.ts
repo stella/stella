@@ -1,15 +1,21 @@
+import { Result } from "better-result";
 import { v7 as uuidv7 } from "uuid";
+import * as v from "valibot";
 import type { StoreApi } from "zustand";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import "@/components/inspector/inspector-persistence-references";
+import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
 import {
   FILE_FACETS,
   type ChatTab,
   type FileTab,
   type InspectorTab,
+  type InspectorTabGroup,
   type InspectorTabsStore,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
@@ -17,8 +23,13 @@ import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
-import { getInspectorView } from "@/components/inspector/view-registry";
+import {
+  getInspectorPersistenceReference,
+  getInspectorView,
+} from "@/components/inspector/view-registry";
+import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { readStoredJson } from "@/lib/stored-json";
 
 export type InspectorBroadcastScope = {
   userId: string;
@@ -36,6 +47,8 @@ type InspectorTabsSyncMessage = {
   recipientId?: string | undefined;
   updatedAt: number;
   tabs: InspectorBroadcastTab[];
+  groups?: InspectorTabGroup[] | undefined;
+  groupAssignments?: Record<string, string | null> | undefined;
 };
 
 type InspectorBroadcastTab =
@@ -60,6 +73,7 @@ type InspectorBroadcastClock = {
 
 const INSPECTOR_TABS_CHANNEL_PREFIX = "stella:inspector-tabs:v1";
 const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1";
+const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1";
 const noopInspectorBroadcastCleanup = () => undefined;
 
 const getInspectorMinimizedStorageKey = ({
@@ -67,6 +81,12 @@ const getInspectorMinimizedStorageKey = ({
   organizationId,
 }: InspectorBroadcastScope) =>
   `${INSPECTOR_MINIMIZED_STORAGE_PREFIX}:${organizationId}:${userId}`;
+
+const getInspectorStateStorageKey = ({
+  userId,
+  organizationId,
+}: InspectorBroadcastScope) =>
+  `${INSPECTOR_STATE_STORAGE_PREFIX}:${organizationId}:${userId}`;
 
 const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
@@ -100,6 +120,11 @@ const writePersistedMinimized = (
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
+let failedPersistenceScope: string | null = null;
+const inspectorScopeOwnership = new WeakMap<
+  StoreApi<InspectorTabsStore>,
+  string
+>();
 
 /* eslint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
 const postInspectorBroadcastMessage = (
@@ -148,8 +173,15 @@ export const getInspectorTabsBroadcastChannelName = ({
 const applySharedInspectorTabs = (
   store: StoreApi<InspectorTabsStore>,
   tabs: InspectorTab[],
+  groups: InspectorTabGroup[],
+  groupAssignments: Record<string, string | null>,
 ) => {
-  const next = reconcileSharedInspectorTabs(store.getState(), tabs);
+  const next = reconcileSharedInspectorTabs(
+    store.getState(),
+    tabs,
+    groups,
+    groupAssignments,
+  );
   store.setState(next);
   useInspectorCommandStore
     .getState()
@@ -167,6 +199,22 @@ const isOptionalString = (value: unknown): value is string | undefined =>
 
 const isOptionalNumber = (value: unknown): value is number | undefined =>
   value === undefined || typeof value === "number";
+
+const isInspectorTabGroup = (value: unknown): value is InspectorTabGroup =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  ((value["type"] === "matter" && typeof value["workspaceId"] === "string") ||
+    (value["type"] === "custom" &&
+      typeof value["name"] === "string" &&
+      typeof value["color"] === "string"));
+
+const isGroupAssignments = (
+  value: unknown,
+): value is Record<string, string | null> =>
+  isRecord(value) &&
+  Object.values(value).every(
+    (groupId) => groupId === null || typeof groupId === "string",
+  );
 
 export const isFileFacet = (
   value: unknown,
@@ -233,6 +281,7 @@ const isInspectorTaskTab = (value: Record<string, unknown>, label: unknown) => {
       value["creationStatus"] === "pending" ||
       value["creationStatus"] === "ready") &&
     typeof value["isNew"] === "boolean" &&
+    typeof value["workspaceId"] === "string" &&
     (status === undefined || status === null || isTaskStatus(status))
   );
 };
@@ -331,7 +380,11 @@ const isInspectorViewTab = (
   ) {
     return false;
   }
-  return getInspectorView(viewType)?.validate(value["payload"]) ?? false;
+  return (
+    getInspectorView(viewType)?.validate(value["payload"]) ??
+    getInspectorPersistenceReference(viewType)?.validate(value["payload"]) ??
+    false
+  );
 };
 
 const isInspectorBroadcastMessage = (
@@ -356,7 +409,12 @@ const isInspectorBroadcastMessage = (
     isOptionalString(value["recipientId"]) &&
     typeof value["updatedAt"] === "number" &&
     Array.isArray(tabs) &&
-    tabs.every(isInspectorTab)
+    tabs.every(isInspectorTab) &&
+    (value["groups"] === undefined ||
+      (Array.isArray(value["groups"]) &&
+        value["groups"].every(isInspectorTabGroup))) &&
+    (value["groupAssignments"] === undefined ||
+      isGroupAssignments(value["groupAssignments"]))
   );
 };
 
@@ -366,6 +424,173 @@ const normalizeInspectorBroadcastTab = (
   tab.type === "task" && tab.creationStatus === undefined
     ? { ...tab, creationStatus: "ready" }
     : tab;
+
+type PersistedInspectorState = {
+  tabs: InspectorBroadcastTab[];
+  groups: InspectorTabGroup[];
+  groupAssignments: Record<string, string | null>;
+  activeId: string | null;
+  collapsedGroupIds: string[];
+};
+
+const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
+  if (tab.type === "skill-resource") {
+    return null;
+  }
+  if (tab.type === "task" && tab.creationStatus === "pending") {
+    return null;
+  }
+  if (tab.type === "external") {
+    const { snippet: _snippet, text: _text, ...reference } = tab;
+    return reference;
+  }
+  if (tab.type === "view") {
+    const persistence = getInspectorPersistenceReference(tab.viewType);
+    if (persistence === undefined || !persistence.validate(tab.payload)) {
+      return null;
+    }
+    return { ...tab, payload: persistence.project(tab.payload) };
+  }
+  return tab;
+};
+
+const readPersistedInspectorState = (
+  scope: InspectorBroadcastScope,
+): PersistedInspectorState | null => {
+  const empty = {
+    tabs: [],
+    groups: [],
+    groupAssignments: {},
+    activeId: null,
+    collapsedGroupIds: [],
+  };
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const readResult = Result.try(() =>
+    readStoredJson(
+      window.localStorage.getItem(getInspectorStateStorageKey(scope)),
+      v.unknown(),
+    ),
+  );
+  if (Result.isError(readResult)) {
+    return null;
+  }
+  const value = readResult.value;
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value)) {
+    return empty;
+  }
+  const tabs = value["tabs"];
+  const groups = value["groups"];
+  const groupAssignments = value["groupAssignments"];
+  const activeId = value["activeId"];
+  const collapsedGroupIds = value["collapsedGroupIds"];
+  if (
+    !Array.isArray(tabs) ||
+    !Array.isArray(groups) ||
+    !groups.every(isInspectorTabGroup) ||
+    !isGroupAssignments(groupAssignments) ||
+    (activeId !== null && typeof activeId !== "string") ||
+    !isStringArray(collapsedGroupIds)
+  ) {
+    return empty;
+  }
+  const safeTabs = tabs
+    .filter(isInspectorTab)
+    .map(normalizeInspectorBroadcastTab)
+    .map(toPersistedInspectorTab)
+    .filter((tab): tab is InspectorTab => tab !== null);
+  const safeTabIds = new Set(safeTabs.map((tab) => tab.id));
+  return {
+    tabs: safeTabs,
+    groups,
+    groupAssignments: normalizeInspectorGroupAssignments(
+      safeTabs,
+      groups,
+      groupAssignments,
+    ),
+    activeId: activeId !== null && safeTabIds.has(activeId) ? activeId : null,
+    collapsedGroupIds,
+  };
+};
+
+const writePersistedInspectorState = (
+  scope: InspectorBroadcastScope,
+  state: InspectorTabsStore,
+): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const tabs = state.tabs
+    .map(toPersistedInspectorTab)
+    .filter((tab): tab is InspectorTab => tab !== null);
+  const tabIds = new Set(tabs.map((tab) => tab.id));
+  const groupAssignments = Object.fromEntries(
+    Object.entries(state.groupAssignments).filter(([tabId]) =>
+      tabIds.has(tabId),
+    ),
+  );
+  const storageKey = getInspectorStateStorageKey(scope);
+  const writeResult = Result.try(() =>
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        tabs,
+        groups: state.groups,
+        groupAssignments,
+        activeId: tabIds.has(state.activeId ?? "") ? state.activeId : null,
+        collapsedGroupIds: state.collapsedGroupIds,
+      }),
+    ),
+  );
+  if (Result.isOk(writeResult)) {
+    if (failedPersistenceScope === storageKey) {
+      failedPersistenceScope = null;
+    }
+    return;
+  }
+  if (failedPersistenceScope === storageKey) {
+    return;
+  }
+  failedPersistenceScope = storageKey;
+  getAnalytics().captureError(writeResult.error, {
+    type: "detached",
+    operation: "inspector-tabs.persist",
+  });
+  stellaToast.add({
+    title: getTranslator()("inspector.groups.saveFailed"),
+    type: "error",
+  });
+};
+
+const subscribeInspectorPersistence = (
+  store: StoreApi<InspectorTabsStore>,
+  scope: InspectorBroadcastScope,
+) => {
+  const unsubscribeState = store.subscribe((state, previousState) => {
+    if (
+      state.tabs !== previousState.tabs ||
+      state.groups !== previousState.groups ||
+      state.groupAssignments !== previousState.groupAssignments ||
+      state.activeId !== previousState.activeId ||
+      state.collapsedGroupIds !== previousState.collapsedGroupIds
+    ) {
+      writePersistedInspectorState(scope, state);
+    }
+  });
+  const unsubscribeMinimized = store.subscribe((state, previousState) => {
+    if (state.minimized !== previousState.minimized) {
+      writePersistedMinimized(scope, state.minimized);
+    }
+  });
+  return () => {
+    unsubscribeState();
+    unsubscribeMinimized();
+  };
+};
 
 const createInspectorBroadcastSession = (
   store: StoreApi<InspectorTabsStore>,
@@ -380,10 +605,13 @@ const createInspectorBroadcastSession = (
   let lastTabsClock: InspectorBroadcastClock | null = null;
 
   const postTabs = (recipientId?: string) => {
-    const tabs = store
-      .getState()
-      .tabs.filter((tab) => !isGenericInspectorTab(tab));
-    if (recipientId !== undefined && tabs.length === 0) {
+    const state = store.getState();
+    const tabs = state.tabs.filter((tab) => !isGenericInspectorTab(tab));
+    if (
+      recipientId !== undefined &&
+      tabs.length === 0 &&
+      state.groups.length === 0
+    ) {
       return;
     }
     const clock = lastTabsClock ?? { senderId: clientId, updatedAt: 0 };
@@ -394,6 +622,8 @@ const createInspectorBroadcastSession = (
         recipientId,
         updatedAt: clock.updatedAt,
         tabs,
+        groups: state.groups,
+        groupAssignments: state.groupAssignments,
       });
     } catch (error) {
       getAnalytics().captureError(error, {
@@ -404,17 +634,18 @@ const createInspectorBroadcastSession = (
   };
 
   const unsubscribe = store.subscribe((state, previousState) => {
-    if (applyingRemote || state.tabs === previousState.tabs) {
+    if (
+      applyingRemote ||
+      (state.tabs === previousState.tabs &&
+        state.groups === previousState.groups &&
+        state.groupAssignments === previousState.groupAssignments)
+    ) {
       return;
     }
     lastTabsClock = getNextInspectorBroadcastClock(lastTabsClock, clientId);
     postTabs();
   });
-  const unsubscribeMinimized = store.subscribe((state, previousState) => {
-    if (state.minimized !== previousState.minimized) {
-      writePersistedMinimized(scope, state.minimized);
-    }
-  });
+  const unsubscribePersistence = subscribeInspectorPersistence(store, scope);
 
   const handleMessage = (event: MessageEvent<unknown>) => {
     const message = event.data;
@@ -444,10 +675,14 @@ const createInspectorBroadcastSession = (
     applyingRemote = true;
     try {
       lastTabsClock = messageClock;
+      const state = store.getState();
       applySharedInspectorTabs(
         store,
         message.tabs.map(normalizeInspectorBroadcastTab),
+        message.groups ?? state.groups,
+        message.groupAssignments ?? state.groupAssignments,
       );
+      writePersistedInspectorState(scope, store.getState());
     } finally {
       applyingRemote = false;
     }
@@ -461,7 +696,7 @@ const createInspectorBroadcastSession = (
   const scopeKey = `${scope.organizationId}:${scope.userId}`;
   const dispose = () => {
     unsubscribe();
-    unsubscribeMinimized();
+    unsubscribePersistence();
     channel.removeEventListener("message", handleMessage);
     channel.close();
     if (inspectorBroadcastSession?.scopeKey === scopeKey) {
@@ -487,22 +722,61 @@ export const initializeInspectorTabBroadcast = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ) => {
+  const scopeKey = `${scope.organizationId}:${scope.userId}`;
+  const previousScopeKey = inspectorScopeOwnership.get(store);
+  const switchingScope =
+    previousScopeKey !== undefined && previousScopeKey !== scopeKey;
+  if (
+    inspectorBroadcastSession !== null &&
+    inspectorBroadcastSession.scopeKey !== scopeKey
+  ) {
+    inspectorBroadcastSession.dispose();
+  }
+  inspectorScopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
   if (store.getState().minimized !== persistedMinimized) {
     store.setState({ minimized: persistedMinimized });
+  }
+  if (inspectorBroadcastSession?.scopeKey !== scopeKey) {
+    const persisted = readPersistedInspectorState(scope);
+    if (persisted !== null) {
+      const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
+      store.setState({
+        tabs,
+        groups: persisted.groups,
+        groupAssignments: persisted.groupAssignments,
+        collapsedGroupIds: persisted.collapsedGroupIds,
+        activeId:
+          persisted.activeId !== null &&
+          tabs.some((tab) => tab.id === persisted.activeId)
+            ? persisted.activeId
+            : (tabs.at(0)?.id ?? null),
+        reviveSuggestion: null,
+      });
+    } else if (switchingScope) {
+      store.setState({
+        tabs: [],
+        groups: [],
+        groupAssignments: {},
+        collapsedGroupIds: [],
+        activeId: null,
+        reviveSuggestion: null,
+      });
+    }
   }
   if (
     typeof window === "undefined" ||
     typeof window.BroadcastChannel !== "function"
   ) {
-    return noopInspectorBroadcastCleanup;
+    if (typeof window === "undefined") {
+      return noopInspectorBroadcastCleanup;
+    }
+    return subscribeInspectorPersistence(store, scope);
   }
-  const scopeKey = `${scope.organizationId}:${scope.userId}`;
   if (inspectorBroadcastSession?.scopeKey === scopeKey) {
     inspectorBroadcastSession.retain();
     return inspectorBroadcastSession.release;
   }
-  inspectorBroadcastSession?.dispose();
   inspectorBroadcastSession = createInspectorBroadcastSession(store, scope);
   return inspectorBroadcastSession.release;
 };

@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { current, type Draft } from "immer";
 import { v7 as uuidv7 } from "uuid";
 
+import {
+  getInspectorTabGroupId,
+  normalizeInspectorGroupAssignments,
+} from "@/components/inspector/inspector-groups.logic";
 import type {
   ExternalTabId,
   FileTab,
@@ -77,6 +81,31 @@ const normalizeFileTabFacet = (tab: Draft<FileTab>): void => {
   }
 };
 
+const activateInspectorTab = (
+  state: Draft<InspectorTabsStore>,
+  id: string,
+): void => {
+  const tab = state.tabs.find((candidate) => candidate.id === id);
+  if (tab !== undefined) {
+    const groupId = getInspectorTabGroupId(state, tab);
+    if (groupId !== null) {
+      state.collapsedGroupIds = state.collapsedGroupIds.filter(
+        (candidate) => candidate !== groupId,
+      );
+    }
+  }
+  state.activeId = id;
+};
+
+const removeGroupAssignment = (
+  state: Draft<InspectorTabsStore>,
+  tabId: string,
+): void => {
+  state.groupAssignments = Object.fromEntries(
+    Object.entries(state.groupAssignments).filter(([id]) => id !== tabId),
+  );
+};
+
 /** Focus-neutral: the caller owns `activeId`. Returns the id the matching
  *  tab had before this upsert, or null when a tab was inserted, so callers
  *  that follow focus across an id replacement can do so. */
@@ -102,6 +131,13 @@ const upsertFileTab = (
 
   const previousId = existing.id;
   existing.id = tab.id;
+  if (
+    previousId !== tab.id &&
+    Object.hasOwn(state.groupAssignments, previousId)
+  ) {
+    state.groupAssignments[tab.id] = state.groupAssignments[previousId] ?? null;
+    removeGroupAssignment(state, previousId);
+  }
   existing.entityId = tab.entityId;
   existing.workspaceId = tab.workspaceId;
   existing.justificationFieldId = tab.justificationFieldId;
@@ -183,7 +219,7 @@ const openTabs = (
           panic("Unhandled inspector open target");
       }
     }
-    state.activeId = activeId;
+    activateInspectorTab(state, activeId);
     state.activationSeq += 1;
     state.minimized = false;
   });
@@ -193,12 +229,91 @@ export const createInspectorTabsSlice = (
   set: InspectorTabsSet,
 ): InspectorTabsStore => ({
   tabs: [],
+  groups: [],
+  groupAssignments: {},
+  collapsedGroupIds: [],
   activeId: null,
   activationSeq: 0,
   flashTabId: null,
   flashSeq: 0,
   minimized: false,
   reviveSuggestion: null,
+
+  createGroup: ({ name, color }) => {
+    const id = `custom:${uuidv7()}`;
+    set((state) => {
+      state.groups.push({ id, type: "custom", name, color });
+    });
+    return id;
+  },
+
+  updateGroup: ({ id, name, color }) =>
+    set((state) => {
+      const group = state.groups.find(
+        (candidate) => candidate.id === id && candidate.type === "custom",
+      );
+      if (group?.type === "custom") {
+        group.name = name;
+        group.color = color;
+      }
+    }),
+
+  removeGroup: (id) =>
+    set((state) => {
+      if (
+        !state.groups.some(
+          (group) => group.id === id && group.type === "custom",
+        )
+      ) {
+        return;
+      }
+      state.groups = state.groups.filter((group) => group.id !== id);
+      state.collapsedGroupIds = state.collapsedGroupIds.filter(
+        (groupId) => groupId !== id,
+      );
+      for (const [tabId, groupId] of Object.entries(state.groupAssignments)) {
+        if (groupId === id) {
+          state.groupAssignments[tabId] = null;
+        }
+      }
+    }),
+
+  setTabGroup: (tabId, groupId) =>
+    set((state) => {
+      if (!state.tabs.some((tab) => tab.id === tabId)) {
+        return;
+      }
+      if (
+        groupId !== null &&
+        !(groupId.startsWith("matter:") && groupId.length > "matter:".length) &&
+        !state.groups.some((group) => group.id === groupId)
+      ) {
+        panic("Cannot assign an Inspector tab to a missing group");
+      }
+      state.groupAssignments[tabId] = groupId;
+      if (state.activeId === tabId && groupId !== null) {
+        state.collapsedGroupIds = state.collapsedGroupIds.filter(
+          (candidate) => candidate !== groupId,
+        );
+      }
+    }),
+
+  toggleGroupCollapsed: (id) =>
+    set((state) => {
+      const index = state.collapsedGroupIds.indexOf(id);
+      if (index === -1) {
+        state.collapsedGroupIds.push(id);
+      } else {
+        state.collapsedGroupIds.splice(index, 1);
+      }
+    }),
+
+  expandGroup: (id) =>
+    set((state) => {
+      state.collapsedGroupIds = state.collapsedGroupIds.filter(
+        (groupId) => groupId !== id,
+      );
+    }),
 
   openFile: (tab) =>
     openTabs(set, {
@@ -214,7 +329,7 @@ export const createInspectorTabsSlice = (
       // Focus follows only a fresh tab or the tab that was already focused;
       // an entity-driven refresh must not steal focus from another tab.
       if (previousId === null || state.activeId === previousId) {
-        state.activeId = tab.id;
+        activateInspectorTab(state, tab.id);
       }
       state.activationSeq += 1;
       state.minimized = false;
@@ -249,7 +364,7 @@ export const createInspectorTabsSlice = (
         isNew: true,
         workspaceId,
       });
-      state.activeId = pendingTaskId;
+      activateInspectorTab(state, pendingTaskId);
       state.activationSeq += 1;
       state.minimized = false;
     });
@@ -272,6 +387,11 @@ export const createInspectorTabsSlice = (
         (tab) => tab.id === pendingTaskId || tab.id !== taskId,
       );
       pendingTab.id = taskId;
+      if (Object.hasOwn(state.groupAssignments, pendingTaskId)) {
+        state.groupAssignments[taskId] =
+          state.groupAssignments[pendingTaskId] ?? null;
+        removeGroupAssignment(state, pendingTaskId);
+      }
       pendingTab.creationStatus = "ready";
       if (state.activeId === pendingTaskId) {
         state.activeId = taskId;
@@ -291,12 +411,7 @@ export const createInspectorTabsSlice = (
   }) =>
     set((state) => {
       const id: ExternalTabId = `external:${url}`;
-      let fallbackLabel = url;
-      try {
-        fallbackLabel = new URL(url).hostname;
-      } catch {
-        // Keep the raw URL as a last-resort tab label.
-      }
+      const fallbackLabel = URL.canParse(url) ? new URL(url).hostname : url;
       const existing = state.tabs.find((tab) => tab.id === id);
       if (!existing) {
         state.tabs.push({
@@ -323,7 +438,7 @@ export const createInspectorTabsSlice = (
         existing.text = text ?? existing.text;
         existing.workspaceId = workspaceId;
       }
-      state.activeId = id;
+      activateInspectorTab(state, id);
       state.activationSeq += 1;
       state.minimized = false;
     }),
@@ -339,7 +454,7 @@ export const createInspectorTabsSlice = (
         existing.workspaceId = workspaceId;
         existing.color = color;
       }
-      state.activeId = id;
+      activateInspectorTab(state, id);
       state.activationSeq += 1;
       state.minimized = false;
     }),
@@ -385,7 +500,7 @@ export const createInspectorTabsSlice = (
           existing.content = content;
         }
       }
-      state.activeId = id;
+      activateInspectorTab(state, id);
       state.activationSeq += 1;
       state.minimized = false;
     }),
@@ -429,7 +544,7 @@ export const createInspectorTabsSlice = (
           existing.activeSkill = args.activeSkill;
         }
       }
-      state.activeId = id;
+      activateInspectorTab(state, id);
       state.activationSeq += 1;
       state.minimized = false;
     }),
@@ -447,6 +562,10 @@ export const createInspectorTabsSlice = (
       const tab = state.tabs.find((candidate) => candidate.id === oldId);
       if (tab?.type === "chat") {
         tab.id = newId;
+        if (Object.hasOwn(state.groupAssignments, oldId)) {
+          state.groupAssignments[newId] = state.groupAssignments[oldId] ?? null;
+          removeGroupAssignment(state, oldId);
+        }
       }
       if (state.activeId === oldId) {
         state.activeId = newId;
@@ -471,7 +590,7 @@ export const createInspectorTabsSlice = (
         existing.payload = payload;
         existing.ownerRouteId = ownerRouteId;
       }
-      state.activeId = id;
+      activateInspectorTab(state, id);
       state.activationSeq += 1;
       state.minimized = false;
       if (state.reviveSuggestion?.id === id) {
@@ -516,6 +635,9 @@ export const createInspectorTabsSlice = (
       ) {
         state.activeId = state.tabs.at(0)?.id ?? null;
       }
+      for (const tabId of removed) {
+        removeGroupAssignment(state, tabId);
+      }
     }),
 
   closeTab: (id, options) =>
@@ -538,9 +660,14 @@ export const createInspectorTabsSlice = (
         state.reviveSuggestion = null;
       }
       state.tabs.splice(index, 1);
+      removeGroupAssignment(state, id);
       if (state.activeId === id) {
         const next = state.tabs[Math.min(index, state.tabs.length - 1)];
-        state.activeId = next?.id ?? null;
+        if (next === undefined) {
+          state.activeId = null;
+        } else {
+          activateInspectorTab(state, next.id);
+        }
       }
     }),
 
@@ -557,7 +684,10 @@ export const createInspectorTabsSlice = (
         state.reviveSuggestion = current(closingBound);
       }
       state.tabs = [target];
-      state.activeId = id;
+      state.groupAssignments = Object.hasOwn(state.groupAssignments, id)
+        ? { [id]: state.groupAssignments[id] ?? null }
+        : {};
+      activateInspectorTab(state, id);
     }),
 
   reviveSuggestedTab: () =>
@@ -570,7 +700,7 @@ export const createInspectorTabsSlice = (
       if (!state.tabs.some((tab) => tab.id === suggestion.id)) {
         state.tabs.push(suggestion);
       }
-      state.activeId = suggestion.id;
+      activateInspectorTab(state, suggestion.id);
       state.activationSeq += 1;
       state.minimized = false;
     }),
@@ -582,7 +712,10 @@ export const createInspectorTabsSlice = (
 
   setActive: (id) =>
     set((state) => {
-      state.activeId = id;
+      if (!state.tabs.some((candidate) => candidate.id === id)) {
+        return;
+      }
+      activateInspectorTab(state, id);
       state.activationSeq += 1;
     }),
 
@@ -593,6 +726,7 @@ export const createInspectorTabsSlice = (
         state.reviveSuggestion = current(closingBound);
       }
       state.tabs = [];
+      state.groupAssignments = {};
       state.activeId = null;
     }),
 
@@ -619,6 +753,11 @@ export const createInspectorTabsSlice = (
       );
       const idChanged = tab.id !== next.id;
       tab.id = next.id;
+      if (idChanged && Object.hasOwn(state.groupAssignments, oldFieldId)) {
+        state.groupAssignments[next.id] =
+          state.groupAssignments[oldFieldId] ?? null;
+        removeGroupAssignment(state, oldFieldId);
+      }
       if (idChanged) {
         tab.renderId = uuidv7();
       }
@@ -705,7 +844,8 @@ export const createInspectorTabsSlice = (
 });
 
 export const closeTabsForDeletedEntities = (
-  state: Pick<InspectorTabsStore, "activeId" | "reviveSuggestion" | "tabs">,
+  state: Pick<InspectorTabsStore, "activeId" | "reviveSuggestion" | "tabs"> &
+    Pick<InspectorTabsStore, "groupAssignments">,
   entityIds: readonly string[],
 ) => {
   const deletedEntityIds = new Set(entityIds);
@@ -725,33 +865,61 @@ export const closeTabsForDeletedEntities = (
         null)
       : state.activeId;
   const tabs = state.tabs.filter((tab) => !isDeletedEntityTab(tab));
+  const remainingIds = new Set(tabs.map((tab) => tab.id));
+  const groupAssignments = Object.fromEntries(
+    Object.entries(state.groupAssignments).filter(([tabId]) =>
+      remainingIds.has(tabId),
+    ),
+  );
   const reviveSuggestion =
     state.reviveSuggestion !== null &&
     isDeletedEntityTab(state.reviveSuggestion)
       ? null
       : state.reviveSuggestion;
 
-  return { activeId, reviveSuggestion, tabs };
+  return { activeId, groupAssignments, reviveSuggestion, tabs };
 };
 
 type SharedInspectorTabsState = Pick<
   InspectorTabsStore,
-  "activationSeq" | "activeId" | "reviveSuggestion" | "tabs"
+  | "activationSeq"
+  | "activeId"
+  | "groupAssignments"
+  | "groups"
+  | "reviveSuggestion"
+  | "tabs"
 >;
 
 /** Merge cross-window tabs without overwriting state owned by this window. */
 export const reconcileSharedInspectorTabs = (
   state: SharedInspectorTabsState,
   sharedTabs: InspectorTab[],
+  groups: InspectorTabsStore["groups"] = state.groups,
+  groupAssignments: InspectorTabsStore["groupAssignments"] = state.groupAssignments,
 ): SharedInspectorTabsState => {
   const localViewTabs = state.tabs.filter(isGenericInspectorTab);
   const tabs: InspectorTab[] = [...sharedTabs, ...localViewTabs];
+  const localViewIds = new Set(localViewTabs.map((tab) => tab.id));
+  const mergedGroupAssignments = {
+    ...groupAssignments,
+    ...Object.fromEntries(
+      Object.entries(state.groupAssignments).filter(([tabId]) =>
+        localViewIds.has(tabId),
+      ),
+    ),
+  };
   const activeId =
     state.activeId !== null && tabs.some((tab) => tab.id === state.activeId)
       ? state.activeId
       : (tabs.at(0)?.id ?? null);
   return {
     tabs,
+    groups,
+    groupAssignments: normalizeInspectorGroupAssignments(
+      tabs,
+      groups,
+      mergedGroupAssignments,
+    ),
     activeId,
     reviveSuggestion:
       state.reviveSuggestion !== null &&

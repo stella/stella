@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
+import { stellaToast } from "@stll/ui/toast";
 
 import { isFileFacet } from "@/components/inspector/inspector-broadcast";
 import {
@@ -11,6 +12,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
@@ -31,6 +33,9 @@ afterEach(() => {
   }
   useInspectorTabsStore.setState({
     tabs: [],
+    groups: [],
+    groupAssignments: {},
+    collapsedGroupIds: [],
     activeId: null,
     activationSeq: 0,
     flashTabId: null,
@@ -116,6 +121,28 @@ class FakeBroadcastChannel {
   }
 }
 
+class MemoryStorage implements Storage {
+  private readonly values = new Map<string, string>();
+  get length() {
+    return this.values.size;
+  }
+  clear() {
+    this.values.clear();
+  }
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+  key(index: number) {
+    return [...this.values.keys()].at(index) ?? null;
+  }
+  removeItem(key: string) {
+    this.values.delete(key);
+  }
+  setItem(key: string, value: string) {
+    this.values.set(key, value);
+  }
+}
+
 const installFakeBroadcastChannel = () => {
   previousWindowDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -123,7 +150,10 @@ const installFakeBroadcastChannel = () => {
   );
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { BroadcastChannel: FakeBroadcastChannel },
+    value: {
+      BroadcastChannel: FakeBroadcastChannel,
+      localStorage: new MemoryStorage(),
+    },
   });
 };
 
@@ -889,6 +919,44 @@ describe("revive suggestion", () => {
     useInspectorTabsStore.getState().closeTab("test-bound-view:tpl-1");
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
+
+  test("route cleanup removes group assignments for closed tabs", () => {
+    registerInspectorView<{ templateId: string }>({
+      type: "test-grouped-bound-view",
+      navigationPolicy: "close-on-route-leave",
+      railIcon: () => null,
+      render: () => null,
+      validate: (value): value is { templateId: string } =>
+        typeof value === "object" &&
+        value !== null &&
+        "templateId" in value &&
+        typeof value.templateId === "string",
+    });
+    const store = useInspectorTabsStore.getState();
+    store.openView({
+      type: "test-grouped-bound-view",
+      id: "test-grouped-bound-view:tpl-1",
+      label: "NDA template",
+      payload: { templateId: "tpl-1" },
+      ownerRouteId: "/_protected/knowledge/templates",
+    });
+    const groupId = store.createGroup({ name: "Templates", color: "blue" });
+    store.setTabGroup("test-grouped-bound-view:tpl-1", groupId);
+
+    store.closeTabsForRoute("/_protected/knowledge/templates");
+
+    expect(useInspectorTabsStore.getState().groupAssignments).toEqual({});
+  });
+
+  test("rejects assignment to a missing custom group", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ id: toChatThreadId("thread-1") });
+
+    expect(() => store.setTabGroup("thread-1", "custom:missing")).toThrow(
+      "Cannot assign an Inspector tab to a missing group",
+    );
+    expect(useInspectorTabsStore.getState().groupAssignments).toEqual({});
+  });
 });
 
 describe("closeTabsForEntities", () => {
@@ -1098,6 +1166,75 @@ describe("Inspector tab broadcast", () => {
       },
     ]);
     expect(useInspectorTabsStore.getState().activeId).toBe("thread-1");
+  });
+
+  test("preserves and persists local groups when a sync message omits group state", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    const store = useInspectorTabsStore.getState();
+    const threadId = toChatThreadId("thread-1");
+    store.openChat({ id: threadId, label: "Local chat" });
+    const groupId = store.createGroup({ name: "Review", color: "blue" });
+    store.setTabGroup(threadId, groupId);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "older-peer",
+      updatedAt: 1,
+      tabs: [
+        {
+          type: "chat",
+          id: threadId,
+          label: "Shared chat",
+          contextMatterIds: [],
+        },
+      ],
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      groups: [{ id: groupId, type: "custom", name: "Review", color: "blue" }],
+      groupAssignments: { [threadId]: groupId },
+    });
+
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({
+      tabs: [],
+      groups: [],
+      groupAssignments: {},
+      activeId: null,
+    });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      groups: [{ id: groupId, type: "custom", name: "Review", color: "blue" }],
+      groupAssignments: { [threadId]: groupId },
+    });
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "older-peer",
+      updatedAt: 2,
+      tabs: [
+        {
+          type: "chat",
+          id: threadId,
+          label: "Shared chat",
+          contextMatterIds: [],
+        },
+      ],
+      groups: [],
+      groupAssignments: {},
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      groups: [],
+      groupAssignments: {},
+    });
   });
 
   test("normalizes task tabs from browser tabs created before creation status existed", () => {
@@ -1371,6 +1508,227 @@ describe("Inspector tab broadcast", () => {
         .openChat({ id: toChatThreadId("thread-local") }),
     ).not.toThrow();
     expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+  });
+
+  test("restores scoped references without transient or content-bearing data", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    useInspectorTabsStore.setState({
+      tabs: [
+        {
+          type: "external",
+          id: "external:https://example.test/source",
+          chatThreadId: toChatThreadId("external-thread"),
+          label: "Source",
+          url: "https://example.test/source",
+          snippet: "privileged excerpt",
+          text: "full privileged body",
+          workspaceId: "workspace-1",
+        },
+        {
+          type: "task",
+          id: "pending-task:1",
+          creationStatus: "pending",
+          label: "Pending",
+          isNew: true,
+          workspaceId: "workspace-1",
+        },
+        {
+          type: "skill-resource",
+          id: "skill-resource:test/body.md",
+          label: "Skill body",
+          skillName: "test",
+          skillId: null,
+          origin: "authored",
+          target: "body",
+          resourcePath: "body.md",
+          mimeType: "text/markdown",
+          content: "secret instructions",
+        },
+        {
+          type: "view",
+          viewType: "case-law-decision",
+          id: "case-law-decision:decision-1",
+          label: "1 Test 1",
+          payload: {
+            caseNumber: "1 Test 1",
+            country: "cz",
+            court: "court",
+            decisionId: "decision-1",
+            slug: "decision",
+            extraContent: "must not persist",
+          },
+        },
+        {
+          type: "chat",
+          id: toChatThreadId("group-only-chat"),
+          label: "Moved chat",
+          contextMatterIds: [],
+        },
+      ],
+      groups: [
+        { id: "custom:review", type: "custom", name: "Review", color: "blue" },
+      ],
+      groupAssignments: {
+        "external:https://example.test/source": "custom:review",
+        "pending-task:1": "custom:review",
+        "group-only-chat": "matter:workspace-empty",
+      },
+      collapsedGroupIds: ["custom:review"],
+      activeId: "external:https://example.test/source",
+    });
+
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({
+      tabs: [],
+      groups: [],
+      groupAssignments: {},
+      collapsedGroupIds: [],
+      activeId: null,
+    });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      tabs: [
+        {
+          type: "external",
+          id: "external:https://example.test/source",
+          label: "Source",
+          url: "https://example.test/source",
+          workspaceId: "workspace-1",
+        },
+        {
+          type: "view",
+          viewType: "case-law-decision",
+          id: "case-law-decision:decision-1",
+          label: "1 Test 1",
+          payload: {
+            caseNumber: "1 Test 1",
+            country: "cz",
+            court: "court",
+            decisionId: "decision-1",
+            slug: "decision",
+          },
+        },
+        {
+          type: "chat",
+          id: toChatThreadId("group-only-chat"),
+          label: "Moved chat",
+          contextMatterIds: [],
+        },
+      ],
+      groups: [
+        { id: "custom:review", type: "custom", name: "Review", color: "blue" },
+      ],
+      groupAssignments: {
+        "external:https://example.test/source": "custom:review",
+        "group-only-chat": "matter:workspace-empty",
+      },
+      collapsedGroupIds: ["custom:review"],
+      activeId: "external:https://example.test/source",
+    });
+    const restored = useInspectorTabsStore.getState().tabs.at(0);
+    expect(restored).not.toHaveProperty("snippet");
+    expect(restored).not.toHaveProperty("text");
+    expect(
+      Reflect.get(useInspectorTabsStore.getState().tabs.at(1) ?? {}, "payload"),
+    ).not.toHaveProperty("extraContent");
+  });
+
+  test("reports a persistence failure once until storage recovers", () => {
+    installFakeBroadcastChannel();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-write-failure",
+      userId: "user-1",
+    });
+    const toastSpy = spyOn(stellaToast, "add").mockReturnValue("toast-1");
+    const captureSpy = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const workingSetItem = window.localStorage.setItem.bind(
+      window.localStorage,
+    );
+    const failingSetItem = () => {
+      throw new DOMException("Storage unavailable", "QuotaExceededError");
+    };
+    window.localStorage.setItem = failingSetItem;
+
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-1") });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-2") });
+
+    expect(toastSpy).toHaveBeenCalledTimes(1);
+    expect(captureSpy).toHaveBeenCalledTimes(1);
+
+    window.localStorage.setItem = workingSetItem;
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-3") });
+    window.localStorage.setItem = failingSetItem;
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-4") });
+
+    expect(toastSpy).toHaveBeenCalledTimes(2);
+    expect(captureSpy).toHaveBeenCalledTimes(2);
+    toastSpy.mockRestore();
+    captureSpy.mockRestore();
+  });
+
+  test("cleanup followed by a new empty scope cannot carry tabs into that scope", () => {
+    installFakeBroadcastChannel();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-old",
+      userId: "user-scope-switch",
+    });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("old-scope-thread") });
+
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-new",
+      userId: "user-scope-switch",
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+    expect(
+      window.localStorage.getItem(
+        "stella:inspector-state:v1:org-new:user-scope-switch",
+      ),
+    ).toBeNull();
+  });
+
+  test("storage-only scope switching clears old tabs and persists minimized state", () => {
+    installFakeBroadcastChannel();
+    Reflect.deleteProperty(window, "BroadcastChannel");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-storage-old",
+      userId: "user-storage",
+    });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("storage-old-thread") });
+    useInspectorTabsStore.getState().setMinimized(true);
+
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-storage-new",
+      userId: "user-storage",
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(
+      window.localStorage.getItem(
+        "stella:inspector-minimized:v1:org-storage-old:user-storage",
+      ),
+    ).toBe("1");
   });
 
   test("does not exchange tabs across organization scopes", () => {

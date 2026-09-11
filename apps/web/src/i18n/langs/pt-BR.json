@@ -2525,6 +2525,28 @@
       "anonymization": "Anonimização",
       "previewInFullViewToast": "A visualização é a visualização principal aqui. Clique no botão minimizar para vê-lo junto com os metadados."
     },
+    "groups": {
+      "addContext": "Adicionar contexto",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> será agrupado em <bdi>{matterName}</bdi>. Adicione o caso ao contexto do chat para que ele possa usar os arquivos e as informações do caso.",
+      "chatMoveTitle": "Adicionar este caso ao chat?",
+      "collapse": "Recolher {groupName}",
+      "color": "Cor do grupo",
+      "colorOption": "Cor {number}",
+      "copyIntoMatter": "Copiar para o caso",
+      "expand": "Expandir {groupName}",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> pertence a <bdi>{sourceMatterName}</bdi>. Copie-o para <bdi>{matterName}</bdi> ou mantenha o arquivo existente como referência.",
+      "fileMoveTitle": "Copiar este arquivo para o caso?",
+      "groupOnly": "Apenas agrupar",
+      "keepReference": "Manter como referência",
+      "moveToGroup": "Mover para o grupo",
+      "name": "Nome do grupo",
+      "newGroup": "Novo grupo",
+      "remove": "Desagrupar abas",
+      "rename": "Renomear grupo",
+      "saveFailed": "Não foi possível salvar os grupos de abas neste navegador.",
+      "tabCount": "{count, plural, one {# aba} other {# abas}}",
+      "ungroup": "Remover do grupo"
+    },
     "hidePane": "Ocultar painel",
     "matterPicker": {
       "allMatters": "Todos os casos",

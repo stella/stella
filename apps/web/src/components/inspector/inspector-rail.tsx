@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { FileTextIcon, MessageSquareIcon, PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -18,6 +19,13 @@ import { DocumentIcon } from "@/components/document-icon";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
+import { useInspectorGroups } from "@/components/inspector/inspector-group-controls";
+import {
+  INSPECTOR_TAB_DRAG_TYPE,
+  InspectorRailGroup,
+} from "@/components/inspector/inspector-group-rail";
+import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
+import { planInspectorTabDrop } from "@/components/inspector/inspector-groups.logic";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -39,6 +47,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
+import { getMatterSwatch } from "@/lib/matter-colors";
 
 export const InspectorRail = ({
   activeId,
@@ -68,6 +77,32 @@ export const InspectorRail = ({
     activeSkillCatalogueData?.entries,
   );
   const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
+  const { visibleGroups, ungroupedTabs } = useInspectorGroups();
+  const transfer = useInspectorGroupTransfer();
+  const dropOnTab = ({ sourceId, targetId }: InspectorTabDropArgs) => {
+    const store = useInspectorTabsStore.getState();
+    const plan = planInspectorTabDrop({ state: store, sourceId, targetId });
+    switch (plan.type) {
+      case "ignore":
+        return;
+      case "join":
+        transfer.requestMove(sourceId, plan.groupId);
+        return;
+      case "create": {
+        const groupId = store.createGroup({
+          name: plan.name || t("inspector.groups.newGroup"),
+          color: getMatterSwatch(targetId),
+        });
+        store.setTabGroup(targetId, groupId);
+        store.setTabGroup(sourceId, groupId);
+        return;
+      }
+      default:
+        plan satisfies never;
+        panic("Unhandled Inspector tab drop");
+    }
+  };
+  const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
     const skillContext =
@@ -106,7 +141,12 @@ export const InspectorRail = ({
       }}
       className="h-full"
       label={t("inspector.title")}
-      overlay={railContextMenu.element}
+      overlay={
+        <>
+          {railContextMenu.element}
+          {transfer.dialog}
+        </>
+      }
       topAction={
         <Tooltip
           content={toggleLabel}
@@ -135,13 +175,34 @@ export const InspectorRail = ({
           railContextMenu.openAt(event);
         }}
       >
-        {tabs.map((tab) => (
+        {visibleGroups.map(({ group, tabs: groupTabs }) => (
+          <InspectorRailGroup
+            activeId={activeId}
+            collapsed={collapsedGroupIds.includes(group.id)}
+            group={group}
+            key={group.id}
+            tabs={groupTabs}
+          >
+            {groupTabs.map((tab) => (
+              <VerticalTab
+                active={tab.id === activeId}
+                key={tab.id}
+                onActivate={() => onActivateTab(tab.id)}
+                onClose={() => onCloseTab(tab.id)}
+                onDropTab={dropOnTab}
+                tab={tab}
+              />
+            ))}
+          </InspectorRailGroup>
+        ))}
+        {ungroupedTabs.map((tab) => (
           <VerticalTab
             active={tab.id === activeId}
             key={tab.id}
             onActivate={() => {
               onActivateTab(tab.id);
             }}
+            onDropTab={dropOnTab}
             onClose={() => {
               onCloseTab(tab.id);
             }}
@@ -386,7 +447,10 @@ const SuggestedReviveTabIcon = ({ tab }: { tab: InspectorTab }) => {
   );
 };
 
+type InspectorTabDropArgs = { sourceId: string; targetId: string };
+
 type VerticalTabProps = {
+  onDropTab: (args: InspectorTabDropArgs) => void;
   tab: InspectorTab;
   active: boolean;
   onActivate: () => void;
@@ -404,11 +468,13 @@ const flashTabElement = (el: HTMLElement) => {
 };
 
 const VerticalTab = ({
+  onDropTab,
   tab,
   active,
   onActivate,
   onClose,
 }: VerticalTabProps) => {
+  const [dragOver, setDragOver] = useState(false);
   const tooltipLabel = tab.label || tab.id.slice(0, 6);
   const tabRef = useRef<HTMLButtonElement>(null);
   const tabNavigate = useNavigate();
@@ -475,11 +541,41 @@ const VerticalTab = ({
     <>
       <InspectorEntityTab
         active={active}
+        className={cn(
+          "border-b-0",
+          dragOver && "bg-accent ring-ring ring-2 ring-inset",
+        )}
+        draggable
         glyph={tabGlyph(tab)}
         icon={<VerticalTabIcon externalIconHref={externalIconHref} tab={tab} />}
         label={tooltipLabel}
         onClose={onClose}
         onContextMenu={containedEventHandler(contextMenu.openAt)}
+        onKeyDown={contextMenu.onKeyDown}
+        onDragStart={(event) => {
+          event.dataTransfer.setData(INSPECTOR_TAB_DRAG_TYPE, tab.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes(INSPECTOR_TAB_DRAG_TYPE)) {
+            return;
+          }
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDragEnd={() => setDragOver(false)}
+        onDrop={(event) => {
+          setDragOver(false);
+          const sourceId = event.dataTransfer.getData(INSPECTOR_TAB_DRAG_TYPE);
+          if (!sourceId) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          onDropTab({ sourceId, targetId: tab.id });
+        }}
         onSelect={onActivate}
         ref={tabRef}
       />

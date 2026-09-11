@@ -2525,6 +2525,28 @@
       "anonymization": "Anonimizavimas",
       "previewInFullViewToast": "Peržiūra čia yra pagrindinis rodinys. Spustelėkite suskleidimo mygtuką, kad matytumėte ją kartu su metaduomenimis."
     },
+    "groups": {
+      "addContext": "Pridėti kontekstą",
+      "chatMoveDescription": "„<bdi>{chatName}</bdi>“ bus sugrupuotas po „<bdi>{matterName}</bdi>“. Pridėkite bylą prie pokalbio konteksto, kad jis galėtų naudoti jos failus ir informaciją.",
+      "chatMoveTitle": "Pridėti šią bylą prie pokalbio?",
+      "collapse": "Suskleisti „{groupName}“",
+      "color": "Grupės spalva",
+      "colorOption": "Spalva {number}",
+      "copyIntoMatter": "Kopijuoti į bylą",
+      "expand": "Išskleisti „{groupName}“",
+      "fileMoveDescription": "„<bdi>{fileName}</bdi>“ priklauso bylai „<bdi>{sourceMatterName}</bdi>“. Nukopijuokite jį į „<bdi>{matterName}</bdi>“ arba palikite esamą failą kaip nuorodą.",
+      "fileMoveTitle": "Kopijuoti šį failą į bylą?",
+      "groupOnly": "Tik sugrupuoti",
+      "keepReference": "Palikti kaip nuorodą",
+      "moveToGroup": "Perkelti į grupę",
+      "name": "Grupės pavadinimas",
+      "newGroup": "Nauja grupė",
+      "remove": "Išgrupuoti korteles",
+      "rename": "Pervadinti grupę",
+      "saveFailed": "Šioje naršyklėje nepavyko išsaugoti kortelių grupių.",
+      "tabCount": "{count, plural, one {# kortelė} few {# kortelės} other {# kortelių}}",
+      "ungroup": "Pašalinti iš grupės"
+    },
     "hidePane": "Slėpti polangį",
     "matterPicker": {
       "allMatters": "Visos bylos",

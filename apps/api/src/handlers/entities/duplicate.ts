@@ -93,6 +93,7 @@ const duplicateEntityHandler = async function* ({
               // one field per property bounds the read.
               fields: {
                 columns: {
+                  id: true,
                   propertyId: true,
                   content: true,
                 },
@@ -130,6 +131,7 @@ const duplicateEntityHandler = async function* ({
               with: {
                 fields: {
                   columns: {
+                    id: true,
                     propertyId: true,
                     content: true,
                   },
@@ -194,6 +196,7 @@ const duplicateEntityHandler = async function* ({
         // Same-workspace duplicate never deletes the source; the
         // lock set is target-only regardless (see `copyEntities`).
         deleteSource: false,
+        fieldMapping: { type: "omit" },
         dependencies,
       }),
   );

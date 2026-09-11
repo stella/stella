@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
+
 /**
  * Module-global registry of inspector view kinds. Each route (or
  * shared module) registers the renderer + rail icon for the
@@ -125,10 +127,19 @@ export type InspectorViewRegistration<P = unknown> = {
 // "heterogeneous registry" pattern; the structural variance is sound.
 type StoredRegistration = InspectorViewRegistration;
 
+type InspectorPersistenceReference = {
+  validate: (payload: unknown) => boolean;
+  project: (payload: unknown) => unknown;
+};
+
 class InspectorViewRegistry {
   private readonly registrations = new Map<
     InspectorViewKind,
     StoredRegistration
+  >();
+  private readonly persistenceReferences = new Map<
+    InspectorViewKind,
+    InspectorPersistenceReference
   >();
 
   register(type: InspectorViewKind, registration: StoredRegistration) {
@@ -142,9 +153,37 @@ class InspectorViewRegistry {
   kinds() {
     return [...this.registrations.keys()];
   }
+
+  registerPersistence(
+    type: InspectorViewKind,
+    persistence: InspectorPersistenceReference,
+  ) {
+    this.persistenceReferences.set(type, persistence);
+  }
+
+  getPersistence(type: InspectorViewKind) {
+    return this.persistenceReferences.get(type);
+  }
 }
 
 const registry = new InspectorViewRegistry();
+
+export const registerInspectorPersistenceReference = <P>(args: {
+  type: string;
+  validate: (payload: unknown) => payload is P;
+  project: (payload: P) => P;
+}): void => {
+  registry.registerPersistence(args.type, {
+    validate: args.validate,
+    project: (payload) =>
+      args.validate(payload)
+        ? args.project(payload)
+        : panic("Invalid inspector persistence reference payload"),
+  });
+};
+
+export const getInspectorPersistenceReference = (type: string) =>
+  registry.getPersistence(type);
 
 export const registerInspectorView = <P>(
   registration: InspectorViewRegistration<P>,

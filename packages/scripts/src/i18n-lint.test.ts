@@ -678,3 +678,50 @@ describe("terminology: Matter stays canonical in search", () => {
     }
   });
 });
+
+describe("terminology: matter transfers", () => {
+  test("declined matter synonyms are rejected even when English only names placeholders", () => {
+    const source =
+      "{fileName} belongs to {sourceMatterName}. Copy it into {matterName}.";
+    for (const [locale, term] of [
+      ["cs", "případ"],
+      ["cs", "případu"],
+      ["cs", "případem"],
+      ["sk", "prípadu"],
+      ["sk", "prípadoch"],
+      ["de", "Angelegenheit"],
+      ["et", "asja"],
+    ] as const) {
+      expect(
+        findForbiddenTerms(
+          source,
+          term,
+          locale,
+          realRules,
+          "inspector.groups.fileMoveDescription",
+        ),
+      ).toContain(term);
+    }
+  });
+
+  test("ordinary in-case idioms outside matter copy remain valid", () => {
+    expect(
+      findForbiddenTerms(
+        "In case of an error",
+        "V případě chyby",
+        "cs",
+        realRules,
+        "errors.example",
+      ),
+    ).toEqual([]);
+    expect(
+      findForbiddenTerms(
+        "In case of an error",
+        "V prípade chyby",
+        "sk",
+        realRules,
+        "errors.example",
+      ),
+    ).toEqual([]);
+  });
+});

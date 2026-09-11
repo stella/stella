@@ -57,6 +57,7 @@ const copyToWorkspaceBodySchema = t.Object({
   targetWorkspaceId: tSafeId("workspace"),
   targetParentId: t.Nullable(tSafeId("entity")),
   deleteSource: t.Boolean(),
+  sourceFieldId: t.Optional(tSafeId("field")),
 });
 
 type CopyToWorkspaceBody = Static<typeof copyToWorkspaceBodySchema>;
@@ -294,7 +295,12 @@ const copyToWorkspaceHandler = async function* ({
   userId,
   recordSourceAuditEvent,
   recordTargetAuditEvent,
-  body: { entityId: sourceEntityId, targetParentId, deleteSource },
+  body: {
+    entityId: sourceEntityId,
+    targetParentId,
+    deleteSource,
+    sourceFieldId,
+  },
   dependencies,
 }: CopyToWorkspaceHandlerProps) {
   // Fetch source entity
@@ -322,6 +328,7 @@ const copyToWorkspaceHandler = async function* ({
               // one field per property bounds the read.
               fields: {
                 columns: {
+                  id: true,
                   propertyId: true,
                   content: true,
                 },
@@ -370,6 +377,7 @@ const copyToWorkspaceHandler = async function* ({
               with: {
                 fields: {
                   columns: {
+                    id: true,
                     propertyId: true,
                     content: true,
                   },
@@ -515,6 +523,10 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
       deleteSource,
+      fieldMapping:
+        sourceFieldId === undefined
+          ? { type: "omit" }
+          : { type: "single", sourceFieldId },
       dependencies,
     });
 
@@ -627,6 +639,7 @@ const copyToWorkspaceHandler = async function* ({
   return Result.ok({
     entityId: txResult.entityId,
     entityIds: txResult.copiedEntities.map(({ entityId }) => entityId),
+    field: txResult.copiedField,
   });
 };
 

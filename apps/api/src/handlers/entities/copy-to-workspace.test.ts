@@ -124,6 +124,7 @@ type InsertedEntity = {
 };
 
 type InsertedField = {
+  id: SafeId<"field">;
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
   entityVersionId: SafeId<"entityVersion">;
@@ -196,6 +197,7 @@ const createContext = ({
   targetWorkspaceId: targetWorkspaceIdArg = targetWorkspaceId,
   targetParentId = null,
   deleteSource = false,
+  sourceFieldId,
   targetWorkspace,
 }: {
   safeDb: CopyToWorkspaceContext["safeDb"];
@@ -203,6 +205,7 @@ const createContext = ({
   targetWorkspaceId?: SafeId<"workspace">;
   targetParentId?: SafeId<"entity"> | null;
   deleteSource?: boolean;
+  sourceFieldId?: SafeId<"field">;
   targetWorkspace?: AccessibleWorkspace | null;
 }): CopyToWorkspaceContext => {
   const resolvedTargetWorkspace =
@@ -236,6 +239,7 @@ const createContext = ({
       targetWorkspaceId: targetWorkspaceIdArg,
       targetParentId,
       deleteSource,
+      sourceFieldId,
     },
     request: sourceRecorderBindings.request,
     route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
@@ -265,8 +269,16 @@ describe("copy-to-workspace", () => {
       currentVersion: {
         id: toSafeId<"entityVersion">("version_1"),
         fields: [
-          { propertyId: sourceFilePropertyId, content: fileContent },
-          { propertyId: sourceCustomPropertyId, content: textFieldContent },
+          {
+            id: toSafeId<"field">("source_file_field"),
+            propertyId: sourceFilePropertyId,
+            content: fileContent,
+          },
+          {
+            id: toSafeId<"field">("source_text_field"),
+            propertyId: sourceCustomPropertyId,
+            content: textFieldContent,
+          },
         ],
       },
     };
@@ -375,18 +387,33 @@ describe("copy-to-workspace", () => {
 
     const { safeDb } = createScopedDbMock(tx);
     const result = await copyToWorkspace.handler(
-      createContext({ safeDb, entityId: documentId }),
+      createContext({
+        safeDb,
+        entityId: documentId,
+        sourceFieldId: toSafeId<"field">("source_file_field"),
+      }),
     );
 
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: {
+        sourceEntityId: documentId,
+        sourceFieldId: toSafeId<"field">("source_file_field"),
+        entityId: expect.any(String),
+        fieldId: expect.any(String),
+      },
     });
 
     // One entity inserted
     expect(insertedEntities).toHaveLength(1);
     const copiedEntity = insertedEntities.at(0);
     expect(copiedEntity?.kind).toBe("document");
+    if (!("field" in result)) {
+      throw new Error("Expected a successful copy result");
+    }
+    expect(result.field?.entityId).toBe(result.entityId);
+    expect(result.field?.fieldId).toBe(insertedFields.at(0)?.id);
     // Name preserved since no conflict exists in target workspace
     expect(copiedEntity?.name).toBe("Report.pdf");
 
@@ -538,6 +565,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
     expect(insertedFields).toHaveLength(1);
     expect(insertedFields.at(0)?.propertyId).toBe(targetClassifierPropertyId);
@@ -663,6 +691,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
     expect(insertedFields).toHaveLength(1);
     expect(insertedFields.at(0)?.propertyId).toBe(targetClassifierPropertyId);
@@ -787,6 +816,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
     expect(insertedFields).toHaveLength(0);
   });
@@ -917,6 +947,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
     expect(insertedFields).toHaveLength(0);
   });
@@ -1039,6 +1070,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
     expect(insertedFields).toHaveLength(0);
   });
@@ -1248,6 +1280,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
     expect(deletedEntityCount).toBe(1);
     const movedKeys = requestKeys("COPY");
@@ -1350,6 +1383,7 @@ describe("copy-to-workspace", () => {
     expect(result).toEqual({
       entityId: expect.any(String),
       entityIds: expect.any(Array),
+      field: null,
     });
 
     // Both folder and child document inserted

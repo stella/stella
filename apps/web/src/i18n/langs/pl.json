@@ -2525,6 +2525,28 @@
       "anonymization": "Anonimizacja",
       "previewInFullViewToast": "Podgląd jest tutaj widokiem głównym. Kliknij przycisk minimalizacji, aby wyświetlić go obok metadanych."
     },
+    "groups": {
+      "addContext": "Dodaj kontekst",
+      "chatMoveDescription": "Czat <bdi>{chatName}</bdi> zostanie zgrupowany pod sprawą <bdi>{matterName}</bdi>. Dodaj sprawę do kontekstu czatu, aby mógł korzystać z jej plików i informacji.",
+      "chatMoveTitle": "Dodać tę sprawę do czatu?",
+      "collapse": "Zwiń grupę {groupName}",
+      "color": "Kolor grupy",
+      "colorOption": "Kolor {number}",
+      "copyIntoMatter": "Skopiuj do sprawy",
+      "expand": "Rozwiń grupę {groupName}",
+      "fileMoveDescription": "Plik <bdi>{fileName}</bdi> należy do sprawy <bdi>{sourceMatterName}</bdi>. Skopiuj go do sprawy <bdi>{matterName}</bdi> lub zachowaj istniejący plik jako odwołanie.",
+      "fileMoveTitle": "Skopiować ten plik do sprawy?",
+      "groupOnly": "Tylko grupuj",
+      "keepReference": "Zachowaj jako odwołanie",
+      "moveToGroup": "Przenieś do grupy",
+      "name": "Nazwa grupy",
+      "newGroup": "Nowa grupa",
+      "remove": "Rozgrupuj karty",
+      "rename": "Zmień nazwę grupy",
+      "saveFailed": "Nie udało się zapisać grup kart w tej przeglądarce.",
+      "tabCount": "{count, plural, one {# karta} few {# karty} many {# kart} other {# karty}}",
+      "ungroup": "Usuń z grupy"
+    },
     "hidePane": "Ukryj panel",
     "matterPicker": {
       "allMatters": "Wszystkie sprawy",

@@ -268,8 +268,7 @@
     {
       "id": "matter",
       "en": "Matter",
-      "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف قانوني (legal file/dossier): bare ملف is also the everyday word for a computer file, so labels, pickers, and scope options rendered with it collided with Files; the qualifier carries the concept, and the short form stays only where the sentence already names the matter. Avoid قضية (lawsuit) and مسألة (abstract legal question). cs uses Spis, never Věc, for the client-engagement container; the concept-scoped inflection bans preserve legitimate uses of věc in case-law copy. cs \"případ\" / sk \"prípad\" are banned in the nominative singular and plural only: those are the forms a label or term takes (a landing nav label had drifted to \"Případy\"), while the oblique forms carry the everyday idiom \"v případě\" (\"in case of\") and would false-fire.",
-      "keyTriggers": ["search.kinds.matter"],
+      "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف قانوني (legal file/dossier): bare ملف is also the everyday word for a computer file, so labels, pickers, and scope options rendered with it collided with Files; the qualifier carries the concept, and the short form stays only where the sentence already names the matter. Avoid قضية (lawsuit) and مسألة (abstract legal question). Czech and Slovak always use Spis for the matter container, including declined forms; the concept-scoped bans preserve unrelated idioms such as Czech \"v případě\" and Slovak \"v prípade\" outside Matter copy. Inspector group prompts, search labels, and desktop-document routing are also triggered by key: matter names may appear only as placeholders, without the English word matter. German uses Akte, never Angelegenheit.",
       "forbidden": {
         "ar": ["قضية", "قضايا", "مسألة", "مسائل"],
         "cs": [
@@ -281,7 +280,13 @@
           "věcech",
           "pracovní prostor",
           "případ",
-          "případy"
+          "případy",
+          "případu",
+          "případem",
+          "případě",
+          "případů",
+          "případům",
+          "případech"
         ],
         "sk": [
           "Vec",
@@ -292,7 +297,13 @@
           "vecami",
           "veciach",
           "prípad",
-          "prípady"
+          "prípady",
+          "prípadu",
+          "prípade",
+          "prípadom",
+          "prípadov",
+          "prípadmi",
+          "prípadoch"
         ],
         "de": [
           "Sache",
@@ -302,7 +313,9 @@
           "Mandaten",
           "Mandats",
           "Mandatsdaten",
-          "Mandatsanbahner"
+          "Mandatsanbahner",
+          "Angelegenheit",
+          "Angelegenheiten"
         ],
         "et": [
           "asi",
@@ -331,7 +344,12 @@
         "es": "Asunto",
         "fr": "Dossier",
         "pt-BR": "Caso"
-      }
+      },
+      "keyTriggers": [
+        "search.kinds.matter",
+        "inspector.groups",
+        "desktopDocumentsDescription"
+      ]
     },
     {
       "id": "team",

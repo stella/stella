@@ -2525,6 +2525,28 @@
       "anonymization": "Anonymization",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
     },
+    "groups": {
+      "addContext": "Add context",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> will be grouped under <bdi>{matterName}</bdi>. Add the matter to the chat’s context so it can use its files and information.",
+      "chatMoveTitle": "Add this matter to the chat?",
+      "collapse": "Collapse {groupName}",
+      "color": "Group color",
+      "colorOption": "Color {number}",
+      "copyIntoMatter": "Copy into matter",
+      "expand": "Expand {groupName}",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> belongs to <bdi>{sourceMatterName}</bdi>. Copy it into <bdi>{matterName}</bdi>, or keep the existing file as a reference.",
+      "fileMoveTitle": "Copy this file into the matter?",
+      "groupOnly": "Group only",
+      "keepReference": "Keep as reference",
+      "moveToGroup": "Move to group",
+      "name": "Group name",
+      "newGroup": "New group",
+      "remove": "Ungroup tabs",
+      "rename": "Rename group",
+      "saveFailed": "Could not save tab groups on this browser.",
+      "tabCount": "{count, plural, one {# tab} other {# tabs}}",
+      "ungroup": "Remove from group"
+    },
     "hidePane": "Hide pane",
     "matterPicker": {
       "allMatters": "All matters",

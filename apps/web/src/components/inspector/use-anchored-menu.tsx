@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import { useRef, useState } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
@@ -18,16 +18,27 @@ type AnchorRect = {
  * from a `onContextMenu` handler. The hook owns the open/close
  * state and clears the anchor on close.
  */
-export const useAnchoredMenu = ({ children }: { children: ReactNode }) => {
+export const useAnchoredMenu = ({
+  children,
+  returnFocus: providedReturnFocus,
+}: {
+  children: ReactNode;
+  returnFocus?: RefObject<HTMLElement | null>;
+}) => {
+  const localReturnFocus = useRef<HTMLElement | null>(null);
+  const returnFocus = providedReturnFocus ?? localReturnFocus;
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
 
-  const openAt = (event: MouseEvent<HTMLElement>) => {
+  const openAt = (
+    event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
-    const x = event.clientX;
-    const y = event.clientY;
+    const x = "clientX" in event ? event.clientX : 0;
+    const y = "clientY" in event ? event.clientY : 0;
     const trigger = event.currentTarget;
+    returnFocus.current = trigger;
     // Keyboard / assistive-tech activations dispatch a click with no
     // pointer position (clientX/clientY are 0); anchor to the triggering
     // element so the menu opens beside it instead of the viewport corner.
@@ -44,6 +55,15 @@ export const useAnchoredMenu = ({ children }: { children: ReactNode }) => {
     setAnchor(null);
   };
 
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (
+      event.key === "ContextMenu" ||
+      (event.shiftKey && event.key === "F10")
+    ) {
+      openAt(event);
+    }
+  };
+
   const element = (
     <Menu
       onOpenChange={(nextOpen) => {
@@ -55,9 +75,11 @@ export const useAnchoredMenu = ({ children }: { children: ReactNode }) => {
       open={open}
     >
       <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
-      <MenuPopup anchor={anchor ?? undefined}>{children}</MenuPopup>
+      <MenuPopup anchor={anchor ?? undefined} finalFocus={returnFocus}>
+        {children}
+      </MenuPopup>
     </Menu>
   );
 
-  return { open, openAt, close, element };
+  return { open, openAt, onKeyDown, close, element };
 };

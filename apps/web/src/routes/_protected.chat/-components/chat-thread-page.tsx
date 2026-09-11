@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { Maximize2Icon, PlusIcon } from "lucide-react";
+import { Minimize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -621,7 +621,7 @@ export const ChatThreadPage = ({
                 content={t("chat.moveToSide")}
                 render={
                   <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                    <Maximize2Icon className="size-4" />
+                    <Minimize2Icon className="size-4" />
                   </Button>
                 }
               />
