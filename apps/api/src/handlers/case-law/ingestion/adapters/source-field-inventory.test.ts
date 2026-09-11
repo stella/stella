@@ -23,7 +23,7 @@
  *    stating it was kept.
  */
 
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -37,9 +37,14 @@ import type {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
-import { buildPlSnDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+import {
+  assemblePlSnDecision,
+  normalizePlSnDetail,
+  readPlSnEnvelope,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-field-inventory-baseline.json";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -376,39 +381,36 @@ const PL_SN_DETAIL_PAYLOAD = JSON.stringify({
   ],
 });
 
-/** What the proxy answers for a task this fixture states no payload for. */
-const PL_SN_EMPTY_ENVELOPE = JSON.stringify({
-  success: true,
-  data: [{ success: true, data: [] }],
-});
+/**
+ * The detail payload the inventory reads, as the inner record the adapter
+ * hands its own normalizer.
+ */
+const plSnDetailRecord = (): Record<string, unknown> => {
+  const payload: unknown = JSON.parse(PL_SN_DETAIL_PAYLOAD);
+  const inner = readPlSnEnvelope(payload);
+  return isRecord(inner) ? inner : panic("the pl-sn fixture states no detail");
+};
 
+/**
+ * Built from the payloads directly rather than through the adapter's fetch
+ * path. What this suite certifies is the mapping from a stated field to the
+ * row, and driving a stubbed transport to reach it only added this
+ * publisher's one-second request gate to every run. No document is supplied:
+ * no declared field is stored through it, so the fixture states exactly what
+ * the inventory reads.
+ */
 const plSnFixture = (): InventoryFixture => ({
   payload: PL_SN_DETAIL_PAYLOAD,
   buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : String(input);
-      // The document task answers nothing here: no declared field is stored
-      // through the document, so the fixture states only what the inventory
-      // reads, and the decision is built listing-only.
-      const body = url.includes("task=detailsOrzeczenie")
-        ? PL_SN_DETAIL_PAYLOAD
-        : PL_SN_EMPTY_ENVELOPE;
-      return await Promise.resolve(
-        new Response(body, {
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }),
-      );
-    });
-
-    const attempted = await buildPlSnDecision({
-      cursor: "2026-06:0",
+    const built = await assemblePlSnDecision({
       item: { ...PL_SN_LISTING_ROW },
-      listingRaw: JSON.stringify(PL_SN_LISTING_ROW),
+      detail: normalizePlSnDetail(plSnDetailRecord()),
+      documentBytes: undefined,
+      rawParts: {
+        listing: JSON.stringify(PL_SN_LISTING_ROW),
+        detail: PL_SN_DETAIL_PAYLOAD,
+      },
     });
-    if (Result.isError(attempted)) {
-      return panic(`pl-sn fixture was refused: ${attempted.error.message}`);
-    }
-    const built = attempted.value;
     return built.type === "unkeyable"
       ? panic("pl-sn fixture did not build")
       : built.decision;

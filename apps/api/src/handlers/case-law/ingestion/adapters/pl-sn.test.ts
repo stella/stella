@@ -303,12 +303,19 @@ describe("listing one decision date", () => {
       ),
     );
 
-    await expect(
-      plSnAdapter.reconciliation.listSlicePage({
-        slice: "2025-06-11",
-        page: 0,
-      }),
-    ).rejects.toThrow(/answered/u);
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection: unknown = await plSnAdapter.reconciliation
+      .listSlicePage({ slice: "2025-06-11", page: 0 })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toMatch(/answered/u);
   });
 });
 
@@ -330,10 +337,10 @@ describe("walking decision-date months oldest first", () => {
   });
 
   /** A source holding `rows` in `month` and nothing anywhere else. */
-  const sourceHolding = (
-    month: string,
-    rows: readonly Record<string, unknown>[],
-  ): string[] => {
+  // Rows are `unknown`, not listing shapes: the publisher can serve an entry
+  // the adapter's own shape filter drops, and how the walk sizes a page that
+  // holds one is exactly what a test below asserts.
+  const sourceHolding = (month: string, rows: readonly unknown[]): string[] => {
     const asked: string[] = [];
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -397,7 +404,7 @@ describe("walking decision-date months oldest first", () => {
       forma_orzeczenia: "wyrok SN",
     }));
     rows.push("not an object at all");
-    sourceHolding("1994-03", rows as Record<string, unknown>[]);
+    sourceHolding("1994-03", rows);
 
     const page = await walk("1994-03:0");
 

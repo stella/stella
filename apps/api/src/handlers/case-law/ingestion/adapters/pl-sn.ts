@@ -232,7 +232,9 @@ export const normalizePlSnListingItem = (
   id: optionalString(value["id"]),
 });
 
-const normalizePlSnDetail = (value: Record<string, unknown>): PlSnDetail => ({
+export const normalizePlSnDetail = (
+  value: Record<string, unknown>,
+): PlSnDetail => ({
   ...normalizePlSnListingItem(value),
   jednostka_obslugujaca_sprawe: optionalString(
     value["jednostka_obslugujaca_sprawe"],
@@ -670,7 +672,7 @@ const RAW_PART = {
   DOCUMENT: "document",
 } as const;
 
-type AssemblePlSnDecisionOptions = {
+export type AssemblePlSnDecisionOptions = {
   /** The row as the listing stated it. */
   item: PlSnListingItem;
   /** The detail record, where one was read. */
@@ -686,9 +688,11 @@ type AssemblePlSnDecisionOptions = {
  *
  * No I/O: the crawl, the reconciliation walk and a replay of the stored
  * envelope all reach this with the same three payloads, so none of them can
- * key, parse or enrich an item differently from the others.
+ * key, parse or enrich an item differently from the others. It is also what
+ * the source-field conformance fixture drives, which is why that suite needs
+ * neither a stubbed transport nor this publisher's one-second request gate.
  */
-const assemblePlSnDecision = async ({
+export const assemblePlSnDecision = async ({
   detail,
   documentBytes,
   item,
@@ -809,7 +813,7 @@ type FetchPlSnDecisionOptions = {
  * publisher was asked and did not answer, so the caller holds its cursor and
  * asks again instead of storing a row that says the document does not exist.
  */
-export const buildPlSnDecision = async ({
+const buildPlSnDecision = async ({
   cursor,
   item,
   listingRaw,
