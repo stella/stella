@@ -94,7 +94,7 @@ const callCapability = async (
     throw new UploadAppError(message ?? `Capability ${capability} failed`);
   }
   const payload = parsePayload(result);
-  return isRecord(payload) && "result" in payload ? payload.result : payload;
+  return isRecord(payload) && "result" in payload ? payload["result"] : payload;
 };
 
 const parseReservation = (
