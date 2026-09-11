@@ -188,6 +188,149 @@ describe("generated capability catalog", () => {
   });
 });
 
+describe("documents.compare capability contract", () => {
+  const MATTER_ID = "11111111-1111-4111-8111-111111111111";
+  const DOCUMENT_ID = "22222222-2222-4222-8222-222222222222";
+  const BASE_VERSION_ID = "33333333-3333-4333-8333-333333333333";
+  const TARGET_VERSION_ID = "44444444-4444-4444-8444-444444444444";
+
+  const invokeValidation = async (selection: Record<string, unknown>) =>
+    await handleMcpToolCall({
+      args: {
+        capability: "documents.compare",
+        input: {
+          params: { matterId: MATTER_ID, documentId: DOCUMENT_ID },
+          body: {
+            selection,
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "accept",
+            output: { type: "version" },
+          },
+        },
+        validate_only: true,
+      },
+      context: createContext({
+        grantedScopes: ["stella:documents_write"],
+        workspaceIds: [MATTER_ID],
+      }),
+      toolName: "invoke_capability",
+    });
+
+  test("list, describe, and invoke share its scope and selection union", async () => {
+    const listed = await call("list_capabilities", {
+      domain: "documents",
+      limit: 50,
+    });
+    const listedPayload = parseToolPayload<{
+      items: { id: string; scope: string; access: string }[];
+    }>(listed);
+    expect(listedPayload.items).toContainEqual(
+      expect.objectContaining({
+        id: "documents.compare",
+        scope: "stella:documents_write",
+        access: "write",
+      }),
+    );
+
+    const described = await call("describe_capability", {
+      capability: "documents.compare",
+    });
+    const describedPayload = parseToolPayload<{
+      id: string;
+      scope: string;
+      handlerKind: string;
+      inputSchema: {
+        body?: {
+          properties?: {
+            output?: { anyOf?: Record<string, unknown>[] };
+            selection?: { anyOf?: Record<string, unknown>[] };
+          };
+        };
+      };
+    }>(described);
+    expect(describedPayload).toMatchObject({
+      id: "documents.compare",
+      scope: "stella:documents_write",
+      handlerKind: "workspace",
+    });
+    const variants =
+      describedPayload.inputSchema.body?.properties?.selection?.anyOf;
+    expect(variants).toHaveLength(2);
+    expect(variants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          required: ["type", "baseVersionId", "targetVersionIds"],
+          properties: expect.objectContaining({
+            type: expect.objectContaining({ const: "versions" }),
+            targetVersionIds: expect.objectContaining({
+              minItems: 1,
+              maxItems: 8,
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          required: ["type", "targetVersionId"],
+          properties: expect.objectContaining({
+            type: expect.objectContaining({ const: "previous" }),
+          }),
+        }),
+      ]),
+    );
+    expect(
+      describedPayload.inputSchema.body?.properties?.output?.anyOf,
+    ).toEqual([
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          type: expect.objectContaining({ const: "preview" }),
+        }),
+      }),
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          type: expect.objectContaining({ const: "version" }),
+        }),
+      }),
+    ]);
+
+    const results = await Promise.all([
+      invokeValidation({
+        type: "versions",
+        baseVersionId: BASE_VERSION_ID,
+        targetVersionIds: [TARGET_VERSION_ID],
+      }),
+      invokeValidation({
+        type: "previous",
+        targetVersionId: TARGET_VERSION_ID,
+      }),
+    ]);
+    for (const result of results) {
+      expect(
+        parseToolPayload<{ valid: boolean; capability: string }>(result),
+      ).toEqual({ valid: true, capability: "documents.compare" });
+    }
+  });
+
+  test("rejects a one-to-many selection above the advertised target bound", async () => {
+    const result = await invokeValidation({
+      type: "versions",
+      baseVersionId: BASE_VERSION_ID,
+      targetVersionIds: Array.from(
+        { length: 9 },
+        (_, index) =>
+          `55555555-5555-4555-8555-${String(index).padStart(12, "0")}`,
+      ),
+    });
+
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string }[]>(error.issues);
+    expect(
+      issues.some(({ path }) => path === "body.selection.targetVersionIds"),
+    ).toBe(true);
+  });
+});
+
 // --- list_capabilities -------------------------------------------------------
 
 describe("list_capabilities", () => {

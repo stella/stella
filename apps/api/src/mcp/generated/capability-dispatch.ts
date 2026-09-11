@@ -196,6 +196,9 @@ export const CAPABILITY_DISPATCH = {
   "document-types.update": {
     load: async () => await import("@/api/handlers/document-types/update"),
   },
+  "documents.compare": {
+    load: async () => await import("@/api/handlers/documents/compare"),
+  },
   "entities.bilingual.create": {
     load: async () => await import("@/api/handlers/entities/bilingual/create"),
   },
@@ -204,9 +207,6 @@ export const CAPABILITY_DISPATCH = {
   },
   "entities.clip": {
     load: async () => await import("@/api/handlers/entities/clip"),
-  },
-  "entities.compare-versions": {
-    load: async () => await import("@/api/handlers/entities/compare-versions"),
   },
   "entities.copy-to-matter": {
     load: async () => await import("@/api/handlers/entities/copy-to-workspace"),

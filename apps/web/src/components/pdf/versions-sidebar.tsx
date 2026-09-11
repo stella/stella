@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import {
   CheckIcon,
   DownloadIcon,
+  FileDiffIcon,
   HistoryIcon,
   Loader2Icon,
   PlusIcon,
@@ -55,8 +56,6 @@ type VersionsSidebarProps = {
   versions: Version[];
   currentVersionId: string | null;
   onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
-  onClearCompare: () => void;
-  isComparing: boolean;
   /** Whether an older page exists to load above the current top. */
   hasOlderVersions?: boolean | undefined;
   /** True while an older page is being fetched + prepended. */
@@ -66,6 +65,8 @@ type VersionsSidebarProps = {
   loadOlderError?: boolean | undefined;
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
+  /** Open document comparison within the version-history facet. */
+  onCompareVersions?: (() => void) | undefined;
 };
 
 type LabelPreset = {
@@ -90,12 +91,11 @@ export const VersionsSidebar = ({
   versions,
   currentVersionId,
   onSwitchVersion,
-  onClearCompare,
-  isComparing,
   hasOlderVersions = false,
   isLoadingOlder = false,
   loadOlderError = false,
   onLoadOlder,
+  onCompareVersions,
 }: VersionsSidebarProps) => {
   const t = useTranslations();
 
@@ -264,7 +264,6 @@ export const VersionsSidebar = ({
       return;
     }
 
-    onClearCompare();
     await invalidateVersions();
 
     if (
@@ -392,7 +391,6 @@ export const VersionsSidebar = ({
                 canDelete={versions.length > 1}
                 currentFieldId={currentFieldId}
                 currentVersionId={currentVersionId}
-                hideDiffStats={isComparing}
                 loadDiff={isDocx ? buildLoadDiff(version.id) : null}
                 showPhaseDivider={
                   idx > 0 &&
@@ -417,18 +415,27 @@ export const VersionsSidebar = ({
         </VersionList>
       </ScrollArea>
 
-      {/* Restore version comparison controls once the feature is finalized. */}
-
-      {/* Footer row — mirrors the Metadata facet's "Extract
-       *  entity type" trigger so both facets share one bottom-row
-       *  pattern: full-width ghost button, leading icon, label.
+      {/* Footer row — version operations stay in the history facet.
+       *  Each action uses the same quiet toolbar pattern: ghost button,
+       *  leading icon, label.
        *  `flex-1` is mandatory; without it the Button base's
        *  `inline-flex shrink-0` keeps the click target at content
        *  width, so hovering the empty right portion of the row
        *  doesn't register. */}
       <div className={cn("flex shrink-0 border-t", TOOLBAR_ROW_HEIGHT)}>
+        {onCompareVersions && (
+          <Button
+            className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 border-e px-3 font-normal before:rounded-none"
+            onClick={onCompareVersions}
+            type="button"
+            variant="ghost"
+          >
+            <FileDiffIcon className="size-4 shrink-0" />
+            <span className="truncate">{t("fileDetail.compare")}</span>
+          </Button>
+        )}
         <Button
-          className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+          className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
           disabled={isUploading}
           onClick={() => fileInputRef.current?.click()}
           type="button"
@@ -498,7 +505,6 @@ type VersionItemProps = {
   version: Version;
   currentFieldId: string;
   currentVersionId: string | null;
-  hideDiffStats: boolean;
   showPhaseDivider: boolean;
   canDelete: boolean;
   loadDiff: (() => Promise<VersionDiffSegment[]>) | null;
@@ -515,7 +521,6 @@ const VersionItem = ({
   showPhaseDivider,
   currentFieldId,
   currentVersionId,
-  hideDiffStats,
   canDelete,
   loadDiff,
   summarize,
@@ -544,7 +549,6 @@ const VersionItem = ({
       : DEFAULT_LABEL_COLOR;
 
   const stats =
-    !hideDiffStats &&
     version.diffWordsAdded !== null &&
     version.diffWordsRemoved !== null &&
     (version.diffWordsAdded > 0 || version.diffWordsRemoved > 0)

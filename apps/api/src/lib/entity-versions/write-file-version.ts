@@ -14,7 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
@@ -36,6 +36,11 @@ export type FileVersionWritePolicy =
   | {
       type: "replace-current-file-from-version";
       expectedCurrentVersionId: SafeId<"entityVersion">;
+    }
+  | {
+      type: "append-derived-file-from-version";
+      expectedCurrentVersionId: SafeId<"entityVersion">;
+      sourceVersionId: SafeId<"entityVersion">;
     }
   | {
       type: "automatic-docx-edit";
@@ -65,6 +70,7 @@ export type WriteFileVersionResult =
         | "entity-not-found"
         | "entity-read-only"
         | "missing-file-field"
+        | "source-version-not-found"
         | "target-file-not-found"
         | "workspace-not-active";
     };
@@ -165,7 +171,7 @@ const hasOpenDocxEditSession = async ({
 };
 
 /**
- * Canonical transaction for replacing an entity's file with a new version.
+ * Canonical transaction for writing an entity file version.
  *
  * Ordinary transports and automatic DOCX edits delegate here, so row locking,
  * version numbering, field/cell cloning, edit-session exclusion, and audit
@@ -197,6 +203,9 @@ export const writeFileVersion = async ({
       break;
     }
     case "replace-current-file-from-version": {
+      break;
+    }
+    case "append-derived-file-from-version": {
       break;
     }
     case "automatic-docx-edit": {
@@ -291,9 +300,13 @@ export const writeFileVersion = async ({
   ) {
     return { status: "current-version-changed" };
   }
-  const currentVersion = await tx.query.entityVersions.findFirst({
+  const fieldSourceVersionId =
+    writePolicy.type === "append-derived-file-from-version"
+      ? writePolicy.sourceVersionId
+      : currentVersionId;
+  const fieldSourceVersion = await tx.query.entityVersions.findFirst({
     where: {
-      id: { eq: currentVersionId },
+      id: { eq: fieldSourceVersionId },
       entityId: { eq: entityId },
       workspaceId: { eq: workspaceId },
       deletedAt: { isNull: true },
@@ -303,12 +316,17 @@ export const writeFileVersion = async ({
       fields: { columns: { id: true, content: true, propertyId: true } },
     },
   });
-  if (!currentVersion) {
-    return { status: "current-version-not-found" };
+  if (!fieldSourceVersion) {
+    return {
+      status:
+        writePolicy.type === "append-derived-file-from-version"
+          ? "source-version-not-found"
+          : "current-version-not-found",
+    };
   }
 
   const fileField = targetsFileProperty
-    ? currentVersion.fields.find(
+    ? fieldSourceVersion.fields.find(
         (candidate) =>
           candidate.propertyId === writePolicy.filePropertyId &&
           (writePolicy.type !== "automatic-docx-edit" ||
@@ -316,7 +334,7 @@ export const writeFileVersion = async ({
           candidate.content.type === "file" &&
           candidate.content.mimeType === DOCX_MIME_TYPE,
       )
-    : currentVersion.fields.find(
+    : fieldSourceVersion.fields.find(
         (candidate) => candidate.content.type === "file",
       );
   if (targetsFileProperty && !fileField) {
@@ -348,7 +366,7 @@ export const writeFileVersion = async ({
   // the per-version property uniqueness constraint below.
   if (
     !fileField &&
-    currentVersion.fields.some(
+    fieldSourceVersion.fields.some(
       (candidate) => candidate.propertyId === filePropertyId,
     )
   ) {
@@ -408,7 +426,7 @@ export const writeFileVersion = async ({
     ...(scanWarnings !== undefined && { scanWarnings }),
   });
   const revisionFields = cloneFieldsForRevision({
-    currentFields: currentVersion.fields,
+    currentFields: fieldSourceVersion.fields,
     entityVersionId,
     propertyId: filePropertyId,
     replacementFieldId: fieldId,
@@ -439,7 +457,7 @@ export const writeFileVersion = async ({
     .where(
       and(
         eq(cellMetadata.workspaceId, workspaceId),
-        eq(cellMetadata.entityVersionId, currentVersionId),
+        eq(cellMetadata.entityVersionId, fieldSourceVersionId),
       ),
     )
     .for("update");
@@ -461,16 +479,18 @@ export const writeFileVersion = async ({
     );
   }
 
-  await tx
-    .update(entities)
-    .set({
-      currentVersionId: entityVersionId,
-      lastEditedBy: userId,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-    );
+  if (writePolicy.type !== "append-derived-file-from-version") {
+    await tx
+      .update(entities)
+      .set({
+        currentVersionId: entityVersionId,
+        lastEditedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+      );
+  }
   if (writePolicy.type === "automatic-docx-edit") {
     // File-chat identity follows the logical document across automatic edits.
     // Move every user's exact field mapping atomically with the version write.
@@ -491,37 +511,42 @@ export const writeFileVersion = async ({
     .set({ lastActivityAt: new Date() })
     .where(eq(workspaces.id, workspaceId));
 
-  await recordAuditEvent(tx, [
-    {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-      resourceId: entityVersionId,
-      workspaceId,
-      changes: {
-        created: {
-          old: null,
-          new: {
-            entityId,
-            versionNumber,
-            fileName,
-            mimeType,
-            sizeBytes,
-            sha256Hex,
-          },
+  const createdVersionAuditEvent = {
+    action: AUDIT_ACTION.CREATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+    resourceId: entityVersionId,
+    workspaceId,
+    changes: {
+      created: {
+        old: null,
+        new: {
+          entityId,
+          versionNumber,
+          fileName,
+          mimeType,
+          sizeBytes,
+          sha256Hex,
         },
       },
-      metadata: { fileName, mimeType, sizeBytes, sha256Hex },
     },
-    {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: entityId,
-      workspaceId,
-      changes: {
-        currentVersionId: { old: currentVersionId, new: entityVersionId },
+    metadata: { fileName, mimeType, sizeBytes, sha256Hex },
+  } satisfies AuditEvent;
+  if (writePolicy.type === "append-derived-file-from-version") {
+    await recordAuditEvent(tx, createdVersionAuditEvent);
+  } else {
+    await recordAuditEvent(tx, [
+      createdVersionAuditEvent,
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: entityId,
+        workspaceId,
+        changes: {
+          currentVersionId: { old: currentVersionId, new: entityVersionId },
+        },
       },
-    },
-  ]);
+    ]);
+  }
 
   const result = {
     status: "ok",

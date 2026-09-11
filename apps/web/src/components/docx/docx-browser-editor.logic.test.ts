@@ -275,19 +275,8 @@ describe("DOCX browser editor route selection", () => {
       shouldUseDocxBrowserEditor({
         isDocxFile: true,
         hasFilePropertyId: true,
-        isComparing: false,
       }),
     ).toBe(true);
-  });
-
-  test("falls back when comparing — redline overlay is bbox-driven", () => {
-    expect(
-      shouldUseDocxBrowserEditor({
-        isDocxFile: true,
-        hasFilePropertyId: true,
-        isComparing: true,
-      }),
-    ).toBe(false);
   });
 
   test("falls back for non-DOCX or files without a file property", () => {
@@ -295,14 +284,12 @@ describe("DOCX browser editor route selection", () => {
       shouldUseDocxBrowserEditor({
         isDocxFile: false,
         hasFilePropertyId: true,
-        isComparing: false,
       }),
     ).toBe(false);
     expect(
       shouldUseDocxBrowserEditor({
         isDocxFile: true,
         hasFilePropertyId: false,
-        isComparing: false,
       }),
     ).toBe(false);
   });

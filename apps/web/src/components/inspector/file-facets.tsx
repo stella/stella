@@ -53,8 +53,7 @@ export const FullViewPreviewGuard = ({
  * Per-tab wrapper around the shared `FacetBar`. Two jobs:
  *  - Resolve the active version label ("v1", "v3", …) for the
  *    current field id and feed it as `activeBadge`.
- *  - Hide the document-review chip on tabs the review can't target
- *    (PDFs, files without DOCX-edit support).
+ *  - Hide DOCX-only chips on tabs they cannot target.
  *
  * Lives as its own component so the version read stays scoped per
  * tab — no conditional hooks inside the parent's pdfTabs.map.
@@ -95,10 +94,9 @@ export const TabFacetBar = ({
   const isEmail = isEmailFile({ fileName, mimeType });
   const facets = useMemo(
     () =>
-      // The document-review surface is DOCX-only (it needs folio block ids to
-      // target), so its chip is absent on every other tab. On DOCX it stays
-      // enabled even before a run: it doubles as the launcher, and it is where
-      // changes the chat proposed are listed.
+      // Document review operates on DOCX structure, so its chip is absent on
+      // every other file type. Review stays enabled before a run because it
+      // also launches the review.
       baseFacets.filter(
         (f) => (isDocx || f !== "playbook") && (isEmail || f !== "attachments"),
       ),

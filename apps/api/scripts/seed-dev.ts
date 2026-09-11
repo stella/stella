@@ -518,6 +518,8 @@ type SupplierAgreementRun =
   | { kind: "inserted"; text: string }
   | { kind: "text"; text: string };
 
+type SeedTrackedChangeDisposition = "keep" | "reject";
+
 type SupplierAgreementParagraph = {
   /** Margin comment (id in SUPPLIER_AGREEMENT_COMMENTS) anchored to the paragraph. */
   commentId?: number;
@@ -805,13 +807,20 @@ const buildSupplierAgreementText = (): string =>
     )
     .join("\n\n");
 
+const supplierAgreementBaseVersionId = (
+  workspaceId: WorkspaceId,
+): EntityVersionId =>
+  seedId<"entityVersion">(`${workspaceId}-supplier-agreement-base-version`);
+
 /**
  * Build the Supplier Agreement DOCX with real tracked changes and margin
  * comments. Mirrors `createMockDocx`'s minimal OOXML package, plus a
  * `word/comments.xml` part (folio reads it by path) and its content-type
  * override and relationship for Word compatibility.
  */
-const createSupplierAgreementDocx = async (): Promise<Buffer> => {
+const createSupplierAgreementDocx = async (
+  disposition: SeedTrackedChangeDisposition,
+): Promise<Buffer> => {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   const { author, date } = SUPPLIER_AGREEMENT_REVIEWER;
@@ -842,7 +851,16 @@ const createSupplierAgreementDocx = async (): Promise<Buffer> => {
     const boldXml = bold ? "<w:b/>" : "";
     const sizeXml = '<w:sz w:val="22"/>';
     const runProps = `<w:rPr>${boldXml}${sizeXml}</w:rPr>`;
-    const escaped = xmlEscape(run.text);
+    const text =
+      disposition === "reject" &&
+      run.text === "NEGOTIATION DRAFT v4 — CONTAINS TRACKED CHANGES"
+        ? "NEGOTIATION DRAFT v3"
+        : run.text;
+    const escaped = xmlEscape(text);
+    if (disposition === "reject") {
+      if (run.kind === "inserted") return "";
+      return `<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+    }
     if (run.kind === "deleted") {
       revisionId++;
       return (
@@ -5867,14 +5885,36 @@ export async function seed(organizationId?: string, userId?: string) {
         },
       });
 
-    await rootDb
-      .insert(entityVersions)
-      .values({
-        id: e.versionId,
-        workspaceId: toWs(e.workspaceId),
-        entityId: e.entityId,
-      })
-      .onConflictDoNothing();
+    const isSupplierAgreement = e.name === SUPPLIER_AGREEMENT_DOC_NAME;
+    const versionInsert = rootDb.insert(entityVersions).values({
+      id: e.versionId,
+      workspaceId: toWs(e.workspaceId),
+      entityId: e.entityId,
+      ...(isSupplierAgreement
+        ? { versionNumber: 2, label: "Negotiated draft" }
+        : {}),
+    });
+    if (isSupplierAgreement) {
+      await versionInsert.onConflictDoUpdate({
+        target: entityVersions.id,
+        set: { versionNumber: 2, label: "Negotiated draft" },
+      });
+      await rootDb
+        .insert(entityVersions)
+        .values({
+          id: supplierAgreementBaseVersionId(e.workspaceId),
+          workspaceId: toWs(e.workspaceId),
+          entityId: e.entityId,
+          versionNumber: 1,
+          label: "Initial draft",
+        })
+        .onConflictDoUpdate({
+          target: entityVersions.id,
+          set: { versionNumber: 1, label: "Initial draft" },
+        });
+    } else {
+      await versionInsert.onConflictDoNothing();
+    }
 
     // Link currentVersionId
     await rootDb
@@ -5937,7 +5977,7 @@ export async function seed(organizationId?: string, userId?: string) {
       // it has a dedicated builder instead of the generic paragraph mock.
       const buildContent = async () => {
         if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
-          return await createSupplierAgreementDocx();
+          return await createSupplierAgreementDocx("keep");
         }
         switch (format.type) {
           case "docx":
@@ -6001,6 +6041,45 @@ export async function seed(organizationId?: string, userId?: string) {
           set: { content: fileContent },
         });
       fileCount++;
+
+      if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
+        const baseVersionId = supplierAgreementBaseVersionId(wsId);
+        const baseFileId = seedId<"userFile">(
+          `${wsLabel}-supplier-agreement-base-file`,
+        );
+        const baseContent = await createSupplierAgreementDocx("reject");
+        await writeS3ObjectWithRetry({
+          data: new Uint8Array(baseContent),
+          key: `${ORG_ID}/${wsId}/${baseFileId}.docx`,
+        });
+        const baseFileContent = {
+          version: 1,
+          type: "file",
+          id: baseFileId,
+          fileName: "Supplier_Agreement_v3.docx",
+          mimeType: DOCX_MIME,
+          sizeBytes: baseContent.byteLength,
+          encrypted: false,
+          sha256Hex: new Bun.CryptoHasher("sha256")
+            .update(baseContent)
+            .digest("hex"),
+          pdfFileId: null,
+        } as const satisfies FieldContent;
+        await rootDb
+          .insert(fields)
+          .values({
+            id: seedId<"field">(`${wsLabel}-supplier-agreement-base-field`),
+            workspaceId: toWs(wsId),
+            propertyId: filePropertyId,
+            entityVersionId: baseVersionId,
+            content: baseFileContent,
+          })
+          .onConflictDoUpdate({
+            target: fields.id,
+            set: { content: baseFileContent },
+          });
+        fileCount++;
+      }
 
       // ── Extracted content (AI reads this) ──
       // Resolve the org from the workspace row so this

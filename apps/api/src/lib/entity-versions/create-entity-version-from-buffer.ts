@@ -50,6 +50,7 @@ class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
     | "entity-not-found"
     | "entity-read-only"
     | "missing-file-field"
+    | "source-version-not-found"
     | "target-file-not-found"
     | "workspace-not-active";
   message: string;
@@ -128,6 +129,7 @@ const ENTITY_VERSION_TARGET_MESSAGES = {
   "edit-session-open":
     "The document has an active edit session; close it before automatic edits",
   "missing-file-field": "Entity has no file field",
+  "source-version-not-found": "Source version not found",
   "target-file-not-found": "The document file changed while edits were applied",
   "workspace-not-active": "The document's matter is archived or unavailable",
 } satisfies Record<EntityVersionTargetErrorCode, string>;
