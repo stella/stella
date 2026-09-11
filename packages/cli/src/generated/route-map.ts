@@ -10556,6 +10556,7 @@ export const generatedRouteMap: RouteNode = {
                     body: {
                       anyOf: [
                         {
+                          additionalProperties: false,
                           type: "object",
                           required: [
                             "entityId",
@@ -10609,6 +10610,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         {
+                          additionalProperties: false,
                           type: "object",
                           required: [
                             "entityId",

@@ -51,18 +51,24 @@ export const prepareDocumentTranslationBodySchema = t.Object({
 });
 
 export const createDocumentTranslationRunBodySchema = t.Union([
-  t.Object({
-    ...commonRunProperties,
-    engine: t.Literal(DOCUMENT_TRANSLATION_ENGINE.DEEPL),
-    output: t.Literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
-  }),
-  t.Object({
-    ...commonRunProperties,
-    engine: t.Literal(DOCUMENT_TRANSLATION_ENGINE.AI),
-    output: t.Union([
-      t.Literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
-      t.Literal(DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL),
-    ]),
-    entityVersionId: tSafeId("entityVersion"),
-  }),
+  t.Object(
+    {
+      ...commonRunProperties,
+      engine: t.Literal(DOCUMENT_TRANSLATION_ENGINE.DEEPL),
+      output: t.Literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      ...commonRunProperties,
+      engine: t.Literal(DOCUMENT_TRANSLATION_ENGINE.AI),
+      output: t.Union([
+        t.Literal(DOCUMENT_TRANSLATION_OUTPUT.TRANSLATED),
+        t.Literal(DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL),
+      ]),
+      entityVersionId: tSafeId("entityVersion"),
+    },
+    { additionalProperties: false },
+  ),
 ]);
