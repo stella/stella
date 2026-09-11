@@ -108,7 +108,6 @@
     "title": "Beállítások"
   },
   "clipboard": {
-    "registrySearchAction": "„{query}” keresése külső nyilvántartásban",
     "registryUnavailable": "Az Ön működési joghatóságaihoz nincs engedélyezett nyilvántartás.",
     "registryDefaultFormat": "Alapértelmezett",
     "registryDisconnect": "Cégjegyzékkeresés leválasztása",

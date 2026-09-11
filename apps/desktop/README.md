@@ -80,6 +80,7 @@ Clipboard keyboard model:
 - Type anywhere to search; the search field takes the keystroke.
 - ← / → move across the results, or across the footer controls when one is focused.
 - ↑ / ↓ switch the search scope: all clips, external registries, saved groups.
+  Clicking the scope icon beside the field steps through them too.
 - Enter copies the highlighted result; Esc closes an open overlay, then the window.
 
 Runtime bridge configuration:

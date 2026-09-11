@@ -275,19 +275,15 @@ for (const {
         const messages = language === "ar" ? arMessages : enMessages;
         await openClipboard(page, language);
         await page.getByRole("searchbox").fill("Clipboard item 2");
-        const registry = page.getByRole("button", {
-          name: messages.clipboard.registrySearchAction.replace(
-            "{query}",
-            "Clipboard item 2",
-          ),
-          exact: true,
-        });
         if (activation === "pointer") {
-          await registry.click();
+          await page.locator("[data-clipboard-scope]").click();
         } else {
-          await registry.focus();
-          await page.keyboard.press("Enter");
+          await page.keyboard.press("ArrowDown");
         }
+        await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
+          "data-clipboard-scope",
+          "registry",
+        );
         await expect(page.getByRole("searchbox")).toHaveValue(
           "Clipboard item 2",
         );
@@ -604,14 +600,16 @@ test("restores footer arrow navigation after changing a menu setting", async ({
 
   await search.focus();
   const footerControls = page.locator(
-    ".clipboard-controls button:not([disabled]):not([aria-disabled='true']), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
+    ".clipboard-controls button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
   );
   const footerControlCount = await footerControls.count();
   expect(footerControlCount).toBeGreaterThan(1);
   await expect(footerControls.nth(1)).toHaveAccessibleName(
     enMessages.clipboard.search,
   );
-  await expect(page.locator(".clipboard-search button")).toHaveCount(0);
+  await expect(
+    page.locator(".clipboard-search button:not([data-clipboard-scope])"),
+  ).toHaveCount(0);
   await expect(footerControls.nth(1)).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   await expect(footerControls.first()).toBeFocused();

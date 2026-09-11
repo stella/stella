@@ -108,7 +108,6 @@
     "title": "Paramètres"
   },
   "clipboard": {
-    "registrySearchAction": "Rechercher « {query} » dans un registre externe",
     "registryUnavailable": "Aucun registre n’est activé pour vos juridictions d’exercice.",
     "registryDefaultFormat": "Par défaut",
     "registryDisconnect": "Déconnecter la recherche dans les registres",

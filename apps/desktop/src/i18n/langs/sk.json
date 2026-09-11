@@ -108,7 +108,6 @@
     "title": "Nastavenia"
   },
   "clipboard": {
-    "registrySearchAction": "Vyhľadať „{query}“ v externom registri",
     "registryUnavailable": "Pre vaše jurisdikcie nie sú povolené žiadne registre.",
     "registryDefaultFormat": "Predvolený",
     "registryDisconnect": "Odpojiť vyhľadávanie v registri",

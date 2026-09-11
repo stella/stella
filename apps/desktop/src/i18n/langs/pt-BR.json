@@ -108,7 +108,6 @@
     "title": "Configurações"
   },
   "clipboard": {
-    "registrySearchAction": "Buscar “{query}” em um registro externo",
     "registryUnavailable": "Nenhum registro está habilitado para as jurisdições em que você atua.",
     "registryDefaultFormat": "Padrão",
     "registryDisconnect": "Desconectar a pesquisa em registros",

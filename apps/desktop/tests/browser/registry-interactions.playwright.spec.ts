@@ -277,19 +277,12 @@ const openClipboard = async (
 };
 const activateRegistry = async (page: Page, query = "Stella Example") => {
   await searchBox(page).fill(query);
-  const messages =
-    (await page.evaluate(() => navigator.language)) === "ar"
-      ? arMessages
-      : enMessages;
-  await page
-    .getByRole("button", {
-      name: messages.clipboard.registrySearchAction.replace("{query}", () =>
-        query.trim(),
-      ),
-      exact: true,
-    })
-    .click();
+  await searchBox(page).press("ArrowDown");
   await expect(searchBox(page)).toBeFocused();
+  await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
+    "data-clipboard-scope",
+    "registry",
+  );
 };
 
 test("keeps typed queries local until the external action, including complete identifiers", async ({
@@ -350,15 +343,7 @@ test("keyboard activation retains the input and Enter never copies a hidden clip
 }) => {
   await openClipboard(page);
   await searchBox(page).fill("Privileged");
-  const action = page.getByRole("button", {
-    name: enMessages.clipboard.registrySearchAction.replace(
-      "{query}",
-      "Privileged",
-    ),
-    exact: true,
-  });
-  await action.focus();
-  await action.press("Enter");
+  await searchBox(page).press("ArrowDown");
   await expect(searchBox(page)).toBeFocused();
   await expect.poll(async () => (await searches(page)).length).toBe(1);
   await searchBox(page).press("Enter");
@@ -697,15 +682,9 @@ for (const language of ["en", "ar"] as const) {
       await searchBox(page).fill("Privileged");
       // WebKit follows macOS keyboard access: Option+Tab includes buttons.
       await searchBox(page).press(browserName === "webkit" ? "Alt+Tab" : "Tab");
-      const messages = language === "ar" ? arMessages : enMessages;
+      // The scope icon stays out of the tab order; the groups rail follows.
       await expect(
-        page.getByRole("button", {
-          name: messages.clipboard.registrySearchAction.replace(
-            "{query}",
-            "Privileged",
-          ),
-          exact: true,
-        }),
+        page.locator('[data-clipboard-group-id="__no_group__"]'),
       ).toBeFocused();
       await searchBox(page).focus();
       const assertSingleFrame = async () => {
@@ -748,7 +727,6 @@ for (const language of ["en", "ar"] as const) {
         expect(layout.registryBottom).toBeLessThanOrEqual(layout.footerBottom);
         expect(layout.scrollHeight).toBeLessThanOrEqual(layout.viewportHeight);
       };
-      await assertSingleFrame();
       await activateRegistry(page, "Privileged");
       await expect(
         page.getByRole("heading", { name: "Stella Example s.r.o." }),
@@ -758,16 +736,13 @@ for (const language of ["en", "ar"] as const) {
     test("returns to local results with the same query and input focused", async ({
       page,
     }) => {
-      const messages = language === "ar" ? arMessages : enMessages;
       await openClipboard(page);
       await activateRegistry(page, "Privileged");
       await expect(
         page.getByRole("heading", { name: "Stella Example s.r.o." }),
       ).toBeVisible();
       const before = await searches(page);
-      await page
-        .getByRole("button", { name: messages.clipboard.allClips, exact: true })
-        .click();
+      await searchBox(page).press("ArrowUp");
       await expect(searchBox(page)).toHaveValue("Privileged");
       await expect(searchBox(page)).toBeFocused();
       await expect(page.locator("[data-clipboard-card-trigger]")).toBeVisible();

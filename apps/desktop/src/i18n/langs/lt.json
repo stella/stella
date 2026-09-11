@@ -108,7 +108,6 @@
     "title": "Nustatymai"
   },
   "clipboard": {
-    "registrySearchAction": "Ieškoti „{query}“ išoriniame registre",
     "registryUnavailable": "Jūsų praktikos jurisdikcijose nėra įjungtų registrų.",
     "registryDefaultFormat": "Numatytasis",
     "registryDisconnect": "Atjungti paiešką registre",

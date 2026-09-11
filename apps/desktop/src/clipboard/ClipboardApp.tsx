@@ -1910,12 +1910,6 @@ const ClipboardApp = () => {
     selectIndex(nextIndex);
   };
 
-  const changeSearchSource = (source: "clips" | "registry") => {
-    setContextMenu({ type: "closed" });
-    setSearchSource(source);
-    searchInputRef.current?.focus();
-  };
-
   const handleControlsKeyDown = (event: KeyboardEvent, target: HTMLElement) => {
     const footer = controlsRef.current;
     const railAction = clipboardControlsKeyAction({
@@ -1928,7 +1922,7 @@ const ClipboardApp = () => {
     event.preventDefault();
     const controls = Array.from(
       footer.querySelectorAll<HTMLElement>(
-        "button:not([disabled]):not([aria-disabled='true']), a[href], input:not([disabled])",
+        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), a[href], input:not([disabled])",
       ),
     ).filter((control) => !control.closest("[inert]"));
     const control = target.closest<HTMLElement>("button, a, input");
@@ -1971,9 +1965,11 @@ const ClipboardApp = () => {
       available: availableScopes,
       current: searchScope,
     });
-    if (next === null) {
-      return;
+    if (next !== null) {
+      applyScope(next);
     }
+  };
+  const applyScope = (next: ClipboardSearchScope) => {
     setContextMenu({ type: "closed" });
     switch (next) {
       case "clips":
@@ -1996,6 +1992,15 @@ const ClipboardApp = () => {
         panic("Unknown clipboard search scope.");
     }
     searchInputRef.current?.focus();
+  };
+  // The pointer path through the scopes: a click steps forward and wraps.
+  const cycleScope = () => {
+    const index = availableScopes.indexOf(searchScope);
+    const next = availableScopes.at((index + 1) % availableScopes.length);
+    if (next === undefined) {
+      return;
+    }
+    applyScope(next);
   };
   const handleScopeKey = (event: KeyboardEvent) => {
     const action = clipboardScopeKeyAction(event.key);
@@ -2289,7 +2294,6 @@ const ClipboardApp = () => {
         query={query}
         composing={searchComposing}
         source={searchSource}
-        onSourceChange={changeSearchSource}
         onConnectionFlowChange={(flow) => {
           connectionFlowRef.current = flow;
         }}
@@ -2465,17 +2469,20 @@ const ClipboardApp = () => {
 
               <InputGroup className="clipboard-search h-11 w-full rounded-full">
                 <InputGroupAddon className="text-foreground/65">
-                  <span
-                    className="flex items-center gap-0.5"
+                  <button
+                    aria-label={t(
+                      CLIPBOARD_SCOPE_PRESENTATION[searchScope].label,
+                    )}
+                    className="flex items-center gap-0.5 rounded-full"
                     data-clipboard-scope={searchScope}
+                    onClick={cycleScope}
+                    tabIndex={-1}
                     title={t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
+                    type="button"
                   >
                     <ScopeIcon aria-hidden="true" className="size-4" />
                     <ChevronsUpDownIcon aria-hidden="true" className="size-3" />
-                    <span className="sr-only">
-                      {t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
-                    </span>
-                  </span>
+                  </button>
                 </InputGroupAddon>
                 <InputGroupInput
                   aria-label={t("search")}

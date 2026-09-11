@@ -110,7 +110,6 @@
     "title": "Settings"
   },
   "clipboard": {
-    "registrySearchAction": "Search external registry for “{query}”",
     "registryUnavailable": "No registries are enabled for your practice jurisdictions.",
     "registryDefaultFormat": "Default",
     "registryDisconnect": "Disconnect registry search",

@@ -108,7 +108,6 @@
     "title": "Iestatījumi"
   },
   "clipboard": {
-    "registrySearchAction": "Meklēt “{query}” ārējā reģistrā",
     "registryUnavailable": "Jūsu prakses jurisdikcijām nav iespējotu reģistru.",
     "registryDefaultFormat": "Noklusējuma",
     "registryDisconnect": "Atvienot meklēšanu reģistrā",

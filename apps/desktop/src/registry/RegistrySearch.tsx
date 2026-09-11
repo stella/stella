@@ -54,7 +54,6 @@ type RegistrySearchProps = {
   query: string;
   composing: boolean;
   source: "clips" | "registry";
-  onSourceChange: (source: "clips" | "registry") => void;
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
   children: (slots: {
     controls: ReactNode;
@@ -69,7 +68,6 @@ export const RegistrySearch = ({
   query,
   composing,
   source,
-  onSourceChange,
   onConnectionFlowChange,
   children,
 }: RegistrySearchProps) => {
@@ -352,86 +350,63 @@ export const RegistrySearch = ({
     emptyText = t("registryEmpty");
   }
 
-  const controls = (
-    <div
-      role="group"
-      aria-label={t("externalRegistry")}
-      className="flex h-11 min-w-0 items-center gap-1"
-      data-registry-controls
-    >
-      {source === "clips" ? (
-        <Button
-          className="h-11 max-w-64 min-w-0 justify-start text-xs"
-          variant="ghost"
-          data-registry-action
-          disabled={!trimmedQuery || composing}
-          onClick={() => onSourceChange("registry")}
-        >
-          <Building2Icon aria-hidden="true" className="size-4 shrink-0" />
-          <span className="truncate">
-            {trimmedQuery
-              ? t("registrySearchAction", { query: trimmedQuery })
-              : t("externalRegistry")}
-          </span>
-        </Button>
-      ) : (
-        <>
-          <Button
-            className="h-11 text-xs"
-            variant="ghost"
-            onClick={() => onSourceChange("clips")}
+  // Scope switching lives on the search field (arrows or the scope icon);
+  // the registry row only chooses which registry the scope searches.
+  const controls =
+    source === "registry" ? (
+      <div
+        role="group"
+        aria-label={t("externalRegistry")}
+        className="flex h-11 min-w-0 items-center gap-1"
+        data-registry-controls
+      >
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                className="h-11 max-w-48 min-w-0 text-xs"
+                disabled={!connected}
+              />
+            }
+            aria-label={t("registrySelect")}
           >
-            {t("allClips")}
-          </Button>
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  className="h-11 max-w-48 min-w-0 text-xs"
-                  disabled={!connected}
-                />
-              }
-              aria-label={t("registrySelect")}
-            >
-              <Building2Icon aria-hidden="true" className="size-4" />
-              <span className="truncate">
-                {connected
-                  ? (connection.registries.find(({ id }) => id === registryId)
-                      ?.name ?? t("registrySelect"))
-                  : t("registrySelect")}
-              </span>
-              <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-            </MenuTrigger>
-            <MenuPopup align="start">
-              <MenuRadioGroup value={registryId}>
-                {connected
-                  ? connection.registries.map(({ id, name }) => (
-                      <MenuRadioItem
-                        key={id}
-                        value={id}
-                        closeOnClick
-                        onClick={() => setRegistryId(id)}
-                      >
-                        {name}
-                      </MenuRadioItem>
-                    ))
-                  : null}
-              </MenuRadioGroup>
-              {connected ? (
-                <>
-                  <MenuSeparator />
-                  <MenuItem onClick={disconnect}>
-                    {t("registryDisconnect")}
-                  </MenuItem>
-                </>
-              ) : null}
-            </MenuPopup>
-          </Menu>
-        </>
-      )}
-    </div>
-  );
+            <Building2Icon aria-hidden="true" className="size-4" />
+            <span className="truncate">
+              {connected
+                ? (connection.registries.find(({ id }) => id === registryId)
+                    ?.name ?? t("registrySelect"))
+                : t("registrySelect")}
+            </span>
+            <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+          </MenuTrigger>
+          <MenuPopup align="start">
+            <MenuRadioGroup value={registryId}>
+              {connected
+                ? connection.registries.map(({ id, name }) => (
+                    <MenuRadioItem
+                      key={id}
+                      value={id}
+                      closeOnClick
+                      onClick={() => setRegistryId(id)}
+                    >
+                      {name}
+                    </MenuRadioItem>
+                  ))
+                : null}
+            </MenuRadioGroup>
+            {connected ? (
+              <>
+                <MenuSeparator />
+                <MenuItem onClick={disconnect}>
+                  {t("registryDisconnect")}
+                </MenuItem>
+              </>
+            ) : null}
+          </MenuPopup>
+        </Menu>
+      </div>
+    ) : null;
   const results = (
     <main
       aria-label={t("registrySearch")}
