@@ -195,6 +195,66 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 
+-- The migrate entrypoint's corpus lane drains application writers before
+-- this migration starts. PostgreSQL maintenance can still hold either hot
+-- table briefly, though, and CREATE TRIGGER needs SHARE ROW EXCLUSIVE on the
+-- target. Acquire both table locks in the same order as corpus writers and
+-- retry bounded waits; once acquired, this transaction retains them through
+-- all four trigger declarations below. The raised lock_timeout is local to
+-- each attempt, while statement_timeout bounds the complete retry sequence.
+SET LOCAL statement_timeout = '10min';--> statement-breakpoint
+DO $$
+DECLARE
+  attempts integer := 0;
+  holders text;
+BEGIN
+  LOOP
+    attempts := attempts + 1;
+    PERFORM set_config(
+      'lock_timeout',
+      CASE
+        WHEN attempts <= 20 THEN '2s'
+        WHEN attempts <= 30 THEN '10s'
+        ELSE '30s'
+      END,
+      true
+    );
+    BEGIN
+      LOCK TABLE "case_law_decisions" IN SHARE ROW EXCLUSIVE MODE;
+      LOCK TABLE "case_law_provision_citations" IN SHARE ROW EXCLUSIVE MODE;
+      EXIT;
+    EXCEPTION
+      WHEN lock_not_available THEN
+        IF attempts >= 36 THEN
+          RAISE;
+        END IF;
+        IF attempts % 5 = 0 THEN
+          SELECT string_agg(
+                   format('%s %s %s', activity.pid,
+                          coalesce(activity.application_name, '?'),
+                          date_trunc('second', now() - activity.xact_start)),
+                   '; ')
+            INTO holders
+            FROM pg_catalog.pg_locks held_lock
+            JOIN pg_catalog.pg_stat_activity activity
+              ON activity.pid = held_lock.pid
+           WHERE held_lock.relation IN (
+                   'case_law_decisions'::regclass,
+                   'case_law_provision_citations'::regclass
+                 )
+             AND held_lock.granted
+             AND activity.pid <> pg_backend_pid();
+          RAISE WARNING 'statute citation counts: attempt % could not lock corpus tables; holders: %',
+            attempts, coalesce(holders, 'none');
+        END IF;
+        PERFORM pg_sleep(1 + random() * 2);
+    END;
+  END LOOP;
+END
+$$;--> statement-breakpoint
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+
 CREATE TRIGGER "case_law_provision_citation_membership_insert"
 AFTER INSERT ON "case_law_provision_citations"
 FOR EACH ROW EXECUTE FUNCTION "sync_case_law_statute_citation_membership"();--> statement-breakpoint
