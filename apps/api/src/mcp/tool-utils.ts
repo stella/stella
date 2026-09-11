@@ -27,6 +27,7 @@ import type {
   InternalToolMcpPresentation,
   InternalToolResult,
   InternalToolSuccess,
+  RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 
 /**
@@ -388,11 +389,10 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * `structuredContent` for a success (MCP 2025-06-18 allows it without an
- * output schema): the payload object itself, so a client reads typed fields
- * instead of re-parsing `content[0].text`. A handler's own
- * `mcp.structuredContent` wins; a non-object payload (array, scalar) has no
- * structured form and is carried by the text content alone.
+ * `structuredContent` for a success. A Stella-owned static tool projects and
+ * validates through the same executable contract that generated its advertised
+ * `outputSchema`; dynamic gateway results without a Stella contract retain the
+ * legacy object mirror.
  *
  * An error result never carries it: `structuredContent` is the tool's output,
  * and the `{ error: … }` envelope is the absence of one. A client validating
@@ -401,16 +401,28 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
  */
 const successStructuredContent = (
   result: InternalToolSuccess,
+  outputContract: RuntimeMcpToolOutputContract | undefined,
 ): Record<string, unknown> | undefined => {
-  if (result.mcp?.structuredContent !== undefined) {
-    return result.mcp.structuredContent;
+  if (outputContract === undefined) {
+    return isJsonObject(result.data) ? result.data : undefined;
   }
-  return isJsonObject(result.data) ? result.data : undefined;
+  const projected = outputContract.project(result.data);
+  const parsed = v.safeParse(outputContract.outputSchemaSource, projected);
+  if (!parsed.success) {
+    return panic("MCP tool output violated its advertised contract", {
+      issues: parsed.issues,
+    });
+  }
+  if (!isJsonObject(parsed.output)) {
+    return panic("MCP tool output contract produced a non-object root");
+  }
+  return parsed.output;
 };
 
 /** Serialize a canonical Stella tool result at the external MCP boundary. */
 export const serializeToolResult = (
   result: InternalToolResult,
+  outputContract?: RuntimeMcpToolOutputContract,
 ): CallToolResult => {
   if (result.status === "success") {
     const serializedData = stringifyJson(result.data);
@@ -429,7 +441,7 @@ export const serializeToolResult = (
         content.push({ type: "text", text });
       }
     }
-    const structuredContent = successStructuredContent(result);
+    const structuredContent = successStructuredContent(result, outputContract);
     return {
       content,
       ...(structuredContent === undefined ? {} : { structuredContent }),

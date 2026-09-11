@@ -6,6 +6,7 @@ import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_SETS,
+  getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
@@ -115,9 +116,22 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // formats on the case-law range, measure 72_962 default and 23_790 anonymized.
 // Pin those exact sizes so future schema growth remains reviewable.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 72_962,
-  anonymized: 23_790,
+  // Output contracts add 40_809 chars across all 50 default tools after the
+  // shared safe-widening compactor; measured full payload: 114_571 chars.
+  default: 116_000,
+  // Output contracts add 26_511 chars across the 21-tool anonymized surface;
+  // measured full payload: 50_637 chars.
+  anonymized: 52_000,
 };
+
+const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
+  default: 42_000,
+  anonymized: 28_000,
+};
+
+// Largest measured schema is read_document at 3_434 chars. A single tool must
+// not consume an unreviewed multi-thousand-token block of every tools/list.
+const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
 
 // Longest description measured after plan 047: the template authoring tool at
 // 724 chars (~180 tokens), 807 after it documented the file transport. Ceiling
@@ -156,6 +170,19 @@ describe.each([...SURFACES])(
       expect(payloadChars).toBeLessThanOrEqual(
         TOOLS_LIST_PAYLOAD_CHAR_CEILING[mode],
       );
+    });
+
+    test("output schemas stay within total and per-tool budgets", () => {
+      let total = 0;
+      for (const tool of toMcpTools(definitions)) {
+        const chars = JSON.stringify(tool.outputSchema).length;
+        total += chars;
+        expect(
+          chars,
+          `Tool ${tool.name} output schema is ${chars} chars`,
+        ).toBeLessThanOrEqual(OUTPUT_SCHEMA_CHAR_CEILING);
+      }
+      expect(total).toBeLessThanOrEqual(OUTPUT_SCHEMA_TOTAL_CHAR_CEILING[mode]);
     });
 
     test("every tool description fits the per-tool character budget", () => {
@@ -452,8 +479,22 @@ describe("MCP static tool-set coherence", () => {
     for (const toolSet of DEFAULT_MCP_TOOL_SETS) {
       const definitionNames = toolSet.definitions.map((tool) => tool.name);
       const handlerNames = Object.keys(toolSet.handlers);
+      const outputNames = Object.keys(toolSet.outputs);
 
       expect(handlerNames.sort()).toEqual(definitionNames.sort());
+      expect(outputNames.sort()).toEqual(definitionNames.sort());
+    }
+  });
+
+  test("every static wire tool advertises its executable output contract", () => {
+    const tools = toMcpTools(DEFAULT_MCP_TOOL_DEFINITIONS);
+    for (const tool of tools) {
+      const contract = getStaticMcpToolOutputContract(tool.name);
+      expect(
+        contract,
+        `Missing output contract for ${tool.name}`,
+      ).toBeDefined();
+      expect(tool.outputSchema).toEqual(contract?.outputSchema);
     }
   });
 

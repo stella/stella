@@ -18,14 +18,14 @@ import {
 } from "@/api/handlers/playbooks/read";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
+import {
   DELETED_TRUE_PROJECTION,
-  LIST_CLAUSES_DETAIL_PROJECTION,
-  LIST_CLAUSES_LIST_PROJECTION,
+  type LIST_CLAUSES_DETAIL_PROJECTION,
+  type LIST_CLAUSES_LIST_PROJECTION,
   LIST_CLAUSES_PROJECTION,
-  LIST_CLAUSES_VERSION_PROJECTION,
-  LIST_PLAYBOOKS_DETAIL_PROJECTION,
-  LIST_PLAYBOOKS_LIST_PROJECTION,
+  type LIST_CLAUSES_VERSION_PROJECTION,
+  type LIST_PLAYBOOKS_DETAIL_PROJECTION,
+  type LIST_PLAYBOOKS_LIST_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
@@ -83,7 +83,10 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 type KnowledgeToolName =
   | "list_clauses"
@@ -1690,4 +1693,13 @@ export const KNOWLEDGE_TOOL_HANDLERS = {
 export const KNOWLEDGE_TOOL_SET = defineMcpToolSet(
   KNOWLEDGE_TOOL_DEFINITIONS,
   KNOWLEDGE_TOOL_HANDLERS,
+  {
+    delete_clause: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
+    list_clauses: defineChatProjectionMcpToolOutput(LIST_CLAUSES_PROJECTION),
+    list_playbooks: defineChatProjectionMcpToolOutput(
+      LIST_PLAYBOOKS_PROJECTION,
+    ),
+    run_playbook: defineChatProjectionMcpToolOutput(RUN_PLAYBOOK_PROJECTION),
+    save_clause: defineChatProjectionMcpToolOutput(SAVE_CLAUSE_PROJECTION),
+  },
 );

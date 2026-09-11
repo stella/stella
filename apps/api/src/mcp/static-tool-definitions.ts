@@ -18,6 +18,7 @@ import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import type {
   McpToolDefinition,
+  RuntimeMcpToolOutputContract,
   McpToolSet,
   ToolScope,
 } from "@/api/mcp/tool-types";
@@ -215,10 +216,17 @@ const MCP_TOOL_DEFINITION_MAPS = {
   ),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
+const MCP_TOOL_OUTPUT_CONTRACTS = new Map<string, RuntimeMcpToolOutputContract>(
+  DEFAULT_MCP_TOOL_SETS.flatMap((toolSet) => Object.entries(toolSet.outputs)),
+);
+
 export const getStaticMcpToolDefinition = (
   toolName: string,
   mode: McpMode = "default",
 ) => MCP_TOOL_DEFINITION_MAPS[mode].get(toolName);
+
+export const getStaticMcpToolOutputContract = (toolName: string) =>
+  MCP_TOOL_OUTPUT_CONTRACTS.get(toolName);
 
 export const listStaticMcpToolDefinitions = (
   mode: McpMode = "default",

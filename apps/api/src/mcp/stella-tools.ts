@@ -29,10 +29,10 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import type {
-  AssertNoExtraFields,
-  LIST_MATTERS_DETAIL_PROJECTION,
-  LIST_MATTERS_LIST_PROJECTION,
+import {
+  type AssertNoExtraFields,
+  type LIST_MATTERS_DETAIL_PROJECTION,
+  type LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
@@ -102,7 +102,10 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
@@ -1978,4 +1981,23 @@ export const STELLA_TOOL_HANDLERS = {
 export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,
   STELLA_TOOL_HANDLERS,
+  {
+    list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
+    read_case_law_decision: defineChatProjectionMcpToolOutput(
+      READ_CASE_LAW_DECISION_PROJECTION,
+    ),
+    read_contact: defineChatProjectionMcpToolOutput(READ_CONTACT_PROJECTION),
+    read_content_across_matters: defineChatProjectionMcpToolOutput(
+      READ_CONTENT_ACROSS_MATTERS_PROJECTION,
+    ),
+    search_across_matters: defineChatProjectionMcpToolOutput(
+      SEARCH_ACROSS_MATTERS_PROJECTION,
+    ),
+    search_case_law: defineChatProjectionMcpToolOutput(
+      SEARCH_CASE_LAW_PROJECTION,
+    ),
+    set_practice_jurisdictions: defineChatProjectionMcpToolOutput(
+      SET_PRACTICE_JURISDICTIONS_PROJECTION,
+    ),
+  },
 );

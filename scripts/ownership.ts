@@ -642,6 +642,24 @@ export const OWNERSHIP = [
       allowed: [],
     },
   },
+  {
+    id: "mcp-output-contracts",
+    capability:
+      "Binding first-party MCP handler results to structured content and advertised output schemas",
+    owner: [
+      "apps/api/src/mcp/tool-types.ts",
+      "apps/api/src/mcp/tool-utils.ts",
+      "apps/api/src/mcp/valibot-tool-definition.ts",
+      "apps/api/src/mcp/static-tool-definitions.ts",
+    ],
+    summary:
+      "Each static tool set supplies one Valibot output contract per handler. " +
+      "The shared factory derives the JSON Schema shown in tools/list, the " +
+      "tool-set type binds it to the handler result, and dispatch validates the " +
+      "post-egress projection before serving structuredContent. Explicit " +
+      "projectors keep dynamic results compact without changing legacy text output.",
+    enforcement: { kind: "none" },
+  },
 ] as const satisfies readonly OwnershipEntry[];
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));

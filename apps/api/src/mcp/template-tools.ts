@@ -13,13 +13,13 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
-  AssertNoExtraFields,
+import {
+  type AssertNoExtraFields,
   CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
   CREATE_TEMPLATE_PROJECTION,
-  LIST_TEMPLATES_LIST_PROJECTION,
+  type LIST_TEMPLATES_LIST_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
-  TEMPLATE_DESCRIBE_PROJECTION,
+  type TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import {
   buildAiConditionDecider,
@@ -135,7 +135,11 @@ import {
   uuidProp,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type TemplateToolName =
@@ -987,6 +991,68 @@ type TemplateFillCompletionGate =
   | { type: "allowed"; completionStatus: "complete" | "partial" }
   | { type: "rejected"; result: ReturnType<typeof structuredErrorResult> };
 
+const TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA = v.strictObject({
+  field: v.string(),
+  reason: v.string(),
+  message: v.string(),
+});
+
+const TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA = v.strictObject({
+  directive: v.string(),
+  message: v.string(),
+  paragraphIndex: v.pipe(v.number(), v.integer()),
+  source: v.optional(v.unknown()),
+});
+
+const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
+  v.strictObject({
+    completionStatus: v.picklist(["complete", "partial"]),
+    templateName: v.string(),
+    fileName: v.string(),
+    text: v.string(),
+    truncated: v.boolean(),
+    docxBase64: v.string(),
+    unmatchedPlaceholders: v.array(v.string()),
+    unusedValues: v.array(v.string()),
+    structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
+    aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
+  }),
+  v.strictObject({
+    completionStatus: v.picklist(["complete", "partial"]),
+    templateName: v.string(),
+    fileName: v.string(),
+    paragraphs: v.array(v.string()),
+    charCount: v.pipe(v.number(), v.integer()),
+    truncated: v.boolean(),
+    unmatchedPlaceholders: v.array(v.string()),
+    unusedValues: v.array(v.string()),
+    structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
+    aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
+  }),
+]);
+
+const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
+  v.strictObject({
+    action: v.literal("create_document"),
+    entityId: v.string(),
+    entityVersionId: v.string(),
+    fileName: v.string(),
+    unmatchedPlaceholders: v.array(v.string()),
+    unusedValues: v.array(v.string()),
+    aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
+  }),
+  v.strictObject({
+    action: v.literal("create_version"),
+    entityId: v.string(),
+    entityVersionId: v.string(),
+    fileName: v.string(),
+    unmatchedPlaceholders: v.array(v.string()),
+    unusedValues: v.array(v.string()),
+    aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
+    versionNumber: v.pipe(v.number(), v.integer()),
+  }),
+]);
+
 /**
  * The completion gate both fill tools run over renderer diagnostics. Owning it
  * here is what keeps the transient tool and the persisting one on one policy:
@@ -1122,7 +1188,9 @@ export const fillTemplateArgsSchema = nullAsAbsent(
   }),
 );
 
-const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
+const handleFillTemplateTool: McpToolHandler<
+  v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   const hasPermission = hasEffectiveAuthority(context, {
     template: ["use"],
   });
@@ -1426,10 +1494,9 @@ const validateFilledTemplateDestination = async ({
   return null;
 };
 
-const handleSaveFilledTemplateTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleSaveFilledTemplateTool: McpToolHandler<
+  v.InferInput<typeof SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(saveFilledTemplateArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -2623,4 +2690,19 @@ export const TEMPLATE_TOOL_HANDLERS = {
 export const TEMPLATE_TOOL_SET = defineMcpToolSet(
   TEMPLATE_TOOL_DEFINITIONS,
   TEMPLATE_TOOL_HANDLERS,
+  {
+    configure_template_fields: defineChatProjectionMcpToolOutput(
+      CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
+    ),
+    create_template: defineChatProjectionMcpToolOutput(
+      CREATE_TEMPLATE_PROJECTION,
+    ),
+    fill_template: defineMcpToolOutput(FILL_TEMPLATE_OUTPUT_SCHEMA),
+    list_templates: defineChatProjectionMcpToolOutput(
+      LIST_TEMPLATES_PROJECTION,
+    ),
+    save_filled_template: defineMcpToolOutput(
+      SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
+    ),
+  },
 );

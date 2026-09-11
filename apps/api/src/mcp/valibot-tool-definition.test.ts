@@ -2,10 +2,165 @@ import { describe, expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
-import { nullAsAbsent } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import type { McpToolHandler } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
+import { nullAsAbsent, toolDataResult } from "@/api/mcp/tool-utils";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineMcpToolOutput,
+  defineProjectedMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 describe("Valibot-backed MCP tool definitions", () => {
+  test("derives executable and wire output contracts from one schema", () => {
+    const outputSchema = v.strictObject({
+      id: v.string(),
+      count: v.pipe(v.number(), v.integer()),
+    });
+    const contract = defineMcpToolOutput(outputSchema);
+
+    expect(contract.outputSchemaSource).toBe(outputSchema);
+    expect(contract.outputSchema).toEqual({
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        count: { type: "integer" },
+      },
+      required: ["id", "count"],
+      additionalProperties: false,
+    });
+    expect(contract.outputSchema).not.toHaveProperty("$schema");
+  });
+
+  test("supports an explicit compact projection without changing its schema", () => {
+    const outputSchema = v.strictObject({ result: v.unknown() });
+    const contract = defineProjectedMcpToolOutput(outputSchema, (result) => ({
+      result,
+    }));
+
+    expect(contract.project([1, 2])).toEqual({ result: [1, 2] });
+    expect(contract.outputSchema).toEqual({
+      type: "object",
+      properties: { result: {} },
+      required: ["result"],
+      additionalProperties: false,
+    });
+  });
+
+  test("projects only the closed chat string-id custom vocabulary", () => {
+    const contract = defineChatProjectionMcpToolOutput(
+      v.strictObject({
+        matterId: v.custom<string>(
+          (value) => typeof value === "string",
+          "Expected a matter identifier",
+        ),
+      }),
+    );
+    expect(contract.outputSchema).toEqual({
+      type: "object",
+      properties: { matterId: { type: "string" } },
+      required: ["matterId"],
+      additionalProperties: false,
+    });
+
+    expect(() =>
+      defineChatProjectionMcpToolOutput(
+        v.strictObject({ score: v.custom<number>(() => true) }),
+      ),
+    ).toThrow('The "custom" schema cannot be converted to JSON Schema');
+  });
+
+  test("safely merges output object unions without dropping possible fields", () => {
+    const contract = defineMcpToolOutput(
+      v.union([
+        v.strictObject({ type: v.literal("left"), left: v.string() }),
+        v.strictObject({ type: v.literal("right"), right: v.number() }),
+      ]),
+    );
+
+    expect(contract.outputSchema).toEqual({
+      type: "object",
+      properties: {
+        type: {
+          anyOf: [
+            { enum: ["left"], type: "string" },
+            { enum: ["right"], type: "string" },
+          ],
+        },
+        left: { type: "string" },
+        right: { type: "number" },
+      },
+      required: ["type"],
+      additionalProperties: false,
+    });
+  });
+
+  test("keeps list-item fields visible while widening deeper object internals", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({
+        items: v.array(
+          v.strictObject({
+            id: v.string(),
+            details: v.strictObject({ value: v.string() }),
+          }),
+        ),
+      }),
+    );
+
+    expect(contract.outputSchema).toEqual({
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              details: { type: "object", additionalProperties: true },
+            },
+            required: ["id", "details"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["items"],
+      additionalProperties: false,
+    });
+  });
+
+  test("binds identity output schemas to their named handler result", () => {
+    const definition = defineValibotMcpTool({
+      access: "read",
+      annotations: {
+        title: "Read example",
+        destructiveHint: false,
+        openWorldHint: false,
+        readOnlyHint: true,
+      },
+      anonymized: { exposure: "passthrough" },
+      description: "Read an example.",
+      inputSchema: nullAsAbsent(v.strictObject({})),
+      name: "read_example",
+      scope: "stella:read",
+    });
+    const definitions = [definition] as const;
+    const outputs = {
+      read_example: defineMcpToolOutput(v.strictObject({ id: v.string() })),
+    };
+    const handlers = {
+      read_example: () => toolDataResult({ id: "example_1" }),
+    } satisfies Record<"read_example", McpToolHandler<{ id: string }>>;
+
+    defineMcpToolSet(definitions, handlers, outputs);
+
+    const mismatchedHandlers = {
+      read_example: () => toolDataResult({ count: 1 }),
+    } satisfies Record<"read_example", McpToolHandler<{ count: number }>>;
+    // @ts-expect-error -- the handler data must equal the named identity output contract.
+    defineMcpToolSet(definitions, mismatchedHandlers, outputs);
+  });
+
   test("derives the wire schema from the handler's strict runtime schema", () => {
     const inputSchema = nullAsAbsent(
       v.strictObject({

@@ -74,6 +74,16 @@ export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = nullAsAbsent(
   }),
 );
 
+export const UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA = v.strictObject({
+  type: v.literal("entity_version"),
+  entityId: v.string(),
+  entityVersionId: v.string(),
+  versionNumber: v.pipe(v.number(), v.integer()),
+  fileId: v.string(),
+  fileName: v.string(),
+  meta: v.optional(v.strictObject({ requestId: v.string() })),
+});
+
 export type UploadDocumentVersionInput = v.InferOutput<
   typeof UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA
 >;
@@ -259,7 +269,9 @@ export const uploadRemoteDocumentVersion = async ({
   entityId: string;
   file: UploadDocumentVersionInput["file"];
   workspaceId: string;
-}): Promise<McpToolResponse> => {
+}): Promise<
+  McpToolResponse<v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>>
+> => {
   const downloaded = await dependencies.download({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
     timeoutMs: 60_000,
@@ -346,11 +358,21 @@ export const uploadRemoteDocumentVersion = async ({
       }),
     },
   });
-  return finalized.status === "error"
-    ? finalized.result
-    : {
-        egress: "structured",
-        payload: finalized.payload,
-        textFields: [],
-      };
+  if (finalized.status === "error") {
+    return finalized.result;
+  }
+  const parsedFinalized = v.safeParse(
+    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
+    finalized.payload,
+  );
+  if (!parsedFinalized.success) {
+    return internalFailureResult(
+      new Error("uploads.update returned an invalid entity-version result"),
+    );
+  }
+  return {
+    egress: "structured",
+    payload: parsedFinalized.output,
+    textFields: [],
+  };
 };
