@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  DYNAMIC_TOOL_NAMESPACES,
+  dynamicToolNamespaceOf,
+  namespaceMcpToolName,
+  namespaceSkillToolName,
+} from "@/api/lib/mcp-upstream/namespace";
+import {
+  DYNAMIC_TOOL_FAMILY_POLICIES,
+  getDynamicMcpToolOutputContract,
+} from "@/api/mcp/gateway/dynamic-tool-policy";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_CASING_RULE, MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import {
@@ -9,6 +19,7 @@ import {
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { defineMcpToolOutput } from "@/api/mcp/valibot-tool-definition";
 
 /**
  * Deterministic registry-quality suite (plan 046, goal c). Everything here is
@@ -703,5 +714,73 @@ describe("destructive write-tool behavior", () => {
       .filter((tool) => tool.destructiveBehavior !== undefined)
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Dynamic tool families are resolved per account, so no static registry row
+ * can carry their contract. The family policy map is the registry instead:
+ * every namespaced family decides who owns its output contract, and a
+ * Stella-owned family's advertised schema must be derived from the executable
+ * source that validates its results at dispatch.
+ */
+describe("MCP dynamic tool-family coherence", () => {
+  const namespaces = Object.keys(DYNAMIC_TOOL_NAMESPACES);
+
+  test("every namespaced family has a policy and every policy names a family", () => {
+    expect(Object.keys(DYNAMIC_TOOL_FAMILY_POLICIES).sort()).toEqual(
+      namespaces.sort(),
+    );
+  });
+
+  test("the namespace census classifies every generated tool name", () => {
+    expect(
+      dynamicToolNamespaceOf(namespaceSkillToolName("summarize-c4ec37")),
+    ).toBe("skill");
+    expect(
+      dynamicToolNamespaceOf(
+        namespaceMcpToolName({ connectorSlug: "registry", toolName: "lookup" }),
+      ),
+    ).toBe("external_mcp");
+    expect(dynamicToolNamespaceOf("list_matters")).toBeUndefined();
+  });
+
+  test("every Stella-owned family derives its advertised schema from its runtime source", () => {
+    for (const policy of Object.values(DYNAMIC_TOOL_FAMILY_POLICIES)) {
+      if (policy.owner !== "stella") {
+        continue;
+      }
+      expect(policy.output.projection).toBe("identity");
+      expect(policy.output.outputSchema).toEqual(
+        defineMcpToolOutput(policy.output.outputSchemaSource).outputSchema,
+      );
+    }
+  });
+
+  test("every Stella-owned family is read-only, non-destructive and closed-world", () => {
+    for (const policy of Object.values(DYNAMIC_TOOL_FAMILY_POLICIES)) {
+      if (policy.owner !== "stella") {
+        continue;
+      }
+      expect(policy.annotations).toEqual({
+        destructiveHint: false,
+        openWorldHint: false,
+        readOnlyHint: true,
+      });
+    }
+  });
+
+  test("only Stella-owned families resolve an output contract by name", () => {
+    expect(
+      getDynamicMcpToolOutputContract(
+        namespaceSkillToolName("summarize-c4ec37"),
+      ),
+    ).toBe(DYNAMIC_TOOL_FAMILY_POLICIES.skill.output);
+    expect(
+      getDynamicMcpToolOutputContract(
+        namespaceMcpToolName({ connectorSlug: "registry", toolName: "lookup" }),
+      ),
+    ).toBeUndefined();
+    expect(getDynamicMcpToolOutputContract("list_matters")).toBeUndefined();
   });
 });

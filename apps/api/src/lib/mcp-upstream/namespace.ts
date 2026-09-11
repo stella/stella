@@ -1,11 +1,46 @@
-const MCP_TOOL_PREFIX = "mcp";
-const SKILL_TOOL_PREFIX = "skill";
+/**
+ * Every dynamically resolved tool family, keyed by the name prefix its tools
+ * carry on the wire. Policy maps over dynamic tools (output contracts,
+ * annotations, submission justifications) are keyed by this union, so a new
+ * family cannot be namespaced here without each decision being made.
+ */
+export const DYNAMIC_TOOL_NAMESPACES = {
+  external_mcp: "mcp",
+  skill: "skill",
+} as const;
+
+export type DynamicToolNamespace = keyof typeof DYNAMIC_TOOL_NAMESPACES;
+
+const NAMESPACE_SEPARATOR = "__";
+
+export const dynamicToolNamespacePrefix = (
+  namespace: DynamicToolNamespace,
+): string => `${DYNAMIC_TOOL_NAMESPACES[namespace]}${NAMESPACE_SEPARATOR}`;
+
+export const dynamicToolNamespaceOf = (
+  toolName: string,
+): DynamicToolNamespace | undefined => {
+  for (const namespace of Object.keys(DYNAMIC_TOOL_NAMESPACES)) {
+    if (
+      isDynamicToolNamespace(namespace) &&
+      toolName.startsWith(dynamicToolNamespacePrefix(namespace))
+    ) {
+      return namespace;
+    }
+  }
+  return undefined;
+};
+
+export const isDynamicToolNamespace = (
+  value: string,
+): value is DynamicToolNamespace =>
+  Object.hasOwn(DYNAMIC_TOOL_NAMESPACES, value);
 
 export const isExternalMcpToolName = (toolName: string): boolean =>
-  toolName.startsWith(`${MCP_TOOL_PREFIX}__`);
+  dynamicToolNamespaceOf(toolName) === "external_mcp";
 
 export const isSkillToolName = (toolName: string): boolean =>
-  toolName.startsWith(`${SKILL_TOOL_PREFIX}__`);
+  dynamicToolNamespaceOf(toolName) === "skill";
 
 export const sanitizeToolNamePart = (value: string): string => {
   const sanitized = value.replace(/[^a-zA-Z0-9_-]/gu, "_");
@@ -23,13 +58,15 @@ export const namespaceMcpToolName = ({
   toolName: string;
 }): string =>
   [
-    MCP_TOOL_PREFIX,
+    DYNAMIC_TOOL_NAMESPACES.external_mcp,
     sanitizeToolNamePart(connectorSlug),
     sanitizeToolNamePart(toolName),
-  ].join("__");
+  ].join(NAMESPACE_SEPARATOR);
 
 export const namespaceSkillToolName = (skillSlug: string): string =>
-  [SKILL_TOOL_PREFIX, sanitizeToolNamePart(skillSlug)].join("__");
+  [DYNAMIC_TOOL_NAMESPACES.skill, sanitizeToolNamePart(skillSlug)].join(
+    NAMESPACE_SEPARATOR,
+  );
 
 export const collisionSafeToolName = ({
   baseName,

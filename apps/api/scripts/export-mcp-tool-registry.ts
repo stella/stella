@@ -14,6 +14,10 @@
 import { panic } from "better-result";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import {
+  dynamicToolNamespacePrefix,
+  isDynamicToolNamespace,
+} from "@/api/lib/mcp-upstream/namespace";
 import { CHATGPT_APP_SUBMISSION_PROFILE } from "@/api/mcp/chatgpt-app-submission-profile";
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -23,6 +27,11 @@ import {
   STELLA_API_CONTRACT,
 } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import {
+  DYNAMIC_TOOL_FAMILY_POLICIES,
+  isStellaOwnedDynamicToolNamespace,
+  type StellaOwnedDynamicToolNamespace,
+} from "@/api/mcp/gateway/dynamic-tool-policy";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
@@ -212,6 +221,49 @@ const submissionTools = Object.fromEntries(
     ];
   }),
 );
+// Stella-owned dynamic tool families (skills) are exposed under per-account,
+// collision-safe names that no committed file can enumerate. The submission
+// schema keys `tools` by exact name and the review form matches a live scan
+// the same way, so a scanned dynamic tool cannot be matched from here. The
+// justification for every tool of a family is derived from the family policy
+// instead, under a namespace section the schema's open root permits; a
+// reviewer applies it to each scanned name carrying the family prefix.
+const DYNAMIC_TOOL_READ_ONLY_JUSTIFICATIONS = {
+  skill:
+    "Returns the stored instructions and metadata of one skill from the user’s private stella workspace without changing stored records.",
+} as const satisfies Record<StellaOwnedDynamicToolNamespace, string>;
+const submissionDynamicToolNamespaces = Object.fromEntries(
+  Object.keys(DYNAMIC_TOOL_READ_ONLY_JUSTIFICATIONS).flatMap((namespace) => {
+    if (
+      !isDynamicToolNamespace(namespace) ||
+      !isStellaOwnedDynamicToolNamespace(namespace)
+    ) {
+      return [];
+    }
+    const policy = DYNAMIC_TOOL_FAMILY_POLICIES[namespace];
+    return [
+      [
+        namespace,
+        {
+          tool_name_prefix: dynamicToolNamespacePrefix(namespace),
+          matching:
+            "Tool names under this prefix are account-specific and may carry a collision suffix; the submission form matches tools by exact name, so apply this entry to every scanned tool whose name starts with the prefix.",
+          annotations: {
+            readOnlyHint: policy.annotations.readOnlyHint,
+            openWorldHint: policy.annotations.openWorldHint,
+            destructiveHint: policy.annotations.destructiveHint,
+          },
+          justifications: {
+            read_only_justification:
+              DYNAMIC_TOOL_READ_ONLY_JUSTIFICATIONS[namespace],
+            open_world_justification: privateOpenWorldJustification,
+            destructive_justification: nonDestructiveJustification,
+          },
+        },
+      ],
+    ];
+  }),
+);
 const chatgptSubmissionPath = new URL(
   "../../../chatgpt-app-submission.json",
   import.meta.url,
@@ -225,6 +277,7 @@ await Bun.write(
       schema_version: 1,
       ...CHATGPT_APP_SUBMISSION_PROFILE,
       tools: submissionTools,
+      dynamic_tool_namespaces: submissionDynamicToolNamespaces,
     },
     null,
     2,

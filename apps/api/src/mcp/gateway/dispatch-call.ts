@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
@@ -100,6 +101,8 @@ export const dispatchGatewayToolCall = async ({
     toolName,
   });
 
+  // Bound to the family's shared output contract at compile time; dispatch
+  // validates the served value against the same Valibot source at runtime.
   return {
     type: "internal",
     result: toolDataResult({
@@ -110,6 +113,6 @@ export const dispatchGatewayToolCall = async ({
       name: skill.slug,
       origin: skill.origin,
       version: skill.version,
-    }),
+    } satisfies SkillToolOutput),
   };
 };

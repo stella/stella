@@ -22,6 +22,7 @@ import {
   getGatewayMcpToolDefinition,
   isMcpToolFeatureEnabled,
   listGatewayMcpToolDefinitions,
+  resolveMcpToolOutputContract,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
 import {
@@ -31,7 +32,6 @@ import {
 import {
   DEFAULT_MCP_TOOL_SETS,
   getStaticMcpToolDefinition,
-  getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpToolDefinition,
@@ -212,9 +212,23 @@ export const handleMcpToolCall = async ({
     toolName,
   });
   if (gatewayResult) {
-    return gatewayResult.type === "external_mcp"
-      ? gatewayResult.result
-      : serializeToolResult(gatewayResult.result);
+    if (gatewayResult.type === "external_mcp") {
+      return gatewayResult.result;
+    }
+    // A Stella-owned dynamic family (skills) serves through its shared
+    // contract exactly like a static tool: the projection is validated and a
+    // violation answers with the same internal_error envelope.
+    const serialized = Result.try({
+      try: () =>
+        serializeToolResult(
+          gatewayResult.result,
+          resolveMcpToolOutputContract(toolName),
+        ),
+      catch: (error) => error,
+    });
+    return Result.isError(serialized)
+      ? internalErrorResult(toolName, serialized.error)
+      : serialized.value;
   }
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
@@ -227,7 +241,7 @@ export const handleMcpToolCall = async ({
       }),
     );
   }
-  const outputContract = getStaticMcpToolOutputContract(toolName);
+  const outputContract = resolveMcpToolOutputContract(toolName);
   if (outputContract === undefined) {
     panic(`Static MCP tool is missing its output contract: ${toolName}`);
   }
@@ -358,16 +372,26 @@ export const handleMcpToolCall = async ({
     catch: (error) => error,
   });
   if (Result.isError(finished)) {
-    captureError(finished.error, { source: "mcp", toolName });
-    // Generic message: never leak internals to the caller. `captureError` keeps
-    // the real exception for observability.
-    return serializeToolResult(
-      structuredErrorResult({
-        code: "internal_error",
-        message: "Tool execution failed",
-        hint: MCP_INTERNAL_ERROR_HINT,
-      }),
-    );
+    return internalErrorResult(toolName, finished.error);
   }
   return finished.value;
+};
+
+/**
+ * The one envelope for a handler, egress, or output-contract failure. Generic
+ * message: never leak internals to the caller. `captureError` keeps the real
+ * exception for observability.
+ */
+const internalErrorResult = (
+  toolName: string,
+  error: unknown,
+): CallToolResult => {
+  captureError(error, { source: "mcp", toolName });
+  return serializeToolResult(
+    structuredErrorResult({
+      code: "internal_error",
+      message: "Tool execution failed",
+      hint: MCP_INTERNAL_ERROR_HINT,
+    }),
+  );
 };

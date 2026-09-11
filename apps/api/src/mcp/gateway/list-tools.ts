@@ -8,13 +8,19 @@ import {
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  getDynamicMcpToolOutputContract,
+  SKILL_TOOL_ANNOTATIONS,
+} from "@/api/mcp/gateway/dynamic-tool-policy";
+import {
   listGatewayExternalMcpTools,
   resolveGatewayExternalMcpTool,
 } from "@/api/mcp/gateway/external-tools";
+import type { ResolvedExternalMcpTool } from "@/api/mcp/gateway/external-tools";
 import {
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
+import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolOutputContract,
@@ -26,6 +32,7 @@ import type {
   McpToolFeatureFlag,
   McpToolInputSchema,
   McpToolAnnotations,
+  RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
@@ -196,46 +203,13 @@ export const listGatewayMcpToolDefinitions = async ({
 
   if (hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
-      definitions.push({
-        ...externalMcpToolAccess({
-          readOnlyHint: tool.cachedTool.readOnlyHint,
-          title: externalToolTitle({
-            connectorDisplayName: tool.connectorDisplayName,
-            rawName: tool.cachedTool.rawName,
-          }),
-        }),
-        anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
-        description: externalToolDescription({
-          connectorDisplayName: tool.connectorDisplayName,
-          description: tool.cachedTool.description,
-        }),
-        inputSchema: tool.cachedTool.inputSchema,
-        name: tool.cachedTool.exposedName,
-        scope: "stella:external_mcps",
-      });
+      definitions.push(externalToolDefinition(tool));
     }
   }
 
   if (hasGrantedScope(scopes, "stella:skills")) {
     for (const skill of await loadVisibleSkillTools({ context })) {
-      definitions.push({
-        access: "read",
-        annotations: {
-          title: toDynamicToolTitle(skill.name) || skill.exposedName,
-          destructiveHint: false,
-          openWorldHint: true,
-          readOnlyHint: true,
-        },
-        anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
-        description: skill.description,
-        inputSchema: {
-          type: "object",
-          properties: {},
-          additionalProperties: false,
-        },
-        name: skill.exposedName,
-        scope: "stella:skills",
-      });
+      definitions.push(skillToolDefinition(skill));
     }
   }
 
@@ -266,27 +240,9 @@ export const getGatewayMcpToolDefinition = async ({
       context,
       toolName,
     });
-    if (!externalTool) {
-      return undefined;
-    }
-
-    return {
-      ...externalMcpToolAccess({
-        readOnlyHint: externalTool.cachedTool.readOnlyHint,
-        title: externalToolTitle({
-          connectorDisplayName: externalTool.connectorDisplayName,
-          rawName: externalTool.cachedTool.rawName,
-        }),
-      }),
-      anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
-      description: externalToolDescription({
-        connectorDisplayName: externalTool.connectorDisplayName,
-        description: externalTool.cachedTool.description,
-      }),
-      inputSchema: externalTool.cachedTool.inputSchema,
-      name: externalTool.cachedTool.exposedName,
-      scope: "stella:external_mcps",
-    };
+    return externalTool === null
+      ? undefined
+      : externalToolDefinition(externalTool);
   }
 
   if (!isSkillToolName(toolName)) {
@@ -294,29 +250,75 @@ export const getGatewayMcpToolDefinition = async ({
   }
 
   const skill = await resolveSkillTool({ context, toolName });
-  if (!skill) {
-    return undefined;
-  }
-
-  return {
-    access: "read",
-    annotations: {
-      title: toDynamicToolTitle(skill.name) || skill.exposedName,
-      destructiveHint: false,
-      openWorldHint: true,
-      readOnlyHint: true,
-    },
-    anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
-    description: skill.description,
-    inputSchema: {
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    },
-    name: skill.exposedName,
-    scope: "stella:skills",
-  };
+  return skill === null ? undefined : skillToolDefinition(skill);
 };
+
+/**
+ * A third-party connector tool is served exactly as its upstream declared it:
+ * the cached input schema, the upstream read-only hint (trusted only when
+ * asserted), and no Stella output contract. The gateway relays its output as
+ * text, so no `outputSchema` is advertised on the upstream's behalf.
+ */
+export const externalToolDefinition = ({
+  cachedTool,
+  connectorDisplayName,
+}: Pick<
+  ResolvedExternalMcpTool,
+  "cachedTool" | "connectorDisplayName"
+>): McpToolDefinition => ({
+  ...externalMcpToolAccess({
+    readOnlyHint: cachedTool.readOnlyHint,
+    title: externalToolTitle({
+      connectorDisplayName,
+      rawName: cachedTool.rawName,
+    }),
+  }),
+  anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
+  description: externalToolDescription({
+    connectorDisplayName,
+    description: cachedTool.description,
+  }),
+  inputSchema: cachedTool.inputSchema,
+  name: cachedTool.exposedName,
+  scope: "stella:external_mcps",
+});
+
+/**
+ * Every skill tool is the same read of a stored skill, so one definition
+ * shape covers the family: the exposed name and title vary per skill, while
+ * the annotations and the output contract come from the family policy.
+ */
+export const skillToolDefinition = (
+  skill: ResolvedSkillTool,
+): McpToolDefinition => ({
+  access: "read",
+  annotations: {
+    ...SKILL_TOOL_ANNOTATIONS,
+    title: toDynamicToolTitle(skill.name) || skill.exposedName,
+  },
+  anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
+  description: skill.description,
+  inputSchema: {
+    type: "object",
+    properties: {},
+    additionalProperties: false,
+  },
+  name: skill.exposedName,
+  scope: "stella:skills",
+});
+
+/**
+ * The executable output contract a served tool name is bound to: a static
+ * tool's own contract, a Stella-owned dynamic family's shared contract, or
+ * none for a third-party connector tool, whose output is relayed as text.
+ * `tools/list` and dispatch both resolve through here so the advertised
+ * schema and the runtime validator cannot come from different sources.
+ */
+export const resolveMcpToolOutputContract = (
+  toolName: string,
+): RuntimeMcpToolOutputContract | undefined =>
+  getStaticMcpToolOutputContract(toolName) ??
+  getDynamicMcpToolOutputContract(toolName);
 
 type WireInputSchema = McpTool["inputSchema"];
 type WireValue = NonNullable<WireInputSchema["properties"]>[string];
@@ -395,7 +397,7 @@ export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
 ): McpTool[] =>
   definitions.map(({ _meta, annotations, description, inputSchema, name }) => {
-    const outputContract = getStaticMcpToolOutputContract(name);
+    const outputContract = resolveMcpToolOutputContract(name);
     return {
       ...(_meta === undefined ? {} : { _meta }),
       annotations,
