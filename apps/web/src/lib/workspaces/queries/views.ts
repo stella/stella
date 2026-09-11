@@ -36,16 +36,10 @@ export const viewsOptions = (workspaceId: string) =>
         .get({ fetch: { signal } });
       const views = unwrapEden(response);
 
-      // The one owner of per-view table state cleanup: every path that
-      // removes a view (this client, another, the CLI, MCP, or a delete
-      // while this browser was closed) ends in a fetch of this list, so
-      // reconciling here needs no component or mutation to remember to.
-      // The list is complete (`handlers/views/list.ts` is unfiltered and
-      // capped at the creation limit), so absence means deleted. Writing to
-      // a localStorage-backed store inside a query function is safe because
-      // protected routes are `ssr: false`: the loader prefetch never runs on
-      // the server. It runs after `unwrapEden`, so a failed fetch drops
-      // nothing.
+      // Every path that removes a view ends in a fetch of this list, so this
+      // is the one owner of per-view table state cleanup. The list is
+      // complete (`handlers/views/list.ts`), so absence means deleted. Safe
+      // in a query function because protected routes are `ssr: false`.
       useTableStore.getState().reconcileViews(
         workspaceId,
         views.map((view) => view.id),

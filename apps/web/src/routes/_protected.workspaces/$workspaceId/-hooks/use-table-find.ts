@@ -2,7 +2,6 @@ import { useMemo } from "react";
 
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import {
   resolveTableFind,
   UNRESTRICTED_FIND,
@@ -28,12 +27,11 @@ export const useTableFind = ({
   view: WorkspaceView<"table">;
   workspaceId: string;
 }): TableFindResolution => {
-  const viewRef = { workspaceId, viewId: view.id };
   const term = useTableStore(
-    (state) => getViewRecord(state.find, viewRef)?.submitted ?? "",
+    (state) => state.find[workspaceId]?.[view.id]?.submitted ?? "",
   );
   const selection = useTableStore(
-    (state) => getViewRecord(state.find, viewRef)?.scope ?? UNRESTRICTED_FIND,
+    (state) => state.find[workspaceId]?.[view.id]?.scope ?? UNRESTRICTED_FIND,
   );
   const { layout } = view;
 

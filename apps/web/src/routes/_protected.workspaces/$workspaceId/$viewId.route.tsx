@@ -46,7 +46,6 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import { windowIncludesAssignees } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import {
   resolveTableFind,
@@ -222,10 +221,7 @@ export const Route = createFileRoute(
         : ["folder", "task"];
       // A live find is part of the window's key: without it the layout would
       // suspend a second time on the window it actually reads.
-      const find = getViewRecord(useTableStore.getState().find, {
-        workspaceId,
-        viewId: activeView.id,
-      });
+      const find = useTableStore.getState().find[workspaceId]?.[activeView.id];
       const { request } = resolveTableFind({
         layout: activeView.layout,
         properties,

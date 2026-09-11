@@ -1,7 +1,6 @@
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 
 type UseSyncSelectedEntitiesInput = {
   workspaceId: string;
@@ -18,8 +17,8 @@ export const useSyncSelectedEntities = ({
   viewId,
   treeData,
 }: UseSyncSelectedEntitiesInput) => {
-  const rowSelection = useTableStore((state) =>
-    getViewRecord(state.rowSelection, { workspaceId, viewId }),
+  const rowSelection = useTableStore(
+    (state) => state.rowSelection[workspaceId]?.[viewId],
   );
   const setSelectedEntities = useTableStore(
     (state) => state.setSelectedEntities,

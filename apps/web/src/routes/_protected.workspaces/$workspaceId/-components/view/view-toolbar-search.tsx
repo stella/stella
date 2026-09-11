@@ -19,7 +19,6 @@ import type {
   TableFindSelection,
   TableViewRef,
 } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import {
   searchableColumnIds,
@@ -70,7 +69,7 @@ export const ViewToolbarSearch = ({
     findColumns: columns,
     schemaColumns: schema.columns,
   });
-  const find = useTableStore((state) => getViewRecord(state.find, viewRef));
+  const find = useTableStore((state) => state.find[workspaceId]?.[view.id]);
   const openFind = useTableStore((state) => state.openFind);
   const closeFind = useTableStore((state) => state.closeFind);
   const clearFind = useTableStore((state) => state.clearFind);

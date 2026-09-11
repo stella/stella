@@ -22,7 +22,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import {
@@ -228,10 +227,7 @@ export const WorkspaceTable = ({
     // the table store (never subscribed), so this table never re-renders as
     // that union grows during load.
     const preservableRowIds = viewId
-      ? getViewRecord(useTableStore.getState().preservableRowIds, {
-          workspaceId,
-          viewId,
-        })
+      ? useTableStore.getState().preservableRowIds[workspaceId]?.[viewId]
       : undefined;
     table.setRowSelection(
       getNextSelectAllRowSelection({

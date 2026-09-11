@@ -92,7 +92,6 @@ import {
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
@@ -125,8 +124,8 @@ export const ViewToolbar = ({
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
-  const selectedEntities = useTableStore((s) =>
-    getViewRecord(s.selectedEntities, { workspaceId, viewId: view.id }),
+  const selectedEntities = useTableStore(
+    (s) => s.selectedEntities[workspaceId]?.[view.id],
   );
   // Assignee sub-grouping needs a board scoped to tasks alone (see
   // kanban-view.logic.ts's `assigneeGroup`); a view admitting several kinds,
@@ -372,7 +371,7 @@ const TableContentModeControl = ({
   const t = useTranslations();
   const viewRef = { workspaceId, viewId };
   const mode = useTableStore(
-    (s) => getViewRecord(s.contentMode, viewRef) ?? "tight",
+    (s) => s.contentMode[workspaceId]?.[viewId] ?? "tight",
   );
   const setMode = useTableStore((s) => s.setContentMode);
 

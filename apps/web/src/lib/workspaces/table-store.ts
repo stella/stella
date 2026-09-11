@@ -11,12 +11,9 @@ import { immer } from "zustand/middleware/immer";
 import { writeStoredJson } from "@/lib/stored-json";
 import type { WorkspaceEntity } from "@/lib/types";
 import {
-  getViewRecord,
+  pruneMatterViews,
   readPersistedTableState,
-  reconcileMatterViews,
-  setViewRecord,
   TABLE_STORE_VERSION,
-  withoutViewRecord,
 } from "@/lib/workspaces/table-store.logic";
 import type {
   PersistedTableState,
@@ -63,6 +60,19 @@ export type TableFind = {
   typed: string;
 };
 
+const getViewRecord = <T>(
+  record: TableViewRecord<T>,
+  { workspaceId, viewId }: TableViewRef,
+): T | undefined => record[workspaceId]?.[viewId];
+
+const setViewRecord = <T>(
+  record: TableViewRecord<T>,
+  { workspaceId, viewId }: TableViewRef,
+  value: T,
+): void => {
+  (record[workspaceId] ??= {})[viewId] = value;
+};
+
 const selectedEntitiesEqual = (
   prev: readonly WorkspaceEntity[] | undefined,
   next: readonly WorkspaceEntity[],
@@ -91,11 +101,7 @@ const validatingStorage: PersistStorage<PersistedTableState> = {
   },
 };
 
-/**
- * Every per-view record, keyed by matter then view. The reconcile lists them
- * by name: a record added here without a line there is a compile error, not
- * a leak.
- */
+/** Every per-view record; `reconcileViews` must list each one. */
 type TableViewRecords = PersistedTableState & {
   rowSelection: TableViewRecord<RowSelectionState>;
   /**
@@ -142,12 +148,7 @@ type TableStore = TableViewRecords & {
   /** Submit what is typed: the readers requery it, and the marks follow. */
   submitFind: (ref: TableViewRef) => void;
   setFindScope: (ref: TableViewRef, scope: TableFindSelection) => void;
-  /**
-   * Drop every record of a view the matter no longer lists. Called from the
-   * views query, so any fetch of a matter's views (loader, switcher, a
-   * refetch after a delete here or elsewhere) is the one place cleanup
-   * happens. Only `liveViewIds`' matter is touched.
-   */
+  /** Drop every record of a view `workspaceId` no longer lists. */
   reconcileViews: (workspaceId: string, liveViewIds: readonly string[]) => void;
 };
 
@@ -228,7 +229,11 @@ export const useTableStore = create<TableStore>()(
 
       clearFind: (ref) => {
         set((state) => {
-          state.find = withoutViewRecord(state.find, ref);
+          state.find = pruneMatterViews(
+            state.find,
+            ref.workspaceId,
+            (viewId) => viewId !== ref.viewId,
+          );
         });
       },
 
@@ -262,35 +267,16 @@ export const useTableStore = create<TableStore>()(
       reconcileViews: (workspaceId, liveViewIds) => {
         set((state) => {
           const live = new Set(liveViewIds);
-          const next: TableViewRecords = {
-            columnSizing: reconcileMatterViews(
-              state.columnSizing,
-              workspaceId,
-              live,
-            ),
-            contentMode: reconcileMatterViews(
-              state.contentMode,
-              workspaceId,
-              live,
-            ),
-            rowSelection: reconcileMatterViews(
-              state.rowSelection,
-              workspaceId,
-              live,
-            ),
-            selectedEntities: reconcileMatterViews(
-              state.selectedEntities,
-              workspaceId,
-              live,
-            ),
-            preservableRowIds: reconcileMatterViews(
-              state.preservableRowIds,
-              workspaceId,
-              live,
-            ),
-            find: reconcileMatterViews(state.find, workspaceId, live),
-          };
-          Object.assign(state, next);
+          const keep = <T>(record: TableViewRecord<T>) =>
+            pruneMatterViews(record, workspaceId, (viewId) => live.has(viewId));
+          Object.assign(state, {
+            columnSizing: keep(state.columnSizing),
+            contentMode: keep(state.contentMode),
+            rowSelection: keep(state.rowSelection),
+            selectedEntities: keep(state.selectedEntities),
+            preservableRowIds: keep(state.preservableRowIds),
+            find: keep(state.find),
+          } satisfies TableViewRecords);
         });
       },
     })),

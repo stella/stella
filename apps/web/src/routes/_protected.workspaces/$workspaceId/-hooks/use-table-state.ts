@@ -15,7 +15,6 @@ import { useShallow } from "zustand/shallow";
 import type { WorkspaceView } from "@/lib/types";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import {
   createColumnOrderState,
   createColumnPinningState,
@@ -42,13 +41,13 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
 
   const storedColumnSizing = useTableStore(
     useShallow((s) => {
-      const sizing = getViewRecord(s.columnSizing, viewRef) ?? {};
+      const sizing = s.columnSizing[workspaceId]?.[viewId] ?? {};
       return omitUtilityColumnSizing(sizing);
     }),
   );
   const setStoredColumnSizing = useTableStore((s) => s.setColumnSizing);
   const contentMode = useTableStore(
-    (s) => getViewRecord(s.contentMode, viewRef) ?? "tight",
+    (s) => s.contentMode[workspaceId]?.[viewId] ?? "tight",
   );
   const setContentMode = useTableStore((s) => s.setContentMode);
   const [columnSizing, setColumnSizing] = useState(storedColumnSizing);
@@ -132,7 +131,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   };
 
   const rowSelection = useTableStore(
-    (s) => getViewRecord(s.rowSelection, viewRef) ?? EMPTY_ROW_SELECTION,
+    (s) => s.rowSelection[workspaceId]?.[viewId] ?? EMPTY_ROW_SELECTION,
   );
   const storeSetRowSelection = useTableStore((s) => s.setRowSelection);
 
