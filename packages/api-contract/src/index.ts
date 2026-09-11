@@ -138,6 +138,12 @@ export type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "./document-properties";
+export {
+  isVerificationCode,
+  VERIFICATION_CODE_ALPHABET,
+  VERIFICATION_CODE_LENGTH,
+  VERIFICATION_CODE_PATTERN,
+} from "./document-reference";
 export type { DocumentReferenceMatch } from "./document-reference";
 export {
   ENTITY_FIND_SCOPE_TYPES,

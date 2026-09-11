@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { VERIFICATION_CODE_PATTERN } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
@@ -25,7 +27,7 @@ import type {
  */
 const FORCE_CODE_SETTING = "stella_test.force_vcode";
 
-const VCODE_PATTERN = /^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u;
+const VCODE_RE = new RegExp(VERIFICATION_CODE_PATTERN, "u");
 
 let testDb: TestDatabase;
 const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
@@ -160,7 +162,7 @@ test("a verification-code collision is redrawn, and the row still lands", async 
 
   const verificationCode = stored.at(0)?.verificationCode;
   expect(verificationCode).not.toBe(takenCode);
-  expect(verificationCode).toMatch(VCODE_PATTERN);
+  expect(verificationCode).toMatch(VCODE_RE);
 });
 
 test("a code that can never be redrawn fails loudly rather than looping", async () => {

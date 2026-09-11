@@ -1,27 +1,24 @@
-/**
- * Alphabet for verification codes: lowercase alphanumeric
- * excluding ambiguous characters (0, O, 1, l, I).
- * 31 chars, 10-char length = 31^10 ~ 8.2 * 10^14 combinations.
- */
-
-const VCODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
-const VCODE_LENGTH = 10;
+import {
+  VERIFICATION_CODE_ALPHABET,
+  VERIFICATION_CODE_LENGTH,
+} from "@stll/api-contract";
 
 /** Rejection-sampling to avoid modulo bias (256 % 31 = 8). */
 const generateCode = (): string => {
+  const alphabetSize = VERIFICATION_CODE_ALPHABET.length;
   // eslint-disable-next-line no-bitwise -- bit-shift builds the rejection-sampling mask
-  const mask = (1 << Math.ceil(Math.log2(VCODE_ALPHABET.length))) - 1;
+  const mask = (1 << Math.ceil(Math.log2(alphabetSize))) - 1;
   const result: string[] = [];
-  while (result.length < VCODE_LENGTH) {
-    const bytes = new Uint8Array(VCODE_LENGTH * 2);
+  while (result.length < VERIFICATION_CODE_LENGTH) {
+    const bytes = new Uint8Array(VERIFICATION_CODE_LENGTH * 2);
     crypto.getRandomValues(bytes);
     for (const b of bytes) {
       // eslint-disable-next-line no-bitwise -- mask random byte to the alphabet bit-width
       const idx = b & mask;
-      if (idx < VCODE_ALPHABET.length) {
-        result.push(VCODE_ALPHABET.at(idx) ?? "");
+      if (idx < alphabetSize) {
+        result.push(VERIFICATION_CODE_ALPHABET.at(idx) ?? "");
       }
-      if (result.length === VCODE_LENGTH) {
+      if (result.length === VERIFICATION_CODE_LENGTH) {
         break;
       }
     }

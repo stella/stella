@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { isVerificationCode } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Loader, LoaderState } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
@@ -12,7 +13,6 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { isVerificationCode } from "@/lib/files/document-reference";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
