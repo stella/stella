@@ -24,8 +24,15 @@ export type ExternalDecisionCitationAnchor = {
   start: number;
 };
 
+const CJEU_DASH_CHARACTERS = "-‑–—­";
+
 const normalizeCjeuCaseNumber = (value: string): string =>
-  value.replace(/\s*[-‑–—­]\s*/u, "-");
+  Array.from(value, (character) => {
+    if (CJEU_DASH_CHARACTERS.includes(character)) {
+      return "-";
+    }
+    return character.trim() === "" ? "" : character;
+  }).join("");
 
 /** Bare Czech Collection citations, whether or not a provision precedes them. */
 export const locateCzechStatuteCitations = (

@@ -1,3 +1,4 @@
+-- Maintain exact case-law citation counts without request-time aggregation.
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 

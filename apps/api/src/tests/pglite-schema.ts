@@ -32,7 +32,7 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
 );
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20260911100000_statute_citation_counts",
+  "20260911150000_statute_citation_counts",
   "migration.sql",
 );
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [

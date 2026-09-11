@@ -421,8 +421,9 @@ const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
     const text = cell
       .text()
       .replaceAll(/\r\n?/gu, "\n")
-      .replaceAll(/[\t ]+\n/gu, "\n")
-      .replaceAll(/\n[\t ]+/gu, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .join("\n")
       .replaceAll(/\n{3,}/gu, "\n\n")
       .trim();
     if (text !== "") {

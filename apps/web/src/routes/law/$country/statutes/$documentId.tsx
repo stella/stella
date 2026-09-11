@@ -299,7 +299,7 @@ const StatuteReader = ({
   // the plain fulltext instead of blocks.
   const ast = statute ? parseDocumentAst(statute.documentAst) : null;
   const preparedReader = prepareStatuteReader({
-    blocks: ast?.blocks ?? [],
+    blocks: ast === null ? [] : ast.blocks,
     statuteTitle: header.title,
   });
   const blocks = preparedReader.blocks;

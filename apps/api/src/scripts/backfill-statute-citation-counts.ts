@@ -18,11 +18,8 @@ import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane
 const BATCH_SIZE = 500;
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
-let seededDecisions = 0;
-
-while (true) {
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each bounded transaction durably advances the replay cursor
-  const batch = await rootDb.transaction(async (tx) => {
+const seedCitationCountBatch = async () =>
+  await rootDb.transaction(async (tx) => {
     const [state] = await tx
       .select({
         cursorDecisionId: caseLawStatuteCitationCountState.cursorDecisionId,
@@ -112,6 +109,10 @@ while (true) {
     return { status: "advanced" as const, decisions: decisionRows.length };
   });
 
+let seededDecisions = 0;
+
+while (true) {
+  const batch = await seedCitationCountBatch();
   seededDecisions += batch.decisions;
   if (batch.status === "ready") {
     break;

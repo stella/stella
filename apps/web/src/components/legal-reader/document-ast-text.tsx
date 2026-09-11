@@ -524,7 +524,22 @@ const renderInlineChildren = ({
 
 const NO_ANCHORS: TextAnchor[] = [];
 const BARE_HTTP_URL_RE = /https?:\/\/[^\s<>"']+/giu;
-const BARE_URL_TRAILING_PUNCTUATION_RE = /[),.;:!?]+$/u;
+const BARE_URL_TRAILING_PUNCTUATION = "),.;:!?";
+
+const trimBareUrlPunctuation = (value: string): string => {
+  let end = value.length;
+  while (end > 0) {
+    const character = value.at(end - 1);
+    if (
+      character === undefined ||
+      !BARE_URL_TRAILING_PUNCTUATION.includes(character)
+    ) {
+      break;
+    }
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
 
 const bareUrlAnchors = (
   text: string,
@@ -534,7 +549,7 @@ const bareUrlAnchors = (
   const anchors: TextAnchor[] = [];
   for (const match of text.matchAll(BARE_HTTP_URL_RE)) {
     const start = initialOffset + match.index;
-    const url = match[0].replace(BARE_URL_TRAILING_PUNCTUATION_RE, "");
+    const url = trimBareUrlPunctuation(match[0]);
     const end = start + url.length;
     const safeHref = sanitizeHref(url);
     if (

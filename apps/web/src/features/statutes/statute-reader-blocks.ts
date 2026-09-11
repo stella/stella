@@ -166,7 +166,39 @@ const extractStatuteMasthead = (
 };
 
 const FOOTNOTE_ANCHOR_RE = /^ppc_(\d+)$/u;
-const FOOTNOTE_REFERENCE_RE = /\d+\)/gu;
+
+type FootnoteReference = {
+  label: string;
+  start: number;
+  text: string;
+};
+
+const isAsciiDigit = (character: string | undefined): boolean =>
+  character !== undefined && character >= "0" && character <= "9";
+
+const footnoteReferencesIn = (text: string): FootnoteReference[] => {
+  const references: FootnoteReference[] = [];
+  let start = 0;
+  while (start < text.length) {
+    if (!isAsciiDigit(text.at(start))) {
+      start += 1;
+      continue;
+    }
+    let end = start + 1;
+    while (isAsciiDigit(text.at(end))) {
+      end += 1;
+    }
+    if (text.at(end) === ")") {
+      references.push({
+        label: text.slice(start, end),
+        start,
+        text: text.slice(start, end + 1),
+      });
+    }
+    start = end + 1;
+  }
+  return references;
+};
 
 const noteLabelsFrom = (blocks: readonly Block[]): Set<string> => {
   const labels = new Set<string>();
@@ -201,9 +233,8 @@ const linkFootnoteMarkersInText = (
   const inlines: Inline[] = [];
   let cursor = 0;
 
-  for (const match of inline.text.matchAll(FOOTNOTE_REFERENCE_RE)) {
-    const start = match.index;
-    const label = match[0].slice(0, -1);
+  for (const reference of footnoteReferencesIn(inline.text)) {
+    const { label, start } = reference;
     const preceding = start > 0 ? inline.text.at(start - 1) : undefined;
     if (
       !noteLabels.has(label) ||
@@ -219,11 +250,11 @@ const linkFootnoteMarkersInText = (
       );
     }
     inlines.push({
-      children: [textInline(match[0], inline.anonymized)],
+      children: [textInline(reference.text, inline.anonymized)],
       href: `#ppc_${label}`,
       type: "link",
     });
-    cursor = start + match[0].length;
+    cursor = start + reference.text.length;
   }
 
   if (cursor === 0) {
