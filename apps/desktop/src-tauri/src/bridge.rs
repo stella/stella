@@ -19,12 +19,16 @@ use crate::types::{
 const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
+pub type RegistryNotifier = Arc<dyn Fn() + Send + Sync>;
+
 #[derive(Clone)]
 pub struct BridgeState {
   pub registry: crate::registry::RegistryState,
   pub manager: Arc<Mutex<SessionManager>>,
   pub static_allowed_origins: HashSet<String>,
   pub bridge_port: u16,
+  /// Runs after a registry handoff is stored so the panel can refresh.
+  pub notify_registry: RegistryNotifier,
 }
 
 async fn is_allowed_origin(state: &BridgeState, origin: Option<&str>) -> bool {
@@ -407,7 +411,10 @@ async fn registry_connect(
     .into_response();
   }
   match crate::registry::accept_handoff(&state.registry, origin_ref, body).await {
-    Ok(()) => json_response(StatusCode::OK, serde_json::json!({"connected":true}), origin.as_deref(), true).into_response(),
+    Ok(()) => {
+      (state.notify_registry)();
+      json_response(StatusCode::OK, serde_json::json!({"connected":true}), origin.as_deref(), true).into_response()
+    }
     Err(_) => json_response(StatusCode::BAD_REQUEST, serde_json::json!({"message":"Registry connection failed; reconnect from desktop"}), origin.as_deref(), true).into_response(),
   }
 }
@@ -471,12 +478,14 @@ pub async fn start_bridge(
   static_allowed_origins: HashSet<String>,
   manager: Arc<Mutex<SessionManager>>,
   registry: crate::registry::RegistryState,
+  notify_registry: RegistryNotifier,
 ) {
   let state = BridgeState {
     registry,
     manager,
     static_allowed_origins,
     bridge_port,
+    notify_registry,
   };
 
   let app = build_router(state);
@@ -522,6 +531,7 @@ mod tests {
       manager: Arc::new(Mutex::new(SessionManager::new())),
       static_allowed_origins: allowed,
       bridge_port: 0,
+      notify_registry: Arc::new(|| ()),
     }
   }
 

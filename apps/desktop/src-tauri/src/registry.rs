@@ -10,6 +10,11 @@ use tokio::sync::Mutex;
 
 use crate::commands::AppState;
 
+/// Emitted app-wide once a browser handoff has stored a registry credential.
+/// The clipboard panel never activates on a handoff, so it cannot rely on a
+/// focus event to notice the new connection.
+pub const CONNECTION_CHANGED_EVENT: &str = "registry-connection-changed";
+
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(300);

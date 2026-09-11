@@ -59,6 +59,7 @@ pub enum DesktopTelemetryOperation {
   ClipboardWindowOpen,
   ClipboardWindowHide,
   ClipboardShortcutRegister,
+  RegistryConnectionSubscribe,
 }
 
 impl DesktopTelemetryOperation {
@@ -81,6 +82,7 @@ impl DesktopTelemetryOperation {
       Self::ClipboardWindowOpen => "clipboardWindowOpen",
       Self::ClipboardWindowHide => "clipboardWindowHide",
       Self::ClipboardShortcutRegister => "clipboardShortcutRegister",
+      Self::RegistryConnectionSubscribe => "registryConnectionSubscribe",
     }
   }
 }

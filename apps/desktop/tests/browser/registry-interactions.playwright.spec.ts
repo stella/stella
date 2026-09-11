@@ -405,6 +405,67 @@ test("retains the explicitly requested query across browser sign-in and native f
   ).toBeVisible();
 });
 
+test("refreshes the connection when the bridge stores a browser handoff", async ({
+  page,
+}) => {
+  await openClipboard(page, { status: "disconnected" });
+  await activateRegistry(page, "Requested company");
+  await page
+    .getByRole("button", {
+      name: enMessages.clipboard.registryConnect,
+      exact: true,
+    })
+    .click();
+  await page.evaluate(() => {
+    const complete: unknown = Reflect.get(
+      window,
+      "__STELLA_COMPLETE_SIGN_IN__",
+    );
+    if (typeof complete !== "function") {
+      throw new TypeError("Sign-in completion fixture is missing");
+    }
+    complete();
+    const invocations: unknown = Reflect.get(
+      window,
+      "__STELLA_REGISTRY_INVOCATIONS__",
+    );
+    if (!Array.isArray(invocations)) {
+      throw new TypeError("Registry invocation fixture is missing");
+    }
+    const subscription = invocations.findLast(
+      (entry: { args: Record<string, unknown>; command: string }) =>
+        entry.command === "plugin:event|listen" &&
+        entry.args["event"] === "registry-connection-changed",
+    );
+    const id = subscription?.args["handler"];
+    if (typeof id !== "number") {
+      throw new TypeError("Registry connection listener is not installed");
+    }
+    const internals: unknown = Reflect.get(window, "__TAURI_INTERNALS__");
+    const callbacks =
+      typeof internals === "object" && internals !== null
+        ? Reflect.get(internals, "callbacks")
+        : undefined;
+    if (!(callbacks instanceof Map)) {
+      throw new TypeError("Tauri callback registry is missing");
+    }
+    callbacks.get(id)?.({
+      event: "registry-connection-changed",
+      id,
+      payload: null,
+    });
+  });
+  await expect
+    .poll(async () => await searches(page))
+    .toContainEqual({
+      command: "registry_search",
+      args: { query: "Requested company", registry: "ares" },
+    });
+  await expect(
+    page.getByRole("heading", { name: "Stella Example s.r.o." }),
+  ).toBeVisible();
+});
+
 test("registry chooser owns its arrow keys and Escape without closing the clipboard", async ({
   page,
 }) => {

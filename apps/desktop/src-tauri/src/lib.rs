@@ -320,8 +320,21 @@ pub fn run() {
       // Spawn HTTP bridge server
       {
         let manager_for_bridge = Arc::clone(&manager);
+        let bridge_app = handle.clone();
+        let notify_registry: bridge::RegistryNotifier = Arc::new(move || {
+          if let Err(error) = bridge_app.emit(registry::CONNECTION_CHANGED_EVENT, ()) {
+            tracing::warn!(error = %error, "registry connection event was not delivered");
+          }
+        });
         tauri::async_runtime::spawn(async move {
-          bridge::start_bridge(bridge_port, allowed_origins, manager_for_bridge, registry).await;
+          bridge::start_bridge(
+            bridge_port,
+            allowed_origins,
+            manager_for_bridge,
+            registry,
+            notify_registry,
+          )
+          .await;
         });
       }
 

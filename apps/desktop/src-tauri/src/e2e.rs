@@ -105,6 +105,7 @@ async fn spawn_test_bridge_with_origins(
     static_allowed_origins,
     manager.clone(),
     Arc::new(Mutex::new(crate::registry::RegistryConnection::default())),
+    Arc::new(|| ()),
   ));
 
   let bridge = TestBridge {

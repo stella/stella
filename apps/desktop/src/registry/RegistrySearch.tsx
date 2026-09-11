@@ -25,7 +25,18 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
+import {
+  DESKTOP_TELEMETRY_ERROR_CODES,
+  DESKTOP_TELEMETRY_OPERATIONS,
+  DESKTOP_TELEMETRY_WINDOWS,
+  reportDesktopError,
+} from "../telemetry/desktop-telemetry";
+
 const SEARCH_DEBOUNCE_MS = 300;
+// Emitted by the native bridge once a browser handoff stored a credential;
+// the non-activating panel gets no focus event to notice it otherwise.
+const CONNECTION_CHANGED_EVENT = "registry-connection-changed";
 
 type Connection =
   | { status: "disconnected" }
@@ -141,10 +152,24 @@ export const RegistrySearch = ({
     };
     refresh();
     window.addEventListener("focus", refresh);
+    const stopListening = subscribeDesktopEvent({
+      event: CONNECTION_CHANGED_EVENT,
+      handler: refresh,
+      // Focus still refreshes the panel, so a lost subscription only delays
+      // the update; record it rather than surface it.
+      onError: () => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.registryConnectionSubscribe,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+      },
+    });
     return () => {
       disposed = true;
       generation.current += 1;
       window.removeEventListener("focus", refresh);
+      stopListening();
     };
   }, [connectionError]);
 

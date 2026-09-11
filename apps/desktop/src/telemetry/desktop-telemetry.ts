@@ -20,6 +20,7 @@ export const DESKTOP_TELEMETRY_OPERATIONS = {
   clipboardHistorySubscribe: "clipboardHistorySubscribe",
   clipboardHistoryUpdate: "clipboardHistoryUpdate",
   clipboardWindowHide: "clipboardWindowHide",
+  registryConnectionSubscribe: "registryConnectionSubscribe",
   render: "render",
   runtime: "runtime",
 } as const;
