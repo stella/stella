@@ -61,7 +61,7 @@
         "@hyzyla/pdfium": "2.1.13",
         "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
         "@libpdf/core": "catalog:",
-        "@litko/yara-x": "^0.7.1",
+        "@litko/yara-x": "^0.7.2",
         "@modelcontextprotocol/server": "2.0.0",
         "@opentelemetry/api-logs": "^0.222.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
@@ -1893,19 +1893,19 @@
 
     "@lifeomic/attempt": ["@lifeomic/attempt@3.1.0", "", {}, "sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw=="],
 
-    "@litko/yara-x": ["@litko/yara-x@0.7.1", "", { "optionalDependencies": { "@litko/yara-x-darwin-arm64": "0.7.1", "@litko/yara-x-darwin-x64": "0.7.1", "@litko/yara-x-linux-arm64-gnu": "0.7.1", "@litko/yara-x-linux-x64-gnu": "0.7.1", "@litko/yara-x-win32-arm64-msvc": "0.7.1", "@litko/yara-x-win32-x64-msvc": "0.7.1" } }, "sha512-UhFmplVeX1aYqlqZsRUUsTDhnhMPpW65MVD/r3fkia4cBexuYYFeKN/nEVwymOkxJSQUsbFLmmOu5MBmZZBKWA=="],
+    "@litko/yara-x": ["@litko/yara-x@0.7.2", "", { "optionalDependencies": { "@litko/yara-x-darwin-arm64": "0.7.2", "@litko/yara-x-darwin-x64": "0.7.2", "@litko/yara-x-linux-arm64-gnu": "0.7.2", "@litko/yara-x-linux-x64-gnu": "0.7.2", "@litko/yara-x-win32-arm64-msvc": "0.7.2", "@litko/yara-x-win32-x64-msvc": "0.7.2" } }, "sha512-ujOkWiP0M4xuzUK+gNCGwWk3JYcsaBXywVfS51IpyVbLjtYf0euI4qlHWMIBlIfte2h6hgZn+EXylhPYIDfuhA=="],
 
-    "@litko/yara-x-darwin-arm64": ["@litko/yara-x-darwin-arm64@0.7.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-6UKT/cVNDeRa1xSrAcS6ImxHpbXsST+2gbxYiygRBI/uCyAs1SrDCKeDCzvpfaai0eielsy+Bjz9y7O+KnMc/w=="],
+    "@litko/yara-x-darwin-arm64": ["@litko/yara-x-darwin-arm64@0.7.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-LONwy0HoVl9n9vdmoQkGy+w6lKA0RTSlzmOTubgEAfWrrzna57eBZmORuvlAGZ490k0qw0SRZ0bhEqFFCF9oXA=="],
 
-    "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.7.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-AP+iwg675nPgVQIJHr5BakOfl6lhC+q6roVAfkRjHSqefZjIKaheGEFr/cr9bm4fjND7Km3wTAPiwNJxqTZ08w=="],
+    "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.7.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-bF9lZNZTb7cZjJHUl8ZTIedFI+vIwCx0krsFLNwo38OvaTGxV7uBmVlnA35razx1VgE/LFySBknBa11niQ6Oiw=="],
 
-    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.7.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-sae3btehDvCLYEa9aYgd3gpT8CtJcMd4Ak0v1gSFUefMkXqvUDzfxPl+bwp6PD2p1Fi7OGcZVCNlrzKyL4AsOw=="],
+    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.7.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-zZrZcHjY+Gs0TN3r/pInTABYQDw9bkr3iVkpO0TxYxA7IIqivnk84QAXfG0bzPSA9l8aTIMhzUt96HXtBFxu7Q=="],
 
-    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.7.1", "", { "os": "linux", "cpu": "x64" }, "sha512-J6XKNFE0KN4MZj3c9wggqJ6yCyd0nd6OFhgqe2prkjogXE21Oy0fYtsynPuylDHRsdckzwTIDzs/3g0SVoyg7w=="],
+    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.7.2", "", { "os": "linux", "cpu": "x64" }, "sha512-Z5IAxSe0FNf90LFLZz8F0WCQVJSsYvXDD9xiW5THBpsg/5WI2toAqNppKO0xv8fq4K26ft+H4X7LZT1SlenZ6g=="],
 
-    "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.7.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-n5pAFjcWZEBVj/8FZ1aXH5M65X8BNNdKvgSjUrdHpkiMpCG7Voauzxo5Q0gavlt75sVUGqQ4kBjMhiqPJhCJFg=="],
+    "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.7.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-KwfYmJmPu2uJruyjQ+xyMXC6wLa5+et4hL9pmWS67u3tD3UyUCLQIoigL/OPMHEZRnDgFi0sSBgiVvjsw1qbYg=="],
 
-    "@litko/yara-x-win32-x64-msvc": ["@litko/yara-x-win32-x64-msvc@0.7.1", "", { "os": "win32", "cpu": "x64" }, "sha512-ePw5oaQDWpFINL2nQllbkqtlSrmoJPK9jJKXZ6/Tkiw8naG+qfgpjRARhEPPZfXroU6rS3XroMCRVsQKklAI1g=="],
+    "@litko/yara-x-win32-x64-msvc": ["@litko/yara-x-win32-x64-msvc@0.7.2", "", { "os": "win32", "cpu": "x64" }, "sha512-r9ly4ext6JliInkyXEfdU0aCA64SvpOEq2V7A7n5uQkzXSkakpGskCQZTcDCOyvqTEHFMyNU5e4XEBWWgPbFdA=="],
 
     "@manypkg/find-root": ["@manypkg/find-root@3.1.0", "", { "dependencies": { "@manypkg/tools": "^2.1.0" } }, "sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA=="],
 
