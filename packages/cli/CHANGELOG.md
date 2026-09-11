@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.10
+
+### Patch Changes
+
+- [#3233](https://github.com/stella/stella/pull/3233) [`188b614`](https://github.com/stella/stella/commit/188b6147a2d9f4933011b850461c89885a291e74) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove source-language input from document translation commands so translation engines infer it from the document.
+
 ## 1.2.9
 
 ### Patch Changes
