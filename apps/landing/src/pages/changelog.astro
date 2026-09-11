@@ -170,6 +170,7 @@ const formatReleaseDate = (publishedAt: string) =>
                       id={release.slug}
                       class="changelog-entry changelog-patch-release rounded-lg"
                       data-static-release
+                      open
                     >
                       <summary class="changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6">
                         <span
@@ -868,7 +869,9 @@ const formatReleaseDate = (publishedAt: string) =>
       const details = document.createElement("details");
       details.id = releaseAnchorId(release.tag_name);
       details.className = "changelog-entry changelog-patch-release rounded-lg";
-      details.open = decodeURIComponent(window.location.hash.slice(1)) === details.id;
+      // A patch that carries real notes reads like any other release; only
+      // maintenance groups start collapsed.
+      details.open = true;
 
       const summary = document.createElement("summary");
       summary.className =
