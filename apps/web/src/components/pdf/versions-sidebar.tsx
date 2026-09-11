@@ -753,7 +753,7 @@ const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
 // Keys the surrounding menu keeps: Escape closes it and the arrows move
 // between items. Every other key, Enter included, stays in the field so the
 // menu's typeahead cannot eat the typed label and Enter submits the form.
-const MENU_OWNED_KEYS = new Set(["Escape", "ArrowDown", "ArrowUp"]);
+const MENU_OWNED_KEYS = ["Escape", "ArrowDown", "ArrowUp"] as const;
 
 // Uncontrolled custom-label field (the form action reads it via FormData). It
 // is free text in any language, so resolve direction from the typed content
@@ -773,7 +773,7 @@ const VersionLabelInput = ({ placeholder }: { placeholder: string }) => {
       name="customLabel"
       onChange={(event) => labelDir.trackValue(event.currentTarget.value)}
       onKeyDown={(event) => {
-        if (!MENU_OWNED_KEYS.has(event.key)) {
+        if (!MENU_OWNED_KEYS.some((key) => key === event.key)) {
           event.stopPropagation();
         }
       }}
