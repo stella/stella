@@ -51,9 +51,7 @@ import {
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
-  canDownloadScrubbed,
-  getDownloadRenditions,
-  type DownloadRendition,
+  getEntityFileDownloadRenditions,
   type DownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import {
@@ -286,54 +284,6 @@ const getFileTabEntityState = ({
     resolvedEmailChatMode,
     shouldSurfaceEmailResolutionError,
   };
-};
-
-/**
- * The alternative copies the header's Download menu offers. The entity read
- * resolves every input the policy needs — the field's encryption, size,
- * stored PDF conversion, and the reference frozen onto the current version —
- * so an unread entity offers nothing rather than an action that fails at the
- * click. `getDownloadRenditions` owns the policy, shared with the row menu.
- */
-const getFileTabDownloadRenditions = ({
-  entityData,
-  tab,
-}: {
-  entityData:
-    | {
-        currentVersionReference: string | null;
-        fields: {
-          content: {
-            encrypted?: boolean | undefined;
-            mimeType?: string | undefined;
-            pdfFileId?: string | null | undefined;
-            sizeBytes?: number | undefined;
-            type: string;
-          };
-          id: string;
-        }[];
-      }
-    | undefined;
-  tab: FileTabPanelProps["tab"];
-}): readonly DownloadRendition[] => {
-  const field = entityData?.fields.find((candidate) => candidate.id === tab.id);
-  const content = field?.content.type === "file" ? field.content : undefined;
-  const encrypted = content?.encrypted;
-  const mimeType = content?.mimeType;
-  const sizeBytes = content?.sizeBytes;
-
-  return getDownloadRenditions({
-    canScrub:
-      encrypted !== undefined &&
-      mimeType !== undefined &&
-      sizeBytes !== undefined &&
-      canDownloadScrubbed({ encrypted, mimeType, sizeBytes }),
-    currentVersionReference: entityData?.currentVersionReference,
-    encrypted,
-    hasPdfConversion:
-      (content?.pdfFileId ?? null) !== null && mimeType !== PDF_MIME,
-    mimeType,
-  });
 };
 
 const getEmailAttachmentState = ({
@@ -575,9 +525,9 @@ export const FileTabPanel = ({
     needsPropertyResolution,
     tab,
   });
-  const downloadRenditions = getFileTabDownloadRenditions({
+  const downloadRenditions = getEntityFileDownloadRenditions({
     entityData: entityQuery.data,
-    tab,
+    fieldId: tab.id,
   });
   const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
     string | null

@@ -2226,7 +2226,6 @@ type Messages = {
       "replaceText": "Replacement text";
       "wholeWords": "Whole words";
     };
-    "finishEditing": "Finish editing";
     "fontColor": "Font color";
     "fontGroup": "Font";
     "fontSize": "Font size";

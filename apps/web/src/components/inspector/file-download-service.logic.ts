@@ -3,7 +3,7 @@ import {
   hasDocumentProperties,
 } from "@stll/api-contract";
 
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 
 /**
  * The alternative copies of a file the app can build, in the order they are
@@ -78,6 +78,57 @@ export const canDownloadScrubbed = (file: {
   !file.encrypted &&
   file.sizeBytes <= DOCUMENT_PROPERTIES_MAX_BYTES &&
   hasDocumentProperties(file.mimeType);
+
+/**
+ * The one owner of which renditions this entity's file field can be downloaded
+ * as, shared by the inspector header and the document route toolbar. The
+ * entity read resolves every input the policy needs — the field's encryption,
+ * size, stored PDF conversion, and the reference frozen onto the current
+ * version — so an unread entity offers nothing rather than an action that
+ * fails at the click.
+ */
+export const getEntityFileDownloadRenditions = ({
+  entityData,
+  fieldId,
+}: {
+  entityData:
+    | {
+        currentVersionReference: string | null;
+        fields: {
+          content: {
+            encrypted?: boolean | undefined;
+            mimeType?: string | undefined;
+            pdfFileId?: string | null | undefined;
+            sizeBytes?: number | undefined;
+            type: string;
+          };
+          id: string;
+        }[];
+      }
+    | undefined;
+  fieldId: string;
+}): readonly DownloadRendition[] => {
+  const field = entityData?.fields.find(
+    (candidate) => candidate.id === fieldId,
+  );
+  const content = field?.content.type === "file" ? field.content : undefined;
+  const encrypted = content?.encrypted;
+  const mimeType = content?.mimeType;
+  const sizeBytes = content?.sizeBytes;
+
+  return getDownloadRenditions({
+    canScrub:
+      encrypted !== undefined &&
+      mimeType !== undefined &&
+      sizeBytes !== undefined &&
+      canDownloadScrubbed({ encrypted, mimeType, sizeBytes }),
+    currentVersionReference: entityData?.currentVersionReference,
+    encrypted,
+    hasPdfConversion:
+      (content?.pdfFileId ?? null) !== null && mimeType !== PDF_MIME,
+    mimeType,
+  });
+};
 
 export const getPdfDownloadFileName = (fileName: string): string => {
   const dotIndex = fileName.lastIndexOf(".");
