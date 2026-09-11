@@ -14,11 +14,11 @@ Project: root
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.2.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 2.2.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-live-region 2.1.0 — Apache-2.0
-- @aws-sdk/client-cloudwatch 3.1126.0 — Apache-2.0
-- @aws-sdk/client-s3 3.1126.0 — Apache-2.0
-- @aws-sdk/client-sesv2 3.1126.0 — Apache-2.0
-- @aws-sdk/client-sts 3.1126.0 — Apache-2.0
-- @aws-sdk/s3-request-presigner 3.1126.0 — Apache-2.0
+- @aws-sdk/client-cloudwatch 3.1127.0 — Apache-2.0
+- @aws-sdk/client-s3 3.1127.0 — Apache-2.0
+- @aws-sdk/client-sesv2 3.1127.0 — Apache-2.0
+- @aws-sdk/client-sts 3.1127.0 — Apache-2.0
+- @aws-sdk/s3-request-presigner 3.1127.0 — Apache-2.0
 - @base-ui/react 1.7.0 — MIT
 - @better-auth/api-key 1.7.1 — MIT
 - @better-auth/oauth-provider 1.7.1 — MIT
@@ -85,21 +85,21 @@ Project: root
 - @tanstack/react-table-devtools 9.2.0 — MIT
 - @tanstack/react-virtual 3.14.10 — MIT
 - @tauri-apps/api 2.11.1 — Apache-2.0 OR MIT
-- @tiptap/core 3.31.2 — MIT
-- @tiptap/extension-bold 3.31.2 — MIT
-- @tiptap/extension-document 3.31.2 — MIT
-- @tiptap/extension-hard-break 3.31.2 — MIT
-- @tiptap/extension-heading 3.31.2 — MIT
-- @tiptap/extension-history 3.31.2 — MIT
-- @tiptap/extension-italic 3.31.2 — MIT
-- @tiptap/extension-list 3.31.2 — MIT
-- @tiptap/extension-mention 3.31.2 — MIT
-- @tiptap/extension-paragraph 3.31.2 — MIT
-- @tiptap/extension-placeholder 3.31.2 — MIT
-- @tiptap/extension-text 3.31.2 — MIT
-- @tiptap/pm 3.31.2 — MIT
-- @tiptap/react 3.31.2 — MIT
-- @tiptap/suggestion 3.31.2 — MIT
+- @tiptap/core 3.31.3 — MIT
+- @tiptap/extension-bold 3.31.3 — MIT
+- @tiptap/extension-document 3.31.3 — MIT
+- @tiptap/extension-hard-break 3.31.3 — MIT
+- @tiptap/extension-heading 3.31.3 — MIT
+- @tiptap/extension-history 3.31.3 — MIT
+- @tiptap/extension-italic 3.31.3 — MIT
+- @tiptap/extension-list 3.31.3 — MIT
+- @tiptap/extension-mention 3.31.3 — MIT
+- @tiptap/extension-paragraph 3.31.3 — MIT
+- @tiptap/extension-placeholder 3.31.3 — MIT
+- @tiptap/extension-text 3.31.3 — MIT
+- @tiptap/pm 3.31.3 — MIT
+- @tiptap/react 3.31.3 — MIT
+- @tiptap/suggestion 3.31.3 — MIT
 - @valibot/to-json-schema 1.7.1 — MIT
 - @volar/typescript 2.4.28 — MIT
 - @vscode/diff 0.0.2-0 — MIT
@@ -123,7 +123,7 @@ Project: root
 - elysia 1.4.30 — MIT
 - entities 8.0.0 — BSD-2-Clause
 - expect-type 1.4.0 — Apache-2.0
-- expo-router 57.0.18 — MIT
+- expo-router 57.0.19 — MIT
 - expo-status-bar 57.0.1 — MIT
 - fast-check 4.9.0 — MIT
 - franc 6.2.0 — MIT
@@ -131,16 +131,16 @@ Project: root
 - input-otp 1.5.0 — MIT
 - ioredis 6.0.0 — MIT
 - ip-address 10.7.0 — MIT
-- jose 6.2.10 — MIT
+- jose 6.2.11 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - katex 0.18.5 — MIT
 - lucide-react 1.39.0 — ISC
-- nodemailer 9.1.1 — MIT-0
+- nodemailer 10.0.0 — MIT-0
 - onnxruntime-node 1.29.0 — MIT
 - oxc-transform-react 0.145.0 — MIT
 - pdfjs-dist 6.3.289 — Apache-2.0
 - postal-mime 3.0.0 — MIT-0
-- posthog-js 1.426.2 — (Apache-2.0 AND MIT)
+- posthog-js 1.427.2 — (Apache-2.0 AND MIT)
 - posthog-node 5.51.6 — MIT
 - prism-react-renderer 2.4.1 — MIT
 - prosemirror-commands 1.7.2 — MIT
