@@ -90,14 +90,15 @@ describe("the dump's date shards partition the calendar", () => {
   test("each shard resumes the day the one before it ends", () => {
     for (const [index, shard] of dateShards.slice(1).entries()) {
       const previous = dateShards[index];
-      if (previous === undefined || previous.to === null) {
+      const end = previous?.to;
+      if (end === undefined || end === null) {
         throw new Error(
           `shard ${previous?.name ?? index} leaves its end open mid-list`,
         );
       }
       expect({ shard: shard.name, from: shard.from }).toEqual({
         shard: shard.name,
-        from: Temporal.PlainDate.from(previous.to).add({ days: 1 }).toString(),
+        from: Temporal.PlainDate.from(end).add({ days: 1 }).toString(),
       });
     }
   });
