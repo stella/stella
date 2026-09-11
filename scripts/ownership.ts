@@ -651,6 +651,8 @@ export const OWNERSHIP = [
       "apps/api/src/mcp/tool-utils.ts",
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/mcp/static-tool-definitions.ts",
+      "apps/api/src/mcp/gateway/list-tools.ts",
+      "apps/api/src/mcp/tools.ts",
     ],
     summary:
       "Each static tool set supplies one Valibot output contract per handler. " +
