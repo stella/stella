@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Building2Icon, ChevronDownIcon, CircleAlertIcon } from "lucide-react";
@@ -55,6 +55,8 @@ type RegistrySearchProps = {
   composing: boolean;
   source: "clips" | "registry";
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
+  /** The shared search field; in registry scope its arrows and Enter act on the highlighted result. */
+  searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
     controls: ReactNode;
     results: ReactNode;
@@ -69,6 +71,7 @@ export const RegistrySearch = ({
   composing,
   source,
   onConnectionFlowChange,
+  searchInput,
   children,
 }: RegistrySearchProps) => {
   const t = useTranslations("clipboard");
@@ -85,6 +88,7 @@ export const RegistrySearch = ({
     null,
   );
   const [attempt, setAttempt] = useState(0);
+  const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const generation = useRef(0);
   const connectionGeneration = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
@@ -254,6 +258,30 @@ export const RegistrySearch = ({
       })
       .catch(() => setError(t("registryErrorDisconnect")));
   };
+  // The highlighted result: the last one focused or stepped to, else the
+  // first, so Enter from the search field always has a target.
+  const activeResult =
+    currentSearch.status === "ready"
+      ? (currentSearch.results.find(({ id }) => id === activeResultId) ??
+        currentSearch.results.at(0) ??
+        null)
+      : null;
+  const stepActiveResult = (step: 1 | -1) => {
+    if (currentSearch.status !== "ready" || activeResult === null) {
+      return;
+    }
+    const index = currentSearch.results.indexOf(activeResult);
+    const next = currentSearch.results.at(
+      Math.max(0, Math.min(currentSearch.results.length - 1, index + step)),
+    );
+    if (next === undefined) {
+      return;
+    }
+    setActiveResultId(next.id);
+    rail.current
+      ?.querySelector(`[data-registry-result="${CSS.escape(next.id)}"]`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
   const copy = (card: ResultCard) => {
     if (card.status !== "ready" || currentSearch.status !== "ready") {
       return;
@@ -335,6 +363,47 @@ export const RegistrySearch = ({
       });
   };
 
+  useEffect(() => {
+    const input = searchInput.current;
+    if (source !== "registry" || !input) {
+      return () => undefined;
+    }
+    const handleSearchKey = (event: KeyboardEvent) => {
+      if (
+        event.isComposing ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        activeResult === null
+      ) {
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        copy(activeResult);
+        return;
+      }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+      // Horizontal arrows leave the text only at the matching edge, so the
+      // caret keeps its native movement inside the query.
+      const length = input.value.length;
+      const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+      const atEnd =
+        input.selectionStart === length && input.selectionEnd === length;
+      const rtl = getComputedStyle(input).direction === "rtl";
+      const forward = (event.key === "ArrowRight") !== rtl;
+      if (forward ? !atEnd : !atStart) {
+        return;
+      }
+      event.preventDefault();
+      stepActiveResult(forward ? 1 : -1);
+    };
+    input.addEventListener("keydown", handleSearchKey);
+    return () => input.removeEventListener("keydown", handleSearchKey);
+  });
   let emptyText = t("registrySearchHint");
   if (connection === null) {
     emptyText = t("registryLoading");
@@ -423,7 +492,9 @@ export const RegistrySearch = ({
           {currentSearch.results.map((card) => (
             <article
               key={card.id}
+              aria-current={activeResult?.id === card.id ? "true" : undefined}
               className="clipboard-card relative flex min-h-0 w-[246px] shrink-0 flex-col overflow-hidden rounded-2xl"
+              data-registry-result={card.id}
             >
               <button
                 type="button"
@@ -466,12 +537,13 @@ export const RegistrySearch = ({
                     ?.focus();
                 }}
                 onClick={() => copy(card)}
-                onFocus={(event) =>
+                onFocus={(event) => {
+                  setActiveResultId(card.id);
                   event.currentTarget.scrollIntoView({
                     block: "nearest",
                     inline: "nearest",
-                  })
-                }
+                  });
+                }}
                 className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
               >
                 <h2 className="truncate text-sm font-semibold" dir="auto">

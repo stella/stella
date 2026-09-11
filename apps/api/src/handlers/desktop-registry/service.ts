@@ -17,7 +17,6 @@ import {
   getOrganizationRegistryHandler,
 } from "@/api/lib/business-registries/credentials";
 import {
-  BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
@@ -27,10 +26,7 @@ import {
   stripLookupMarkdown,
 } from "@/api/lib/docx/lookup-fields";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  arrayOrEmpty,
-  isNativeToolEnabledForOrg,
-} from "@/api/lib/mcp-connectors/catalog-metadata";
+import { arrayOrEmpty } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 import { getDefaultDesktopRegistry } from "./default-registry";
 
@@ -51,32 +47,19 @@ type DesktopRegistrySearch = {
 const invalidRegistry = () =>
   new HandlerError({ status: 400, message: "Unsupported business registry" });
 
-const loadSettings = async ({
+// Practice jurisdictions only pick the default registry; the desktop offers
+// every deployable registry so a lookup abroad never needs a settings change.
+const loadPracticeJurisdictions = async ({
   organizationId,
   scopedDb,
 }: DesktopRegistryContext) => {
   const row = await scopedDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
-      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+      columns: { practiceJurisdictions: true },
     }),
   );
-  return {
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-    nativeToolOverrides: row?.nativeToolOverrides ?? {},
-  };
-};
-
-const registryIsEnabled = async (
-  context: DesktopRegistryContext,
-  registry: BusinessRegistrySlug,
-) => {
-  const settings = await loadSettings(context);
-  return isNativeToolEnabledForOrg({
-    slug: BUSINESS_REGISTRY_DISPATCH[registry].nativeToolSlug,
-    practiceJurisdictions: settings.practiceJurisdictions,
-    nativeToolOverrides: settings.nativeToolOverrides,
-  });
+  return arrayOrEmpty(row?.practiceJurisdictions);
 };
 
 const loadFormats = async (
@@ -134,7 +117,7 @@ const loadFormats = async (
 export const getDesktopRegistryConfig = async (
   context: DesktopRegistryContext,
 ): Promise<Result<DesktopRegistryConfig, HandlerError>> => {
-  const settings = await loadSettings(context);
+  const practiceJurisdictions = await loadPracticeJurisdictions(context);
   const dispatchResult = await Result.tryPromise({
     try: async () => await getOrganizationRegistryDispatch(context),
     catch: (cause) =>
@@ -149,17 +132,8 @@ export const getDesktopRegistryConfig = async (
   }
   const registries = BUSINESS_REGISTRY_SLUGS.flatMap((id) => {
     const handler = dispatchResult.value[id];
-    if (
-      !isNativeToolEnabledForOrg({
-        slug: handler.nativeToolSlug,
-        practiceJurisdictions: settings.practiceJurisdictions,
-        nativeToolOverrides: settings.nativeToolOverrides,
-      })
-    ) {
-      return null;
-    }
     return handler.isDeployAvailable()
-      ? { id, name: handler.displayName }
+      ? { id, name: `${handler.country} · ${handler.displayName}` }
       : null;
   });
   const enabledRegistries = registries.filter((entry) => entry !== null);
@@ -167,7 +141,7 @@ export const getDesktopRegistryConfig = async (
     registries: enabledRegistries,
     defaultRegistryId: getDefaultDesktopRegistry({
       registries: enabledRegistries,
-      practiceJurisdictions: settings.practiceJurisdictions,
+      practiceJurisdictions,
     }),
   });
 };
@@ -179,14 +153,6 @@ export const searchDesktopRegistry = async (
   const query = rawQuery.trim();
   if (query.length === 0 || query.length > 256) {
     return Result.err(invalidRegistry());
-  }
-  if (!(await registryIsEnabled(context, registry))) {
-    return Result.err(
-      new HandlerError({
-        status: 403,
-        message: "Business registry is not enabled",
-      }),
-    );
   }
   const configured = await Result.tryPromise({
     try: async () =>
@@ -293,8 +259,7 @@ export const formatDesktopRegistry = async (
   if (
     id.length === 0 ||
     id.length > 64 ||
-    !isPlausibleLookupValue(registry, id) ||
-    !(await registryIsEnabled(context, registry))
+    !isPlausibleLookupValue(registry, id)
   ) {
     return Result.err(invalidRegistry());
   }

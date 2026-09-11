@@ -2297,6 +2297,7 @@ const ClipboardApp = () => {
         onConnectionFlowChange={(flow) => {
           connectionFlowRef.current = flow;
         }}
+        searchInput={searchInputRef}
       >
         {({ controls, results, feedback: registryFeedback }) => (
           <>

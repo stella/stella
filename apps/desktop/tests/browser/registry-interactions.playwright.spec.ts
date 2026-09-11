@@ -355,6 +355,29 @@ test("keyboard activation retains the input and Enter never copies a hidden clip
   await expect(searchBox(page)).toBeFocused();
 });
 
+test("highlights the first registry result and copies it with Enter from the search field", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page, "Privileged");
+  const result = page.locator('[data-registry-result="company-1"]');
+  await expect(result).toHaveAttribute("aria-current", "true");
+  await expect(searchBox(page)).toBeFocused();
+  await searchBox(page).press("End");
+  await searchBox(page).press("ArrowRight");
+  await expect(result).toHaveAttribute("aria-current", "true");
+  await expect(searchBox(page)).toBeFocused();
+  await searchBox(page).press("Enter");
+  await expect
+    .poll(async () =>
+      (await readInvocations(page)).filter(
+        ({ command }) => command === "registry_copy",
+      ),
+    )
+    .toEqual([{ command: "registry_copy", args: { text: "Registry result" } }]);
+  await expect(searchBox(page)).toBeFocused();
+});
+
 test("retains the explicitly requested query across browser sign-in and native focus return", async ({
   page,
 }) => {
