@@ -282,6 +282,7 @@ export const MODEL_RATES = {
     inputPerMTok: 80_000,
     outputPerMTok: 320_000,
     cachedInputPerMTok: 20_000,
+    cachedWriteInputPerMTok: 80_000,
   },
   // models.dev: amazon-bedrock:us.amazon.nova-lite-v1:0
   "us.amazon.nova-lite-v1:0": {
@@ -289,6 +290,7 @@ export const MODEL_RATES = {
     inputPerMTok: 6000,
     outputPerMTok: 24_000,
     cachedInputPerMTok: 1500,
+    cachedWriteInputPerMTok: 6000,
   },
   // models.dev: amazon-bedrock:us.amazon.nova-micro-v1:0
   "us.amazon.nova-micro-v1:0": {
@@ -296,6 +298,7 @@ export const MODEL_RATES = {
     inputPerMTok: 3500,
     outputPerMTok: 14_000,
     cachedInputPerMTok: 875,
+    cachedWriteInputPerMTok: 3500,
   },
   // models.dev: amazon-bedrock:openai.gpt-oss-120b-1:0
   "openai.gpt-oss-120b-1:0": {
