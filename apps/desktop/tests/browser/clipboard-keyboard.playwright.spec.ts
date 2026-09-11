@@ -619,6 +619,16 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await moreOptions.click();
   const menuSetting = page.getByRole("menuitemcheckbox");
   await expect(menuSetting).toBeVisible();
+  // The popup takes focus a beat after it opens; Escape must reach the menu,
+  // not the trigger, to exercise overlay-before-clipboard dismissal.
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.activeElement?.closest('[role="menu"]') !== null,
+        ),
+    )
+    .toBe(true);
   await page.keyboard.press("Escape");
   await expect(menuSetting).toBeHidden();
   expect(await invocationCount(page, "clipboard_hide")).toBe(1);
