@@ -23,7 +23,7 @@
  * counted them could never settle.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -41,6 +41,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
   caseLawDecisions,
+  caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
 import {
@@ -63,6 +64,7 @@ import {
   RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
+  floorSliceWalk,
   partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
@@ -233,7 +235,15 @@ const emptySummary = (
 export type ReconciliationUnitOutcome =
   | { type: "worked"; summary: ReconciliationUnitSummary }
   | { type: "idle" }
-  | { type: "leased" };
+  | { type: "leased" }
+  /**
+   * The source states something no unit can act on — today, a sweep floor
+   * that is no slice of this source. Nothing was walked, and nothing will be
+   * until an operator changes the row: obeying the value would sweep a range
+   * nobody chose, and ignoring it would sweep the range the source excluded
+   * while every turn still reported success.
+   */
+  | { type: "misconfigured" };
 
 /**
  * How long this process holds a slice whose walk threw before offering it
@@ -710,6 +720,28 @@ const selectOldestLedgerSlice = async (
   return row?.oldest ?? null;
 };
 
+/**
+ * The source's configuration as of this unit.
+ *
+ * Read per unit rather than handed in once: the floor it carries is operator
+ * input, and a daemon that read it at startup would hold a narrowed sweep
+ * open, or a widened one shut, until the process was replaced.
+ */
+const selectSourceConfig = async (
+  scopedDb: ScopedDb,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<unknown> =>
+  (
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select({ config: caseLawSources.config })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .limit(1),
+    )
+  ).at(0)?.config;
+
 /** Whether any parked item for this source has come due. */
 const hasDueParkedItems = async (
   scopedDb: ScopedDb,
@@ -1118,7 +1150,7 @@ export const runReconciliationWorkUnit = async ({
   adapterKey,
   fetchDelayMs,
   now,
-  reconciliation,
+  reconciliation: adapterReconciliation,
   scopedDb,
   sleep,
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
@@ -1135,6 +1167,28 @@ export const runReconciliationWorkUnit = async ({
     );
   }
   const startedAt = now();
+
+  // Everything below reads the floored walk, so the configured floor is
+  // applied here rather than at each place that would otherwise have to
+  // remember it: the tip window, the sweep, and the frontier between them.
+  const floored = floorSliceWalk({
+    adapterKey,
+    config: await selectSourceConfig(scopedDb, sourceId),
+    now: startedAt,
+    walk: adapterReconciliation,
+  });
+  if (Result.isError(floored)) {
+    // Logged here because the loop's window tally counts these turns without
+    // saying what cannot be used: the value an operator has to fix leaves
+    // the process only through this record.
+    logger.error("case_law.reconciliation.floor_rejected", {
+      adapterKey,
+      reason: floored.error.message,
+    });
+    return { type: "misconfigured" };
+  }
+  const reconciliation = floored.value;
+
   const tipSlices = tipWindowSlices(reconciliation, startedAt);
   const staleBefore = new Date(
     startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,

@@ -252,11 +252,17 @@ const caseNumberStub: SourceReconciliation = {
   },
 };
 
-const seedSource = async (): Promise<SafeId<"caseLawSource">> => {
+/** `config` is what an operator states about this source; `{}` is the default. */
+const seedSource = async (
+  config: Record<string, unknown> = {},
+): Promise<SafeId<"caseLawSource">> => {
   const id = createSafeId<"caseLawSource">();
-  await db
-    .insert(caseLawSources)
-    .values({ id, adapterKey: `reconciliation-${id}`, name: "engine fixture" });
+  await db.insert(caseLawSources).values({
+    id,
+    adapterKey: `reconciliation-${id}`,
+    name: "engine fixture",
+    config,
+  });
   return id;
 };
 
@@ -1017,6 +1023,58 @@ test("a slice the publisher will not list is recorded, and the sweep moves past 
     summary: { slice: behind, reason: SLICE_WALK_REASON.SWEEP },
   });
   expect(listed.map(({ slice }) => slice)).toEqual([refused, behind]);
+});
+
+test("a configured floor is where the sweep stops, and nothing below it is owed", async () => {
+  // The floor an operator puts under a source: the publisher serves older
+  // history, this deployment does not sweep it. Asserted against the same
+  // stub without one, because a source with nothing to sweep either way
+  // would pass whatever the floor did.
+  const swept = day(-TIP_WINDOW_DAYS);
+  const unfloored = await seedSource();
+  await seedFreshTip(unfloored);
+
+  expect(await runUnit(unfloored)).toMatchObject({
+    type: "worked",
+    summary: { slice: swept, reason: SLICE_WALK_REASON.SWEEP },
+  });
+
+  const floored = await seedSource({
+    reconciliation: { firstSlice: day(-(TIP_WINDOW_DAYS - 1)) },
+  });
+  await seedFreshTip(floored);
+
+  // Idle rather than short: the excluded range is not history this source
+  // owes, so no row is written for it and nothing reports it uncovered.
+  expect(await runUnit(floored)).toEqual({ type: "idle" });
+  expect(await ledgerRow(floored, swept)).toBeUndefined();
+});
+
+test("a floor nothing can walk holds the source rather than being ignored", async () => {
+  const sourceId = await seedSource({
+    reconciliation: { firstSlice: "the last two years" },
+  });
+  await seedFreshTip(sourceId);
+
+  const outcome = await runUnit(sourceId);
+
+  // Not idle: an idle turn says the source is surveyed and settled, which is
+  // what a mistyped floor must never be mistaken for.
+  expect(outcome).toEqual({ type: "misconfigured" });
+  // Nothing listed and nothing recorded: the turn ends before any work is
+  // chosen, so a floor an operator mistyped cannot sweep the wrong range.
+  expect(listed).toEqual([]);
+  expect(await ledgerRow(sourceId, day(-TIP_WINDOW_DAYS))).toBeUndefined();
+  // The tally counts these turns without naming the value behind them, so
+  // this record is the only place it reaches an operator.
+  const rejected = logs
+    .at("ERROR")
+    .find(
+      ({ message }) => message === "case_law.reconciliation.floor_rejected",
+    );
+  expect(String(rejected?.attributes?.["reason"])).toContain(
+    "the last two years",
+  );
 });
 
 test("a failed walk of a counted slice keeps its counts and marks it failed", async () => {

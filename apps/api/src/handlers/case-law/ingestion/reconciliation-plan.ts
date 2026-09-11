@@ -9,11 +9,14 @@
  * never reaches a fixed point looks like a loop that is always busy.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import type { SourceSliceWalk } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * How long a slice's ledger row stays authoritative. A publisher keeps adding
@@ -150,6 +153,102 @@ export const partitionShortSliceCandidates = (
     }
   }
   return partition;
+};
+
+/**
+ * The floor a source's own configuration puts under its slice walk.
+ *
+ * Loose, like the walk policy beside it: the configuration carries whatever
+ * else that source needs, and an absent key is a source with no floor.
+ */
+const sliceFloorSchema = v.looseObject({
+  reconciliation: v.optional(
+    v.looseObject({
+      firstSlice: v.optional(v.pipe(v.string(), v.minLength(1))),
+    }),
+  ),
+});
+
+export type FloorSliceWalkOptions<TWalk extends SourceSliceWalk> = {
+  /** Names the source in the refusal an operator reads. */
+  adapterKey: string;
+  /** The source's `config` column, whatever JSON the row holds. */
+  config: unknown;
+  now: Date;
+  walk: TWalk;
+};
+
+/**
+ * The walk a source is actually swept over: the adapter's, floored by its
+ * configuration.
+ *
+ * The adapter's `firstSlice` is what the publisher can serve; the
+ * configuration says how much of that this deployment sweeps. The effective
+ * floor is therefore the later of the two — a configured floor may narrow the
+ * sweep, never widen it past what the publisher has — and it is applied by
+ * replacing the walk, so everything downstream (the tip window, the sweep's
+ * next slice, whatever the ledger is asked to cover) reads one floor rather
+ * than each re-deriving it.
+ *
+ * The configured value is compared, never handed to the adapter: it is a
+ * slice in the adapter's own grammar as an operator typed it, and a walk that
+ * parses its slices panics on one it cannot read. Comparison is enough, since
+ * slices sort in walk order. The one thing comparison cannot catch is a value
+ * that is no slice at all, which would silently stop the sweep dead, so a
+ * floor above the source's newest slice is refused rather than obeyed.
+ */
+export const floorSliceWalk = <TWalk extends SourceSliceWalk>({
+  adapterKey,
+  config,
+  now,
+  walk,
+}: FloorSliceWalkOptions<TWalk>): Result<TWalk, ConfigurationError> => {
+  const refuse = (detail: string): Result<never, ConfigurationError> =>
+    Result.err(
+      new ConfigurationError({
+        message: `${adapterKey}: unusable reconciliation floor — ${detail}`,
+      }),
+    );
+
+  // The column is JSON, so a row can hold any JSON value and older rows do
+  // hold a string. A value that is not an object cannot carry the key, so it
+  // states no floor rather than a broken one; only a stated floor can be
+  // malformed, and that is refused below.
+  if (!isRecord(config)) {
+    return Result.ok(walk);
+  }
+
+  const parsed = v.safeParse(sliceFloorSchema, config);
+  if (!parsed.success) {
+    return refuse(v.summarize(parsed.issues));
+  }
+
+  const configured = parsed.output.reconciliation?.firstSlice;
+  if (configured === undefined) {
+    return Result.ok(walk);
+  }
+
+  const tip = walk.sliceOf(now);
+  if (configured > tip) {
+    return refuse(
+      `"${configured}" sorts after the newest slice this source has, "${tip}"`,
+    );
+  }
+
+  // A floor at or below the publisher's own first slice asks for history the
+  // publisher does not serve; the adapter's floor stands.
+  if (configured <= walk.firstSlice) {
+    return Result.ok(walk);
+  }
+
+  return Result.ok({
+    ...walk,
+    firstSlice: configured,
+    previousSlice: (slice: string): string | null => {
+      const previous = walk.previousSlice(slice);
+      return previous === null || previous < configured ? null : previous;
+    },
+  });
 };
 
 /**
