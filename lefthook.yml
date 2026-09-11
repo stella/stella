@@ -41,6 +41,9 @@ pre-push:
     changeset:
       run: bun scripts/changeset-guard.ts --base origin/main
     secrets:
+      # The hook's stdin carries the ref updates the push would publish; the
+      # scanner scopes each gitleaks run to exactly those commits.
+      use_stdin: true
       run: bun run secrets:check:pushed
     ai-skills:
       run: bash scripts/check-ai-skill-sources.sh
