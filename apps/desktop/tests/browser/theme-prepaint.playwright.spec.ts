@@ -59,4 +59,3 @@ for (const documentCase of DOCUMENTS) {
     });
   }
 }
-

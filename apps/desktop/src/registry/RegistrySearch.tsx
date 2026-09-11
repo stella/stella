@@ -597,4 +597,3 @@ export const RegistrySearch = ({
   );
   return children({ controls, results, feedback });
 };
-

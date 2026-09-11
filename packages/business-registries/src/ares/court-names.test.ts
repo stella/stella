@@ -76,4 +76,3 @@ describe("ARES court names", () => {
     },
   );
 });
-

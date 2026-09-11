@@ -21,4 +21,3 @@ describe("clipboard capture network boundary", () => {
     }
   });
 });
-

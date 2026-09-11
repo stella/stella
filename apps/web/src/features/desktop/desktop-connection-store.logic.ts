@@ -59,7 +59,9 @@ export const createDesktopConnectionStore = ({
    * instead of throwing, and joins the attempt already in flight so a click
    * during the watch (or a second surface) can never link twice.
    */
-  const connect = async (explicit = false): Promise<DesktopConnectionOutcome> => {
+  const connect = async (
+    explicit = false,
+  ): Promise<DesktopConnectionOutcome> => {
     const running = attempt;
     if (running) {
       return await running;

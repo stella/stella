@@ -335,4 +335,3 @@ mod tests {
     assert!(serde_json::from_value::<RegistryHandoff>(payload).is_err());
   }
 }
-

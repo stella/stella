@@ -763,4 +763,3 @@ for (const language of ["en", "ar"] as const) {
     }
   });
 }
-

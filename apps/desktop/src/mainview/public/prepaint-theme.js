@@ -7,4 +7,3 @@
   root.style.colorScheme = isDark ? "dark" : "light";
   root.style.backgroundColor = isDark ? "#0c0c0d" : "#ffffff";
 })();
-

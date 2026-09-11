@@ -84,4 +84,3 @@ describe("unified registry search boundary", () => {
     );
   });
 });
-

@@ -12,7 +12,6 @@ import {
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
-import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
@@ -29,6 +28,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";

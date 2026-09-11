@@ -11,4 +11,3 @@ describe("desktop registry handoff hash", () => {
     expect(readDesktopRegistryNonce(`#other=${nonce}`)).toBeNull();
   });
 });
-
