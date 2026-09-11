@@ -1110,9 +1110,9 @@ describe("the plain walk recovers from what a configured one left behind", () =>
   test("a configuration that is not an object states no walks", async () => {
     await populated();
 
-    // SAFETY: the runner's type says the column holds an object; this asserts
-    // what happens when the row does not, which is the case under test.
-    const notAnObject = "{}" as unknown as Record<string, unknown>;
+    // Decoded from the column's own JSON rather than asserted into shape, so
+    // the value really is what a row holding a string hands the runner.
+    const notAnObject: Record<string, unknown> = JSON.parse('"{}"');
     const page = await plainFetch()(null, notAnObject);
 
     expect(page.unwrap().sourceUrl).not.toContain("windowed");
