@@ -13,8 +13,9 @@ import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/shallow";
 
 import type { WorkspaceView } from "@/lib/types";
-import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import type { TableContentMode } from "@/lib/workspaces/table-store";
+import { useTableStore } from "@/lib/workspaces/table-store";
+import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import {
   createColumnOrderState,
   createColumnPinningState,
@@ -36,22 +37,25 @@ type UseTableStateProps = {
 
 export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const viewId = view.id;
+  const viewRef = { workspaceId, viewId };
   const updateView = useUpdateView(workspaceId);
 
   const storedColumnSizing = useTableStore(
     useShallow((s) => {
-      const sizing = s.columnSizing.get(viewId) ?? {};
+      const sizing = getViewRecord(s.columnSizing, viewRef) ?? {};
       return omitUtilityColumnSizing(sizing);
     }),
   );
   const setStoredColumnSizing = useTableStore((s) => s.setColumnSizing);
-  const contentMode = useTableStore((s) => s.contentMode[viewId] ?? "tight");
+  const contentMode = useTableStore(
+    (s) => getViewRecord(s.contentMode, viewRef) ?? "tight",
+  );
   const setContentMode = useTableStore((s) => s.setContentMode);
   const [columnSizing, setColumnSizing] = useState(storedColumnSizing);
 
   const debouncedSetStoredColumnSizing = useDebouncedCallback(
     (data: ColumnSizingState) => {
-      setStoredColumnSizing(viewId, data);
+      setStoredColumnSizing(viewRef, data);
     },
     COLUMN_SIZING_DEBOUNCE_MS,
   );
@@ -128,7 +132,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   };
 
   const rowSelection = useTableStore(
-    (s) => s.rowSelection[viewId] ?? EMPTY_ROW_SELECTION,
+    (s) => getViewRecord(s.rowSelection, viewRef) ?? EMPTY_ROW_SELECTION,
   );
   const storeSetRowSelection = useTableStore((s) => s.setRowSelection);
 
@@ -137,14 +141,14 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     // during render; writing to the (subscribed) store synchronously would
     // update this component mid-render. Defer past the render so the prune
     // lands as its own update — harmless for real clicks (already post-event).
-    queueMicrotask(() => storeSetRowSelection(viewId, updater));
+    queueMicrotask(() => storeSetRowSelection(viewRef, updater));
   };
 
   return {
     view,
     contentMode,
     setContentMode: (mode: TableContentMode) => {
-      setContentMode(viewId, mode);
+      setContentMode(viewRef, mode);
     },
     state: {
       columnSizing,

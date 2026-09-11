@@ -109,7 +109,9 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   // Deferred alongside the window key (`useListPage` defers its own), so the
   // marks and the empty state describe the rows on screen, not the term whose
   // fetch is still in flight.
-  const find = useDeferredValue(useTableFind({ properties, view }));
+  const find = useDeferredValue(
+    useTableFind({ properties, view, workspaceId }),
+  );
   const fieldIds = useMemo(
     () =>
       visibleEntityFieldIds({
@@ -155,7 +157,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     workspaceId,
     entityIdChunks: justificationEntityIdChunks,
   });
-  useSyncSelectedEntities({ viewId: view.id, treeData });
+  useSyncSelectedEntities({ workspaceId, viewId: view.id, treeData });
   const tableKey = getWorkspaceTableKey({ workspaceId, viewId: view.id });
 
   const table = useTable({

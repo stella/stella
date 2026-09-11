@@ -90,6 +90,9 @@ import {
   propertiesOptions,
 } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import type { TableContentMode } from "@/lib/workspaces/table-store";
+import { useTableStore } from "@/lib/workspaces/table-store";
+import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
@@ -101,8 +104,6 @@ import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { ViewToolbarSearch } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
-import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -124,7 +125,9 @@ export const ViewToolbar = ({
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
-  const selectedEntities = useTableStore((s) => s.selectedEntities[view.id]);
+  const selectedEntities = useTableStore((s) =>
+    getViewRecord(s.selectedEntities, { workspaceId, viewId: view.id }),
+  );
   // Assignee sub-grouping needs a board scoped to tasks alone (see
   // kanban-view.logic.ts's `assigneeGroup`); a view admitting several kinds,
   // or one that does not provably restrict its kinds, does not offer it.
@@ -156,6 +159,7 @@ export const ViewToolbar = ({
           paneRef={paneRef}
           properties={properties}
           view={view}
+          workspaceId={workspaceId}
         />
       )}
 
@@ -271,7 +275,7 @@ export const ViewToolbar = ({
             }
             properties={properties}
           />
-          <TableContentModeControl viewId={view.id} />
+          <TableContentModeControl viewId={view.id} workspaceId={workspaceId} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
           <RunPlaybookControl workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
@@ -340,6 +344,7 @@ const SelectionActions = ({
 // -- Layout-specific controls --
 
 type TableContentModeControlProps = {
+  workspaceId: string;
   viewId: string;
 };
 
@@ -360,14 +365,20 @@ const TABLE_CONTENT_MODE_OPTIONS = [
   labelKey: TranslationKey;
 }[];
 
-const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
+const TableContentModeControl = ({
+  workspaceId,
+  viewId,
+}: TableContentModeControlProps) => {
   const t = useTranslations();
-  const mode = useTableStore((s) => s.contentMode[viewId] ?? "tight");
+  const viewRef = { workspaceId, viewId };
+  const mode = useTableStore(
+    (s) => getViewRecord(s.contentMode, viewRef) ?? "tight",
+  );
   const setMode = useTableStore((s) => s.setContentMode);
 
   return (
     <SegmentedIconToggle
-      onChange={(next) => setMode(viewId, next)}
+      onChange={(next) => setMode(viewRef, next)}
       options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
         value: option.mode,
         icon: option.icon,

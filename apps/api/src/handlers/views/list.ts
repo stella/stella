@@ -71,6 +71,10 @@ const readViews = createSafeHandler(
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
           .orderBy(workspaceViews.position)
+          // Unfiltered and capped at the creation limit, so this list is
+          // complete: the web client's table store treats a view absent from
+          // it as deleted (`lib/workspaces/queries/views.ts`). Paginating or
+          // filtering here would silently drop live per-view state.
           .limit(LIMITS.viewsCount),
       ),
     );

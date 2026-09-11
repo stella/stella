@@ -5,6 +5,7 @@ import type { ConditionNode } from "@stll/conditions";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty } from "@/lib/types";
+import type { TableFindSelection } from "@/lib/workspaces/table-store";
 import {
   effectiveFindSelection,
   resolveFindScope,
@@ -15,7 +16,6 @@ import {
   toPickerFindColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
-import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 const property = (
   id: string,

@@ -7,6 +7,7 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
+import { useTableStore } from "@/lib/workspaces/table-store";
 
 export const viewsKeys = {
   // Locale-independent prefix. Mutations invalidate this so every cached locale
@@ -33,8 +34,24 @@ export const viewsOptions = (workspaceId: string) =>
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
+      const views = unwrapEden(response);
 
-      return unwrapEden(response);
+      // The one owner of per-view table state cleanup: every path that
+      // removes a view (this client, another, the CLI, MCP, or a delete
+      // while this browser was closed) ends in a fetch of this list, so
+      // reconciling here needs no component or mutation to remember to.
+      // The list is complete (`handlers/views/list.ts` is unfiltered and
+      // capped at the creation limit), so absence means deleted. Writing to
+      // a localStorage-backed store inside a query function is safe because
+      // protected routes are `ssr: false`: the loader prefetch never runs on
+      // the server. It runs after `unwrapEden`, so a failed fetch drops
+      // nothing.
+      useTableStore.getState().reconcileViews(
+        workspaceId,
+        views.map((view) => view.id),
+      );
+
+      return views;
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

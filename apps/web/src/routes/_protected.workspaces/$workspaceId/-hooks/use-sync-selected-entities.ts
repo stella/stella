@@ -1,8 +1,10 @@
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import { useTableStore } from "@/lib/workspaces/table-store";
+import { getViewRecord } from "@/lib/workspaces/table-store.logic";
 
 type UseSyncSelectedEntitiesInput = {
+  workspaceId: string;
   viewId: string;
   treeData: TableTreeNode[];
 };
@@ -12,10 +14,13 @@ type UseSyncSelectedEntitiesInput = {
 // grouped layouts so a grouped view, whose rows are split across sections,
 // resolves the same way the flat table does once its sections are unioned.
 export const useSyncSelectedEntities = ({
+  workspaceId,
   viewId,
   treeData,
 }: UseSyncSelectedEntitiesInput) => {
-  const rowSelection = useTableStore((state) => state.rowSelection[viewId]);
+  const rowSelection = useTableStore((state) =>
+    getViewRecord(state.rowSelection, { workspaceId, viewId }),
+  );
   const setSelectedEntities = useTableStore(
     (state) => state.setSelectedEntities,
   );
@@ -36,6 +41,6 @@ export const useSyncSelectedEntities = ({
       }
     };
     visit(treeData);
-    setSelectedEntities(viewId, result);
-  }, [rowSelection, treeData, viewId, setSelectedEntities]);
+    setSelectedEntities({ workspaceId, viewId }, result);
+  }, [rowSelection, treeData, workspaceId, viewId, setSelectedEntities]);
 };
