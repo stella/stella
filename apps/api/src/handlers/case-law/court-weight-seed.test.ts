@@ -15,7 +15,7 @@ import {
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260902090000_case_law_court_weight_seed/migration.sql",
+  "../../../drizzle/20260911140000_case_law_court_weight_seed_pol/migration.sql",
 );
 
 describe("court weight seed", () => {
@@ -58,6 +58,11 @@ describe("court weight seed", () => {
       ["POL", "Sąd Najwyższy", "supreme"],
       ["POL", "Naczelny Sąd Administracyjny", "supreme"],
       ["POL", "Trybunał Konstytucyjny", "constitutional"],
+      ["POL", "Sąd Apelacyjny w Krakowie", "appeal"],
+      ["POL", "Sąd Okręgowy w Warszawie", "regional"],
+      ["POL", "Sąd Rejonowy w Gdańsku", "district"],
+      ["POL", "Sąd Rejonowy dla Warszawy-Śródmieścia", "district"],
+      ["POL", "Krajowa Izba Odwoławcza", "procurement-review"],
       ["AUT", "OGH", "supreme"],
       ["AUT", "VwGH", "supreme"],
       ["AUT", "VfGH", "constitutional"],
@@ -75,6 +80,70 @@ describe("court weight seed", () => {
         court,
         label,
       ]);
+    }
+  });
+
+  test("Poland ranks every instance the feeds store, each pattern once", () => {
+    // The SAOS feed and the Supreme Court connector store these six court
+    // names; a name two patterns both match would take whichever the
+    // precedence order happens to reach first.
+    expect(COURT_WEIGHT_SEED.filter((row) => row.country === "POL")).toEqual([
+      {
+        country: "POL",
+        courtPattern: "trybunał konstytucyjny",
+        tier: 4,
+        tierLabel: "constitutional",
+        weight: 10,
+      },
+      {
+        country: "POL",
+        courtPattern: "sąd najwyższy|naczelny sąd administracyjny",
+        tier: 3,
+        tierLabel: "supreme",
+        weight: 8,
+      },
+      {
+        country: "POL",
+        courtPattern: "sąd apelacyjny",
+        tier: 2,
+        tierLabel: "appeal",
+        weight: 5,
+      },
+      {
+        country: "POL",
+        courtPattern: "sąd okręgowy",
+        tier: 2,
+        tierLabel: "regional",
+        weight: 4,
+      },
+      {
+        country: "POL",
+        courtPattern: "krajowa izba odwoławcza",
+        tier: 1,
+        tierLabel: "procurement-review",
+        weight: 3,
+      },
+      {
+        country: "POL",
+        courtPattern: "sąd rejonowy",
+        tier: 1,
+        tierLabel: "district",
+        weight: 2,
+      },
+    ]);
+    const polish = [
+      "Trybunał Konstytucyjny",
+      "Sąd Najwyższy",
+      "Sąd Apelacyjny w Krakowie",
+      "Sąd Okręgowy w Warszawie",
+      "Krajowa Izba Odwoławcza",
+      "Sąd Rejonowy dla Warszawy-Śródmieścia",
+    ];
+    for (const court of polish) {
+      const matched = seededCourtWeightEntries("POL").filter((entry) =>
+        entry.pattern.test(court),
+      );
+      expect([court, matched.length]).toEqual([court, 1]);
     }
   });
 
