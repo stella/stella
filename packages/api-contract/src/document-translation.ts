@@ -87,64 +87,6 @@ export type DocumentTranslationTargetLanguage =
 export type DocumentTranslationTargetLanguageCode =
   DocumentTranslationTargetLanguage["code"];
 
-const DOCUMENT_TRANSLATION_SOURCE_BY_TARGET = {
-  AR: "AR",
-  BG: "BG",
-  ZH: "ZH",
-  "ZH-HANS": "ZH",
-  "ZH-HANT": "ZH",
-  CS: "CS",
-  DA: "DA",
-  NL: "NL",
-  "EN-US": "EN-GB",
-  "EN-GB": "EN-GB",
-  ET: "ET",
-  FI: "FI",
-  FR: "FR",
-  DE: "DE",
-  EL: "EL",
-  HU: "HU",
-  ID: "ID",
-  IT: "IT",
-  JA: "JA",
-  KO: "KO",
-  LV: "LV",
-  LT: "LT",
-  NB: "NB",
-  PL: "PL",
-  "PT-BR": "PT-PT",
-  "PT-PT": "PT-PT",
-  RO: "RO",
-  RU: "RU",
-  SK: "SK",
-  SL: "SL",
-  ES: "ES",
-  "ES-419": "ES",
-  SV: "SV",
-  TR: "TR",
-  UK: "UK",
-} as const satisfies Record<
-  DocumentTranslationTargetLanguageCode,
-  DocumentTranslationSourceLanguageCode
->;
-
-export const documentTranslationSourceForTarget = (
-  target: DocumentTranslationTargetLanguageCode,
-): DocumentTranslationSourceLanguageCode =>
-  DOCUMENT_TRANSLATION_SOURCE_BY_TARGET[target];
-
-export type DocumentTranslationSourceLanguageDetection =
-  | {
-      type: "detected";
-      language: DocumentTranslationSourceLanguageCode;
-      confidence: "high" | "medium";
-    }
-  | {
-      type: "ambiguous";
-      candidates: readonly DocumentTranslationSourceLanguageCode[];
-    }
-  | { type: "unknown" };
-
 export const DOCUMENT_TRANSLATION_RUN_ERROR_CODES = [
   "document_unresolved",
   "document_changed",

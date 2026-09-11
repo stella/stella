@@ -9,6 +9,7 @@ import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import {
   buildBilingualDocumentRequest,
   SOURCE_DOCUMENT_CACHE_CHARS_MAX,
+  translationLanguageInstruction,
   translateFormattedBatch,
 } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
@@ -42,6 +43,29 @@ const generateObjectMock = mock(
 );
 const generateObjectForTest =
   asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
+
+describe("translation language instruction", () => {
+  test("lets the model infer the source when only a target is known", () => {
+    const instruction = translationLanguageInstruction({
+      type: "automatic-source",
+      targetLang: "CS",
+    });
+
+    expect(instruction).toContain("Target language: CS");
+    expect(instruction).toContain("Infer the source language");
+    expect(instruction).not.toContain("Source language:");
+  });
+
+  test("preserves an explicit source for an already-pinned translation", () => {
+    expect(
+      translationLanguageInstruction({
+        type: "explicit-source",
+        sourceLang: "EN-GB",
+        targetLang: "CS",
+      }),
+    ).toBe("Source language: EN-GB. Target language: CS.");
+  });
+});
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -206,7 +230,7 @@ describe("formatted bilingual AI boundary", () => {
 
     const result = await translateFormattedBatch(
       { batch: [accepted, repaired], preceding: [], glossary: [] },
-      { sourceLang: "en", targetLang: "cs" },
+      { type: "explicit-source", sourceLang: "en", targetLang: "cs" },
       context,
     );
 
@@ -247,7 +271,7 @@ describe("formatted bilingual AI boundary", () => {
 
     const translation = translateFormattedBatch(
       { batch: [formattedUnit(1, spans)], preceding: [], glossary: [] },
-      { sourceLang: "en", targetLang: "cs" },
+      { type: "explicit-source", sourceLang: "en", targetLang: "cs" },
       context,
     );
 
@@ -277,7 +301,7 @@ describe("formatted bilingual AI boundary", () => {
 
     const translation = translateFormattedBatch(
       { batch, preceding: [], glossary: [] },
-      { sourceLang: "en", targetLang: "cs" },
+      { type: "explicit-source", sourceLang: "en", targetLang: "cs" },
       context,
     );
 

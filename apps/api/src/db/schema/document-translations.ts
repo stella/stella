@@ -133,8 +133,8 @@ export const documentTranslationRuns = p.pgTable(
       sql`${table.output} = 'translated' OR ${table.engine} = 'ai'`,
     ),
     p.check(
-      "document_translation_runs_ai_source_lang_check",
-      sql`${table.engine} <> 'ai' OR (${table.sourceLang} IS NOT NULL AND ${table.sourceLang} <> 'auto')`,
+      "document_translation_runs_ai_source_presence_check",
+      sql`${table.engine} <> 'ai' OR ${table.sourceLang} IS NOT NULL`,
     ),
     p.check(
       "document_translation_runs_progress_check",

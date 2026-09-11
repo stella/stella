@@ -14,10 +14,6 @@ import { panic, Result } from "better-result";
 import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  documentTranslationSourceForTarget,
-  type DocumentTranslationSourceLanguageDetection,
-} from "@stll/api-contract/document-translation";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -32,10 +28,7 @@ import {
 } from "@stll/ui/dialog";
 import { stellaToast } from "@stll/ui/toast";
 
-import {
-  DocumentLanguagePicker,
-  DocumentSourceLanguagePicker,
-} from "@/components/document-language-picker";
+import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { DOCUMENT_TRANSLATION_TARGET_CODES } from "@/components/document-language-picker.logic";
 import {
   documentTranslationPreparationOptions,
@@ -53,10 +46,8 @@ import {
   defaultDocumentTranslationTarget,
   documentTranslationRunFailureKey,
   openDocumentTranslationOutput,
-  resolvedDocumentTranslationSource,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
-  type DocumentTranslationSourceSelection,
   type TranslationChoice,
 } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -73,40 +64,6 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
-
-type SourceStatusKeyOptions = {
-  selection: DocumentTranslationSourceSelection;
-  detection: DocumentTranslationSourceLanguageDetection | null;
-  hasError: boolean;
-  isPending: boolean;
-};
-
-type SourceStatusKey =
-  | "translate.dialog.sourceDetected"
-  | "translate.dialog.sourceDetecting"
-  | "translate.dialog.sourceDetectionFailed"
-  | "translate.dialog.sourceManual"
-  | "translate.dialog.sourceNeedsSelection";
-
-const sourceStatusKey = ({
-  selection,
-  detection,
-  hasError,
-  isPending,
-}: SourceStatusKeyOptions): SourceStatusKey => {
-  if (isPending) {
-    return "translate.dialog.sourceDetecting";
-  }
-  if (selection.type === "manual") {
-    return "translate.dialog.sourceManual";
-  }
-  if (hasError) {
-    return "translate.dialog.sourceDetectionFailed";
-  }
-  return detection?.type === "detected"
-    ? "translate.dialog.sourceDetected"
-    : "translate.dialog.sourceNeedsSelection";
-};
 
 type TranslateDocumentDialogCommonProps = {
   workspaceId: string;
@@ -172,14 +129,6 @@ export const TranslateDocumentDialog = (
     DEFAULT_TRANSLATION_CHOICE,
   );
   const documentKey = `${entityId}:${fieldId}`;
-  const [sourceSelectionState, setSourceSelectionState] = useState<{
-    documentKey: string;
-    selection: DocumentTranslationSourceSelection;
-  }>(() => ({ documentKey, selection: { type: "automatic" } }));
-  const sourceSelection =
-    sourceSelectionState.documentKey === documentKey
-      ? sourceSelectionState.selection
-      : ({ type: "automatic" } as const);
   const [targetSelection, setTargetSelection] = useState<{
     documentKey: string;
     language: DeepLTargetLanguageCode;
@@ -200,11 +149,6 @@ export const TranslateDocumentDialog = (
       entityVersionKey,
     }),
     enabled: open && isDocx && runId === null,
-  });
-  const sourceDetection = preparationQuery.data?.sourceLanguage ?? null;
-  const sourceLang = resolvedDocumentTranslationSource({
-    selection: sourceSelection,
-    detection: sourceDetection,
   });
   const commentsFound =
     activeCommentPolicyState.type === "required" ||
@@ -236,14 +180,9 @@ export const TranslateDocumentDialog = (
       ? targetSelection.language
       : defaultDocumentTranslationTarget({
           lastUsedTarget: lastTarget,
-          matterLanguages: preparationQuery.data?.matterLanguages ?? null,
-          sourceLanguage: sourceLang,
           supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
           uiLocale: locale,
         });
-  const targetSourceLanguage = documentTranslationSourceForTarget(targetLang);
-  const sameLanguage =
-    sourceLang !== null && sourceLang === targetSourceLanguage;
   const runQuery = useQuery({
     ...documentTranslationRunOptions({
       workspaceId,
@@ -392,9 +331,6 @@ export const TranslateDocumentDialog = (
             );
           case "translated:ai":
           case "bilingual:ai": {
-            if (sourceLang === null) {
-              return panic("AI translation started without a source language");
-            }
             const entityVersionId =
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
@@ -403,7 +339,6 @@ export const TranslateDocumentDialog = (
                 ...common,
                 output: choice === "translated:ai" ? "translated" : "bilingual",
                 engine: "ai",
-                sourceLang,
                 entityVersionId,
               }),
             );
@@ -459,10 +394,8 @@ export const TranslateDocumentDialog = (
     isRunning,
     isStarting,
     hasCommentPolicy: commentPolicy !== null,
-    hasPreparedAiSource: preparationQuery.data !== undefined,
-    hasResolvedAiSource: sourceLang !== null,
+    hasPreparedAiVersion: preparationQuery.data !== undefined,
     requiresCommentPolicy: commentsFound,
-    sameLanguage,
   });
 
   if (!canTranslateDocument({ canUseDeepL, isDocx })) {
@@ -589,32 +522,6 @@ export const TranslateDocumentDialog = (
                   </p>
                 ) : null}
               </fieldset>
-              {!isDeepL ? (
-                <div className="flex flex-col gap-1.5">
-                  <DocumentSourceLanguagePicker
-                    disabled={preparationQuery.isPending}
-                    id="translate-source"
-                    label={t("bilingual.dialog.sourceLanguage")}
-                    onChange={(language) =>
-                      setSourceSelectionState({
-                        documentKey,
-                        selection: { type: "manual", language },
-                      })
-                    }
-                    value={sourceLang}
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    {t(
-                      sourceStatusKey({
-                        selection: sourceSelection,
-                        detection: sourceDetection,
-                        hasError: preparationQuery.error !== null,
-                        isPending: preparationQuery.isPending,
-                      }),
-                    )}
-                  </p>
-                </div>
-              ) : null}
               <DocumentLanguagePicker
                 id="translate-target"
                 label={t("translate.dialog.targetLanguage")}
@@ -665,11 +572,6 @@ export const TranslateDocumentDialog = (
                     value="translated"
                   />
                 </fieldset>
-              ) : null}
-              {sameLanguage ? (
-                <p className="text-destructive text-sm">
-                  {t("bilingual.dialog.sameLanguage")}
-                </p>
               ) : null}
             </div>
           )}

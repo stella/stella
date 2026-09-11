@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { DOC_MIME_TYPE, DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const DOCX_EXTENSION = ".docx";
@@ -49,19 +51,39 @@ export const resolveTranslatedOutput = ({
   };
 };
 
-type BuildBilingualFileNameOptions = {
-  sourceFileName: string;
-  sourceLang: string;
-  targetLang: string;
-};
+type BuildBilingualFileNameOptions =
+  | {
+      type: "automatic-source";
+      sourceFileName: string;
+      targetLang: string;
+    }
+  | {
+      type: "explicit-source";
+      sourceFileName: string;
+      sourceLang: string;
+      targetLang: string;
+    };
 
-/** `Contract.docx` + cs/en -> `Contract (CS-EN).docx`; output is always DOCX. */
-export const buildBilingualFileName = ({
-  sourceFileName,
-  sourceLang,
-  targetLang,
-}: BuildBilingualFileNameOptions): string => {
-  const tag = ` (${sourceLang.toUpperCase()}-${targetLang.toUpperCase()})`;
+/** Name the target; include the source only when the user supplied it. */
+export const buildBilingualFileName = (
+  options: BuildBilingualFileNameOptions,
+): string => {
+  const { sourceFileName, targetLang } = options;
+  let tag: string;
+  switch (options.type) {
+    case "automatic-source":
+      tag = ` (Bilingual ${targetLang.toUpperCase()})`;
+      break;
+    case "explicit-source":
+      tag =
+        ` (${options.sourceLang.toUpperCase()}-` +
+        `${targetLang.toUpperCase()})`;
+      break;
+    default: {
+      options satisfies never;
+      return panic("Unhandled bilingual filename source");
+    }
+  }
   const lastDot = sourceFileName.lastIndexOf(".");
   const stem =
     lastDot === -1 ? sourceFileName : sourceFileName.slice(0, lastDot);

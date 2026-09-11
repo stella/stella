@@ -302,9 +302,9 @@ type RecordDocxVersionLanguageOptions = {
  * this one hook covers upload, desktop edit, folio publish, copy and
  * translation output alike -- no per-call-site discipline, and no second
  * download: the bytes are already here for extraction. Passing the extracted
- * text lets the detector answer from `word/styles.xml` alone in the usual
- * case. Telemetry-only on failure: a document whose language cannot be read
- * is still a fully indexed document.
+ * text lets the declaration reader weight the styles that the document
+ * actually uses. Telemetry-only on failure: a document whose language cannot
+ * be read is still a fully indexed document.
  */
 const recordDocxVersionLanguage = async ({
   buffer,

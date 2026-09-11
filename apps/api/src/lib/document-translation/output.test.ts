@@ -44,10 +44,21 @@ describe("document translation output metadata", () => {
   test("names bilingual DOCX output with both language tags", () => {
     expect(
       buildBilingualFileName({
+        type: "explicit-source",
         sourceFileName: "Agreement.docx",
         sourceLang: "cs",
         targetLang: "en",
       }),
     ).toBe("Agreement (CS-EN).docx");
+  });
+
+  test("names target-only bilingual output without inventing a source", () => {
+    expect(
+      buildBilingualFileName({
+        type: "automatic-source",
+        sourceFileName: "Agreement.docx",
+        targetLang: "cs",
+      }),
+    ).toBe("Agreement (Bilingual CS).docx");
   });
 });
