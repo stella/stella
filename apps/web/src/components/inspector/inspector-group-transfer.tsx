@@ -211,6 +211,10 @@ export const useInspectorGroupTransfer = (
       };
       if (!isCurrentScope(requestScope)) {
         submittingRef.current = false;
+        if (mountedRef.current) {
+          setIsSubmitting(false);
+          setPending(null);
+        }
         return;
       }
       setPending({ ...pending, copiedFile });

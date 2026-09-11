@@ -947,6 +947,16 @@ describe("revive suggestion", () => {
 
     expect(useInspectorTabsStore.getState().groupAssignments).toEqual({});
   });
+
+  test("rejects assignment to a missing custom group", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ id: toChatThreadId("thread-1") });
+
+    expect(() => store.setTabGroup("thread-1", "custom:missing")).toThrow(
+      "Cannot assign an Inspector tab to a missing group",
+    );
+    expect(useInspectorTabsStore.getState().groupAssignments).toEqual({});
+  });
 });
 
 describe("closeTabsForEntities", () => {
@@ -1568,9 +1578,13 @@ describe("Inspector tab broadcast", () => {
     const captureSpy = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
     );
-    window.localStorage.setItem = () => {
+    const workingSetItem = window.localStorage.setItem.bind(
+      window.localStorage,
+    );
+    const failingSetItem = () => {
       throw new DOMException("Storage unavailable", "QuotaExceededError");
     };
+    window.localStorage.setItem = failingSetItem;
 
     useInspectorTabsStore
       .getState()
@@ -1581,6 +1595,18 @@ describe("Inspector tab broadcast", () => {
 
     expect(toastSpy).toHaveBeenCalledTimes(1);
     expect(captureSpy).toHaveBeenCalledTimes(1);
+
+    window.localStorage.setItem = workingSetItem;
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-3") });
+    window.localStorage.setItem = failingSetItem;
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-4") });
+
+    expect(toastSpy).toHaveBeenCalledTimes(2);
+    expect(captureSpy).toHaveBeenCalledTimes(2);
     toastSpy.mockRestore();
     captureSpy.mockRestore();
   });

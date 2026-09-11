@@ -280,13 +280,23 @@ export const createInspectorTabsSlice = (
 
   setTabGroup: (tabId, groupId) =>
     set((state) => {
-      if (state.tabs.some((tab) => tab.id === tabId)) {
-        state.groupAssignments[tabId] = groupId;
-        if (state.activeId === tabId && groupId !== null) {
-          state.collapsedGroupIds = state.collapsedGroupIds.filter(
-            (candidate) => candidate !== groupId,
-          );
-        }
+      if (!state.tabs.some((tab) => tab.id === tabId)) {
+        return;
+      }
+      if (
+        groupId !== null &&
+        !(
+          groupId.startsWith("matter:") && groupId.length > "matter:".length
+        ) &&
+        !state.groups.some((group) => group.id === groupId)
+      ) {
+        panic("Cannot assign an Inspector tab to a missing group");
+      }
+      state.groupAssignments[tabId] = groupId;
+      if (state.activeId === tabId && groupId !== null) {
+        state.collapsedGroupIds = state.collapsedGroupIds.filter(
+          (candidate) => candidate !== groupId,
+        );
       }
     }),
 
