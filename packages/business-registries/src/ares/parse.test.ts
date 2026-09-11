@@ -40,7 +40,7 @@ describe("enrichWithVr", () => {
       zaznamy: [
         {
           primarniZaznam: true,
-          spisovaZnacka: [{ soud: court, oddil: "B", vlozka: "8573" }],
+          spisovaZnacka: [{ soud: court, oddil: "B", vlozka: 8573 }],
         },
       ],
     } satisfies AresVrResponse;

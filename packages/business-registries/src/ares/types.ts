@@ -68,7 +68,8 @@ export type AresVrNameEntry = {
 export type AresVrSpisZn = {
   soud?: string;
   oddil?: string;
-  vlozka?: string;
+  /** ARES serializes the insert number as a JSON number. */
+  vlozka?: string | number;
   datumZapisu?: string;
   datumVymazu?: string;
 };

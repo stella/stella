@@ -94,7 +94,7 @@ const parseCourtFile = (
   return {
     court: getAresCourtName(entry.soud),
     section: entry.oddil,
-    insert: entry.vlozka,
+    insert: String(entry.vlozka),
   };
 };
 
