@@ -192,10 +192,21 @@ describe("floorSliceWalk", () => {
   });
 
   test("a floor nothing can walk holds the source rather than being ignored", () => {
+    // The in-range values below are only a test of the shape check while they
+    // sort inside the source's own range: ordering already refuses anything
+    // above the tip.
+    expect(reconciliation.firstSlice < "2024-foo").toBe(true);
+    expect(toUtcDateString(NOW) > "2024-foo").toBe(true);
+
     const unusable = [
       // Not a slice at all: obeyed as written it sorts above every slice the
       // source has and stops the sweep dead, in silence.
       { reconciliation: { firstSlice: "yesterday" } },
+      // Worse, because ordering alone accepts it: it sorts between the feed's
+      // first slice and today's, so it would quietly floor the sweep at
+      // whatever "2024-" sorts against rather than at a day anyone chose.
+      { reconciliation: { firstSlice: "2024-foo" } },
+      { reconciliation: { firstSlice: "2024-01" } },
       { reconciliation: { firstSlice: "2026-09-31" } },
       { reconciliation: { firstSlice: "" } },
       { reconciliation: { firstSlice: 20_240_101 } },

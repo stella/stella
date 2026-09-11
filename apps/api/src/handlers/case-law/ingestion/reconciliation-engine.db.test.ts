@@ -1050,6 +1050,58 @@ test("a configured floor is where the sweep stops, and nothing below it is owed"
   expect(await ledgerRow(floored, swept)).toBeUndefined();
 });
 
+test("rows below a configured floor are no longer the source's backlog", async () => {
+  // Raising the floor leaves behind whatever the source swept under the old
+  // one. Those rows are still work to every read of the ledger: a short row
+  // below the floor can never settle, so it would be re-listed on every turn
+  // and the excluded range would be crawled forever by the backlog instead of
+  // the sweep. One row of each kind the ledger can offer, all below the floor.
+  // The tip window's own start, so the sweep is exhausted at the floor and
+  // the rows below it are the only work anything could still offer.
+  const floor = day(-(TIP_WINDOW_DAYS - 1));
+  const sourceId = await seedSource({
+    reconciliation: { firstSlice: floor },
+  });
+  await seedFreshTip(sourceId);
+  const long = new Date(
+    NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS - DAY_IN_MS,
+  );
+  const rested = new Date(
+    NOW.getTime() - RECONCILIATION_FAILED_SLICE_RETRY_MS - DAY_IN_MS,
+  );
+  // Short and stale: priority 3 would take it.
+  await seedSlice({
+    sourceId,
+    slice: stepDay(floor, -1),
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  // Failed and rested: priority 4 would take it.
+  await db.insert(caseLawCoverageSlices).values({
+    id: createSafeId<"caseLawCoverageSlice">(),
+    sourceId,
+    slice: stepDay(floor, -2),
+    reported: null,
+    collected: null,
+    walkError: "AdapterFetchError: listing refused",
+    checkedAt: rested,
+  });
+  // Settled long ago: priority 6 would take it.
+  await seedSlice({
+    sourceId,
+    slice: stepDay(floor, -3),
+    reported: 2,
+    collected: 2,
+    checkedAt: long,
+  });
+
+  // Idle covers all three at once: any read still reaching below the floor
+  // would answer this turn with one of them.
+  expect(await runUnit(sourceId)).toEqual({ type: "idle" });
+  expect(listed).toEqual([]);
+});
+
 test("a floor nothing can walk holds the source rather than being ignored", async () => {
   const sourceId = await seedSource({
     reconciliation: { firstSlice: "the last two years" },

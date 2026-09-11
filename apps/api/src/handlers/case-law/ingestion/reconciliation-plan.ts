@@ -169,6 +169,27 @@ const sliceFloorSchema = v.looseObject({
   ),
 });
 
+/**
+ * Whether two slices are written the same way: digits where the other has
+ * digits, the same characters everywhere else.
+ *
+ * A slice grammar lives in its adapter, so this compares a candidate against
+ * a slice the adapter produced instead of restating one: `2024-foo` against
+ * `2020-10-01` differs, `2001-ufs` against `1993-ufs` does not. It says
+ * nothing about what the value means — `2010-13` is shaped like a month —
+ * only that it is not written like something this source walks.
+ */
+const sharesSliceShape = (candidate: string, known: string): boolean => {
+  if (candidate.length !== known.length) {
+    return false;
+  }
+  const isDigit = (char: string): boolean => char >= "0" && char <= "9";
+  return Array.from(known).every((char, index) => {
+    const candidateChar = candidate.charAt(index);
+    return isDigit(char) ? isDigit(candidateChar) : candidateChar === char;
+  });
+};
+
 export type FloorSliceWalkOptions<TWalk extends SourceSliceWalk> = {
   /** Names the source in the refusal an operator reads. */
   adapterKey: string;
@@ -193,9 +214,10 @@ export type FloorSliceWalkOptions<TWalk extends SourceSliceWalk> = {
  * The configured value is compared, never handed to the adapter: it is a
  * slice in the adapter's own grammar as an operator typed it, and a walk that
  * parses its slices panics on one it cannot read. Comparison is enough, since
- * slices sort in walk order. The one thing comparison cannot catch is a value
- * that is no slice at all, which would silently stop the sweep dead, so a
- * floor above the source's newest slice is refused rather than obeyed.
+ * slices sort in walk order. What comparison alone cannot catch is a value
+ * that is no slice at all, which would narrow the sweep to a boundary nobody
+ * chose, so a floor is refused unless it is written like a slice this source
+ * walks and sits at or below the source's newest one.
  */
 export const floorSliceWalk = <TWalk extends SourceSliceWalk>({
   adapterKey,
@@ -229,6 +251,19 @@ export const floorSliceWalk = <TWalk extends SourceSliceWalk>({
   }
 
   const tip = walk.sliceOf(now);
+  // Shape first, because ordering cannot catch a value that sorts inside the
+  // source's range without being one of its slices: "2024-foo" sits between
+  // a 2020 first slice and a 2026 tip, and floors the sweep at whatever
+  // "2024-" happens to sort against. The shapes come from two slices the
+  // adapter itself produced, so nothing here has to know a grammar, and an
+  // adapter that changes one cannot leave a stale copy behind.
+  if (
+    ![walk.firstSlice, tip].some((known) => sharesSliceShape(configured, known))
+  ) {
+    return refuse(
+      `"${configured}" is not shaped like a slice of this source, such as "${tip}"`,
+    );
+  }
   if (configured > tip) {
     return refuse(
       `"${configured}" sorts after the newest slice this source has, "${tip}"`,
