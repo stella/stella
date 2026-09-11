@@ -187,6 +187,25 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.PL_SN]: {
+    key: ADAPTER_KEYS.PL_SN,
+    name: "Polish Supreme Court (Sąd Najwyższy)",
+    ...ADAPTER_JURISDICTIONS.POL,
+    // Poland issues no ECLI, so there is no court code to resolve one against.
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      // The oldest decision date the search answers with: a query bounded at
+      // 1900-01-01 lists nothing before this day, and this day lists one
+      // decision. Its document is headed 23 June 1994 and its docket reads
+      // `III ARN 36/94`, so the year the publisher filed it under looks like a
+      // typo — but it is the date the source filters on, which is what this
+      // range has to state, or the walk would start after a listed decision.
+      fromInclusive: "1993-06-23",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",

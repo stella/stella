@@ -32,6 +32,7 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,
   [ADAPTER_KEYS.PL_COURTS]: async () =>
     (await import("./pl-courts")).plCourtsAdapter,
+  [ADAPTER_KEYS.PL_SN]: async () => (await import("./pl-sn")).plSnAdapter,
   [ADAPTER_KEYS.AT_COURTS]: async () =>
     (await import("./at-courts")).atCourtsAdapter,
   [ADAPTER_KEYS.AT_VFGH]: async () => (await import("./at-vfgh")).atVfghAdapter,

@@ -46,6 +46,14 @@ type ParsePlDecisionInput = {
   keywords: string[];
   statutes: string[];
   documentId: string;
+  /**
+   * Publisher the document came from, for `DocumentAst.source.system`.
+   *
+   * Polish decisions reach this parser from more than one publisher, and the
+   * AST records which one a stored document was read from. Defaults to SAOS,
+   * the publisher this parser was written against.
+   */
+  sourceSystem?: string | undefined;
 };
 
 type ParsePlDecisionOutput = {
@@ -518,7 +526,7 @@ export const parsePlDecisionContent = (
   const documentAst: DocumentAst = {
     version: 1,
     source: {
-      system: "saos.org.pl",
+      system: input.sourceSystem ?? "saos.org.pl",
       documentId: input.documentId,
       webUrl: input.sourceUrl ?? "",
       printUrl: input.documentUrl ?? "",

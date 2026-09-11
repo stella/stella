@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "11a95ca719770efc78d217dd5bcd1bd2d308bf4058a44147b5a723253ee57e6b",
+  "sourceUrl": "https://sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json&task=searchOrzeczenia&data_wydania_od=1993-06-01&data_wydania_do=1993-06-30&strona=1&rozmiar_strony=20",
+  "capturedAt": "2026-09-10T23:14:09.624Z"
+}

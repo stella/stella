@@ -37,8 +37,14 @@ import type {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import {
+  assemblePlSnDecision,
+  normalizePlSnDetail,
+  readPlSnEnvelope,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-field-inventory-baseline.json";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -333,6 +339,84 @@ const czNssFixture = (): InventoryFixture => ({
   },
 });
 
+// ── PL SN fixture ────────────────────────────────────────
+
+/** The listing row, as `searchOrzeczenia` states one. */
+const PL_SN_LISTING_ROW = {
+  sygnatura_sprawy: "I CSKP 40/26",
+  data_wydania: "2026-06-10",
+  forma_orzeczenia: "wyrok SN",
+  id: "0l6YSZcBZvGrB8P_kR8N",
+} as const;
+
+/**
+ * The detail response, carrying every field this proxy is known to label.
+ * Each one is given a value, because a disposition is only exercised where
+ * the decision built from the fixture can be checked for it.
+ */
+const PL_SN_DETAIL_PAYLOAD = JSON.stringify({
+  success: true,
+  message: null,
+  messages: null,
+  data: [
+    {
+      success: true,
+      message: null,
+      messages: null,
+      data: {
+        jednostka_obslugujaca_sprawe: "Izba Cywilna Wydział I",
+        izby_sn: ["Izba Cywilna"],
+        rodzaj_skladu_orzekajacego: "Skład 3-osobowy",
+        sklad_orzekajacy: ["Jan Kowalski", "Anna Nowak"],
+        sklad_orzekajacy_przewodniczacy: ["Jan Kowalski"],
+        sklad_orzekajacy_sprawozdawca: ["Anna Nowak"],
+        sklad_orzekajacy_wspolsprawozdawcy: ["Piotr Wiśniewski"],
+        sklad_orzekajacy_autor_uzasadnienia: "Anna Nowak",
+        zglaszajacy_zdanie_odrebne_orzeczenie: "Piotr Wiśniewski",
+        zglaszajacy_zdanie_odrebne_uzasadnienie: "Piotr Wiśniewski",
+        data_modyfikacji: "2026-06-20",
+        ...PL_SN_LISTING_ROW,
+      },
+    },
+  ],
+});
+
+/**
+ * The detail payload the inventory reads, as the inner record the adapter
+ * hands its own normalizer.
+ */
+const plSnDetailRecord = (): Record<string, unknown> => {
+  const payload: unknown = JSON.parse(PL_SN_DETAIL_PAYLOAD);
+  const inner = readPlSnEnvelope(payload);
+  return isRecord(inner) ? inner : panic("the pl-sn fixture states no detail");
+};
+
+/**
+ * Built from the payloads directly rather than through the adapter's fetch
+ * path. What this suite certifies is the mapping from a stated field to the
+ * row, and driving a stubbed transport to reach it only added this
+ * publisher's one-second request gate to every run. No document is supplied:
+ * no declared field is stored through it, so the fixture states exactly what
+ * the inventory reads.
+ */
+const plSnFixture = (): InventoryFixture => ({
+  payload: PL_SN_DETAIL_PAYLOAD,
+  buildDecision: async () => {
+    const built = await assemblePlSnDecision({
+      item: { ...PL_SN_LISTING_ROW },
+      detail: normalizePlSnDetail(plSnDetailRecord()),
+      documentBytes: undefined,
+      rawParts: {
+        listing: JSON.stringify(PL_SN_LISTING_ROW),
+        detail: PL_SN_DETAIL_PAYLOAD,
+      },
+    });
+    return built.type === "unkeyable"
+      ? panic("pl-sn fixture did not build")
+      : built.decision;
+  },
+});
+
 // ── Coverage declaration ─────────────────────────────────
 
 type InventoryFixture = {
@@ -365,6 +449,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.SK_COURTS]: PENDING,
   [ADAPTER_KEYS.SK_US]: PENDING,
   [ADAPTER_KEYS.PL_COURTS]: PENDING,
+  [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },
   [ADAPTER_KEYS.AT_COURTS]: PENDING,
   [ADAPTER_KEYS.AT_VFGH]: PENDING,
   [ADAPTER_KEYS.AT_VWGH]: PENDING,
