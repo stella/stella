@@ -1084,6 +1084,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [],
     });
 
@@ -1155,6 +1156,7 @@ describe("MCP template tools", () => {
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [
         {
           fieldPath: "scope",
