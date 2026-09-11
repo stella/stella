@@ -10,6 +10,7 @@ import {
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  corpusIndexProjectionErasureIsPending,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
@@ -444,6 +445,14 @@ export const corpusIndexProjectionStates = p.pgTable(
           AND ${t.appliedIndexId} IS NOT NULL
           AND ${t.desiredEpoch} > ${t.appliedEpoch}`,
       ),
+    // The erasure claim asks which entities of a generation still owe an
+    // erasure. Keyed on the generation it claims within and its queue order,
+    // partial on the answer, so a cycle with nothing pending reads the index
+    // rather than the table.
+    p
+      .index("corpus_index_projection_states_erase_pending_idx")
+      .on(t.family, t.generation, t.updatedAt, t.entityId)
+      .where(corpusIndexProjectionErasureIsPending(t)),
     p
       .index("corpus_index_projection_states_blocked_idx")
       .on(t.family, t.generation, t.entityId)

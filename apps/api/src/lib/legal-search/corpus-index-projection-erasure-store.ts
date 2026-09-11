@@ -17,7 +17,10 @@ import {
   entityIdsForCorpusProjectionWorkScope,
   type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
-import { corpusIndexProjectionIntentIsOutstanding } from "@/api/lib/legal-search/corpus-index-projection-sql";
+import {
+  corpusIndexProjectionErasureIsPending,
+  corpusIndexProjectionIntentIsOutstanding,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
@@ -52,6 +55,52 @@ const validateLimit = (limit: number): number => {
   return limit;
 };
 
+type CorpusProjectionErasureClaimOptions = {
+  family: CorpusFamily;
+  generation: string;
+  limit: number;
+  scopedEntityIds: readonly string[] | null;
+};
+
+/**
+ * The erasure claim read. Exported so the plan guard explains the exact
+ * statement the erasure cycle issues rather than a copy of it.
+ */
+export const corpusProjectionErasureClaimQuery = (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    limit,
+    scopedEntityIds,
+  }: CorpusProjectionErasureClaimOptions,
+) =>
+  tx
+    .select({
+      entityId: corpusIndexProjectionStates.entityId,
+      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
+        corpusIndexProjectionErasureIsPending(corpusIndexProjectionStates),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionStates.updatedAt),
+      asc(corpusIndexProjectionStates.entityId),
+    )
+    .limit(limit)
+    .for("update", {
+      of: corpusIndexProjectionStates,
+      skipLocked: true,
+    });
+
 /**
  * Fence every pre-erasure append, then mark erasure applied only after each
  * exact revision is terminal. Engine I/O happens in the separate cleanup
@@ -76,35 +125,12 @@ export const advanceCorpusProjectionErasuresTx = async <
     family,
     generation,
   );
-  const states = await tx
-    .select({
-      entityId: corpusIndexProjectionStates.entityId,
-      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
-    })
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        scopedEntityIds === null
-          ? undefined
-          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
-        eq(corpusIndexProjectionStates.desiredAction, "erase"),
-        sql`(
-          ${corpusIndexProjectionStates.appliedAction} IS DISTINCT FROM 'erase'
-          OR ${corpusIndexProjectionStates.appliedEpoch} IS DISTINCT FROM ${corpusIndexProjectionStates.desiredEpoch}
-        )`,
-      ),
-    )
-    .orderBy(
-      asc(corpusIndexProjectionStates.updatedAt),
-      asc(corpusIndexProjectionStates.entityId),
-    )
-    .limit(limit)
-    .for("update", {
-      of: corpusIndexProjectionStates,
-      skipLocked: true,
-    });
+  const states = await corpusProjectionErasureClaimQuery(tx, {
+    family,
+    generation,
+    limit,
+    scopedEntityIds,
+  });
   if (states.length === 0) {
     return {
       claimedCount: 0,

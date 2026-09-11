@@ -3,6 +3,7 @@ import { sql, type SQLWrapper } from "drizzle-orm";
 import {
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
+  type CorpusIndexDesiredAction,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 
 const sqlLiteralValues = (values: readonly string[]) =>
@@ -64,3 +65,34 @@ export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
  */
 export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
   sql`${status} NOT IN (${sqlLiteralValues(CORPUS_INDEX_QUIESCENT_INTENT_STATUSES)})`;
+
+const ERASE_ACTION: CorpusIndexDesiredAction = "erase";
+const ERASE_ACTION_LITERAL = sql.raw(`'${ERASE_ACTION}'`);
+
+type CorpusProjectionErasureColumns = {
+  appliedAction: SQLWrapper;
+  appliedEpoch: SQLWrapper;
+  desiredAction: SQLWrapper;
+  desiredEpoch: SQLWrapper;
+};
+
+/**
+ * One source of truth for "this entity still owes the index an erasure",
+ * shared by the erasure claim and by the partial index that serves it. The
+ * action is written as a literal rather than bound: PostgreSQL uses a partial
+ * index only where it can prove the index predicate from the query's, and a
+ * generic plan over `desired_action = $n` proves nothing, so the claim would
+ * read the whole table however few erasures are pending.
+ */
+export const corpusIndexProjectionErasureIsPending = ({
+  appliedAction,
+  appliedEpoch,
+  desiredAction,
+  desiredEpoch,
+}: CorpusProjectionErasureColumns) => sql`(
+  ${desiredAction} = ${ERASE_ACTION_LITERAL}
+  AND (
+    ${appliedAction} IS DISTINCT FROM ${ERASE_ACTION_LITERAL}
+    OR ${appliedEpoch} IS DISTINCT FROM ${desiredEpoch}
+  )
+)`;

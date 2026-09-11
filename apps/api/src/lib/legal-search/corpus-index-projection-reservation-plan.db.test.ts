@@ -10,7 +10,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { corpusProjectionReservationQueue } from "@/api/lib/legal-search/corpus-index-projection-store";
-import { isRecord } from "@/api/lib/type-guards";
+import { planLines } from "@/api/tests/helpers/explain-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -201,24 +201,6 @@ const intentProbe = ({ lines }: ReservationPlan): string => {
   );
   return lines.slice(start, end === -1 ? undefined : end).join("\n");
 };
-
-const explainRows = (explained: unknown): unknown[] => {
-  if (Array.isArray(explained)) {
-    return explained;
-  }
-  if (isRecord(explained) && Array.isArray(explained["rows"])) {
-    return explained["rows"];
-  }
-  return panic("EXPLAIN did not return plan rows");
-};
-
-const planLines = (explained: unknown): string[] =>
-  explainRows(explained).map((row) => {
-    const text = isRecord(row) ? row["QUERY PLAN"] : undefined;
-    return typeof text === "string"
-      ? text
-      : panic("EXPLAIN row has no plan text");
-  });
 
 const explainReservation = async (): Promise<ReservationPlan> =>
   await db.transaction(async (transaction) => {
