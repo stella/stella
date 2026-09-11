@@ -337,6 +337,12 @@ for (const {
       await expect(
         page.locator('[data-clipboard-id="clip-2"]'),
       ).toHaveAttribute("aria-current", "true");
+      // Enter in the field acts on the highlighted card, so it stays lit.
+      await expect
+        .poll(
+          async () => (await readCardEmphasis(page, "clip-2")).selectionOpacity,
+        )
+        .toBe("1");
       expect(await invocationCount(page, "registry_search")).toBe(0);
     });
 
