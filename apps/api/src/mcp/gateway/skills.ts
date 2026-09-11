@@ -11,7 +11,7 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 
-type SkillToolRow = {
+export type SkillToolRow = {
   body: string;
   description: string;
   id: typeof agentSkills.$inferSelect.id;
@@ -91,7 +91,12 @@ export const resolveSkillTool = async ({
     (skill) => skill.exposedName === toolName,
   ) ?? null;
 
-const resolveSkillToolPrecedence = (
+/**
+ * Pure naming and precedence step, exported so tests and the orientation eval
+ * derive collision-safe exposed names through the served code path rather
+ * than a hand-written mirror of it.
+ */
+export const resolveSkillToolPrecedence = (
   rows: readonly SkillToolRow[],
 ): ResolvedSkillTool[] => {
   const skills: ResolvedSkillTool[] = [];

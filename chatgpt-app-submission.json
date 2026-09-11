@@ -676,5 +676,21 @@
         "destructive_justification": "Can dispatch a catalog capability marked destructive; destructive targets require explicit confirmation."
       }
     }
+  },
+  "dynamic_tool_namespaces": {
+    "skill": {
+      "tool_name_prefix": "skill__",
+      "matching": "Tool names under this prefix are account-specific and may carry a collision suffix; the submission form matches tools by exact name, so apply this entry to every scanned tool whose name starts with the prefix.",
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns the stored instructions and metadata of one skill from the user’s private stella workspace without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    }
   }
 }

@@ -204,6 +204,9 @@ tool).
 - `compat-tools.ts`: OpenAI-compatible `search` / `fetch` tools.
 - `egress.ts`: the central anonymize-then-window egress pipeline.
 - `gateway/`: dynamic gateway for user-managed skills and external MCP tools.
+  `gateway/dynamic-tool-policy.ts` holds one policy per dynamic tool family:
+  a Stella-owned family (skills) shares one output contract and annotation
+  set, a third-party connector family keeps its upstream contract.
 - `server.ts` and `server-core.ts`: MCP HTTP transport wiring.
 - `../handlers/mcp/routes-core.ts`: Elysia routes that expose the MCP resources.
 - `../handlers/mcp-connectors/`: connector management APIs used by the web app.

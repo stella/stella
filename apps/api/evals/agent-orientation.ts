@@ -9,11 +9,12 @@ import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
  * are checked:
  *
  *   mcp   The model sees the exact wire tools a real MCP client gets
- *         (`listStaticMcpToolDefinitions("default")` projected through
- *         `toMcpTools`) and the server's connect-time instructions
- *         (`getMcpInstructions("default")`) as its system prompt. The run
- *         ends at the first tool call (`maxIterations(1)`); no tool
- *         executes.
+ *         (`listStaticMcpToolDefinitions("default")` plus a fixture of
+ *         account skills named through the served precedence step, all
+ *         projected through `toMcpTools`) and the server's connect-time
+ *         instructions (`getMcpInstructions("default")`) as its system
+ *         prompt. The run ends at the first tool call
+ *         (`maxIterations(1)`); no tool executes.
  *   cli   The model sees the generated agent skill
  *         (`packages/cli/skills/stella-cli/SKILL.md`) as its system prompt
  *         and answers with exactly one shell command in a fenced code
@@ -48,6 +49,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   streamChatChunks,
   toolCallEndInputOf,
@@ -57,7 +59,9 @@ import {
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
-import { toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { skillToolDefinition, toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { resolveSkillToolPrecedence } from "@/api/mcp/gateway/skills";
+import type { SkillToolRow } from "@/api/mcp/gateway/skills";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type {
@@ -414,6 +418,61 @@ type Task = {
   cli: CliTaskSpec;
 };
 
+/**
+ * Account skills as a real `tools/list` would serve them: the fixture rows go
+ * through the served precedence and naming step, so the exposed names
+ * (including the collision suffix `risk.review` receives next to
+ * `risk_review`) are whatever production would generate, never a hand-typed
+ * example. Tasks look their expected name up by slug.
+ */
+const skillFixtureRow = ({
+  description,
+  name,
+  slug,
+}: {
+  description: string;
+  name: string;
+  slug: string;
+}): SkillToolRow => ({
+  body: `# ${name}\n\nFollow these steps.`,
+  compatibility: null,
+  description,
+  id: toSafeId<"agentSkill">(`skill_${slug}`),
+  license: null,
+  metadata: {},
+  name,
+  origin: "authored",
+  scope: "team",
+  slug,
+  userId: "user_eval",
+  version: "1.0.0",
+});
+
+const SKILL_FIXTURES = resolveSkillToolPrecedence([
+  skillFixtureRow({
+    slug: "summarize",
+    name: "Summarize a document",
+    description:
+      "Step-by-step instructions for producing a client-ready summary of a contract or decision.",
+  }),
+  skillFixtureRow({
+    slug: "risk_review",
+    name: "Risk review (English-law leases)",
+    description:
+      "Checklist for reviewing the risk allocation in an English-law commercial lease.",
+  }),
+  skillFixtureRow({
+    slug: "risk.review",
+    name: "Risk review (Czech commercial contracts)",
+    description:
+      "Checklist for reviewing risk clauses in a Czech commercial contract (obchodní smlouva).",
+  }),
+]);
+
+const skillToolNameOf = (slug: string): string =>
+  SKILL_FIXTURES.find((skill) => skill.slug === slug)?.exposedName ??
+  panic(`agent-orientation eval: no skill fixture with slug ${slug}`);
+
 const TASKS: readonly Task[] = [
   {
     id: "list-matter-documents",
@@ -605,6 +664,28 @@ const TASKS: readonly Task[] = [
         "entity-id": "doc_42",
       },
     },
+  },
+  // Skill tools are account-specific, argument-less reads of stored
+  // instructions; the CLI has no skill surface, so it must decline.
+  {
+    id: "skill-instructions",
+    request:
+      "Before you summarize the share purchase agreement in matter ws_acme_2024, load the stella skill instructions for summarizing a document.",
+    mcp: {
+      toolName: skillToolNameOf("summarize"),
+      checkArgs: () => [],
+    },
+    cli: { kind: "declined" },
+  },
+  {
+    id: "skill-instructions-suffixed",
+    request:
+      "Load the stella skill instructions for reviewing risk clauses in a Czech commercial contract (obchodní smlouva), then wait for my next message.",
+    mcp: {
+      toolName: skillToolNameOf("risk.review"),
+      checkArgs: () => [],
+    },
+    cli: { kind: "declined" },
   },
 ] as const;
 
@@ -844,9 +925,13 @@ const toStandardJsonSchema = (
   },
 });
 
+const listMcpSurfaceDefinitions = (): McpToolDefinition[] => [
+  ...listStaticMcpToolDefinitions("default"),
+  ...SKILL_FIXTURES.map(skillToolDefinition),
+];
+
 const buildMcpClientTools = (): AnyClientTool[] => {
-  const definitions = listStaticMcpToolDefinitions("default");
-  const wireTools = toMcpTools(definitions);
+  const wireTools = toMcpTools(listMcpSurfaceDefinitions());
   return wireTools.map((tool) =>
     toolDefinition({
       name: tool.name,
@@ -857,7 +942,7 @@ const buildMcpClientTools = (): AnyClientTool[] => {
 };
 
 const mcpDefinitionsByName = new Map(
-  listStaticMcpToolDefinitions("default").map((definition) => [
+  listMcpSurfaceDefinitions().map((definition) => [
     definition.name,
     definition,
   ]),
@@ -926,8 +1011,10 @@ const parseCliCommand = (command: string): ParsedCliCommand => {
   return { path: commandPath, flags, startsWithStella };
 };
 
+// Models spell a refusal with a typographic apostrophe (`can’t`) as often as
+// a straight one, and "no such command exists" as often as "no command".
 const DECLINED_PATTERN =
-  /\b(?:cannot|can't|no command|not (?:able|possible|supported)|does not support|doesn't support|no CLI|not exposed|unavailable)\b/iu;
+  /\b(?:cannot|can[’']t|no (?:such )?command|not (?:able|possible|supported)|does not (?:support|exist)|doesn[’']t (?:support|exist)|no CLI|not exposed|unavailable)\b/iu;
 
 const kebabToSnake = (flagName: string): string =>
   flagName.replaceAll("-", "_");

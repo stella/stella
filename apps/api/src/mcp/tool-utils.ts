@@ -389,10 +389,10 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * `structuredContent` for a success. A Stella-owned static tool projects and
- * validates through the same executable contract that generated its advertised
- * `outputSchema`; dynamic gateway results without a Stella contract retain the
- * legacy object mirror.
+ * `structuredContent` for a success. A Stella-owned tool (static, or a dynamic
+ * family such as skills) projects and validates through the same executable
+ * contract that generated its advertised `outputSchema`; a success without a
+ * Stella contract retains the legacy object mirror.
  *
  * An error result never carries it: `structuredContent` is the tool's output,
  * and the `{ error: … }` envelope is the absence of one. A client validating
