@@ -13,6 +13,11 @@
  */
 import { Result } from "better-result";
 
+import {
+  VERIFICATION_CODE_ALPHABET,
+  VERIFICATION_CODE_LENGTH,
+} from "@stll/api-contract";
+
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
@@ -70,9 +75,12 @@ const WID_RE = /w:id="(?<id>\d+)"/gu;
 const WID_VALUE_RE = /w:id="(?<id>\d+)"/u;
 const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/u;
 const WT_TEXT_RE = /<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu;
-const STL_CODE_RE = /stl:(?<code>[abcdefghjkmnpqrstuvwxyz23456789]{10})/u;
-const STL_CODES_RE = /stl:[abcdefghjkmnpqrstuvwxyz23456789]{10}/gu;
-const STL_SUFFIX_RE = /(?<!\s)\s*stl:[abcdefghjkmnpqrstuvwxyz23456789]+\s*$/u;
+const VCODE_CLASS = `[${VERIFICATION_CODE_ALPHABET}]`;
+const VCODE_SOURCE = `${VCODE_CLASS}{${VERIFICATION_CODE_LENGTH}}`;
+const STL_CODE_RE = new RegExp(`stl:(?<code>${VCODE_SOURCE})`, "u");
+const STL_CODES_RE = new RegExp(`stl:${VCODE_SOURCE}`, "gu");
+/** Any run of code characters, so a truncated stamp is stripped too. */
+const STL_SUFFIX_RE = new RegExp(`(?<!\\s)\\s*stl:${VCODE_CLASS}+\\s*$`, "u");
 const SECT_PR_RE = /(?<sect><w:sectPr[^>]*>)/u;
 const CLOSING_BODY_RE = /<\/w:body>/u;
 const CLOSING_FTR_RE = /<\/w:ftr>/u;
@@ -91,8 +99,7 @@ const ANY_PARAGRAPH_RE = /<w:p[\s/>]/u;
  * other text means a human edited the line, and stripping then removes their
  * words rather than ours.
  */
-const STAMP_TEXT_RE =
-  /^\S(?:.*\S)? {2}stl:[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u;
+const STAMP_TEXT_RE = new RegExp(`^\\S(?:.*\\S)? {2}stl:${VCODE_SOURCE}$`, "u");
 
 // ── Public API ──────────────────────────────────────────
 

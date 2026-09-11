@@ -1,9 +1,9 @@
 import Elysia, { t } from "elysia";
 
+import { VERIFICATION_CODE_PATTERN } from "@stll/api-contract";
+
 import { resolveVerificationCodeAuth } from "@/api/handlers/verify/resolve-auth";
 import { authMacro } from "@/api/lib/auth";
-
-const VCODE_PATTERN = "^[abcdefghjkmnpqrstuvwxyz23456789]{10}$";
 
 /**
  * Authenticated resolution: `/v1/verify/:code` → the referenced document
@@ -24,7 +24,7 @@ export const verifyAuthRoute = new Elysia({ prefix: "/verify" })
       ),
     {
       params: t.Object({
-        code: t.String({ pattern: VCODE_PATTERN }),
+        code: t.String({ pattern: VERIFICATION_CODE_PATTERN }),
       }),
     },
   );

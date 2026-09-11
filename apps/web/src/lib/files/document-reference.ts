@@ -19,6 +19,8 @@
 import { Result } from "better-result";
 import type JSZip from "jszip";
 
+import { isVerificationCode } from "@stll/api-contract";
+
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -54,22 +56,6 @@ const WT_TEXT_RE = /<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu;
 /** Deliberately loose: `isVerificationCode` stays the one shape check. */
 const STL_CODE_RE = /stl:(?<code>[^\s<]+)/u;
 const STL_PREFIX = "stl:";
-
-/**
- * The alphabet the API mints verification codes from (lowercase alphanumeric
- * minus the look-alikes 0/O/1/l/I). Validating here only avoids a request that
- * `GET /verify/:code` would reject on its own `params` pattern; the server
- * stays the authority on what resolves.
- */
-const VERIFICATION_CODE_RE = /^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u;
-
-/**
- * Whether a string has the shape of a verification code. A printed code is
- * retyped by hand, so the shape is checked before it is looked up: a segment
- * that cannot be a code gets the same answer as one that resolves to nothing.
- */
-export const isVerificationCode = (code: string): boolean =>
-  VERIFICATION_CODE_RE.test(code);
 
 /**
  * Matches the shape the API's stamper writes in `buildCustomPropertiesXml`:
