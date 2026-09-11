@@ -1471,6 +1471,7 @@ type Messages = {
     "reload": "Reload";
     "remove": "Remove";
     "removeMember": "Remove member";
+    "removed": "Removed";
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
