@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -8,6 +9,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
@@ -57,7 +59,8 @@ const createTestFetch = (opts?: {
       url: `https://example.com/test-api?page=${page}`,
     }),
 
-    parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+    parseResponse: async (resp) =>
+      Result.ok(await readTestJson<TestResponse>(resp)),
 
     extractItems: (data) => ({
       items: data.results,
@@ -210,6 +213,44 @@ describe("createPagePaginatedFetch", () => {
     expect(page.nextCursor).toBe("offset:27");
   });
 
+  /**
+   * The page an adapter refuses is a page nobody read, so it must fail rather
+   * than arrive empty: an empty page advances a cursor, and for a traversal
+   * it ends the walk it was in. Failing holds the cursor, and the same page
+   * is asked for again next cycle.
+   */
+  test("a refused body fails the page instead of emptying it", async () => {
+    await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 10));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+
+    const refusal = new AdapterFetchError({
+      message: "test: the body states no results array",
+      adapterKey: "test",
+      cursor: null,
+    });
+    const fetchPage = createPagePaginatedFetch<TestResponse>({
+      adapterKey: "test",
+      pageSize: 3,
+      firstPage: 1,
+      buildRequest: (page) => ({
+        url: `https://example.com/test-api?page=${page}`,
+      }),
+      parseResponse: async () => await Promise.resolve(Result.err(refusal)),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
+    });
+
+    const result = await fetchPage("offset:3", {});
+
+    expect(result.isErr()).toBe(true);
+    if (!Result.isError(result)) {
+      return;
+    }
+    expect(result.error.message).toBe("test: the body states no results array");
+  });
+
   test("returns error for invalid cursor", async () => {
     const fetchPage = createTestFetch();
     for (const cursor of [
@@ -283,7 +324,8 @@ describe("createPagePaginatedFetch", () => {
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}&pageSize=20`,
       }),
-      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
       extractItems: (data) => ({
         items: data.results,
         total: data.total,
@@ -308,7 +350,8 @@ describe("createPagePaginatedFetch", () => {
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}&pageSize=100`,
       }),
-      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
       extractItems: (data) => ({
         items: data.results,
         total: data.total,
@@ -344,7 +387,8 @@ describe("createPagePaginatedFetch", () => {
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}`,
       }),
-      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
       extractItems: (data) => ({
         items: data.results,
         total: data.total,
@@ -750,7 +794,8 @@ test("a walk whose name carries the cursor separator is refused", () => {
           followedBy: null,
         },
       ],
-      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
       extractItems: (data) => ({ items: data.results, total: data.total }),
       parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
     });
@@ -792,7 +837,8 @@ describe("a walk that names itself as its successor", () => {
           followedBy,
         },
       ],
-      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
       extractItems: (data) => ({ items: data.results, total: data.total }),
       parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
     });

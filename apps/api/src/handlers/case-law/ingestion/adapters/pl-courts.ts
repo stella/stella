@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
@@ -1434,15 +1434,16 @@ export const plCourtsAdapter = defineSourceAdapter({
     // instead of being abandoned half-read.
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      if (!isSaosDumpPage(json)) {
-        throw new AdapterFetchError({
-          message: "SAOS dump API returned a payload with no items array",
-          adapterKey: ADAPTER_KEYS.PL_COURTS,
-          // Reading a page is not told which cursor asked for it.
-          cursor: null,
-        });
-      }
-      return json;
+      return isSaosDumpPage(json)
+        ? Result.ok(json)
+        : Result.err(
+            new AdapterFetchError({
+              message: "SAOS dump API returned a payload with no items array",
+              adapterKey: ADAPTER_KEYS.PL_COURTS,
+              // Reading a page is not told which cursor asked for it.
+              cursor: null,
+            }),
+          );
     },
 
     extractItems: (data) => ({ items: data.items }),

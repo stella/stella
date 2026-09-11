@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   ADAPTER_KEYS,
@@ -854,7 +854,7 @@ export const skCourtsAdapter = defineSourceAdapter({
 
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      return isSkApiResponse(json) ? json : {};
+      return Result.ok(isSkApiResponse(json) ? json : {});
     },
 
     extractItems: (data) => ({

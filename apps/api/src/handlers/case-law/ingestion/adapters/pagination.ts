@@ -115,10 +115,23 @@ type PagePaginationOptions<TResponse> = {
    */
   traversal?: readonly TraversalMode[] | undefined;
   /**
-   * Parse the raw response into a typed result.
-   * Should throw on unexpected response shapes.
+   * Read the publisher's body into a typed page.
+   *
+   * An answer this adapter will not read is `Result.err`, not an exception:
+   * the page then fails and its cursor is held, so the same page is asked
+   * for again next cycle rather than being passed on as something it is not.
+   * Reading a malformed body as an empty page is the failure this shape
+   * exists to prevent — for a walk that hands over on a short page, an empty
+   * page means the collection ended.
+   *
+   * A body that is not the declared format at all still rejects, because
+   * `response.json()` does; that one keeps its single retry below, since a
+   * publisher under load answers a 200 with an HTML notice and then answers
+   * properly.
    */
-  parseResponse: (response: Response) => Promise<TResponse>;
+  parseResponse: (
+    response: Response,
+  ) => Promise<Result<TResponse, AdapterFetchError>>;
   /**
    * Extract items from the parsed response.
    * Return the items and optional total count.
@@ -167,7 +180,7 @@ type PagePaginationOptions<TResponse> = {
  *     buildRequest: (page) => ({
  *       url: `https://api.example.com/search?page=${page}`,
  *     }),
- *     parseResponse: async (resp) => resp.json(),
+ *     parseResponse: async (resp) => Result.ok(await resp.json()),
  *     extractItems: (data) => ({
  *       items: data.results,
  *       total: data.totalCount,
@@ -420,9 +433,9 @@ export const createPagePaginatedFetch = <TResponse>(
     cursor: string | null,
     _config: Record<string, unknown>,
     signal?: AbortSignal,
-  ): Promise<Result<SyncPage, AdapterFetchError>> =>
-    await Result.tryPromise({
-      try: async () => {
+  ): Promise<Result<SyncPage, AdapterFetchError>> => {
+    const attempt = await Result.tryPromise({
+      try: async (): Promise<Result<SyncPage, AdapterFetchError>> => {
         const walk = modes ? decodeTraversalCursor(cursor, modes) : null;
         const offset = walk
           ? walk.offset
@@ -485,10 +498,10 @@ export const createPagePaginatedFetch = <TResponse>(
               page: String(page),
               retries: String(SERVER_ERROR_RETRIES),
             });
-            return {
+            return Result.ok({
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
-            };
+            });
           }
           throw error;
         }
@@ -513,10 +526,10 @@ export const createPagePaginatedFetch = <TResponse>(
               httpStatus: String(response.status),
               page: String(page),
             });
-            return {
+            return Result.ok({
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
-            };
+            });
           }
 
           throw new AdapterFetchError({
@@ -527,13 +540,27 @@ export const createPagePaginatedFetch = <TResponse>(
           });
         }
 
-        let data: TResponse;
-        try {
-          data = await opts.parseResponse(response);
-        } catch (parseError) {
-          // Some court APIs return HTML error pages with 200 status
-          // (rate limits, maintenance). Retry once after a delay.
-          if (parseError instanceof SyntaxError) {
+        const retryFailed = (detail: string): AdapterFetchError =>
+          new AdapterFetchError({
+            message: `${opts.adapterKey}: page ${page} retry ${detail}`,
+            adapterKey: opts.adapterKey,
+            cursor,
+          });
+
+        // A refusal comes back as Err and ends the page here: the adapter
+        // read the body and will not have it, which one more request cannot
+        // change. Only a body that would not parse at all is retried.
+        const readPage = async (): Promise<
+          Result<TResponse, AdapterFetchError>
+        > => {
+          try {
+            return await opts.parseResponse(response);
+          } catch (parseError) {
+            // Some court APIs return HTML error pages with 200 status
+            // (rate limits, maintenance). Retry once after a delay.
+            if (!(parseError instanceof SyntaxError)) {
+              throw parseError;
+            }
             const contentType =
               response.headers.get("content-type") ?? "unknown";
             logger.warn("case_law.ingestion.page_unparseable_retry", {
@@ -548,32 +575,41 @@ export const createPagePaginatedFetch = <TResponse>(
               adapterKey: opts.adapterKey,
             });
             if (!retryResponse.ok) {
-              throw new AdapterFetchError({
-                message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
-                adapterKey: opts.adapterKey,
-                cursor,
-                httpStatus: retryResponse.status,
-              });
+              return Result.err(
+                new AdapterFetchError({
+                  message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
+                  adapterKey: opts.adapterKey,
+                  cursor,
+                  httpStatus: retryResponse.status,
+                }),
+              );
             }
             try {
-              data = await opts.parseResponse(retryResponse);
+              const retried = await opts.parseResponse(retryResponse);
+              return Result.isError(retried)
+                ? Result.err(
+                    retryFailed(`validation failed: ${retried.error.message}`),
+                  )
+                : retried;
             } catch (retryParseError) {
               const retryContentType =
                 retryResponse.headers.get("content-type") ?? "unknown";
-              const detail =
-                retryParseError instanceof SyntaxError
-                  ? `unparseable (content-type: ${retryContentType})`
-                  : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
-              throw new AdapterFetchError({
-                message: `${opts.adapterKey}: page ${page} retry ${detail}`,
-                adapterKey: opts.adapterKey,
-                cursor,
-              });
+              return Result.err(
+                retryFailed(
+                  retryParseError instanceof SyntaxError
+                    ? `unparseable (content-type: ${retryContentType})`
+                    : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`,
+                ),
+              );
             }
-          } else {
-            throw parseError;
           }
+        };
+
+        const parsed = await readPage();
+        if (Result.isError(parsed)) {
+          return parsed;
         }
+        const data = parsed.value;
         const fetchMs = Math.round(performance.now() - fetchT0);
         const { items: fetchedItems, total } = opts.extractItems(data);
         const items = fetchedItems.slice(itemsAlreadyFetched);
@@ -661,8 +697,13 @@ export const createPagePaginatedFetch = <TResponse>(
           nextCursor = encodeTraversalCursor(successor, 0);
         }
 
-        return { decisions, nextCursor, sourceUrl: url };
+        return Result.ok({ decisions, nextCursor, sourceUrl: url });
       },
       catch: adapterCatch(opts.adapterKey, cursor),
     });
+
+    // The walk's own refusals and the thrown ones arrive nested one level
+    // apart; both are the same failure to the caller.
+    return attempt.andThen((page) => page);
+  };
 };
