@@ -1168,6 +1168,75 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().activeId).toBe("thread-1");
   });
 
+  test("preserves and persists local groups when a sync message omits group state", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    const store = useInspectorTabsStore.getState();
+    const threadId = toChatThreadId("thread-1");
+    store.openChat({ id: threadId, label: "Local chat" });
+    const groupId = store.createGroup({ name: "Review", color: "blue" });
+    store.setTabGroup(threadId, groupId);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "older-peer",
+      updatedAt: 1,
+      tabs: [
+        {
+          type: "chat",
+          id: threadId,
+          label: "Shared chat",
+          contextMatterIds: [],
+        },
+      ],
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      groups: [{ id: groupId, type: "custom", name: "Review", color: "blue" }],
+      groupAssignments: { [threadId]: groupId },
+    });
+
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({
+      tabs: [],
+      groups: [],
+      groupAssignments: {},
+      activeId: null,
+    });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      groups: [{ id: groupId, type: "custom", name: "Review", color: "blue" }],
+      groupAssignments: { [threadId]: groupId },
+    });
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "older-peer",
+      updatedAt: 2,
+      tabs: [
+        {
+          type: "chat",
+          id: threadId,
+          label: "Shared chat",
+          contextMatterIds: [],
+        },
+      ],
+      groups: [],
+      groupAssignments: {},
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      groups: [],
+      groupAssignments: {},
+    });
+  });
+
   test("normalizes task tabs from browser tabs created before creation status existed", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };

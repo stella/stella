@@ -566,6 +566,32 @@ const writePersistedInspectorState = (
   });
 };
 
+const subscribeInspectorPersistence = (
+  store: StoreApi<InspectorTabsStore>,
+  scope: InspectorBroadcastScope,
+) => {
+  const unsubscribeState = store.subscribe((state, previousState) => {
+    if (
+      state.tabs !== previousState.tabs ||
+      state.groups !== previousState.groups ||
+      state.groupAssignments !== previousState.groupAssignments ||
+      state.activeId !== previousState.activeId ||
+      state.collapsedGroupIds !== previousState.collapsedGroupIds
+    ) {
+      writePersistedInspectorState(scope, state);
+    }
+  });
+  const unsubscribeMinimized = store.subscribe((state, previousState) => {
+    if (state.minimized !== previousState.minimized) {
+      writePersistedMinimized(scope, state.minimized);
+    }
+  });
+  return () => {
+    unsubscribeState();
+    unsubscribeMinimized();
+  };
+};
+
 const createInspectorBroadcastSession = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
@@ -619,24 +645,7 @@ const createInspectorBroadcastSession = (
     lastTabsClock = getNextInspectorBroadcastClock(lastTabsClock, clientId);
     postTabs();
   });
-  const unsubscribeStatePersistence = store.subscribe(
-    (state, previousState) => {
-      if (
-        state.tabs !== previousState.tabs ||
-        state.groups !== previousState.groups ||
-        state.groupAssignments !== previousState.groupAssignments ||
-        state.activeId !== previousState.activeId ||
-        state.collapsedGroupIds !== previousState.collapsedGroupIds
-      ) {
-        writePersistedInspectorState(scope, state);
-      }
-    },
-  );
-  const unsubscribeMinimized = store.subscribe((state, previousState) => {
-    if (state.minimized !== previousState.minimized) {
-      writePersistedMinimized(scope, state.minimized);
-    }
-  });
+  const unsubscribePersistence = subscribeInspectorPersistence(store, scope);
 
   const handleMessage = (event: MessageEvent<unknown>) => {
     const message = event.data;
@@ -666,23 +675,12 @@ const createInspectorBroadcastSession = (
     applyingRemote = true;
     try {
       lastTabsClock = messageClock;
-      let groups: InspectorTabGroup[];
-      if (message.groups === undefined) {
-        groups = [];
-      } else {
-        groups = message.groups;
-      }
-      let groupAssignments: Record<string, string | null>;
-      if (message.groupAssignments === undefined) {
-        groupAssignments = {};
-      } else {
-        groupAssignments = message.groupAssignments;
-      }
+      const state = store.getState();
       applySharedInspectorTabs(
         store,
         message.tabs.map(normalizeInspectorBroadcastTab),
-        groups,
-        groupAssignments,
+        message.groups ?? state.groups,
+        message.groupAssignments ?? state.groupAssignments,
       );
       writePersistedInspectorState(scope, store.getState());
     } finally {
@@ -698,8 +696,7 @@ const createInspectorBroadcastSession = (
   const scopeKey = `${scope.organizationId}:${scope.userId}`;
   const dispose = () => {
     unsubscribe();
-    unsubscribeStatePersistence();
-    unsubscribeMinimized();
+    unsubscribePersistence();
     channel.removeEventListener("message", handleMessage);
     channel.close();
     if (inspectorBroadcastSession?.scopeKey === scopeKey) {
@@ -774,26 +771,7 @@ export const initializeInspectorTabBroadcast = (
     if (typeof window === "undefined") {
       return noopInspectorBroadcastCleanup;
     }
-    const unsubscribeState = store.subscribe((state, previousState) => {
-      if (
-        state.tabs !== previousState.tabs ||
-        state.groups !== previousState.groups ||
-        state.groupAssignments !== previousState.groupAssignments ||
-        state.activeId !== previousState.activeId ||
-        state.collapsedGroupIds !== previousState.collapsedGroupIds
-      ) {
-        writePersistedInspectorState(scope, state);
-      }
-    });
-    const unsubscribeMinimized = store.subscribe((state, previousState) => {
-      if (state.minimized !== previousState.minimized) {
-        writePersistedMinimized(scope, state.minimized);
-      }
-    });
-    return () => {
-      unsubscribeState();
-      unsubscribeMinimized();
-    };
+    return subscribeInspectorPersistence(store, scope);
   }
   if (inspectorBroadcastSession?.scopeKey === scopeKey) {
     inspectorBroadcastSession.retain();
