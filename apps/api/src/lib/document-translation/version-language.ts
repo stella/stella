@@ -2,9 +2,7 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 
-import type {
-  DocumentTranslationSourceLanguageCode,
-} from "@stll/api-contract/document-translation";
+import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
 import type { Transaction } from "@/api/db/root";
 import { entityVersions } from "@/api/db/schema";

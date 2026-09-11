@@ -1,8 +1,6 @@
 import { t } from "elysia";
 
-import {
-  DOCUMENT_TRANSLATION_TARGET_LANGUAGES,
-} from "@stll/api-contract/document-translation";
+import { DOCUMENT_TRANSLATION_TARGET_LANGUAGES } from "@stll/api-contract/document-translation";
 
 import { tSafeId } from "@/api/lib/custom-schema";
 import {

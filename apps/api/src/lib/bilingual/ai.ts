@@ -4,7 +4,7 @@
 
 import type { ModelMessage, TextPart } from "@tanstack/ai";
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -534,25 +534,29 @@ const hasExactSpanIds = (
 
 const serializeFormattedRows = (
   batch: readonly FormattedBilingualUnit[],
-): string => {
+): Result<string, BilingualAIContractError> => {
   const lines: string[] = [];
   let serializedChars = 0;
   for (const unit of batch) {
     if (unit.inline.length > FORMATTED_INLINE_TOKENS_MAX) {
-      throw new BilingualAIContractError({
-        message: `Formatted bilingual row ${unit.rowId} exceeds the inline token limit`,
-      });
+      return Result.err(
+        new BilingualAIContractError({
+          message: `Formatted bilingual row ${unit.rowId} exceeds the inline token limit`,
+        }),
+      );
     }
     const serialized = JSON.stringify(unit.inline);
     serializedChars += serialized.length;
     if (serializedChars > FORMATTED_ROWS_SERIALIZED_CHARS_MAX) {
-      throw new BilingualAIContractError({
-        message: "Formatted bilingual batch exceeds the prompt size limit",
-      });
+      return Result.err(
+        new BilingualAIContractError({
+          message: "Formatted bilingual batch exceeds the prompt size limit",
+        }),
+      );
     }
     lines.push(`#${unit.ordinal}: ${serialized}`);
   }
-  return lines.join("\n");
+  return Result.ok(lines.join("\n"));
 };
 
 type FormattedTranslationOutput = v.InferOutput<
@@ -590,7 +594,9 @@ export const translateFormattedBatch = async (
   { batch, preceding, glossary }: TranslateFormattedBatchInput,
   languages: TranslationLanguages,
   context: BilingualAIDocumentContext,
-): Promise<Map<number, BilingualFormattedTranslation>> => {
+): Promise<
+  Result<Map<number, BilingualFormattedTranslation>, BilingualAIContractError>
+> => {
   const analytics = analyticsFor(
     context,
     "bilingual.translate",
@@ -610,8 +616,11 @@ export const translateFormattedBatch = async (
   const translateAttempt = async (
     remaining: readonly FormattedBilingualUnit[],
     attempt: number,
-  ): Promise<void> => {
-    const rowLines = serializeFormattedRows(remaining);
+  ): Promise<Result<void, BilingualAIContractError>> => {
+    const serialized = serializeFormattedRows(remaining);
+    if (Result.isError(serialized)) {
+      return serialized;
+    }
     const repairInstruction =
       attempt === 1
         ? ""
@@ -619,7 +628,7 @@ export const translateFormattedBatch = async (
     const request = buildBilingualDocumentRequest(
       context,
       TRANSLATION_ROLE,
-      `${translationLanguageInstruction(languages)}\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${rowLines}${repairInstruction}`,
+      `${translationLanguageInstruction(languages)}\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${serialized.value}${repairInstruction}`,
     );
     const output = await (
       context.generateObjectForRole ?? generateTanStackObjectForRole
@@ -639,11 +648,15 @@ export const translateFormattedBatch = async (
     });
     const rejected = collectFormattedTranslations(remaining, output, result);
     if (attempt < FORMATTED_OUTPUT_ATTEMPTS && rejected.length > 0) {
-      await translateAttempt(rejected, attempt + 1);
+      return await translateAttempt(rejected, attempt + 1);
     }
+    return Result.ok();
   };
   if (batch.length > 0) {
-    await translateAttempt(batch, 1);
+    const translated = await translateAttempt(batch, 1);
+    if (Result.isError(translated)) {
+      return translated;
+    }
   }
-  return result;
+  return Result.ok(result);
 };

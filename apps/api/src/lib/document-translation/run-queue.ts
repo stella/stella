@@ -927,7 +927,7 @@ const translateBilingualWithAI = async (
       }
       formattedBatch.push(formattedUnit);
     }
-    const result = await Result.tryPromise({
+    const attempted = await Result.tryPromise({
       try: async () =>
         await translateFormattedBatch(
           {
@@ -940,12 +940,17 @@ const translateBilingualWithAI = async (
         ),
       catch: (cause) => cause,
     });
-    if (Result.isError(result)) {
-      return Result.err(documentTranslationProviderErrorCode(result.error));
+    if (Result.isError(attempted)) {
+      return Result.err(documentTranslationProviderErrorCode(attempted.error));
+    }
+    if (Result.isError(attempted.value)) {
+      return Result.err(
+        documentTranslationProviderErrorCode(attempted.value.error),
+      );
     }
     const updates: { unitKey: string; targetText: string }[] = [];
     for (const row of batch) {
-      const formattedTranslation = result.value.get(row.ordinal);
+      const formattedTranslation = attempted.value.value.get(row.ordinal);
       if (formattedTranslation === undefined) {
         return Result.err("translation_failed");
       }

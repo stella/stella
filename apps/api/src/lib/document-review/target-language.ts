@@ -56,9 +56,7 @@ const detectReviewLanguage = (
 export const resolveReviewTargetLanguage = (
   target: PreparedDocxFile,
 ): ReviewTargetLanguage =>
-  detectReviewLanguage(
-    target.blocks.map((block) => block.text).join("\n"),
-  );
+  detectReviewLanguage(target.blocks.map((block) => block.text).join("\n"));
 
 /**
  * The language `text` is confidently written in, when that is not the
