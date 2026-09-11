@@ -116,18 +116,6 @@ export const shouldCopyFromClipboardInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "Enter" && !isComposing;
 
-/**
- * ArrowUp in the search field hands focus back to the selected card (the rail
- * sits above the search bar). Composition keeps ArrowUp for the IME's
- * candidate list, and a clip name editor keeps its caret.
- */
-export const shouldReturnToTimelineFromInput = ({
-  dataset,
-  isComposing,
-  key,
-}: ClipboardInputKey) =>
-  !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
-
 type ClipboardSearchArrowKey = ClipboardInputKey &
   ClipboardModifiers & {
     direction: "ltr" | "rtl";
@@ -181,7 +169,8 @@ type ClipboardDirectionalKey = {
 
 /**
  * Every footer control follows visual order, including the overflow menu
- * trigger after its popup closes. ArrowUp returns to the selected card.
+ * trigger after its popup closes. Vertical arrows never move rows: they are
+ * scope keys everywhere (see `clipboardScopeKeyAction`).
  */
 export const clipboardControlsKeyAction = ({
   direction,
@@ -192,13 +181,59 @@ export const clipboardControlsKeyAction = ({
       return direction === "rtl" ? "next" : "previous";
     case "ArrowRight":
       return direction === "rtl" ? "previous" : "next";
-    case "ArrowUp":
-      return "focusTimeline";
-    case "ArrowDown":
-      return "stay";
     default:
       return null;
   }
+};
+
+export const CLIPBOARD_SEARCH_SCOPES = ["clips", "registry", "groups"] as const;
+export type ClipboardSearchScope = (typeof CLIPBOARD_SEARCH_SCOPES)[number];
+
+/** The scope the current source and group selection amount to. */
+export const clipboardSearchScope = ({
+  activeGroupId,
+  source,
+}: {
+  activeGroupId: string | null;
+  source: "clips" | "registry";
+}): ClipboardSearchScope => {
+  if (source === "registry") {
+    return "registry";
+  }
+  return activeGroupId === null ? "clips" : "groups";
+};
+
+/**
+ * Vertical arrows step through the search scopes from wherever focus is; the
+ * rail and the footer keep only the horizontal arrows.
+ */
+export const clipboardScopeKeyAction = (key: string) => {
+  switch (key) {
+    case "ArrowDown":
+      return "next";
+    case "ArrowUp":
+      return "previous";
+    default:
+      return null;
+  }
+};
+
+/** The neighbouring scope, or null at either end of the list (no wrap). */
+export const adjacentClipboardScope = ({
+  action,
+  available,
+  current,
+}: {
+  action: "next" | "previous";
+  available: readonly ClipboardSearchScope[];
+  current: ClipboardSearchScope;
+}): ClipboardSearchScope | null => {
+  const index = available.indexOf(current);
+  const nextIndex = index + (action === "next" ? 1 : -1);
+  if (index === -1 || nextIndex < 0 || nextIndex >= available.length) {
+    return null;
+  }
+  return available.at(nextIndex) ?? null;
 };
 
 /**
@@ -227,9 +262,6 @@ export const clipboardTimelineKeyAction = ({
   direction,
   key,
 }: ClipboardDirectionalKey) => {
-  if (key === "ArrowDown") {
-    return "focusSearch";
-  }
   const forward = direction === "rtl" ? "ArrowLeft" : "ArrowRight";
   if (key === forward) {
     return "next";

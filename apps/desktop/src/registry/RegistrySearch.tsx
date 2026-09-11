@@ -60,7 +60,6 @@ type RegistrySearchProps = {
   composing: boolean;
   source: "clips" | "registry";
   onSourceChange: (source: "clips" | "registry") => void;
-  onFocusSearch: () => void;
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
   children: (slots: {
     controls: ReactNode;
@@ -76,7 +75,6 @@ export const RegistrySearch = ({
   composing,
   source,
   onSourceChange,
-  onFocusSearch,
   onConnectionFlowChange,
   children,
 }: RegistrySearchProps) => {
@@ -495,11 +493,6 @@ export const RegistrySearch = ({
                     !(event.target instanceof HTMLButtonElement) ||
                     !Object.hasOwn(event.target.dataset, "registryCard")
                   ) {
-                    return;
-                  }
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    onFocusSearch();
                     return;
                   }
                   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {

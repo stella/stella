@@ -304,24 +304,44 @@ for (const {
       });
     }
 
-    test("vertical arrows move between the shared search and clipboard cards", async ({
+    test("vertical arrows switch the search scope and never move rows", async ({
       page,
     }) => {
       const cards = await openClipboard(page, language);
+      const search = page.getByRole("searchbox");
+      // The groups rail yields to the registry chooser in registry scope.
+      const groupsRail = page.locator(".clipboard-groups-rail");
+      const pressedGroup = page.locator(
+        '[data-clipboard-group-id][aria-pressed="true"]',
+      );
       await page.keyboard.press(nextCardKey);
       await expect(cards.nth(1)).toBeFocused();
       await page.keyboard.press("ArrowDown");
-      const search = page.getByRole("searchbox");
       await expect(search).toBeFocused();
-      await search.fill("Clipboard item");
-      await search.press("ArrowDown");
+      await expect(groupsRail).toBeHidden();
+      await page.keyboard.press("ArrowDown");
       await expect(search).toBeFocused();
-      expect(await invocationCount(page, "registry_show")).toBe(0);
-      await search.press("ArrowUp");
-      await expect(cards.first()).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await expect(pressedGroup).not.toHaveAttribute(
+        "data-clipboard-group-id",
+        "__no_group__",
+      );
+      await page.keyboard.press("ArrowDown");
+      await expect(search).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await page.keyboard.press("ArrowUp");
+      await expect(groupsRail).toBeHidden();
+      await page.keyboard.press("ArrowUp");
+      await expect(groupsRail).toBeVisible();
+      await expect(pressedGroup).toHaveAttribute(
+        "data-clipboard-group-id",
+        "__no_group__",
+      );
+      await expect(search).toBeFocused();
+      await expect(
+        page.locator('[data-clipboard-id="clip-2"]'),
+      ).toHaveAttribute("aria-current", "true");
       expect(await invocationCount(page, "registry_search")).toBe(0);
-      await cards.first().press("ArrowDown");
-      await expect(search).toBeFocused();
     });
 
     for (const dismissal of ["dom", "native"] as const) {
@@ -417,7 +437,7 @@ for (const {
       await page.keyboard.press(nextCardKey);
       await expect(cards.nth(1)).toBeFocused();
       await page.mouse.move(0, 0);
-      await page.keyboard.press("ArrowDown");
+      await page.getByRole("searchbox").focus();
       await expect(page.getByRole("searchbox")).toBeFocused();
 
       await page.keyboard.press(previousGroupKey);
@@ -449,7 +469,7 @@ for (const {
       await expect(
         page.locator(".clipboard-groups-rail button").nth(1),
       ).toBeFocused();
-      await page.keyboard.press("ArrowUp");
+      await cards.nth(1).focus();
       await expect(cards.nth(1)).toBeFocused();
       await expect
         .poll(
@@ -463,7 +483,6 @@ for (const {
     }) => {
       const cards = await openClipboard(page, language);
       const search = page.getByRole("searchbox");
-
       await cards.first().evaluate(
         (card, keys) => {
           for (const key of keys) {
@@ -479,7 +498,6 @@ for (const {
         [nextCardKey, "ArrowDown"],
       );
       await expect(search).toBeFocused();
-
       await page.evaluate(
         async () =>
           new Promise<void>((resolve) => {
@@ -490,6 +508,8 @@ for (const {
             });
           }),
       );
+      await expect(search).toBeFocused();
+      await page.keyboard.press("ArrowUp");
       await expect(search).toBeFocused();
       await expect(
         page.locator('[data-clipboard-id="clip-2"]'),
@@ -524,7 +544,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
     '[data-clipboard-group-id][aria-pressed="true"]',
   );
   const focusActiveGroup = async () => {
-    await page.keyboard.press("ArrowDown");
+    await search.focus();
     await expect(search).toBeFocused();
     const searchFocusColor = await page
       .locator(".clipboard-search")
@@ -548,7 +568,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   );
   expect(initialFocus.indicator.outlineStyle).toBe("solid");
   expect(initialFocus.indicator.outlineWidth).toBe("2px");
-  await page.keyboard.press("ArrowUp");
+  await cards.first().focus();
   await expect(cards.first()).toBeFocused();
 
   const moreOptions = page.getByRole("button", { name: "More options" });
@@ -560,9 +580,13 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   await expect(screenCaptureSetting).toBeHidden();
   await expect(moreOptions).toBeFocused();
 
+  // Vertical arrows are scope keys even on a closed menu trigger.
   await page.keyboard.press("ArrowDown");
-  await expect(moreOptions).toBeFocused();
+  await expect(search).toBeFocused();
   await expect(screenCaptureSetting).toBeHidden();
+  await page.keyboard.press("ArrowUp");
+  await expect(search).toBeFocused();
+  await moreOptions.focus();
   await page.keyboard.press("ArrowLeft");
   const workGroup = page.locator('[data-clipboard-group-id="work"]');
   await expect(workGroup).toBeFocused();
@@ -575,10 +599,10 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   await expect(moreOptions).toBeFocused();
-  await page.keyboard.press("ArrowUp");
+  await cards.first().focus();
   await expect(cards.first()).toBeFocused();
 
-  await page.keyboard.press("ArrowDown");
+  await search.focus();
   const footerControls = page.locator(
     ".clipboard-controls button:not([disabled]):not([aria-disabled='true']), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
   );

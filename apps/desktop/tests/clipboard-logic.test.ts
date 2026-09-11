@@ -7,7 +7,10 @@ import {
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
+  adjacentClipboardScope,
   clipboardControlsKeyAction,
+  clipboardScopeKeyAction,
+  clipboardSearchScope,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -22,7 +25,6 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
-  shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
 
@@ -325,12 +327,12 @@ test("source apps receive a stable tint from the bounded palette", () => {
 });
 
 describe("keyboard indexes", () => {
-  test("timeline arrows navigate horizontally and Arrow Down focuses search", () => {
+  test("timeline arrows navigate horizontally and leave vertical arrows alone", () => {
     const ltr = (key: string) =>
       clipboardTimelineKeyAction({ direction: "ltr", key });
     expect(ltr("ArrowLeft")).toBe("previous");
     expect(ltr("ArrowRight")).toBe("next");
-    expect(ltr("ArrowDown")).toBe("focusSearch");
+    expect(ltr("ArrowDown")).toBeNull();
     expect(ltr("ArrowUp")).toBeNull();
   });
 
@@ -339,25 +341,69 @@ describe("keyboard indexes", () => {
       clipboardTimelineKeyAction({ direction: "rtl", key });
     expect(rtl("ArrowLeft")).toBe("next");
     expect(rtl("ArrowRight")).toBe("previous");
-    expect(rtl("ArrowDown")).toBe("focusSearch");
+    expect(rtl("ArrowDown")).toBeNull();
     expect(rtl("ArrowUp")).toBeNull();
   });
 
-  test("footer arrows follow visual order and Arrow Up returns to the timeline", () => {
+  test("footer arrows follow visual order and ignore vertical keys", () => {
     const ltr = (key: string) =>
       clipboardControlsKeyAction({ direction: "ltr", key });
     expect(ltr("ArrowLeft")).toBe("previous");
     expect(ltr("ArrowRight")).toBe("next");
-    expect(ltr("ArrowUp")).toBe("focusTimeline");
-    expect(ltr("ArrowDown")).toBe("stay");
+    expect(ltr("ArrowUp")).toBeNull();
+    expect(ltr("ArrowDown")).toBeNull();
     expect(ltr("Enter")).toBeNull();
 
     const rtl = (key: string) =>
       clipboardControlsKeyAction({ direction: "rtl", key });
     expect(rtl("ArrowLeft")).toBe("next");
     expect(rtl("ArrowRight")).toBe("previous");
-    expect(rtl("ArrowUp")).toBe("focusTimeline");
-    expect(rtl("ArrowDown")).toBe("stay");
+  });
+
+  test("vertical arrows step through the available scopes without wrapping", () => {
+    expect(clipboardScopeKeyAction("ArrowDown")).toBe("next");
+    expect(clipboardScopeKeyAction("ArrowUp")).toBe("previous");
+    expect(clipboardScopeKeyAction("ArrowLeft")).toBeNull();
+
+    const all = ["clips", "registry", "groups"] as const;
+    expect(
+      adjacentClipboardScope({
+        action: "next",
+        available: all,
+        current: "clips",
+      }),
+    ).toBe("registry");
+    expect(
+      adjacentClipboardScope({
+        action: "next",
+        available: all,
+        current: "groups",
+      }),
+    ).toBeNull();
+    expect(
+      adjacentClipboardScope({
+        action: "previous",
+        available: all,
+        current: "clips",
+      }),
+    ).toBeNull();
+    expect(
+      adjacentClipboardScope({
+        action: "previous",
+        available: ["clips", "registry"],
+        current: "registry",
+      }),
+    ).toBe("clips");
+
+    expect(clipboardSearchScope({ activeGroupId: null, source: "clips" })).toBe(
+      "clips",
+    );
+    expect(clipboardSearchScope({ activeGroupId: "g", source: "clips" })).toBe(
+      "groups",
+    );
+    expect(
+      clipboardSearchScope({ activeGroupId: "g", source: "registry" }),
+    ).toBe("registry");
   });
 
   test("timeline navigation has no target beyond either edge", () => {
@@ -515,37 +561,6 @@ describe("clipboard input keyboard handling", () => {
         dataset: {},
         isComposing: true,
         key: "Enter",
-      }),
-    ).toBe(false);
-  });
-
-  test("ArrowUp in search returns focus to the timeline", () => {
-    expect(
-      shouldReturnToTimelineFromInput({
-        dataset: {},
-        isComposing: false,
-        key: "ArrowUp",
-      }),
-    ).toBe(true);
-    expect(
-      shouldReturnToTimelineFromInput({
-        dataset: {},
-        isComposing: true,
-        key: "ArrowUp",
-      }),
-    ).toBe(false);
-    expect(
-      shouldReturnToTimelineFromInput({
-        dataset: { clipboardNameInput: "" },
-        isComposing: false,
-        key: "ArrowUp",
-      }),
-    ).toBe(false);
-    expect(
-      shouldReturnToTimelineFromInput({
-        dataset: {},
-        isComposing: false,
-        key: "ArrowDown",
       }),
     ).toBe(false);
   });

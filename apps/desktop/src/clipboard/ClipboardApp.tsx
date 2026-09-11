@@ -113,8 +113,12 @@ import {
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  clipboardTimelineKeyAction,
+  CLIPBOARD_SEARCH_SCOPES,
+  adjacentClipboardScope,
   clipboardControlsKeyAction,
+  clipboardScopeKeyAction,
+  clipboardSearchScope,
+  clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -123,10 +127,12 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
-  shouldReturnToTimelineFromInput,
   shouldLeaveClipboardSearch,
 } from "./clipboard-logic";
-import type { ClipboardPointerPosition } from "./clipboard-logic";
+import type {
+  ClipboardPointerPosition,
+  ClipboardSearchScope,
+} from "./clipboard-logic";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -1906,29 +1912,6 @@ const ClipboardApp = () => {
       return;
     }
     event.preventDefault();
-    switch (railAction) {
-      case "stay":
-        return;
-      case "focusTimeline":
-        if (searchSource === "registry") {
-          timelineRef.current
-            ?.querySelector<HTMLElement>(
-              "[data-registry-card]:not(:disabled), [data-registry-controls] button:not(:disabled)",
-            )
-            ?.focus();
-          return;
-        }
-        if (activeItem) {
-          selectIndex(activeIndex);
-        }
-        return;
-      case "previous":
-      case "next":
-        break;
-      default:
-        railAction satisfies never;
-        panic("Unknown clipboard control navigation action.");
-    }
     const controls = Array.from(
       footer.querySelectorAll<HTMLElement>(
         "button:not([disabled]):not([aria-disabled='true']), a[href], input:not([disabled])",
@@ -1951,36 +1934,76 @@ const ClipboardApp = () => {
       event.target instanceof HTMLElement &&
       event.target.closest("[data-registry-controls], [data-registry-results]")
     ) {
-      if (
-        event.key === "ArrowDown" &&
-        !event.isComposing &&
-        event.target.closest("[data-registry-controls]") &&
-        !event.target.closest('[aria-haspopup="menu"], [role="menu"]')
-      ) {
-        event.preventDefault();
-        searchInputRef.current?.focus();
-      }
-      return true;
-    }
-    if (
-      searchSource === "registry" &&
-      event.target === searchInputRef.current &&
-      event.key === "ArrowUp" &&
-      !event.isComposing &&
-      query.trim()
-    ) {
-      const target =
-        timelineRef.current?.querySelector<HTMLElement>(
-          "[data-registry-card]:not(:disabled)",
-        ) ??
-        timelineRef.current?.querySelector<HTMLElement>(
-          "[data-registry-controls] button:not(:disabled)",
-        );
-      event.preventDefault();
-      target?.focus();
       return true;
     }
     return searchSource === "registry";
+  };
+
+  const searchScope = clipboardSearchScope({
+    activeGroupId,
+    source: searchSource,
+  });
+  const availableScopes: readonly ClipboardSearchScope[] =
+    snapshot.groups.length === 0
+      ? CLIPBOARD_SEARCH_SCOPES.filter((scope) => scope !== "groups")
+      : CLIPBOARD_SEARCH_SCOPES;
+  // Scopes are the only thing vertical arrows do, from the rail, the search
+  // field, and the footer alike. Focus returns to the search field so typing
+  // continues in the new scope without another keystroke.
+  const switchScope = (action: "next" | "previous") => {
+    const next = adjacentClipboardScope({
+      action,
+      available: availableScopes,
+      current: searchScope,
+    });
+    if (next === null) {
+      return;
+    }
+    setContextMenu({ type: "closed" });
+    switch (next) {
+      case "clips":
+        setSelectedGroupId(null);
+        setSearchSource("clips");
+        break;
+      case "registry":
+        setSearchSource("registry");
+        break;
+      case "groups": {
+        const remembered = snapshot.groups.find(
+          (group) => group.id === selectedGroupId,
+        );
+        setSelectedGroupId((remembered ?? snapshot.groups.at(0))?.id ?? null);
+        setSearchSource("clips");
+        break;
+      }
+      default:
+        next satisfies never;
+        panic("Unknown clipboard search scope.");
+    }
+    searchInputRef.current?.focus();
+  };
+  const handleScopeKey = (event: KeyboardEvent) => {
+    const action = clipboardScopeKeyAction(event.key);
+    if (
+      !action ||
+      event.isComposing ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !(event.target instanceof HTMLElement) ||
+      // Open popups, dialogs, and multi-line editors keep their own arrows.
+      event.target.closest(
+        '[role="menu"], [role="dialog"], textarea, select, [contenteditable="true"]',
+      ) ||
+      (event.target instanceof HTMLInputElement &&
+        isClipboardNameInput(event.target.dataset))
+    ) {
+      return false;
+    }
+    event.preventDefault();
+    switchScope(action);
+    return true;
   };
 
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -1998,6 +2021,9 @@ const ClipboardApp = () => {
       event.preventDefault();
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
+      return;
+    }
+    if (handleScopeKey(event)) {
       return;
     }
     if (handleRegistryKeyDown(event)) {
@@ -2027,9 +2053,6 @@ const ClipboardApp = () => {
           event.preventDefault();
           copyItem(item);
         }
-      } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
-        event.preventDefault();
-        selectIndex(activeIndex);
       } else if (
         shouldLeaveClipboardSearch({
           ...inputKey,
@@ -2091,11 +2114,6 @@ const ClipboardApp = () => {
       direction: railDirection,
       key: event.key,
     });
-    if (keyAction === "focusSearch") {
-      event.preventDefault();
-      searchInputRef.current?.focus();
-      return;
-    }
     if (keyAction) {
       event.preventDefault();
       navigate(keyAction);
@@ -2257,7 +2275,6 @@ const ClipboardApp = () => {
         composing={searchComposing}
         source={searchSource}
         onSourceChange={changeSearchSource}
-        onFocusSearch={() => searchInputRef.current?.focus()}
         onConnectionFlowChange={(flow) => {
           connectionFlowRef.current = flow;
         }}
