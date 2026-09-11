@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1088,
+    "count": 1087,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 1,
@@ -353,7 +353,7 @@
       "apps/web/src/routes/_protected.settings/organization.members.tsx": 1,
       "apps/web/src/routes/_protected.settings/organization.route.tsx": 1,
       "apps/web/src/routes/_protected.tsx": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr.ts": 2,
