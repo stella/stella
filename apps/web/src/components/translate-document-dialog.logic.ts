@@ -129,9 +129,7 @@ export const defaultDocumentTranslationTarget = ({
   if (offered.has(fromLocale)) {
     return fromLocale;
   }
-  return (
-    supportedTargets.at(0) ?? panic("No translation target is available")
-  );
+  return supportedTargets.at(0) ?? panic("No translation target is available");
 };
 
 export type DocumentTranslationCommentPolicy =
