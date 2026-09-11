@@ -245,12 +245,13 @@ describe("a dump answer the crawl cannot read", () => {
 
   const answerWith = (body: unknown) => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = asFetchMock(() =>
-      Promise.resolve(
-        new Response(JSON.stringify(body), {
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }),
-      ),
+    globalThis.fetch = asFetchMock(
+      async () =>
+        await Promise.resolve(
+          new Response(JSON.stringify(body), {
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+          }),
+        ),
     );
     restore = () => {
       globalThis.fetch = originalFetch;
