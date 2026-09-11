@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Options for page-number pagination (1-indexed or
@@ -271,11 +272,20 @@ const BAD_GATEWAY_STATUS = 502;
  * on the FIRST one, so a name containing it names a walk that does not
  * exist: every cursor the walk writes then decodes as "no walk", which
  * restarts the crawl from the first walk on every step, silently and
- * forever. `assertNamesCarryNoSeparator` refuses that at construction.
+ * forever. `assertNamesAreUsable` refuses that at construction.
  */
 const TRAVERSAL_CURSOR_SEPARATOR = ":";
 
-const OFFSET_CURSOR_PREFIX = "offset:";
+/**
+ * What a plain offset cursor carries where a walk's cursor carries its name.
+ *
+ * Reserved for that reason: a walk of this name would read `offset:50000`,
+ * written by the plain walk, as offset 50 000 inside itself, silently
+ * skipping everything before it rather than starting the walk.
+ */
+const PLAIN_CURSOR_NAME = "offset";
+
+const OFFSET_CURSOR_PREFIX = `${PLAIN_CURSOR_NAME}${TRAVERSAL_CURSOR_SEPARATOR}`;
 const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
 export const encodeOffsetCursor = (offset: number): string =>
@@ -320,6 +330,39 @@ export const decodeOffsetCursor = ({
   return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
 };
 
+/** Whether a cursor is `<walk>:<offset>`, whoever wrote that walk. */
+const namesAWalk = (cursor: string): boolean => {
+  const separator = cursor.indexOf(TRAVERSAL_CURSOR_SEPARATOR);
+  return (
+    separator > 0 &&
+    parseCanonicalNonNegativeSafeInteger(cursor.slice(separator + 1)) !== null
+  );
+};
+
+/**
+ * The offset a plain walk resumes at.
+ *
+ * A cursor naming a walk reaches the plain walk whenever a source stops
+ * configuring one, and the offset inside that walk points nowhere in the
+ * unfiltered collection. So the plain walk starts over, which is what
+ * {@link decodeTraversalCursor} answers a cursor naming an unknown walk and
+ * for the same reason. Rejecting it instead would stall the source outright:
+ * a failed page holds its cursor, and nothing else ever rewrites it, so the
+ * next cycle would reject the very same cursor.
+ *
+ * A cursor that is neither shape is still rejected — that is a cursor nobody
+ * here wrote, and reading it as "start over" would hide it forever.
+ */
+const decodePlainWalkCursor = (
+  params: DecodeOffsetCursorParams,
+): number | null => {
+  const offset = decodeOffsetCursor(params);
+  if (offset !== null) {
+    return offset;
+  }
+  return params.cursor !== null && namesAWalk(params.cursor) ? 0 : null;
+};
+
 /**
  * The mode a cursor names and the offset within it.
  *
@@ -353,30 +396,51 @@ export const decodeTraversalCursor = (
 export const encodeTraversalCursor = (mode: string, offset: number): string =>
   `${mode}${TRAVERSAL_CURSOR_SEPARATOR}${offset}`;
 
-const nameIsCursorSafe = (name: string): boolean =>
-  !name.includes(TRAVERSAL_CURSOR_SEPARATOR);
+const nameCarriesSeparator = (name: string): boolean =>
+  name.includes(TRAVERSAL_CURSOR_SEPARATOR);
 
-const assertNamesCarryNoSeparator = (
+const nameIsPlainCursorName = (name: string): boolean =>
+  name === PLAIN_CURSOR_NAME;
+
+const assertNamesAreUsable = (
   adapterKey: string,
   modes: readonly TraversalMode[],
 ): void => {
   for (const { name } of modes) {
-    if (!nameIsCursorSafe(name)) {
+    if (nameCarriesSeparator(name)) {
       panic(
         `${adapterKey}: traversal walk "${name}" contains ${TRAVERSAL_CURSOR_SEPARATOR}, which its cursors are split on`,
+      );
+    }
+    if (nameIsPlainCursorName(name)) {
+      panic(
+        `${adapterKey}: traversal walk "${name}" is the name a plain offset cursor carries`,
       );
     }
   }
 };
 
-/** The fields a policy entry carries whatever kind it names. */
+/**
+ * The fields a policy entry carries whatever kind it names.
+ *
+ * The name is the walk's whole identity: it is all a cursor persists, and an
+ * offset means "this far into whatever this name now covers". So a walk keeps
+ * its name only while it covers the same thing. Widening a window under the
+ * same name resumes the old offset inside the new one, which steps over
+ * everything the widening added ahead of it; rename the walk instead, and the
+ * cursor naming the old one restarts the crawl at the first walk.
+ */
 const WALK_ENTRY_FIELDS = {
   name: v.pipe(
     v.string(),
     v.minLength(1),
     v.check(
-      nameIsCursorSafe,
+      (name) => !nameCarriesSeparator(name),
       `a walk name may not contain "${TRAVERSAL_CURSOR_SEPARATOR}", which its cursors are split on`,
+    ),
+    v.check(
+      (name) => !nameIsPlainCursorName(name),
+      `a walk may not be named "${PLAIN_CURSOR_NAME}", which is the name a plain offset cursor carries`,
     ),
   ),
   kind: v.pipe(v.string(), v.minLength(1)),
@@ -465,6 +529,14 @@ const materialiseConfiguredWalks = ({
         cursor,
       }),
     );
+
+  // The column is JSON, so a row can hold any JSON value, and older rows do
+  // hold a string. A value that is not an object cannot carry a `walks` key,
+  // so it states no policy — the plain walk — rather than a broken one. Only
+  // a stated policy can be malformed, and that still refuses below.
+  if (!isRecord(config)) {
+    return Result.ok([]);
+  }
 
   const parsed = v.safeParse(walkPolicySchema, config);
   if (!parsed.success) {
@@ -614,7 +686,7 @@ export const createPagePaginatedFetch = <TResponse>(
   const { firstPage, walkKinds } = opts;
   const declaredModes = opts.traversal;
   if (declaredModes !== undefined) {
-    assertNamesCarryNoSeparator(opts.adapterKey, declaredModes);
+    assertNamesAreUsable(opts.adapterKey, declaredModes);
   }
 
   return async (
@@ -646,7 +718,7 @@ export const createPagePaginatedFetch = <TResponse>(
         const walk = modes ? decodeTraversalCursor(cursor, modes) : null;
         const offset = walk
           ? walk.offset
-          : decodeOffsetCursor({
+          : decodePlainWalkCursor({
               cursor,
               firstPage,
               legacyPageSize: opts.legacyPageSize ?? opts.pageSize,

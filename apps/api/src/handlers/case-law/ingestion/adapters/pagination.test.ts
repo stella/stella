@@ -1010,6 +1010,11 @@ describe("walks configured by the source", () => {
       detail: ":",
     },
     {
+      why: "gives a walk the name a plain cursor carries",
+      walks: [windowWalk("offset", "a")],
+      detail: 'may not be named "offset"',
+    },
+    {
       why: "states walks that are not a list",
       walks: "everything",
       detail: "walks",
@@ -1030,4 +1035,118 @@ describe("walks configured by the source", () => {
       expect(page.error.cursor).toBe("first:0");
     });
   }
+});
+
+/**
+ * What the plain walk does with cursors and configurations it did not write.
+ *
+ * A source that stops configuring walks, or whose configuration was never an
+ * object, still has a checkpoint and still has to make progress. Each case
+ * below stalls the source outright if the page fails instead: a failed page
+ * holds its cursor, and nothing else rewrites it, so the next cycle is handed
+ * the identical input and fails identically.
+ */
+describe("the plain walk recovers from what a configured one left behind", () => {
+  let restore: (() => void) | undefined;
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  const populated = async () => {
+    await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+  };
+
+  const plainFetch = () =>
+    createPagePaginatedFetch<TestResponse>({
+      adapterKey: "test",
+      pageSize: 3,
+      firstPage: 0,
+      buildRequest: (page) => ({
+        url: `https://example.com/test-api?page=${page}`,
+      }),
+      walkKinds: {
+        window: defineWalkKind({}, () => (page) => ({
+          url: `https://example.com/test-api?page=${page}&windowed=1`,
+        })),
+      },
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
+    });
+
+  test("a cursor from a walk nobody configures any more starts it over", async () => {
+    await populated();
+
+    const page = await plainFetch()("m-2014-03:1200", {});
+
+    expect(page.unwrap().sourceUrl).toContain("page=0");
+    expect(page.unwrap().sourceUrl).not.toContain("windowed");
+  });
+
+  test("a cursor of neither shape is still refused", async () => {
+    await populated();
+
+    const page = await plainFetch()("m-2014-03:-1", {});
+
+    expect(Result.isOk(page)).toBe(false);
+    if (Result.isOk(page)) {
+      return;
+    }
+    expect(page.error.message).toContain("invalid cursor");
+  });
+
+  /**
+   * The column holds JSON, so a row can hold any JSON value, and rows seeded
+   * from an older shape hold the string "{}". Such a value cannot carry a
+   * policy, so it states none; refusing it would halt a source over a shape
+   * that configures nothing.
+   */
+  test("a configuration that is not an object states no walks", async () => {
+    await populated();
+
+    // SAFETY: the runner's type says the column holds an object; this asserts
+    // what happens when the row does not, which is the case under test.
+    const notAnObject = "{}" as unknown as Record<string, unknown>;
+    const page = await plainFetch()(null, notAnObject);
+
+    expect(page.unwrap().sourceUrl).not.toContain("windowed");
+    expect(page.unwrap().nextCursor).toBe("offset:1");
+  });
+});
+
+/**
+ * A plain cursor carries `offset` where a walk cursor carries its name, so a
+ * walk of that name reads `offset:50000`, written by the plain walk, as
+ * offset 50 000 inside itself and steps over everything before it.
+ */
+test("a walk may not take the name a plain cursor carries", () => {
+  const withName = (name: string) =>
+    createPagePaginatedFetch<TestResponse>({
+      adapterKey: "test",
+      pageSize: 3,
+      firstPage: 0,
+      buildRequest: () => ({ url: "https://example.com/test-api?page=0" }),
+      traversal: [
+        {
+          name,
+          buildRequest: () => ({ url: "https://example.com/test-api?page=0" }),
+          followedBy: null,
+        },
+      ],
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
+    });
+
+  expect(() => withName("offset")).toThrow(
+    /traversal walk "offset" is the name a plain offset cursor carries/u,
+  );
+  expect(() => withName("offsets")).not.toThrow();
 });
