@@ -973,19 +973,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
       )}
 
-      {hasActivity && (
-        <div className="flex justify-end">
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            size="sm"
-            variant="outline"
-          >
-            <UploadIcon className="size-4" />
-            {tWorkspaces("uploadDocuments")}
-          </Button>
-        </div>
-      )}
-
       <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
       <input
         className="hidden"
