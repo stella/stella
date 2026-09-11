@@ -425,7 +425,7 @@ const simplifyMcpOutputSchema = (
       continue;
     }
     if (Array.isArray(value)) {
-      simplified[key] = value.map((nested) =>
+      simplified[key] = value.map((nested: unknown) =>
         isSchemaRecord(nested) ? simplifyMcpOutputSchema(nested) : nested,
       );
       continue;
@@ -483,7 +483,7 @@ const compactMcpOutputSchema = (
       continue;
     }
     if (Array.isArray(value)) {
-      compacted[key] = value.map((nested) =>
+      compacted[key] = value.map((nested: unknown) =>
         isSchemaRecord(nested)
           ? compactMcpOutputSchema(nested, depth + 1)
           : nested,

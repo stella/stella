@@ -529,13 +529,7 @@ export type McpToolOutputContractMap<
 >;
 
 type OutputContractData<TContract> =
-  TContract extends McpToolOutputContract<
-    infer TData,
-    v.GenericSchema,
-    "identity" | "explicit"
-  >
-    ? TData
-    : never;
+  TContract extends McpToolOutputContract<infer TData> ? TData : never;
 
 type IdentityOutputNames<TOutputs> = {
   [TName in keyof TOutputs]: TOutputs[TName] extends {
