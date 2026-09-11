@@ -71,6 +71,16 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // Desktop registry search authenticates with a purpose-bound API key
+  // rather than the session the matrix harness drives, so no matrix case can
+  // reach it. The key's server-written metadata pins the organization and
+  // membership is re-resolved on every request
+  // (`handlers/desktop-registry/auth.test.ts`); its one tenant-scoped read,
+  // saved lookup formats, runs on the membership-scoped RLS database covered
+  // by `tests/security/template-lookup-formats-rls.integration.test.ts`; and
+  // revocation cannot cross organizations
+  // (`lib/business-registries/desktop/revocation.db.test.ts`).
+  "desktop-registry": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
