@@ -11,11 +11,11 @@ import type {
 } from "@/api/lib/case-law/court-weights";
 
 /**
- * The court rank declaration every jurisdiction ships with. The migration
- * `case_law_court_weight_seed` inserts exactly these rows, so a deployed
- * database is never without them; `seed-court-weights.ts` re-upserts them
- * after an edit here, and `court-weight-seed.test.ts` holds the migration to
- * this list. Ranking code reads the table, never this constant.
+ * The court rank declaration every jurisdiction ships with. The latest
+ * `case_law_court_weight_seed*` migration inserts exactly these rows, so a
+ * deployed database is never without them; `seed-court-weights.ts` re-upserts
+ * them after an edit here, and `court-weight-seed.test.ts` holds that
+ * migration to this list. Ranking code reads the table, never this constant.
  */
 
 export type CourtWeightSeedRow = {
@@ -71,7 +71,12 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     tierLabel: "regional",
     weight: 4,
   },
-  // Poland
+  // Poland. The feeds store the full court name with its seat appended
+  // ("Sąd Okręgowy w Warszawie", "Sąd Rejonowy dla Warszawy-Śródmieścia"),
+  // so each rank is the court's name without the seat. Appeal and regional
+  // share tier 2 and differ by weight, the way the tier scale allows one
+  // instance to outrank another without adding a tier the search blend
+  // would have to rescale.
   {
     country: "POL",
     courtPattern: "trybunał konstytucyjny",
@@ -88,10 +93,31 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   },
   {
     country: "POL",
-    courtPattern: "sąd apelacyjny|sąd okręgowy",
+    courtPattern: "sąd apelacyjny",
+    tier: 2,
+    tierLabel: "appeal",
+    weight: 5,
+  },
+  {
+    country: "POL",
+    courtPattern: "sąd okręgowy",
     tier: 2,
     tierLabel: "regional",
     weight: 4,
+  },
+  {
+    country: "POL",
+    courtPattern: "krajowa izba odwoławcza",
+    tier: 1,
+    tierLabel: "procurement-review",
+    weight: 3,
+  },
+  {
+    country: "POL",
+    courtPattern: "sąd rejonowy",
+    tier: 1,
+    tierLabel: "district",
+    weight: 2,
   },
   // Austria. The RIS feeds store the court as the publisher's abbreviation
   // (`OGH`, `VwGH`, `VfGH`) or as the full name with the abbreviation in
@@ -185,9 +211,12 @@ const SEED_COLUMNS =
 /**
  * The statements the seed migration carries, rendered from the list above
  * so the two cannot drift: the migration file is compared to this text.
- * The declaration is the table's only writer, so a row an older seed left
- * at another rank is brought to the declared one before the missing rows
- * are added; both statements read the VALUES list, never a table.
+ * The declaration is the table's only writer, so a pattern it no longer
+ * carries is dropped and a row an older seed left at another rank is brought
+ * to the declared one before the missing rows are added. A superseded pattern
+ * left behind would keep matching court names the declaration now ranks
+ * elsewhere, and which of the two wins is a precedence accident. Every
+ * statement reads the VALUES list, never a table.
  */
 export const courtWeightSeedSql = (): string => {
   const values = [
@@ -197,6 +226,14 @@ export const courtWeightSeedSql = (): string => {
         `  (${sqlLiteral(row.country)}, ${sqlLiteral(row.courtPattern)}, ${String(row.tier)}, ${sqlLiteral(row.tierLabel)}, ${String(row.weight)})`,
     ).join(",\n"),
     `) AS v (${SEED_COLUMNS})`,
+  ].join("\n");
+  const remove = [
+    `-- stella-migration-safety: reviewed delete-data - drops only the (country, court_pattern) keys the declaration above no longer carries, from an operator-seeded registry of ${String(COURT_WEIGHT_SEED.length)} rows; rollback re-runs the previous release's seed`,
+    'DELETE FROM "case_law_court_weights" w',
+    "WHERE NOT EXISTS (",
+    `  SELECT 1 FROM ${values}`,
+    '  WHERE v.country = w."country" AND v.court_pattern = w."court_pattern"',
+    ");",
   ].join("\n");
   const update = [
     'UPDATE "case_law_court_weights" w',
@@ -208,7 +245,7 @@ export const courtWeightSeedSql = (): string => {
   // The arbiter is a unique index, not a named constraint, so the rows that
   // already exist are skipped by an anti-join rather than ON CONFLICT.
   const insert = [
-    "-- stella-migration-safety: reviewed insert-select - the source relation is a fourteen-row VALUES list, not a table, so the statement is bounded and instant; rollback deletes the same (country, court_pattern) keys",
+    `-- stella-migration-safety: reviewed insert-select - the source relation is a ${String(COURT_WEIGHT_SEED.length)}-row VALUES list, not a table, so the statement is bounded and instant; rollback deletes the same (country, court_pattern) keys`,
     `INSERT INTO "case_law_court_weights" ("id", ${SEED_COLUMNS})`,
     "SELECT gen_random_uuid(), v.country, v.court_pattern, v.tier, v.tier_label, v.weight",
     `FROM ${values}`,
@@ -217,5 +254,5 @@ export const courtWeightSeedSql = (): string => {
     '  WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern',
     ");",
   ].join("\n");
-  return [update, "--> statement-breakpoint", insert].join("\n");
+  return [remove, update, insert].join("\n--> statement-breakpoint\n");
 };
