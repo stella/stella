@@ -2,7 +2,11 @@ import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import type { BilingualAIContext } from "@/api/lib/bilingual/ai";
+import {
+  translationLanguageInstruction,
+  type BilingualAIContext,
+  type TranslationLanguages,
+} from "@/api/lib/bilingual/ai";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TRANSLATION_ROLE = "chat" as const;
@@ -36,8 +40,7 @@ export type TaggedTranslationSegment = {
 type TranslateTaggedSegmentsOptions = {
   segments: readonly TaggedTranslationSegment[];
   preceding: readonly TaggedTranslationSegment[];
-  sourceLang: string;
-  targetLang: string;
+  languages: TranslationLanguages;
   context: BilingualAIContext;
 };
 
@@ -45,8 +48,7 @@ type TranslateTaggedSegmentsOptions = {
 export const translateTaggedSegments = async ({
   segments,
   preceding,
-  sourceLang,
-  targetLang,
+  languages,
   context,
 }: TranslateTaggedSegmentsOptions): Promise<Map<string, string>> => {
   const analytics = createTanStackAIAnalyticsCallbacks({
@@ -74,7 +76,7 @@ export const translateTaggedSegments = async ({
     tenantWorkspaceIds: [context.workspaceId],
     system: TRANSLATION_SYSTEM,
     systemPromptOrigin: "embeds-untrusted",
-    prompt: `Source language: ${sourceLang}. Target language: ${targetLang}.
+    prompt: `${translationLanguageInstruction(languages)}
 
 Preceding segments (context only, do not return):
 ${preceding.map((segment) => `${segment.id}: ${segment.taggedText}`).join("\n") || "(start of document)"}

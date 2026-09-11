@@ -1,11 +1,8 @@
 import { panic } from "better-result";
 
-import {
-  documentTranslationSourceForTarget,
-  type DocumentTranslationRunErrorCode,
-  type DocumentTranslationSourceLanguageCode,
-  type DocumentTranslationSourceLanguageDetection,
-  type DocumentTranslationTargetLanguageCode,
+import type {
+  DocumentTranslationRunErrorCode,
+  DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
 
 import {
@@ -43,35 +40,8 @@ type CanStartDocumentTranslationOptions = {
   isRunning: boolean;
   isStarting: boolean;
   hasCommentPolicy: boolean;
+  hasPreparedAiVersion: boolean;
   requiresCommentPolicy: boolean;
-  hasPreparedAiSource: boolean;
-  hasResolvedAiSource: boolean;
-  sameLanguage: boolean;
-};
-
-export type DocumentTranslationSourceSelection =
-  | { type: "automatic" }
-  | { type: "manual"; language: DocumentTranslationSourceLanguageCode };
-
-type ResolvedDocumentTranslationSourceOptions = {
-  selection: DocumentTranslationSourceSelection;
-  detection: DocumentTranslationSourceLanguageDetection | null;
-};
-
-export const resolvedDocumentTranslationSource = ({
-  selection,
-  detection,
-}: ResolvedDocumentTranslationSourceOptions): DocumentTranslationSourceLanguageCode | null => {
-  switch (selection.type) {
-    case "manual":
-      return selection.language;
-    case "automatic":
-      return detection?.type === "detected" ? detection.language : null;
-    default: {
-      selection satisfies never;
-      return panic(`Unhandled selection: ${String(selection)}`);
-    }
-  }
 };
 
 export type TranslationChoice =
@@ -134,20 +104,8 @@ export const parseLastTranslationTarget = (
   raw !== null && isDocumentTranslationTargetCode(raw) ? raw : null;
 
 type DefaultDocumentTranslationTargetOptions = {
-  /**
-   * What the rest of the matter is written in, most common first (the
-   * preparation endpoint ranks them). `null` while the preparation has not
-   * answered: nothing is known yet, which is not the same as "no other
-   * documents".
-   */
-  matterLanguages:
-    | readonly {
-        language: DocumentTranslationSourceLanguageCode;
-      }[]
-    | null;
   /** This browser's last successful choice, or null before the first run. */
   lastUsedTarget: DocumentTranslationTargetLanguageCode | null;
-  sourceLanguage: DocumentTranslationSourceLanguageCode | null;
   supportedTargets: readonly DocumentTranslationTargetLanguageCode[];
   uiLocale: string;
 };
@@ -155,48 +113,23 @@ type DefaultDocumentTranslationTargetOptions = {
 /**
  * Which language the dialog proposes translating into.
  *
- * The matter comes first: a document opened inside a matter that is otherwise
- * Czech is almost always being translated for that matter's readers, so the
- * habit of this browser and the language of this UI are both weaker evidence.
- *
- * Every branch rejects a candidate that resolves back to the source, so the
- * dialog can never open on "choose two different languages".
+ * A deliberate choice from this browser is stronger than the UI locale. The
+ * translation engine, not this default, determines the source language.
  */
 export const defaultDocumentTranslationTarget = ({
   lastUsedTarget,
-  matterLanguages,
-  sourceLanguage,
   supportedTargets,
   uiLocale,
 }: DefaultDocumentTranslationTargetOptions): DocumentTranslationTargetLanguageCode => {
   const offered = new Set<string>(supportedTargets);
-  const translatesTheSource = (
-    target: DocumentTranslationTargetLanguageCode,
-  ): boolean =>
-    offered.has(target) &&
-    documentTranslationSourceForTarget(target) !== sourceLanguage;
-
-  // Every source language is also an offered target, so a matter language is
-  // proposable as-is; this annotation is what keeps the two catalogs bound.
-  const matterTargets: DocumentTranslationTargetLanguageCode[] =
-    matterLanguages === null
-      ? []
-      : matterLanguages.map(({ language }) => language);
-  const fromMatter = matterTargets.find(translatesTheSource);
-  if (fromMatter !== undefined) {
-    return fromMatter;
-  }
-  if (lastUsedTarget !== null && translatesTheSource(lastUsedTarget)) {
+  if (lastUsedTarget !== null && offered.has(lastUsedTarget)) {
     return lastUsedTarget;
   }
   const fromLocale = defaultTargetLanguage(uiLocale);
-  if (translatesTheSource(fromLocale)) {
+  if (offered.has(fromLocale)) {
     return fromLocale;
   }
-  return (
-    supportedTargets.find(translatesTheSource) ??
-    panic("No offered translation target differs from the source language")
-  );
+  return supportedTargets.at(0) ?? panic("No translation target is available");
 };
 
 export type DocumentTranslationCommentPolicy =
@@ -247,17 +180,14 @@ export const canStartDocumentTranslation = ({
   isRunning,
   isStarting,
   hasCommentPolicy,
-  hasPreparedAiSource,
-  hasResolvedAiSource,
+  hasPreparedAiVersion,
   requiresCommentPolicy,
-  sameLanguage,
 }: CanStartDocumentTranslationOptions): boolean =>
   !isStarting &&
   !isLoadingRun &&
   (!isDeepL || canUseDeepL) &&
-  (isDeepL || (hasPreparedAiSource && hasResolvedAiSource)) &&
+  (isDeepL || hasPreparedAiVersion) &&
   (!requiresCommentPolicy || hasCommentPolicy) &&
-  !sameLanguage &&
   !isRunning;
 
 type OpenDocumentTranslationOutputOptions = {

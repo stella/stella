@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  DOCUMENT_TRANSLATION_RUN_ERROR_CODES,
-  documentTranslationSourceForTarget,
-} from "@stll/api-contract/document-translation";
+import { DOCUMENT_TRANSLATION_RUN_ERROR_CODES } from "@stll/api-contract/document-translation";
 
 import { DOCUMENT_TRANSLATION_TARGET_CODES } from "./document-language-picker.logic";
 import {
@@ -16,7 +13,6 @@ import {
   documentTranslationRunFailureKey,
   openDocumentTranslationOutput,
   parseLastTranslationTarget,
-  resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
 
 describe("document translation availability", () => {
@@ -49,12 +45,34 @@ describe("document translation start availability", () => {
         isRunning: false,
         isStarting: false,
         hasCommentPolicy: false,
-        hasPreparedAiSource: false,
-        hasResolvedAiSource: false,
+        hasPreparedAiVersion: false,
         requiresCommentPolicy: false,
-        sameLanguage: false,
       }),
     ).toBeFalse();
+  });
+
+  test("waits for the pinned version before starting stella AI", () => {
+    const options = {
+      canUseDeepL: false,
+      isDeepL: false,
+      isLoadingRun: false,
+      isRunning: false,
+      isStarting: false,
+      hasCommentPolicy: false,
+      requiresCommentPolicy: false,
+    };
+    expect(
+      canStartDocumentTranslation({
+        ...options,
+        hasPreparedAiVersion: false,
+      }),
+    ).toBeFalse();
+    expect(
+      canStartDocumentTranslation({
+        ...options,
+        hasPreparedAiVersion: true,
+      }),
+    ).toBeTrue();
   });
 
   test("requires an explicit comment policy when comments are found", () => {
@@ -64,10 +82,8 @@ describe("document translation start availability", () => {
       isLoadingRun: false,
       isRunning: false,
       isStarting: false,
-      hasPreparedAiSource: true,
-      hasResolvedAiSource: true,
+      hasPreparedAiVersion: true,
       requiresCommentPolicy: true,
-      sameLanguage: false,
     };
     expect(
       canStartDocumentTranslation({ ...options, hasCommentPolicy: false }),
@@ -95,46 +111,6 @@ describe("document translation failure copy", () => {
       );
     },
   );
-});
-
-describe("document translation source resolution", () => {
-  test("uses a version-bound automatic detection", () => {
-    expect(
-      resolvedDocumentTranslationSource({
-        selection: { type: "automatic" },
-        detection: {
-          type: "detected",
-          language: "EN-GB",
-          confidence: "high",
-        },
-      }),
-    ).toBe("EN-GB");
-  });
-
-  test.each([
-    { type: "ambiguous", candidates: ["CS", "SK"] } as const,
-    { type: "unknown" } as const,
-  ])("requires a manual choice for $type detection", (detection) => {
-    expect(
-      resolvedDocumentTranslationSource({
-        selection: { type: "automatic" },
-        detection,
-      }),
-    ).toBeNull();
-  });
-
-  test("lets a manual choice override automatic detection", () => {
-    expect(
-      resolvedDocumentTranslationSource({
-        selection: { type: "manual", language: "DE" },
-        detection: {
-          type: "detected",
-          language: "EN-GB",
-          confidence: "high",
-        },
-      }),
-    ).toBe("DE");
-  });
 });
 
 describe("document translation comment policy ownership", () => {
@@ -217,45 +193,14 @@ describe("document translation output handoff", () => {
 describe("default translation target", () => {
   const options = {
     lastUsedTarget: null,
-    matterLanguages: [],
-    sourceLanguage: "CS",
     supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
     uiLocale: "cs",
   } as const;
-
-  test("proposes the language the rest of the matter is written in", () => {
-    expect(
-      defaultDocumentTranslationTarget({
-        ...options,
-        lastUsedTarget: "DE",
-        matterLanguages: [{ language: "PL" }, { language: "DE" }],
-      }),
-    ).toBe("PL");
-  });
-
-  test("skips a matter language that is the document's own language", () => {
-    expect(
-      defaultDocumentTranslationTarget({
-        ...options,
-        matterLanguages: [{ language: "CS" }, { language: "SK" }],
-      }),
-    ).toBe("SK");
-  });
 
   test("falls back to this browser's last choice", () => {
     expect(
       defaultDocumentTranslationTarget({ ...options, lastUsedTarget: "PT-BR" }),
     ).toBe("PT-BR");
-  });
-
-  test("ignores a last choice that no longer differs from the source", () => {
-    expect(
-      defaultDocumentTranslationTarget({
-        ...options,
-        lastUsedTarget: "CS",
-        uiLocale: "de",
-      }),
-    ).toBe("DE");
   });
 
   test("falls back to the UI locale", () => {
@@ -264,26 +209,21 @@ describe("default translation target", () => {
     ).toBe("PL");
   });
 
-  test("falls back to the first offered language that differs", () => {
-    expect(defaultDocumentTranslationTarget(options)).toBe("AR");
+  test("falls back to the first offered language", () => {
+    expect(
+      defaultDocumentTranslationTarget({
+        ...options,
+        supportedTargets: ["AR", "DE"],
+        uiLocale: "ja",
+      }),
+    ).toBe("AR");
   });
 
-  test.each(DOCUMENT_TRANSLATION_TARGET_CODES.map((code) => [code] as const))(
-    "never proposes the source language itself (%s)",
-    (code) => {
-      const sourceLanguage = documentTranslationSourceForTarget(code);
-      const target = defaultDocumentTranslationTarget({
-        lastUsedTarget: code,
-        matterLanguages: [{ language: sourceLanguage }],
-        sourceLanguage,
-        supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
-        uiLocale: sourceLanguage.toLowerCase(),
-      });
-      expect(documentTranslationSourceForTarget(target)).not.toBe(
-        sourceLanguage,
-      );
-    },
-  );
+  test("keeps an explicit same-language target for provider-side handling", () => {
+    expect(
+      defaultDocumentTranslationTarget({ ...options, lastUsedTarget: "CS" }),
+    ).toBe("CS");
+  });
 });
 
 describe("active translation choice", () => {

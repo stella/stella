@@ -135,6 +135,7 @@ export const createBilingualEntityHandler = (
 
       const { buffer, rows, warnings } = conversion.value;
       const fileName = buildBilingualFileName({
+        type: "explicit-source",
         sourceFileName: loaded.fileName,
         sourceLang: body.sourceLang,
         targetLang: body.targetLang,

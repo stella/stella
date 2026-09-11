@@ -4,7 +4,7 @@
 
 import type { ModelMessage, TextPart } from "@tanstack/ai";
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
-import { TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -70,7 +70,26 @@ export type BilingualAIDocumentContext = BilingualAIContext & {
   sourceDocument: readonly BilingualUnit[];
 };
 
-type Languages = { sourceLang: string; targetLang: string };
+export type TranslationLanguages =
+  | { type: "automatic-source"; targetLang: string }
+  | { type: "explicit-source"; sourceLang: string; targetLang: string };
+
+/** The source is optional by contract; target-only runs let the model infer it
+ * from the complete source-document context rather than a local classifier. */
+export const translationLanguageInstruction = (
+  languages: TranslationLanguages,
+): string => {
+  switch (languages.type) {
+    case "automatic-source":
+      return `Target language: ${languages.targetLang}. Infer the source language from the source document.`;
+    case "explicit-source":
+      return `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.`;
+    default: {
+      languages satisfies never;
+      return panic("Unhandled translation language direction");
+    }
+  }
+};
 
 const analyticsFor = (
   context: BilingualAIContext,
@@ -192,7 +211,7 @@ const formatDispositionRows = (
  */
 export const decideDispositions = async (
   units: readonly BilingualUnit[],
-  languages: Languages,
+  languages: TranslationLanguages,
   context: BilingualAIDocumentContext,
 ): Promise<DispositionedUnit[]> => {
   const decided = new Map<number, BilingualRowDisposition>();
@@ -226,7 +245,7 @@ export const decideDispositions = async (
         const request = buildBilingualDocumentRequest(
           context,
           DISPOSITION_ROLE,
-          `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\n${formatDispositionRows(slice, decided)}`,
+          `${translationLanguageInstruction(languages)}\n\n${formatDispositionRows(slice, decided)}`,
         );
         const output = await (
           context.generateObjectForRole ?? generateTanStackObjectForRole
@@ -322,7 +341,7 @@ const GLOSSARY_SYSTEM = `You build the glossary for translating a legal document
 export const proposeGlossary = async (
   candidates: readonly string[],
   texts: readonly string[],
-  languages: Languages,
+  languages: TranslationLanguages,
   context: BilingualAIDocumentContext,
 ): Promise<BilingualGlossaryEntry[]> => {
   const analytics = analyticsFor(context, "bilingual.glossary", GLOSSARY_ROLE);
@@ -336,7 +355,7 @@ export const proposeGlossary = async (
   const request = buildBilingualDocumentRequest(
     context,
     GLOSSARY_ROLE,
-    `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nDefined terms found:\n${candidates.map((term) => `- ${term}`).join("\n") || "(none)"}\n\nDocument sample:\n${sample}`,
+    `${translationLanguageInstruction(languages)}\n\nDefined terms found:\n${candidates.map((term) => `- ${term}`).join("\n") || "(none)"}\n\nDocument sample:\n${sample}`,
   );
   const output = await (
     context.generateObjectForRole ?? generateTanStackObjectForRole
@@ -431,7 +450,7 @@ export type TranslateBatchInput = {
  *  answered. Missing rows are the caller's to mark failed. */
 export const translateBatch = async (
   { batch, preceding, glossary }: TranslateBatchInput,
-  languages: Languages,
+  languages: TranslationLanguages,
   context: BilingualAIDocumentContext,
 ): Promise<Map<number, string>> => {
   const analytics = analyticsFor(
@@ -456,7 +475,7 @@ export const translateBatch = async (
   const request = buildBilingualDocumentRequest(
     context,
     TRANSLATION_ROLE,
-    `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nRows to translate:\n${rowLines}`,
+    `${translationLanguageInstruction(languages)}\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nRows to translate:\n${rowLines}`,
   );
   const output = await (
     context.generateObjectForRole ?? generateTanStackObjectForRole
@@ -515,25 +534,29 @@ const hasExactSpanIds = (
 
 const serializeFormattedRows = (
   batch: readonly FormattedBilingualUnit[],
-): string => {
+): Result<string, BilingualAIContractError> => {
   const lines: string[] = [];
   let serializedChars = 0;
   for (const unit of batch) {
     if (unit.inline.length > FORMATTED_INLINE_TOKENS_MAX) {
-      throw new BilingualAIContractError({
-        message: `Formatted bilingual row ${unit.rowId} exceeds the inline token limit`,
-      });
+      return Result.err(
+        new BilingualAIContractError({
+          message: `Formatted bilingual row ${unit.rowId} exceeds the inline token limit`,
+        }),
+      );
     }
     const serialized = JSON.stringify(unit.inline);
     serializedChars += serialized.length;
     if (serializedChars > FORMATTED_ROWS_SERIALIZED_CHARS_MAX) {
-      throw new BilingualAIContractError({
-        message: "Formatted bilingual batch exceeds the prompt size limit",
-      });
+      return Result.err(
+        new BilingualAIContractError({
+          message: "Formatted bilingual batch exceeds the prompt size limit",
+        }),
+      );
     }
     lines.push(`#${unit.ordinal}: ${serialized}`);
   }
-  return lines.join("\n");
+  return Result.ok(lines.join("\n"));
 };
 
 type FormattedTranslationOutput = v.InferOutput<
@@ -569,9 +592,11 @@ const collectFormattedTranslations = (
 /** Translate a batch without flattening its styled DOCX runs to plain text. */
 export const translateFormattedBatch = async (
   { batch, preceding, glossary }: TranslateFormattedBatchInput,
-  languages: Languages,
+  languages: TranslationLanguages,
   context: BilingualAIDocumentContext,
-): Promise<Map<number, BilingualFormattedTranslation>> => {
+): Promise<
+  Result<Map<number, BilingualFormattedTranslation>, BilingualAIContractError>
+> => {
   const analytics = analyticsFor(
     context,
     "bilingual.translate",
@@ -591,8 +616,11 @@ export const translateFormattedBatch = async (
   const translateAttempt = async (
     remaining: readonly FormattedBilingualUnit[],
     attempt: number,
-  ): Promise<void> => {
-    const rowLines = serializeFormattedRows(remaining);
+  ): Promise<Result<void, BilingualAIContractError>> => {
+    const serialized = serializeFormattedRows(remaining);
+    if (Result.isError(serialized)) {
+      return serialized;
+    }
     const repairInstruction =
       attempt === 1
         ? ""
@@ -600,7 +628,7 @@ export const translateFormattedBatch = async (
     const request = buildBilingualDocumentRequest(
       context,
       TRANSLATION_ROLE,
-      `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${rowLines}${repairInstruction}`,
+      `${translationLanguageInstruction(languages)}\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${serialized.value}${repairInstruction}`,
     );
     const output = await (
       context.generateObjectForRole ?? generateTanStackObjectForRole
@@ -620,11 +648,15 @@ export const translateFormattedBatch = async (
     });
     const rejected = collectFormattedTranslations(remaining, output, result);
     if (attempt < FORMATTED_OUTPUT_ATTEMPTS && rejected.length > 0) {
-      await translateAttempt(rejected, attempt + 1);
+      return await translateAttempt(rejected, attempt + 1);
     }
+    return Result.ok();
   };
   if (batch.length > 0) {
-    await translateAttempt(batch, 1);
+    const translated = await translateAttempt(batch, 1);
+    if (Result.isError(translated)) {
+      return translated;
+    }
   }
-  return result;
+  return Result.ok(result);
 };

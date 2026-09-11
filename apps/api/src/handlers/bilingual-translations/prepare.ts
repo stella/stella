@@ -122,9 +122,10 @@ const prepareBilingualTranslation = createSafeHandler(
       },
     };
     const languages = {
+      type: "explicit-source",
       sourceLang: body.sourceLang,
       targetLang: body.targetLang,
-    };
+    } as const;
     const texts = units.map((unit) => unit.sourceText);
 
     const prepared = await Result.tryPromise({

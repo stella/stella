@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -9,6 +10,7 @@ import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import {
   buildBilingualDocumentRequest,
   SOURCE_DOCUMENT_CACHE_CHARS_MAX,
+  translationLanguageInstruction,
   translateFormattedBatch,
 } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
@@ -42,6 +44,29 @@ const generateObjectMock = mock(
 );
 const generateObjectForTest =
   asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
+
+describe("translation language instruction", () => {
+  test("lets the model infer the source when only a target is known", () => {
+    const instruction = translationLanguageInstruction({
+      type: "automatic-source",
+      targetLang: "CS",
+    });
+
+    expect(instruction).toContain("Target language: CS");
+    expect(instruction).toContain("Infer the source language");
+    expect(instruction).not.toContain("Source language:");
+  });
+
+  test("preserves an explicit source for an already-pinned translation", () => {
+    expect(
+      translationLanguageInstruction({
+        type: "explicit-source",
+        sourceLang: "EN-GB",
+        targetLang: "CS",
+      }),
+    ).toBe("Source language: EN-GB. Target language: CS.");
+  });
+});
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -206,11 +231,15 @@ describe("formatted bilingual AI boundary", () => {
 
     const result = await translateFormattedBatch(
       { batch: [accepted, repaired], preceding: [], glossary: [] },
-      { sourceLang: "en", targetLang: "cs" },
+      { type: "explicit-source", sourceLang: "en", targetLang: "cs" },
       context,
     );
 
     expect(generateObjectMock).toHaveBeenCalledTimes(2);
+    expect(Result.isError(result)).toBeFalse();
+    if (Result.isError(result)) {
+      return;
+    }
     // The retry reuses one callbacks instance, so both attempts stay on one
     // trace instead of reporting as two independent generations.
     expect(dispatchedCallbacks.at(1)).toBe(dispatchedCallbacks.at(0));
@@ -223,14 +252,14 @@ describe("formatted bilingual AI boundary", () => {
     expect(retryContent?.at(1)?.content).toContain("Contract repair:");
     expect(retryContent?.at(1)?.content).not.toContain("#1:");
     expect(retryContent?.at(1)?.content).toContain("#2:");
-    expect(result.get(1)).toEqual({
+    expect(result.value.get(1)).toEqual({
       text: "Ahoj světe",
       spans: [
         { id: "row-1:s0001", text: "Ahoj" },
         { id: "row-1:s0002", text: " světe" },
       ],
     });
-    expect(result.get(2)).toEqual({
+    expect(result.value.get(2)).toEqual({
       text: "Sbohem světe",
       spans: [
         { id: "row-2:s0001", text: "Sbohem" },
@@ -239,31 +268,30 @@ describe("formatted bilingual AI boundary", () => {
     });
   });
 
-  test("rejects pathological inline token counts before model dispatch", async () => {
+  test("returns a typed error for pathological inline token counts", async () => {
     const spans = Array.from({ length: 2049 }, (_unused, index) => ({
       id: `row-1:s${index}`,
       text: "",
     }));
 
-    const translation = translateFormattedBatch(
+    const translation = await translateFormattedBatch(
       { batch: [formattedUnit(1, spans)], preceding: [], glossary: [] },
-      { sourceLang: "en", targetLang: "cs" },
+      { type: "explicit-source", sourceLang: "en", targetLang: "cs" },
       context,
     );
 
-    const rejection = await translation.then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(rejection).toMatchObject({
-      _tag: "BilingualAIContractError",
+    expect(translation).toMatchObject({
+      status: "error",
+      error: {
+        _tag: "BilingualAIContractError",
+      },
     });
     expect(generateObjectMock).not.toHaveBeenCalled();
-    // A rejected contract is the caller's error to handle, not a captured defect.
+    // A refused contract is the caller's error to handle, not a captured defect.
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("rejects cumulative formatted row serialization before model dispatch", async () => {
+  test("returns a typed error for oversized formatted rows", async () => {
     const batch = Array.from({ length: 8 }, (_unusedBatch, batchIndex) => {
       const ordinal = batchIndex + 1;
       return formattedUnit(
@@ -275,21 +303,20 @@ describe("formatted bilingual AI boundary", () => {
       );
     });
 
-    const translation = translateFormattedBatch(
+    const translation = await translateFormattedBatch(
       { batch, preceding: [], glossary: [] },
-      { sourceLang: "en", targetLang: "cs" },
+      { type: "explicit-source", sourceLang: "en", targetLang: "cs" },
       context,
     );
 
-    const rejection = await translation.then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(rejection).toMatchObject({
-      _tag: "BilingualAIContractError",
+    expect(translation).toMatchObject({
+      status: "error",
+      error: {
+        _tag: "BilingualAIContractError",
+      },
     });
     expect(generateObjectMock).not.toHaveBeenCalled();
-    // A rejected contract is the caller's error to handle, not a captured defect.
+    // A refused contract is the caller's error to handle, not a captured defect.
     expect(analytics.exceptions()).toEqual([]);
   });
 });

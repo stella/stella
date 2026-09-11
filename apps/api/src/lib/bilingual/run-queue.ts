@@ -507,7 +507,11 @@ const executeRun = async (
     },
   };
 
-  const languages = { sourceLang: run.sourceLang, targetLang: run.targetLang };
+  const languages = {
+    type: "explicit-source",
+    sourceLang: run.sourceLang,
+    targetLang: run.targetLang,
+  } as const;
   const translated = new Map<string, string>(
     rows.flatMap((row) =>
       row.targetText === null ? [] : [[row.rowId, row.targetText]],

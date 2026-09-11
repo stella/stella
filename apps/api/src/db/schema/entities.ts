@@ -469,16 +469,11 @@ export const entityVersions = p.pgTable(
       "collaboration_contributor_user_ids",
     ).$type<string[] | null>(),
     /**
-     * The document's own language, primarily as declared by the DOCX `w:lang`
-     * run defaults (see `lib/document-translation/docx-language.ts`), stored
-     * as a `DOCUMENT_TRANSLATION_SOURCE_LANGUAGES` code -- BCP-47 shaped, e.g.
-     * `CS`, `EN-GB`, `PT-PT`. Null means not detected, or not a DOCX at all.
-     *
-     * Written once, by whichever of the two producers reaches the row first:
-     * native extraction at ingestion (declaration only), or the
-     * translation-preparation endpoint when it inspects a version that
-     * predates the column (declaration, then text detection). There is no
-     * backfill, so a null on an old version is expected rather than a fault.
+     * The document's own language as declared by DOCX `w:lang` run defaults
+     * (see `lib/document-translation/docx-language.ts`), stored as a
+     * `DOCUMENT_TRANSLATION_SOURCE_LANGUAGES` code: BCP-47 shaped, e.g. `CS`,
+     * `EN-GB`, `PT-PT`. Native extraction writes it once. Null means the DOCX
+     * has no usable declaration, predates this metadata, or is another format.
      */
     detectedLanguage: p
       .varchar("detected_language", { length: 10 })

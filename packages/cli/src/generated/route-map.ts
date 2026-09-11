@@ -10446,8 +10446,8 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "document-translations", "prepare"],
                 capabilityId: "document-translations.prepare",
                 description:
-                  "Inspect the current DOCX version and prepare its source-language and comment requirements for translation.",
-                access: "write",
+                  "Inspect the current DOCX version and prepare its comment requirements for translation.",
+                access: "read",
                 flags: [
                   {
                     kind: "string",
@@ -10480,7 +10480,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -10556,6 +10556,7 @@ export const generatedRouteMap: RouteNode = {
                     body: {
                       anyOf: [
                         {
+                          additionalProperties: false,
                           type: "object",
                           required: [
                             "entityId",
@@ -10606,14 +10607,10 @@ export const generatedRouteMap: RouteNode = {
                               const: "translated",
                               type: "string",
                             },
-                            sourceLang: {
-                              minLength: 2,
-                              maxLength: 16,
-                              type: "string",
-                            },
                           },
                         },
                         {
+                          additionalProperties: false,
                           type: "object",
                           required: [
                             "entityId",
@@ -10621,7 +10618,6 @@ export const generatedRouteMap: RouteNode = {
                             "targetLang",
                             "engine",
                             "output",
-                            "sourceLang",
                             "entityVersionId",
                           ],
                           properties: {
@@ -10672,42 +10668,6 @@ export const generatedRouteMap: RouteNode = {
                                   const: "bilingual",
                                   type: "string",
                                 },
-                              ],
-                            },
-                            sourceLang: {
-                              default: "AR",
-                              type: "string",
-                              enum: [
-                                "AR",
-                                "BG",
-                                "ZH",
-                                "CS",
-                                "DA",
-                                "NL",
-                                "EN-GB",
-                                "ET",
-                                "FI",
-                                "FR",
-                                "DE",
-                                "EL",
-                                "HU",
-                                "ID",
-                                "IT",
-                                "JA",
-                                "KO",
-                                "LV",
-                                "LT",
-                                "NB",
-                                "PL",
-                                "PT-PT",
-                                "RO",
-                                "RU",
-                                "SK",
-                                "SL",
-                                "ES",
-                                "SV",
-                                "TR",
-                                "UK",
                               ],
                             },
                             entityVersionId: {

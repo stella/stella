@@ -25,12 +25,11 @@ describe("document translation run request boundary", () => {
     ).toBeTrue();
   });
 
-  test("requires source language and prepared version together for AI", () => {
+  test("accepts target-only AI translation with a prepared version", () => {
     expect(
       Value.Check(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "ai",
-        sourceLang: "EN-GB",
         entityVersionId: ENTITY_VERSION_ID,
       }),
     ).toBeTrue();
@@ -38,36 +37,32 @@ describe("document translation run request boundary", () => {
       Value.Check(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "ai",
+      }),
+    ).toBeFalse();
+  });
+
+  test("does not accept a client-supplied source language", () => {
+    expect(
+      Value.Check(createDocumentTranslationRunBodySchema, {
+        ...common,
+        engine: "ai",
         sourceLang: "EN-GB",
+        entityVersionId: ENTITY_VERSION_ID,
       }),
     ).toBeFalse();
     expect(
       Value.Check(createDocumentTranslationRunBodySchema, {
         ...common,
-        engine: "ai",
-        entityVersionId: ENTITY_VERSION_ID,
+        engine: "deepl",
+        sourceLang: "EN",
       }),
     ).toBeFalse();
-  });
-
-  test("rejects automatic or unsupported AI source-language values", () => {
-    for (const sourceLang of ["auto", "KLINGON"]) {
-      expect(
-        Value.Check(createDocumentTranslationRunBodySchema, {
-          ...common,
-          engine: "ai",
-          sourceLang,
-          entityVersionId: ENTITY_VERSION_ID,
-        }),
-      ).toBeFalse();
-    }
   });
 
   test("leaves comment policy optional and accepts every declared policy", () => {
     const request = {
       ...common,
       engine: "ai",
-      sourceLang: "EN-GB",
       entityVersionId: ENTITY_VERSION_ID,
     } as const;
     expect(Value.Check(createDocumentTranslationRunBodySchema, request)).toBe(

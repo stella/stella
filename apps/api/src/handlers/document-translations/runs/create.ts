@@ -189,7 +189,8 @@ const createDocumentTranslationRun = createSafeHandler<
             output: body.output,
             engine: body.engine,
             commentPolicy: body.commentPolicy,
-            sourceLang: body.sourceLang ?? "auto",
+            // The worker sends no source hint when this discriminator is set.
+            sourceLang: "auto",
             targetLang: body.targetLang,
             requestedBy: user.id,
           })

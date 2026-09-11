@@ -99,7 +99,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability                          | Access | Scope                | Feature | Reachable via                                                          |
 | ----------------------------------- | ------ | -------------------- | ------- | ---------------------------------------------------------------------- |
-| `document-translations.prepare`     | write  | stella:matters_write | —       | generic invoke → `stella capability document-translations prepare`     |
+| `document-translations.prepare`     | read   | stella:read          | —       | generic invoke → `stella capability document-translations prepare`     |
 | `document-translations.runs.create` | write  | stella:matters_write | —       | generic invoke → `stella capability document-translations runs-create` |
 | `document-translations.runs.get`    | read   | stella:read          | —       | generic invoke → `stella capability document-translations runs-get`    |
 

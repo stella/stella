@@ -28,6 +28,7 @@ import {
 import type {
   BilingualAIContext,
   TranslationContextRow,
+  TranslationLanguages,
 } from "@/api/lib/bilingual/ai";
 import {
   BILINGUAL_LIMITS,
@@ -282,6 +283,19 @@ type ClaimedRun = {
   sourceLang: string;
   targetLang: string;
 };
+
+const translationLanguagesForRun = (
+  run: Pick<ClaimedRun, "sourceLang" | "targetLang">,
+): TranslationLanguages =>
+  // Runs created before source inference became the default retain their
+  // explicit instruction while every new run takes the target-only branch.
+  run.sourceLang === "auto"
+    ? { type: "automatic-source", targetLang: run.targetLang }
+    : {
+        type: "explicit-source",
+        sourceLang: run.sourceLang,
+        targetLang: run.targetLang,
+      };
 
 const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
   const claimed = await actor.scopedDb(async (tx) => {
@@ -552,8 +566,7 @@ const translateCommentsWithAI = async (
             taggedText: commentTaggedText(comment),
           })),
           preceding: [],
-          sourceLang: run.sourceLang,
-          targetLang: run.targetLang,
+          languages: translationLanguagesForRun(run),
           context,
         }),
       catch: (cause) => cause,
@@ -722,8 +735,7 @@ const translateDocxWithAI = async (
             id: segment.segmentId,
             taggedText: translated.get(segment.segmentId) ?? segment.taggedText,
           })),
-          sourceLang: run.sourceLang,
-          targetLang: run.targetLang,
+          languages: translationLanguagesForRun(run),
           context,
         }),
       catch: (cause) => cause,
@@ -827,10 +839,7 @@ const translateBilingualWithAI = async (
     ...context,
     sourceDocument: formatted.value,
   };
-  const languages = {
-    sourceLang: run.sourceLang,
-    targetLang: run.targetLang,
-  };
+  const languages = translationLanguagesForRun(run);
   const texts = formatted.value.map((unit) => unit.sourceText);
   const prepared = await Result.tryPromise({
     try: async () => {
@@ -918,7 +927,7 @@ const translateBilingualWithAI = async (
       }
       formattedBatch.push(formattedUnit);
     }
-    const result = await Result.tryPromise({
+    const attempted = await Result.tryPromise({
       try: async () =>
         await translateFormattedBatch(
           {
@@ -931,12 +940,17 @@ const translateBilingualWithAI = async (
         ),
       catch: (cause) => cause,
     });
-    if (Result.isError(result)) {
-      return Result.err(documentTranslationProviderErrorCode(result.error));
+    if (Result.isError(attempted)) {
+      return Result.err(documentTranslationProviderErrorCode(attempted.error));
+    }
+    if (Result.isError(attempted.value)) {
+      return Result.err(
+        documentTranslationProviderErrorCode(attempted.value.error),
+      );
     }
     const updates: { unitKey: string; targetText: string }[] = [];
     for (const row of batch) {
-      const formattedTranslation = result.value.get(row.ordinal);
+      const formattedTranslation = attempted.value.value.get(row.ordinal);
       if (formattedTranslation === undefined) {
         return Result.err("translation_failed");
       }
@@ -994,11 +1008,20 @@ const translateBilingualWithAI = async (
   }
   return Result.ok({
     buffer: applied.value.buffer,
-    fileName: buildBilingualFileName({
-      sourceFileName: run.sourceFileName,
-      sourceLang: run.sourceLang,
-      targetLang: run.targetLang,
-    }),
+    fileName: buildBilingualFileName(
+      run.sourceLang === "auto"
+        ? {
+            type: "automatic-source",
+            sourceFileName: run.sourceFileName,
+            targetLang: run.targetLang,
+          }
+        : {
+            type: "explicit-source",
+            sourceFileName: run.sourceFileName,
+            sourceLang: run.sourceLang,
+            targetLang: run.targetLang,
+          },
+    ),
     mimeType: DOCX_MIME_TYPE,
     warnings: conversion.value.warnings.slice(
       0,
