@@ -15,7 +15,7 @@ import {
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260911140000_case_law_court_weight_seed_pol/migration.sql",
+  "../../../drizzle/20260911180000_case_law_court_weight_seed_pol_wsa/migration.sql",
 );
 
 describe("court weight seed", () => {
@@ -59,6 +59,7 @@ describe("court weight seed", () => {
       ["POL", "Naczelny Sąd Administracyjny", "supreme"],
       ["POL", "Trybunał Konstytucyjny", "constitutional"],
       ["POL", "Sąd Apelacyjny w Krakowie", "appeal"],
+      ["POL", "Wojewódzki Sąd Administracyjny w Warszawie", "appeal"],
       ["POL", "Sąd Okręgowy w Warszawie", "regional"],
       ["POL", "Sąd Rejonowy w Gdańsku", "district"],
       ["POL", "Sąd Rejonowy dla Warszawy-Śródmieścia", "district"],
@@ -84,9 +85,11 @@ describe("court weight seed", () => {
   });
 
   test("Poland ranks every instance the feeds store, each pattern once", () => {
-    // The SAOS feed and the Supreme Court connector store these six court
-    // names; a name two patterns both match would take whichever the
-    // precedence order happens to reach first.
+    // The SAOS feed and the Supreme Court connector store these court names;
+    // a name two patterns both match would take whichever the precedence
+    // order happens to reach first. The administrative pair is the close
+    // one: only `naczelny` and `wojewódzki` separate the supreme row from
+    // the appeal row.
     expect(COURT_WEIGHT_SEED.filter((row) => row.country === "POL")).toEqual([
       {
         country: "POL",
@@ -104,7 +107,7 @@ describe("court weight seed", () => {
       },
       {
         country: "POL",
-        courtPattern: "sąd apelacyjny",
+        courtPattern: "sąd apelacyjny|wojewódzki sąd administracyjny",
         tier: 2,
         tierLabel: "appeal",
         weight: 5,
@@ -135,6 +138,7 @@ describe("court weight seed", () => {
       "Trybunał Konstytucyjny",
       "Sąd Najwyższy",
       "Sąd Apelacyjny w Krakowie",
+      "Wojewódzki Sąd Administracyjny w Warszawie",
       "Sąd Okręgowy w Warszawie",
       "Krajowa Izba Odwoławcza",
       "Sąd Rejonowy dla Warszawy-Śródmieścia",

@@ -76,7 +76,10 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   // so each rank is the court's name without the seat. Appeal and regional
   // share tier 2 and differ by weight, the way the tier scale allows one
   // instance to outrank another without adding a tier the search blend
-  // would have to rescale.
+  // would have to rescale. The voivodeship administrative courts sit with
+  // appeal rather than with district: they are the administrative branch's
+  // first instance, but what they review is an authority's decision, and the
+  // only court above them is the supreme one already ranked above.
   {
     country: "POL",
     courtPattern: "trybunał konstytucyjny",
@@ -93,7 +96,7 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   },
   {
     country: "POL",
-    courtPattern: "sąd apelacyjny",
+    courtPattern: "sąd apelacyjny|wojewódzki sąd administracyjny",
     tier: 2,
     tierLabel: "appeal",
     weight: 5,
