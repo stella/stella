@@ -142,6 +142,27 @@ describe("a policy entry the adapter cannot serve", () => {
   });
 
   /**
+   * Both bounds are dates and the pair is still not a window. Left accepted,
+   * it would be the one malformed entry that looks like success: the
+   * publisher holds no date inside it, so its first page comes back empty,
+   * which is the signal a walk has finished — the walk would hand over on its
+   * first request of every cycle and never say anything was wrong.
+   */
+  test("a window that ends before it starts is refused", () => {
+    expect(refusalFor(dateWindow("y-1987", "1987-12-31", "1987-01-01"))).toBe(
+      "states a judgment-date window from 1987-12-31 back to 1987-01-01",
+    );
+  });
+
+  test("a window of a single day is not reversed", () => {
+    expect(
+      paramsOf(dateWindow("d-1987", "1987-01-01", "1987-01-01")).get(
+        "judgmentEndDate",
+      ),
+    ).toBe("1987-01-01");
+  });
+
+  /**
    * A mistyped parameter would otherwise read as an absent one, and the walk
    * would ask the publisher for a window nobody configured.
    */

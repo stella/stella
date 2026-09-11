@@ -217,18 +217,31 @@ export const PL_COURTS_WALK_KINDS = {
    * judgment can hold, in both directions, so a policy meaning to reach every
    * record needs open ends: no date then puts a judgment outside every window.
    */
-  [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind(
-    {
+  [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind({
+    params: {
       from: v.optional(v.pipe(v.string(), v.isoDate())),
       to: v.optional(v.pipe(v.string(), v.isoDate())),
     },
-    ({ from, to }) =>
+    /**
+     * A window that ends before it starts holds no date, so the publisher
+     * answers its first page empty — which is exactly how a walk says it is
+     * finished. The walk would hand over on its first request every cycle and
+     * look like a walk that had done its work, so the reversal has to be
+     * refused where it is still visible as one. ISO dates order
+     * lexicographically, so the comparison is the string one.
+     */
+    objection: ({ from, to }) =>
+      from !== undefined && to !== undefined && from > to
+        ? `states a judgment-date window from ${from} back to ${to}`
+        : null,
+    buildRequest:
+      ({ from, to }) =>
       (page) =>
         dumpRequest(page, {
           ...(from === undefined ? {} : { judgmentStartDate: from }),
           ...(to === undefined ? {} : { judgmentEndDate: to }),
         }),
-  ),
+  }),
 
   /**
    * Everything the publisher has edited within the lookback, whatever
@@ -239,23 +252,33 @@ export const PL_COURTS_WALK_KINDS = {
    * than one full pass over the configured walks is what keeps such an edit
    * from falling between two visits.
    */
-  [PL_COURTS_WALK_KIND.SINCE_MODIFIED]: defineWalkKind(
-    { lookbackDays: v.pipe(v.number(), v.integer(), v.minValue(1)) },
-    ({ lookbackDays }) =>
+  [PL_COURTS_WALK_KIND.SINCE_MODIFIED]: defineWalkKind({
+    params: { lookbackDays: v.pipe(v.number(), v.integer(), v.minValue(1)) },
+    buildRequest:
+      ({ lookbackDays }) =>
       (page) =>
         dumpRequest(page, {
+          // Read per page, so a lap that crosses UTC midnight asks the later
+          // pages for a window one day narrower. Dropping that oldest day
+          // shortens the filtered collection from its front, which slides
+          // later judgments to lower offsets, and one can land behind the
+          // offset the lap has reached. It is a delay, not a loss: the item
+          // stays in the window for the rest of the lookback, which is days,
+          // and every entry into this walk is at offset 0 — it names itself
+          // as its successor, so running dry restarts it at its own head, and
+          // a checkpoint only ever persists that. The next lap reads it.
           sinceModificationDate: plCourtsModifiedSince(
             Temporal.Now.plainDateISO("UTC"),
             lookbackDays,
           ),
         }),
-  ),
+  }),
 
   /** The dump unfiltered, in the publisher's own order: the plain walk. */
-  [PL_COURTS_WALK_KIND.WHOLE_DUMP]: defineWalkKind(
-    {},
-    () => (page) => dumpRequest(page, {}),
-  ),
+  [PL_COURTS_WALK_KIND.WHOLE_DUMP]: defineWalkKind({
+    params: {},
+    buildRequest: () => (page) => dumpRequest(page, {}),
+  }),
 } as const satisfies Record<PlCourtsWalkKind, WalkKind>;
 
 /**

@@ -886,13 +886,16 @@ describe("walks configured by the source", () => {
         url: `https://example.com/test-api?page=${page}`,
       }),
       walkKinds: {
-        window: defineWalkKind(
-          { bucket: v.pipe(v.string(), v.minLength(1)) },
-          ({ bucket }) =>
+        window: defineWalkKind({
+          params: { bucket: v.pipe(v.string(), v.minLength(1)) },
+          objection: ({ bucket }) =>
+            bucket === "empty" ? "states an empty bucket" : null,
+          buildRequest:
+            ({ bucket }) =>
             (page) => ({
               url: `https://example.com/test-api?page=${page}&bucket=${bucket}`,
             }),
-        ),
+        }),
       },
       parseResponse: async (resp) =>
         Result.ok(await readTestJson<TestResponse>(resp)),
@@ -1007,12 +1010,17 @@ describe("walks configured by the source", () => {
     {
       why: "gives a name the cursor is split on",
       walks: [windowWalk("m:2014-03", "a")],
-      detail: ":",
+      detail: 'a walk name may not contain ":"',
     },
     {
       why: "gives a walk the name a plain cursor carries",
       walks: [windowWalk("offset", "a")],
       detail: 'may not be named "offset"',
+    },
+    {
+      why: "combines parameters the kind will not serve together",
+      walks: [windowWalk("first", "empty")],
+      detail: "states an empty bucket",
     },
     {
       why: "states walks that are not a list",
@@ -1070,9 +1078,12 @@ describe("the plain walk recovers from what a configured one left behind", () =>
         url: `https://example.com/test-api?page=${page}`,
       }),
       walkKinds: {
-        window: defineWalkKind({}, () => (page) => ({
-          url: `https://example.com/test-api?page=${page}&windowed=1`,
-        })),
+        window: defineWalkKind({
+          params: {},
+          buildRequest: () => (page) => ({
+            url: `https://example.com/test-api?page=${page}&windowed=1`,
+          }),
+        }),
       },
       parseResponse: async (resp) =>
         Result.ok(await readTestJson<TestResponse>(resp)),

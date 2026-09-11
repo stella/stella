@@ -463,6 +463,22 @@ const walkPolicySchema = v.looseObject({
 
 type WalkPolicyEntry = v.InferOutput<typeof walkEntrySchema>;
 
+type WalkKindDefinition<TParams extends v.ObjectEntries> = {
+  /** The parameters this kind takes, beside the fields every entry carries. */
+  params: TParams;
+  /**
+   * What is wrong with a combination of parameters that each field on its own
+   * accepts, or null when nothing is. A pair of bounds is the usual case: both
+   * are dates, and the pair is still not a window.
+   */
+  objection?: (
+    params: v.InferOutput<v.LooseObjectSchema<TParams, undefined>>,
+  ) => string | null;
+  buildRequest: (
+    params: v.InferOutput<v.LooseObjectSchema<TParams, undefined>>,
+  ) => PageRequestBuilder;
+};
+
 /**
  * Declare one walk kind: the parameters it takes and how it turns them into
  * page requests.
@@ -471,12 +487,11 @@ type WalkPolicyEntry = v.InferOutput<typeof walkEntrySchema>;
  * than ignored: a mistyped parameter would otherwise read as an absent one
  * and the walk would quietly ask the publisher for something else.
  */
-export const defineWalkKind = <TParams extends v.ObjectEntries>(
-  params: TParams,
-  buildRequest: (
-    params: v.InferOutput<v.LooseObjectSchema<TParams, undefined>>,
-  ) => PageRequestBuilder,
-): WalkKind => {
+export const defineWalkKind = <TParams extends v.ObjectEntries>({
+  params,
+  objection,
+  buildRequest,
+}: WalkKindDefinition<TParams>): WalkKind => {
   const schema = v.looseObject(params);
   const declared = new Set([
     ...Object.keys(WALK_ENTRY_FIELDS),
@@ -490,9 +505,13 @@ export const defineWalkKind = <TParams extends v.ObjectEntries>(
         return Result.err(`does not take ${undeclared.join(", ")}`);
       }
       const parsed = v.safeParse(schema, entry);
-      return parsed.success
+      if (!parsed.success) {
+        return Result.err(v.summarize(parsed.issues));
+      }
+      const objected = objection?.(parsed.output) ?? null;
+      return objected === null
         ? Result.ok(buildRequest(parsed.output))
-        : Result.err(v.summarize(parsed.issues));
+        : Result.err(objected);
     },
   };
 };
