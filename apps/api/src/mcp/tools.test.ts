@@ -1241,8 +1241,6 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: {
         country: [{ count: 1, value: "CZE" }],
-        court: [],
-        language: [],
         court: [{ count: 1, value: "Nejvyšší soud" }],
         language: [{ count: 1, value: "cs" }],
       },
