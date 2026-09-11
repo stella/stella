@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.10
+
+### Patch Changes
+
+- [#3240](https://github.com/stella/stella/pull/3240) [`6c041a7`](https://github.com/stella/stella/commit/6c041a73574026a3d5b03afb81e96eda7fc0f863) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh Amazon Nova cache-write rates from models.dev.
+
 ## 0.1.9
 
 ### Patch Changes
