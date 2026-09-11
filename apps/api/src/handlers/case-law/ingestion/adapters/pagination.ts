@@ -76,7 +76,7 @@ export type TraversalMode = {
 export type FirstPageNumber = 0 | 1;
 
 /** Build the request for one page inside a walk. */
-export type PageRequestBuilder = (page: number) => {
+type PageRequestBuilder = (page: number) => {
   url: string;
   init?: RequestInit;
 };
