@@ -2,6 +2,7 @@ import type {
   JsonSchemaType,
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
+import type * as v from "valibot";
 
 import type { env } from "@/api/env";
 import type {
@@ -31,6 +32,32 @@ export type McpToolInputSchema = {
   properties?: Record<string, unknown>;
   [key: string]: unknown;
 };
+
+/**
+ * Stella-owned tools always return an object as structured content. The source
+ * Valibot schema is retained beside its wire projection so the handler type,
+ * advertised contract, and runtime validator are one value rather than three
+ * hand-maintained mirrors.
+ */
+export type McpToolOutputSchema = NonNullable<McpTool["outputSchema"]>;
+
+export type McpToolOutputContract<
+  TData = unknown,
+  TSchema extends v.GenericSchema = v.GenericSchema,
+  TProjection extends "identity" | "explicit" = "identity" | "explicit",
+> = {
+  /** Type-only handler binding; factories intentionally omit it at runtime. */
+  handlerDataType?: (data: TData) => void;
+  outputSchema: McpToolOutputSchema;
+  outputSchemaSource: TSchema;
+  project: (data: unknown) => unknown;
+  projection: TProjection;
+};
+
+export type RuntimeMcpToolOutputContract = Omit<
+  McpToolOutputContract<never>,
+  "handlerDataType"
+>;
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 
@@ -333,7 +360,6 @@ export type McpStructuredWindow = {
 export type InternalToolMcpPresentation = {
   additionalText?: readonly string[];
   primaryText?: string;
-  structuredContent?: Record<string, unknown>;
 };
 
 export type InternalToolSuccess<TData = unknown> = {
@@ -428,7 +454,7 @@ export type TypedMcpToolHandler<TData> = (options: {
 }) => TypedMcpToolHandlerResult<TData>;
 
 type TypedHandlerData<THandler> =
-  THandler extends TypedMcpToolHandler<infer TData> ? TData : never;
+  THandler extends McpToolHandler<infer TData> ? TData : never;
 
 export type TypedHandlerDataByName<
   THandlers,
@@ -496,9 +522,60 @@ export type McpToolHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],
 > = Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
 
-export type McpToolSet<TDefinitions extends readonly McpToolDefinition[]> = {
+export type McpToolOutputContractMap<
+  TDefinitions extends readonly McpToolDefinition[],
+> = Readonly<
+  Record<TDefinitions[number]["name"], McpToolOutputContract<never>>
+>;
+
+type OutputContractData<TContract> =
+  TContract extends McpToolOutputContract<infer TData> ? TData : never;
+
+type IdentityOutputNames<TOutputs> = {
+  [TName in keyof TOutputs]: TOutputs[TName] extends {
+    projection: "identity";
+  }
+    ? TName
+    : never;
+}[keyof TOutputs];
+
+type OutputDataByName<TOutputs> = {
+  [TName in keyof TOutputs]: OutputContractData<TOutputs[TName]>;
+};
+
+type OutputContractAssertion<THandlers, TOutputs> =
+  IdentityOutputNames<TOutputs> extends infer TNames extends keyof THandlers &
+    keyof TOutputs
+    ? [TNames] extends [never]
+      ? unknown
+      : AllHandlerOutputsTyped<THandlers, TNames> extends true
+        ? HandlerOutputsMatchByName<
+            THandlers,
+            OutputDataByName<TOutputs>,
+            TNames
+          > extends true
+          ? unknown
+          : never
+        : never
+    : never;
+
+type OutputBoundHandlerMap<
+  TDefinitions extends readonly McpToolDefinition[],
+  TOutputs extends McpToolOutputContractMap<TDefinitions>,
+> = {
+  readonly [TName in TDefinitions[number]["name"]]: McpToolHandler<
+    OutputContractData<TOutputs[TName]>
+  >;
+};
+
+export type McpToolSet<
+  TDefinitions extends readonly McpToolDefinition[],
+  TOutputs extends McpToolOutputContractMap<TDefinitions> =
+    McpToolOutputContractMap<TDefinitions>,
+> = {
   readonly definitions: TDefinitions;
   readonly handlers: McpToolHandlerMap<TDefinitions>;
+  readonly outputs: TOutputs;
 };
 
 /**
@@ -509,12 +586,16 @@ export type McpToolSet<TDefinitions extends readonly McpToolDefinition[]> = {
  */
 export const defineMcpToolSet = <
   const TDefinitions extends readonly McpToolDefinition[],
-  const THandlers extends McpToolHandlerMap<TDefinitions>,
+  const TOutputs extends McpToolOutputContractMap<TDefinitions>,
+  const THandlers extends OutputBoundHandlerMap<TDefinitions, TOutputs>,
 >(
   definitions: TDefinitions,
   handlers: THandlers &
-    Record<Exclude<keyof THandlers, TDefinitions[number]["name"]>, never>,
-): McpToolSet<TDefinitions> => ({ definitions, handlers });
+    Record<Exclude<keyof THandlers, TDefinitions[number]["name"]>, never> &
+    OutputContractAssertion<THandlers, TOutputs>,
+  outputs: TOutputs &
+    Record<Exclude<keyof TOutputs, TDefinitions[number]["name"]>, never>,
+): McpToolSet<TDefinitions, TOutputs> => ({ definitions, handlers, outputs });
 
 /**
  * Foundation for expressing one anonymizable text field as code instead of a

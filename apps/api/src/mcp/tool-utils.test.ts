@@ -27,6 +27,10 @@ import {
   validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
+import {
+  defineMcpToolOutput,
+  defineProjectedMcpToolOutput,
+} from "@/api/mcp/valibot-tool-definition";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
@@ -444,16 +448,49 @@ describe("serializeToolResult", () => {
     expect(result.structuredContent).toEqual(data);
   });
 
-  test("keeps a handler's own structuredContent alongside its prose text", () => {
+  test("keeps prose text while deriving structured content from its contract", () => {
     const data = { entityId: "doc_1" };
-    const result = serializeToolResult({
-      status: "success",
-      data,
-      mcp: { primaryText: "Choose a file.", structuredContent: data },
-    });
+    const contract = defineMcpToolOutput(
+      v.strictObject({ entityId: v.string() }),
+    );
+    const result = serializeToolResult(
+      {
+        status: "success",
+        data,
+        mcp: { primaryText: "Choose a file." },
+      },
+      contract,
+    );
 
     expect(result.content).toEqual([{ type: "text", text: "Choose a file." }]);
     expect(result.structuredContent).toEqual(data);
+  });
+
+  test("projects arbitrary handler data into a stable structured envelope", () => {
+    const contract = defineProjectedMcpToolOutput(
+      v.strictObject({ result: v.unknown() }),
+      (result) => ({ result }),
+    );
+    const result = serializeToolResult(
+      { status: "success", data: [1, 2] },
+      contract,
+    );
+
+    expect(result.content).toEqual([{ type: "text", text: "[1,2]" }]);
+    expect(result.structuredContent).toEqual({ result: [1, 2] });
+  });
+
+  test("fails closed when projected content violates the advertised schema", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({ entityId: v.string() }),
+    );
+
+    expect(() =>
+      serializeToolResult(
+        { status: "success", data: { entityId: 42 } },
+        contract,
+      ),
+    ).toThrow("MCP tool output violated its advertised contract");
   });
 
   test("omits structuredContent for a non-object payload", () => {

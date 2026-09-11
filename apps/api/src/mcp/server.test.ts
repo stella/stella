@@ -397,7 +397,16 @@ describe("handleMcpHttpRequest", () => {
         toolName === "upload_document_version"
           ? {
               content: [{ type: "text", text: "Uploaded document version." }],
-              structuredContent: { entityVersionId: "version_1" },
+              structuredContent: {
+                finalizedResult: {
+                  type: "entity_version",
+                  entityId: "00000000-0000-4000-8000-0000000e0001",
+                  entityVersionId: "version_1",
+                  versionNumber: 2,
+                  fileId: "file_1",
+                  fileName: "agreement.docx",
+                },
+              },
             }
           : {
               content: [
@@ -457,7 +466,14 @@ describe("handleMcpHttpRequest", () => {
         { timeout: 2000 },
       );
       expect(uploaded.structuredContent).toEqual({
-        entityVersionId: "version_1",
+        finalizedResult: {
+          type: "entity_version",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
+          entityVersionId: "version_1",
+          versionNumber: 2,
+          fileId: "file_1",
+          fileName: "agreement.docx",
+        },
       });
       const opened = await client.callTool(
         {

@@ -31,6 +31,7 @@ import {
 import {
   DEFAULT_MCP_TOOL_SETS,
   getStaticMcpToolDefinition,
+  getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpToolDefinition,
@@ -164,7 +165,6 @@ export const getMcpToolRequiredScopesHint = (
     }
     return [staticTool.scope, ...staticTool.additionalScopes];
   }
-
   if (mode !== "default") {
     return undefined;
   }
@@ -226,6 +226,10 @@ export const handleMcpToolCall = async ({
         hint: "Call tools/list for the tools available to this session.",
       }),
     );
+  }
+  const outputContract = getStaticMcpToolOutputContract(toolName);
+  if (outputContract === undefined) {
+    panic(`Static MCP tool is missing its output contract: ${toolName}`);
   }
 
   if (
@@ -332,7 +336,7 @@ export const handleMcpToolCall = async ({
         args: normalizedArgs,
         context: executionContext,
       });
-      return await finalizeToolEgress(
+      const finalized = await finalizeToolEgress(
         {
           context: executionContext,
           mode,
@@ -349,6 +353,7 @@ export const handleMcpToolCall = async ({
               ?.loadAnonymizationGazetteerEntriesByWorkspace,
         },
       );
+      return serializeToolResult(finalized, outputContract);
     },
     catch: (error) => error,
   });
@@ -364,5 +369,5 @@ export const handleMcpToolCall = async ({
       }),
     );
   }
-  return serializeToolResult(finished.value);
+  return finished.value;
 };

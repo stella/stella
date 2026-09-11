@@ -93,7 +93,8 @@ const callCapability = async (
     const message = result.content.find((part) => part.type === "text")?.text;
     throw new UploadAppError(message ?? `Capability ${capability} failed`);
   }
-  return parsePayload(result);
+  const payload = parsePayload(result);
+  return isRecord(payload) && "result" in payload ? payload["result"] : payload;
 };
 
 const parseReservation = (

@@ -27,17 +27,17 @@ import type { UpsertFieldContent } from "@/api/handlers/fields/upsert-by-id";
 import { upsertFieldHandler } from "@/api/handlers/fields/upsert-by-id";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
+import {
   DELETED_TRUE_PROJECTION,
   LIST_DOCUMENTS_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
-  READ_DOCUMENT_DEFAULT_PROJECTION,
-  READ_DOCUMENT_DIFF_PROJECTION,
+  type READ_DOCUMENT_DEFAULT_PROJECTION,
+  type READ_DOCUMENT_DIFF_PROJECTION,
   READ_DOCUMENT_PROJECTION,
-  READ_DOCUMENT_VERSION_PROJECTION,
-  SAVE_DOCUMENT_CREATE_PROJECTION,
+  type READ_DOCUMENT_VERSION_PROJECTION,
+  type SAVE_DOCUMENT_CREATE_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
-  SAVE_DOCUMENT_UPDATE_PROJECTION,
+  type SAVE_DOCUMENT_UPDATE_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -73,6 +73,7 @@ import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
   OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
   UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
+  UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -82,11 +83,11 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
-  McpToolResponse,
   TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -106,7 +107,11 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -522,6 +527,11 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
   scope: "stella:documents_write",
+});
+
+const OPEN_DOCUMENT_VERSION_UPLOAD_OUTPUT_SCHEMA = v.strictObject({
+  entityId: v.string(),
+  workspaceId: v.string(),
 });
 
 /** Entity kind the document tools operate on (same set list_documents surfaces). */
@@ -2035,7 +2045,7 @@ type DocumentVersionUploadTargetResult =
       entityId: SafeId<"entity">;
       workspaceId: SafeId<"workspace">;
     }
-  | { status: "error"; response: McpToolResponse };
+  | { status: "error"; response: InternalToolErrorResult };
 
 const resolveDocumentVersionUploadTarget = async ({
   context,
@@ -2066,10 +2076,9 @@ const resolveDocumentVersionUploadTarget = async ({
   return { entityId, status: "ok", workspaceId: owner.workspaceId };
 };
 
-const handleUploadDocumentVersionTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleUploadDocumentVersionTool: TypedMcpToolHandler<
+  v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(
     UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION.inputSchemaSource,
     args,
@@ -2094,10 +2103,9 @@ const handleUploadDocumentVersionTool: McpToolHandler = async ({
   });
 };
 
-const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleOpenDocumentVersionUploadTool: TypedMcpToolHandler<
+  v.InferInput<typeof OPEN_DOCUMENT_VERSION_UPLOAD_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(
     OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION.inputSchemaSource,
     args,
@@ -2121,7 +2129,6 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
   return toolDataResult(data, {
     primaryText:
       "Choose a file in the upload panel to add a new document version.",
-    structuredContent: data,
   });
 };
 
@@ -2672,4 +2679,24 @@ export const DOCUMENT_TOOL_HANDLERS = {
 export const DOCUMENT_TOOL_SET = defineMcpToolSet(
   DOCUMENT_TOOL_DEFINITIONS,
   DOCUMENT_TOOL_HANDLERS,
+  {
+    delete_document: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
+    list_documents: defineChatProjectionMcpToolOutput(
+      LIST_DOCUMENTS_PROJECTION,
+    ),
+    list_properties: defineChatProjectionMcpToolOutput(
+      LIST_PROPERTIES_PROJECTION,
+    ),
+    [DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName]: defineMcpToolOutput(
+      OPEN_DOCUMENT_VERSION_UPLOAD_OUTPUT_SCHEMA,
+    ),
+    read_document: defineChatProjectionMcpToolOutput(READ_DOCUMENT_PROJECTION),
+    save_document: defineChatProjectionMcpToolOutput(SAVE_DOCUMENT_PROJECTION),
+    [DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName]: defineMcpToolOutput(
+      UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
+    ),
+    set_field_value: defineChatProjectionMcpToolOutput(
+      SET_FIELD_VALUE_PROJECTION,
+    ),
+  },
 );

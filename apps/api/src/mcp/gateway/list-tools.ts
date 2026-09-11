@@ -17,6 +17,7 @@ import {
 } from "@/api/mcp/gateway/skills";
 import {
   getStaticMcpToolDefinition,
+  getStaticMcpToolOutputContract,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type {
@@ -393,14 +394,20 @@ const toWireInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
 ): McpTool[] =>
-  definitions.map(({ _meta, annotations, description, inputSchema, name }) => ({
-    ...(_meta === undefined ? {} : { _meta }),
-    annotations,
-    description,
-    inputSchema: toWireInputSchema(inputSchema),
-    name,
-    title: annotations.title,
-  }));
+  definitions.map(({ _meta, annotations, description, inputSchema, name }) => {
+    const outputContract = getStaticMcpToolOutputContract(name);
+    return {
+      ...(_meta === undefined ? {} : { _meta }),
+      annotations,
+      description,
+      inputSchema: toWireInputSchema(inputSchema),
+      name,
+      ...(outputContract === undefined
+        ? {}
+        : { outputSchema: outputContract.outputSchema }),
+      title: annotations.title,
+    };
+  });
 
 // Display title for a dynamically-gated tool. External connectors and skills
 // carry human names already; clamp to the CLI trust boundary's 64-char wire

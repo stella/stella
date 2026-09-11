@@ -10,6 +10,8 @@ import {
 import type {
   McpToolDefinition,
   McpToolInputSchema,
+  McpToolOutputContract,
+  McpToolOutputSchema,
 } from "@/api/mcp/tool-types";
 import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 
@@ -18,6 +20,13 @@ const VALIBOT_MCP_JSON_SCHEMA_CONFIG = {
   target: "draft-07",
   typeMode: "input",
 } as const;
+
+const CHAT_STRING_ID_CUSTOM_SCHEMA_MESSAGES = new Set([
+  "Expected a matter identifier",
+  "Expected a contact identifier",
+  "Expected a property identifier",
+  "Expected an entity identifier",
+]);
 
 type ToJsonSchemaConfig = NonNullable<Parameters<typeof toJsonSchema>[1]>;
 
@@ -155,6 +164,50 @@ const deriveMcpInputSchema = (
       };
 };
 
+const deriveMcpOutputSchema = (
+  schema: v.GenericSchema,
+  customSchemaProjection: "none" | "chat-string-ids" = "none",
+): McpToolOutputSchema => {
+  const { $schema: _dialect, ...jsonSchema } = toJsonSchema(
+    schema,
+    customSchemaProjection === "none"
+      ? VALIBOT_MCP_JSON_SCHEMA_CONFIG
+      : {
+          ...VALIBOT_MCP_JSON_SCHEMA_CONFIG,
+          overrideSchema: ({ valibotSchema }) => {
+            if (valibotSchema.type !== "custom") {
+              return undefined;
+            }
+            const message =
+              "message" in valibotSchema ? valibotSchema.message : undefined;
+            return typeof message === "string" &&
+              CHAT_STRING_ID_CUSTOM_SCHEMA_MESSAGES.has(message)
+              ? { type: "string" }
+              : undefined;
+          },
+        },
+  );
+  const projected = compactMcpOutputSchema(
+    simplifyMcpOutputSchema(projectSchemaKeywords(jsonSchema)),
+  );
+  const acceptsObject =
+    projected["type"] === "object" ||
+    ["anyOf", "allOf"].some((keyword) => {
+      const branches = projected[keyword];
+      return (
+        Array.isArray(branches) &&
+        branches.length > 0 &&
+        branches.every(
+          (branch) => isSchemaRecord(branch) && branch["type"] === "object",
+        )
+      );
+    });
+  if (!acceptsObject) {
+    return panic("A native MCP tool output schema must accept an object root");
+  }
+  return projected;
+};
+
 const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -253,6 +306,197 @@ const projectSchemaKeywordsIn = (value: unknown): unknown => {
   return isSchemaRecord(value) ? projectSchemaKeywords(value) : value;
 };
 
+const schemaKey = (schema: Record<string, unknown>): string =>
+  JSON.stringify(schema);
+
+const uniqueSchemas = (
+  schemas: readonly Record<string, unknown>[],
+): Record<string, unknown>[] => {
+  const seen = new Set<string>();
+  return schemas.filter((schema) => {
+    const key = schemaKey(schema);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
+const combineSchemas = (
+  schemas: readonly Record<string, unknown>[],
+): Record<string, unknown> => {
+  const unique = uniqueSchemas(schemas);
+  return unique.length === 1 ? (unique.at(0) ?? {}) : { anyOf: unique };
+};
+
+const MERGEABLE_OBJECT_SCHEMA_KEYS = new Set([
+  "additionalProperties",
+  "properties",
+  "required",
+  "type",
+]);
+
+/**
+ * Safely widens a union of closed object outputs into one compact object. It
+ * never drops a possible property or narrows a value schema: properties seen
+ * in only some branches become optional, while differing property schemas stay
+ * as `anyOf`. The executable Valibot source remains exact at dispatch.
+ */
+const mergeObjectUnion = (
+  branches: readonly unknown[],
+): Record<string, unknown> | undefined => {
+  if (
+    branches.length === 0 ||
+    !branches.every(
+      (branch) =>
+        isSchemaRecord(branch) &&
+        branch["type"] === "object" &&
+        Object.keys(branch).every((key) =>
+          MERGEABLE_OBJECT_SCHEMA_KEYS.has(key),
+        ) &&
+        (branch["properties"] === undefined ||
+          isSchemaRecord(branch["properties"])),
+    )
+  ) {
+    return undefined;
+  }
+
+  const objectBranches = branches.filter(isSchemaRecord);
+  const propertyNames = new Set<string>();
+  for (const branch of objectBranches) {
+    const properties = branch["properties"];
+    if (isSchemaRecord(properties)) {
+      for (const name of Object.keys(properties)) {
+        propertyNames.add(name);
+      }
+    }
+  }
+
+  const properties: Record<string, unknown> = {};
+  for (const name of propertyNames) {
+    const schemas = objectBranches.flatMap((branch) => {
+      const branchProperties = branch["properties"];
+      const property = isSchemaRecord(branchProperties)
+        ? branchProperties[name]
+        : undefined;
+      return isSchemaRecord(property) ? [property] : [];
+    });
+    properties[name] = combineSchemas(schemas);
+  }
+
+  const required = [...propertyNames].filter((name) =>
+    objectBranches.every(
+      (branch) =>
+        Array.isArray(branch["required"]) && branch["required"].includes(name),
+    ),
+  );
+
+  return {
+    type: "object",
+    properties,
+    ...(required.length === 0 ? {} : { required }),
+    ...(objectBranches.every(
+      (branch) => branch["additionalProperties"] === false,
+    )
+      ? { additionalProperties: false }
+      : {}),
+  };
+};
+
+/**
+ * Provider-facing output schemas favor a compact safe superset. This recursive
+ * pass only deduplicates alternatives and merges object unions with the
+ * widening rule above; it never guesses which domain fields are unimportant.
+ */
+const simplifyMcpOutputSchema = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> => {
+  const simplified: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
+      const mapped: Record<string, unknown> = {};
+      for (const [name, nested] of Object.entries(value)) {
+        mapped[name] = isSchemaRecord(nested)
+          ? simplifyMcpOutputSchema(nested)
+          : nested;
+      }
+      simplified[key] = mapped;
+      continue;
+    }
+    if (Array.isArray(value)) {
+      simplified[key] = value.map((nested: unknown) =>
+        isSchemaRecord(nested) ? simplifyMcpOutputSchema(nested) : nested,
+      );
+      continue;
+    }
+    simplified[key] = isSchemaRecord(value)
+      ? simplifyMcpOutputSchema(value)
+      : value;
+  }
+
+  const alternatives = simplified["anyOf"];
+  if (!Array.isArray(alternatives) || !alternatives.every(isSchemaRecord)) {
+    return simplified;
+  }
+  const unique = uniqueSchemas(alternatives);
+  if (unique.length !== alternatives.length) {
+    simplified["anyOf"] = unique;
+  }
+  const merged = mergeObjectUnion(unique);
+  if (merged === undefined) {
+    return simplified;
+  }
+  const { anyOf: _alternatives, ...siblings } = simplified;
+  return { ...siblings, ...merged };
+};
+
+const MCP_OUTPUT_SCHEMA_MAX_DETAIL_DEPTH = 3;
+
+/**
+ * Keep root fields and list-item fields visible to models, then widen deeper
+ * object internals. This bounds registry cost without hand-selecting domain
+ * fields: the exact source schema still validates every nested value at
+ * dispatch, and the published schema remains a truthful superset.
+ */
+const compactMcpOutputSchema = (
+  schema: Record<string, unknown>,
+  depth = 0,
+): Record<string, unknown> => {
+  if (
+    depth >= MCP_OUTPUT_SCHEMA_MAX_DETAIL_DEPTH &&
+    schema["type"] === "object"
+  ) {
+    return { type: "object", additionalProperties: true };
+  }
+
+  const compacted: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
+      const mapped: Record<string, unknown> = {};
+      for (const [name, nested] of Object.entries(value)) {
+        mapped[name] = isSchemaRecord(nested)
+          ? compactMcpOutputSchema(nested, depth + 1)
+          : nested;
+      }
+      compacted[key] = mapped;
+      continue;
+    }
+    if (Array.isArray(value)) {
+      compacted[key] = value.map((nested: unknown) =>
+        isSchemaRecord(nested)
+          ? compactMcpOutputSchema(nested, depth + 1)
+          : nested,
+      );
+      continue;
+    }
+    compacted[key] = isSchemaRecord(value)
+      ? compactMcpOutputSchema(value, depth + 1)
+      : value;
+  }
+  return compacted;
+};
+
 /**
  * Defines a native tool from the same Valibot schema its handler parses.
  * `inputSchemaSource` retains that actual schema as internal registry metadata:
@@ -289,3 +533,48 @@ export const defineValibotMcpTool = <
     inputSchemaSource: inputSchema,
   };
 };
+
+/**
+ * Defines the one output contract used for handler typing, tools/list, and
+ * post-egress validation. Keeping the Valibot source in the returned value is
+ * deliberate: publishing only its JSON Schema projection would lose the
+ * executable contract and permit runtime drift.
+ */
+export const defineMcpToolOutput = <const TSchema extends v.GenericSchema>(
+  outputSchemaSource: TSchema,
+): McpToolOutputContract<v.InferInput<TSchema>, TSchema, "identity"> => ({
+  outputSchema: deriveMcpOutputSchema(outputSchemaSource),
+  outputSchemaSource,
+  project: (data) => data,
+  projection: "identity",
+});
+
+/**
+ * Chat projection schemas brand tenant ids with `v.custom` validators. Their
+ * closed annotation vocabulary guarantees those custom nodes are strings; the
+ * wire schema can therefore publish `type: string` while the original custom
+ * validator remains authoritative at runtime. No other unsupported schema is
+ * ignored or guessed.
+ */
+export const defineChatProjectionMcpToolOutput = <
+  const TSchema extends v.GenericSchema,
+>(
+  outputSchemaSource: TSchema,
+): McpToolOutputContract<v.InferInput<TSchema>, TSchema, "identity"> => ({
+  outputSchema: deriveMcpOutputSchema(outputSchemaSource, "chat-string-ids"),
+  outputSchemaSource,
+  project: (data) => data,
+  projection: "identity",
+});
+
+export const defineProjectedMcpToolOutput = <
+  const TSchema extends v.GenericSchema,
+>(
+  outputSchemaSource: TSchema,
+  project: (data: unknown) => v.InferInput<TSchema>,
+): McpToolOutputContract<unknown, TSchema, "explicit"> => ({
+  outputSchema: deriveMcpOutputSchema(outputSchemaSource),
+  outputSchemaSource,
+  project,
+  projection: "explicit",
+});

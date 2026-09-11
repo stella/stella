@@ -12,7 +12,10 @@ import {
   toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 const FEEDBACK_KINDS = ["bug", "feature_request", "docs", "other"] as const;
 type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
@@ -101,6 +104,16 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
+const PREPARE_FEEDBACK_OUTPUT_SCHEMA = v.strictObject({
+  channel: v.literal("github"),
+  sanitized_title: v.string(),
+  sanitized_body: v.string(),
+  redactions: v.pipe(v.number(), v.integer()),
+  issue_url: v.string(),
+  gh_cli_command: v.string(),
+  next_step: v.string(),
+});
+
 /**
  * Sanitized body plus a provenance footer. No user/org identifiers appear
  * anywhere in the published body.
@@ -185,7 +198,9 @@ const buildGithubFeedbackResult = ({
   composedBody: string;
   redactions: number;
   sanitizedTitle: string;
-}): InternalToolSuccess => {
+}): InternalToolSuccess<
+  v.InferInput<typeof PREPARE_FEEDBACK_OUTPUT_SCHEMA>
+> => {
   const issueUrl = buildBoundedGithubIssueUrl({
     composedBody,
     title: sanitizedTitle,
@@ -209,7 +224,9 @@ const buildGithubFeedbackResult = ({
   });
 };
 
-const handlePrepareFeedbackTool: McpToolHandler = async ({ args }) => {
+const handlePrepareFeedbackTool: McpToolHandler<
+  v.InferInput<typeof PREPARE_FEEDBACK_OUTPUT_SCHEMA>
+> = async ({ args }) => {
   const parsed = await Promise.resolve(v.safeParse(feedbackArgsSchema, args));
   if (!parsed.success) {
     return validationErrorResult(
@@ -240,4 +257,7 @@ export const FEEDBACK_TOOL_HANDLERS = {
 export const FEEDBACK_TOOL_SET = defineMcpToolSet(
   FEEDBACK_TOOL_DEFINITIONS,
   FEEDBACK_TOOL_HANDLERS,
+  {
+    prepare_feedback: defineMcpToolOutput(PREPARE_FEEDBACK_OUTPUT_SCHEMA),
+  },
 );

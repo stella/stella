@@ -14,14 +14,14 @@ import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement"
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
+import {
   DELETE_TIME_ENTRY_PROJECTION,
   GET_USAGE_PROJECTION,
-  LIST_INVOICES_DETAIL_PROJECTION,
-  LIST_INVOICES_LIST_PROJECTION,
+  type LIST_INVOICES_DETAIL_PROJECTION,
+  type LIST_INVOICES_LIST_PROJECTION,
   LIST_INVOICES_PROJECTION,
-  LIST_TIME_ENTRIES_DETAIL_PROJECTION,
-  LIST_TIME_ENTRIES_LIST_PROJECTION,
+  type LIST_TIME_ENTRIES_DETAIL_PROJECTION,
+  type LIST_TIME_ENTRIES_LIST_PROJECTION,
   LIST_TIME_ENTRIES_PROJECTION,
   RESOLVE_RATE_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
@@ -71,7 +71,10 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 type BillingToolName =
   | "list_time_entries"
@@ -1074,7 +1077,9 @@ const resolveRateArgsSchema = nullAsAbsent(
   }),
 );
 
-const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
+const handleResolveRateTool: McpToolHandler<
+  v.InferInput<typeof RESOLVE_RATE_PROJECTION>
+> = async ({ args, context }) => {
   if (!hasEffectiveAuthority(context, { rate: ["read"] })) {
     return errorResult("Forbidden");
   }
@@ -1616,4 +1621,18 @@ export const BILLING_TOOL_HANDLERS = {
 export const BILLING_TOOL_SET = defineMcpToolSet(
   BILLING_TOOL_DEFINITIONS,
   BILLING_TOOL_HANDLERS,
+  {
+    delete_time_entry: defineChatProjectionMcpToolOutput(
+      DELETE_TIME_ENTRY_PROJECTION,
+    ),
+    get_usage: defineChatProjectionMcpToolOutput(GET_USAGE_PROJECTION),
+    list_invoices: defineChatProjectionMcpToolOutput(LIST_INVOICES_PROJECTION),
+    list_time_entries: defineChatProjectionMcpToolOutput(
+      LIST_TIME_ENTRIES_PROJECTION,
+    ),
+    resolve_rate: defineChatProjectionMcpToolOutput(RESOLVE_RATE_PROJECTION),
+    save_time_entry: defineChatProjectionMcpToolOutput(
+      SAVE_TIME_ENTRY_PROJECTION,
+    ),
+  },
 );

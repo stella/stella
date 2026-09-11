@@ -746,6 +746,7 @@ describe("MCP template tools", () => {
           path: "role",
           label: "Smith role",
           inputType: "select",
+          required: false,
           options: ["Smith director"],
           lookup: {
             registry: "krs",
@@ -1016,6 +1017,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [],
     });
 
@@ -1082,6 +1084,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [],
     });
 
@@ -1114,6 +1117,7 @@ describe("MCP template tools", () => {
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [
         {
           fieldPath: "scope",
@@ -1152,6 +1156,7 @@ describe("MCP template tools", () => {
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
+      structureErrors: [],
       aiFieldErrors: [
         {
           fieldPath: "scope",
@@ -1286,6 +1291,7 @@ describe("MCP template tools", () => {
       text: "Lease",
       unmatchedPlaceholders: [],
       unusedValues: ["intentional"],
+      structureErrors: [],
       aiFieldErrors: [],
     });
 
@@ -2288,14 +2294,14 @@ describe("MCP template tools", () => {
         name: "POA",
         warnings: [
           {
-            code: "unprefixed_item_path",
+            code: "unaliased_item_path",
             path: "name",
             message:
               "{{name}} inside {% for attorney in attorneys %} is not item-scoped",
             hint: "Write {{ attorney.name }}.",
           },
           {
-            code: "unknown_directive",
+            code: "legacy_marker",
             path: "{{#endeach}}",
             message: "{{#endeach}} is not a directive",
             hint: "Close the loop with {% endfor %}.",
@@ -2322,8 +2328,8 @@ describe("MCP template tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       templateId: "tmpl_new",
       warnings: [
-        { code: "unprefixed_item_path", path: "name" },
-        { code: "unknown_directive", path: "{{#endeach}}" },
+        { code: "unaliased_item_path", path: "name" },
+        { code: "legacy_marker", path: "{{#endeach}}" },
       ],
     });
   });

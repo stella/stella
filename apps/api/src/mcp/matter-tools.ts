@@ -30,15 +30,15 @@ import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspa
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
-import type {
-  AssertNoExtraFields,
+import {
+  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
-  LINK_MATTER_CONTACT_LINK_PROJECTION,
-  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  type LINK_MATTER_CONTACT_LINK_PROJECTION,
+  type LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
   LIST_CONTACTS_PROJECTION,
-  LIST_TASKS_DETAIL_PROJECTION,
-  LIST_TASKS_LIST_PROJECTION,
+  type LIST_TASKS_DETAIL_PROJECTION,
+  type LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
@@ -99,7 +99,10 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 type MatterToolName =
   | "save_matter"
@@ -2307,4 +2310,20 @@ export const MATTER_TOOL_HANDLERS = {
 export const MATTER_TOOL_SET = defineMcpToolSet(
   MATTER_TOOL_DEFINITIONS,
   MATTER_TOOL_HANDLERS,
+  {
+    delete_contact: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
+    delete_matter: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
+    delete_task: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
+    link_matter_contact: defineChatProjectionMcpToolOutput(
+      LINK_MATTER_CONTACT_PROJECTION,
+    ),
+    list_contacts: defineChatProjectionMcpToolOutput(LIST_CONTACTS_PROJECTION),
+    list_tasks: defineChatProjectionMcpToolOutput(LIST_TASKS_PROJECTION),
+    lookup_business_registry: defineChatProjectionMcpToolOutput(
+      LOOKUP_BUSINESS_REGISTRY_PROJECTION,
+    ),
+    save_contact: defineChatProjectionMcpToolOutput(SAVE_CONTACT_PROJECTION),
+    save_matter: defineChatProjectionMcpToolOutput(SAVE_MATTER_PROJECTION),
+    save_task: defineChatProjectionMcpToolOutput(SAVE_TASK_PROJECTION),
+  },
 );

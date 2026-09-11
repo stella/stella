@@ -21,11 +21,11 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-remove";
-import type {
-  AssertNoExtraFields,
-  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
-  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
-  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
+import {
+  type AssertNoExtraFields,
+  type MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
+  type MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
+  type MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
@@ -53,7 +53,11 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineChatProjectionMcpToolOutput,
+  defineMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 type ResearchAdminToolName =
   | "search_legislation"
@@ -219,6 +223,23 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",
+});
+
+const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
+  items: v.array(
+    v.strictObject({
+      id: v.string(),
+      createdAt: v.string(),
+      userId: v.string(),
+      actor: v.string(),
+      action: v.string(),
+      resourceType: v.string(),
+      resourceId: v.string(),
+      changes: v.unknown(),
+    }),
+  ),
+  limit: v.pipe(v.number(), v.integer()),
+  nextCursor: v.nullable(v.string()),
 });
 
 // --- search_legislation -------------------------------------------------
@@ -575,7 +596,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 
 // --- list_audit_log -----------------------------------------------------
 
-const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
+const handleListAuditLogTool: McpToolHandler<
+  v.InferInput<typeof LIST_AUDIT_LOG_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   if (!hasEffectiveAuthority(context, { auditLog: ["read"] })) {
     return errorResult("Forbidden");
   }
@@ -634,7 +657,19 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   if (Result.isError(page)) {
     return internalFailureResult(page.error);
   }
-  return toolDataResult(page.value);
+  return toolDataResult({
+    ...page.value,
+    items: page.value.items.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt.toISOString(),
+      userId: item.userId,
+      actor: item.actor,
+      action: item.action,
+      resourceType: item.resourceType,
+      resourceId: item.resourceId,
+      changes: item.changes,
+    })),
+  });
 };
 
 // --- manage_organization ------------------------------------------------
@@ -963,4 +998,13 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_DEFINITIONS,
   RESEARCH_ADMIN_TOOL_HANDLERS,
+  {
+    list_audit_log: defineMcpToolOutput(LIST_AUDIT_LOG_OUTPUT_SCHEMA),
+    manage_organization: defineChatProjectionMcpToolOutput(
+      MANAGE_ORGANIZATION_PROJECTION,
+    ),
+    search_legislation: defineChatProjectionMcpToolOutput(
+      SEARCH_LEGISLATION_PROJECTION,
+    ),
+  },
 );

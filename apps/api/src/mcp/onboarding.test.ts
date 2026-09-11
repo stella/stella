@@ -478,7 +478,7 @@ describe("empty-result onboarding hints", () => {
 
   test("search_case_law appends a hint when empty and jurisdictions are missing", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
-      facets: {},
+      facets: null,
       hits: [],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
@@ -507,7 +507,7 @@ describe("empty-result onboarding hints", () => {
 
   test("search_case_law does not append a hint when results are non-empty", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
-      facets: {},
+      facets: null,
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
@@ -544,7 +544,7 @@ describe("empty-result onboarding hints", () => {
 
   test("search_case_law does not append a hint when jurisdictions are configured", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
-      facets: {},
+      facets: null,
       hits: [],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),

@@ -29,7 +29,10 @@ import {
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
-import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
+import {
+  defineMcpToolOutput,
+  defineValibotMcpTool,
+} from "@/api/mcp/valibot-tool-definition";
 
 type CompatToolName = "fetch" | "search";
 
@@ -316,7 +319,32 @@ export const COMPAT_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-const handleCompatSearchTool: McpToolHandler = async ({ args, context }) => {
+const COMPAT_SEARCH_OUTPUT_SCHEMA = v.strictObject({
+  results: v.array(
+    v.strictObject({ id: v.string(), title: v.string(), url: v.string() }),
+  ),
+  nextCursor: v.optional(v.nullable(v.string())),
+});
+
+const COMPAT_FETCH_OUTPUT_SCHEMA = v.strictObject({
+  id: v.string(),
+  title: v.string(),
+  text: v.string(),
+  url: v.string(),
+  nextCursor: v.nullable(v.string()),
+  metadata: v.strictObject({
+    anonymized: v.optional(v.literal(true)),
+    anonymizedEntityCount: v.optional(v.number()),
+    charCount: v.number(),
+    source: v.literal("stella"),
+    truncated: v.boolean(),
+    workspaceId: v.string(),
+  }),
+});
+
+const handleCompatSearchTool: McpToolHandler<
+  v.InferInput<typeof COMPAT_SEARCH_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(compatSearchArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -375,7 +403,9 @@ const handleCompatSearchTool: McpToolHandler = async ({ args, context }) => {
   };
 };
 
-const handleCompatFetchTool: McpToolHandler = async ({ args, context }) => {
+const handleCompatFetchTool: McpToolHandler<
+  v.InferInput<typeof COMPAT_FETCH_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
   const parsed = v.safeParse(compatFetchArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(
@@ -487,4 +517,8 @@ export const COMPAT_TOOL_HANDLERS = {
 export const COMPAT_TOOL_SET = defineMcpToolSet(
   COMPAT_TOOL_DEFINITIONS,
   COMPAT_TOOL_HANDLERS,
+  {
+    fetch: defineMcpToolOutput(COMPAT_FETCH_OUTPUT_SCHEMA),
+    search: defineMcpToolOutput(COMPAT_SEARCH_OUTPUT_SCHEMA),
+  },
 );

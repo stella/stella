@@ -294,8 +294,22 @@ const featureDisabledHint = (feature: string): string =>
 const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
-  citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-  citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
+  citationsFrom: [
+    {
+      citationText: "29 Odo 1/2001",
+      citedDecisionId: null,
+      id: "c_1",
+      sectionIndex: null,
+    },
+  ],
+  citationsTo: [
+    {
+      citationText: "31 Cdo 2/2025",
+      citingDecisionId: DECISION_ID,
+      id: "c_2",
+      sectionIndex: null,
+    },
+  ],
   citationsNextCursor: null,
   country: "CZE",
   court: "Nejvyšší soud",
@@ -1332,6 +1346,8 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: {
         country: [{ count: 1, value: "CZE" }],
+        court: [],
+        language: [],
       },
       hits: [
         {
@@ -1363,6 +1379,8 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       facets: {
         country: [{ count: 1, value: "CZE" }],
+        court: [],
+        language: [],
       },
       nextCursor: null,
       results: [
@@ -1466,7 +1484,11 @@ describe("OpenAI-compatible MCP tools", () => {
   test("dispatches a feature-gated tool once the flag is on", async () => {
     await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
       searchDecisionsHandlerMock.mockResolvedValue({
-        facets: { country: [{ count: 1, value: "CZE" }] },
+        facets: {
+          country: [{ count: 1, value: "CZE" }],
+          court: [],
+          language: [],
+        },
         hits: [
           {
             caseNumber: "29 Cdo 123/2024",
@@ -1538,10 +1560,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_case_law normalizes an unambiguous localized date", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
-      facets: {},
+      facets: null,
       hits: [],
       nextCursor: null,
-      totalCount: 0,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
     });
 
     await handleMcpToolCall({
@@ -1622,8 +1644,22 @@ describe("OpenAI-compatible MCP tools", () => {
       decision: {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
-        citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-        citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
+        citationsFrom: [
+          {
+            citationText: "29 Odo 1/2001",
+            citedDecisionId: null,
+            id: "c_1",
+            sectionIndex: null,
+          },
+        ],
+        citationsTo: [
+          {
+            citationText: "31 Cdo 2/2025",
+            citingDecisionId: DECISION_ID,
+            id: "c_2",
+            sectionIndex: null,
+          },
+        ],
         country: "CZE",
         court: "Nejvyšší soud",
         decisionDate: "2024-02-01",
@@ -1725,8 +1761,22 @@ describe("OpenAI-compatible MCP tools", () => {
       decision: {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
-        citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-        citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
+        citationsFrom: [
+          {
+            citationText: "29 Odo 1/2001",
+            citedDecisionId: null,
+            id: "c_1",
+            sectionIndex: null,
+          },
+        ],
+        citationsTo: [
+          {
+            citationText: "31 Cdo 2/2025",
+            citingDecisionId: DECISION_ID,
+            id: "c_2",
+            sectionIndex: null,
+          },
+        ],
         country: "CZE",
         court: "Nejvyšší soud",
         decisionDate: "2024-02-01",
@@ -1771,14 +1821,18 @@ describe("OpenAI-compatible MCP tools", () => {
             { length: page === 0 ? 50 : 10 },
             (_unused, i) => ({
               citationText: `from-${String(fromStart + i)}`,
+              citedDecisionId: null,
               id: `cf_${String(fromStart + i)}`,
+              sectionIndex: null,
             }),
           ),
           citationsTo: Array.from(
             { length: page === 0 ? 50 : 20 },
             (_unused, i) => ({
               citationText: `to-${String(toStart + i)}`,
+              citingDecisionId: DECISION_ID,
               id: `ct_${String(toStart + i)}`,
+              sectionIndex: null,
             }),
           ),
           citationsNextCursor: page === 0 ? "citations-next" : null,

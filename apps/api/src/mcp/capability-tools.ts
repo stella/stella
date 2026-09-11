@@ -3,6 +3,7 @@ import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
+import * as v from "valibot";
 
 import capabilityCatalogRaw from "@stll/cli/capability-catalog.json";
 import type { PermissionInput } from "@stll/permissions";
@@ -76,6 +77,10 @@ import {
   featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
+import {
+  defineMcpToolOutput,
+  defineProjectedMcpToolOutput,
+} from "@/api/mcp/valibot-tool-definition";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
 
@@ -268,11 +273,11 @@ const DISPATCH_BY_ID = new Map<string, CapabilityDispatchEntry>(
 
 const capabilityDomain = (id: string): string => id.split(".").at(0) ?? id;
 const capabilityLeaf = (id: string): string => id.split(".").at(-1) ?? id;
-const additionalScopesOf = (entry: CatalogEntry): readonly string[] => {
+const additionalScopesOf = (entry: CatalogEntry): string[] => {
   if (entry.additionalScopes === undefined) {
     return [];
   }
-  return entry.additionalScopes;
+  return [...entry.additionalScopes];
 };
 const requiredScopesOf = (entry: CatalogEntry): readonly string[] => [
   entry.scope,
@@ -286,9 +291,9 @@ type RenderedTransport = {
   /** Body field carrying bytes, and whether it is required. */
   fileField: string | null;
   fileFieldRequired: boolean | null;
-  fileMediaTypes: readonly string[];
+  fileMediaTypes: string[];
   /** Media types the success payload would be, for a file-returning capability. */
-  responseMediaTypes: readonly string[];
+  responseMediaTypes: string[];
   /** Where the work can be done instead, as one sentence. */
   alternative: string | null;
 };
@@ -299,8 +304,6 @@ type RenderedTransport = {
  * capability has a fileless mode, so an agent can tell "cannot be called" from
  * "can be called without the file" before spending a round trip.
  */
-const NO_MEDIA_TYPES: readonly string[] = [];
-
 const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
   const input = transportFileInput(transport);
   const response = transportFileResponse(transport);
@@ -310,9 +313,8 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
     invocable: isTransportInvocable(transport),
     fileField: input === undefined ? null : input.field,
     fileFieldRequired: input === undefined ? null : input.required,
-    fileMediaTypes: input === undefined ? NO_MEDIA_TYPES : input.mediaTypes,
-    responseMediaTypes:
-      response === undefined ? NO_MEDIA_TYPES : response.mediaTypes,
+    fileMediaTypes: input === undefined ? [] : [...input.mediaTypes],
+    responseMediaTypes: response === undefined ? [] : [...response.mediaTypes],
     alternative:
       alternative === undefined
         ? null
@@ -729,6 +731,59 @@ const successEgress = (
   textFields: [],
 });
 
+const CAPABILITY_TRANSPORT_OUTPUT_SCHEMA = v.strictObject({
+  type: v.picklist(["json", "file-input", "file-response", "file-both"]),
+  invocable: v.boolean(),
+  fileField: v.nullable(v.string()),
+  fileFieldRequired: v.nullable(v.boolean()),
+  fileMediaTypes: v.array(v.string()),
+  responseMediaTypes: v.array(v.string()),
+  alternative: v.nullable(v.string()),
+});
+
+const CAPABILITY_DISPOSITION_OUTPUT_SCHEMA = v.variant("type", [
+  v.strictObject({ type: v.literal("tool"), name: v.string() }),
+  v.strictObject({ type: v.literal("covered"), by: v.string() }),
+  v.strictObject({ type: v.literal("capability"), reason: v.string() }),
+]);
+
+const LIST_CAPABILITIES_OUTPUT_SCHEMA = v.strictObject({
+  items: v.array(
+    v.strictObject({
+      id: v.string(),
+      summary: v.string(),
+      description: v.nullable(v.string()),
+      access: v.picklist(["read", "write"]),
+      destructive: v.boolean(),
+      handlerKind: v.picklist(HANDLER_KINDS),
+      transport: CAPABILITY_TRANSPORT_OUTPUT_SCHEMA,
+      scope: v.string(),
+      additionalScopes: v.array(v.string()),
+    }),
+  ),
+  nextCursor: v.nullable(v.string()),
+  limit: v.pipe(v.number(), v.integer()),
+});
+
+const DESCRIBE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({
+  id: v.string(),
+  description: v.nullable(v.string()),
+  domain: v.string(),
+  access: v.picklist(["read", "write"]),
+  destructive: v.boolean(),
+  handlerKind: v.picklist(HANDLER_KINDS),
+  scope: v.string(),
+  additionalScopes: v.array(v.string()),
+  transport: CAPABILITY_TRANSPORT_OUTPUT_SCHEMA,
+  allowsArchivedWorkspace: v.boolean(),
+  feature: v.nullable(v.string()),
+  permissions: v.nullable(v.unknown()),
+  disposition: CAPABILITY_DISPOSITION_OUTPUT_SCHEMA,
+  inputSchema: v.unknown(),
+});
+
+const INVOKE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({ result: v.unknown() });
+
 // --- list_capabilities -------------------------------------------------------
 
 const CAPABILITY_LIST_CURSOR = "cursor";
@@ -742,13 +797,15 @@ const contextFeatureEnabled = (
     isCapabilityFeatureEnabled
   )(feature);
 
-const listCapabilitiesHandler = ({
+const listCapabilitiesHandler: McpToolHandler<
+  v.InferInput<typeof LIST_CAPABILITIES_OUTPUT_SCHEMA>
+> = ({
   args,
   context,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
-}): McpToolResponse => {
+}) => {
   const domain = args["domain"];
   if (domain !== undefined && typeof domain !== "string") {
     return structuredErrorResult({
@@ -907,13 +964,15 @@ const loadEndpointGuarded = async (
   return { ok: true, endpoint };
 };
 
-const describeCapabilityHandler = async ({
+const describeCapabilityHandler: McpToolHandler<
+  v.InferInput<typeof DESCRIBE_CAPABILITY_OUTPUT_SCHEMA>
+> = async ({
   args,
   context,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
-}): Promise<McpToolResponse> => {
+}) => {
   const id = parseRequiredString(args, "capability");
   if (typeof id !== "string") {
     return id;
@@ -1977,4 +2036,12 @@ export const CAPABILITY_TOOL_HANDLERS = {
 export const CAPABILITY_TOOL_SET = defineMcpToolSet(
   CAPABILITY_TOOL_DEFINITIONS,
   CAPABILITY_TOOL_HANDLERS,
+  {
+    describe_capability: defineMcpToolOutput(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA),
+    invoke_capability: defineProjectedMcpToolOutput(
+      INVOKE_CAPABILITY_OUTPUT_SCHEMA,
+      (result) => ({ result }),
+    ),
+    list_capabilities: defineMcpToolOutput(LIST_CAPABILITIES_OUTPUT_SCHEMA),
+  },
 );

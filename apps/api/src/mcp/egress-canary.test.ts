@@ -6,7 +6,11 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
-import { isMcpEgressPlan, type McpEgressPlan } from "@/api/mcp/tool-types";
+import {
+  isMcpEgressPlan,
+  type McpEgressPlan,
+  type McpToolResponse,
+} from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -266,7 +270,7 @@ const parseResultText = (result: CallToolResult): string => {
 /** Runs a handler's response through the real anonymized egress pipeline. */
 const finalize = async (
   context: McpRequestContext,
-  response: Awaited<ReturnType<typeof COMPAT_TOOL_HANDLERS.search>>,
+  response: McpToolResponse,
 ) => await finalizeMcpEgress({ context, mode: "anonymized", response });
 
 const expectNoSeedLeak = (
