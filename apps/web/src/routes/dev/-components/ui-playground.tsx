@@ -2,22 +2,28 @@ import { useRef, useState } from "react";
 import type * as React from "react";
 
 import {
+  AlignJustifyIcon,
   ArrowRightIcon,
   ArchiveIcon,
   BellIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  Clock3Icon,
   ClockIcon,
   CogIcon,
   CopyIcon,
   FileTextIcon,
   FilterIcon,
   LinkIcon,
+  ListIcon,
   MailIcon,
+  Rows2Icon,
+  Rows3Icon,
   SearchIcon,
   ShieldIcon,
   Trash2Icon,
   UserIcon,
+  WrapTextIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -146,6 +152,7 @@ import {
 } from "@stll/ui/preview-card";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { ScrollToTop } from "@stll/ui/scroll-to-top";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
@@ -463,6 +470,13 @@ export function UiPlayground() {
                     </PopoverPopup>
                   </Popover>
                 </div>
+              </PlaygroundSection>
+
+              <PlaygroundSection
+                description="Compact and touch sizes. Click a segment to change the selection."
+                title="SegmentedIconToggle"
+              >
+                <SegmentedIconTogglePlayground />
               </PlaygroundSection>
             </PlaygroundGrid>
           </TabsPanel>
@@ -1246,6 +1260,94 @@ export function UiPlayground() {
         </Tabs>
       </div>
     </main>
+  );
+}
+
+function SegmentedIconTogglePlayground() {
+  const t = useTranslations();
+  const [density, setDensity] = useState<"compact" | "comfortable">("compact");
+  const [contentMode, setContentMode] = useState<"tight" | "fit-content">(
+    "tight",
+  );
+  const [viewMode, setViewMode] = useState<"timeline" | "list">("timeline");
+
+  const densityOptions = [
+    { value: "compact", icon: Rows3Icon, label: t("common.compact") },
+    {
+      value: "comfortable",
+      icon: Rows2Icon,
+      label: t("common.comfortable"),
+    },
+  ] as const;
+  const contentModeOptions = [
+    {
+      value: "tight",
+      icon: AlignJustifyIcon,
+      label: t("workspaces.table.tightContent"),
+    },
+    {
+      value: "fit-content",
+      icon: WrapTextIcon,
+      label: t("workspaces.table.wrapContent"),
+    },
+  ] as const;
+  const viewModeOptions = [
+    {
+      value: "timeline",
+      icon: Clock3Icon,
+      label: t("workspaces.overview.activity.views.timeline"),
+    },
+    {
+      value: "list",
+      icon: ListIcon,
+      label: t("workspaces.overview.activity.views.list"),
+    },
+  ] as const;
+
+  const densityLabel = densityOptions.find(
+    (option) => option.value === density,
+  )?.label;
+  const contentModeLabel = contentModeOptions.find(
+    (option) => option.value === contentMode,
+  )?.label;
+  const viewModeLabel = viewModeOptions.find(
+    (option) => option.value === viewMode,
+  )?.label;
+
+  return (
+    <>
+      <div className="grid gap-2 rounded-md border p-3">
+        <code className="text-muted-foreground text-xs">compact</code>
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedIconToggle
+            onChange={setDensity}
+            options={densityOptions}
+            value={density}
+          />
+          <span className="text-sm">{densityLabel}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedIconToggle
+            onChange={setContentMode}
+            options={contentModeOptions}
+            value={contentMode}
+          />
+          <span className="text-sm">{contentModeLabel}</span>
+        </div>
+      </div>
+      <div className="grid gap-2 rounded-md border p-3">
+        <code className="text-muted-foreground text-xs">touch</code>
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedIconToggle
+            onChange={setViewMode}
+            options={viewModeOptions}
+            size="touch"
+            value={viewMode}
+          />
+          <span className="text-sm">{viewModeLabel}</span>
+        </div>
+      </div>
+    </>
   );
 }
 
