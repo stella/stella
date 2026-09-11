@@ -181,6 +181,7 @@ const runCopy = async (
           sourceEntityId: rootId,
           sourceEntities: sources,
           deleteSource: false,
+          fieldMapping: { type: "omit" },
         });
       }),
   );
@@ -318,6 +319,7 @@ test("rolling back after the copy also removes its extraction runs", async () =>
           sourceEntityId: rootId,
           sourceEntities: sources,
           deleteSource: false,
+          fieldMapping: { type: "omit" },
         });
         throw new HandlerError({ status: 500, message: "force rollback" });
       }),

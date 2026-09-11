@@ -35,6 +35,7 @@ const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
 // `@/` path alias. Writing any other key silently leaves the app on its
 // system colour-scheme preference.
 const THEME_STORAGE_KEY = "stella-ui-theme";
+const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1:";
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 
 // Route chunks are compiled on demand by the dev server, so the first visit to
@@ -211,6 +212,18 @@ test("capture landing product screenshots", async ({
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
+      // Each product capture owns its Inspector state. Full navigation below
+      // creates a fresh store, while removing only the persisted tab state
+      // prevents an editor opened by an earlier capture from leaking into an
+      // unrelated route or the next theme pass.
+      await page.evaluate((storagePrefix) => {
+        for (let index = localStorage.length - 1; index >= 0; index--) {
+          const key = localStorage.key(index);
+          if (key?.startsWith(storagePrefix)) {
+            localStorage.removeItem(key);
+          }
+        }
+      }, INSPECTOR_STATE_STORAGE_PREFIX);
       // Anchor the inspector's relative timestamp before navigating, so the
       // caption paints with the pinned clock on its first render. Captures
       // without an anchor run on real time; the clock is only restored when a

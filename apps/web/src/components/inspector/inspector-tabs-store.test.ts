@@ -33,6 +33,9 @@ afterEach(() => {
   }
   useInspectorTabsStore.setState({
     tabs: [],
+    groups: [],
+    groupAssignments: {},
+    collapsedGroupIds: [],
     activeId: null,
     activationSeq: 0,
     flashTabId: null,
@@ -915,6 +918,34 @@ describe("revive suggestion", () => {
     // must not outlive the main view it points at.
     useInspectorTabsStore.getState().closeTab("test-bound-view:tpl-1");
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("route cleanup removes group assignments for closed tabs", () => {
+    registerInspectorView<{ templateId: string }>({
+      type: "test-grouped-bound-view",
+      navigationPolicy: "close-on-route-leave",
+      railIcon: () => null,
+      render: () => null,
+      validate: (value): value is { templateId: string } =>
+        typeof value === "object" &&
+        value !== null &&
+        "templateId" in value &&
+        typeof value.templateId === "string",
+    });
+    const store = useInspectorTabsStore.getState();
+    store.openView({
+      type: "test-grouped-bound-view",
+      id: "test-grouped-bound-view:tpl-1",
+      label: "NDA template",
+      payload: { templateId: "tpl-1" },
+      ownerRouteId: "/_protected/knowledge/templates",
+    });
+    const groupId = store.createGroup({ name: "Templates", color: "blue" });
+    store.setTabGroup("test-grouped-bound-view:tpl-1", groupId);
+
+    store.closeTabsForRoute("/_protected/knowledge/templates");
+
+    expect(useInspectorTabsStore.getState().groupAssignments).toEqual({});
   });
 });
 

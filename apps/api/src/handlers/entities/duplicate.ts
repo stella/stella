@@ -196,6 +196,7 @@ const duplicateEntityHandler = async function* ({
         // Same-workspace duplicate never deletes the source; the
         // lock set is target-only regardless (see `copyEntities`).
         deleteSource: false,
+        fieldMapping: { type: "omit" },
         dependencies,
       }),
   );

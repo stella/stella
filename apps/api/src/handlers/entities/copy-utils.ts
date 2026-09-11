@@ -88,6 +88,14 @@ export type CopiedField = {
   fieldId: SafeId<"field">;
 };
 
+type CopiedFieldInsert = {
+  id: SafeId<"field">;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  entityVersionId: SafeId<"entityVersion">;
+  content: WritableFieldContent;
+};
+
 export type FileMapping = {
   sourceKey: string;
   targetKey: string;
@@ -497,7 +505,7 @@ export type CopyEntitiesResult = {
   /** Newly created runs to hand to the queue after this transaction commits. */
   nativeExtractionRunIds: SafeId<"documentProcessingRun">[];
   copiedEntities: CopiedEntity[];
-  copiedFields: CopiedField[];
+  copiedField: CopiedField | null;
   /** File fields that may need PDF derivative generation. */
   fileFields: CopiedFileField[];
 };
@@ -527,6 +535,9 @@ type CopyEntitiesProps = {
    * needs the source row locked — see the lock-set comment below.
    */
   deleteSource: boolean;
+  fieldMapping:
+    | { type: "omit" }
+    | { type: "single"; sourceFieldId: SafeId<"field"> };
   dependencies?: CopyEntitiesDependencies | undefined;
 };
 
@@ -565,6 +576,7 @@ export const copyEntities = async ({
   sourceEntities,
   sourceWorkspaceId,
   deleteSource,
+  fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
 }: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
   // Same-workspace duplicate and cross-workspace copy both lock the
@@ -625,7 +637,7 @@ export const copyEntities = async ({
 
   const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
   const copiedEntities: CopiedEntity[] = [];
-  const copiedFields: CopiedField[] = [];
+  let copiedField: CopiedField | null = null;
   // Split by which mechanism owns each copy's search projection, so every
   // copy is covered exactly once: a durable extraction run indexes the
   // documents it extracts, and a dirty mark committed with this transaction
@@ -717,15 +729,21 @@ export const copyEntities = async ({
       .set({ currentVersionId: newVersionId })
       .where(eq(entities.id, newEntityId));
 
-    const fieldInserts = source.currentVersion.fields.map((field) => {
+    const fieldInserts: CopiedFieldInsert[] = [];
+    for (const field of source.currentVersion.fields) {
       const fieldId = createSafeId<"field">();
 
-      copiedFields.push({
-        sourceEntityId: source.id,
-        sourceFieldId: field.id,
-        entityId: newEntityId,
-        fieldId,
-      });
+      if (
+        fieldMapping.type === "single" &&
+        field.id === fieldMapping.sourceFieldId
+      ) {
+        copiedField = {
+          sourceEntityId: source.id,
+          sourceFieldId: field.id,
+          entityId: newEntityId,
+          fieldId,
+        };
+      }
 
       // Track file fields for PDF derivative enqueueing
       if (field.content.type === "file") {
@@ -737,14 +755,14 @@ export const copyEntities = async ({
         });
       }
 
-      return {
+      fieldInserts.push({
         id: fieldId,
         workspaceId: targetWorkspaceId,
         propertyId: field.propertyId,
         entityVersionId: newVersionId,
         content: field.content,
-      };
-    });
+      });
+    }
     if (fieldInserts.length > 0) {
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential field insert depends on the version created in this iteration
       await tx.insert(fields).values(fieldInserts);
@@ -828,7 +846,7 @@ export const copyEntities = async ({
     entityId: rootEntityId,
     entityIdsBySearchIndexOwner: copiedEntityIds,
     copiedEntities,
-    copiedFields,
+    copiedField,
     fileFields,
     nativeExtractionRunIds,
   };

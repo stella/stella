@@ -227,6 +227,7 @@ export const InspectorGroupEditor = ({
                     })}
                     aria-pressed={color === swatch}
                     key={swatch}
+                    className="min-h-11 min-w-11"
                     onClick={() => setColor(swatch)}
                     size="icon"
                     type="button"

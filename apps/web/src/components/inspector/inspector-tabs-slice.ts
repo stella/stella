@@ -627,6 +627,9 @@ export const createInspectorTabsSlice = (
       ) {
         state.activeId = state.tabs.at(0)?.id ?? null;
       }
+      for (const tabId of removed) {
+        removeGroupAssignment(state, tabId);
+      }
     }),
 
   closeTab: (id, options) =>

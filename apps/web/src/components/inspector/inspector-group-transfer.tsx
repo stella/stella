@@ -189,6 +189,7 @@ export const useInspectorGroupTransfer = (
             targetWorkspaceId: toSafeId<"workspace">(pending.workspaceId),
             targetParentId: null,
             deleteSource: false,
+            sourceFieldId: toSafeId<"field">(source.id),
           });
         return unwrapEden(response);
       });
@@ -203,11 +204,7 @@ export const useInspectorGroupTransfer = (
         return;
       }
 
-      const mappedField = result.value.fields.find(
-        (field) =>
-          field.sourceEntityId === source.entityId &&
-          field.sourceFieldId === source.id,
-      );
+      const mappedField = result.value.field;
       copiedFile = {
         entityId: result.value.entityId,
         fieldId: mappedField?.fieldId ?? null,
@@ -217,7 +214,7 @@ export const useInspectorGroupTransfer = (
         return;
       }
       setPending({ ...pending, copiedFile });
-      if (mappedField === undefined) {
+      if (mappedField === null) {
         getAnalytics().captureError(
           new InspectorCopyMappingError({
             message: "Copied Inspector file field was not returned",
@@ -348,14 +345,16 @@ export const useInspectorGroupTransfer = (
           </DialogTitle>
           <DialogDescription>
             {pending?.type === "chat"
-              ? t("inspector.groups.chatMoveDescription", {
+              ? t.rich("inspector.groups.chatMoveDescription", {
                   chatName: tab?.label ?? "",
                   matterName,
+                  bdi: (chunks) => <bdi>{chunks}</bdi>,
                 })
-              : t("inspector.groups.fileMoveDescription", {
+              : t.rich("inspector.groups.fileMoveDescription", {
                   fileName: tab?.type === "pdf" ? tab.fileName : "",
                   matterName,
                   sourceMatterName,
+                  bdi: (chunks) => <bdi>{chunks}</bdi>,
                 })}
           </DialogDescription>
         </DialogHeader>

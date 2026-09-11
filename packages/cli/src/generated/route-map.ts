@@ -11496,6 +11496,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "deleteSource",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--source-field-id",
+                    prop: "sourceFieldId",
+                    required: false,
+                    part: "body",
+                    partPath: "sourceFieldId",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -11545,6 +11554,13 @@ export const generatedRouteMap: RouteNode = {
                         },
                         deleteSource: {
                           type: "boolean",
+                        },
+                        sourceFieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
                         },
                       },
                     },
