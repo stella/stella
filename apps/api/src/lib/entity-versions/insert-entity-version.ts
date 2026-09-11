@@ -26,7 +26,7 @@ const MAX_CODE_ATTEMPTS = 4;
 
 /**
  * A stamp and its verification code are one artifact: the download stamper
- * (`handlers/files/get.ts`) and the `/v/<code>` lookup both need the pair, so
+ * (`handlers/files/get.ts`) and the `/verify/<code>` page both need the pair, so
  * a row carries both or neither. Deriving the code from the stamp keeps that
  * pairing true at every writer instead of at thirteen of them.
  */

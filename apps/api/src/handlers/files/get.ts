@@ -45,8 +45,6 @@ type ReadFileHandlerProps = {
   recordAuditEvent: AuditRecorder;
 };
 
-const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-
 const fileFieldQuery = async (
   scopedDb: ScopedDb,
   fieldId: SafeId<"field">,
@@ -523,7 +521,7 @@ export const stampedDownloadHandler = async ({
     buffer,
     row.versionStamp,
     row.verificationCode,
-    BASE_URL,
+    env.FRONTEND_URL,
   );
 
   // Record the access only once the stamped bytes exist, matching the
