@@ -32,6 +32,10 @@ const CLEANUP_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
 const ORPHAN_APPLIED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000304",
 );
+const CONVERGED_ENTITY_ID = "0198e331-e578-7000-8000-000000000309";
+const CONVERGED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
+  "0198e331-e578-7000-8000-000000000310",
+);
 const ERASING_ENTITY_ID = "0198e331-e578-7000-8000-000000000305";
 const SETTLED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000306",
@@ -43,6 +47,7 @@ const UNREFERENCED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
 const INDEX_ID = "case_law_v5_cs_sk";
 const FINGERPRINT = "a".repeat(64);
 const ERASING_FINGERPRINT = "d".repeat(64);
+const CONVERGED_FINGERPRINT = "e".repeat(64);
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -227,6 +232,35 @@ test("the launch probe waits out the engine publish delay", async () => {
 // referenced ones must not let that reference offset an unreferenced applied
 // revision elsewhere in the generation and read as convergence.
 test("a settling erasure cannot offset an unreferenced applied revision", async () => {
+  // Its own converged entity, so the case holds whether this test runs alone
+  // or after the ones above.
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: CONVERGED_INTENT_ID,
+    ...TARGET,
+    entityId: CONVERGED_ENTITY_ID,
+    epoch: 1n,
+    fingerprint: CONVERGED_FINGERPRINT,
+    indexId: INDEX_ID,
+    status: "applied",
+    appendStartedAt: NOW,
+    appendCommittedAt: NOW,
+    expectedDocumentCount: 1,
+    appliedAt: NOW,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    ...TARGET,
+    entityId: CONVERGED_ENTITY_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: CONVERGED_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+    appliedAction: "upsert",
+    appliedEpoch: 1n,
+    appliedRevision: CONVERGED_INTENT_ID,
+    appliedFingerprint: CONVERGED_FINGERPRINT,
+    appliedIndexId: INDEX_ID,
+    appliedAt: NOW,
+  });
   expect(await readStatus()).toBe("ready_for_census");
 
   await db.insert(corpusIndexProjectionIntents).values({
@@ -287,4 +321,11 @@ test("a settling erasure cannot offset an unreferenced applied revision", async 
     .delete(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, UNREFERENCED_INTENT_ID));
   expect(await readStatus()).toBe("ready_for_census");
+
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, CONVERGED_ENTITY_ID));
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, CONVERGED_INTENT_ID));
 });
