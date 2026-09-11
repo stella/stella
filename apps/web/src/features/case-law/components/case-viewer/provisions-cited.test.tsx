@@ -74,7 +74,11 @@ describe("ProvisionsCited", () => {
   test("says nothing about a decision that applies no provisions", () => {
     expect(
       renderPanel(
-        <ProvisionsCited decisionId={decisionId} isHydrated />,
+        <ProvisionsCited
+          decisionDate="2024-01-01"
+          decisionId={decisionId}
+          isHydrated
+        />,
         seed([]),
       ),
     ).toBe("");
@@ -82,7 +86,11 @@ describe("ProvisionsCited", () => {
 
   test("names the panel, and states the references only once opened", () => {
     const markup = renderPanel(
-      <ProvisionsCited decisionId={decisionId} isHydrated />,
+      <ProvisionsCited
+        decisionDate="2024-01-01"
+        decisionId={decisionId}
+        isHydrated
+      />,
       seed([provision({})]),
     );
 

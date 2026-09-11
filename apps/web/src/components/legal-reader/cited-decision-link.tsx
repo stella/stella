@@ -16,6 +16,7 @@ import {
   opensCitationInInspector,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
 import { useFormatter } from "@/i18n/formatting-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { citedDecisionLabel } from "@/lib/cited-decision-label";
@@ -78,10 +79,7 @@ export const CitedDecisionLink = ({
       }),
     );
   };
-  const linkClassName = cn(
-    "text-primary decoration-primary/40 underline underline-offset-2 hover:decoration-current",
-    className,
-  );
+  const linkClassName = cn(LEGAL_CITATION_LINK_CLASS_NAME, className);
   const link =
     params.language === undefined ? (
       <Link

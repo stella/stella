@@ -92,6 +92,13 @@ const CASE_NUMBER_BODY = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{
 // (slash instead of comma). `canonicalizeDedupKey` folds every join
 // spelling to one canonical key.
 const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)`;
+const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+
+// Czech file-number prefix in all publisher spellings: `č. j.`, `č.j.`,
+// and the equally common contracted `čj.`. Keep one source for extraction
+// and prefix stripping so a newly accepted spelling cannot produce a key the
+// resolver canonicalizes differently.
+const CZ_FILE_NUMBER_PREFIX = String.raw`[čc]\.?\s*j\.:?\s*`;
 
 // Shared "sygn." lead-in, covering every registrar spelling seen in the
 // corpus: title-case "Sygn." at the start of a document header vs.
@@ -316,20 +323,26 @@ const CITATION_PATTERNS: RegExp[] = [
   // different court's collection). "NSS" must be tried before "NS", or
   // the alternation matches the "NS" prefix and truncates the extracted
   // text to the wrong court's abbreviation.
-  /[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)/gu,
+  new RegExp(CZECH_REPORTER_CITATION_SOURCE, "gu"),
 
   // Generic: "rozsudek č.j. 5 As 123/2020"; registrars also write "č. j.:
   // 137 Ex 1850/23", administrative senates glue the digit straight to
   // the registry letter ("6A 242/2016", "9Afs 44/2011", "2T 190/2017"),
   // and consolidated proceedings join two case numbers with a comma
   // before the shared year ("36 Co 52,53/2023", "27 Co 116, 119/2007").
-  new RegExp(String.raw`[čc]\.\s*j\.:?\s*${CASE_NUMBER_BODY_COMMA}`, "gu"),
+  new RegExp(
+    String.raw`${CZ_FILE_NUMBER_PREFIX}${CASE_NUMBER_BODY_COMMA}`,
+    "gu",
+  ),
 
   // Czech letter-first registries under č.j. without a senate number:
   // "č.j. Nad 224/2014" (delegation/jurisdiction disputes), "č.j. Konf
   // 4/2011-12" (jurisdiction-conflict panel). Mirrors the sp. zn.
   // letter-first fallback above.
-  /[čc]\.\s*j\.:?\s*(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  new RegExp(
+    String.raw`${CZ_FILE_NUMBER_PREFIX}(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)`,
+    "gu",
+  ),
 
   // Insolvency filings cite another court's case with that court's own
   // registry code before the docket: "č. j. KSCB 26 INS 8270/2018"
@@ -341,7 +354,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // dedup key whenever they happen to share a senate/registry/docket/
   // year. The code is a bounded 2-5 letter uppercase run so it cannot
   // swallow ordinary prose before an unprefixed case number.
-  /[čc]\.\s*j\.:?\s*(?<caseNumber>[A-Z]{2,5}\s{1,3}\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)/gu,
+  new RegExp(
+    String.raw`${CZ_FILE_NUMBER_PREFIX}(?<caseNumber>[A-Z]{2,5}\s{1,3}\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)`,
+    "gu",
+  ),
 
   // Slovak file number: "č. k. 4 Obo 48/02" (číslo konania), the Slovak
   // counterpart to the Czech č. j. above. Lower-court Slovak decisions are
@@ -627,7 +643,10 @@ const stripPrefix = (text: string): string => {
   }
 
   // Czech: "č. j. 5 As 123/2020", "č.j. 5 As 123/2020", "č. j.: 5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
+  const cj = new RegExp(
+    String.raw`^${CZ_FILE_NUMBER_PREFIX}(?<caseNumber>.+)`,
+    "isu",
+  ).exec(trimmed);
   if (cj?.groups?.["caseNumber"]) {
     return cj.groups["caseNumber"].trim();
   }
@@ -716,6 +735,40 @@ export const decisionIdentifiersFromMetadata = ({
   return [caseNumberIdentifier, ...additional];
 };
 
+/** Every independently citable Czech reporter reference in a composite label. */
+export const czechReporterIdentifiersFromCitationLabel = (
+  citation: string,
+): DecisionIdentifiers | null => {
+  const values = citation.match(
+    new RegExp(CZECH_REPORTER_CITATION_SOURCE, "giu"),
+  );
+  if (values === null) {
+    return null;
+  }
+  const [first, ...rest] = values;
+  return [
+    {
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value: first,
+    },
+    ...rest.map((value) => ({
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value,
+    })),
+  ];
+};
+
+const expandCompositeReporterIdentifier = (
+  identifier: DecisionIdentifier,
+): readonly DecisionIdentifier[] => {
+  if (identifier.type !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION) {
+    return [identifier];
+  }
+  return (
+    czechReporterIdentifiersFromCitationLabel(identifier.value) ?? [identifier]
+  );
+};
+
 export const decisionIdentifiersFromStoredMetadata = ({
   caseNumber,
   ecli,
@@ -724,7 +777,10 @@ export const decisionIdentifiersFromStoredMetadata = ({
   const persistedIdentifiers =
     decisionIdentifiersFromPersistedMetadata(metadata);
   if (persistedIdentifiers !== null) {
-    const [firstIdentifier, ...otherIdentifiers] = persistedIdentifiers;
+    const expandedIdentifiers = persistedIdentifiers.flatMap(
+      expandCompositeReporterIdentifier,
+    );
+    const [firstIdentifier, ...otherIdentifiers] = expandedIdentifiers;
     return decisionIdentifiersFromMetadata({
       caseNumber,
       ecli,
@@ -743,17 +799,15 @@ export const decisionIdentifiersFromStoredMetadata = ({
     ? storedAliasesValue
     : [];
 
-  const reporterIdentifier = {
+  const reporterIdentifierCandidate = {
     type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     value: legacyReporterCitation,
   };
-  const validReporterIdentifier = isDecisionIdentifier(reporterIdentifier)
-    ? reporterIdentifier
-    : null;
+  const reporterIdentifiers = isDecisionIdentifier(reporterIdentifierCandidate)
+    ? expandCompositeReporterIdentifier(reporterIdentifierCandidate)
+    : [];
   const capacity =
-    DECISION_IDENTIFIER_MAX_COUNT -
-    (ecli ? 2 : 1) -
-    (validReporterIdentifier === null ? 0 : 1);
+    DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1) - reporterIdentifiers.length;
   const seen = new Set([
     normalizeDecisionIdentifier({
       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -780,9 +834,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
     }
   }
   const legacyIdentifiers: DecisionIdentifier[] = aliases;
-  if (validReporterIdentifier !== null) {
-    legacyIdentifiers.push(validReporterIdentifier);
-  }
+  legacyIdentifiers.push(...reporterIdentifiers);
   const [firstIdentifier, ...otherIdentifiers] = legacyIdentifiers;
   return decisionIdentifiersFromMetadata({
     caseNumber,

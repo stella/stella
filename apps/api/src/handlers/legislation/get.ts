@@ -5,8 +5,16 @@ import { status, t } from "elysia";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  caseLawStatuteCitationCountState,
+  legislationDocuments,
+  legislationSources,
+} from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import {
+  statuteCitationCaseCount,
+  statuteCitationCountStateJoin,
+} from "@/api/handlers/legislation/citation-count";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -82,6 +90,7 @@ export const readLegislationHandler = async (
           fulltext: legislationDocuments.fulltext,
           astS3Key: legislationDocuments.astS3Key,
           textS3Key: legislationDocuments.textS3Key,
+          citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
           ...(options.audience === "workspace"
             ? { metadata: legislationDocuments.metadata }
             : {}),
@@ -90,6 +99,10 @@ export const readLegislationHandler = async (
         .innerJoin(
           legislationSources,
           eq(legislationSources.id, legislationDocuments.sourceId),
+        )
+        .leftJoin(
+          caseLawStatuteCitationCountState,
+          statuteCitationCountStateJoin,
         )
         .where(
           and(

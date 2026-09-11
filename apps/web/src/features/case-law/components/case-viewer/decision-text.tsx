@@ -1,4 +1,4 @@
-import { Fragment, useRef } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
@@ -14,12 +14,15 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
 
+import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { CitedProvisionLink } from "@/components/legal-reader/cited-provision-link";
+import { CitedStatuteLink } from "@/components/legal-reader/cited-statute-link";
 import {
   BlockRenderer,
   FulltextFallback,
   HighlightedText,
+  InlineContent,
   buildDocumentAstSearchPieces,
   buildFulltextSearchPieces,
   rangesForPiece,
@@ -36,11 +39,15 @@ import {
 } from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import {
+  annotationsOverlappingTextSpan,
   apparatusBlockIds,
+  editorialSupplementBlocks,
   footnoteParts,
   visibleDecisionBlocks,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
+import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -80,11 +87,35 @@ type DecisionTextProps = {
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   searchQuery: string;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
+  /** Work citations, including references with no provision locator. */
+  statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };
 
 const SUPPLEMENT_LEGAL_SENTENCE_ID = "supplement-legal-sentence";
 const SUPPLEMENT_ABSTRACT_ID = "supplement-abstract";
 const DECISION_REFERENCE_ID = "decision-reference";
+
+const supplementBlockAnchorId = (pieceId: string, start: number): string =>
+  `${pieceId}:${String(start)}`;
+
+const DecisionReference = ({
+  activeMatchIndex,
+  ranges,
+  text,
+}: {
+  activeMatchIndex: number;
+  ranges: SearchMatchRange[];
+  text: string;
+}) => (
+  <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
+    <HighlightedText
+      activeMatchIndex={activeMatchIndex}
+      pieceId={DECISION_REFERENCE_ID}
+      ranges={ranges}
+      text={text}
+    />
+  </p>
+);
 
 /**
  * Wrap runs of apparatus blocks in one collapsed disclosure while leaving
@@ -145,70 +176,6 @@ const supplementText = (field: TextField): string | null => {
   }
 };
 
-const EditorialSupplement = ({
-  activeMatchIndex,
-  rangesByPieceId,
-  textFields,
-}: {
-  activeMatchIndex: number;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
-  textFields: ReadDecisionTextFields;
-}) => {
-  const t = useTranslations();
-  const abstract = supplementText(textFields[DECISION_TEXT_FIELD.ABSTRACT]);
-  const legalSentence = supplementText(
-    textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
-  );
-
-  if (!abstract && !legalSentence) {
-    return null;
-  }
-
-  return (
-    <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4 font-sans text-[0.88rem] leading-relaxed">
-      {legalSentence && (
-        <section>
-          <h4 className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase">
-            {t("caseLaw.viewer.legalSentence")}
-          </h4>
-          <p className="reader-justify">
-            <HighlightedText
-              activeMatchIndex={activeMatchIndex}
-              pieceId={SUPPLEMENT_LEGAL_SENTENCE_ID}
-              ranges={rangesForPiece(
-                rangesByPieceId,
-                SUPPLEMENT_LEGAL_SENTENCE_ID,
-              )}
-              text={legalSentence}
-            />
-          </p>
-        </section>
-      )}
-      {abstract && (
-        <section className={cn(legalSentence ? "mt-4" : "")}>
-          <h4 className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase">
-            {t("caseLaw.viewer.abstract")}
-          </h4>
-          <p className="text-foreground-strong-muted reader-justify">
-            <HighlightedText
-              activeMatchIndex={activeMatchIndex}
-              pieceId={SUPPLEMENT_ABSTRACT_ID}
-              ranges={rangesForPiece(rangesByPieceId, SUPPLEMENT_ABSTRACT_ID)}
-              text={abstract}
-            />
-          </p>
-        </section>
-      )}
-    </div>
-  );
-};
-
-/**
- * Every inline link in the text, by block: cited decisions and applied
- * provisions, located separately and merged so the two kinds never nest. A
- * decision citation and a provision reference cannot share characters in
- * honest text, so whichever starts first simply wins.
- */
 /**
  * A mark on the text, drawn the way PDF readers draw mark-up: a colour and a
  * style. A comment is a dotted underline in the margin colour; the words
@@ -272,7 +239,175 @@ const renderAnnotation = (
   </mark>
 );
 
-const renderExactAnnotations = ({
+const annotationTextAnchor = (
+  annotation: AnnotationAnchorSource,
+  offset = 0,
+): TextAnchor => ({
+  end: offset + annotation.endOffset,
+  key: `annotation:${annotation.id}`,
+  render: (children): ReactElement => renderAnnotation(annotation, children),
+  start: offset + annotation.startOffset,
+});
+
+const EditorialSupplementBody = ({
+  activeMatchIndex,
+  annotationAnchors,
+  pieceId,
+  ranges,
+  text,
+  variant,
+}: {
+  activeMatchIndex: number;
+  annotationAnchors: readonly AnnotationAnchorSource[];
+  pieceId: string;
+  ranges: SearchMatchRange[];
+  text: string;
+  variant: "abstract" | "legal-sentence";
+}) => (
+  <div className="space-y-3">
+    {editorialSupplementBlocks(text).map((block) => {
+      const blockAnchorId = supplementBlockAnchorId(pieceId, block.start);
+      const anchors = annotationAnchors
+        .filter((annotation) => annotation.blockAnchorId === blockAnchorId)
+        .map((annotation) => annotationTextAnchor(annotation, block.start));
+      const content = (
+        <InlineContent
+          activeMatchIndex={activeMatchIndex}
+          anchors={anchors}
+          initialOffset={block.start}
+          inlines={[{ text: block.text, type: "text" }]}
+          pieceId={pieceId}
+          ranges={ranges}
+        />
+      );
+
+      return block.type === "heading" ? (
+        <h5
+          className="text-foreground text-sm leading-snug font-semibold"
+          data-anchor={blockAnchorId}
+          key={block.start}
+        >
+          {content}
+        </h5>
+      ) : (
+        <p
+          className={cn(
+            "reader-justify",
+            variant === "abstract" && "text-foreground-strong-muted",
+          )}
+          data-anchor={blockAnchorId}
+          key={block.start}
+        >
+          {content}
+        </p>
+      );
+    })}
+  </div>
+);
+
+const EditorialSupplement = ({
+  activeMatchIndex,
+  annotationAnchors,
+  rangesByPieceId,
+  textFields,
+}: {
+  activeMatchIndex: number;
+  annotationAnchors: readonly AnnotationAnchorSource[];
+  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  textFields: ReadDecisionTextFields;
+}) => {
+  const t = useTranslations();
+  const abstract = supplementText(textFields[DECISION_TEXT_FIELD.ABSTRACT]);
+  const legalSentence = supplementText(
+    textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
+  );
+  const abstractRanges = rangesForPiece(
+    rangesByPieceId,
+    SUPPLEMENT_ABSTRACT_ID,
+  );
+  const legalSentenceRanges = rangesForPiece(
+    rangesByPieceId,
+    SUPPLEMENT_LEGAL_SENTENCE_ID,
+  );
+  const [abstractOpenByUser, setAbstractOpenByUser] = useState(false);
+  const abstractOpen = abstractRanges.length > 0 || abstractOpenByUser;
+
+  if (!abstract && !legalSentence) {
+    return null;
+  }
+
+  return (
+    <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4 font-sans text-[0.88rem] leading-relaxed">
+      {legalSentence && (
+        <section>
+          <h4
+            className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase"
+            data-reader-chrome=""
+          >
+            {t("caseLaw.viewer.legalSentence")}
+          </h4>
+          <EditorialSupplementBody
+            activeMatchIndex={activeMatchIndex}
+            annotationAnchors={annotationAnchors}
+            pieceId={SUPPLEMENT_LEGAL_SENTENCE_ID}
+            ranges={legalSentenceRanges}
+            text={legalSentence}
+            variant="legal-sentence"
+          />
+        </section>
+      )}
+      {abstract && (
+        <details
+          className={cn(legalSentence ? "mt-4" : "")}
+          onToggle={(event) => setAbstractOpenByUser(event.currentTarget.open)}
+          open={abstractOpen}
+        >
+          <summary
+            className="text-muted-foreground cursor-pointer text-[0.75rem] font-semibold tracking-wide uppercase select-none marker:text-current"
+            data-reader-chrome=""
+          >
+            {t("caseLaw.viewer.abstract")}
+          </summary>
+          <div className="mt-3">
+            <EditorialSupplementBody
+              activeMatchIndex={activeMatchIndex}
+              annotationAnchors={annotationAnchors}
+              pieceId={SUPPLEMENT_ABSTRACT_ID}
+              ranges={abstractRanges}
+              text={abstract}
+              variant="abstract"
+            />
+          </div>
+        </details>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Every inline link in the text, by block: cited decisions and applied
+ * provisions, located separately and merged so the two kinds never nest. A
+ * decision citation and a provision reference cannot share characters in
+ * honest text, so whichever starts first simply wins.
+ */
+const buildStandaloneAnnotationAnchors = (
+  annotations: readonly AnnotationAnchorSource[],
+): Record<string, TextAnchor[]> => {
+  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  for (const annotation of annotations) {
+    const anchors = anchorsByPieceId[annotation.blockAnchorId];
+    if (anchors === undefined) {
+      anchorsByPieceId[annotation.blockAnchorId] = [
+        annotationTextAnchor(annotation),
+      ];
+      continue;
+    }
+    anchors.push(annotationTextAnchor(annotation));
+  }
+  return anchorsByPieceId;
+};
+
+const renderLinkAnnotations = ({
   annotations,
   children,
 }: {
@@ -325,14 +460,37 @@ const buildAnchorsByPieceId = ({
   blocks,
   citations,
   provisions,
+  statutes,
 }: {
   annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
   provisions: readonly DecisionProvisionAnchor[];
+  statutes: readonly DecisionStatuteCitationAnchor[];
 }): Record<string, TextAnchor[]> => {
   const citationSpans = locateCitationAnchors({ blocks, citations });
   const provisionSpans = locateProvisionAnchors({ blocks, provisions });
+  const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
+  for (const statute of statutes) {
+    const spans = statuteSpans.get(statute.blockId);
+    if (spans === undefined) {
+      statuteSpans.set(statute.blockId, [statute]);
+      continue;
+    }
+    spans.push(statute);
+  }
+  const externalCjeuSpansByBlock = new Map<
+    string,
+    ReturnType<typeof locateExternalCjeuCitations>
+  >();
+  for (const citation of locateExternalCjeuCitations(blocks)) {
+    const spans = externalCjeuSpansByBlock.get(citation.blockId);
+    if (spans === undefined) {
+      externalCjeuSpansByBlock.set(citation.blockId, [citation]);
+      continue;
+    }
+    spans.push(citation);
+  }
   const blockIdByAnchor = new Map(
     blocks.map((block) => [block.anchorId, block.id] as const),
   );
@@ -353,38 +511,31 @@ const buildAnchorsByPieceId = ({
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(provisionSpans),
+    ...statuteSpans.keys(),
+    ...externalCjeuSpansByBlock.keys(),
     ...annotationsByBlock.keys(),
   ]);
   for (const blockId of blockIds) {
     const anchors: TextAnchor[] = [];
     const blockAnnotations = annotationsByBlock.get(blockId);
     // A reader's mark over a link keeps the link: links are the text's own
-    // structure, and the mark is still visible in the margin.
+    // structure, and intersecting marks are repeated inside them below.
     for (const annotation of optionalArray(blockAnnotations)) {
-      anchors.push({
-        end: annotation.endOffset,
-        key: `annotation:${annotation.id}`,
-        // Plain inline markup so the words keep wrapping and justifying as
-        // the paragraph's own; an inline button cannot break across lines. A click
-        // on a mark is handled by the toolbar, which listens on the document
-        // and reads the id off the element.
-        render: (children): ReactElement =>
-          renderAnnotation(annotation, children),
-        start: annotation.startOffset,
-      });
+      // Plain inline markup keeps the paragraph's own wrapping and
+      // justification. The toolbar handles clicks on the mark by id.
+      anchors.push(annotationTextAnchor(annotation));
     }
     for (const span of optionalArray(citationSpans[blockId])) {
-      const exactAnnotations = optionalArray(blockAnnotations).filter(
-        (annotation) =>
-          annotation.startOffset === span.start &&
-          annotation.endOffset === span.end,
+      const linkAnnotations = annotationsOverlappingTextSpan(
+        optionalArray(blockAnnotations),
+        span,
       );
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
         render: (children): ReactElement => {
-          const marked = renderExactAnnotations({
-            annotations: exactAnnotations,
+          const marked = renderLinkAnnotations({
+            annotations: linkAnnotations,
             children,
           });
           return (
@@ -397,17 +548,16 @@ const buildAnchorsByPieceId = ({
       });
     }
     for (const span of optionalArray(provisionSpans[blockId])) {
-      const exactAnnotations = optionalArray(blockAnnotations).filter(
-        (annotation) =>
-          annotation.startOffset === span.start &&
-          annotation.endOffset === span.end,
+      const linkAnnotations = annotationsOverlappingTextSpan(
+        optionalArray(blockAnnotations),
+        span,
       );
       anchors.push({
         end: span.end,
         key: `provision:${span.source.id}`,
         render: (children): ReactElement => {
-          const marked = renderExactAnnotations({
-            annotations: exactAnnotations,
+          const marked = renderLinkAnnotations({
+            annotations: linkAnnotations,
             children,
           });
           return (
@@ -419,10 +569,51 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
-    // Links first: a link and a mark on the same words keep the link, since
-    // the mark still reads in the margin while a lost link is gone. The mark
-    // continues on either side of the link, so a sentence with a citation
-    // in it is still visibly marked.
+    for (const span of optionalArray(statuteSpans.get(blockId))) {
+      const linkAnnotations = annotationsOverlappingTextSpan(
+        optionalArray(blockAnnotations),
+        span,
+      );
+      anchors.push({
+        end: span.end,
+        key: `statute:${span.id}`,
+        render: (children): ReactElement => {
+          const marked = renderLinkAnnotations({
+            annotations: linkAnnotations,
+            children,
+          });
+          return (
+            <CitedStatuteLink target={span.target}>{marked}</CitedStatuteLink>
+          );
+        },
+        start: span.start,
+      });
+    }
+    for (const span of optionalArray(externalCjeuSpansByBlock.get(blockId))) {
+      const linkAnnotations = annotationsOverlappingTextSpan(
+        optionalArray(blockAnnotations),
+        span,
+      );
+      anchors.push({
+        end: span.end,
+        key: `external-decision:${span.id}`,
+        render: (children): ReactElement => {
+          const marked = renderLinkAnnotations({
+            annotations: linkAnnotations,
+            children,
+          });
+          return (
+            <ExternalCitationLink href={span.href}>
+              {marked}
+            </ExternalCitationLink>
+          );
+        },
+        start: span.start,
+      });
+    }
+    // Links stay interactive, and every mark crossing them is painted inside
+    // their text. The mark's remaining pieces continue on either side, so a
+    // citation can never cut a white hole through a highlighted passage.
     const links = dropOverlappingSpans(
       anchors.filter((anchor) => !anchor.key.startsWith("annotation:")),
     );
@@ -542,6 +733,8 @@ const renderBlocksWithHoldingZone = ({
 const NO_CITATION_ANCHORS: readonly CitationAnchorSource[] = [];
 const NO_PROVISION_ANCHORS: readonly DecisionProvisionAnchor[] = [];
 const NO_ANNOTATION_ANCHORS: readonly AnnotationAnchorSource[] = [];
+const NO_STATUTE_CITATION_ANCHORS: readonly DecisionStatuteCitationAnchor[] =
+  [];
 
 export const DecisionText = ({
   activeMatchIndex,
@@ -553,6 +746,7 @@ export const DecisionText = ({
   provisionAnchors = NO_PROVISION_ANCHORS,
   searchQuery,
   sectionMap,
+  statuteCitationAnchors = NO_STATUTE_CITATION_ANCHORS,
 }: DecisionTextProps) => {
   const t = useTranslations();
 
@@ -685,19 +879,19 @@ export const DecisionText = ({
             ))}
           </div>
         )}
-        <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
-          <HighlightedText
-            activeMatchIndex={activeMatchIndex}
-            pieceId={DECISION_REFERENCE_ID}
-            ranges={rangesForPiece(
-              searchResults.rangesByPieceId,
-              DECISION_REFERENCE_ID,
-            )}
-            text={`${decision.court}, ${displayRef}`}
-          />
-        </p>
+        <DecisionReference
+          activeMatchIndex={activeMatchIndex}
+          ranges={rangesForPiece(
+            searchResults.rangesByPieceId,
+            DECISION_REFERENCE_ID,
+          )}
+          text={`${decision.court}, ${displayRef}`}
+        />
         <EditorialSupplement
           activeMatchIndex={activeMatchIndex}
+          annotationAnchors={
+            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
+          }
           rangesByPieceId={searchResults.rangesByPieceId}
           textFields={decision.textFields}
         />
@@ -709,6 +903,9 @@ export const DecisionText = ({
             blocks: visibleBlocks,
             citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
             provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
+            statutes: hydrated
+              ? statuteCitationAnchors
+              : NO_STATUTE_CITATION_ANCHORS,
           }),
           blocks: visibleBlocks,
           rangesByPieceId: searchResults.rangesByPieceId,
@@ -730,24 +927,27 @@ export const DecisionText = ({
           lineHeight: "var(--reader-body-line-height)",
         }}
       >
-        <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
-          <HighlightedText
-            activeMatchIndex={activeMatchIndex}
-            pieceId={DECISION_REFERENCE_ID}
-            ranges={rangesForPiece(
-              searchResults.rangesByPieceId,
-              DECISION_REFERENCE_ID,
-            )}
-            text={`${decision.court}, ${displayRef}`}
-          />
-        </p>
+        <DecisionReference
+          activeMatchIndex={activeMatchIndex}
+          ranges={rangesForPiece(
+            searchResults.rangesByPieceId,
+            DECISION_REFERENCE_ID,
+          )}
+          text={`${decision.court}, ${displayRef}`}
+        />
         <EditorialSupplement
           activeMatchIndex={activeMatchIndex}
+          annotationAnchors={
+            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
+          }
           rangesByPieceId={searchResults.rangesByPieceId}
           textFields={decision.textFields}
         />
         <FulltextFallback
           activeMatchIndex={activeMatchIndex}
+          anchorsByPieceId={buildStandaloneAnnotationAnchors(
+            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
+          )}
           rangesByPieceId={searchResults.rangesByPieceId}
           text={decision.fulltext}
         />

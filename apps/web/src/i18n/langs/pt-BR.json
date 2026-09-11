@@ -578,6 +578,13 @@
       "colorViolet": "Violeta",
       "colorYellow": "Amarelo",
       "commentPlaceholder": "Escreva um comentário…",
+      "createFreeAccount": "Criar conta gratuita",
+      "guestAuthor": "Você",
+      "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
+      "guestMigrationComplete": "Destaques e notas salvos.",
+      "guestMigrationFailed": "Não foi possível salvar alguns destaques e notas. Eles permanecerão nesta aba para uma nova tentativa.",
+      "guestSavePrompt": "Seus destaques e notas serão salvos quando você criar uma conta gratuita.",
+      "guestStorageUnavailable": "Não foi possível salvar destaques e notas nesta aba.",
       "highlight": "Destacar",
       "removeHighlight": "Remover destaque",
       "sharedBadge": "Compartilhado",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Em vigor",
       "draft": "Em projeto",
+      "future": "Futura",
       "historical": "Substituída",
       "repealed": "Revogada"
     },

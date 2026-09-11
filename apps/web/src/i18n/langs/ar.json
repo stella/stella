@@ -578,6 +578,13 @@
       "colorViolet": "بنفسجي",
       "colorYellow": "أصفر",
       "commentPlaceholder": "اكتب تعليقًا…",
+      "createFreeAccount": "إنشاء حساب مجاني",
+      "guestAuthor": "أنت",
+      "guestLimitReached": "يمكن أن يحتوي هذا التبويب على ما يصل إلى {count} من التمييزات والملاحظات. أنشئ حسابًا لحفظ المزيد.",
+      "guestMigrationComplete": "تم حفظ التمييزات والملاحظات.",
+      "guestMigrationFailed": "تعذر حفظ بعض التمييزات والملاحظات. ستبقى في هذا التبويب لمحاولة أخرى.",
+      "guestSavePrompt": "سيتم حفظ تمييزاتك وملاحظاتك عند إنشاء حساب مجاني.",
+      "guestStorageUnavailable": "تعذر حفظ التمييزات والملاحظات في هذا التبويب.",
       "highlight": "تمييز",
       "removeHighlight": "إزالة التمييز",
       "sharedBadge": "مشارك",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "نافذ",
       "draft": "مقترح",
+      "future": "مستقبلي",
       "historical": "مُستبدَل",
       "repealed": "مُلغى"
     },

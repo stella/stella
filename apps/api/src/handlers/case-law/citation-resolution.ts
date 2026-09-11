@@ -296,6 +296,7 @@ type CitationMatchingHoldersSqlOptions = {
   normalizedIdentifierValue: SQL;
   citingDecisionId: SQL;
   citingDate: SQL;
+  citingLanguage: SQL;
   jurisdictionPredicate: SQL;
   limit: number;
 };
@@ -316,12 +317,22 @@ const citationMatchingHoldersSql = ({
   normalizedIdentifierValue,
   citingDecisionId,
   citingDate,
+  citingLanguage,
   jurisdictionPredicate,
   limit,
 }: CitationMatchingHoldersSqlOptions): SQL => sql`
-  SELECT candidate.id, candidate.court, candidate.decision_type
+  SELECT DISTINCT ON (candidate.work_key)
+         candidate.id, candidate.court, candidate.decision_type
   FROM (
-    SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
+    SELECT ${holder}.id,
+           ${holder}.court,
+           ${holder}.decision_type,
+           ${holder}.language,
+           CASE
+             WHEN ${holder}.language_group_key IS NULL
+               THEN 'decision:' || ${holder}.id::text
+             ELSE 'group:' || ${holder}.language_group_key
+           END AS work_key
       FROM ${caseLawDecisionIdentifiers} identifier
       JOIN ${caseLawDecisions} ${holder}
         ON ${holder}.id = identifier.decision_id
@@ -335,7 +346,15 @@ const citationMatchingHoldersSql = ({
           OR ${citingDate} >= ${holder}.decision_date
            )
     UNION ALL
-    SELECT ${holder}.id, ${holder}.court, ${holder}.decision_type
+    SELECT ${holder}.id,
+           ${holder}.court,
+           ${holder}.decision_type,
+           ${holder}.language,
+           CASE
+             WHEN ${holder}.language_group_key IS NULL
+               THEN 'decision:' || ${holder}.id::text
+             ELSE 'group:' || ${holder}.language_group_key
+           END AS work_key
       FROM ${caseLawDecisions} ${holder}
      WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
        AND ${holder}.citation_key = ${citationKey}
@@ -354,6 +373,13 @@ const citationMatchingHoldersSql = ({
            AND existing_identifier.normalized_value = ${citationKey}
        )
   ) candidate
+  -- Language manifestations are one judgment, not competing decisions.
+  -- Keep one representative per group and prefer the language of the citing
+  -- judgment so an inline link opens the wording its reader can use directly.
+  ORDER BY candidate.work_key,
+           (candidate.language = ${citingLanguage}) DESC,
+           candidate.language,
+           candidate.id
   LIMIT ${limit}`;
 
 /**
@@ -377,7 +403,8 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            c.cited_decision_type_hint,
            c.cited_court_hint,
            citing.country AS citing_country,
-           citing.decision_date AS citing_date
+           citing.decision_date AS citing_date,
+           citing.language AS citing_language
       FROM ${caseLawCitations} c
       JOIN ${caseLawDecisions} citing ON citing.id = c.citing_decision_id
      WHERE ${unsettledCitationSql({
@@ -477,6 +504,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
               ),
               citingDecisionId: sql.raw("b.citing_decision_id"),
               citingDate: sql.raw("b.citing_date"),
+              citingLanguage: sql.raw("b.citing_language"),
               jurisdictionPredicate: sql`cited.country = ANY (pol.resolves_to)`,
               limit: CITATION_CANDIDATE_SCAN_CAP,
             })}
@@ -494,6 +522,7 @@ const resolutionStatement = (selection: SQL): SQL => sql`
               ),
               citingDecisionId: sql.raw("b.citing_decision_id"),
               citingDate: sql.raw("b.citing_date"),
+              citingLanguage: sql.raw("b.citing_language"),
               jurisdictionPredicate: sql`NOT (other.country = ANY (pol.resolves_to))`,
               limit: 1,
             })}

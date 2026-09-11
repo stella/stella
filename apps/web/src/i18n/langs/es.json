@@ -578,6 +578,13 @@
       "colorViolet": "Violeta",
       "colorYellow": "Amarillo",
       "commentPlaceholder": "Escribe un comentario…",
+      "createFreeAccount": "Crear cuenta gratuita",
+      "guestAuthor": "Tú",
+      "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
+      "guestMigrationComplete": "Resaltados y notas guardados.",
+      "guestMigrationFailed": "No se han podido guardar algunos resaltados y notas. Permanecerán en esta pestaña para otro intento.",
+      "guestSavePrompt": "Tus resaltados y notas se guardarán cuando crees una cuenta gratuita.",
+      "guestStorageUnavailable": "No se han podido guardar los resaltados y notas en esta pestaña.",
       "highlight": "Resaltar",
       "removeHighlight": "Quitar resaltado",
       "sharedBadge": "Compartido",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "En vigor",
       "draft": "En proyecto",
+      "future": "Futura",
       "historical": "Sustituida",
       "repealed": "Derogada"
     },

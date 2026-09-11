@@ -191,6 +191,7 @@ test(
       "/s/unavailable-country-case?country=CZE",
       "/s/open-case?country=XAA",
       "/s/open-case?country=CZE&language=xx_notalanguage!",
+      "/s/open-case?country=POL",
     ]) {
       const response = await get(path);
       expect(response.status).toBe(404);

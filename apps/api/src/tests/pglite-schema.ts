@@ -30,6 +30,11 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   "20260827080000_agent_skill_revisions",
   "migration.sql",
 );
+const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260911100000_statute_citation_counts",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -202,6 +207,28 @@ export const installPgliteAgentSkillRevisionTrigger = async (
     AGENT_SKILL_REVISIONS_MIGRATION_PATH,
   ).filter((statement) =>
     AGENT_SKILL_REVISION_TRIGGER_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
+  'INSERT INTO "case_law_statute_citation_count_state"',
+  "CREATE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the count state and trigger invariants omitted by schema push. */
+export const installPgliteStatuteCitationCounts = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    STATUTE_CITATION_COUNTS_MIGRATION_PATH,
+  ).filter((statement) =>
+    STATUTE_CITATION_COUNT_STATEMENT_PREFIXES.some((prefix) =>
       executableSql(statement).startsWith(prefix),
     ),
   );

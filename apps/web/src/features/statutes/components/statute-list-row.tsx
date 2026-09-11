@@ -15,6 +15,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 
 export type StatuteListItem = {
+  citationCaseCount: number | null;
   country: string;
   documentType: string | null;
   effectiveDate: string | null;
@@ -47,6 +48,13 @@ export const StatuteListRow = ({ statute }: { statute: StatuteListItem }) => {
                 EM_DASH,
             })}
           </span>
+          {typeof statute.citationCaseCount === "number" && (
+            <span className="tabular-nums opacity-75">
+              {t("caseLaw.citation.decisionCount", {
+                count: statute.citationCaseCount,
+              })}
+            </span>
+          )}
         </>
       }
       title={statute.title}

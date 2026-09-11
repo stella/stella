@@ -45,6 +45,13 @@
 
 import * as cheerio from "cheerio";
 
+import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "@stll/legal-ast/czech-document-roles";
+
 import type {
   Block,
   DocumentAst,
@@ -55,11 +62,6 @@ import {
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
-  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
-} from "./cz-patterns";
 import {
   inlinesToPlainText,
   stripFurniturePrefix,
@@ -645,6 +647,20 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
     // Section headings in Odůvodnění: standalone Roman
     // numeral possibly followed by a title on the next line
     if (inOduvodneni) {
+      const titledRoman = caseLawSectionHeading(plainText);
+      if (titledRoman !== null) {
+        blockIndex += 1;
+        blocks.push({
+          id: makeBlockId(),
+          anchorId: makeAnchorId("h", blockIndex),
+          type: "heading",
+          level: titledRoman.level,
+          inlines,
+          plainText,
+        });
+        continue;
+      }
+
       const romanMatch = SECTION_ROMAN_RE.exec(plainText);
       if (romanMatch) {
         // Check if next non-empty line is a short title

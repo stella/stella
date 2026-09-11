@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
-import { EyeOffIcon, SparklesIcon, UserRoundIcon } from "lucide-react";
+import { panic } from "better-result";
+import { SparklesIcon, UserRoundIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -37,9 +38,10 @@ import { AnnotationToolbar } from "@/features/case-law/components/case-viewer/an
 import type { AnnotationToolbarController } from "@/features/case-law/components/case-viewer/annotation-toolbar";
 import type { AnnotationAnchorSource } from "@/features/case-law/components/case-viewer/decision-text";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
+import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
+import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
@@ -62,14 +64,15 @@ type DecisionWorkspaceDecision = {
   textFields: ReadDecisionTextFields;
 };
 
-/** A signed-in reader's marks on the decision and the means to change them. */
+/** A reader's marks on the decision and the means to change them. */
 export type DecisionWorkspaceAnnotations = {
   annotations: readonly DecisionAnnotation[];
   controller: AnnotationToolbarController;
+  mode: "authenticated" | "guest";
 };
 
 type DecisionWorkspaceBaseProps = {
-  /** Absent for a visitor: reading is public, marking needs an account. */
+  /** Absent only while the reader surface has no annotation controller. */
   annotations?: DecisionWorkspaceAnnotations | undefined;
   decision: DecisionWorkspaceDecision;
   decisionId: SafeId<"caseLawDecision">;
@@ -78,6 +81,7 @@ type DecisionWorkspaceBaseProps = {
 
 type LockedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
   aiMode: "locked";
+  onRequestAI?: (() => void) | undefined;
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
@@ -97,14 +101,29 @@ const getHeadingDisplayAnchorId = ({
   startAnchorId: string;
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
-/** The notes filter's "all sources" glyph, through the shared matter icon
- * so the layers glyph keeps one owner. */
+/** The notes margin's mutually exclusive source filter. */
+type NotesFilter = "all" | "ai" | "mine";
+
+const annotationsForFilter = (
+  annotations: readonly DecisionAnnotation[],
+  filter: NotesFilter,
+): readonly DecisionAnnotation[] => {
+  switch (filter) {
+    case "all":
+      return annotations;
+    case "ai":
+      return [];
+    case "mine":
+      return annotations.filter((annotation) => annotation.mine);
+    default:
+      filter satisfies never;
+      return panic(`Unhandled notes filter: ${String(filter)}`);
+  }
+};
+
 const NotesFilterAllIcon = ({ className }: { className?: string }) => (
   <MatterIcon className={className} variant="all" />
 );
-
-/** Which margin notes the reader wants beside the text. */
-type NotesFilter = "all" | "ai" | "human" | "none";
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const { annotations, decision, decisionId, initialSearchQuery } = props;
@@ -113,6 +132,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     null,
   );
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
+  const showAiNotes = notesFilter === "all" || notesFilter === "ai";
   // The comment being written: its paragraphs, so the margin can sit the
   // composer beside the first and the saved comment covers them all.
   const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
@@ -141,13 +161,17 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         ];
   // A mark the server has not stored yet has no id to act on, so it is not
   // active even if clicked.
+  const annotationRows =
+    annotations === undefined ? [] : annotations.annotations;
+  const visibleAnnotationRows = annotationsForFilter(
+    annotationRows,
+    notesFilter,
+  );
   const activeAnnotation =
-    annotations?.annotations.find(
+    visibleAnnotationRows.find(
       (item) =>
         item.id === activeAnnotationId && !isPendingAnnotationId(item.id),
     ) ?? null;
-  const annotationRows =
-    annotations === undefined ? [] : annotations.annotations;
   // A mark over several paragraphs is several rows under one group; the bar
   // acts on all of them, and a comment left from the mark covers them all.
   const rowsOf = (item: DecisionAnnotation): DecisionAnnotation[] =>
@@ -185,7 +209,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     selection?.removeAllRanges();
     selection?.addRange(range);
   }, [activeRowIds]);
-  const annotationAnchors: AnnotationAnchorSource[] = annotationRows.map(
+  const annotationAnchors: AnnotationAnchorSource[] = visibleAnnotationRows.map(
     (item) => ({
       blockAnchorId: item.blockAnchorId,
       color: item.color,
@@ -198,7 +222,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   );
   // A comment over several paragraphs is several rows; its words sit on the
   // first, and that is the one the margin shows.
-  const commentItems: CommentMarginItem[] = annotationRows
+  const commentItems: CommentMarginItem[] = visibleAnnotationRows
     .filter((item) => item.kind === "comment" && item.body !== null)
     .map((item) => ({
       author: { image: item.authorImage, name: item.authorName },
@@ -268,7 +292,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
-  const provisionAnchors = useDecisionProvisionAnchors(decisionId);
+  const provisionAnchors = useDecisionProvisionAnchors(
+    decisionId,
+    decision.decisionDate,
+  );
+  const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
+    visibleDecisionBlocks(ast),
+    decision.decisionDate,
+  );
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
     useDecisionAnalysis(decisionId, decision.analysis ?? null);
@@ -313,7 +344,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       ? analysisState.analysis
       : null;
 
-  const jumpToAnchor = useCallback((anchorId: string) => {
+  const jumpToAnchor = (anchorId: string) => {
     const container = mainRef.current;
     const el = container?.querySelector<HTMLElement>(
       `#${CSS.escape(anchorId)}`,
@@ -331,7 +362,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     delete el.dataset["highlight"];
     forceReflow(el);
     el.dataset["highlight"] = "";
-  }, []);
+  };
 
   const sectionMap = (() => {
     if (analysisTree.length === 0 || !ast) {
@@ -388,10 +419,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   });
 
   // The composer is never filtered away: the reader is mid-sentence in it.
-  const showAiNotes = notesFilter === "all" || notesFilter === "ai";
   const visibleMarginItems = [
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...(notesFilter === "all" || notesFilter === "human" ? commentItems : []),
+    ...commentItems,
     ...composerItem,
   ];
 
@@ -415,10 +445,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     { icon: SparklesIcon, label: t("caseLaw.notesFilter.ai"), value: "ai" },
     {
       icon: UserRoundIcon,
-      label: t("caseLaw.notesFilter.human"),
-      value: "human",
+      label: t("inbox.filter.mine"),
+      value: "mine",
     },
-    { icon: EyeOffIcon, label: t("common.none"), value: "none" },
   ] as const satisfies readonly {
     icon: React.ComponentType<{ className?: string }>;
     label: string;
@@ -431,35 +460,41 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
       <div className="relative min-h-0 flex-1">
-        {((hasAnalysis && marginItems.length > 0) ||
-          commentItems.length > 0) && (
-          <div className="bg-sidebar absolute start-3 bottom-3 z-20 flex items-center overflow-hidden rounded-md border shadow-sm max-lg:hidden">
-            {notesFilterOptions.map((option) => {
-              const Icon = option.icon;
-              const isActive = notesFilter === option.value;
-              return (
-                <Tooltip
-                  content={option.label}
-                  key={option.value}
-                  render={
-                    <InspectorRailIconButton
-                      aria-label={option.label}
-                      aria-pressed={isActive}
-                      className={cn(
-                        "rounded-none",
-                        isActive && "bg-muted text-foreground",
-                      )}
-                      onClick={() => setNotesFilter(option.value)}
-                    />
-                  }
-                >
-                  <Icon className="size-4" />
-                </Tooltip>
-              );
-            })}
-          </div>
+        {props.aiMode === "locked" && showAiNotes && (
+          <LockedAnalysisPreview
+            onRequest={props.onRequestAI}
+            width={panelWidth - 16}
+          />
         )}
-        {hasAnalysis && analysisTree.length > 0 && (
+        <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border shadow-[0_1px_2px_rgb(0_0_0/0.05),0_8px_24px_rgb(0_0_0/0.08)] backdrop-blur-xl max-lg:hidden">
+          {notesFilterOptions.map((option) => {
+            const Icon = option.icon;
+            const isActive = notesFilter === option.value;
+            return (
+              <Tooltip
+                content={option.label}
+                key={option.value}
+                render={
+                  <InspectorRailIconButton
+                    aria-label={option.label}
+                    aria-pressed={isActive}
+                    className={cn(
+                      "rounded-none",
+                      isActive && "bg-muted text-foreground",
+                    )}
+                    onClick={() => {
+                      setActiveAnnotationId(null);
+                      setNotesFilter(option.value);
+                    }}
+                  />
+                }
+              >
+                <Icon className="size-4" />
+              </Tooltip>
+            );
+          })}
+        </div>
+        {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
           <OutlineRail
             items={analysisOutline.items}
             onJump={(id, container) => {
@@ -535,13 +570,19 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   scrollContainerRef={mainRef}
                 />
               )}
-              {isAnalyzing && (
+              {showAiNotes && isAnalyzing && (
                 <div className="px-2 pt-8">
                   <AnalysisLoader />
                 </div>
               )}
-              {aiEnabled && analysisState.status === "error" && (
-                <div className="flex flex-col items-center gap-3 pt-12">
+              {showAiNotes && aiEnabled && analysisState.status === "error" && (
+                <div
+                  className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+                  role="alert"
+                >
+                  <p className="text-muted-foreground text-xs leading-snug">
+                    {t("errors.api.server")}
+                  </p>
                   <Button
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
                     onClick={() => {
@@ -555,13 +596,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   </Button>
                 </div>
               )}
-
-              <div className="text-foreground-disabled sticky bottom-3 flex items-center gap-1 px-2 pt-4">
-                <SparklesIcon className="size-3" />
-                <span className="text-[0.6rem] font-medium tracking-wider uppercase">
-                  AI
-                </span>
-              </div>
 
               <div
                 className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
@@ -596,8 +630,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               </div>
             </aside>
 
-            <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
-              <ProvisionsCited decisionId={decisionId} />
+            <main
+              className="reader-paper min-w-0 py-8"
+              data-slot="reader-document-column"
+            >
               <DecisionText
                 activeMatchIndex={activeMatchIndex}
                 annotationAnchors={annotationAnchors}
@@ -608,6 +644,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 provisionAnchors={provisionAnchors}
                 searchQuery={searchOpen ? searchQuery : ""}
                 sectionMap={showAiNotes ? sectionMap : undefined}
+                statuteCitationAnchors={statuteCitationAnchors}
               />
             </main>
           </div>
@@ -630,6 +667,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             onActivateAnnotation={setActiveAnnotationId}
             onClearActive={() => setActiveAnnotationId(null)}
             onCompose={setComposing}
+            mode={annotations.mode}
             scrollContainerRef={mainRef}
           />
         )}
@@ -671,5 +709,47 @@ const AnalysisLoader = () => {
         </div>
       ))}
     </div>
+  );
+};
+
+const LockedAnalysisPreview = ({
+  onRequest,
+  width,
+}: {
+  onRequest?: (() => void) | undefined;
+  width: number;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <section
+      aria-label={t("caseLaw.notesFilter.ai")}
+      className="bg-background/70 supports-[backdrop-filter]:bg-background/45 absolute start-2 bottom-14 z-30 min-h-36 overflow-hidden rounded-xl border shadow-[0_1px_2px_rgb(0_0_0/0.05),0_10px_30px_rgb(0_0_0/0.09)] backdrop-blur-xl max-lg:hidden"
+      data-slot="locked-analysis-preview"
+      style={{ width: `${width}px` }}
+    >
+      <div aria-hidden="true" className="space-y-3 p-4 opacity-45 blur-[3px]">
+        <div className="bg-foreground/35 h-2 w-2/5 rounded-full" />
+        <div className="space-y-2">
+          <div className="bg-foreground/20 h-2 w-full rounded-full" />
+          <div className="bg-foreground/20 h-2 w-5/6 rounded-full" />
+          <div className="bg-foreground/20 h-2 w-3/4 rounded-full" />
+        </div>
+        <div className="bg-foreground/25 h-2 w-1/3 rounded-full" />
+      </div>
+      <div className="bg-background/20 absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
+        {onRequest === undefined ? (
+          <span className="bg-background/80 text-muted-foreground flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs shadow-sm">
+            <SparklesIcon className="size-3.5" />
+            AI
+          </span>
+        ) : (
+          <Button className="shadow-sm" onClick={onRequest} size="sm">
+            <SparklesIcon className="size-3.5" />
+            {t("caseLaw.annotations.createFreeAccount")}
+          </Button>
+        )}
+      </div>
+    </section>
   );
 };

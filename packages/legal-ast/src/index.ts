@@ -17,6 +17,12 @@ export type {
   PersistedDecisionAnalysis,
 } from "./analysis.js";
 export {
+  CZ_CLOSING_RE,
+  CZ_JUDGE_NAME_RE,
+  CZ_JUDGE_TITLE_RE,
+  withInferredCzechSignatureRoles,
+} from "./czech-document-roles.js";
+export {
   APPARATUS_ROLES,
   getDocumentAstMetadata,
   hasBlockInlines,
@@ -37,6 +43,7 @@ export type {
   ImageBlock,
   InlineBlock,
   ParagraphBlock,
+  ParagraphListDepth,
   ParagraphNote,
   ParagraphRole,
   PersistedAstDegradation,

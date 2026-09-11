@@ -578,6 +578,13 @@
       "colorViolet": "Fialová",
       "colorYellow": "Žltá",
       "commentPlaceholder": "Napíšte komentár…",
+      "createFreeAccount": "Vytvoriť bezplatný účet",
+      "guestAuthor": "Vy",
+      "guestLimitReached": "Táto karta môže obsahovať najviac {count} zvýraznení a poznámok. Ak chcete uložiť viac, vytvorte si účet.",
+      "guestMigrationComplete": "Zvýraznenia a poznámky boli uložené.",
+      "guestMigrationFailed": "Niektoré zvýraznenia a poznámky sa nepodarilo uložiť. Zostanú na tejto karte na ďalší pokus.",
+      "guestSavePrompt": "Vaše zvýraznenia a poznámky sa uložia, keď si vytvoríte bezplatný účet.",
+      "guestStorageUnavailable": "Zvýraznenia a poznámky sa na tejto karte nepodarilo uložiť.",
       "highlight": "Zvýrazniť",
       "removeHighlight": "Odstrániť zvýraznenie",
       "sharedBadge": "Zdieľané",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
+      "future": "Budúce",
       "historical": "Nahradené",
       "repealed": "Zrušené"
     },

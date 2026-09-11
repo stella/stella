@@ -26,6 +26,10 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "@stll/legal-ast/czech-document-roles";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import type {
@@ -35,10 +39,6 @@ import type {
 } from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
-} from "./cz-patterns";
 import {
   inlinesToPlainText,
   stripFurniturePrefix,

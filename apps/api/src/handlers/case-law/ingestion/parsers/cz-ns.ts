@@ -12,6 +12,12 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_NAME_RE as SIGNATURE_RE,
+  CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
+} from "@stll/legal-ast/czech-document-roles";
+
 import type {
   Block,
   DocumentAst,
@@ -23,11 +29,6 @@ import type {
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_NAME_RE as SIGNATURE_RE,
-  CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
-} from "./cz-patterns";
 import {
   inlinesToPlainText,
   walkInlines as walkInlinesShared,

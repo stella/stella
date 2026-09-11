@@ -21,3 +21,21 @@ export const formatValidityDate = (
     ? null
     : format.dateTime(date, { dateStyle: "medium", timeZone: "UTC" });
 };
+
+type FormatValidityRangeOptions = {
+  format: IntlFormatter;
+  openEnded: string;
+  validFrom: Date | string | null;
+  validTo: Date | string | null;
+};
+
+/** Compact temporal-version label for chrome and version pickers. */
+export const formatValidityRange = ({
+  format,
+  openEnded,
+  validFrom,
+  validTo,
+}: FormatValidityRangeOptions): string =>
+  `${formatValidityDate(validFrom, format) ?? EM_DASH} – ${
+    formatValidityDate(validTo, format) ?? openEnded
+  }`;

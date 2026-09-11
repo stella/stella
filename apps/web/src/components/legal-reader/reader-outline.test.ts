@@ -12,6 +12,7 @@ import {
   parseOutlineJump,
   parseProvisionDesignation,
   resolveAnchorPct,
+  statuteOutlineFromHeadings,
   withProvisionRanges,
 } from "@/components/legal-reader/reader-outline";
 
@@ -114,6 +115,48 @@ describe("outlineFromHeadings", () => {
 
   test("a document with no headings yields no outline", () => {
     expect(outlineFromHeadings([paragraph("p-1")])).toEqual([]);
+  });
+});
+
+describe("statuteOutlineFromHeadings", () => {
+  test("omits preamble prose misclassified as headings", () => {
+    const statuteBlocks: Block[] = [
+      heading({
+        anchorId: "frag-title",
+        level: 1,
+        lines: ["LISTINA ZÁKLADNÍCH PRÁV A SVOBOD"],
+      }),
+      heading({
+        anchorId: "frag-preamble-1",
+        level: 1,
+        lines: ["Federální shromáždění na základě návrhů..."],
+      }),
+      heading({
+        anchorId: "frag-preamble-2",
+        level: 1,
+        lines: ["uznávajíc neporušitelnost přirozených práv..."],
+      }),
+      heading({
+        anchorId: "prilohy-hlava_1",
+        level: 1,
+        lines: ["HLAVA PRVNÍ", "OBECNÁ USTANOVENÍ"],
+      }),
+      heading({
+        anchorId: "prilohy-cl_1",
+        level: 2,
+        lines: ["Čl. 1"],
+      }),
+      paragraph("prilohy-cl_1-p-1"),
+      heading({
+        anchorId: "prilohy-cl_2",
+        level: 2,
+        lines: ["Čl. 2"],
+      }),
+    ];
+
+    expect(
+      statuteOutlineFromHeadings(statuteBlocks).map(({ id }) => id),
+    ).toEqual(["prilohy-hlava_1", "prilohy-cl_1", "prilohy-cl_2"]);
   });
 });
 

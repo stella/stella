@@ -1,11 +1,11 @@
-/* Source Serif 4 — loaded only for the case law reader. */
+/* Source Serif 4 — shared by the public-law readers. */
 @import "@fontsource-variable/source-serif-4";
 
-/* Case law reader tokens. */
+/* Shared legal-reader tokens. */
 
 :root {
   --reader-body-font: "Source Serif 4 Variable", serif;
-  --reader-body-size: 14px;
+  --reader-body-size: 15px;
   --reader-body-line-height: 1.65;
   --reader-paragraph-gap: 0.65em;
   --reader-section-gap-top: 2.5em;
@@ -79,6 +79,21 @@
   );
 }
 
+/* One document canvas for every public-law reader: width, centering and
+   inline gutters stay identical even when the surrounding tools differ. */
+[data-slot="reader-document-column"] {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (max-width: 639px) {
+  [data-slot="reader-document-column"] {
+    padding-inline: 0.75rem;
+  }
+}
+
 /* Collapse gap between consecutive h3 sub-headings
    (e.g., "I." followed by "Ústavná sťažnosť"). */
 article h3 + h3 {
@@ -86,8 +101,12 @@ article h3 + h3 {
 }
 
 /* Tight stacking for signature lines (judge name + title). */
+article .reader-signature {
+  margin-block-end: 0;
+}
+
 article .reader-signature + .reader-signature {
-  margin-top: 0;
+  margin-block-start: 0;
 }
 
 /* Highlight flash when jumping to a block (annotation, footnote, note

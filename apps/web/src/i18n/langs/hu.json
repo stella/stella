@@ -578,6 +578,13 @@
       "colorViolet": "Lila",
       "colorYellow": "Sárga",
       "commentPlaceholder": "Írj megjegyzést…",
+      "createFreeAccount": "Ingyenes fiók létrehozása",
+      "guestAuthor": "Ön",
+      "guestLimitReached": "Ez a lap legfeljebb {count} kiemelést és jegyzetet tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
+      "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
+      "guestMigrationFailed": "Néhány kiemelést és jegyzetet nem sikerült menteni. Egy újabb próbálkozásig ezen a lapon maradnak.",
+      "guestSavePrompt": "A kiemelések és jegyzetek mentésre kerülnek, amikor létrehoz egy ingyenes fiókot.",
+      "guestStorageUnavailable": "A kiemeléseket és jegyzeteket nem sikerült menteni ezen a lapon.",
       "highlight": "Kiemelés",
       "removeHighlight": "Kiemelés eltávolítása",
       "sharedBadge": "Megosztva",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Hatályos",
       "draft": "Tervezetben",
+      "future": "Jövőbeli",
       "historical": "Felváltott",
       "repealed": "Hatályon kívül helyezett"
     },

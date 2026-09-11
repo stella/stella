@@ -41,6 +41,10 @@ import {
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
 import {
+  readStatuteCitationCountsHandler,
+  statuteCitationCountsQuerySchema,
+} from "@/api/handlers/case-law/provisions/citation-counts";
+import {
   listCitingDecisionsHandler,
   listCitingDecisionsQuerySchema,
 } from "@/api/handlers/case-law/provisions/citing-decisions";
@@ -64,6 +68,22 @@ const listDecisions = createSafePublicHandler(
       ),
     );
 
+    return Result.ok(response);
+  },
+);
+
+const readStatuteCitationCounts = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: statuteCitationCountsQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readStatuteCitationCountsHandler(query, caseLawPublicReadDb),
+      ),
+    );
     return Result.ok(response);
   },
 );
@@ -291,6 +311,9 @@ export const publicCaseLawRoute = new Elysia({
   })
   .get("/provisions/citing-decisions", listCitingDecisions.handler, {
     query: listCitingDecisions.config.query,
+  })
+  .get("/provisions/citation-counts", readStatuteCitationCounts.handler, {
+    query: readStatuteCitationCounts.config.query,
   })
   .post("/decisions/search", searchDecisions.handler, {
     body: searchDecisions.config.body,

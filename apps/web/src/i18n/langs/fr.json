@@ -578,6 +578,13 @@
       "colorViolet": "Pourpre",
       "colorYellow": "Jaune",
       "commentPlaceholder": "Écrire un commentaire…",
+      "createFreeAccount": "Créer un compte gratuit",
+      "guestAuthor": "Vous",
+      "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
+      "guestMigrationComplete": "Surlignages et notes enregistrés.",
+      "guestMigrationFailed": "Certains surlignages et notes n’ont pas pu être enregistrés. Ils resteront dans cet onglet pour une nouvelle tentative.",
+      "guestSavePrompt": "Vos surlignages et notes seront enregistrés lorsque vous créerez un compte gratuit.",
+      "guestStorageUnavailable": "Les surlignages et notes n’ont pas pu être enregistrés dans cet onglet.",
       "highlight": "Surligner",
       "removeHighlight": "Retirer le surlignage",
       "sharedBadge": "Partagé",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "En vigueur",
       "draft": "En projet",
+      "future": "À venir",
       "historical": "Remplacé",
       "repealed": "Abrogé"
     },

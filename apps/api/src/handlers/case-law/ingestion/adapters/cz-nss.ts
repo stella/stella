@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -43,6 +42,7 @@ import {
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
@@ -102,6 +102,11 @@ const CZ_NSS_LANGUAGE = "cs";
  * this label covers only documents that carry no ECLI.
  */
 const CZ_NSS_COURT = "Nejvyšší správní soud";
+
+const nssReporterIdentifiers = (citation: string | undefined) =>
+  citation === undefined
+    ? undefined
+    : (czechReporterIdentifiersFromCitationLabel(citation) ?? undefined);
 
 /** The deciding court this portal states for one decision. */
 const czNssCourt = (
@@ -1309,6 +1314,7 @@ const rowToResult = ({
     return undefined;
   })();
   const decisionType = (detail.decisionType ?? row.decisionType)?.toLowerCase();
+  const reporterIdentifiers = nssReporterIdentifiers(detail.citation);
   // This source publishes the docket with the sheet number appended.
   const publishedCaseNumber = row.publishedCaseNumber ?? row.caseNumber;
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
@@ -1325,16 +1331,9 @@ const rowToResult = ({
   return {
     caseNumber: row.caseNumber,
     sheetNumber,
-    ...(detail.citation === undefined
+    ...(reporterIdentifiers === undefined
       ? {}
-      : {
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-              value: detail.citation,
-            },
-          ],
-        }),
+      : { identifiers: reporterIdentifiers }),
     sourceDocumentId,
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the detail URL of whichever document
@@ -1587,6 +1586,7 @@ const reparseStoredRaw = (
   const citation =
     nonEmptyString(storedDetail?.citation) ??
     nonEmptyString(stored.metadata["citation"]);
+  const reporterIdentifiers = nssReporterIdentifiers(citation);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
@@ -1603,16 +1603,9 @@ const reparseStoredRaw = (
     result: {
       caseNumber: stored.caseNumber,
       sheetNumber,
-      ...(citation === undefined
+      ...(reporterIdentifiers === undefined
         ? {}
-        : {
-            identifiers: [
-              {
-                type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-                value: citation,
-              },
-            ],
-          }),
+        : { identifiers: reporterIdentifiers }),
       sourceDocumentId,
       ...(sourceDocumentId === undefined
         ? {}

@@ -8,6 +8,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import {
   type DecisionAnalysis,
@@ -25,12 +26,12 @@ type AnalysisState =
   | { status: "idle" }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
   | { status: "done"; analysis: DecisionAnalysis }
-  | { status: "error"; message: string };
+  | { status: "error" };
 
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
-  | { status: "error"; error: string };
+  | { status: "error" };
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -64,11 +65,7 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "error") {
-    const error = value["error"];
-    return {
-      status: "error",
-      error: typeof error === "string" ? error : "Generation failed",
-    };
+    return { status: "error" };
   }
 
   return null;
@@ -77,7 +74,45 @@ export const parseAnalysisResponse = (
 type AnalysisQueryResult =
   | { kind: "done"; analysis: DecisionAnalysis }
   | { kind: "generating"; tree: DecisionAnalysis["tree"] }
-  | { kind: "error"; message: string };
+  | { kind: "error" };
+
+type AnalysisQuerySnapshot = {
+  hasQueryError: boolean;
+  isFetching: boolean;
+  result: AnalysisQueryResult | undefined;
+};
+
+/** Resolve retained query data into one unambiguous reader state. */
+export const analysisStateFromQuery = ({
+  hasQueryError,
+  isFetching,
+  result,
+}: AnalysisQuerySnapshot): Exclude<AnalysisState, { status: "idle" }> => {
+  // TanStack Query retains the settled error result while a manual refetch is
+  // in flight. Fetching must win, otherwise Retry appears to do nothing and
+  // leaves the adjacent layer controls visually stuck beside a stale error.
+  if (isFetching && (result?.kind === "error" || hasQueryError)) {
+    return { status: "generating", tree: [] };
+  }
+
+  if (result !== undefined) {
+    switch (result.kind) {
+      case "done":
+        return { status: "done", analysis: result.analysis };
+      case "generating":
+        return { status: "generating", tree: result.tree };
+      case "error":
+        return { status: "error" };
+      default:
+        result satisfies never;
+        return panic(`Unhandled analysis result: ${String(result)}`);
+    }
+  }
+
+  return hasQueryError
+    ? { status: "error" }
+    : { status: "generating", tree: [] };
+};
 
 const isTerminal = (result: AnalysisQueryResult): boolean =>
   result.kind === "done" || result.kind === "error";
@@ -126,12 +161,7 @@ export const useDecisionAnalysis = (
       const parsed = parseAnalysisResponse(data);
 
       if (!parsed) {
-        return {
-          kind: "error",
-          message: response.ok
-            ? "Unexpected response"
-            : `HTTP ${String(response.status)}`,
-        };
+        return { kind: "error" };
       }
 
       if (parsed.status === "done") {
@@ -140,7 +170,7 @@ export const useDecisionAnalysis = (
       if (parsed.status === "generating") {
         return { kind: "generating", tree: parsed.tree };
       }
-      return { kind: "error", message: parsed.error };
+      return { kind: "error" };
     },
     enabled,
     refetchInterval: (q) =>
@@ -190,24 +220,11 @@ export const useDecisionAnalysis = (
     if (!isGenerating) {
       return { status: "idle" };
     }
-    if (query.data) {
-      switch (query.data.kind) {
-        case "done":
-          return { status: "done", analysis: query.data.analysis };
-        case "generating":
-          return { status: "generating", tree: query.data.tree };
-        case "error":
-          return { status: "error", message: query.data.message };
-      }
-    }
-    if (query.isError) {
-      return {
-        status: "error",
-        message:
-          query.error instanceof Error ? query.error.message : "Unknown error",
-      };
-    }
-    return { status: "generating", tree: [] };
+    return analysisStateFromQuery({
+      hasQueryError: query.isError,
+      isFetching: query.isFetching,
+      result: query.data,
+    });
   })();
 
   return { state, generate };

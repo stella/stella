@@ -17,6 +17,11 @@
  * styles[]: { localId, alignment, bold, italic, ... }
  */
 
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "@stll/legal-ast/czech-document-roles";
+
 import type {
   Block,
   DocumentAst,
@@ -27,11 +32,6 @@ import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
-} from "./cz-patterns";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 

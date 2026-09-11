@@ -75,6 +75,7 @@ const AuthenticatedDecisionWorkspace = ({
           remove: remove.mutateAsync,
           update: update.mutateAsync,
         },
+        mode: "authenticated",
       }}
       decision={decision}
       decisionId={decisionId}

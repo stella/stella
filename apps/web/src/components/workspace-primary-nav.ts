@@ -28,9 +28,11 @@ type WorkspacePrimaryNavItem = {
   readonly labelKey: TranslationKey;
 } & (
   | {
+      readonly audience: "authenticated";
       readonly kind: "action";
     }
   | {
+      readonly audience: "authenticated" | "public";
       readonly kind: "route";
       readonly to: WorkspacePrimaryRoute;
     }
@@ -40,12 +42,14 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: SearchIcon,
     id: "search",
+    audience: "authenticated",
     kind: "action",
     labelKey: "navigation.search",
   },
   {
     icon: MessageSquareIcon,
     id: "chat",
+    audience: "authenticated",
     kind: "route",
     labelKey: "navigation.chat",
     to: "/chat",
@@ -53,6 +57,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: InboxIcon,
     id: "inbox",
+    audience: "authenticated",
     kind: "route",
     labelKey: "navigation.inbox",
     to: "/inbox",
@@ -60,6 +65,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: MattersNavIcon,
     id: "matters",
+    audience: "authenticated",
     kind: "route",
     labelKey: "common.matters",
     to: "/workspaces",
@@ -67,6 +73,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: BookOpenIcon,
     id: "caseLaw",
+    audience: "public",
     kind: "route",
     labelKey: "common.caseLaw",
     to: "/law",
@@ -74,6 +81,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: BlocksIcon,
     id: "tools",
+    audience: "public",
     kind: "route",
     // Reuse the canonical "Tools" label; no per-surface variant.
     labelKey: "knowledge.sections.tools.title",
@@ -82,6 +90,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: LibraryBigIcon,
     id: "knowledge",
+    audience: "authenticated",
     kind: "route",
     labelKey: "navigation.knowledge",
     to: "/knowledge",
@@ -89,6 +98,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: UsersIcon,
     id: "contacts",
+    audience: "authenticated",
     kind: "route",
     labelKey: "navigation.contacts",
     to: "/contacts",

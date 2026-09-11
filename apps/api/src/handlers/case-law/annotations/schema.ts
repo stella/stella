@@ -4,31 +4,71 @@ import type { Static } from "elysia";
 
 import {
   CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
+  CASE_LAW_ANNOTATION_COLORS,
+  CASE_LAW_ANNOTATION_MAX_SPANS,
   CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
-} from "@/api/db/schema";
+  CASE_LAW_ANNOTATION_STYLES,
+  CASE_LAW_ANNOTATION_VISIBILITIES,
+} from "@stll/api-contract/case-law-annotations";
 import type {
   CaseLawAnnotationColor,
   CaseLawAnnotationStyle,
   CaseLawAnnotationVisibility,
-} from "@/api/db/schema";
+} from "@stll/api-contract/case-law-annotations";
+
 import { tSafeId } from "@/api/lib/custom-schema";
 
+const ANNOTATION_COLOR_SCHEMA_VALUES = [
+  CASE_LAW_ANNOTATION_COLORS[0],
+  CASE_LAW_ANNOTATION_COLORS[1],
+  CASE_LAW_ANNOTATION_COLORS[2],
+  CASE_LAW_ANNOTATION_COLORS[3],
+  CASE_LAW_ANNOTATION_COLORS[4],
+] as const satisfies readonly CaseLawAnnotationColor[];
+const ANNOTATION_STYLE_SCHEMA_VALUES = [
+  CASE_LAW_ANNOTATION_STYLES[0],
+  CASE_LAW_ANNOTATION_STYLES[1],
+  CASE_LAW_ANNOTATION_STYLES[2],
+  CASE_LAW_ANNOTATION_STYLES[3],
+] as const satisfies readonly CaseLawAnnotationStyle[];
+const ANNOTATION_VISIBILITY_SCHEMA_VALUES = [
+  CASE_LAW_ANNOTATION_VISIBILITIES[0],
+  CASE_LAW_ANNOTATION_VISIBILITIES[1],
+] as const satisfies readonly CaseLawAnnotationVisibility[];
+
+type MissingAnnotationColor = Exclude<
+  CaseLawAnnotationColor,
+  (typeof ANNOTATION_COLOR_SCHEMA_VALUES)[number]
+>;
+type MissingAnnotationStyle = Exclude<
+  CaseLawAnnotationStyle,
+  (typeof ANNOTATION_STYLE_SCHEMA_VALUES)[number]
+>;
+type MissingAnnotationVisibility = Exclude<
+  CaseLawAnnotationVisibility,
+  (typeof ANNOTATION_VISIBILITY_SCHEMA_VALUES)[number]
+>;
+
+true satisfies MissingAnnotationColor extends never ? true : never;
+true satisfies MissingAnnotationStyle extends never ? true : never;
+true satisfies MissingAnnotationVisibility extends never ? true : never;
+
 export const annotationColorSchema = t.Union([
-  t.Literal("yellow"),
-  t.Literal("green"),
-  t.Literal("sky"),
-  t.Literal("violet"),
-  t.Literal("red"),
+  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[0]),
+  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[1]),
+  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[2]),
+  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[3]),
+  t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[4]),
 ]);
 export const annotationStyleSchema = t.Union([
-  t.Literal("highlight"),
-  t.Literal("underline"),
-  t.Literal("squiggly"),
-  t.Literal("strikethrough"),
+  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[0]),
+  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[1]),
+  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[2]),
+  t.Literal(ANNOTATION_STYLE_SCHEMA_VALUES[3]),
 ]);
 export const annotationVisibilitySchema = t.Union([
-  t.Literal("private"),
-  t.Literal("shared"),
+  t.Literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[0]),
+  t.Literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[1]),
 ]);
 
 /** The route schema has validated these values; preserve its closed domain. */
@@ -84,12 +124,9 @@ const spanSchema = t.Object({
   }),
 });
 
-/** A selection is a run of paragraphs; a court's reasoning rarely ends at one. */
-export const ANNOTATION_MAX_SPANS = 40;
-
 const spansSchema = t.Array(spanSchema, {
   minItems: 1,
-  maxItems: ANNOTATION_MAX_SPANS,
+  maxItems: CASE_LAW_ANNOTATION_MAX_SPANS,
 });
 
 /**
@@ -101,6 +138,7 @@ export const createAnnotationBodySchema = t.Union([
     kind: t.Literal("highlight"),
     color: annotationColorSchema,
     style: annotationStyleSchema,
+    requestId: t.Optional(tSafeId("caseLawDecisionAnnotation")),
     visibility: t.Optional(annotationVisibilitySchema),
     spans: spansSchema,
   }),
@@ -110,10 +148,13 @@ export const createAnnotationBodySchema = t.Union([
       minLength: 1,
       maxLength: CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
     }),
+    requestId: t.Optional(tSafeId("caseLawDecisionAnnotation")),
     visibility: t.Optional(annotationVisibilitySchema),
     spans: spansSchema,
   }),
 ]);
+
+export type CreateAnnotationBody = Static<typeof createAnnotationBodySchema>;
 
 /** One change per request, named, so an update cannot be empty or ambiguous. */
 export const updateAnnotationBodySchema = t.Union([

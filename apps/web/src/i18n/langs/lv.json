@@ -578,6 +578,13 @@
       "colorViolet": "Violets",
       "colorYellow": "Dzeltens",
       "commentPlaceholder": "Rakstiet komentāru…",
+      "createFreeAccount": "Izveidot bezmaksas kontu",
+      "guestAuthor": "Jūs",
+      "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
+      "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
+      "guestMigrationFailed": "Dažus izcēlumus un piezīmes neizdevās saglabāt. Tie paliks šajā cilnē nākamajam mēģinājumam.",
+      "guestSavePrompt": "Jūsu izcēlumi un piezīmes tiks saglabāti, kad izveidosiet bezmaksas kontu.",
+      "guestStorageUnavailable": "Izcēlumus un piezīmes šajā cilnē neizdevās saglabāt.",
       "highlight": "Izcelt",
       "removeHighlight": "Noņemt izcēlumu",
       "sharedBadge": "Kopīgots",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Spēkā",
       "draft": "Projektā",
+      "future": "Nākotnes",
       "historical": "Aizstāts",
       "repealed": "Zaudējis spēku"
     },

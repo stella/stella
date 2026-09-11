@@ -1,8 +1,15 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
 import { describe, expect, test } from "bun:test";
 
 import type { HeadingLevel } from "@stll/legal-ast/document-ast";
 
-import { HEADING_CLASS } from "@/components/legal-reader/document-ast-text";
+import {
+  BlockRenderer,
+  FulltextFallback,
+  HEADING_CLASS,
+} from "@/components/legal-reader/document-ast-text";
 
 // A statute is navigated by its containers (Část, Hlava, Díl, Oddíl) and
 // read by its sections. The four containers carry the hierarchy; the
@@ -78,5 +85,63 @@ describe("statute heading emphasis", () => {
   test("the case-law scale is untouched by the statute variant", () => {
     expect(HEADING_CLASS["case-law"][1]).toContain("text-lg");
     expect(HEADING_CLASS["case-law"][6]).toContain("text-sm");
+  });
+});
+
+describe("embedded block anchors", () => {
+  test("keeps a local anchor hook without duplicating document ids or permalinks", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BlockRenderer, {
+        activeMatchIndex: -1,
+        anchorPresentation: "embedded",
+        block: {
+          anchorId: "prilohy-cl_7",
+          id: "b42",
+          inlines: [{ type: "text", text: "Čl. 7" }],
+          level: 3,
+          plainText: "Čl. 7",
+          type: "heading",
+        },
+        rangesByPieceId: {},
+        variant: "statute",
+      }),
+    );
+
+    expect(markup).toContain('data-anchor="prilohy-cl_7"');
+    expect(markup).not.toContain('id="prilohy-cl_7"');
+    expect(markup).not.toContain('href="#prilohy-cl_7"');
+  });
+});
+
+describe("fallback legal text anchors", () => {
+  test("every paragraph remains annotatable and renders its stored mark", () => {
+    const markup = renderToStaticMarkup(
+      createElement(FulltextFallback, {
+        activeMatchIndex: -1,
+        anchorsByPieceId: {
+          "fulltext:1": [
+            {
+              end: 6,
+              key: "annotation:one",
+              render: (children) =>
+                createElement(
+                  "mark",
+                  { "data-annotation-id": "one" },
+                  children,
+                ),
+              start: 0,
+            },
+          ],
+        },
+        rangesByPieceId: {},
+        text: "First paragraph.\n\nSecond paragraph.",
+      }),
+    );
+
+    expect(markup).toContain('data-anchor="fulltext:0"');
+    expect(markup).toContain('data-anchor="fulltext:1"');
+    expect(markup).toContain(
+      '<mark data-annotation-id="one">Second</mark> paragraph.',
+    );
   });
 });

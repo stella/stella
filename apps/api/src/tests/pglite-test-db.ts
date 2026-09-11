@@ -20,6 +20,7 @@ import {
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteSchemaPrerequisites,
+  installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 
@@ -157,6 +158,9 @@ const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_identifier_backfills",
       "case_law_citations",
       "case_law_provision_citations",
+      "case_law_statute_citation_memberships",
+      "case_law_statute_citation_counts",
+      "case_law_statute_citation_count_state",
       "case_law_polarity_rules",
       "case_law_court_weights",
       "case_law_fts_configs",
@@ -174,6 +178,9 @@ const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_identifier_backfills",
       "case_law_citations",
       "case_law_provision_citations",
+      "case_law_statute_citation_memberships",
+      "case_law_statute_citation_counts",
+      "case_law_statute_citation_count_state",
       "case_law_polarity_rules",
       "case_law_court_weights",
       "case_law_fts_configs",
@@ -190,6 +197,8 @@ const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_identifier_backfills",
       "case_law_citations",
       "case_law_provision_citations",
+      "case_law_statute_citation_memberships",
+      "case_law_statute_citation_counts",
       "case_law_polarity_rules",
       "case_law_court_weights",
       "case_law_fts_configs",
@@ -197,6 +206,10 @@ const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures"
     TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ON TABLE "case_law_statute_citation_count_state"
+      TO stella_ingestion
   `,
   `
     GRANT UPDATE (
@@ -366,6 +379,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteCorpusProjectionRevisionFence(db);
+  await installPgliteStatuteCitationCounts(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

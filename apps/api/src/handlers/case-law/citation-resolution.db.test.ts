@@ -53,6 +53,7 @@ const laterTarget = createSafeId<"caseLawDecision">();
 const ambiguousA = createSafeId<"caseLawDecision">();
 const ambiguousB = createSafeId<"caseLawDecision">();
 const euTarget = createSafeId<"caseLawDecision">();
+const euTargetEnglish = createSafeId<"caseLawDecision">();
 const citing = createSafeId<"caseLawDecision">();
 const euCiting = createSafeId<"caseLawDecision">();
 const undeclaredCiting = createSafeId<"caseLawDecision">();
@@ -165,15 +166,28 @@ beforeAll(
       },
       {
         // The Court of Justice: CZE declares it reachable, so a Czech
-        // judgment citing it resolves across the border on purpose.
+        // judgment citing it resolves across the border on purpose. Its
+        // translations are one judgment, and Czech is the useful target for
+        // this Czech citation.
         ...base,
         id: euTarget,
-        caseNumber: "C-106/89",
-        citationKey: "c-106/89",
+        caseNumber: "C-423/12",
+        citationKey: "c-423/12",
         country: "EU",
-        decisionDate: "1990-11-13",
+        decisionDate: "2014-01-16",
         slug: "eu-target",
-        languageGroupKey: "eu-target",
+        languageGroupKey: "eu-target-group",
+      },
+      {
+        ...base,
+        id: euTargetEnglish,
+        caseNumber: "C-423/12",
+        citationKey: "c-423/12",
+        country: "EU",
+        decisionDate: "2014-01-16",
+        language: "en",
+        slug: "eu-target-en",
+        languageGroupKey: "eu-target-group",
       },
       {
         ...base,
@@ -262,8 +276,8 @@ beforeAll(
       {
         id: supranationalCitation,
         citingDecisionId: citing,
-        citationText: "rozsudek Soudního dvora C-106/89",
-        citationKey: "c-106/89",
+        citationText: "C-423/12, Flora May Reyes v. Migrationsverket",
+        citationKey: "c-423/12",
       },
       {
         // The reverse of the supranational rule: EU declares no national
@@ -566,7 +580,7 @@ test("a citation without a key is never examined", async () => {
   });
 });
 
-test("a member state's citation reaches the supranational court", async () => {
+test("a member state's citation reaches its language manifestation of the supranational judgment", async () => {
   expect(await rowOf(supranationalCitation)).toMatchObject({
     cited: euTarget,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,

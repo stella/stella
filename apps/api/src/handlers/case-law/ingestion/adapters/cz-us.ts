@@ -10,10 +10,14 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
   PENDING_SOURCE_FIELD_INVENTORY,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -25,6 +29,9 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceRawParts,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -402,6 +409,30 @@ const fieldAboveAbstractMinimum = (field: TextField): TextField => {
 };
 
 /**
+ * Project one publisher cell to text without erasing its block breaks. NALUS
+ * separates abstract paragraphs and headings with paired `<br>` elements;
+ * Cheerio's `.text()` drops both and welds the blocks together.
+ */
+const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
+  const cells: string[] = [];
+  $(selector).each((_, element) => {
+    const cell = $(element).clone();
+    cell.find("br").replaceWith("\n");
+    const text = cell
+      .text()
+      .replaceAll(/\r\n?/gu, "\n")
+      .replaceAll(/[\t ]+\n/gu, "\n")
+      .replaceAll(/\n[\t ]+/gu, "\n")
+      .replaceAll(/\n{3,}/gu, "\n\n")
+      .trim();
+    if (text !== "") {
+      cells.push(text);
+    }
+  });
+  return cells.join("\n\n");
+};
+
+/**
  * Extract abstract and legal sentence from GetAbstract.aspx.
  *
  * Both source cells are represented by the text-field contract.
@@ -412,12 +443,15 @@ const extractAbstract = (
   const $ = cheerio.load(html);
   return {
     abstract: fieldAboveAbstractMinimum(
-      sourceTextField(ADAPTER_KEYS.CZ_US, $("table.abstractContent td").text()),
+      sourceTextField(
+        ADAPTER_KEYS.CZ_US,
+        supplementText($, "table.abstractContent td"),
+      ),
     ),
     legalSentence: fieldAboveAbstractMinimum(
       sourceTextField(
         ADAPTER_KEYS.CZ_US,
-        $("table.legalSentenceContent td").text(),
+        supplementText($, "table.legalSentenceContent td"),
       ),
     ),
   };
@@ -1330,12 +1364,12 @@ const multiResponseSourceRaw = ({
   textHtml: string;
   abstractHtml?: string | undefined;
 }): { sourceRaw: string; sourceRawContentType: string } => ({
-  sourceRaw: JSON.stringify({
-    listingHtml,
-    textHtml,
-    ...(abstractHtml === undefined ? {} : { abstractHtml }),
+  sourceRaw: encodeSourceRawEnvelope({
+    listing: listingHtml,
+    document: textHtml,
+    ...(abstractHtml === undefined ? {} : { abstract: abstractHtml }),
   }),
-  sourceRawContentType: "application/json",
+  sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 });
 
 const listedOnlyDecision = (
@@ -1598,6 +1632,126 @@ const buildCzUsFromPayload = async (
   }
 };
 
+const CZ_US_REPARSABLE_CONTENT_TYPES = new Set([
+  "application/json",
+  "text/html",
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+]);
+
+/** Read both the current envelope and the JSON shape stored before it. */
+const czUsStoredRawParts = (
+  raw: string,
+  contentType: string | null,
+): SourceRawParts | null => {
+  const envelope = decodeSourceRawEnvelope(raw);
+  if (envelope !== null) {
+    return envelope;
+  }
+  if (contentType === null || contentType === "text/html") {
+    return { document: raw };
+  }
+  if (contentType !== "application/json") {
+    return null;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(raw)).unwrapOr(null);
+  if (!isRecord(parsed) || typeof parsed["textHtml"] !== "string") {
+    return null;
+  }
+  return {
+    document: parsed["textHtml"],
+    ...(typeof parsed["listingHtml"] === "string"
+      ? { listing: parsed["listingHtml"] }
+      : {}),
+    ...(typeof parsed["abstractHtml"] === "string"
+      ? { abstract: parsed["abstractHtml"] }
+      : {}),
+  };
+};
+
+/**
+ * Rebuild a NALUS decision solely from its saved source responses. Rows from
+ * before the multi-page envelope retain their metadata because their raw HTML
+ * has no abstract page; envelope rows re-project the original abstract block
+ * breaks without contacting the publisher.
+ */
+const reparseStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (
+    stored.contentType !== null &&
+    !CZ_US_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored content type ${stored.contentType}`,
+    };
+  }
+  if (stored.sourceDocumentId === null || stored.sourceUrl === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "missing source document id or source URL",
+    };
+  }
+
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = czUsStoredRawParts(raw, stored.contentType);
+  const documentHtml = parts?.["document"];
+  if (documentHtml === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `no decision document in the stored payload for ${stored.caseNumber}`,
+    };
+  }
+
+  const listedCounter = stored.metadata["ecliCounter"];
+  const nalusRecordId = stored.metadata["nalusRecordId"];
+  const nalusSz = stored.metadata["nalusSz"];
+  const decision = parseDecisionPage({
+    html: documentHtml,
+    sourceUrl: stored.sourceUrl,
+    sourceDocumentId: stored.sourceDocumentId,
+    listedEcli: stored.ecli ?? undefined,
+    listedCounter:
+      typeof listedCounter === "number" ? listedCounter : undefined,
+    nalusRecordId:
+      typeof nalusRecordId === "string" ? nalusRecordId : undefined,
+    nalusSz: typeof nalusSz === "string" ? nalusSz : undefined,
+    nalusQuarantineIds: [],
+  });
+  if (decision === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `stored decision document could not be parsed for ${stored.caseNumber}`,
+    };
+  }
+  if (decision.caseNumber !== stored.caseNumber) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `stored document states ${decision.caseNumber}`,
+    };
+  }
+
+  decision.metadata = checkedDecisionMetadata({
+    ...stored.metadata,
+    ...decision.metadata,
+  });
+  const abstractHtml = parts?.["abstract"];
+  if (abstractHtml !== undefined) {
+    decision.textFields = {
+      ...decision.textFields,
+      ...extractAbstract(abstractHtml),
+    };
+  }
+  decision.sourceRaw = raw;
+  decision.sourceRawContentType = stored.contentType ?? "text/html";
+  return { type: "parsed", result: decision };
+};
+
 // ── Adapter ──────────────────────────────────────────────
 
 export const czUsAdapter = defineSourceAdapter({
@@ -1613,6 +1767,7 @@ export const czUsAdapter = defineSourceAdapter({
   pageTimeoutMs: 240_000,
   maxSyncPages: 10,
   maxCycleMs: 30 * 60 * 1000,
+  reparseStoredRaw,
 
   /**
    * NALUS reports its total only on a search result page, and a search

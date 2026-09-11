@@ -5,7 +5,10 @@ import type {
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
-import { parseAnalysisResponse } from "./use-decision-analysis";
+import {
+  analysisStateFromQuery,
+  parseAnalysisResponse,
+} from "./use-decision-analysis";
 
 const heading = {
   id: "h1",
@@ -66,5 +69,50 @@ describe("decision analysis response parsing", () => {
     expect(
       parseAnalysisResponse({ status: "done", analysis: unfingerprinted }),
     ).toBeNull();
+  });
+
+  test("accepts an error without exposing its transport message", () => {
+    expect(
+      parseAnalysisResponse({ status: "error", error: "HTTP 500" }),
+    ).toEqual({ status: "error" });
+  });
+});
+
+describe("decision analysis query state", () => {
+  test("a retry replaces the retained error with progress", () => {
+    expect(
+      analysisStateFromQuery({
+        hasQueryError: false,
+        isFetching: true,
+        result: { kind: "error" },
+      }),
+    ).toEqual({ status: "generating", tree: [] });
+  });
+
+  test("a settled result remains an error", () => {
+    expect(
+      analysisStateFromQuery({
+        hasQueryError: false,
+        isFetching: false,
+        result: { kind: "error" },
+      }),
+    ).toEqual({ status: "error" });
+  });
+
+  test("a thrown request error becomes progress only while retrying", () => {
+    expect(
+      analysisStateFromQuery({
+        hasQueryError: true,
+        isFetching: true,
+        result: undefined,
+      }),
+    ).toEqual({ status: "generating", tree: [] });
+    expect(
+      analysisStateFromQuery({
+        hasQueryError: true,
+        isFetching: false,
+        result: undefined,
+      }),
+    ).toEqual({ status: "error" });
   });
 });

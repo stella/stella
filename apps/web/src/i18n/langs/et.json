@@ -578,6 +578,13 @@
       "colorViolet": "Lilla",
       "colorYellow": "Kollane",
       "commentPlaceholder": "Kirjuta kommentaar…",
+      "createFreeAccount": "Loo tasuta konto",
+      "guestAuthor": "Teie",
+      "guestLimitReached": "See vahekaart mahutab kuni {count} esiletõstmist ja märkust. Rohkema salvestamiseks looge konto.",
+      "guestMigrationComplete": "Esiletõstmised ja märkused salvestati.",
+      "guestMigrationFailed": "Mõnda esiletõstmist ja märkust ei õnnestunud salvestada. Need jäävad uue katse jaoks sellele vahekaardile.",
+      "guestSavePrompt": "Teie esiletõstmised ja märkused salvestatakse tasuta konto loomisel.",
+      "guestStorageUnavailable": "Esiletõstmisi ja märkusi ei õnnestunud sellel vahekaardil salvestada.",
       "highlight": "Tõsta esile",
       "removeHighlight": "Eemalda esiletõst",
       "sharedBadge": "Jagatud",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "Kehtiv",
       "draft": "Eelnõus",
+      "future": "Tulevane",
       "historical": "Asendatud",
       "repealed": "Kehtetu"
     },

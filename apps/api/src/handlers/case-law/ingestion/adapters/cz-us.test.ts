@@ -12,6 +12,10 @@ import {
   test,
 } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
   TEXT_ABSENCE_REASON,
@@ -724,14 +728,18 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(page.decisions).toHaveLength(1);
     expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
-    expect(page.decisions[0]?.sourceRawContentType).toBe("application/json");
-    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
-      listingHtml: expect.stringContaining("ResultDetail.aspx?id=4001"),
-      textHtml: expect.stringContaining("lblRegistrySign"),
-    });
-    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).not.toHaveProperty(
-      "abstractHtml",
+    expect(page.decisions[0]?.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
+    expect(
+      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+    ).toMatchObject({
+      listing: expect.stringContaining("ResultDetail.aspx?id=4001"),
+      document: expect.stringContaining("lblRegistrySign"),
+    });
+    expect(
+      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+    ).not.toHaveProperty("abstract");
   });
 
   test("enriches listed decisions with abstracts and legal sentences", async () => {
@@ -761,11 +769,13 @@ describe("czUsAdapter.fetchPage", () => {
       abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: abstract },
       legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: legalSentence },
     });
-    expect(decision?.sourceRawContentType).toBe("application/json");
-    expect(JSON.parse(decision?.sourceRaw ?? "")).toMatchObject({
-      listingHtml: expect.stringContaining("ResultDetail.aspx?id=5001"),
-      textHtml: expect.stringContaining("lblRegistrySign"),
-      abstractHtml: expect.stringContaining(abstract),
+    expect(decision?.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
+    expect(decodeSourceRawEnvelope(decision?.sourceRaw ?? "")).toMatchObject({
+      listing: expect.stringContaining("ResultDetail.aspx?id=5001"),
+      document: expect.stringContaining("lblRegistrySign"),
+      abstract: expect.stringContaining(abstract),
     });
   });
 
@@ -829,9 +839,65 @@ describe("czUsAdapter.fetchPage", () => {
     });
     // The page the sentences came from is still stored, so a later reading
     // can recover whatever the court served.
-    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
-      abstractHtml: expect.stringContaining("Právní věta není k dispozici."),
+    expect(
+      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+    ).toMatchObject({
+      abstract: expect.stringContaining("Právní věta není k dispozici."),
     });
+  });
+
+  test("preserves abstract block breaks and replays the legacy saved envelope", async () => {
+    const abstractHtml = makeAbstractPage(
+      "Analytická právní věta<br/><br/>Plošné shromažďování údajů je nepřípustné.<br/><br/>Návrh a řízení před Ústavním soudem<br/><br/>Plénum návrhu vyhovělo.",
+      "První právní věta.<br/><br/>Druhá právní věta.",
+    );
+    const textHtml = makeTextPage("Pl.ÚS 24/10", "22. 3. 2011", {
+      counter: 1,
+      decisionForm: "Nález",
+    });
+    const reparse = czUsAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-us to support stored-raw replay");
+    }
+
+    const outcome = await reparse({
+      raw: new TextEncoder().encode(
+        JSON.stringify({
+          abstractHtml,
+          listingHtml: "<html>listing</html>",
+          textHtml,
+        }),
+      ),
+      contentType: "application/json",
+      caseNumber: "Pl.ÚS 24/10",
+      sourceDocumentId: "nalus-record:69635",
+      language: "cs",
+      court: "Ústavní soud",
+      ecli: "ECLI:CZ:US:2011:Pl.US.24.10.1",
+      decisionDate: "2011-03-22",
+      decisionType: "nález",
+      sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=Pl-24-10_1",
+      documentUrl: null,
+      metadata: {
+        ecliCounter: 1,
+        nalusRecordId: "69635",
+        nalusSz: "Pl-24-10_1",
+      },
+    });
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.textFields.abstract).toEqual({
+      text: "Analytická právní věta\n\nPlošné shromažďování údajů je nepřípustné.\n\nNávrh a řízení před Ústavním soudem\n\nPlénum návrhu vyhovělo.",
+      type: TEXT_FIELD_TYPE.PRESENT,
+    });
+    expect(outcome.result.textFields.legalSentence).toEqual({
+      text: "První právní věta.\n\nDruhá právní věta.",
+      type: TEXT_FIELD_TYPE.PRESENT,
+    });
+    expect(outcome.result.sourceRaw).toContain("abstractHtml");
   });
 
   test("preserves decision-page metadata while taking identity from search", async () => {
@@ -1369,10 +1435,14 @@ describe("czUsAdapter.fetchPage", () => {
       },
     });
     expect(page.decisions[0]?.legacySourceUrls).toBeUndefined();
-    expect(page.decisions[0]?.sourceRawContentType).toBe("application/json");
-    expect(JSON.parse(page.decisions[0]?.sourceRaw ?? "")).toMatchObject({
-      listingHtml: expect.stringContaining("ResultDetail.aspx?id=7001"),
-      textHtml: expect.stringContaining("detail unavailable"),
+    expect(page.decisions[0]?.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
+    expect(
+      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+    ).toMatchObject({
+      listing: expect.stringContaining("ResultDetail.aspx?id=7001"),
+      document: expect.stringContaining("detail unavailable"),
     });
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.nextCursor).toBe(historicalCursor(2025));

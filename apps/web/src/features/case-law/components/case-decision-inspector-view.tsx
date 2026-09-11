@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -24,9 +25,11 @@ import { CitationHeader } from "@/features/case-law/components/case-viewer/citat
 import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
+import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
+import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -43,13 +46,21 @@ export const CaseDecisionInspectorView = ({
   const { payload } = tab;
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
-  const provisionAnchors = useDecisionProvisionAnchors(decisionId);
   const {
     data: decision,
     isError,
     isPending,
     refetch,
   } = useQuery(decisionOptions(decisionId));
+  const decisionDate = decision?.decisionDate ?? null;
+  const provisionAnchors = useDecisionProvisionAnchors(
+    decisionId,
+    decisionDate,
+  );
+  const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
+    visibleDecisionBlocks(parseDocumentAst(decision?.documentAst)),
+    decisionDate,
+  );
   const inspector = useInspectorView();
   const mainDecision = useMainCaseLawDecision();
   const mainRef = useRef<HTMLElement>(null);
@@ -188,13 +199,17 @@ export const CaseDecisionInspectorView = ({
                 sourceUrl={decision.sourceUrl}
               />
               <DecisionCitations decisionId={decisionId} />
-              <ProvisionsCited decisionId={decisionId} />
+              <ProvisionsCited
+                decisionDate={decision.decisionDate}
+                decisionId={decisionId}
+              />
               <DecisionText
                 activeMatchIndex={0}
                 citationAnchors={citationAnchors}
                 decision={decision}
                 provisionAnchors={provisionAnchors}
                 searchQuery=""
+                statuteCitationAnchors={statuteCitationAnchors}
               />
             </>
           )}

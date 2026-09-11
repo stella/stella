@@ -3,11 +3,14 @@ import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  parseDocumentAst,
+  resolveDocumentAnchor,
+} from "@stll/legal-ast/document-ast";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { BlockRenderer } from "@/components/legal-reader/document-ast-text";
+import { provisionBlocks } from "@/features/statutes/provision-preview";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
@@ -22,33 +25,6 @@ const READER_STYLE = {
   fontSize: "var(--reader-body-size)",
   lineHeight: "var(--reader-body-line-height)",
 } as const;
-
-/**
- * The blocks one provision owns: its heading, then everything up to the next
- * heading at the same or a shallower level. Nested subdivisions stay inside.
- * Null when no heading carries the anchor, which tells an unknown anchor
- * apart from an empty provision.
- */
-export const provisionBlocks = (
-  blocks: readonly Block[],
-  anchorId: string,
-): Block[] | null => {
-  const start = blocks.findIndex(
-    (block) => block.type === "heading" && block.anchorId === anchorId,
-  );
-  const heading = blocks.at(start);
-  if (heading?.type !== "heading") {
-    return null;
-  }
-  const owned: Block[] = [heading];
-  for (const block of blocks.slice(start + 1)) {
-    if (block.type === "heading" && block.level <= heading.level) {
-      break;
-    }
-    owned.push(block);
-  }
-  return owned;
-};
 
 type ProvisionWordingProps = {
   /** The provision heading's anchor. */
@@ -79,15 +55,19 @@ export const ProvisionWording = ({
   const ast =
     statute === undefined ? null : parseDocumentAst(statute.documentAst);
   const blocks = ast === null ? null : provisionBlocks(ast.blocks, anchorId);
-  const target = highlightAnchorId ?? anchorId;
+  const requestedTarget = highlightAnchorId ?? anchorId;
+  const target =
+    ast === null
+      ? null
+      : (resolveDocumentAnchor(ast.blocks, requestedTarget)?.anchorId ?? null);
   const ready = blocks !== null && blocks.length > 0;
 
   useExternalSyncEffect(() => {
-    if (!ready) {
+    if (!ready || target === null) {
       return;
     }
     const element = containerRef.current?.querySelector<HTMLElement>(
-      `#${CSS.escape(target)}`,
+      `[data-anchor="${CSS.escape(target)}"]`,
     );
     if (!element) {
       return;
@@ -126,6 +106,7 @@ export const ProvisionWording = ({
       {blocks.map((block) => (
         <BlockRenderer
           activeMatchIndex={NO_ACTIVE_MATCH}
+          anchorPresentation="embedded"
           block={block}
           key={block.id}
           rangesByPieceId={NO_RANGES}

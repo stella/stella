@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { formatValidityDate } from "@/features/statutes/statute-format";
+import { formatValidityRange } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 
 export type StatuteVersion = {
@@ -50,9 +50,6 @@ export const StatuteVersionSwitcher = ({
     return null;
   }
 
-  const formatBoundary = (value: string | null): string =>
-    formatValidityDate(value, format) ?? t("statutes.openEnded");
-
   return (
     <Select onValueChange={handleValueChange} value={currentVersionId}>
       <SelectTrigger
@@ -64,9 +61,11 @@ export const StatuteVersionSwitcher = ({
       <SelectPopup>
         {versions.map((version) => (
           <SelectItem key={version.id} value={version.id}>
-            {t("statutes.validity", {
-              from: formatBoundary(version.versionValidFrom),
-              to: formatBoundary(version.versionValidTo),
+            {formatValidityRange({
+              format,
+              openEnded: t("statutes.openEnded"),
+              validFrom: version.versionValidFrom,
+              validTo: version.versionValidTo,
             })}
           </SelectItem>
         ))}

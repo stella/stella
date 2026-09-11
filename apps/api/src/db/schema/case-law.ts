@@ -12,6 +12,20 @@ import type {
   CaseLawResearchSavedQuery,
 } from "@stll/api-contract";
 import {
+  CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
+  CASE_LAW_ANNOTATION_COLORS,
+  CASE_LAW_ANNOTATION_KINDS,
+  CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
+  CASE_LAW_ANNOTATION_STYLES,
+  CASE_LAW_ANNOTATION_VISIBILITIES,
+} from "@stll/api-contract/case-law-annotations";
+import type {
+  CaseLawAnnotationColor,
+  CaseLawAnnotationKind,
+  CaseLawAnnotationStyle,
+  CaseLawAnnotationVisibility,
+} from "@stll/api-contract/case-law-annotations";
+import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
@@ -45,6 +59,7 @@ import type {
   Polarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
@@ -70,6 +85,7 @@ import {
   safeUuid,
   safeWorkspaceId,
   sql,
+  stellaPublicLawReader,
   tsvector,
   user,
   wsPolicies,
@@ -166,6 +182,22 @@ export const PROVISION_WORK_SOURCES = [
   "carry-over",
 ] as const;
 
+export const STATUTE_CITATION_TARGET_TYPES = ["work", "provision"] as const;
+
+export const STATUTE_CITATION_TARGET_TYPE = {
+  PROVISION: STATUTE_CITATION_TARGET_TYPES[1],
+  WORK: STATUTE_CITATION_TARGET_TYPES[0],
+} as const;
+
+export const STATUTE_CITATION_COUNT_STATUSES = ["building", "ready"] as const;
+
+export const STATUTE_CITATION_COUNT_STATUS = {
+  BUILDING: STATUTE_CITATION_COUNT_STATUSES[0],
+  READY: STATUTE_CITATION_COUNT_STATUSES[1],
+} as const;
+
+export const STATUTE_CITATION_COUNT_STATE_KEY = "global";
+
 const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
   sql.raw(`'${unit}'`),
 );
@@ -173,6 +205,12 @@ const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
 const PROVISION_WORK_SOURCE_SQL_VALUES = PROVISION_WORK_SOURCES.map((source) =>
   sql.raw(`'${source}'`),
 );
+
+const STATUTE_CITATION_TARGET_TYPE_SQL_VALUES =
+  STATUTE_CITATION_TARGET_TYPES.map((type) => sql.raw(`'${type}'`));
+
+const STATUTE_CITATION_COUNT_STATUS_SQL_VALUES =
+  STATUTE_CITATION_COUNT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 const CITATION_RESOLUTION_SCOPE_SQL_VALUES = CITATION_RESOLUTION_SCOPES.map(
   (scope) => sql.raw(`'${scope}'`),
@@ -1295,6 +1333,133 @@ export const caseLawProvisionCitations = p.pgTable(
 );
 
 /**
+ * One distinct citing decision per statute target. The provision writer
+ * projects this from its canonical citation rows; the composite key makes a
+ * second mention of the same target in one judgment physically irrelevant.
+ * An empty anchor is reserved for the whole-work target.
+ */
+export const caseLawStatuteCitationMemberships = p.pgTable(
+  "case_law_statute_citation_memberships",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
+      .notNull()
+      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id),
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    workEli: p.varchar("work_eli", { length: 512 }).notNull(),
+    targetType: p
+      .text("target_type", { enum: STATUTE_CITATION_TARGET_TYPES })
+      .notNull(),
+    anchor: p.varchar({ length: 256 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_statute_citation_memberships_pkey",
+      columns: [
+        t.decisionId,
+        t.jurisdiction,
+        t.workEli,
+        t.targetType,
+        t.anchor,
+      ],
+    }),
+    p
+      .index("case_law_statute_citation_memberships_target_idx")
+      .on(t.jurisdiction, t.workEli, t.targetType, t.anchor),
+    p.index("case_law_statute_citation_memberships_source_idx").on(t.sourceId),
+    p.check(
+      "case_law_statute_citation_memberships_target_type_values",
+      sql`${t.targetType} IN (${sql.join(STATUTE_CITATION_TARGET_TYPE_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "case_law_statute_citation_memberships_target_shape",
+      sql`(${t.targetType} = 'work' AND ${t.anchor} = '') OR (${t.targetType} = 'provision' AND ${t.anchor} <> '')`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Exact distinct-decision totals maintained from the membership table. */
+export const caseLawStatuteCitationCounts = p.pgTable(
+  "case_law_statute_citation_counts",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id),
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    workEli: p.varchar("work_eli", { length: 512 }).notNull(),
+    targetType: p
+      .text("target_type", { enum: STATUTE_CITATION_TARGET_TYPES })
+      .notNull(),
+    anchor: p.varchar({ length: 256 }).notNull(),
+    decisionCount: p.integer("decision_count").notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_statute_citation_counts_pkey",
+      columns: [t.jurisdiction, t.workEli, t.targetType, t.anchor, t.sourceId],
+    }),
+    p.index("case_law_statute_citation_counts_source_idx").on(t.sourceId),
+    p.check(
+      "case_law_statute_citation_counts_target_type_values",
+      sql`${t.targetType} IN (${sql.join(STATUTE_CITATION_TARGET_TYPE_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "case_law_statute_citation_counts_target_shape",
+      sql`(${t.targetType} = 'work' AND ${t.anchor} = '') OR (${t.targetType} = 'provision' AND ${t.anchor} <> '')`,
+    ),
+    p.check(
+      "case_law_statute_citation_counts_positive",
+      sql`${t.decisionCount} > 0`,
+    ),
+    ...globalCaseLawPolicies(),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${caseLawSources} AS citation_count_source
+        WHERE citation_count_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`citation_count_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
+/**
+ * Completeness of the initial corpus pass. Until it is ready, absence from
+ * the rollup is unknown rather than an exact zero and public reads hide it.
+ */
+export const caseLawStatuteCitationCountState = p.pgTable(
+  "case_law_statute_citation_count_state",
+  {
+    key: p.varchar({ length: 32 }).primaryKey(),
+    status: p
+      .text({ enum: STATUTE_CITATION_COUNT_STATUSES })
+      .notNull()
+      .default(STATUTE_CITATION_COUNT_STATUS.BUILDING),
+    cursorDecisionId: safeUuid<"caseLawDecision">("cursor_decision_id"),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_statute_citation_count_state_key",
+      sql`${t.key} = ${STATUTE_CITATION_COUNT_STATE_KEY}`,
+    ),
+    p.check(
+      "case_law_statute_citation_count_state_status_values",
+      sql`${t.status} IN (${sql.join(STATUTE_CITATION_COUNT_STATUS_SQL_VALUES, sql.raw(","))})`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
  * Where the standing resolution walk had got to.
  *
  * The walk is correct without this: settled rows leave the pending predicate,
@@ -1755,35 +1920,20 @@ export const caseLawResearchAnswers = p.pgTable(
 // Case Law — Search index (global, no tenant column)
 // ---------------------------------------------------------------------------
 
-/** What a reader leaves on a decision's text. */
-export const CASE_LAW_ANNOTATION_KINDS = ["highlight", "comment"] as const;
-export type CaseLawAnnotationKind = (typeof CASE_LAW_ANNOTATION_KINDS)[number];
-
-/** Who besides the author sees an annotation. */
-export const CASE_LAW_ANNOTATION_VISIBILITIES = ["private", "shared"] as const;
-export type CaseLawAnnotationVisibility =
-  (typeof CASE_LAW_ANNOTATION_VISIBILITIES)[number];
-
-/** Highlight swatches, named after the design system's option palette. */
-export const CASE_LAW_ANNOTATION_COLORS = [
-  "yellow",
-  "green",
-  "sky",
-  "violet",
-  "red",
-] as const;
-export type CaseLawAnnotationColor =
-  (typeof CASE_LAW_ANNOTATION_COLORS)[number];
-
-/** How a highlight is drawn, the way a PDF reader offers mark-up styles. */
-export const CASE_LAW_ANNOTATION_STYLES = [
-  "highlight",
-  "underline",
-  "squiggly",
-  "strikethrough",
-] as const;
-export type CaseLawAnnotationStyle =
-  (typeof CASE_LAW_ANNOTATION_STYLES)[number];
+export {
+  CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
+  CASE_LAW_ANNOTATION_COLORS,
+  CASE_LAW_ANNOTATION_KINDS,
+  CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
+  CASE_LAW_ANNOTATION_STYLES,
+  CASE_LAW_ANNOTATION_VISIBILITIES,
+};
+export type {
+  CaseLawAnnotationColor,
+  CaseLawAnnotationKind,
+  CaseLawAnnotationStyle,
+  CaseLawAnnotationVisibility,
+};
 
 const CASE_LAW_ANNOTATION_KIND_SQL_VALUES = CASE_LAW_ANNOTATION_KINDS.map(
   (value) => sql.raw(`'${value}'`),
@@ -1796,10 +1946,6 @@ const CASE_LAW_ANNOTATION_COLOR_SQL_VALUES = CASE_LAW_ANNOTATION_COLORS.map(
 const CASE_LAW_ANNOTATION_STYLE_SQL_VALUES = CASE_LAW_ANNOTATION_STYLES.map(
   (value) => sql.raw(`'${value}'`),
 );
-
-/** Long enough for a paragraph a reader marks, short enough to stay a quote. */
-export const CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH = 2000;
-export const CASE_LAW_ANNOTATION_BODY_MAX_LENGTH = 10_000;
 
 /**
  * A reader's highlights and comments on a decision. Organization-owned,

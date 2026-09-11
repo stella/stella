@@ -5,10 +5,13 @@ import { drizzle } from "drizzle-orm/pglite";
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
+  caseLawStatuteCitationCounts,
   caseLawSources,
+  STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import { readStatuteCitationCountsHandler } from "@/api/handlers/case-law/provisions/citation-counts";
 import { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -400,6 +403,45 @@ test("citing decisions filter by anchor", async () => {
   const page = await citingDecisions({ anchor: ANCHOR_B, limit: 10 });
 
   expect(page.items.map((item) => item.spanStart)).toEqual([30]);
+});
+
+test("citation counts deduplicate repeated mentions by decision", async () => {
+  const result = await readStatuteCitationCountsHandler(
+    { eli: WORK_ELI, jurisdiction: JURISDICTION },
+    caseLawDb,
+  );
+
+  expect(result).toEqual({
+    status: "ready",
+    provisions: [
+      { anchor: ANCHOR_A, decisionCount: 2 },
+      { anchor: ANCHOR_B, decisionCount: 1 },
+    ],
+  });
+});
+
+test("public readers cannot see restricted-source citation buckets", async () => {
+  const rows = await withPublicLawReaderRole(
+    db,
+    async (tx) =>
+      await tx
+        .select({
+          anchor: caseLawStatuteCitationCounts.anchor,
+          decisionCount: caseLawStatuteCitationCounts.decisionCount,
+          sourceId: caseLawStatuteCitationCounts.sourceId,
+          targetType: caseLawStatuteCitationCounts.targetType,
+        })
+        .from(caseLawStatuteCitationCounts),
+  );
+
+  expect(rows).toHaveLength(3);
+  expect(rows.every(({ sourceId }) => sourceId === openSourceId)).toBe(true);
+  expect(rows).toContainEqual({
+    anchor: "",
+    decisionCount: 2,
+    sourceId: openSourceId,
+    targetType: STATUTE_CITATION_TARGET_TYPE.WORK,
+  });
 });
 
 test("citing decisions answer the same work by its identifier", async () => {

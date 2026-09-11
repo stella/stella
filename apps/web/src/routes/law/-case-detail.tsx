@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { ExternalLinkIcon, Minimize2Icon } from "lucide-react";
+import { Minimize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -14,14 +14,16 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import Tooltip from "@/components/tooltip";
+import { useGuestDecisionAnnotations } from "@/features/case-law/annotations/use-guest-decision-annotations";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   extractId,
   type PublicCaseLawDecision,
@@ -112,30 +114,10 @@ export function PublicDecisionViewer({
     <main className="flex min-h-0 flex-1 overflow-hidden">
       <DecisionDetailsTab decision={decision} key={decision.id} />
       <ChromeHeaderActions>
-        {originalUrl !== null && (
-          <Tooltip
-            content={t("inspector.external.openOriginal")}
-            render={
-              <Button
-                className="hidden md:inline-flex"
-                render={
-                  <a
-                    href={sanitizeHref(originalUrl)}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    <ExternalLinkIcon aria-hidden="true" className="size-4" />
-                    <span className="sr-only">
-                      {t("inspector.external.openOriginal")}
-                    </span>
-                  </a>
-                }
-                size="icon-sm"
-                variant="ghost"
-              />
-            }
-          />
-        )}
+        <OpenOriginalButton
+          className="hidden md:inline-flex"
+          href={originalUrl}
+        />
         <Tooltip
           content={willSwap ? t("inspector.swapViews") : t("chat.moveToSide")}
           render={
@@ -174,18 +156,74 @@ export function PublicDecisionViewer({
           />
         </Suspense>
       ) : (
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <DecisionWorkspace
-            aiMode="locked"
-            decision={decision}
-            decisionId={decisionId}
-            initialSearchQuery={initialSearchQuery}
-          />
-        </div>
+        <GuestDecisionWorkspace
+          decision={decision}
+          decisionId={decisionId}
+          initialSearchQuery={initialSearchQuery}
+        />
       )}
     </main>
   );
 }
+
+const GuestDecisionWorkspace = ({
+  decision,
+  decisionId,
+  initialSearchQuery,
+}: {
+  decision: PublicCaseLawDecision;
+  decisionId: ReturnType<typeof extractId>;
+  initialSearchQuery?: string | undefined;
+}) => {
+  const t = useTranslations();
+  const requestSignIn = usePublicSignInRequest();
+  const currentHref = useRouterState({
+    select: (state) => state.location.href,
+  });
+  const { annotations, count, create, remove, update } =
+    useGuestDecisionAnnotations(decisionId);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {count > 0 && (
+        <div
+          className="bg-muted text-muted-foreground flex min-h-11 items-center justify-center gap-3 border-b px-4 py-2 text-center text-xs"
+          role="status"
+        >
+          <span>{t("caseLaw.annotations.guestSavePrompt")}</span>
+          {requestSignIn !== null && (
+            <Button
+              className="shrink-0"
+              onClick={() => requestSignIn(currentHref)}
+              size="sm"
+              variant="outline"
+            >
+              {t("caseLaw.annotations.createFreeAccount")}
+            </Button>
+          )}
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <DecisionWorkspace
+          aiMode="locked"
+          annotations={{
+            annotations,
+            controller: { create, remove, update },
+            mode: "guest",
+          }}
+          decision={decision}
+          decisionId={decisionId}
+          initialSearchQuery={initialSearchQuery}
+          onRequestAI={
+            requestSignIn === null
+              ? undefined
+              : () => requestSignIn(currentHref)
+          }
+        />
+      </div>
+    </div>
+  );
+};
 
 /**
  * The facts of the decision on screen live in the inspector, not above the

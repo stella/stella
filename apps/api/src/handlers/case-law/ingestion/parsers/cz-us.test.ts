@@ -236,6 +236,39 @@ describe("parseUsDecisionHtml", () => {
       expect(h3s.some((h) => h.plainText.includes("Posouzení"))).toBe(true);
     });
 
+    test("preserves same-line Roman section and subsection headings", () => {
+      const rtf = [
+        "\\pard NÁLEZ",
+        "\\par",
+        "O d ů v o d n ě n í :",
+        "\\par",
+        "VIII. Vlastní přezkum",
+        "\\par",
+        "VIII. A) Tzv. data retention",
+        "\\par",
+        "Text přezkumu.",
+      ].join("\n");
+      const input = baseInput(`
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtf}" />
+          <input id="docIdHidden" value="99999" />
+        </body></html>
+      `);
+
+      const { documentAst } = parseUsDecisionHtml(input);
+      expect(
+        documentAst.blocks
+          .filter((block) => block.type === "heading")
+          .map((block) => ({ level: block.level, text: block.plainText })),
+      ).toContainEqual({ level: 3, text: "VIII. Vlastní přezkum" });
+      expect(
+        documentAst.blocks
+          .filter((block) => block.type === "heading")
+          .map((block) => ({ level: block.level, text: block.plainText })),
+      ).toContainEqual({ level: 4, text: "VIII. A) Tzv. data retention" });
+    });
+
     test("does not turn punctuation-only lines into Roman numeral headings", () => {
       const rtf = [
         "\\pard NÁLEZ",

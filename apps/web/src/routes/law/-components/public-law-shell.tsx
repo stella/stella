@@ -14,6 +14,11 @@ import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
+import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
+import {
+  resolveStatuteDisplayStatus,
+  STATUTE_STATUS_LABEL_KEYS,
+} from "@/features/statutes/statute-status";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
@@ -74,6 +79,21 @@ function PublicLawTopBar() {
       );
     },
   });
+  const documentStatus = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "status"),
+  });
+  const documentValidFrom = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "versionValidFrom"),
+  });
+  const statuteDisplayStatus =
+    documentStatus === null
+      ? null
+      : resolveStatuteDisplayStatus({
+          status: documentStatus,
+          validFrom: documentValidFrom,
+        });
   // The area of law is the one fact that belongs next to the name; the rest
   // of a decision's facts live in the inspector.
   const legalArea = useRouterState({
@@ -115,8 +135,8 @@ function PublicLawTopBar() {
       {/* One section name, then the corpus and the document as the reader
           descends; the home carries the name alone, its scope tabs pick the
           corpus. */}
-      <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2">
-        <BreadcrumbList className="flex-nowrap gap-1.5 sm:gap-1.5">
+      <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
           <BreadcrumbItem>
             <Link
               activeOptions={CRUMB_ACTIVE_OPTIONS}
@@ -161,8 +181,29 @@ function PublicLawTopBar() {
           {documentLabel !== null && (
             <>
               <BreadcrumbSeparator />
-              <BreadcrumbItem className="min-w-0">
-                <BreadcrumbPage className="truncate font-medium">
+              <BreadcrumbItem className="min-w-0 flex-1">
+                {section === "statutes" && documentStatus !== null && (
+                  <span
+                    aria-label={
+                      statuteDisplayStatus !== null
+                        ? t(STATUTE_STATUS_LABEL_KEYS[statuteDisplayStatus])
+                        : documentStatus
+                    }
+                    className="shrink-0"
+                    role="img"
+                    title={
+                      statuteDisplayStatus !== null
+                        ? t(STATUTE_STATUS_LABEL_KEYS[statuteDisplayStatus])
+                        : documentStatus
+                    }
+                  >
+                    <StatuteStatusDot
+                      status={documentStatus}
+                      validFrom={documentValidFrom}
+                    />
+                  </span>
+                )}
+                <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
                   {documentLabel}
                 </BreadcrumbPage>
                 {legalArea !== null && (

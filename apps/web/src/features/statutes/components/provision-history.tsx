@@ -1,8 +1,12 @@
 import { useState } from "react";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import {
+  parseDocumentAst,
+  resolveDocumentHeadingAnchor,
+} from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import {
   ReviewDiffDeletion,
@@ -18,6 +22,7 @@ import {
 } from "@/features/statutes/provision-diff";
 import type { ProvisionDiffSegment } from "@/features/statutes/provision-diff";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
+import { statuteOptions } from "@/features/statutes/queries/statutes";
 import {
   EM_DASH,
   formatValidityDate,
@@ -45,10 +50,31 @@ export const ProvisionHistory = ({
   const t = useTranslations();
   const format = useFormatter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const {
+    data: statute,
+    isError: isStatuteError,
+    isPending: isStatutePending,
+  } = useQuery(statuteOptions(documentId));
+  const ast =
+    statute === undefined ? null : parseDocumentAst(statute.documentAst);
+  const resolvedAnchor =
+    ast === null
+      ? null
+      : (resolveDocumentHeadingAnchor(ast.blocks, anchorId)?.anchorId ?? null);
   const { data, fetchNextPage, hasNextPage, isError, isFetchingNextPage } =
-    useInfiniteQuery(provisionHistoryOptions({ anchor: anchorId, documentId }));
+    useInfiniteQuery({
+      ...provisionHistoryOptions({
+        anchor: resolvedAnchor ?? anchorId,
+        documentId,
+      }),
+      enabled: resolvedAnchor !== null,
+    });
 
-  if (isError) {
+  if (
+    isError ||
+    isStatuteError ||
+    (!isStatutePending && resolvedAnchor === null)
+  ) {
     return (
       <p className="text-muted-foreground text-sm">
         {t("statutes.provisionHistoryUnavailable")}
@@ -56,7 +82,7 @@ export const ProvisionHistory = ({
     );
   }
 
-  if (data === undefined) {
+  if (data === undefined || isStatutePending) {
     return (
       <div className="flex flex-col gap-2">
         <Skeleton className="h-6 w-full" />

@@ -578,6 +578,13 @@
       "colorViolet": "Violett",
       "colorYellow": "Gelb",
       "commentPlaceholder": "Kommentar schreiben…",
+      "createFreeAccount": "Kostenloses Konto erstellen",
+      "guestAuthor": "Sie",
+      "guestLimitReached": "Dieser Tab kann bis zu {count} Hervorhebungen und Notizen speichern. Erstellen Sie ein Konto, um mehr zu speichern.",
+      "guestMigrationComplete": "Hervorhebungen und Notizen gespeichert.",
+      "guestMigrationFailed": "Einige Hervorhebungen und Notizen konnten nicht gespeichert werden. Sie bleiben für einen weiteren Versuch in diesem Tab.",
+      "guestSavePrompt": "Ihre Hervorhebungen und Notizen werden gespeichert, sobald Sie ein kostenloses Konto erstellen.",
+      "guestStorageUnavailable": "Hervorhebungen und Notizen konnten in diesem Tab nicht gespeichert werden.",
       "highlight": "Hervorheben",
       "removeHighlight": "Hervorhebung entfernen",
       "sharedBadge": "Geteilt",
@@ -4028,6 +4035,7 @@
     "status": {
       "current": "In Kraft",
       "draft": "Im Entwurf",
+      "future": "Zukünftig",
       "historical": "Überholt",
       "repealed": "Aufgehoben"
     },

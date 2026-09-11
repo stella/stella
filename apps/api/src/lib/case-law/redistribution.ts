@@ -1,23 +1,11 @@
-import { sql, type SQLWrapper } from "drizzle-orm";
-
 import { caseLawSources } from "@/api/db/schema";
+import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 
-// null descriptor = legacy public-record source, treated as redistributable.
-export const redistributableCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
-  ${descriptor} IS NULL
-  OR (${descriptor} ->> 'allowsRedistribution') = 'true'
-)`;
+export {
+  redistributableCaseLawSourceFor,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/lib/case-law/redistribution-sql";
 
 export const redistributableCaseLawSource = redistributableCaseLawSourceFor(
   caseLawSources.descriptor,
 );
-
-/**
- * The same predicate as raw SQL for sites that join `case_law_sources`
- * under an alias (subqueries where the unaliased Drizzle fragment would
- * collide with an outer join). `alias` must be a code constant.
- */
-export const redistributableCaseLawSourceSqlFor = (alias: string): string => `(
-  ${alias}.descriptor IS NULL
-  OR (${alias}.descriptor ->> 'allowsRedistribution') = 'true'
-)`;
