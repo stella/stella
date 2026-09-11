@@ -72,7 +72,7 @@ const listDecisions = createSafePublicHandler(
   },
 );
 
-const readStatuteCitationCounts = createSafePublicHandler(
+export const readStatuteCitationCounts = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     query: statuteCitationCountsQuerySchema,
