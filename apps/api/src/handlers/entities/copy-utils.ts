@@ -74,7 +74,7 @@ type CarriedVersionColumns = Pick<
  * CarriedVersionColumns}. Total over that shape, so a column added to the
  * carried set cannot be left unread by the loaders.
  */
-export const CARRIED_VERSION_COLUMNS = {
+const CARRIED_VERSION_COLUMNS = {
   id: true,
   versionNumber: true,
   stamp: true,
@@ -140,7 +140,7 @@ export const ENTITY_SNAPSHOT_COLUMNS = {
   currentVersionId: true,
 } as const;
 
-export const VERSION_FIELDS_SELECT = {
+const VERSION_FIELDS_SELECT = {
   // Ascending field id is ascending creation order, the order
   // `findExtractionFileField` requires, so the copy resolves the
   // same extraction source as the entity it came from. At most
