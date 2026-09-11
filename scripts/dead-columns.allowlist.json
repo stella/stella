@@ -47,7 +47,7 @@
   {
     "table": "case_law_corpus_jurisdictions",
     "column": "firstObservedAt",
-    "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment); census.ts only ever selects `country`. Migrations are excluded by design."
+    "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment). Migrations are excluded by design."
   },
   {
     "table": "case_law_citation_resolution_census_runs",
@@ -58,5 +58,25 @@
     "table": "case_law_citation_resolution_census_runs",
     "column": "cursorKey",
     "reason": "dormant feature: see case_law_citation_resolution_census_runs.keysScanned -- same not-yet-landed census feature."
+  },
+  {
+    "table": "case_law_decisions",
+    "column": "indexedGeneration",
+    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
+  },
+  {
+    "table": "case_law_decisions",
+    "column": "indexedAt",
+    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
+  },
+  {
+    "table": "legislation_documents",
+    "column": "indexedGeneration",
+    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
+  },
+  {
+    "table": "legislation_documents",
+    "column": "indexedAt",
+    "reason": "kept for one release while earlier tasks still write it; drop with the next schema release"
   }
 ]

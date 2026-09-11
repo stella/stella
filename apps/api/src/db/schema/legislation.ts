@@ -3,7 +3,6 @@ import type { SQLWrapper } from "drizzle-orm";
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 
 import {
-  caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
@@ -136,6 +135,7 @@ export const legislationDocuments = p.pgTable(
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),
     astS3Key: p.varchar("ast_s3_key", { length: 512 }),
     contentHash: p.varchar("content_hash", { length: 64 }),
+    /** The case-law twins' legislation counterparts; see that table. */
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
@@ -205,11 +205,10 @@ export const legislationDocuments = p.pgTable(
     p
       .index("legislation_documents_citation_authority_idx")
       .on(t.citationAuthority),
+    // Indexes of the retired projection's markers, dropped with the columns.
     p
       .index("legislation_documents_indexed_idx")
       .on(t.indexedHash, t.contentHash),
-    // Pending set for the corpus indexer's missing scan (see the case-law
-    // twin for the reasoning).
     p
       .index("legislation_documents_corpus_pending_idx")
       .on(t.id)
@@ -291,58 +290,6 @@ export const legislationIndexJobs = p.pgTable(
       sql`${t.status} <> ${CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE} OR ${t.errorMessage} IS NULL`,
     ),
     ...globalCaseLawPolicies(),
-  ],
-);
-
-/** Highest engine delete task observed for each physical legislation index. */
-export const legislationCorpusIndexDeleteWatermarks = p.pgTable(
-  "legislation_corpus_index_delete_watermarks",
-  {
-    indexId: p.varchar("index_id", { length: 64 }).primaryKey(),
-    opstamp: p.bigint({ mode: "number" }).notNull(),
-    lastCheckedAt: timestamptz("last_checked_at"),
-    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
-  },
-  (t) => [
-    p
-      .index("legislation_corpus_index_delete_watermarks_check_idx")
-      .on(t.lastCheckedAt),
-    p.check(
-      "legislation_corpus_index_delete_watermarks_nonnegative",
-      sql`${t.opstamp} >= 0`,
-    ),
-    ...globalCaseLawPolicies(),
-  ],
-);
-
-/**
- * Documents whose accepted Quickwit delete task remains unapplied on one or
- * more published splits. The key makes task replay idempotent; the bounded
- * reconciler removes a row only after every split reaches its opstamp.
- */
-export const legislationCorpusIndexPendingDeletes = p.pgTable(
-  "legislation_corpus_index_pending_deletes",
-  {
-    indexId: p.varchar("index_id", { length: 64 }).notNull(),
-    // No foreign key: source deletion must not erase settlement ownership
-    // before the search engine has removed the legislation document.
-    documentId: safeUuid<"legislationDocument">("document_id").notNull(),
-    opstamp: p.bigint({ mode: "number" }).notNull(),
-    createdAt: timestamptz("created_at").defaultNow().notNull(),
-  },
-  (t) => [
-    p.primaryKey({
-      name: "legislation_corpus_index_pending_deletes_pkey",
-      columns: [t.indexId, t.documentId],
-    }),
-    p
-      .index("legislation_corpus_index_pending_deletes_settlement_idx")
-      .on(t.indexId, t.opstamp),
-    p.check(
-      "legislation_corpus_index_pending_deletes_nonnegative",
-      sql`${t.opstamp} >= 0`,
-    ),
-    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

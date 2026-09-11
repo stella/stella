@@ -55,7 +55,6 @@
     "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },
   "dependencies": {
-    "@aws-sdk/client-cloudwatch": "^3.1127.0",
     "@aws-sdk/client-s3": "^3.1127.0",
     "@aws-sdk/client-sesv2": "^3.1127.0",
     "@aws-sdk/client-sts": "^3.1127.0",

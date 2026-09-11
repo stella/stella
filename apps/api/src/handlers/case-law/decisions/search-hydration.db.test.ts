@@ -14,7 +14,7 @@ import {
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
 } from "@/api/handlers/case-law/decisions/search";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -39,10 +39,11 @@ import {
  * and that a candidate is read once however many rounds the scan spends.
  */
 
-const GENERATION = "case_law_v3";
-/** A generation the final projection builds: its state row is authoritative. */
-const PROJECTED_GENERATION = "case_law_v6";
-const PROJECTED_INDEX_ID = corpusIndexId(PROJECTED_GENERATION, "CZE");
+const GENERATION = "case_law_v5";
+/** A second generation, holding a different set of decisions. */
+const OTHER_GENERATION = "case_law_v6";
+const INDEX_ID = corpusIndexId(GENERATION, "CZE");
+const OTHER_INDEX_ID = corpusIndexId(OTHER_GENERATION, "CZE");
 const APPLIED_FINGERPRINT = "a".repeat(64);
 const DESIRED_FINGERPRINT = "b".repeat(64);
 const sourceId = createSafeId<"caseLawSource">();
@@ -53,6 +54,9 @@ const foreignId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
 const projectedId = createSafeId<"caseLawDecision">();
 const queuedId = createSafeId<"caseLawDecision">();
+const czechIntentId = createSafeId<"corpusIndexProjectionIntent">();
+const slovakIntentId = createSafeId<"corpusIndexProjectionIntent">();
+const closedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const projectedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const queuedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 
@@ -73,6 +77,57 @@ const candidatesOf = (...ids: string[]) => ids.map((id) => ({ id, score: 1 }));
 
 /** The registry as a request holds it, without a database to read it from. */
 const courtWeights = courtWeightMapFromSeed();
+
+type HeldProjectionOptions = {
+  entityId: string;
+  generation: string;
+  indexId: string;
+  intentId: SafeId<"corpusIndexProjectionIntent">;
+};
+
+/**
+ * One decision a generation holds: applied equals desired on every field the
+ * read compares, in the index the generation routes the decision's country to.
+ */
+const heldProjection = ({
+  entityId,
+  generation,
+  indexId,
+  intentId,
+}: HeldProjectionOptions) => {
+  const appliedAt = new Date();
+  return {
+    intent: {
+      id: intentId,
+      family: "case_law" as const,
+      generation,
+      entityId,
+      epoch: 1n,
+      fingerprint: APPLIED_FINGERPRINT,
+      indexId,
+      status: "applied" as const,
+      appendStartedAt: appliedAt,
+      appendCommittedAt: appliedAt,
+      expectedDocumentCount: 1,
+      appliedAt,
+    },
+    state: {
+      family: "case_law" as const,
+      generation,
+      entityId,
+      desiredAction: "upsert" as const,
+      desiredEpoch: 1n,
+      desiredFingerprint: APPLIED_FINGERPRINT,
+      desiredIndexId: indexId,
+      appliedAction: "upsert" as const,
+      appliedEpoch: 1n,
+      appliedRevision: intentId,
+      appliedFingerprint: APPLIED_FINGERPRINT,
+      appliedIndexId: indexId,
+      appliedAt,
+    },
+  };
+};
 
 beforeAll(
   async () => {
@@ -107,8 +162,6 @@ beforeAll(
         name: "closed",
       }),
     ]);
-    // `indexed_hash = content_hash` with no projection row is the legacy
-    // serving marker the rehydration filter accepts.
     await db.insert(caseLawDecisions).values([
       {
         id: czechId,
@@ -119,7 +172,6 @@ beforeAll(
         language: "cs",
         languageGroupKey: "hydration-group",
         contentHash: "hash-cze",
-        indexedHash: "hash-cze",
         citationAuthority: 2,
         citationCount: 7,
         metadata: { legalSentence: "Právní věta." },
@@ -133,7 +185,6 @@ beforeAll(
         language: "sk",
         languageGroupKey: "hydration-group",
         contentHash: "hash-svk",
-        indexedHash: "hash-svk",
         citationAuthority: 1,
         citationCount: 3,
       },
@@ -155,23 +206,7 @@ beforeAll(
         country: "CZE",
         language: "cs",
         contentHash: "hash-closed",
-        indexedHash: "hash-closed",
       },
-    ]);
-
-    // A generation the final projection builds writes no projection row and
-    // never sets the serving marker: what it holds is stated by its
-    // projection state alone.
-    await db.insert(corpusIndexGenerations).values({
-      family: "case_law",
-      generation: PROJECTED_GENERATION,
-      cluster: "q09",
-      manifestDigest: corpusIndexManifestDigest(
-        CORPUS_INDEX_MANIFESTS[PROJECTED_GENERATION],
-      ),
-      status: "building",
-    });
-    await db.insert(caseLawDecisions).values([
       {
         id: projectedId,
         sourceId,
@@ -181,7 +216,6 @@ beforeAll(
         language: "cs",
         languageGroupKey: "projected-group",
         contentHash: "hash-projected",
-        indexedHash: null,
       },
       {
         id: queuedId,
@@ -192,60 +226,84 @@ beforeAll(
         language: "cs",
         languageGroupKey: "queued-group",
         contentHash: "hash-queued",
-        indexedHash: null,
       },
     ]);
-    await db.insert(corpusIndexProjectionIntents).values(
-      [
-        { id: projectedIntentId, entityId: projectedId },
-        { id: queuedIntentId, entityId: queuedId },
-      ].map(({ id, entityId }) => ({
-        id,
+
+    await db.insert(corpusIndexGenerations).values(
+      ([GENERATION, OTHER_GENERATION] as const).map((generation) => ({
         family: "case_law" as const,
-        generation: PROJECTED_GENERATION,
-        entityId,
-        epoch: 1n,
-        fingerprint: APPLIED_FINGERPRINT,
-        indexId: PROJECTED_INDEX_ID,
-        status: "applied" as const,
-        appendStartedAt: new Date(),
-        appendCommittedAt: new Date(),
-        expectedDocumentCount: 1,
-        appliedAt: new Date(),
+        generation,
+        cluster: "q09" as const,
+        manifestDigest: corpusIndexManifestDigest(
+          CORPUS_INDEX_MANIFESTS[generation],
+        ),
+        status: "building" as const,
       })),
     );
-    await db.insert(corpusIndexProjectionStates).values([
+
+    // What a generation holds is stated by its projection state alone.
+    const held = [
       {
-        family: "case_law",
-        generation: PROJECTED_GENERATION,
-        entityId: projectedId,
-        desiredAction: "upsert",
-        desiredEpoch: 1n,
-        desiredFingerprint: APPLIED_FINGERPRINT,
-        desiredIndexId: PROJECTED_INDEX_ID,
-        appliedAction: "upsert",
-        appliedEpoch: 1n,
-        appliedRevision: projectedIntentId,
-        appliedFingerprint: APPLIED_FINGERPRINT,
-        appliedIndexId: PROJECTED_INDEX_ID,
-        appliedAt: new Date(),
+        entityId: czechId,
+        generation: GENERATION,
+        indexId: INDEX_ID,
+        intentId: czechIntentId,
       },
+      {
+        entityId: slovakId,
+        generation: GENERATION,
+        indexId: INDEX_ID,
+        intentId: slovakIntentId,
+      },
+      {
+        entityId: closedId,
+        generation: GENERATION,
+        indexId: INDEX_ID,
+        intentId: closedIntentId,
+      },
+      {
+        entityId: projectedId,
+        generation: OTHER_GENERATION,
+        indexId: OTHER_INDEX_ID,
+        intentId: projectedIntentId,
+      },
+    ].map(heldProjection);
+    const queuedAt = new Date();
+    await db.insert(corpusIndexProjectionIntents).values([
+      ...held.map(({ intent }) => intent),
+      {
+        id: queuedIntentId,
+        family: "case_law",
+        generation: OTHER_GENERATION,
+        entityId: queuedId,
+        epoch: 1n,
+        fingerprint: APPLIED_FINGERPRINT,
+        indexId: OTHER_INDEX_ID,
+        status: "applied",
+        appendStartedAt: queuedAt,
+        appendCommittedAt: queuedAt,
+        expectedDocumentCount: 1,
+        appliedAt: queuedAt,
+      },
+    ]);
+    await db.insert(corpusIndexProjectionStates).values([
+      ...held.map(({ state }) => state),
       // The applied revision is behind a queued content change, so what the
       // engine holds for this decision is not what the generation wants.
       {
         family: "case_law",
-        generation: PROJECTED_GENERATION,
+        generation: OTHER_GENERATION,
         entityId: queuedId,
         desiredAction: "upsert",
         desiredEpoch: 2n,
         desiredFingerprint: DESIRED_FINGERPRINT,
-        desiredIndexId: PROJECTED_INDEX_ID,
+        desiredIndexId: OTHER_INDEX_ID,
         appliedAction: "upsert",
         appliedEpoch: 1n,
         appliedRevision: queuedIntentId,
         appliedFingerprint: APPLIED_FINGERPRINT,
-        appliedIndexId: PROJECTED_INDEX_ID,
-        appliedAt: new Date(),
+        appliedIndexId: OTHER_INDEX_ID,
+        appliedAt: queuedAt,
       },
     ]);
   },
@@ -354,34 +412,32 @@ test("an empty page reads nothing", async () => {
   expect(reads).toBe(0);
 });
 
-test("a final-projection generation admits exactly what its projection state holds", async () => {
+test("a generation admits exactly what its projection state holds", async () => {
   const scoped = {
     body: SEARCH_BODY,
     caseLawDb,
     courtWeights,
-    generation: PROJECTED_GENERATION,
+    generation: OTHER_GENERATION,
   };
 
   const ranking = await rehydrateCaseLawCandidates({
     ...scoped,
     candidates: candidatesOf(projectedId, queuedId, czechId),
   });
-  // Applied equals desired for the first decision, though it carries no
-  // serving marker at all. The second still owes the index a mutation, and
-  // the third has no state row in this generation, which is not something a
-  // marker on the decision may answer for.
+  // Applied equals desired for the first decision. The second still owes the
+  // index a mutation, and the third has no state row in this generation.
   expect(ranking.ranked.map((hit) => hit.id)).toEqual([projectedId]);
 
   const rows = await readCaseLawPageDecisionRows({
     body: scoped.body,
     caseLawDb,
-    generation: PROJECTED_GENERATION,
+    generation: OTHER_GENERATION,
     ids: [projectedId, queuedId, czechId],
   });
   expect([...rows.keys()]).toEqual([projectedId]);
 });
 
-test("a legacy generation still reads the projection row and the serving marker", async () => {
+test("a generation admits nothing another generation holds", async () => {
   const ranking = await rehydrateCaseLawCandidates({
     body: SEARCH_BODY,
     candidates: candidatesOf(projectedId, czechId),

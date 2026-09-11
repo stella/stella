@@ -26,8 +26,9 @@
  * visibly wrong date with a plausibly wrong one is worse than an honest gap.
  *
  * **What a date change costs elsewhere.** Two things, both handled per batch:
- * the search projection is re-enqueued by clearing `indexed_hash` in the same
- * statement, and the citation graph is told, because the resolver filters
+ * the corpus projection's desired state is reconciled per repaired decision in
+ * the same transaction — the date is a fingerprint field, so nothing keyed on
+ * the payload would otherwise notice — and the citation graph is told, because the resolver filters
  * candidates on `decision_date` and treats NULL on either side as permissive.
  * Edges decided under the old date are retracted and requeued through the same
  * helpers the ingestion pipeline uses when a stored decision's resolution
@@ -67,10 +68,15 @@
 
 import { panic } from "better-result";
 
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import {
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isRecord } from "@/api/lib/type-guards";
 import type { DecisionDateRepairBatch } from "@/api/scripts/repair-decision-dates-plan";
 import {
@@ -175,7 +181,20 @@ const printSurvey = async (): Promise<number> => {
 
 const repairBatch = async (size: number): Promise<DecisionDateRepairBatch> =>
   await rootDb.transaction(async (tx) => {
-    const batch = await repairDecisionDateBatch(tx, size);
+    const batch = await repairDecisionDateBatch(tx, size, {
+      // The source lock is what keeps a crawl refreshing the same decision
+      // from interleaving with the repair and its reconcile.
+      reconcileProjection: async (entityId: SafeId<"caseLawDecision">) => {
+        const subject = { family: "case_law", entityId } as const;
+        const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+        if (lock !== null) {
+          await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+            lock,
+            subject,
+          });
+        }
+      },
+    });
     for (const row of batch.unannounced) {
       console.error(
         `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
@@ -265,7 +284,7 @@ console.info(
     `(survey reported ${String(total)} before the run).`,
 );
 console.info(
-  "The search projection is re-enqueued and the affected citations are back " +
+  "The corpus projection is reconciled and the affected citations are back " +
     "in the resolver's queue; both settle on their own schedules.",
 );
 

@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
   caseLawCitations,
@@ -11,6 +12,8 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
+  corpusIndexGenerations,
+  corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -23,11 +26,17 @@ import {
 import type { DecisionIdentifierBackfillProgress } from "@/api/handlers/case-law/ingestion/decision-identifier-backfill";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
+import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
+const GENERATION = "case_law_v6";
 const sourceId = createSafeId<"caseLawSource">();
 const decisionId = createSafeId<"caseLawDecision">();
 const caseNumberCitationId = createSafeId<"caseLawCitation">();
@@ -239,6 +248,71 @@ test("a completion receipt does not hide later projection drift", async () => {
     phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE,
     cursorId: null,
   });
+});
+
+test("an identifier rewrite reconciles the decision's projection", async () => {
+  // Content the generation can hold, from a source that allows it: an
+  // erasable decision carries no fingerprint for an identifier to move.
+  await db
+    .update(caseLawSources)
+    .set({
+      descriptor: {
+        license: "public-domain",
+        attribution: null,
+        allowsRedistribution: true,
+        allowsDerivedAi: true,
+      },
+    })
+    .where(eq(caseLawSources.id, sourceId));
+  await db
+    .update(caseLawDecisions)
+    .set({ contentHash: "d".repeat(64) })
+    .where(eq(caseLawDecisions.id, decisionId));
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: GENERATION,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS[GENERATION],
+    ),
+    status: "serving",
+  });
+  await db.transaction(async (tx) => {
+    await ensureCorpusProjectionDesiredStateTx(
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- structural test adapter across Drizzle drivers
+      tx as unknown as Transaction,
+      { family: "case_law", entityId: decisionId },
+      GENERATION,
+    );
+  });
+  const seededEpoch = (
+    await db
+      .select({ epoch: corpusIndexProjectionStates.desiredEpoch })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, decisionId))
+  ).at(0)?.epoch;
+  expect(seededEpoch).toBeDefined();
+
+  // Give the decision an identifier it did not have, so the next pass has a
+  // rewrite to make; a pass that writes nothing would reconcile nothing either.
+  await db
+    .update(caseLawDecisions)
+    .set({
+      metadata: {
+        additionalCaseNumbers: ["I ACz 2/24", "I ACz 3/24"],
+        citation: "12 Test Reporter 34",
+      },
+    })
+    .where(eq(caseLawDecisions.id, decisionId));
+  await runDecisionIdentifierBackfill(rootDb(), { batchSize: 10 });
+
+  const reconciledEpoch = (
+    await db
+      .select({ epoch: corpusIndexProjectionStates.desiredEpoch })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, decisionId))
+  ).at(0)?.epoch;
+  expect(reconciledEpoch).toBeGreaterThan(seededEpoch ?? 0n);
 });
 
 test("rejects a batch that could exceed PostgreSQL's bind-parameter limit", async () => {

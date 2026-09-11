@@ -60,23 +60,13 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "chat_thread_search_preview_passages",
   "case_law_search_document_preview_passages",
   "case_law_index_jobs",
-  "case_law_corpus_index_backfills",
-  "case_law_corpus_index_source_reconciliations",
-  "case_law_corpus_index_writer_leases",
-  "case_law_corpus_index_projections",
-  // Exact corpus-index accounting is maintained only by ingestion triggers
-  // and the bounded seed worker; request handlers may observe its status.
-  "case_law_corpus_index_counts",
-  "case_law_corpus_index_count_backfills",
   // Append-only ingestion registry: request code reads the bounded country
   // set for census; decision-write triggers are its only writer.
   "case_law_corpus_jurisdictions",
-  "case_law_corpus_index_delete_watermarks",
   "legislation_sources",
   "legislation_documents",
   "legislation_search_documents",
   "legislation_index_jobs",
-  "legislation_corpus_index_delete_watermarks",
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
@@ -142,8 +132,6 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // the owner connection.
   "apikey",
   "case_law_corpus_upload_intents",
-  "case_law_corpus_index_pending_deletes",
-  "legislation_corpus_index_pending_deletes",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
@@ -245,6 +233,28 @@ const migrationSqlFiles = () =>
     .map((entry) => nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"))
     .filter((path) => existsSync(path))
     .toSorted();
+
+const DROP_TABLE_PREFIX = "DROP TABLE ";
+const IF_EXISTS_PREFIX = "IF EXISTS ";
+const DROP_TABLE_OPTIONS = new Set(["cascade", "restrict"]);
+
+/**
+ * Tables a migration removes. Migrations are history and keep the statements
+ * that created and granted a table long after it is gone, so the classification
+ * sets below would otherwise have to carry its name forever.
+ */
+const droppedTableNames = (statement: string): string[] => {
+  if (!startsWithSqlKeyword(statement, DROP_TABLE_PREFIX, 0)) {
+    return [];
+  }
+  const target = statement.slice(DROP_TABLE_PREFIX.length);
+  const tablesSql = startsWithSqlKeyword(target, IF_EXISTS_PREFIX, 0)
+    ? target.slice(IF_EXISTS_PREFIX.length)
+    : target;
+  return identifierNamesFromSql(tablesSql).filter(
+    (name) => name !== "public" && !DROP_TABLE_OPTIONS.has(name),
+  );
+};
 
 const enableRlsTableName = (statement: string): string | null => {
   const prefix = "ALTER TABLE ";
@@ -434,7 +444,8 @@ const selectOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
 };
 
 const collectRlsGrantState = () => {
-  const rlsTables: RlsTableIntroduction[] = [];
+  let rlsTables: RlsTableIntroduction[] = [];
+  const droppedTables = new Set<string>();
   const explicitGrantMigrationsByTable = new Map<string, string[]>();
   const selectOnlyMutationGrants: string[] = [];
   const unexpectedDynamicGrantSites: string[] = [];
@@ -451,7 +462,19 @@ const collectRlsGrantState = () => {
     }
 
     for (const statement of statements) {
+      const dropped = droppedTableNames(statement);
+      if (dropped.length > 0) {
+        for (const table of dropped) {
+          droppedTables.add(table);
+        }
+        rlsTables = rlsTables.filter(({ table }) => !dropped.includes(table));
+      }
+
       const rlsTable = enableRlsTableName(statement);
+      if (rlsTable) {
+        // A table recreated after a drop is present again.
+        droppedTables.delete(rlsTable);
+      }
       if (
         rlsTable &&
         migration !== BOOTSTRAP_MIGRATION &&
@@ -478,6 +501,7 @@ const collectRlsGrantState = () => {
   }
 
   return {
+    droppedTables,
     explicitGrantMigrationsByTable,
     rlsTables,
     selectOnlyMutationGrants,
@@ -499,11 +523,11 @@ describe("RLS table grants", () => {
     expect(
       dynamicGrantSites({
         contents:
-          "EXECUTE 'GRANT UPDATE ON TABLE case_law_corpus_index_counts TO stella';",
+          "EXECUTE 'GRANT UPDATE ON TABLE case_law_index_jobs TO stella';",
         migration: "future_migration",
       }),
     ).toEqual([
-      "future_migration: EXECUTE 'GRANT UPDATE ON TABLE case_law_corpus_index_counts TO stella'",
+      "future_migration: EXECUTE 'GRANT UPDATE ON TABLE case_law_index_jobs TO stella'",
     ]);
     expect(collectRlsGrantState().unexpectedDynamicGrantSites).toEqual([]);
   });
@@ -581,6 +605,18 @@ describe("RLS table grants", () => {
       .map(({ migration, table }) => `${migration}: ${table}`);
 
     expect(missingGrants).toEqual([]);
+  });
+
+  test("the classification sets name no table a migration has dropped", () => {
+    const { droppedTables } = collectRlsGrantState();
+
+    expect(
+      [
+        ...POST_BOOTSTRAP_SELECT_ONLY_TABLES,
+        ...POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES,
+        ...POST_BOOTSTRAP_DENY_STELLA_TABLES,
+      ].filter((table) => droppedTables.has(table)),
+    ).toEqual([]);
   });
 
   test("deny-stella control-plane tables revoke all privileges from stella", () => {

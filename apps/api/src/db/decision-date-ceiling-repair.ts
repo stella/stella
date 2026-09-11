@@ -102,6 +102,16 @@ const reportUnannounced = (rows: readonly CorruptDecisionDateRow[]): void => {
   }
 };
 
+// Repaired dates whose projection desired state this pass could not move.
+const reportUnreconciled = (rows: number): void => {
+  if (rows === 0) {
+    return;
+  }
+  process.stderr.write(
+    `[migrate] ${REPAIR_NAME}: ${String(rows)} repaired row(s) await a corpus projection reconcile sweep\n`,
+  );
+};
+
 /** One batch in its own transaction; the number of rows it claimed. */
 const repairOneBatch = async (
   connection: OnlineMigrationConnection,
@@ -117,9 +127,15 @@ const repairOneBatch = async (
     await connection.execute(
       `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
     );
-    const batch = await repairDecisionDateBatch(bindTo(connection), BATCH);
+    const batch = await repairDecisionDateBatch(bindTo(connection), BATCH, {
+      // This runs on the reserved migrate connection, which has no query layer
+      // to reach the projection's desired-state writer. The rows are reported
+      // so a reconcile sweep is known to be owed for them.
+      reconcileProjection: null,
+    });
     await connection.execute("COMMIT");
     reportUnannounced(batch.unannounced);
+    reportUnreconciled(batch.unreconciled);
     return batch.cleared + batch.rederived + batch.skipped;
   } catch (error: unknown) {
     await connection.execute("ROLLBACK");

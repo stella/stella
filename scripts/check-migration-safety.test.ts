@@ -718,14 +718,14 @@ describe("check-migration-safety", () => {
       // A qualifier with whitespace around its dot is the same relation.
       expectFinding(
         runChecker(
-          `UPDATE ONLY "public" . case_law_decisions SET "indexed_hash" = NULL WHERE "id" = 'x';`,
+          `UPDATE ONLY "public" . case_law_decisions SET "content_hash" = NULL WHERE "id" = 'x';`,
         ),
         "high-volume-table-dml",
       );
       expectFinding(
         runChecker(`
           INSERT INTO case_law_search_documents ("decision_id")
-          SELECT "id" FROM "case_law_decisions" WHERE "indexed_hash" IS NULL;
+          SELECT "id" FROM "case_law_decisions" WHERE "content_hash" IS NULL;
         `),
         "high-volume-table-dml",
       );

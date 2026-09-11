@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
 import { CORPUS_FAMILIES } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  type CorpusIndexGenerationTarget,
   lockCorpusIndexGenerationActivationTx,
   readServingCorpusIndexGenerationTx,
   registerCorpusIndexGenerationTx,
@@ -21,6 +22,11 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const CASE_LAW_TARGET = {
   family: "case_law",
+  generation: "case_law_v6",
+} as const;
+/** What case law serves before it flips to `CASE_LAW_TARGET`. */
+const CASE_LAW_PREVIOUS_TARGET = {
+  family: "case_law",
   generation: "case_law_v5",
 } as const;
 const LEGISLATION_TARGET = {
@@ -31,10 +37,19 @@ const LEGISLATION_TARGET = {
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
-const register = async (target: typeof CASE_LAW_TARGET) =>
+const register = async (target: CorpusIndexGenerationTarget) =>
   await db.transaction(
     async (tx) =>
       await registerCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), target),
+  );
+
+const setServing = async (target: CorpusIndexGenerationTarget) =>
+  await db.transaction(
+    async (tx) =>
+      await setServingCorpusIndexGenerationTx(
+        asTestRaw<Transaction>(tx),
+        target,
+      ),
   );
 
 beforeAll(async () => {
@@ -115,26 +130,25 @@ test("generation registration fails closed on a drifted binding", async () => {
   expect(rejection).toMatchObject({
     message: "Corpus generation contract mismatch: legislation/legislation_v2",
   });
+
+  // The drifted row is the whole subject of this test; leaving it registered
+  // would fail every later registration of the same generation.
+  await db
+    .delete(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, LEGISLATION_TARGET.family),
+        eq(corpusIndexGenerations.generation, LEGISLATION_TARGET.generation),
+      ),
+    );
 });
 
 test("serving generation reads and flips are family-independent", async () => {
   await register(CASE_LAW_TARGET);
-  await db.insert(corpusIndexGenerations).values([
-    {
-      family: "case_law",
-      generation: "case_law_v2",
-      cluster: "q08",
-      manifestDigest: "a".repeat(64),
-      status: "serving",
-    },
-    {
-      family: "legislation",
-      generation: "legislation_v1",
-      cluster: "q08",
-      manifestDigest: "b".repeat(64),
-      status: "serving",
-    },
-  ]);
+  await register(CASE_LAW_PREVIOUS_TARGET);
+  await register(LEGISLATION_TARGET);
+  await setServing(CASE_LAW_PREVIOUS_TARGET);
+  await setServing(LEGISLATION_TARGET);
 
   expect(
     await readServingCorpusIndexGenerationTx(
@@ -142,58 +156,34 @@ test("serving generation reads and flips are family-independent", async () => {
       "case_law",
     ),
   ).toEqual({
-    family: "case_law",
-    generation: "case_law_v2",
-    cluster: "q08",
-  });
-
-  const promoted = await db.transaction(
-    async (tx) =>
-      await setServingCorpusIndexGenerationTx(
-        asTestRaw<Transaction>(tx),
-        CASE_LAW_TARGET,
-      ),
-  );
-  expect(promoted).toEqual({
-    family: "case_law",
-    generation: "case_law_v5",
+    ...CASE_LAW_PREVIOUS_TARGET,
     cluster: "q09",
   });
-  const immediateRollbackRejection: unknown = await db
-    .transaction(
-      async (tx) =>
-        await setServingCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), {
-          family: "case_law",
-          generation: "case_law_v2",
-        }),
-    )
-    .then(
-      () => null,
-      (error: unknown) => error,
-    );
+
+  expect(await setServing(CASE_LAW_TARGET)).toEqual({
+    ...CASE_LAW_TARGET,
+    cluster: "q09",
+  });
+  const immediateRollbackRejection: unknown = await setServing(
+    CASE_LAW_PREVIOUS_TARGET,
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
   expect(immediateRollbackRejection).toMatchObject({
-    message: "Corpus serving target is not reconciled: case_law/case_law_v2",
+    message: `Corpus serving target is not reconciled: case_law/${CASE_LAW_PREVIOUS_TARGET.generation}`,
   });
 
   await db.transaction(
     async (tx) =>
-      await resumeRetiringCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), {
-        family: "case_law",
-        generation: "case_law_v2",
-      }),
+      await resumeRetiringCorpusIndexGenerationTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_PREVIOUS_TARGET,
+      ),
   );
-  expect(
-    await db.transaction(
-      async (tx) =>
-        await setServingCorpusIndexGenerationTx(asTestRaw<Transaction>(tx), {
-          family: "case_law",
-          generation: "case_law_v2",
-        }),
-    ),
-  ).toEqual({
-    family: "case_law",
-    generation: "case_law_v2",
-    cluster: "q08",
+  expect(await setServing(CASE_LAW_PREVIOUS_TARGET)).toEqual({
+    ...CASE_LAW_PREVIOUS_TARGET,
+    cluster: "q09",
   });
   expect(
     await readServingCorpusIndexGenerationTx(
@@ -201,8 +191,7 @@ test("serving generation reads and flips are family-independent", async () => {
       "legislation",
     ),
   ).toEqual({
-    family: "legislation",
-    generation: "legislation_v1",
-    cluster: "q08",
+    ...LEGISLATION_TARGET,
+    cluster: "q09",
   });
 });

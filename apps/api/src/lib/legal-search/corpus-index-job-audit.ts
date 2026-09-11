@@ -21,7 +21,6 @@ const REASON_LIMIT = 2048;
 type WithdrawalAuditEvent = {
   decisionId: SafeId<"caseLawDecision">;
   /** Generation the row is filed under. */
-  generation: string;
   /** Why the document was taken back, in the caller's own words. */
   reason: string;
 };
@@ -36,11 +35,10 @@ type WithdrawalAuditEvent = {
  */
 export const recordCorpusWithdrawalAuditEvent = async (
   tx: Transaction,
-  { decisionId, generation, reason }: WithdrawalAuditEvent,
+  { decisionId, reason }: WithdrawalAuditEvent,
 ): Promise<void> => {
   await tx.insert(caseLawIndexJobs).values({
     decisionId,
-    generation,
     operation: "withdraw",
     status: "succeeded",
     contentHash: null,

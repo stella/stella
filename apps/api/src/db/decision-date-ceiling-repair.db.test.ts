@@ -138,7 +138,6 @@ const snapshot = async (db: ReturnType<typeof drizzle>) => ({
     .select({
       id: caseLawDecisions.id,
       decisionDate: caseLawDecisions.decisionDate,
-      indexedHash: caseLawDecisions.indexedHash,
     })
     .from(caseLawDecisions)
     .orderBy(caseLawDecisions.id),
@@ -192,21 +191,16 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     ...rest,
   });
   await db.insert(caseLawDecisions).values([
-    decision(keptId, "1 C 1/2026", {
-      decisionDate: day(1),
-      indexedHash: "kept",
-    }),
+    decision(keptId, "1 C 1/2026", { decisionDate: day(1) }),
     // Admitted by the previous ceiling, refused by the new one; nothing in
     // the row survives, so it is cleared.
     decision(clearedId, "2 C 2/2026", {
       citationKey: SHARED_KEY,
       decisionDate: day(40),
-      indexedHash: "stale",
     }),
     // Refused too, but its own metadata carries the date the ingest lost.
     decision(rederivedId, "4 C 4/2026", {
       decisionDate: day(40),
-      indexedHash: "stale",
       metadata: { decisionDate: "2020-05-05" },
     }),
     // Shares the cleared decision's key: an edge drawn to it while the
@@ -283,17 +277,14 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
   expect(decisionsById.get(keptId)).toEqual({
     id: keptId,
     decisionDate: day(1),
-    indexedHash: "kept",
   });
   expect(decisionsById.get(clearedId)).toEqual({
     id: clearedId,
     decisionDate: null,
-    indexedHash: null,
   });
   expect(decisionsById.get(rederivedId)).toEqual({
     id: rederivedId,
     decisionDate: "2020-05-05",
-    indexedHash: null,
   });
   expect(repaired.citations).toEqual([
     {
@@ -367,7 +358,6 @@ test("an interrupted repair keeps its committed batches and resumes by running a
       country: "CZE",
       language: "cs",
       decisionDate: day(40),
-      indexedHash: "stale",
     })),
   );
   await applyMigration(db);

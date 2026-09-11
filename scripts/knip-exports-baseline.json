@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 777,
+    "count": 767,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -91,7 +91,6 @@
       "apps/api/src/handlers/files/ocr-export.ts": 1,
       "apps/api/src/handlers/files/routes.ts": 4,
       "apps/api/src/handlers/folio-collab/room-credentials.ts": 2,
-      "apps/api/src/handlers/legislation/corpus-index.ts": 3,
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
       "apps/api/src/handlers/legislation/ingestion/outbound-urls.ts": 2,
       "apps/api/src/handlers/legislation/list.ts": 1,
@@ -156,9 +155,6 @@
       "apps/api/src/lib/clauses/types.ts": 1,
       "apps/api/src/lib/conditions/ast-utils.ts": 1,
       "apps/api/src/lib/confirmation-otp.ts": 1,
-      "apps/api/src/lib/corpus-index/backfill-pacing.ts": 1,
-      "apps/api/src/lib/corpus-index/census.ts": 3,
-      "apps/api/src/lib/corpus-index/core.ts": 2,
       "apps/api/src/lib/data-url.ts": 2,
       "apps/api/src/lib/db-pagination.ts": 2,
       "apps/api/src/lib/deepl/client.ts": 1,
@@ -221,9 +217,10 @@
       "apps/api/src/lib/json-value.ts": 2,
       "apps/api/src/lib/legal-search/authority-sql.ts": 1,
       "apps/api/src/lib/legal-search/backfill-statement-timeout.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-family.ts": 2,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 5,
+      "apps/api/src/lib/legal-search/case-law-corpus-projection.ts": 1,
+      "apps/api/src/lib/legal-search/corpus-index-client.ts": 6,
       "apps/api/src/lib/legal-search/corpus-index-config.ts": 2,
+      "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-manifest.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts": 1,
@@ -240,7 +237,7 @@
       "apps/api/src/lib/legal-search/corpus-location.ts": 1,
       "apps/api/src/lib/legal-search/corpus-pack.ts": 3,
       "apps/api/src/lib/legal-search/corpus-query.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-source.ts": 1,
+      "apps/api/src/lib/legal-search/corpus-source.ts": 2,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 1,
       "apps/api/src/lib/legal-search/document-types.ts": 2,
       "apps/api/src/lib/legal-search/expansion.ts": 1,
@@ -335,7 +332,6 @@
       "apps/api/src/mcp/tool-utils.ts": 7,
       "apps/api/src/mcp/upload-purpose-gate.ts": 1,
       "apps/api/src/tests/fixture-provenance.ts": 3,
-      "apps/api/src/tests/helpers/case-law-projection-trigger.ts": 3,
       "apps/api/src/tests/helpers/mock-root-db.ts": 5,
       "apps/api/src/tests/helpers/recording-telemetry.ts": 1,
       "apps/api/src/tests/helpers/test-tool-set.ts": 1,
@@ -371,16 +367,15 @@
     }
   },
   "apps/legal-atlas-runner": {
-    "count": 6,
+    "count": 5,
     "files": {
       "apps/legal-atlas-runner/src/runners/case-law-reconciliation.ts": 1,
       "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts": 2,
-      "apps/legal-atlas-runner/src/runners/corpus-index-progress.ts": 1,
       "apps/legal-atlas-runner/src/runners/cycle-progress.ts": 2
     }
   },
   "apps/web": {
-    "count": 425,
+    "count": 424,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -477,7 +472,7 @@
       "apps/web/src/components/workspaces/properties/shared.tsx": 1,
       "apps/web/src/components/workspaces/table/group-columns.ts": 1,
       "apps/web/src/features/case-law/annotations/selection-anchor.ts": 2,
-      "apps/web/src/features/case-law/case-law-jurisdiction.ts": 2,
+      "apps/web/src/features/case-law/case-law-jurisdiction.ts": 1,
       "apps/web/src/features/case-law/citation-treatment.ts": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,

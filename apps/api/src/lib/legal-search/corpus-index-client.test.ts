@@ -41,10 +41,20 @@ let responseBody: unknown;
 let responseBodyForUrl: ((url: URL) => unknown) | null;
 let responseStatus: number;
 const originalFetch = globalThis.fetch;
-const originalCorpusIndexEndpoint = envBase.CORPUS_INDEX_ENDPOINT;
-const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
 const originalQ09Endpoint = envBase.CORPUS_INDEX_Q09_ENDPOINT;
 const originalQ09SearchEndpoint = envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
+
+/**
+ * The host an endpoint names, read from the test environment rather than
+ * written out: a test that pins the port by hand drifts the moment the
+ * environment moves.
+ */
+const hostOf = (endpoint: string | undefined): string => {
+  if (endpoint === undefined) {
+    throw new Error("the test environment configures no corpus index endpoint");
+  }
+  return new URL(endpoint).host;
+};
 
 beforeEach(() => {
   requests = [];
@@ -83,27 +93,19 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   Object.assign(envBase, {
-    CORPUS_INDEX_ENDPOINT: originalCorpusIndexEndpoint,
-    CORPUS_INDEX_SEARCH_ENDPOINT: originalCorpusIndexSearchEndpoint,
     CORPUS_INDEX_Q09_ENDPOINT: originalQ09Endpoint,
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: originalQ09SearchEndpoint,
   });
 });
 
-test("cluster registry is total and q09 never falls back to q08", async () => {
+test("a cluster without its endpoint pair reaches no host", async () => {
   expect(CORPUS_INDEX_CLUSTER_CONFIG).toEqual({
-    q08: {
-      mutationEnv: "CORPUS_INDEX_ENDPOINT",
-      searchEnv: "CORPUS_INDEX_SEARCH_ENDPOINT",
-    },
     q09: {
       mutationEnv: "CORPUS_INDEX_Q09_ENDPOINT",
       searchEnv: "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
     },
   });
   Object.assign(envBase, {
-    CORPUS_INDEX_ENDPOINT: "http://localhost:7281",
-    CORPUS_INDEX_SEARCH_ENDPOINT: "http://localhost:7282",
     CORPUS_INDEX_Q09_ENDPOINT: undefined,
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: undefined,
   });
@@ -124,8 +126,6 @@ test("cluster registry is total and q09 never falls back to q08", async () => {
 test("q09 uses only its registered endpoint pair", async () => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
   Object.assign(envBase, {
-    CORPUS_INDEX_ENDPOINT: "http://localhost:7281",
-    CORPUS_INDEX_SEARCH_ENDPOINT: "http://localhost:7282",
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://localhost:7292",
   });
@@ -378,7 +378,7 @@ test("config attestation rejects an extra physical field mapping", async () => {
 test("search sends the documented sort_by parameter", async () => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -387,7 +387,7 @@ test("search sends the documented sort_by parameter", async () => {
 
   expect(result.isOk()).toBe(true);
   const request = requests.at(0);
-  expect(request?.host).toBe("localhost:7281");
+  expect(request?.host).toBe(hostOf(originalQ09SearchEndpoint));
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/search");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["sort_by"]).toBe("_score");
@@ -406,7 +406,7 @@ test("search accepts a response without snippets", async () => {
     errors: [],
   };
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "seq:0",
     maxHits: 0,
@@ -422,7 +422,7 @@ test("search accepts a response without snippets", async () => {
 test("search rejects a response without snippets when snippet fields were requested", async () => {
   responseBody = { num_hits: 1, hits: [{ id: "a" }] };
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -435,7 +435,7 @@ test("search rejects a response without snippets when snippet fields were reques
 test("search rejects a malformed snippets value", async () => {
   responseBody = { num_hits: 1, hits: [], snippets: "no" };
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "seq:0",
     maxHits: 0,
@@ -444,29 +444,12 @@ test("search rejects a malformed snippets value", async () => {
   expect(result.isErr()).toBe(true);
 });
 
-test("search falls back to the shared corpus index endpoint", async () => {
-  responseBody = { num_hits: 0, hits: [], snippets: [] };
-  Object.assign(envBase, {
-    CORPUS_INDEX_ENDPOINT: "http://localhost:7290",
-    CORPUS_INDEX_SEARCH_ENDPOINT: undefined,
-  });
-
-  const result = await getCorpusIndexClient("q08").search({
-    indexId: "legal_corpus_v1_cze",
-    query: "text:smlouva",
-    maxHits: 10,
-  });
-
-  expect(result.isOk()).toBe(true);
-  expect(requests.at(0)?.host).toBe("localhost:7290");
-});
-
 test("search reads no snippets when snippet fields were requested and nothing matched", async () => {
   // The engine leaves `snippets` out of a zero-hit response even when
   // snippet fields were requested; that is an empty page, not a malformed one.
   responseBody = { num_hits: 0, hits: [] };
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -484,7 +467,7 @@ test("search reads no snippets when snippet fields were requested and nothing ma
 test("search rejects a malformed external response", async () => {
   responseBody = [];
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -499,7 +482,7 @@ test("search rejects a malformed external response", async () => {
 test("search rejects a malformed object response", async () => {
   responseBody = { error: "index unavailable" };
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -519,7 +502,7 @@ test("search pagination always requests BM25 relevance order", async () => {
   };
 
   await readCorpusIndexSearchPage({
-    cluster: "q08",
+    cluster: "q09",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     limit: 10,
@@ -550,7 +533,7 @@ test("search pagination always requests BM25 relevance order", async () => {
 test("ingest fails when the engine accepts fewer documents than sent", async () => {
   responseBody = { num_docs_for_processing: 1 };
 
-  const result = await getCorpusIndexClient("q08").ingestBatch(
+  const result = await getCorpusIndexClient("q09").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -565,7 +548,7 @@ test("ingest fails when the engine accepts fewer documents than sent", async () 
 test("ingest fails when the engine reports rejected documents", async () => {
   responseBody = { num_docs_for_processing: 2, num_rejected_docs: 1 };
 
-  const result = await getCorpusIndexClient("q08").ingestBatch(
+  const result = await getCorpusIndexClient("q09").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -580,7 +563,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
 test("delete-by-query posts one document-scoped delete task", async () => {
   responseBody = { opstamp: 42, create_timestamp: DELETE_TASK_SECONDS };
 
-  const result = await getCorpusIndexClient("q08").deleteByQuery(
+  const result = await getCorpusIndexClient("q09").deleteByQuery(
     "legal_corpus_v1_cze",
     'document_id:"dec-1"',
   );
@@ -597,7 +580,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   // indexer never has to know how many documents a row previously emitted.
   expect(requests).toHaveLength(1);
   const request = requests.at(0);
-  expect(request?.host).toBe("localhost:7280");
+  expect(request?.host).toBe(hostOf(originalQ09Endpoint));
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["query"]).toBe('document_id:"dec-1"');
@@ -606,7 +589,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
 test("delete-by-query rejects a response without a usable opstamp", async () => {
   responseBody = { create_timestamp: DELETE_TASK_SECONDS };
 
-  const result = await getCorpusIndexClient("q08").deleteByQuery(
+  const result = await getCorpusIndexClient("q09").deleteByQuery(
     "legal_corpus_v1_cze",
     'document_id:"dec-1"',
   );
@@ -633,7 +616,7 @@ const publishedSplit = ({
 });
 
 const readSettlement = async (requiredOpstamp: number) =>
-  await getCorpusIndexClient("q08").readDeleteSettlement({
+  await getCorpusIndexClient("q09").readDeleteSettlement({
     indexId: "legal_corpus_v1_cze",
     requiredOpstamp,
     deleteCreatedAt: DELETE_TASK_CREATED_AT,
@@ -773,7 +756,7 @@ test("delete settlement without a delete instant keeps every split", async () =>
     ],
   };
 
-  const result = await getCorpusIndexClient("q08").readDeleteSettlement({
+  const result = await getCorpusIndexClient("q09").readDeleteSettlement({
     indexId: "legal_corpus_v1_cze",
     requiredOpstamp: 42,
     deleteCreatedAt: null,
@@ -960,7 +943,7 @@ test("ingest sends the commit mode the caller asked for", async () => {
   responseBody = { num_docs_for_processing: 1 };
 
   for (const commit of Object.values(CORPUS_INDEX_COMMIT)) {
-    await getCorpusIndexClient("q08").ingestBatch(
+    await getCorpusIndexClient("q09").ingestBatch(
       "legal_corpus_v1_cze",
       '{"document_id":"a"}',
       commit,
@@ -990,7 +973,7 @@ test("the ingest budget outlasts the engine's commit wait", () => {
 test("ingest succeeds when every document is accepted", async () => {
   responseBody = { num_docs_for_processing: 2 };
 
-  const result = await getCorpusIndexClient("q08").ingestBatch(
+  const result = await getCorpusIndexClient("q09").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -1006,7 +989,7 @@ test("final-generation ingest requires the exact committed V2 receipt", async ()
     num_rejected_docs: 0,
   };
 
-  const result = await getCorpusIndexClient("q08").ingestCommittedBatch(
+  const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}\n{"document_id":"b"}',
   );
@@ -1021,7 +1004,7 @@ test("the two final-generation ingests differ only in their commit mode", async 
     num_ingested_docs: 2,
     num_rejected_docs: 0,
   };
-  const client = getCorpusIndexClient("q08");
+  const client = getCorpusIndexClient("q09");
   const ndjson = '{"document_id":"a"}\n{"document_id":"b"}';
 
   expect(
@@ -1047,7 +1030,7 @@ test("queued ingest rejects a partial V2 receipt", async () => {
     num_rejected_docs: 0,
   };
 
-  const result = await getCorpusIndexClient("q08").ingestQueuedBatch(
+  const result = await getCorpusIndexClient("q09").ingestQueuedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}\n{"document_id":"b"}',
   );
@@ -1070,7 +1053,7 @@ test("final-generation ingest rejects missing or partial V2 counters", async () 
     },
   ]) {
     responseBody = receipt;
-    const result = await getCorpusIndexClient("q08").ingestCommittedBatch(
+    const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
       "case_law_v5_cs_sk",
       '{"document_id":"a"}\n{"document_id":"b"}',
     );
@@ -1094,7 +1077,7 @@ const rejectFetchWith = (reason: unknown): void => {
 test("ingest names the request and its budget when the transport fails", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
 
-  const result = await getCorpusIndexClient("q08").ingestBatch(
+  const result = await getCorpusIndexClient("q09").ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}',
     CORPUS_INDEX_COMMIT.waitFor,
@@ -1111,7 +1094,7 @@ test("ingest names the request and its budget when the transport fails", async (
 test("each request reports its own budget, not a shared one", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1134,7 +1117,7 @@ test("an unreadable success body names the request too", async () => {
     preconnect: originalFetch.preconnect,
   });
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1167,7 +1150,7 @@ test("a body that stalls past the budget is a timeout, not an unreadable body", 
     preconnect: originalFetch.preconnect,
   });
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1186,7 +1169,7 @@ test("a request that never reaches the engine is not reported as a timeout", asy
     new Error("Unable to connect. Is the computer able to access the url?"),
   );
 
-  const result = await getCorpusIndexClient("q08").search({
+  const result = await getCorpusIndexClient("q09").search({
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,

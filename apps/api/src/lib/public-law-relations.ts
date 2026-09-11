@@ -8,7 +8,6 @@
  */
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitations: "case_law_citations",
-  caseLawCorpusIndexProjections: "case_law_corpus_index_projections",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisions: "case_law_decisions",
   caseLawProvisionCitations: "case_law_provision_citations",
@@ -61,13 +60,6 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     section_index: "required",
     polarity: "required",
   },
-  case_law_corpus_index_projections: {
-    generation: "required",
-    decision_id: "required",
-    index_id: "required",
-    indexed_hash: "required",
-    pending_action: "required",
-  },
   case_law_decision_identifiers: {
     decision_id: "required",
     type: "required",
@@ -101,7 +93,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     text_s3_key: "required",
     ast_s3_key: "required",
     content_hash: "required",
-    indexed_hash: "required",
+    // Granted, and no longer read: the column is dropped a release from now.
+    indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
   },
@@ -180,7 +173,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     text_s3_key: "required",
     ast_s3_key: "required",
     content_hash: "required",
-    indexed_hash: "required",
+    // Granted, and no longer read: the column is dropped a release from now.
+    indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
   },
@@ -222,7 +216,6 @@ export const publicLawColumnPairs = (
  */
 export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
   "case_law_citations",
-  "case_law_corpus_index_projections",
   "case_law_decisions",
   "case_law_provision_citations",
 ] as const;

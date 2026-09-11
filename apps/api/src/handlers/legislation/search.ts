@@ -294,8 +294,8 @@ export const rehydrateLegislationCandidates = async ({
   // it no longer matches.
   const rehydrationFilters: SQL[] = [
     redistributableLegislationSource,
-    // Accept only hits this generation currently holds, read from whichever
-    // relation the generation records that in.
+    // Accept only hits this generation currently holds, read from its
+    // projection state.
     currentLegislationCorpusProjection(generation),
   ];
   if (body.jurisdiction) {

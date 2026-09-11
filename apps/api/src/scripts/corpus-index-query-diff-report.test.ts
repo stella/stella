@@ -126,6 +126,7 @@ describe("parseGoldenQueryFile", () => {
 });
 
 describe("goldenQueryRequest", () => {
+  const GENERATION = "case_law_v5";
   const query: GoldenQuery = {
     id: "q",
     jurisdiction: "cze",
@@ -133,18 +134,23 @@ describe("goldenQueryRequest", () => {
     filters: { court: "Nejvyšší soud" },
   };
 
-  test("a generation whose index is shared carries the jurisdiction clause", () => {
+  test("an index holding several jurisdictions carries the jurisdiction clause", () => {
     // Base and candidate are routed separately: comparing a per-country
     // index against a shared one without the clause would set one
-    // jurisdiction's hits against several jurisdictions' hits.
-    const perCountry = goldenQueryRequest("case_law_v2", query);
-    const shared = goldenQueryRequest("case_law_v3", query);
+    // jurisdiction's hits against several jurisdictions' hits. Both routes
+    // are the same generation; what differs is whether that jurisdiction's
+    // index holds others.
+    const perCountry = goldenQueryRequest(GENERATION, {
+      ...query,
+      jurisdiction: "pol",
+    });
+    const shared = goldenQueryRequest(GENERATION, query);
     expect(perCountry).toEqual({
-      indexId: "case_law_v2_cze",
+      indexId: "case_law_v5_pol",
       engineQuery: '("náhrada" AND "škody") AND court:"Nejvyšší soud"',
     });
     expect(shared).toEqual({
-      indexId: "case_law_v3_cs_sk",
+      indexId: "case_law_v5_cs_sk",
       engineQuery:
         '("náhrada" AND "škody") AND jurisdiction:"CZE" AND court:"Nejvyšší soud"',
     });
@@ -153,7 +159,7 @@ describe("goldenQueryRequest", () => {
   });
 
   test("a query without a searchable term has no request", () => {
-    expect(goldenQueryRequest("case_law_v3", { ...query, text: "..." })).toBe(
+    expect(goldenQueryRequest(GENERATION, { ...query, text: "..." })).toBe(
       null,
     );
   });

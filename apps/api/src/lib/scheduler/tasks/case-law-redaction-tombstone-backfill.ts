@@ -164,8 +164,6 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
               contentHash: null,
               documentAst: null,
               fulltext: null,
-              indexedAt: null,
-              indexedHash: null,
               normalizedS3Key: null,
               redactedAt: sql`(
                 SELECT max(${caseLawIndexJobs.createdAt})

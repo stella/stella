@@ -292,3 +292,92 @@ test("bounded reconciliation repairs drift once and then reaches a fixed point",
     generationCount: 1,
   });
 });
+
+test("a retiring generation is told to erase but never to take new content", async () => {
+  const subject = {
+    family: "case_law",
+    entityId: CASE_LAW_DECISION_ID,
+  } as const;
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: "case_law_v6",
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v6,
+    ),
+    status: "building",
+  });
+  await db.transaction(async (tx) => {
+    await ensureCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      subject,
+      "case_law_v5",
+    );
+    await ensureCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      subject,
+      "case_law_v6",
+    );
+  });
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "retiring" })
+    .where(eq(corpusIndexGenerations.generation, "case_law_v6"));
+
+  // A content change: the retiring generation is past taking it, so its
+  // desired state stays where it was while the building one moves on.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ contentHash: "c".repeat(64) })
+      .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+    await advanceCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      subject,
+    );
+  });
+
+  expect(
+    await db
+      .select({
+        generation: corpusIndexProjectionStates.generation,
+        action: corpusIndexProjectionStates.desiredAction,
+        epoch: corpusIndexProjectionStates.desiredEpoch,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
+      .orderBy(corpusIndexProjectionStates.generation),
+  ).toEqual([
+    { generation: "case_law_v5", action: "upsert", epoch: 2n },
+    // Left at the epoch it was seeded with: nothing was sent to it.
+    { generation: "case_law_v6", action: "upsert", epoch: 1n },
+  ]);
+
+  // An erasure: the retiring index still holds the text until it is deleted,
+  // so this one has to reach it.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ contentHash: null })
+      .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+    await advanceCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      subject,
+    );
+  });
+
+  expect(
+    await db
+      .select({
+        generation: corpusIndexProjectionStates.generation,
+        action: corpusIndexProjectionStates.desiredAction,
+        epoch: corpusIndexProjectionStates.desiredEpoch,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, CASE_LAW_DECISION_ID))
+      .orderBy(corpusIndexProjectionStates.generation),
+  ).toEqual([
+    { generation: "case_law_v5", action: "erase", epoch: 3n },
+    { generation: "case_law_v6", action: "erase", epoch: 3n },
+  ]);
+});

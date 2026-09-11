@@ -509,9 +509,19 @@ const setCanonicalProjectionEpoch = async (
 type RegisteredManifest = {
   generation: string;
   manifest: CorpusIndexManifest;
+  /** Whether the generation may still be given content, or only relieved of it. */
+  accepts: "content" | "erase-only";
 };
 
-const activeManifests = async (
+/**
+ * Every generation a canonical mutation has to reach, with what it may be told.
+ *
+ * A building or serving generation takes the whole descriptor. A retiring one
+ * is past taking new content, but its index still holds whatever it was given
+ * until that index is deleted, so an erasure has to reach it as well; sending
+ * it an upsert instead would re-add the text this mutation is removing.
+ */
+const projectionManifests = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
 ): Promise<RegisteredManifest[]> => {
@@ -529,6 +539,7 @@ const activeManifests = async (
         or(
           eq(corpusIndexGenerations.status, "building"),
           eq(corpusIndexGenerations.status, "serving"),
+          eq(corpusIndexGenerations.status, "retiring"),
         ),
       ),
     )
@@ -540,8 +551,29 @@ const activeManifests = async (
   return rows.map((row) => ({
     generation: row.generation,
     manifest: requireRegisteredCorpusIndexManifest(row),
+    accepts: row.status === "retiring" ? "erase-only" : "content",
   }));
 };
+
+type GenerationProjection = {
+  generation: string;
+  descriptor: CorpusIndexProjectionDescriptor;
+};
+
+/**
+ * The descriptor each generation is owed for one canonical input. A retiring
+ * generation appears only where that descriptor is an erasure.
+ */
+const projectionsFor = (
+  manifests: readonly RegisteredManifest[],
+  input: Parameters<typeof deriveCorpusIndexProjectionDescriptor>[1],
+): GenerationProjection[] =>
+  manifests.flatMap(({ generation, manifest, accepts }) => {
+    const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
+    return accepts === "erase-only" && descriptor.action !== "erase"
+      ? []
+      : [{ generation, descriptor }];
+  });
 
 export const readActiveCorpusProjectionManifest = async (
   tx: Transaction,
@@ -753,8 +785,11 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const manifests = await activeManifests(tx, subject.family);
-  if (manifests.length === 0) {
+  const projections = projectionsFor(
+    await projectionManifests(tx, subject.family),
+    locked.input,
+  );
+  if (projections.length === 0) {
     return { epoch: locked.epoch, generationCount: 0 };
   }
 
@@ -762,19 +797,16 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   await setCanonicalProjectionEpoch(tx, subject, epoch);
   await writeDesiredStates(
     tx,
-    manifests.map(({ generation, manifest }) =>
+    projections.map(({ generation, descriptor }) =>
       buildCorpusIndexProjectionDesiredStateValues({
         subject,
         generation,
         epoch,
-        descriptor: deriveCorpusIndexProjectionDescriptor(
-          manifest,
-          locked.input,
-        ),
+        descriptor,
       }),
     ),
   );
-  return { epoch, generationCount: manifests.length };
+  return { epoch, generationCount: projections.length };
 };
 
 /**
@@ -787,8 +819,11 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; changed: boolean; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const manifests = await activeManifests(tx, subject.family);
-  if (manifests.length === 0) {
+  const projections = projectionsFor(
+    await projectionManifests(tx, subject.family),
+    locked.input,
+  );
+  if (projections.length === 0) {
     return {
       epoch: locked.epoch,
       changed: false,
@@ -815,10 +850,6 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   const byGeneration = new Map(
     existing.map((state) => [state.generation, state]),
   );
-  const projections = manifests.map(({ generation, manifest }) => ({
-    generation,
-    descriptor: deriveCorpusIndexProjectionDescriptor(manifest, locked.input),
-  }));
   const existingDrifted = projections.some(({ generation, descriptor }) => {
     const state = byGeneration.get(generation);
     return (
@@ -854,7 +885,7 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   return {
     epoch,
     changed: values.length > 0,
-    generationCount: manifests.length,
+    generationCount: projections.length,
   };
 };
 

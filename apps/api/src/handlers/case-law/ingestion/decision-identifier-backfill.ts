@@ -26,7 +26,13 @@ import {
   normalizeDecisionIdentifier,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import {
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const DECISION_IDENTIFIER_BACKFILL_VERSION = "typed-identifiers-v1";
@@ -223,6 +229,39 @@ type DecisionRow = {
   metadata: Record<string, unknown>;
 };
 
+/**
+ * Reconcile each rewritten decision's desired state in turn. Recursive rather
+ * than a loop with an awaited body: the desired state is reconciled per
+ * decision, on one transaction, so the sequencing is structural.
+ */
+const reconcileRewrittenAt = async (
+  tx: Transaction,
+  ids: readonly SafeId<"caseLawDecision">[],
+  offset = 0,
+): Promise<void> => {
+  const entityId = ids.at(offset);
+  if (entityId === undefined) {
+    return;
+  }
+  const subject = { family: "case_law", entityId } as const;
+  const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+  if (lock !== null) {
+    await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+      lock,
+      subject,
+    });
+  }
+  await reconcileRewrittenAt(tx, ids, offset + 1);
+};
+
+/** Ids the identifier rewrite actually changed, branded for the projection. */
+const rewrittenDecisionIds = (result: unknown): SafeId<"caseLawDecision">[] =>
+  rowsOf(result).flatMap((row) =>
+    isRecord(row) && typeof row["id"] === "string"
+      ? [brandPersistedCaseLawDecisionId(row["id"])]
+      : [],
+  );
+
 const readDecisionRows = (result: unknown): DecisionRow[] =>
   rowsOf(result).flatMap((row) =>
     isRecord(row) &&
@@ -383,7 +422,7 @@ const projectDecisionPage = async (
     // excludes concurrent refreshes while remaining compatible with the
     // resolver's foreign-key KEY SHARE checks.
     await lockCitationGraph(tx);
-    await tx.execute(sql`
+    const rewritten = await tx.execute(sql`
     WITH expected(decision_id, type, value, normalized_value) AS (
       VALUES ${expected}
     ), page(decision_id) AS (VALUES ${page}),
@@ -430,9 +469,15 @@ const projectDecisionPage = async (
       SELECT DISTINCT decision_id FROM changed_identifiers
     )
     UPDATE case_law_decisions decision
-    SET indexed_hash = NULL, updated_at = clock_timestamp()
+    SET updated_at = clock_timestamp()
     WHERE decision.id IN (SELECT decision_id FROM changed_decisions)
+    RETURNING decision.id
   `);
+    // Identifiers are projection fingerprint data, and `content_hash` covers
+    // only the text payload, so an identifier-only rewrite is invisible to
+    // anything keyed on that. Each rewritten decision's desired state is
+    // reconciled here, under its source lock, in this transaction.
+    await reconcileRewrittenAt(tx, rewrittenDecisionIds(rewritten));
   }
   const decisionsScanned = checkpoint.decisionsScanned + rows.length;
   await tx.execute(sql`

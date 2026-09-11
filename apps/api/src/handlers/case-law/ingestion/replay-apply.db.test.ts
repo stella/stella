@@ -55,9 +55,9 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 // A writing replay, through the same `processDecision` a crawl feeds.
 //
 // Two properties are asserted here that the module cannot state on its own:
-// the pipeline really does write the re-parsed payload and clear the search
-// projection's staleness marker, and a second run over an unchanged payload
-// reaches a fixed point instead of rewriting the row again.
+// the pipeline really does write the re-parsed payload, and a second run over
+// an unchanged payload reaches a fixed point instead of rewriting the row
+// again.
 //
 // The raw-payload upload runs against an in-process object store, so the
 // object itself is the assertion. Its key matters: the pipeline writes that
@@ -217,13 +217,12 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   expect(fake.objects.size).toBe(1);
 
   // The pipeline's own write: payload, source hash, the raw-payload pointer
-  // and the search projection's staleness marker.
+  // and the observation watermark.
   const [applied] = await db
     .select({
       fulltext: caseLawDecisions.fulltext,
       sourceHash: caseLawDecisions.sourceHash,
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
-      indexedHash: caseLawDecisions.indexedHash,
       observationOrder: caseLawDecisions.sourceObservationOrder,
     })
     .from(caseLawDecisions)
@@ -232,7 +231,6 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     fulltext: NEW_PARSER_TEXT,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,
-    indexedHash: null,
     observationOrder: 1n,
   });
 

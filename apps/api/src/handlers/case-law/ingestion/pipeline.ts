@@ -1741,8 +1741,6 @@ const processDecisionAttempt = async ({
                   sourceRawS3Key,
                   sourceRawContentType,
                   parserVersion: result.parserVersion ?? 0,
-                  // Re-pick metadata-only changes in the corpus indexer.
-                  indexedHash: null,
                 }),
             ...(payloadNeedsGuard ? {} : payloadColumns),
             // Partial observations preserve the authoritative detail hash.

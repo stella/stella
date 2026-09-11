@@ -7,8 +7,6 @@ type RecordedRequest = { host: string };
 
 const originalFetch = globalThis.fetch;
 const originalEndpoints = {
-  CORPUS_INDEX_ENDPOINT: envBase.CORPUS_INDEX_ENDPOINT,
-  CORPUS_INDEX_SEARCH_ENDPOINT: envBase.CORPUS_INDEX_SEARCH_ENDPOINT,
   CORPUS_INDEX_Q09_ENDPOINT: envBase.CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
 };
@@ -38,8 +36,6 @@ beforeEach(() => {
     preconnect: originalFetch.preconnect,
   });
   Object.assign(envBase, {
-    CORPUS_INDEX_ENDPOINT: "http://localhost:7281",
-    CORPUS_INDEX_SEARCH_ENDPOINT: "http://localhost:7282",
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://localhost:7292",
   });
@@ -50,18 +46,18 @@ afterEach(() => {
   Object.assign(envBase, originalEndpoints);
 });
 
-test("v4 and v5 query clients use their distinct cluster endpoints", async () => {
+test("compared generations read through the search endpoint, not the mutation one", async () => {
   const base = await corpusIndexQueryDiffClientForGeneration(
-    "case_law_v4",
+    "case_law_v5",
   ).search({
-    indexId: "case_law_v4_cze",
+    indexId: "case_law_v5_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
   });
   const candidate = await corpusIndexQueryDiffClientForGeneration(
-    "case_law_v5",
+    "case_law_v6",
   ).search({
-    indexId: "case_law_v5_cs_sk",
+    indexId: "case_law_v6_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
   });
@@ -69,8 +65,15 @@ test("v4 and v5 query clients use their distinct cluster endpoints", async () =>
   expect(base.isOk()).toBe(true);
   expect(candidate.isOk()).toBe(true);
   expect(requests.map(({ host }) => host)).toEqual([
-    "localhost:7282",
+    "localhost:7292",
     "localhost:7292",
   ]);
-  expect(requests.at(0)?.host).not.toBe(requests.at(1)?.host);
+});
+
+test("a generation the contract does not know has no query client", () => {
+  // The diff gates a generation flip, so an unroutable generation must stop
+  // the run rather than resolve to whichever cluster happens to be configured.
+  expect(() => corpusIndexQueryDiffClientForGeneration("case_law_v4")).toThrow(
+    "Unknown case_law corpus index generation: case_law_v4",
+  );
 });

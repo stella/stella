@@ -15,7 +15,6 @@ import {
 } from "@stll/api-contract/search";
 
 import {
-  caseLawCorpusIndexProjections,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
@@ -62,10 +61,7 @@ import {
 import { isUuid } from "@/api/lib/custom-schema";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
-import {
-  caseLawCorpusProjectionJoin,
-  currentCaseLawCorpusProjection,
-} from "@/api/lib/legal-search/case-law-corpus-projection";
+import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -624,7 +620,7 @@ type DecisionRowsQueryOptions = {
  */
 const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
-  { filters, generation, ids }: DecisionRowsQueryOptions,
+  { filters, ids }: DecisionRowsQueryOptions,
 ) =>
   tx
     .select({
@@ -637,10 +633,6 @@ const candidateDecisionRowsQuery = (
       languageGroupKey: caseLawDecisions.languageGroupKey,
     })
     .from(caseLawDecisions)
-    .leftJoin(
-      caseLawCorpusIndexProjections,
-      caseLawCorpusProjectionJoin(generation),
-    )
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(and(inArray(caseLawDecisions.id, ids), ...filters));
 
@@ -655,7 +647,7 @@ type CandidateDecisionRow = Awaited<
  */
 const pageDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
-  { filters, generation, ids }: DecisionRowsQueryOptions,
+  { filters, ids }: DecisionRowsQueryOptions,
 ) =>
   tx
     .select({
@@ -686,10 +678,6 @@ const pageDecisionRowsQuery = (
       createdAt: caseLawDecisions.createdAt,
     })
     .from(caseLawDecisions)
-    .leftJoin(
-      caseLawCorpusIndexProjections,
-      caseLawCorpusProjectionJoin(generation),
-    )
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(and(inArray(caseLawDecisions.id, ids), ...filters));
 
@@ -719,10 +707,8 @@ const caseLawSearchRowFilters = (
 ): SQL[] => {
   const filters: SQL[] = [
     redistributableCaseLawSource,
-    // Prefer the generation-specific projection state; generations that
-    // predate durable rebuild checkpoints fall back to the serving marker.
-    // Both paths reject a scrubbed or pending row, so a stale physical
-    // copy cannot serve outdated or erased snippets.
+    // The generation's projection state rejects a scrubbed or pending row, so
+    // a stale physical copy cannot serve outdated or erased snippets.
     currentCaseLawCorpusProjection(generation),
   ];
   if (body.court) {

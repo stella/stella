@@ -10,8 +10,8 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import {
-  corpusIndexClusterForGeneration,
   type CorpusFamily,
+  parseCorpusIndexClusterForGeneration,
   type QuickwitCluster,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
@@ -67,12 +67,11 @@ type CorpusIndexGenerationContractRow = Pick<
 export const requireRegisteredCorpusIndexManifest = ({
   family,
   generation,
-  cluster,
   manifestDigest,
 }: CorpusIndexGenerationContractRow): CorpusIndexManifest => {
   const manifest = requireCorpusIndexManifest(family, generation);
   const expectedDigest = corpusIndexManifestDigest(manifest);
-  if (cluster !== manifest.cluster || manifestDigest !== expectedDigest) {
+  if (manifestDigest !== expectedDigest) {
     return panic(
       `Corpus generation contract mismatch: ${family}/${generation}`,
     );
@@ -87,18 +86,14 @@ const requireServingCorpusIndexGeneration = (
   if (row.family !== family || row.status !== "serving") {
     return panic(`Serving corpus generation row is malformed: ${family}`);
   }
-  const expectedCluster = corpusIndexClusterForGeneration(
-    family,
-    row.generation,
-  );
-  if (row.cluster !== expectedCluster) {
+  // A row naming a generation the contract does not declare routes nowhere,
+  // so it cannot be served.
+  if (parseCorpusIndexClusterForGeneration(family, row.generation) === null) {
     return panic(
-      `Serving corpus generation cluster mismatch: ${family}/${row.generation}`,
+      `Serving corpus generation is not declared: ${family}/${row.generation}`,
     );
   }
-  if (row.cluster === "q09") {
-    requireRegisteredCorpusIndexManifest(row);
-  }
+  requireRegisteredCorpusIndexManifest(row);
   return {
     family,
     generation: row.generation,
@@ -140,18 +135,16 @@ const requireActiveGenerationTarget = (
   row: CorpusIndexGenerationContractRow,
   target: { family: CorpusFamily; generation: string },
 ): void => {
-  const expectedCluster = corpusIndexClusterForGeneration(
-    target.family,
-    target.generation,
-  );
-  if (row.cluster !== expectedCluster) {
+  // As above: an undeclared generation is not a target anything can route to.
+  if (
+    parseCorpusIndexClusterForGeneration(target.family, target.generation) ===
+    null
+  ) {
     return panic(
-      `Corpus serving target cluster mismatch: ${target.family}/${target.generation}`,
+      `Corpus serving target is not declared: ${target.family}/${target.generation}`,
     );
   }
-  if (row.cluster === "q09") {
-    requireRegisteredCorpusIndexManifest(row);
-  }
+  requireRegisteredCorpusIndexManifest(row);
 };
 
 /**
@@ -365,9 +358,9 @@ const requireRebuildTarget = async (
       .limit(1)
       .for("update")
   ).at(0);
-  if (row?.status !== status || row.cluster !== "q09") {
+  if (row?.status !== status) {
     return panic(
-      `Corpus generation rebuild requires q09 ${status}: ${target.family}/${target.generation}`,
+      `Corpus generation rebuild requires ${status}: ${target.family}/${target.generation}`,
     );
   }
   return row;

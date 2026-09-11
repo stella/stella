@@ -89,11 +89,10 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1108,
+    "count": 1091,
     "files": {
-      "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
-      "apps/api/src/handlers/case-law/erasure.ts": 2,
+      "apps/api/src/handlers/case-law/erasure.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": 12,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 7,
@@ -146,7 +145,6 @@
       "apps/api/src/handlers/invoices/add-entries.ts": 2,
       "apps/api/src/handlers/invoices/create.ts": 2,
       "apps/api/src/handlers/invoices/transition.ts": 2,
-      "apps/api/src/handlers/legislation/corpus-index.ts": 1,
       "apps/api/src/handlers/legislation/search-index.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 1,
       "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
@@ -189,7 +187,6 @@
       "apps/api/src/lib/compression.ts": 1,
       "apps/api/src/lib/confirmation-otp.ts": 2,
       "apps/api/src/lib/content-encryption.ts": 1,
-      "apps/api/src/lib/corpus-index/census.ts": 3,
       "apps/api/src/lib/corpus-index/chunking.ts": 4,
       "apps/api/src/lib/corpus-index/core.ts": 2,
       "apps/api/src/lib/db/better-auth-oauth-policy-census.ts": 4,
@@ -429,12 +426,11 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 435,
+    "count": 431,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
-      "apps/api/src/handlers/case-law/corpus-index.ts": 3,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": 3,
@@ -491,7 +487,6 @@
       "apps/api/src/lib/chat/compaction-tokens.ts": 1,
       "apps/api/src/lib/client-ip.ts": 2,
       "apps/api/src/lib/compression.ts": 1,
-      "apps/api/src/lib/corpus-index/core.ts": 1,
       "apps/api/src/lib/date-format.ts": 2,
       "apps/api/src/lib/deepl/client.ts": 5,
       "apps/api/src/lib/delete-account.ts": 1,
@@ -774,7 +769,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 105,
+    "count": 97,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -782,7 +777,6 @@
       "apps/api/scripts/ingestion-status.ts": 6,
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 3,
-      "apps/api/src/handlers/case-law/erasure.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
@@ -810,7 +804,6 @@
       "apps/api/src/lib/account-deletion-steps.ts": 3,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
-      "apps/api/src/lib/corpus-index/core.ts": 5,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
@@ -830,7 +823,6 @@
       "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 2,
       "apps/api/src/scripts/backfill-fulltext.ts": 3,
-      "apps/api/src/scripts/build-corpus-index.ts": 1,
       "apps/api/src/scripts/corpus-column-trim.ts": 2,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 2,
       "apps/api/src/scripts/normalize-case-numbers.ts": 1,
@@ -900,7 +892,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 284,
+    "count": 282,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -911,7 +903,6 @@
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/audit-logs/query.ts": 3,
       "apps/api/src/handlers/case-law/analysis/analysis-store.ts": 1,
-      "apps/api/src/handlers/case-law/corpus-index.ts": 1,
       "apps/api/src/handlers/case-law/decisions/list.ts": 1,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
       "apps/api/src/handlers/case-law/erasure.ts": 3,
@@ -932,7 +923,6 @@
       "apps/api/src/handlers/chat/tools/registry-adapter/mcp-chat-context.ts": 1,
       "apps/api/src/handlers/clauses/search-vector.ts": 1,
       "apps/api/src/handlers/contacts/import-validate.ts": 1,
-      "apps/api/src/handlers/legislation/corpus-index.ts": 1,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/search.ts": 1,
       "apps/api/src/handlers/mcp-connectors/connect.ts": 3,
@@ -1090,7 +1080,7 @@
     }
   },
   "eslint-spelled-suppression-directives": {
-    "count": 251,
+    "count": 249,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1100,7 +1090,6 @@
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/audit-logs/query.ts": 1,
       "apps/api/src/handlers/case-law/analysis/analysis-store.ts": 1,
-      "apps/api/src/handlers/case-law/corpus-index.ts": 1,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
       "apps/api/src/handlers/case-law/erasure.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
@@ -1120,7 +1109,6 @@
       "apps/api/src/handlers/chat/tools/registry-adapter/mcp-chat-context.ts": 1,
       "apps/api/src/handlers/clauses/search-vector.ts": 1,
       "apps/api/src/handlers/contacts/import-validate.ts": 1,
-      "apps/api/src/handlers/legislation/corpus-index.ts": 1,
       "apps/api/src/handlers/legislation/search-index.ts": 1,
       "apps/api/src/handlers/legislation/search.ts": 1,
       "apps/api/src/handlers/mcp-connectors/connect.ts": 3,

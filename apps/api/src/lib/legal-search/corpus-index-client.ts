@@ -237,8 +237,6 @@ export type CorpusIndexClient = {
 };
 
 type CorpusIndexEndpointEnv =
-  | "CORPUS_INDEX_ENDPOINT"
-  | "CORPUS_INDEX_SEARCH_ENDPOINT"
   | "CORPUS_INDEX_Q09_ENDPOINT"
   | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT";
 
@@ -248,10 +246,6 @@ type CorpusIndexClusterConfig = {
 };
 
 export const CORPUS_INDEX_CLUSTER_CONFIG = {
-  q08: {
-    mutationEnv: "CORPUS_INDEX_ENDPOINT",
-    searchEnv: "CORPUS_INDEX_SEARCH_ENDPOINT",
-  },
   q09: {
     mutationEnv: "CORPUS_INDEX_Q09_ENDPOINT",
     searchEnv: "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",

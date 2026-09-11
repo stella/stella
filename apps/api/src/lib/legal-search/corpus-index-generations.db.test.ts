@@ -57,26 +57,26 @@ afterAll(async () => {
   await client.close();
 });
 
-test("each family can serve exactly one independently routed generation", async () => {
+test("each family serves exactly one generation at a time", async () => {
   await db.insert(corpusIndexGenerations).values([
     {
-      cluster: "q08",
+      cluster: "q09",
       family: "case_law",
-      generation: "case_law_v2",
+      generation: "case_law_v5",
       manifestDigest: MANIFEST_DIGEST,
       status: "serving",
     },
     {
       cluster: "q09",
       family: "case_law",
-      generation: "case_law_v5",
+      generation: "case_law_v6",
       manifestDigest: MANIFEST_DIGEST,
       status: "building",
     },
     {
-      cluster: "q08",
+      cluster: "q09",
       family: "legislation",
-      generation: "legislation_v1",
+      generation: "legislation_v2",
       manifestDigest: MANIFEST_DIGEST,
       status: "serving",
     },
@@ -89,7 +89,7 @@ test("each family can serve exactly one independently routed generation", async 
         .values({
           cluster: "q09",
           family: "case_law",
-          generation: "case_law_v6",
+          generation: "case_law_v7",
           manifestDigest: MANIFEST_DIGEST,
           status: "serving",
         })
@@ -109,14 +109,14 @@ test("each family can serve exactly one independently routed generation", async 
 
   expect(serving).toEqual([
     {
-      cluster: "q08",
+      cluster: "q09",
       family: "case_law",
-      generation: "case_law_v2",
+      generation: "case_law_v5",
     },
     {
-      cluster: "q08",
+      cluster: "q09",
       family: "legislation",
-      generation: "legislation_v1",
+      generation: "legislation_v2",
     },
   ]);
 });
@@ -182,11 +182,13 @@ test("generation identity cannot be retargeted after registration", async () => 
     .set({ status: "retiring" })
     .where(eq(corpusIndexGenerations.generation, "case_law_v7"));
 
+  // The trigger runs before the cluster check constraint, so a retarget is
+  // refused as an identity change rather than as an unknown cluster.
   expect(
     await rejectionMessage(
       db.execute(sql`
         UPDATE corpus_index_generations
-        SET cluster = 'q08'
+        SET cluster = 'q10'
         WHERE family = 'case_law' AND generation = 'case_law_v7'
       `),
     ),

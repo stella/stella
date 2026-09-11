@@ -8,14 +8,11 @@ import {
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 
 const deployedCorpusEnvironment = {
-  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: 80,
-  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: 60,
-  CORPUS_INDEX_ENDPOINT: "http://corpus-index.stella-staging.local:7280",
-  CORPUS_INDEXING_ENABLED: true,
+  CORPUS_INDEX_Q09_ENDPOINT:
+    "http://corpus-index-v09.stella-staging.local:7280",
   CORPUS_STORAGE_ENABLED: true,
   DATABASE_URL: "postgres://stella@database.internal/stella?sslmode=require",
   LEGAL_CORPUS_S3_BUCKET: "stella-staging-legal-corpus",
-  LEGAL_SEARCH_INDEX_GENERATION: "case_law_v2",
   LEGAL_SEARCH_PROVIDER: "corpus-index",
   S3_CREDENTIALS_PROVIDER: "aws-runtime",
   S3_ENDPOINT: "https://s3.eu-central-1.amazonaws.com",
@@ -23,11 +20,10 @@ const deployedCorpusEnvironment = {
 } as const;
 
 describe("corpus cluster endpoint transport", () => {
-  test("canonical storage can delegate projection when the embedded writer is paused", () => {
+  test("canonical storage can delegate projection to another worker", () => {
     expect(
       envBaseInvariantViolation({
         ...deployedCorpusEnvironment,
-        CORPUS_INDEXING_ENABLED: false,
         CORPUS_PROJECTION_OWNER: "external",
         CORPUS_STORAGE_MODE: "canonical",
       }),
@@ -38,10 +34,20 @@ describe("corpus cluster endpoint transport", () => {
     expect(
       envBaseInvariantViolation({
         ...deployedCorpusEnvironment,
-        CORPUS_INDEXING_ENABLED: false,
         CORPUS_STORAGE_MODE: "canonical",
       }),
     ).toContain("requires CORPUS_PROJECTION_OWNER");
+  });
+
+  test("the corpus-index provider needs an endpoint to read from", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEX_Q09_ENDPOINT: undefined,
+      }),
+    ).toBe(
+      "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.",
+    );
   });
 
   test("accepts the VPC-only q09 mutation endpoint used by deployment", () => {

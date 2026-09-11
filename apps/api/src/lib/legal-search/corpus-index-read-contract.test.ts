@@ -6,15 +6,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 
-test("legacy and final case-law reads use their declared schema", () => {
-  expect(corpusIndexReadContract("case_law", "case_law_v4")).toEqual({
-    family: "case_law",
-    openingPassageQuery: "seq:0",
-    yearFacetField: "year",
-    stemFields: null,
-    searchableFields: [],
-    keywordFields: [],
-  });
+test("case-law reads use their generation's declared schema", () => {
   expect(corpusIndexReadContract("case_law", "case_law_v5")).toEqual({
     family: "case_law",
     openingPassageQuery: "is_opening:true",
@@ -48,11 +40,7 @@ test("legacy and final case-law reads use their declared schema", () => {
   });
 });
 
-test("legislation reads derive the final opening marker", () => {
-  expect(corpusIndexReadContract("legislation", "legislation_v1")).toEqual({
-    family: "legislation",
-    openingPassageQuery: "seq:0",
-  });
+test("legislation reads derive the opening marker from the manifest", () => {
   expect(corpusIndexReadContract("legislation", "legislation_v2")).toEqual({
     family: "legislation",
     openingPassageQuery: "is_opening:true",

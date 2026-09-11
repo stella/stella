@@ -510,7 +510,7 @@ if (!databaseUrl || !runPostgresTests) {
         family: "case_law",
         generation: "case_law_v5",
       } as const;
-      const legacyGeneration = `case_law_v${suffix}`;
+      const unrelatedGeneration = `case_law_v${suffix}`;
       const subject = { family: "case_law", entityId: decisionId } as const;
       const releaseWriter = Promise.withResolvers<undefined>();
       const writerLocked = Promise.withResolvers<undefined>();
@@ -547,8 +547,8 @@ if (!databaseUrl || !runPostgresTests) {
         });
         await writerDb.insert(corpusIndexGenerations).values({
           family: "case_law",
-          generation: legacyGeneration,
-          cluster: "q08",
+          generation: unrelatedGeneration,
+          cluster: "q09",
           manifestDigest: "a".repeat(64),
           status: "building",
         });
@@ -598,8 +598,8 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         releaseWriter.resolve(undefined);
         const createdGenerations = targetGenerationCreated
-          ? [legacyGeneration, target.generation]
-          : [legacyGeneration];
+          ? [unrelatedGeneration, target.generation]
+          : [unrelatedGeneration];
         await writerDb
           .update(corpusIndexGenerations)
           .set({ status: "retired" })

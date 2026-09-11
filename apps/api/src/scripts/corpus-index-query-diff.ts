@@ -32,8 +32,8 @@ import {
  * documentType, language, source). A small synthetic sample is committed
  * as corpus-index-query-diff.sample.json.
  *
- *   CORPUS_INDEX_SEARCH_ENDPOINT=... bun run src/scripts/corpus-index-query-diff.ts \
- *     --queries queries.json --base case_law_v1 --candidate case_law_v2
+ *   CORPUS_INDEX_Q09_SEARCH_ENDPOINT=... bun run src/scripts/corpus-index-query-diff.ts \
+ *     --queries queries.json --base case_law_v5 --candidate case_law_v6
  */
 
 const DEFAULT_DEPTH = 20;
@@ -42,7 +42,7 @@ const DEFAULT_MAX_DIVERGENCE = 0.2;
 const USAGE = `Usage: bun run src/scripts/corpus-index-query-diff.ts [options]
 
   --queries <path>         Query list file (JSON; see script doc comment). Required.
-  --base <generation>      Baseline generation prefix, e.g. case_law_v1. Required.
+  --base <generation>      Baseline generation prefix, e.g. case_law_v5. Required.
   --candidate <generation> Candidate generation prefix. Required.
   --top <n>                Compared document depth per query (default ${DEFAULT_DEPTH}).
   --max-divergence <0..1>  Per-query divergence (1 - overlap) above which the

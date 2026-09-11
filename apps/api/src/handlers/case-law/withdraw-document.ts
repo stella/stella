@@ -17,7 +17,6 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
 import { eraseCorpusObjects } from "@/api/handlers/case-law/erasure";
 import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -48,8 +47,6 @@ type WithdrawInput = {
    */
   reason: string;
   scopedDb: ScopedDb;
-  /** Generation the audit row is filed under. */
-  generation?: string;
   /** Test seam; production deletes through the corpus bucket client. */
   deleteCorpus?: typeof deleteCorpusDocument;
 };
@@ -121,7 +118,6 @@ export const withdrawCaseLawDecisionDocument = async ({
   decisionId,
   reason,
   scopedDb,
-  generation = envBase.LEGAL_SEARCH_INDEX_GENERATION,
   deleteCorpus = deleteCorpusDocument,
 }: WithdrawInput): Promise<
   Result<WithdrawCaseLawDecisionDocumentOutcome, DatabaseError>
@@ -200,7 +196,6 @@ export const withdrawCaseLawDecisionDocument = async ({
     // a withdrawal cannot land without a record of why.
     await recordCorpusWithdrawalAuditEvent(tx, {
       decisionId,
-      generation,
       reason,
     });
     await tx
@@ -209,8 +204,6 @@ export const withdrawCaseLawDecisionDocument = async ({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
         ...TRIMMED_CORPUS_PAYLOAD_COLUMNS,
         contentHash: null,
-        indexedHash: null,
-        indexedAt: null,
         textS3Key: null,
         normalizedS3Key: null,
         astS3Key: null,

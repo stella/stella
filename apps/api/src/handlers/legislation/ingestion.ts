@@ -128,9 +128,6 @@ const preserveLegislationCorpusWriteRetry = async ({
           normalizedS3Key: null,
           astS3Key: null,
           contentHash: null,
-          indexedHash: null,
-          indexedGeneration: null,
-          indexedAt: null,
         })
         // Only undo this run's own write: a concurrent newer refresh owns
         // the row once it has advanced sourceHash.
@@ -459,12 +456,9 @@ export const processLegislationDocument = async (
   const id = await scopedDb(async (tx) => {
     // audit: skip — background legislation ingestion; public data, not user actions
     if (existing) {
-      // Clear indexedHash so the corpus indexer re-picks this row even
-      // when only metadata changed (its staleness check compares
-      // indexedHash to contentHash, which only tracks the payload).
       await tx
         .update(legislationDocuments)
-        .set({ ...values, indexedHash: null, updatedAt: new Date() })
+        .set({ ...values, updatedAt: new Date() })
         .where(eq(legislationDocuments.id, existing.id));
       return existing.id;
     }

@@ -163,7 +163,7 @@ export type CorpusPayload = {
  */
 const FIELD_SEPARATOR = "\u0000";
 
-/** sha256 over the canonical payload; what S3 keys and indexedHash compare. */
+/** sha256 over the canonical payload; what object storage is keyed on. */
 export const corpusContentHash = ({
   text,
   sections,

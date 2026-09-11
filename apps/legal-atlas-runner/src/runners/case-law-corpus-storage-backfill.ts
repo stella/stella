@@ -1,15 +1,9 @@
-import { panic } from "better-result";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
-import {
-  BACKFILL_STATUS,
-  backfillCorpusIndex,
-} from "@/api/handlers/case-law/corpus-index";
-import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -17,8 +11,6 @@ import {
   type TimestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
-import { legacyOperationalCorpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -56,8 +48,6 @@ type LegislationBackfillRow = {
 
 type BackfillOptions = {
   caseLawLimit: number | null;
-  indexBatchSize: number | null;
-  indexReadConcurrency: number | null;
   legislationLimit: number | null;
 };
 
@@ -91,8 +81,6 @@ const parseLimit = (name: string, value: string | undefined): ParseResult => {
     ok: true,
     options: {
       caseLawLimit: parsed,
-      indexBatchSize: null,
-      indexReadConcurrency: null,
       legislationLimit: parsed,
     },
   };
@@ -101,8 +89,6 @@ const parseLimit = (name: string, value: string | undefined): ParseResult => {
 const parseArgs = (argv: readonly string[]): ParseResult => {
   const options: BackfillOptions = {
     caseLawLimit: null,
-    indexBatchSize: null,
-    indexReadConcurrency: null,
     legislationLimit: null,
   };
 
@@ -119,36 +105,6 @@ const parseArgs = (argv: readonly string[]): ParseResult => {
       continue;
     }
 
-    if (arg === "--index-batch-size") {
-      const parsed = parseLimit(arg, argv.at(i + 1));
-      if (!parsed.ok) {
-        return parsed;
-      }
-      const requestedBatch = parsed.options.caseLawLimit ?? 0;
-      if (requestedBatch <= 0) {
-        return { ok: false, message: `${arg} must be a positive integer` };
-      }
-      // Cap keeps one batch's payload and CAS fan-out bounded even when an
-      // operator asks for more.
-      options.indexBatchSize = Math.min(requestedBatch, 1000);
-      i += 1;
-      continue;
-    }
-    if (arg === "--index-read-concurrency") {
-      const parsed = parseLimit(arg, argv.at(i + 1));
-      if (!parsed.ok) {
-        return parsed;
-      }
-      const requestedReads = parsed.options.caseLawLimit ?? 0;
-      if (requestedReads <= 0) {
-        return { ok: false, message: `${arg} must be a positive integer` };
-      }
-      // Half the row cap: a passage row issues up to two object reads, so
-      // this bounds in-flight requests at twice the value.
-      options.indexReadConcurrency = Math.min(requestedReads, 16);
-      i += 1;
-      continue;
-    }
     if (arg === "--case-law-limit") {
       const parsed = parseLimit(arg, argv.at(i + 1));
       if (!parsed.ok) {
@@ -490,97 +446,6 @@ const backfillLegislation = async (
   return { written, skipped, failed };
 };
 
-type IndexBackfillResult = {
-  indexed: number;
-};
-
-const backfillCaseLawIndex = async (
-  limit: number | null,
-  bulk: { indexBatchSize: number | null; indexReadConcurrency: number | null },
-): Promise<IndexBackfillResult> => {
-  const generation = legacyOperationalCorpusGeneration("case_law");
-  let indexed = 0;
-
-  while (true) {
-    const batchSize = nextBatchSize(
-      limit,
-      indexed,
-      bulk.indexBatchSize ?? undefined,
-    );
-    if (batchSize === 0) {
-      break;
-    }
-    await refreshStaleS3();
-
-    const result = await backfillCorpusIndex(
-      ingestionDb,
-      batchSize,
-      generation,
-      bulk.indexReadConcurrency === null
-        ? {}
-        : { readConcurrency: bulk.indexReadConcurrency },
-    );
-    switch (result.status) {
-      case BACKFILL_STATUS.ADVANCED:
-        indexed += result.indexed;
-        if (result.indexed > 0) {
-          logInfo(`  case-law indexed=${indexed}`);
-        }
-        break;
-      case BACKFILL_STATUS.COMPLETE:
-        return { indexed };
-      case BACKFILL_STATUS.BUSY:
-        throw new ConcurrentModificationError({
-          message:
-            "Case-law corpus index backfill is already running for this generation; retry after the active writer finishes.",
-        });
-      default: {
-        result satisfies never;
-        return panic(`Unhandled result: ${String(result)}`);
-      }
-    }
-  }
-
-  return { indexed };
-};
-
-const backfillLegislationIndex = async (
-  limit: number | null,
-  bulk: { indexBatchSize: number | null; indexReadConcurrency: number | null },
-): Promise<IndexBackfillResult> => {
-  const generation = legacyOperationalCorpusGeneration("legislation");
-  let indexed = 0;
-
-  while (true) {
-    const batchSize = nextBatchSize(
-      limit,
-      indexed,
-      bulk.indexBatchSize ?? BATCH_SIZE,
-    );
-    if (batchSize === 0) {
-      break;
-    }
-    await refreshStaleS3();
-
-    const count = await backfillLegislationCorpusIndex(
-      ingestionDb,
-      batchSize,
-      generation,
-      bulk.indexReadConcurrency === null
-        ? {}
-        : { readConcurrency: bulk.indexReadConcurrency },
-    );
-    if (count === 0) {
-      break;
-    }
-
-    indexed += count;
-    logInfo(`  legislation indexed=${indexed}`);
-  }
-
-  return { indexed };
-};
-
 export const runLegalCorpusStorageBackfill = async (
   argv: readonly string[] = [],
 ): Promise<number> => {
@@ -608,47 +473,6 @@ export const runLegalCorpusStorageBackfill = async (
     `Done. Case-law wrote ${caseLaw.written}, skipped ${caseLaw.skipped}, ${caseLaw.failed} failed. Legislation wrote ${legislation.written}, skipped ${legislation.skipped}, ${legislation.failed} failed.`,
   );
   return caseLaw.failed === 0 && legislation.failed === 0 ? 0 : 1;
-};
-
-export const runLegalCorpusIndexBackfill = async (
-  argv: readonly string[] = [],
-): Promise<number> => {
-  const parsed = parseArgs(argv);
-  if (!parsed.ok) {
-    logError(parsed.message);
-    return 64;
-  }
-
-  await refreshS3();
-  await refreshCorpusS3();
-
-  logInfo("=== BACKFILL LEGAL CORPUS INDEX ===");
-  logInfo(
-    `Limits: case-law=${parsed.options.caseLawLimit ?? "all"} legislation=${parsed.options.legislationLimit ?? "all"}`,
-  );
-
-  try {
-    const caseLaw = await backfillCaseLawIndex(parsed.options.caseLawLimit, {
-      indexBatchSize: parsed.options.indexBatchSize,
-      indexReadConcurrency: parsed.options.indexReadConcurrency,
-    });
-    const legislation = await backfillLegislationIndex(
-      parsed.options.legislationLimit,
-      {
-        indexBatchSize: parsed.options.indexBatchSize,
-        indexReadConcurrency: parsed.options.indexReadConcurrency,
-      },
-    );
-
-    logInfo(
-      `Done. Case-law indexed ${caseLaw.indexed}. Legislation indexed ${legislation.indexed}.`,
-    );
-    return 0;
-  } catch (error) {
-    captureError(error, { step: "legalCorpusIndexBackfill" });
-    logError(error instanceof Error ? error.message : String(error));
-    return 1;
-  }
 };
 
 export const runCaseLawCorpusStorageBackfill = async (
