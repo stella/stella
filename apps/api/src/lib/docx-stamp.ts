@@ -271,7 +271,7 @@ export const injectStamp = async (
   docxBuffer: ArrayBuffer,
   stamp: string,
   verificationCode: string,
-  baseUrl: string,
+  frontendUrl: string,
 ): Promise<ArrayBuffer> => {
   let archive: DocxArchive;
   try {
@@ -282,7 +282,7 @@ export const injectStamp = async (
   }
 
   await injectCustomProperties(archive, stamp, verificationCode);
-  await injectFooter(archive, stamp, verificationCode, baseUrl);
+  await injectFooter(archive, stamp, verificationCode, frontendUrl);
 
   return archive.zip.generateAsync({
     type: "arraybuffer",
@@ -927,7 +927,7 @@ const injectFooter = async (
   archive: DocxArchive,
   stamp: string,
   verificationCode: string,
-  baseUrl: string,
+  frontendUrl: string,
 ): Promise<void> => {
   const docXml = await archive.readEntryString("word/document.xml");
   if (!docXml) {
@@ -937,7 +937,7 @@ const injectFooter = async (
   const docRelsPath = "word/_rels/document.xml.rels";
   const docRels = (await archive.readEntryString(docRelsPath)) ?? "";
 
-  const verifyUrl = `${baseUrl}/v/${verificationCode}`;
+  const verifyUrl = `${frontendUrl}/verify/${verificationCode}`;
   const footerMatch = findExistingFooter(docXml, docRels);
 
   if (footerMatch) {

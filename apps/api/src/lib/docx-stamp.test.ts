@@ -142,7 +142,7 @@ describe("injectStamp", () => {
 
     const rels = await readZipFile(stamped, "word/_rels/footer1.xml.rels");
     expect(rels).not.toBeNull();
-    expect(rels).toContain(`https://stella.legal/v/${code}`);
+    expect(rels).toContain(`https://stella.legal/verify/${code}`);
   });
 
   test("updates Content_Types for custom properties", async () => {

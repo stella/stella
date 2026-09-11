@@ -93,7 +93,7 @@ import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
-import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
+import { verifyAuthRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
@@ -569,7 +569,6 @@ const api = new Elysia()
   )
   .use(healthRoute)
   .use(wellKnownRoute)
-  .use(verifyRoute)
   .use(hostedUsageWebhookRoute)
   .use(
     // The MCP transport paths sit at the root, outside the shared `/v1`

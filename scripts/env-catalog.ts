@@ -299,7 +299,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   FEEDBACK_EMAIL_TO:
     "Destination for public-intake feedback email. Unset disables local email delivery.",
   FRONTEND_URL:
-    "Web app origin used for absolute transactional-email links and trusted redirects.",
+    "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
   GOOGLE_AUTH_CLIENT_ID:
     "Google OAuth client ID; required when the matching web login flag is enabled.",
   GOOGLE_AUTH_CLIENT_SECRET:
@@ -329,7 +329,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
   PUBLIC_URL:
-    "Public API origin for verification links and OAuth callbacks. Defaults to BETTER_AUTH_URL.",
+    "Public API origin for OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
     'Morphological expansion of case-law search terms: "off" builds today\'s query, "shadow" runs the unexpanded query and records leaf counts comparing it with the expanded one (never the query text). "on" runs the expanded query; a search cursor names the dictionary its page used, so a continuation built against another one is rejected as invalid.',
   REDIS_TLS_REJECT_UNAUTHORIZED:
