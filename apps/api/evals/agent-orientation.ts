@@ -351,6 +351,13 @@ const schemaCheck = (
 type McpTaskSpec = {
   toolName: string;
   destructive?: true;
+  /**
+   * One call that passes: it must parse through the tool's own input schema
+   * and satisfy `checkArgs`. Pinned at startup so a schema change (an id
+   * that became a UUID, a renamed property) fails the fixture loudly instead
+   * of quietly turning every run into a rejection.
+   */
+  exampleArgs: Record<string, unknown>;
   /** Task-specific field checks beyond schema validity; empty = ok. */
   checkArgs: (args: Record<string, unknown>) => string[];
 };
@@ -473,19 +480,31 @@ const skillToolNameOf = (slug: string): string =>
   SKILL_FIXTURES.find((skill) => skill.slug === slug)?.exposedName ??
   panic(`agent-orientation eval: no skill fixture with slug ${slug}`);
 
+// Fixture ids are shaped like the ids a real list or search result returns:
+// every id input on the MCP surface is validated as a UUID, so a placeholder
+// such as `ct_88` would only measure whether a model refuses to guess.
+const ACME_MATTER_ID = "a1a1a1a1-0000-4000-8000-000000000001";
+const DILIGENCE_MATTER_ID = "a1a1a1a1-0000-4000-8000-000000000017";
+const NDA_TEMPLATE_ID = "7e7e7e7e-0000-4000-8000-000000000003";
+const DILIGENCE_PLAYBOOK_ID = "9b9b9b9b-0000-4000-8000-000000000002";
+const CONTACT_ID = "c0c0c0c0-0000-4000-8000-000000000088";
+const DOCUMENT_ID = "d0d0d0d0-0000-4000-8000-000000000042";
+const TRANSLATION_ENTITY_ID = "7f7f7f7f-1111-4222-8333-444444444444";
+const TRANSLATION_FIELD_ID = "5e5e5e5e-1111-4222-8333-444444444444";
+
 const TASKS: readonly Task[] = [
   {
     id: "list-matter-documents",
-    request:
-      "List every document and folder in matter ws_acme_2024, the top level.",
+    request: `List every document and folder in matter ${ACME_MATTER_ID}, the top level.`,
     mcp: {
       toolName: "list_documents",
-      checkArgs: (args) => field(args, "matter_id", "ws_acme_2024"),
+      exampleArgs: { matter_id: ACME_MATTER_ID },
+      checkArgs: (args) => field(args, "matter_id", ACME_MATTER_ID),
     },
     cli: {
       kind: "command",
       path: ["document", "list"],
-      flags: { "matter-id": "ws_acme_2024" },
+      flags: { "matter-id": ACME_MATTER_ID },
     },
   },
   {
@@ -494,11 +513,20 @@ const TASKS: readonly Task[] = [
       "Search the case-law corpus for decisions about breach of a duty of care in negligence, restricted to German courts.",
     mcp: {
       toolName: "search_case_law",
+      exampleArgs: {
+        query: "breach of duty of care negligence",
+        country: "DE",
+      },
       checkArgs: (args) => [
         ...(typeof args["query"] === "string" && args["query"].length > 0
           ? []
           : ["query: expected a non-empty string"]),
-        ...field(args, "country", "DE"),
+        // The handler folds the code to upper case (publicCaseLawCountry), so
+        // `de` is as correct as `DE`.
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "DE"
+          ? []
+          : [`country: expected DE, got ${JSON.stringify(args["country"])}`]),
       ],
     },
     cli: {
@@ -509,76 +537,98 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "fill-template",
-    request:
-      'Fill template tpl_nda_v3 with values {"party_name": "Beta s.r.o.", "effective_date": "2026-09-02"}.',
+    request: `Fill template ${NDA_TEMPLATE_ID} with values {"party_name": "Beta s.r.o.", "effective_date": "2026-09-02"}.`,
     mcp: {
       toolName: "fill_template",
+      exampleArgs: {
+        template_id: NDA_TEMPLATE_ID,
+        values: { party_name: "Beta s.r.o.", effective_date: "2026-09-02" },
+      },
       checkArgs: (args) => [
-        ...field(args, "template_id", "tpl_nda_v3"),
+        ...field(args, "template_id", NDA_TEMPLATE_ID),
         ...(isRecord(args["values"]) ? [] : ["values: expected an object"]),
       ],
     },
     cli: {
       kind: "command",
       path: ["template", "fill"],
-      flags: { "template-id": "tpl_nda_v3" },
+      flags: { "template-id": NDA_TEMPLATE_ID },
     },
   },
   {
     id: "run-playbook",
-    request: "Run playbook pb_diligence_v2 over matter ws_diligence_17.",
+    request: `Run playbook ${DILIGENCE_PLAYBOOK_ID} over matter ${DILIGENCE_MATTER_ID}.`,
     mcp: {
       toolName: "run_playbook",
+      exampleArgs: {
+        matter_id: DILIGENCE_MATTER_ID,
+        playbook_id: DILIGENCE_PLAYBOOK_ID,
+      },
       checkArgs: (args) => [
-        ...field(args, "matter_id", "ws_diligence_17"),
-        ...field(args, "playbook_id", "pb_diligence_v2"),
+        ...field(args, "matter_id", DILIGENCE_MATTER_ID),
+        ...field(args, "playbook_id", DILIGENCE_PLAYBOOK_ID),
       ],
     },
     cli: {
       kind: "command",
       path: ["playbook", "run"],
       flags: {
-        "matter-id": "ws_diligence_17",
-        "playbook-id": "pb_diligence_v2",
+        "matter-id": DILIGENCE_MATTER_ID,
+        "playbook-id": DILIGENCE_PLAYBOOK_ID,
       },
     },
   },
   {
     id: "delete-contact",
-    request:
-      "The user has confirmed: delete contact ct_88 from the address book.",
+    request: `The user has confirmed: delete contact ${CONTACT_ID} from the address book.`,
     mcp: {
       toolName: "delete_contact",
       destructive: true,
-      checkArgs: (args) => field(args, "contact_id", "ct_88"),
+      exampleArgs: { contact_id: CONTACT_ID, confirm: true },
+      checkArgs: (args) => field(args, "contact_id", CONTACT_ID),
     },
     cli: {
       kind: "command",
       path: ["contact", "delete"],
-      flags: { "contact-id": "ct_88" },
+      flags: { "contact-id": CONTACT_ID },
       destructive: true,
     },
   },
+  // The capability tasks name the capability id: without it, every model
+  // starts with list_capabilities, a legitimate discovery step this
+  // first-call scorer cannot credit.
   {
     id: "translate-document",
     request:
-      "Start a DeepL translation to German of document " +
-      "ent_7f7f7f7f-1111-2222-3333-444444444444, file field " +
-      "fld_5e5e5e5e-1111-2222-3333-444444444444, in matter ws_acme_2024.",
+      `Start a DeepL translation to German through the document-translations.runs.create capability: document ${TRANSLATION_ENTITY_ID}, ` +
+      `file field ${TRANSLATION_FIELD_ID}, in matter ${ACME_MATTER_ID}.`,
     mcp: {
       toolName: "invoke_capability",
+      exampleArgs: {
+        capability: "document-translations.runs.create",
+        input: {
+          params: { matterId: ACME_MATTER_ID },
+          body: {
+            entityId: TRANSLATION_ENTITY_ID,
+            fieldId: TRANSLATION_FIELD_ID,
+            targetLang: "de",
+            engine: "deepl",
+            output: "translated",
+          },
+        },
+      },
       checkArgs: (args) => [
         ...field(args, "capability", "document-translations.runs.create"),
-        ...nestedField(args, ["input", "params", "matterId"], "ws_acme_2024"),
+        ...nestedField(args, ["input", "params", "matterId"], ACME_MATTER_ID),
         ...nestedField(
           args,
           ["input", "body", "entityId"],
-          "7f7f7f7f-1111-2222-3333-444444444444",
+          TRANSLATION_ENTITY_ID,
         ),
         ...nestedField(
           args,
           ["input", "body", "fieldId"],
-          "5e5e5e5e-1111-2222-3333-444444444444",
+          TRANSLATION_FIELD_ID,
         ),
         ...nestedField(args, ["input", "body", "targetLang"], "de"),
         ...nestedField(args, ["input", "body", "engine"], "deepl"),
@@ -592,9 +642,9 @@ const TASKS: readonly Task[] = [
       // each expected value from that payload, so a reply that names the
       // command but omits the body fails here as it would at the CLI.
       flags: {
-        "matter-id": "ws_acme_2024",
-        "entity-id": "7f7f7f7f-1111-2222-3333-444444444444",
-        "field-id": "5e5e5e5e-1111-2222-3333-444444444444",
+        "matter-id": ACME_MATTER_ID,
+        "entity-id": TRANSLATION_ENTITY_ID,
+        "field-id": TRANSLATION_FIELD_ID,
         "target-lang": "de",
         engine: "deepl",
         output: "translated",
@@ -603,18 +653,22 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "start-workflow-extraction",
-    request: "Start the extraction workflow in matter ws_acme_2024.",
+    request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow-start capability.`,
     mcp: {
       toolName: "invoke_capability",
+      exampleArgs: {
+        capability: "matters.workflow-start",
+        input: { params: { matterId: ACME_MATTER_ID } },
+      },
       checkArgs: (args) => [
         ...field(args, "capability", "matters.workflow-start"),
-        ...nestedField(args, ["input", "params", "matterId"], "ws_acme_2024"),
+        ...nestedField(args, ["input", "params", "matterId"], ACME_MATTER_ID),
       ],
     },
     cli: {
       kind: "command",
       path: ["capability", "matters", "workflow-start"],
-      flags: { "matter-id": "ws_acme_2024" },
+      flags: { "matter-id": ACME_MATTER_ID },
     },
   },
   {
@@ -623,6 +677,7 @@ const TASKS: readonly Task[] = [
       "Search across every accessible matter for 'force majeure clause'.",
     mcp: {
       toolName: "search_across_matters",
+      exampleArgs: { query: "force majeure clause" },
       checkArgs: (args) => field(args, "query", "force majeure clause"),
     },
     cli: {
@@ -639,19 +694,28 @@ const TASKS: readonly Task[] = [
       "The host attached contract-v2.docx (file_id file_9f2, download_url " +
       "https://files.example.test/9f2, mime_type application/vnd.openxmlformats-" +
       "officedocument.wordprocessingml.document). Upload it as a new version of " +
-      "document doc_42.",
+      `document ${DOCUMENT_ID}.`,
     // The CLI has no host-file-reference concept: `stella upload` is a
     // hand-wired local-bytes command (packages/cli/src/commands/upload.ts,
     // registered outside the generated route tree) that reads a path off
     // disk, so its prompt gives a local path instead of the MCP surface's
     // file_id/download_url reference.
     cliRequest:
-      "The file to upload is at ./contract-v2.docx, in matter ws_acme_2024. " +
-      "Upload it as a new version of document doc_42.",
+      `The file to upload is at ./contract-v2.docx, in matter ${ACME_MATTER_ID}. ` +
+      `Upload it as a new version of document ${DOCUMENT_ID}.`,
     mcp: {
       toolName: "upload_document_version",
+      exampleArgs: {
+        entity_id: DOCUMENT_ID,
+        file: {
+          file_id: "file_9f2",
+          download_url: "https://files.example.test/9f2",
+          mime_type:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+      },
       checkArgs: (args) => [
-        ...field(args, "entity_id", "doc_42"),
+        ...field(args, "entity_id", DOCUMENT_ID),
         ...(args["file"] === undefined ? ["file: expected a value"] : []),
       ],
     },
@@ -660,8 +724,8 @@ const TASKS: readonly Task[] = [
       path: ["upload"],
       flags: {
         file: "./contract-v2.docx",
-        "matter-id": "ws_acme_2024",
-        "entity-id": "doc_42",
+        "matter-id": ACME_MATTER_ID,
+        "entity-id": DOCUMENT_ID,
       },
     },
   },
@@ -669,10 +733,10 @@ const TASKS: readonly Task[] = [
   // instructions; the CLI has no skill surface, so it must decline.
   {
     id: "skill-instructions",
-    request:
-      "Before you summarize the share purchase agreement in matter ws_acme_2024, load the stella skill instructions for summarizing a document.",
+    request: `Before you summarize the share purchase agreement in matter ${ACME_MATTER_ID}, load the stella skill instructions for summarizing a document.`,
     mcp: {
       toolName: skillToolNameOf("summarize"),
+      exampleArgs: {},
       checkArgs: () => [],
     },
     cli: { kind: "declined" },
@@ -683,11 +747,41 @@ const TASKS: readonly Task[] = [
       "Load the stella skill instructions for reviewing risk clauses in a Czech commercial contract (obchodní smlouva), then wait for my next message.",
     mcp: {
       toolName: skillToolNameOf("risk.review"),
+      exampleArgs: {},
       checkArgs: () => [],
     },
     cli: { kind: "declined" },
   },
 ] as const;
+
+/**
+ * A fixture is only evidence when the call it expects can pass: each task's
+ * `exampleArgs` must parse through the target tool's own input schema and
+ * satisfy the task's checks. Runs before any paid request.
+ */
+const assertMcpTaskFixtures = (tasks: readonly Task[]): void => {
+  const failures: string[] = [];
+  for (const task of tasks) {
+    const definition = mcpDefinitionsByName.get(task.mcp.toolName);
+    if (definition === undefined) {
+      failures.push(`${task.id}: unknown tool ${task.mcp.toolName}`);
+      continue;
+    }
+    const schema = schemaCheck(definition, task.mcp.exampleArgs);
+    const issues = [
+      ...schema.issues,
+      ...task.mcp.checkArgs(task.mcp.exampleArgs),
+    ];
+    if (issues.length > 0) {
+      failures.push(`${task.id}: ${issues.join("; ")}`);
+    }
+  }
+  if (failures.length > 0) {
+    panic(
+      `agent-orientation eval: task fixtures no longer pass their own tool contracts\n${failures.join("\n")}`,
+    );
+  }
+};
 
 // --- CLI options --------------------------------------------------------------
 
@@ -1427,6 +1521,7 @@ const main = async () => {
   }
   const surfaces: Surface[] =
     options.surface === "both" ? ["mcp", "cli"] : [options.surface];
+  assertMcpTaskFixtures(tasks);
   const models = await resolveModels(options.models);
   const mcpTools = surfaces.includes("mcp") ? buildMcpClientTools() : [];
   const skill = surfaces.includes("cli")
