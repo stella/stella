@@ -15,6 +15,7 @@ import {
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { authorizeDesktopRegistry } from "@/api/lib/desktop-registry-auth";
 import { revokeDesktopRegistryCredential } from "@/api/lib/desktop-registry-revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -38,7 +39,7 @@ const config = {
         type: t.Literal("format"),
         registry,
         id: t.String({ minLength: 1, maxLength: 64 }),
-        formatId: t.Union([t.String({ format: "uuid" }), t.Null()]),
+        formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
       },
       { additionalProperties: false },
     ),

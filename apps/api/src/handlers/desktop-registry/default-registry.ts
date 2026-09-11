@@ -3,6 +3,11 @@ import type { DesktopRegistryConfig } from "@stll/api-contract/desktop-registry"
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 
+const sole = <T>(entries: T[]): T | null => {
+  const [first, ...rest] = entries;
+  return first !== undefined && rest.length === 0 ? first : null;
+};
+
 type DefaultRegistryOptions = {
   registries: DesktopRegistryConfig["registries"];
   practiceJurisdictions: PracticeJurisdiction[];
@@ -24,8 +29,5 @@ export const getDefaultDesktopRegistry = ({
         isPrimary && countryCode === BUSINESS_REGISTRY_DISPATCH[id].country,
     ),
   );
-  if (primaryRegistries.length === 1) {
-    return primaryRegistries[0].id;
-  }
-  return domesticRegistries.length === 1 ? domesticRegistries[0].id : null;
+  return sole(primaryRegistries)?.id ?? sole(domesticRegistries)?.id ?? null;
 };

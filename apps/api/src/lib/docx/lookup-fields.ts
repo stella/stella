@@ -161,7 +161,7 @@ export const renderLookupHit = (hit: BusinessRegistryHit): string => {
     const parts = [
       company ? ARES_DEFAULT_FORMAT_PARTS.name : "**[company name]**",
     ];
-    if (tokens.address) {
+    if (tokens["address"]) {
       parts.push(ARES_DEFAULT_FORMAT_PARTS.address);
     }
     parts.push(ARES_DEFAULT_FORMAT_PARTS.identifier);

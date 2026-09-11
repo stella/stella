@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
-import { isBusinessRegistrySlug } from "@stll/api-contract";
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import type {
   DesktopRegistryConfig,
@@ -41,7 +40,7 @@ export type DesktopRegistryContext = {
   scopedDb: ScopedDb;
 };
 
-export type DesktopRegistrySearch = {
+type DesktopRegistrySearch = {
   registry: BusinessRegistrySlug;
   query: string;
 };
@@ -167,16 +166,13 @@ export const getDesktopRegistryConfig = async (
 
 export const searchDesktopRegistry = async (
   context: DesktopRegistryContext,
-  input: { registry: unknown; query: string },
+  { registry, query: rawQuery }: DesktopRegistrySearch,
 ): Promise<Result<DesktopRegistrySearchResponse, HandlerError>> => {
-  const query = input.query.trim();
-  if (!isBusinessRegistrySlug(input.registry)) {
-    return Result.err(invalidRegistry());
-  }
+  const query = rawQuery.trim();
   if (query.length === 0 || query.length > 256) {
     return Result.err(invalidRegistry());
   }
-  if (!(await registryIsEnabled(context, input.registry))) {
+  if (!(await registryIsEnabled(context, registry))) {
     return Result.err(
       new HandlerError({
         status: 403,
@@ -188,7 +184,7 @@ export const searchDesktopRegistry = async (
     try: async () =>
       await getOrganizationRegistryHandler({
         ...context,
-        registry: input.registry,
+        registry,
       }),
     catch: (cause) =>
       new HandlerError({
@@ -217,7 +213,7 @@ export const searchDesktopRegistry = async (
   if (lookup instanceof HandlerError) {
     return Result.err(lookup);
   }
-  const formats = await loadFormats(context, input.registry);
+  const formats = await loadFormats(context, registry);
   const results: DesktopRegistrySearchResult[] = [];
   if (lookup.type === "lookup") {
     if (lookup.hit !== null) {
@@ -234,7 +230,7 @@ export const searchDesktopRegistry = async (
       items: lookup.hits.slice(0, SEARCH_LIMIT),
       limit: DETAIL_CONCURRENCY,
       operation: async (hit) => {
-        if (formats.defaultFormat === null && input.registry !== "ares") {
+        if (formats.defaultFormat === null && registry !== "ares") {
           return Result.ok(hit);
         }
         const detail = await executeRegistryLookup({
@@ -275,28 +271,27 @@ export const searchDesktopRegistry = async (
   });
 };
 
+type DesktopRegistryFormat = {
+  registry: BusinessRegistrySlug;
+  id: string;
+  formatId: SafeId<"templateLookupFormat"> | null;
+};
+
 export const formatDesktopRegistry = async (
   context: DesktopRegistryContext,
-  input: {
-    registry: unknown;
-    id: string;
-    formatId: string | null;
-  },
+  { registry, id: rawId, formatId }: DesktopRegistryFormat,
 ): Promise<Result<{ text: string }, HandlerError>> => {
-  if (!isBusinessRegistrySlug(input.registry)) {
-    return Result.err(invalidRegistry());
-  }
-  const id = input.id.trim();
+  const id = rawId.trim();
   if (
     id.length === 0 ||
     id.length > 64 ||
-    !isPlausibleLookupValue(input.registry, id) ||
-    !(await registryIsEnabled(context, input.registry))
+    !isPlausibleLookupValue(registry, id) ||
+    !(await registryIsEnabled(context, registry))
   ) {
     return Result.err(invalidRegistry());
   }
   const format =
-    input.formatId === null
+    formatId === null
       ? null
       : await context
           .scopedDb((tx) =>
@@ -305,18 +300,18 @@ export const formatDesktopRegistry = async (
               .from(templateLookupFormats)
               .where(
                 and(
-                  eq(templateLookupFormats.id, input.formatId),
+                  eq(templateLookupFormats.id, formatId),
                   eq(
                     templateLookupFormats.organizationId,
                     context.organizationId,
                   ),
-                  eq(templateLookupFormats.registry, input.registry),
+                  eq(templateLookupFormats.registry, registry),
                 ),
               )
               .limit(1),
           )
           .then((rows) => rows.at(0) ?? null);
-  if (input.formatId !== null && !format) {
+  if (formatId !== null && !format) {
     return Result.err(
       new HandlerError({ status: 404, message: "Saved format not found" }),
     );
@@ -325,7 +320,7 @@ export const formatDesktopRegistry = async (
     try: async () =>
       await getOrganizationRegistryHandler({
         ...context,
-        registry: input.registry,
+        registry,
       }),
     catch: (cause) =>
       new HandlerError({

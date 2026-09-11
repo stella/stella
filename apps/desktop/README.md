@@ -94,6 +94,9 @@ Runtime bridge configuration:
   - Optional override for the localhost bridge port during development
 - `STELLA_DESKTOP_VIEW_PORT`
   - Optional override for the desktop Vite dev server during development
+- `STELLA_DESKTOP_REGISTRY_WEB_ORIGIN`
+  - Optional build-time override for the web origin that registry sign-in opens
+  - Debug builds only; release builds always use the hosted web app or the linked self-host origin
 
 Example:
 

@@ -16,4 +16,3 @@ export type DesktopRegistrySearchResponse = {
   formats: { id: string; name: string }[];
   defaultFormatId: string | null;
 };
-

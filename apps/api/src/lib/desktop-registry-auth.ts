@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { Temporal } from "@stll/time";
 
 import { rlsDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
@@ -12,6 +13,7 @@ import {
   desktopRegistryMetadata,
 } from "@/api/handlers/desktop-registry/config";
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -25,7 +27,16 @@ const rejected = () =>
 
 // Authentication owns the RLS bootstrap; registry handlers receive only the
 // resulting scoped database. This never creates a browser or MCP session.
-export const authorizeDesktopRegistry = async (request: Request) => {
+type DesktopRegistryAuthorization = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  keyId: string;
+  scopedDb: ScopedDb;
+};
+
+export const authorizeDesktopRegistry = async (
+  request: Request,
+): Promise<Result<DesktopRegistryAuthorization, HandlerError<401 | 503>>> => {
   const authorization = request.headers.get("authorization");
   if (
     !authorization?.startsWith(`Bearer ${DESKTOP_REGISTRY_KEY_PREFIX}`) ||

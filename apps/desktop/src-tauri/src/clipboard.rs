@@ -19,7 +19,7 @@ use std::{
   io::{Cursor, Write},
   path::Path,
   sync::{Arc, Mutex},
-  time::{Duration as StdDuration, Instant},
+  time::Instant,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -2888,7 +2888,7 @@ fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
       let _ = sender.send(frontmost_source_app_on_main_thread());
     })
     .ok()?;
-  let source = receiver.recv_timeout(StdDuration::from_secs(1)).ok()??;
+  let source = receiver.recv_timeout(std::time::Duration::from_secs(1)).ok()??;
   let key = source
     .app
     .identifier
