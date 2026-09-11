@@ -78,12 +78,14 @@ export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = nullAsAbsent(
 );
 
 export const UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA = v.strictObject({
-  type: v.literal("entity_version"),
-  entityId: v.string(),
-  entityVersionId: v.string(),
-  versionNumber: v.pipe(v.number(), v.integer()),
-  fileId: v.string(),
-  fileName: v.string(),
+  finalizedResult: v.strictObject({
+    type: v.literal("entity_version"),
+    entityId: v.string(),
+    entityVersionId: v.string(),
+    versionNumber: v.pipe(v.number(), v.integer()),
+    fileId: v.string(),
+    fileName: v.string(),
+  }),
   meta: v.optional(v.strictObject({ requestId: v.string() })),
 });
 

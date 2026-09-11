@@ -167,7 +167,11 @@ describe("document file upload surface", () => {
                 payload: {
                   finalizedResult: {
                     type: "entity_version",
+                    entityId: "00000000-0000-4000-8000-000000000010",
                     entityVersionId: "version_123",
+                    versionNumber: 2,
+                    fileId: "file_456",
+                    fileName: "agreement.docx",
                   },
                 },
               } satisfies { status: "ok"; payload: unknown });
@@ -181,7 +185,11 @@ describe("document file upload surface", () => {
       payload: {
         finalizedResult: {
           type: "entity_version",
+          entityId: "00000000-0000-4000-8000-000000000010",
           entityVersionId: "version_123",
+          versionNumber: 2,
+          fileId: "file_456",
+          fileName: "agreement.docx",
         },
       },
     });
