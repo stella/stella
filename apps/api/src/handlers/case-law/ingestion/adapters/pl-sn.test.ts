@@ -303,7 +303,7 @@ describe("listing one decision date", () => {
       ),
     );
 
-    expect(
+    await expect(
       plSnAdapter.reconciliation.listSlicePage({
         slice: "2025-06-11",
         page: 0,
@@ -385,6 +385,53 @@ describe("walking decision-date months oldest first", () => {
 
     expect(page.decisions).toHaveLength(20);
     expect(page.nextCursor).toBe("1994-03:20");
+  });
+
+  test("a full page holding an unreadable row still continues the month", async () => {
+    // The shape filter drops the bad row, but the page the publisher served
+    // was full. Measured by what survived the filter, the month would look
+    // finished here and every later page of it would go unvisited.
+    const rows: unknown[] = Array.from({ length: 19 }, (_unused, index) => ({
+      id: `id-${index}`,
+      sygnatura_sprawy: `I CSK ${index}/94`,
+      forma_orzeczenia: "wyrok SN",
+    }));
+    rows.push("not an object at all");
+    sourceHolding("1994-03", rows as Record<string, unknown>[]);
+
+    const page = await walk("1994-03:0");
+
+    expect(page.decisions).toHaveLength(19);
+    expect(page.nextCursor).toBe("1994-03:20");
+  });
+
+  test("a cycle aborted mid-page replays it rather than checkpointing past it", async () => {
+    const rows = Array.from({ length: 20 }, (_unused, index) => ({
+      id: `id-${index}`,
+      sygnatura_sprawy: `I CSK ${index}/94`,
+      forma_orzeczenia: "wyrok SN",
+    }));
+    // The cycle ends once the listing is in hand, so the page's rows are
+    // listed and none of them is built. A cursor advanced by the page size
+    // here would checkpoint past twenty decisions nothing ever looked at.
+    const controller = new AbortController();
+    globalThis.fetch = asFetchMock(async () => {
+      controller.abort();
+      return await Promise.resolve(jsonResponse(envelope(rows)));
+    });
+
+    const result = await plSnAdapter.fetchPage(
+      "1994-03:0",
+      {},
+      controller.signal,
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (!Result.isOk(result)) {
+      return;
+    }
+    expect(result.value.decisions).toEqual([]);
+    expect(result.value.nextCursor).toBe("1994-03:0");
   });
 
   test("a short page hands over to the next month at its beginning", async () => {

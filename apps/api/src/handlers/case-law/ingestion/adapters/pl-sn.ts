@@ -24,9 +24,17 @@
  * and a year window (already past 10,000 in 2025) is not an option.
  *
  * Cursor format: `YYYY-MM:offset` — the month being walked and the item
- * offset reached inside it. Oldest-first, so a decision published later
- * appends past the cursor rather than shifting the offsets already walked;
- * at the present month the cursor parks and re-reads only that month's tail.
+ * offset reached inside it, oldest month first; at the present month the
+ * cursor parks and re-reads only that month's tail.
+ *
+ * The listing is ordered by docket, and the API offers no keyset or
+ * publication-time key to walk instead, so an offset inside a month is not
+ * stable against the publisher backfilling a decision into it: a docket
+ * sorting ahead of the cursor shifts every later offset by one, and the row
+ * that crosses the page boundary is passed unseen. That is why the crawl is
+ * not the only path to a decision (rule 16): the day-sliced reconciliation
+ * below lists each decision date independently of this cursor, compares the
+ * identities against what is held, and ingests the difference.
  *
  * Overlap with `pl-courts`: SAOS republished this court until 2016-06-22 and
  * its importer has been dormant since. The two sources have separate id
@@ -388,6 +396,14 @@ type ListWindowOptions = {
 
 type ListedWindow = {
   rows: Record<string, unknown>[];
+  /**
+   * How many rows the publisher served, before the shape filter below.
+   *
+   * This, not the filtered count, is what says whether a page was full: one
+   * row the filter drops would otherwise make a full page read as the last
+   * one, and the walk would leave the rest of the month unvisited.
+   */
+  served: number;
   /** The listing request these rows came back from. */
   url: string;
 };
@@ -435,7 +451,7 @@ const listWindow = async ({
     );
   }
   const rows: unknown[] = payload;
-  return Result.ok({ rows: rows.filter(isRecord), url });
+  return Result.ok({ rows: rows.filter(isRecord), served: rows.length, url });
 };
 
 type DecisionIdOptions = {
@@ -552,11 +568,13 @@ const benchOf = (form: string): PlSnBench | null => {
 /**
  * The deciding court, read off the record's own decision form.
  *
- * A form naming no bench is reported rather than assumed: this portal is the
- * court's own, but a publisher that starts carrying another body's decisions
- * must not have them silently stored under this court's name, and the four
- * bare forms it lists today ("orzeczenie", "zarządzenie", "opinia", "wyciąg z
- * protokołu") are the shape such a change would arrive in.
+ * Four of the forms this court lists name no bench ("orzeczenie",
+ * "zarządzenie", "opinia", "wyciąg z protokołu"); they are its own forms, and
+ * the chamber and unit on the same record place them at this court too, so
+ * the court is right for them. A form outside that vocabulary is a different
+ * matter, and the report below is what makes it visible rather than silently
+ * stored under this court's name: `court` is a required field, so there is no
+ * unknown to leave it at.
  */
 export const plSnDecidingCourt = (form: string | undefined): string => {
   const bench = form === undefined ? null : benchOf(form);
@@ -1173,6 +1191,8 @@ type CrawlWindow = {
   month: string;
   offset: number;
   rows: Record<string, unknown>[];
+  /** Rows the publisher served for this page; see {@link ListedWindow}. */
+  served: number;
   /** The listing request the rows came back from. */
   url: string;
 };
@@ -1205,20 +1225,21 @@ const advanceToPopulatedWindow = async (
     if (Result.isError(listed)) {
       return listed;
     }
+    const { rows, served } = listed.value;
     url = listed.value.url;
-    if (listed.value.rows.length > 0) {
-      return Result.ok({ month, offset, rows: listed.value.rows, url });
+    if (served > 0) {
+      return Result.ok({ month, offset, rows, served, url });
     }
     const next = monthAfter(month);
     if (next === null) {
       // The present month, with nothing after this offset: park here so the
       // next cycle re-reads this month's tail and nothing older (rule 13).
-      return Result.ok({ month, offset, rows: [], url });
+      return Result.ok({ month, offset, rows: [], served: 0, url });
     }
     month = next;
     offset = 0;
   }
-  return Result.ok({ month, offset, rows: [], url });
+  return Result.ok({ month, offset, rows: [], served: 0, url });
 };
 
 const plSnFetchPage = async (
@@ -1234,9 +1255,11 @@ const plSnFetchPage = async (
   }
   const window = advanced.value;
   const decisions: IngestionResult[] = [];
+  let aborted = false;
 
   for (const row of window.rows) {
     if (signal?.aborted) {
+      aborted = true;
       break;
     }
     const attempted = await buildPlSnDecision({
@@ -1266,13 +1289,28 @@ const plSnFetchPage = async (
     }
   }
 
-  if (window.rows.length >= CRAWL_PAGE_SIZE) {
+  if (aborted) {
+    // The cycle stopped partway through this page, so it says nothing about
+    // the rows it never reached. Parking at the page's own start replays it
+    // next cycle rather than checkpointing past them; what was stored is
+    // re-stored under the same hash, and skipping them would be permanent.
+    return Result.ok({
+      decisions,
+      sourceUrl: window.url,
+      nextCursor: encodePlSnCursor(window),
+    });
+  }
+
+  // Measured against what the publisher served, not what survived the shape
+  // filter: a full page with one unreadable row is still a full page, and
+  // reading it as the month's last one would leave the rest unvisited.
+  if (window.served >= CRAWL_PAGE_SIZE) {
     return Result.ok({
       decisions,
       sourceUrl: window.url,
       nextCursor: encodePlSnCursor({
         month: window.month,
-        offset: window.offset + window.rows.length,
+        offset: window.offset + window.served,
       }),
     });
   }
