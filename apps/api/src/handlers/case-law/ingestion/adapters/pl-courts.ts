@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
@@ -27,8 +28,11 @@ import type {
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
-import type { TraversalMode } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import {
+  createPagePaginatedFetch,
+  defineWalkKind,
+} from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import type { WalkKind } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   hashContent,
   INGESTION_USER_AGENT,
@@ -63,18 +67,19 @@ import { isRecord } from "@/api/lib/type-guards";
  * referenced cases, reporters, publication metadata, and the
  * original court document URL.
  *
- * The crawl walks the dump one judgment-date shard at a time rather than as
- * one offset walk over the whole collection: see {@link PL_COURTS_DUMP_SHARDS}
- * for why the collection has to be cut into bounded pieces and why the pieces
- * are fixed. A shard ends where the publisher answers a page short of the
- * page size, and the walk hands over to the next shard; the last shard hands
- * over to a `recent` lane that asks for everything modified in the last
- * {@link PL_COURTS_RECENT_LOOKBACK_DAYS} days and, having no successor but
- * itself, restarts from its own head each time it runs dry.
+ * How the dump is walked is policy, and the adapter holds only the vocabulary
+ * it can be asked for: see {@link PL_COURTS_WALK_KINDS}. A source that states
+ * no walks is crawled the plain way, as one offset walk over the unfiltered
+ * dump.
  *
- * Cursor format: `<shard>:<item offset>` (e.g. "m-2014-03:1200"). A cursor
- * naming no shard, including one written before the shards existed
- * ("offset:1927900"), restarts the walk at the first shard.
+ * Where walks are configured, a walk ends when the publisher answers a page
+ * short of the page size, and the helper hands over to the next walk in the
+ * list; the last one names itself, so it restarts from its own head each time
+ * it runs dry.
+ *
+ * Cursor format: `<walk>:<item offset>` (e.g. "m-2014-03:1200"). A cursor
+ * naming a walk the current policy does not declare, including a plain
+ * offset cursor ("offset:1927900"), restarts at the first walk.
  */
 
 const DUMP_URL = "https://www.saos.org.pl/api/dump/judgments";
@@ -142,31 +147,11 @@ export const PL_COURTS_LANGUAGE = "pl";
  * rulings, of which `U 1/86` of this date is the earliest — the Tribunal began
  * adjudicating in 1986, so the corpus has nothing genuinely older. The single
  * row the sort puts ahead of it carries a mangled four-digit year and is a
- * publisher typo rather than a judgment from that year; the crawl still
- * ingests it, because the shard walk below opens with a catch-all for every
- * date before this one.
+ * publisher typo rather than a judgment from that year, which is why the
+ * date-window walk leaves either bound omittable.
  */
 export const PL_COURTS_FIRST_SLICE =
   ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].dateRange.fromInclusive;
-
-/** Last year the shard list covers with a single yearly shard. */
-const YEARLY_SHARD_LAST_YEAR = 2011;
-
-/**
- * Last year the shard list names at all. Everything after it is one catch-all.
- */
-const MONTHLY_SHARD_HORIZON_YEAR = 2030;
-
-/** The `recent` lane's name, which is also its own successor. */
-const RECENT_MODE = "recent";
-
-/**
- * How far back the `recent` lane asks for modifications.
- *
- * Wider than the time a full shard walk takes, so a judgment edited while the
- * walk was elsewhere is still listed when the lane comes round again.
- */
-export const PL_COURTS_RECENT_LOOKBACK_DAYS = 45;
 
 const dumpRequest = (
   page: number,
@@ -181,147 +166,97 @@ const dumpRequest = (
   init: { headers: { Accept: JSON_MEDIA_TYPE } },
 });
 
-/**
- * One shard's judgment-date filter; an absent bound is open on that side.
- *
- * A name carries no colon: it becomes a cursor prefix, and the cursor is
- * split on the first one. `createPagePaginatedFetch` rejects a name that
- * would collide with the separator.
- */
-type DumpShard = {
-  name: string;
-  judgmentStartDate?: string;
-  judgmentEndDate?: string;
-};
+/** The walk kinds a source's configuration may ask this adapter for. */
+export const PL_COURTS_WALK_KIND = {
+  JUDGMENT_DATE: "judgment-date",
+  SINCE_MODIFIED: "since-modified",
+  WHOLE_DUMP: "whole-dump",
+} as const;
 
-const dumpShardRanges = (): DumpShard[] => {
-  const firstDay =
-    parsePlainDate(PL_COURTS_FIRST_SLICE) ??
-    panic(`pl-courts: unreadable first slice ${PL_COURTS_FIRST_SLICE}`);
-  const shards: DumpShard[] = [
-    {
-      name: `before-${firstDay.year}`,
-      judgmentEndDate: firstDay.subtract({ days: 1 }).toString(),
-    },
-  ];
-
-  for (let year = firstDay.year; year <= YEARLY_SHARD_LAST_YEAR; year++) {
-    shards.push({
-      name: `y-${year}`,
-      // The corpus opens mid-1986, and the catch-all above owns everything
-      // before that day, so the first yearly shard starts there rather than
-      // on 1 January: the shards then partition the calendar exactly.
-      judgmentStartDate:
-        year === firstDay.year
-          ? firstDay.toString()
-          : Temporal.PlainDate.from({ year, month: 1, day: 1 }).toString(),
-      judgmentEndDate: Temporal.PlainDate.from({
-        year,
-        month: 12,
-        day: 31,
-      }).toString(),
-    });
-  }
-
-  for (
-    let year = YEARLY_SHARD_LAST_YEAR + 1;
-    year <= MONTHLY_SHARD_HORIZON_YEAR;
-    year++
-  ) {
-    for (let month = 1; month <= 12; month++) {
-      const first = Temporal.PlainDate.from({ year, month, day: 1 });
-      shards.push({
-        name: `m-${year}-${String(month).padStart(2, "0")}`,
-        judgmentStartDate: first.toString(),
-        judgmentEndDate: first.with({ day: first.daysInMonth }).toString(),
-      });
-    }
-  }
-
-  shards.push({
-    name: `after-${MONTHLY_SHARD_HORIZON_YEAR}`,
-    judgmentStartDate: Temporal.PlainDate.from({
-      year: MONTHLY_SHARD_HORIZON_YEAR + 1,
-      month: 1,
-      day: 1,
-    }).toString(),
-  });
-
-  return shards;
-};
+type PlCourtsWalkKind =
+  (typeof PL_COURTS_WALK_KIND)[keyof typeof PL_COURTS_WALK_KIND];
 
 /**
- * The date the `recent` lane asks the publisher to list modifications from.
+ * The date a since-modified walk asks the publisher to list changes from.
  *
  * Taken from a calendar day rather than an instant so the request is stable
- * for the whole day and the lane cannot ask for a narrower window each time
+ * for the whole day and the walk cannot ask for a narrower window each time
  * it restarts.
  */
-export const plCourtsRecentSince = (today: Temporal.PlainDate): string =>
-  `${today.subtract({ days: PL_COURTS_RECENT_LOOKBACK_DAYS }).toString()}T00:00:00.000`;
-
-/** The shards in list order, each followed by the next, then the lane. */
-const buildDumpShardWalks = (): TraversalMode[] => {
-  const ranges = dumpShardRanges();
-  return [
-    ...ranges.map((shard, index) => ({
-      name: shard.name,
-      buildRequest: (page: number) =>
-        dumpRequest(page, {
-          ...(shard.judgmentStartDate === undefined
-            ? {}
-            : { judgmentStartDate: shard.judgmentStartDate }),
-          ...(shard.judgmentEndDate === undefined
-            ? {}
-            : { judgmentEndDate: shard.judgmentEndDate }),
-        }),
-      followedBy: ranges[index + 1]?.name ?? RECENT_MODE,
-    })),
-    {
-      name: RECENT_MODE,
-      buildRequest: (page: number) =>
-        dumpRequest(page, {
-          sinceModificationDate: plCourtsRecentSince(
-            Temporal.Now.plainDateISO("UTC"),
-          ),
-        }),
-      followedBy: RECENT_MODE,
-    },
-  ];
-};
+export const plCourtsModifiedSince = (
+  today: Temporal.PlainDate,
+  lookbackDays: number,
+): string =>
+  `${today.subtract({ days: lookbackDays }).toString()}T00:00:00.000`;
 
 /**
- * The ordered walks the crawl makes over the dump.
+ * The walks this adapter knows how to make over the dump, and what each takes.
  *
- * The dump is a single collection of several hundred thousand judgments
- * with no end the walker can recognise from inside it, so one offset walk
- * over the whole thing is unbounded: every event that advances the cursor
- * without reading a page (a timeout, a publisher-side 5xx) pushes it
- * further past the tail, where each request costs seconds and answers with
- * nothing. Filtering by judgment date bounds each walk instead. A shard's
- * last page is short, which is the signal the pagination helper hands over
- * on, so a walk that runs out of judgments moves to the next shard rather
- * than deeper into empty offsets. A page that answers zero items in the
- * middle of a shard hands over too: giving up the remainder of one shard is
- * bounded loss, which giving up on an unbounded walk was not.
+ * The dump is a single collection of several hundred thousand judgments with
+ * no end the walker can recognise from inside it, so one offset walk over the
+ * whole thing is unbounded: every event that advances the cursor without
+ * reading a page (a timeout, a publisher-side 5xx) pushes it further past the
+ * tail, where each request costs seconds and answers with nothing. The
+ * filtered kinds below bound a walk instead. A bounded walk's last page is
+ * short, which is the signal the pagination helper hands over on, so a walk
+ * that runs out of judgments moves to the next one rather than deeper into
+ * empty offsets.
  *
- * The list is deliberately static and the horizon deliberately fixed. Shard
- * names are persisted as cursor prefixes, so a cursor written in one month
- * has to still name a shard in the next; a list derived from the current date
- * renames its own tail as time passes and silently restarts the crawl. Empty
- * months up to the horizon cost about a second each per full walk, which is
- * cheaper than any scheme that keeps the list current.
- *
- * `judgmentDate` is publisher data and a few records carry years no judgment
- * can hold, in both directions. The two catch-alls are open-ended so those
- * records are still reachable: no date puts a judgment outside every shard.
- *
- * The tail catch-all is followed by {@link RECENT_MODE}, which names itself
- * as its own successor and so restarts from its own head whenever it runs
- * dry. That is where the crawl stays once the collection has been seen.
+ * Which walks are made, in what order, and over which windows is policy and
+ * arrives in the source's configuration. A walk's name is persisted as a
+ * cursor prefix, so a policy whose names move renames its own cursors and
+ * restarts the crawl: names are stable input, never derived from the date the
+ * policy is read on.
  */
-export const PL_COURTS_DUMP_SHARDS: readonly TraversalMode[] =
-  buildDumpShardWalks();
+export const PL_COURTS_WALK_KINDS = {
+  /**
+   * A window of the dump bounded by judgment date. Either bound may be
+   * omitted, which leaves that side open.
+   *
+   * `judgmentDate` is publisher data and a few records carry years no
+   * judgment can hold, in both directions, so a policy meaning to reach every
+   * record needs open ends: no date then puts a judgment outside every window.
+   */
+  [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind(
+    {
+      from: v.optional(v.pipe(v.string(), v.isoDate())),
+      to: v.optional(v.pipe(v.string(), v.isoDate())),
+    },
+    ({ from, to }) =>
+      (page) =>
+        dumpRequest(page, {
+          ...(from === undefined ? {} : { judgmentStartDate: from }),
+          ...(to === undefined ? {} : { judgmentEndDate: to }),
+        }),
+  ),
+
+  /**
+   * Everything the publisher has edited within the lookback, whatever
+   * judgment date it carries.
+   *
+   * This is the shape a crawl stays current in: a judgment edited while a
+   * date-bounded walk was elsewhere is listed again here. A lookback wider
+   * than one full pass over the configured walks is what keeps such an edit
+   * from falling between two visits.
+   */
+  [PL_COURTS_WALK_KIND.SINCE_MODIFIED]: defineWalkKind(
+    { lookbackDays: v.pipe(v.number(), v.integer(), v.minValue(1)) },
+    ({ lookbackDays }) =>
+      (page) =>
+        dumpRequest(page, {
+          sinceModificationDate: plCourtsModifiedSince(
+            Temporal.Now.plainDateISO("UTC"),
+            lookbackDays,
+          ),
+        }),
+  ),
+
+  /** The dump unfiltered, in the publisher's own order: the plain walk. */
+  [PL_COURTS_WALK_KIND.WHOLE_DUMP]: defineWalkKind(
+    {},
+    () => (page) => dumpRequest(page, {}),
+  ),
+} as const satisfies Record<PlCourtsWalkKind, WalkKind>;
 
 /**
  * Slices near the tip the reconciliation re-walks on a fast cadence.
@@ -1426,8 +1361,9 @@ export const plCourtsAdapter = defineSourceAdapter({
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,
 
+    // The plain walk, for a source that configures none.
     buildRequest: (page) => dumpRequest(page, {}),
-    traversal: PL_COURTS_DUMP_SHARDS,
+    walkKinds: PL_COURTS_WALK_KINDS,
 
     // Refused rather than read as an empty page: throwing here fails the
     // page, so the cursor holds and the shard is asked again next cycle

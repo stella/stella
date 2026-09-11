@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
@@ -17,6 +18,7 @@ import {
   createPagePaginatedFetch,
   decodeOffsetCursor,
   decodeTraversalCursor,
+  defineWalkKind,
   encodeOffsetCursor,
   encodeTraversalCursor,
 } from "./pagination";
@@ -855,4 +857,177 @@ describe("a walk that names itself as its successor", () => {
     expect(restarted.unwrap().nextCursor).toBe("recent:0");
     expect(parked.unwrap().nextCursor).toBe("recent:10");
   });
+});
+
+/**
+ * Walks materialised from a source's configuration.
+ *
+ * The adapter states the kinds it can serve; the configuration states which
+ * walks are made and in what order. Everything that can be wrong with such a
+ * policy is invisible at runtime unless the page fails: a kind nobody serves,
+ * a name that collides with the cursor separator, a repeated name that makes
+ * a walk unreachable. Each of those must hold the cursor rather than crawl
+ * something nobody asked for.
+ */
+describe("walks configured by the source", () => {
+  let restore: (() => void) | undefined;
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  const configurableFetch = () =>
+    createPagePaginatedFetch<TestResponse>({
+      adapterKey: "test",
+      pageSize: 3,
+      firstPage: 0,
+      buildRequest: (page) => ({
+        url: `https://example.com/test-api?page=${page}`,
+      }),
+      walkKinds: {
+        window: defineWalkKind(
+          { bucket: v.pipe(v.string(), v.minLength(1)) },
+          ({ bucket }) =>
+            (page) => ({
+              url: `https://example.com/test-api?page=${page}&bucket=${bucket}`,
+            }),
+        ),
+      },
+      parseResponse: async (resp) =>
+        Result.ok(await readTestJson<TestResponse>(resp)),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
+    });
+
+  const windowWalk = (name: string, bucket: string) => ({
+    name,
+    kind: "window",
+    bucket,
+  });
+
+  const exhausted = async () => {
+    await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+  };
+
+  test("the list is the chain: each walk hands over to the next", async () => {
+    await exhausted();
+
+    const page = await configurableFetch()("first:0", {
+      walks: [windowWalk("first", "a"), windowWalk("second", "b")],
+    });
+
+    expect(page.unwrap().nextCursor).toBe("second:0");
+  });
+
+  /**
+   * Parking past the end of the list would leave the crawl re-reading the
+   * tail of a walk that is finished; naming itself puts it back at the head,
+   * which is where anything new turns up.
+   */
+  test("the last walk names itself, so it restarts from its own head", async () => {
+    await exhausted();
+
+    const page = await configurableFetch()("second:0", {
+      walks: [windowWalk("first", "a"), windowWalk("second", "b")],
+    });
+
+    expect(page.unwrap().nextCursor).toBe("second:0");
+  });
+
+  test("the request is built by the kind the entry names", async () => {
+    await exhausted();
+
+    const page = await configurableFetch()("first:0", {
+      walks: [windowWalk("first", "a")],
+    });
+
+    expect(page.unwrap().sourceUrl).toContain("bucket=a");
+  });
+
+  // A bound is about a walk that still has pages to give: a walk that runs
+  // dry hands over, whatever its bound says.
+  test("a per-entry item bound turns the walk back at its own head", async () => {
+    await saveFixture(
+      FIXTURE_NAME,
+      makeFixture([{ id: 1 }, { id: 2 }, { id: 3 }], 99),
+    );
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+
+    const page = await configurableFetch()("first:0", {
+      walks: [
+        { ...windowWalk("first", "a"), windowItems: 1 },
+        windowWalk("second", "b"),
+      ],
+    });
+
+    expect(page.unwrap().nextCursor).toBe("first:0");
+  });
+
+  test("no policy at all is the plain walk", async () => {
+    await exhausted();
+
+    const page = await configurableFetch()(null, {});
+
+    expect(page.unwrap().sourceUrl).not.toContain("bucket=");
+    expect(page.unwrap().nextCursor).toBe("offset:1");
+  });
+
+  /**
+   * Every refusal below fails the page, which holds the cursor: the same page
+   * is asked for again next cycle, rather than the crawl silently reading a
+   * collection nobody configured.
+   */
+  const refusals = [
+    {
+      why: "names a kind the adapter does not serve",
+      walks: [{ name: "first", kind: "by-court" }],
+      detail: "does not serve",
+    },
+    {
+      why: "carries a parameter the kind does not take",
+      walks: [{ name: "first", kind: "window", bucket: "a", buckets: "b" }],
+      detail: "does not take buckets",
+    },
+    {
+      why: "omits a parameter the kind requires",
+      walks: [{ name: "first", kind: "window" }],
+      detail: "bucket",
+    },
+    {
+      why: "names two walks the same, making the second unreachable",
+      walks: [windowWalk("first", "a"), windowWalk("first", "b")],
+      detail: 'two walks are named "first"',
+    },
+    {
+      why: "gives a name the cursor is split on",
+      walks: [windowWalk("m:2014-03", "a")],
+      detail: ":",
+    },
+    {
+      why: "states walks that are not a list",
+      walks: "everything",
+      detail: "walks",
+    },
+  ] as const;
+
+  for (const { why, walks, detail } of refusals) {
+    test(`a policy that ${why} fails the page`, async () => {
+      await exhausted();
+
+      const page = await configurableFetch()("first:0", { walks });
+
+      expect(Result.isOk(page)).toBe(false);
+      if (Result.isOk(page)) {
+        return;
+      }
+      expect(page.error.message).toContain(detail);
+      expect(page.error.cursor).toBe("first:0");
+    });
+  }
 });
