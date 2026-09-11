@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
-import {
-  type DocumentTranslationRunErrorCode,
-  type DocumentTranslationTargetLanguageCode,
+import type {
+  DocumentTranslationRunErrorCode,
+  DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
 
 import {
