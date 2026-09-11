@@ -100,7 +100,7 @@ export const DownloadSplitButton = ({
         render={
           <Button
             aria-label={downloadLabel}
-            className={cn(hasRenditions && "rounded-e-none")}
+            className={cn(hasRenditions && "rounded-e-none pe-1")}
             onClick={() => onDownload("original")}
             size="xs"
             variant="ghost"
@@ -116,7 +116,7 @@ export const DownloadSplitButton = ({
             aria-label={downloadAsLabel}
             render={
               <Button
-                className="rounded-s-none border-s px-1"
+                className="rounded-s-none border-s ps-0.5 pe-1"
                 size="xs"
                 variant="ghost"
               />
