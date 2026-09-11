@@ -11408,7 +11408,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "copy-to-matter"],
                 capabilityId: "entities.copy-to-matter",
                 description:
-                  "Copy a document or folder subtree into another matter, or move it with deleteSource, which permanently deletes the source documents, their version history, and their no-longer-referenced files. Fields whose property has no counterpart in the target matter are dropped rather than remapped, so a move can lose column values; read-only entities are refused.",
+                  "Copy a document or folder subtree into another matter, or move it with deleteSource, which permanently deletes the source documents and their no-longer-referenced files. A copy starts a new version history; a move carries the existing one across, so every printed reference keeps resolving. Fields whose property has no counterpart in the target matter are dropped rather than remapped, so a move can lose column values; read-only entities are refused.",
                 access: "write",
                 flags: [
                   {
