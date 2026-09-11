@@ -28,7 +28,6 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { PL_COURTS_DUMP_SHARDS } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // ── Bounds ───────────────────────────────────────────────
@@ -45,12 +44,6 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
  * backfill and then close one full live-window lap. 192 leaves both shapes
  * ample headroom while an adapter that never converges still fails in
  * seconds rather than running until the test times out.
- *
- * An adapter whose catch-up is a walk per shard rather than a step per
- * slice declares its own `maxWalkSteps` below, derived from its shard list.
- * Raising this shared ceiling instead would hand every other adapter the
- * same allowance and stop the suite noticing that one of them stopped
- * converging.
  */
 const MAX_WALK_STEPS = 192;
 
@@ -64,21 +57,13 @@ const MAX_WALK_STEPS = 192;
 const WALK_TIMEOUT_MS = 120_000;
 
 /**
- * What the pl-courts stub gives one date shard: a full page and a short one.
- * The full page proves the offset advances inside a shard; the short page is
- * the signal the walk hands over on. Two steps per shard, and the whole
- * static shard list is one bounded catch-up before the crawl reaches its
- * recent lane and parks there.
+ * What the pl-courts stub gives the dump: a full page and a short one. The
+ * full page proves the offset advances; the short page is where the walk runs
+ * out and has to park. The adapter is walked with the empty configuration
+ * every adapter gets here, so this is its plain walk.
  */
 const PL_DUMP_PAGE_SIZE = 100;
-const PL_DUMP_SHARD_ENTRIES = 150;
-const PL_DUMP_STEPS_PER_SHARD = Math.ceil(
-  PL_DUMP_SHARD_ENTRIES / PL_DUMP_PAGE_SIZE,
-);
-
-/** The catch-up, plus the lane's own step and the one that closes the loop. */
-const PL_DUMP_CATCH_UP_STEPS =
-  PL_COURTS_DUMP_SHARDS.length * PL_DUMP_STEPS_PER_SHARD + 4;
+const PL_DUMP_ENTRIES = 150;
 
 /** Stands in for the null start cursor when keying the sequence. */
 const START_OF_WALK = "<null>";
@@ -147,14 +132,6 @@ type AdapterCoverage =
       readonly maxSteadyStateCursors: number;
       /** Adapter-specific cost of one legitimate steady-state lap. */
       readonly maxSteadyStatePositions: number;
-      /**
-       * Steps this adapter's one-time catch-up may take before the cursor
-       * sequence has to have closed a loop. Omitted means
-       * {@link MAX_WALK_STEPS}: only an adapter that crosses a declared
-       * list of bounded walks needs more, and its budget is derived from
-       * that list rather than chosen.
-       */
-      readonly maxWalkSteps?: number;
     }
   | { readonly disposition: "excluded"; readonly reason: string };
 
@@ -252,23 +229,13 @@ const ADAPTER_CONFORMANCE = {
   },
   [ADAPTER_KEYS.PL_COURTS]: {
     disposition: "exercised",
-    // Two answers, because the crawl asks two questions. A date shard is
-    // history and stays populated: an empty one could not tell a correct
-    // handover from a walk that reset to its own first page. The lane that
-    // keeps the crawl current asks what changed lately, and on a source
-    // whose every item is already stored, nothing did.
+    // The dump stays populated: an empty one could not tell a correct park at
+    // the tail from a walk that reset to its own first page.
     exhaustedSource: ({ url }) => {
-      const params = new URL(url).searchParams;
-      if (params.has("sinceModificationDate")) {
-        return jsonResponse({ items: [] });
-      }
-      const page = Number(params.get("pageNumber"));
+      const page = Number(new URL(url).searchParams.get("pageNumber"));
       const count = Math.max(
         0,
-        Math.min(
-          PL_DUMP_PAGE_SIZE,
-          PL_DUMP_SHARD_ENTRIES - page * PL_DUMP_PAGE_SIZE,
-        ),
+        Math.min(PL_DUMP_PAGE_SIZE, PL_DUMP_ENTRIES - page * PL_DUMP_PAGE_SIZE),
       );
       return jsonResponse({
         items: Array.from({ length: count }, () => ({})),
@@ -276,7 +243,6 @@ const ADAPTER_CONFORMANCE = {
     },
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
-    maxWalkSteps: PL_DUMP_CATCH_UP_STEPS,
   },
   [ADAPTER_KEYS.PL_SN]: {
     disposition: "exercised",
@@ -511,10 +477,9 @@ describe("an exhausted source leaves every adapter parked", () => {
           return;
         }
 
-        const maxSteps = coverage.maxWalkSteps ?? MAX_WALK_STEPS;
         const outcome = await walkExhausted({
           adapter,
-          maxSteps,
+          maxSteps: MAX_WALK_STEPS,
           respond: coverage.exhaustedSource,
         });
 
@@ -531,7 +496,7 @@ describe("an exhausted source leaves every adapter parked", () => {
           }
           case "diverged": {
             throw new Error(
-              `${key}: still emitting never-before-seen cursors after ${maxSteps} steps against an exhausted source, so the sweep never converges. Sequence: ${formatSequence(outcome.steps)}`,
+              `${key}: still emitting never-before-seen cursors after ${MAX_WALK_STEPS} steps against an exhausted source, so the sweep never converges. Sequence: ${formatSequence(outcome.steps)}`,
             );
           }
           case "converged": {

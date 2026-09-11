@@ -8,6 +8,7 @@
  */
 
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -21,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Options for page-number pagination (1-indexed or
@@ -35,7 +37,7 @@ export type TraversalMode = {
    */
   name: string;
   /** Request for a page within this walk. */
-  buildRequest: (page: number) => { url: string; init?: RequestInit };
+  buildRequest: PageRequestBuilder;
   /**
    * Where to continue once this walk reaches the end of the collection, or
    * null to stay in it.
@@ -73,7 +75,71 @@ export type TraversalMode = {
  */
 export type FirstPageNumber = 0 | 1;
 
-type PagePaginationOptions<TResponse> = {
+/** Build the request for one page inside a walk. */
+type PageRequestBuilder = (page: number) => {
+  url: string;
+  init?: RequestInit;
+};
+
+/**
+ * One kind of walk an adapter knows how to make over its source, together
+ * with the parameters that kind takes.
+ *
+ * The vocabulary is the mechanism and lives in code. Which walks are made, in
+ * what order, over which windows, is policy and comes from the source's
+ * configuration. `build` is handed one policy entry and answers either with
+ * the request builder for it or with what is wrong with it, so a policy the
+ * adapter cannot serve fails the page rather than being approximated.
+ */
+export type WalkKind = {
+  readonly build: (
+    entry: Readonly<Record<string, unknown>>,
+  ) => Result<PageRequestBuilder, string>;
+};
+
+/**
+ * How an adapter declares the walks it makes.
+ *
+ * `traversal` states them in code, for a source whose walks are a fact about
+ * the endpoint. `walkKinds` states only what the adapter can serve and leaves
+ * the choice to the configuration. Declaring both would leave which one is in
+ * force to the reader, so the union makes that unrepresentable; declaring
+ * neither is the plain offset walk over `buildRequest`.
+ */
+type PageWalkDeclaration =
+  | {
+      /**
+       * Ordered walks over the same collection, where one walk cannot serve
+       * both catching up and keeping up.
+       *
+       * A source sorted newest-first cannot be caught up by walking offsets
+       * forward: every publication shifts each later offset, so items slide
+       * past the cursor unseen and the crawl never converges. Walking
+       * oldest-first does converge, because new items land at the end and the
+       * offsets already walked never move. It is the wrong order to stay
+       * current in, though, so a source needs both: oldest-first until the
+       * collection has been seen, then newest-first from there on.
+       *
+       * The active mode is persisted in the cursor (`backfill:1200`) rather
+       * than chosen per call, so a restart, a redeploy, or a second caller
+       * all resume in the phase the crawl actually reached.
+       */
+      traversal: readonly TraversalMode[];
+      walkKinds?: never;
+    }
+  | {
+      /**
+       * The walk kinds this adapter serves, keyed by the name a policy entry
+       * gives in its `kind`. Total by construction: write the record
+       * `as const satisfies Record<<the adapter's kind union>, WalkKind>` so
+       * a new kind without a builder does not compile.
+       */
+      walkKinds: Readonly<Record<string, WalkKind>>;
+      traversal?: never;
+    }
+  | { traversal?: never; walkKinds?: never };
+
+type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   /** Adapter key for error context. */
   adapterKey: string;
   /**
@@ -91,29 +157,10 @@ type PagePaginationOptions<TResponse> = {
    */
   legacyPageSize?: number | undefined;
   /**
-   * Build the fetch request for a given page number.
-   * Return the URL and optional RequestInit overrides.
+   * Build the fetch request for a given page number, for the plain walk the
+   * adapter falls back to when no walks are declared or configured.
    */
-  buildRequest: (page: number) => { url: string; init?: RequestInit };
-  /**
-   * Ordered walks over the same collection, where one walk cannot serve both
-   * catching up and keeping up.
-   *
-   * A source sorted newest-first cannot be caught up by walking offsets
-   * forward: every publication shifts each later offset, so items slide past
-   * the cursor unseen and the crawl never converges. Walking oldest-first
-   * does converge, because new items land at the end and the offsets already
-   * walked never move. It is the wrong order to stay current in, though, so a
-   * source needs both: oldest-first until the collection has been seen, then
-   * newest-first from there on.
-   *
-   * The active mode is persisted in the cursor (`backfill:1200`) rather than
-   * chosen per call, so a restart, a redeploy, or a second caller all resume
-   * in the phase the crawl actually reached.
-   *
-   * Adapters that need only one walk omit this and keep `buildRequest`.
-   */
-  traversal?: readonly TraversalMode[] | undefined;
+  buildRequest: PageRequestBuilder;
   /**
    * Read the publisher's body into a typed page.
    *
@@ -225,11 +272,20 @@ const BAD_GATEWAY_STATUS = 502;
  * on the FIRST one, so a name containing it names a walk that does not
  * exist: every cursor the walk writes then decodes as "no walk", which
  * restarts the crawl from the first walk on every step, silently and
- * forever. `assertNamesCarryNoSeparator` refuses that at construction.
+ * forever. `assertNamesAreUsable` refuses that at construction.
  */
 const TRAVERSAL_CURSOR_SEPARATOR = ":";
 
-const OFFSET_CURSOR_PREFIX = "offset:";
+/**
+ * What a plain offset cursor carries where a walk's cursor carries its name.
+ *
+ * Reserved for that reason: a walk of this name would read `offset:50000`,
+ * written by the plain walk, as offset 50 000 inside itself, silently
+ * skipping everything before it rather than starting the walk.
+ */
+const PLAIN_CURSOR_NAME = "offset";
+
+const OFFSET_CURSOR_PREFIX = `${PLAIN_CURSOR_NAME}${TRAVERSAL_CURSOR_SEPARATOR}`;
 const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
 export const encodeOffsetCursor = (offset: number): string =>
@@ -274,6 +330,39 @@ export const decodeOffsetCursor = ({
   return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
 };
 
+/** Whether a cursor is `<walk>:<offset>`, whoever wrote that walk. */
+const namesAWalk = (cursor: string): boolean => {
+  const separator = cursor.indexOf(TRAVERSAL_CURSOR_SEPARATOR);
+  return (
+    separator > 0 &&
+    parseCanonicalNonNegativeSafeInteger(cursor.slice(separator + 1)) !== null
+  );
+};
+
+/**
+ * The offset a plain walk resumes at.
+ *
+ * A cursor naming a walk reaches the plain walk whenever a source stops
+ * configuring one, and the offset inside that walk points nowhere in the
+ * unfiltered collection. So the plain walk starts over, which is what
+ * {@link decodeTraversalCursor} answers a cursor naming an unknown walk and
+ * for the same reason. Rejecting it instead would stall the source outright:
+ * a failed page holds its cursor, and nothing else ever rewrites it, so the
+ * next cycle would reject the very same cursor.
+ *
+ * A cursor that is neither shape is still rejected — that is a cursor nobody
+ * here wrote, and reading it as "start over" would hide it forever.
+ */
+const decodePlainWalkCursor = (
+  params: DecodeOffsetCursorParams,
+): number | null => {
+  const offset = decodeOffsetCursor(params);
+  if (offset !== null) {
+    return offset;
+  }
+  return params.cursor !== null && namesAWalk(params.cursor) ? 0 : null;
+};
+
 /**
  * The mode a cursor names and the offset within it.
  *
@@ -307,17 +396,207 @@ export const decodeTraversalCursor = (
 export const encodeTraversalCursor = (mode: string, offset: number): string =>
   `${mode}${TRAVERSAL_CURSOR_SEPARATOR}${offset}`;
 
-const assertNamesCarryNoSeparator = (
+const nameCarriesSeparator = (name: string): boolean =>
+  name.includes(TRAVERSAL_CURSOR_SEPARATOR);
+
+const nameIsPlainCursorName = (name: string): boolean =>
+  name === PLAIN_CURSOR_NAME;
+
+const assertNamesAreUsable = (
   adapterKey: string,
   modes: readonly TraversalMode[],
 ): void => {
   for (const { name } of modes) {
-    if (name.includes(TRAVERSAL_CURSOR_SEPARATOR)) {
+    if (nameCarriesSeparator(name)) {
       panic(
         `${adapterKey}: traversal walk "${name}" contains ${TRAVERSAL_CURSOR_SEPARATOR}, which its cursors are split on`,
       );
     }
+    if (nameIsPlainCursorName(name)) {
+      panic(
+        `${adapterKey}: traversal walk "${name}" is the name a plain offset cursor carries`,
+      );
+    }
   }
+};
+
+/**
+ * The fields a policy entry carries whatever kind it names.
+ *
+ * The name is the walk's whole identity: it is all a cursor persists, and an
+ * offset means "this far into whatever this name now covers". So a walk keeps
+ * its name only while it covers the same thing. Widening a window under the
+ * same name resumes the old offset inside the new one, which steps over
+ * everything the widening added ahead of it; rename the walk instead, and the
+ * cursor naming the old one restarts the crawl at the first walk.
+ */
+const WALK_ENTRY_FIELDS = {
+  name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.check(
+      (name) => !nameCarriesSeparator(name),
+      `a walk name may not contain "${TRAVERSAL_CURSOR_SEPARATOR}", which its cursors are split on`,
+    ),
+    v.check(
+      (name) => !nameIsPlainCursorName(name),
+      `a walk may not be named "${PLAIN_CURSOR_NAME}", which is the name a plain offset cursor carries`,
+    ),
+  ),
+  kind: v.pipe(v.string(), v.minLength(1)),
+  windowItems: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+} as const;
+
+/**
+ * The walk policy inside a source's configuration.
+ *
+ * Loose on both levels: the configuration carries whatever else that source
+ * needs, and an entry's own parameters belong to its kind, which validates
+ * them itself. An absent or empty list is a source with no policy, which
+ * walks the plain way.
+ */
+const walkEntrySchema = v.looseObject(WALK_ENTRY_FIELDS);
+
+const walkPolicySchema = v.looseObject({
+  walks: v.optional(v.array(walkEntrySchema), []),
+});
+
+type WalkPolicyEntry = v.InferOutput<typeof walkEntrySchema>;
+
+type WalkKindDefinition<TParams extends v.ObjectEntries> = {
+  /** The parameters this kind takes, beside the fields every entry carries. */
+  params: TParams;
+  /**
+   * What is wrong with a combination of parameters that each field on its own
+   * accepts, or null when nothing is. A pair of bounds is the usual case: both
+   * are dates, and the pair is still not a window.
+   */
+  objection?: (
+    params: v.InferOutput<v.LooseObjectSchema<TParams, undefined>>,
+  ) => string | null;
+  buildRequest: (
+    params: v.InferOutput<v.LooseObjectSchema<TParams, undefined>>,
+  ) => PageRequestBuilder;
+};
+
+/**
+ * Declare one walk kind: the parameters it takes and how it turns them into
+ * page requests.
+ *
+ * A policy entry is one flat object, so an undeclared key is refused rather
+ * than ignored: a mistyped parameter would otherwise read as an absent one
+ * and the walk would quietly ask the publisher for something else.
+ */
+export const defineWalkKind = <TParams extends v.ObjectEntries>({
+  params,
+  objection,
+  buildRequest,
+}: WalkKindDefinition<TParams>): WalkKind => {
+  const schema = v.looseObject(params);
+  const declared = new Set([
+    ...Object.keys(WALK_ENTRY_FIELDS),
+    ...Object.keys(params),
+  ]);
+
+  return {
+    build: (entry) => {
+      const undeclared = Object.keys(entry).filter((key) => !declared.has(key));
+      if (undeclared.length > 0) {
+        return Result.err(`does not take ${undeclared.join(", ")}`);
+      }
+      const parsed = v.safeParse(schema, entry);
+      if (!parsed.success) {
+        return Result.err(v.summarize(parsed.issues));
+      }
+      const objected = objection?.(parsed.output) ?? null;
+      return objected === null
+        ? Result.ok(buildRequest(parsed.output))
+        : Result.err(objected);
+    },
+  };
+};
+
+type MaterialiseWalksOptions = {
+  adapterKey: string;
+  config: Record<string, unknown>;
+  cursor: string | null;
+  walkKinds: Readonly<Record<string, WalkKind>>;
+};
+
+/**
+ * Turn a source's walk policy into the walks the helper drives.
+ *
+ * The list is the chain: each entry is followed by the next, and the last
+ * names itself, so a policy that ends on a lane meant to stay near the head
+ * restarts there instead of parking the crawl on its tail.
+ *
+ * Policy the adapter cannot serve is refused. Materialising fewer walks than
+ * were asked for, or falling back to the plain walk, would leave the crawl
+ * reading a collection nobody chose while every page still reported success.
+ */
+const materialiseConfiguredWalks = ({
+  adapterKey,
+  config,
+  cursor,
+  walkKinds,
+}: MaterialiseWalksOptions): Result<TraversalMode[], AdapterFetchError> => {
+  const refuse = (detail: string): Result<never, AdapterFetchError> =>
+    Result.err(
+      new AdapterFetchError({
+        message: `${adapterKey}: unusable walk policy — ${detail}`,
+        adapterKey,
+        cursor,
+      }),
+    );
+
+  // The column is JSON, so a row can hold any JSON value, and older rows do
+  // hold a string. A value that is not an object cannot carry a `walks` key,
+  // so it states no policy — the plain walk — rather than a broken one. Only
+  // a stated policy can be malformed, and that still refuses below.
+  if (!isRecord(config)) {
+    return Result.ok([]);
+  }
+
+  const parsed = v.safeParse(walkPolicySchema, config);
+  if (!parsed.success) {
+    return refuse(v.summarize(parsed.issues));
+  }
+
+  const entries: readonly WalkPolicyEntry[] = parsed.output.walks;
+  const seen = new Set<string>();
+  const modes: TraversalMode[] = [];
+
+  for (const [index, entry] of entries.entries()) {
+    // A repeated name is unreachable rather than wrong-looking: a cursor
+    // naming it always decodes to the first walk that carries it.
+    if (seen.has(entry.name)) {
+      return refuse(`two walks are named "${entry.name}"`);
+    }
+    seen.add(entry.name);
+
+    const kind = walkKinds[entry.kind];
+    if (kind === undefined) {
+      return refuse(
+        `walk "${entry.name}" names kind "${entry.kind}", which this adapter does not serve`,
+      );
+    }
+
+    const built = kind.build(entry);
+    if (Result.isError(built)) {
+      return refuse(`walk "${entry.name}" ${built.error}`);
+    }
+
+    modes.push({
+      name: entry.name,
+      buildRequest: built.value,
+      followedBy: entries[index + 1]?.name ?? entry.name,
+      ...(entry.windowItems === undefined
+        ? {}
+        : { windowItems: entry.windowItems }),
+    });
+  }
+
+  return Result.ok(modes);
 };
 
 type ParsedPageItems = {
@@ -423,23 +702,42 @@ const resolveNextCursor = ({
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
 ) => {
-  const { firstPage } = opts;
-  const modes = opts.traversal;
-  if (modes !== undefined) {
-    assertNamesCarryNoSeparator(opts.adapterKey, modes);
+  const { firstPage, walkKinds } = opts;
+  const declaredModes = opts.traversal;
+  if (declaredModes !== undefined) {
+    assertNamesAreUsable(opts.adapterKey, declaredModes);
   }
 
   return async (
     cursor: string | null,
-    _config: Record<string, unknown>,
+    config: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<Result<SyncPage, AdapterFetchError>> => {
     const attempt = await Result.tryPromise({
       try: async (): Promise<Result<SyncPage, AdapterFetchError>> => {
+        // Materialised per call rather than once at construction: the policy
+        // lives in the source's configuration, which the runner reads fresh,
+        // and a lane whose window is derived from the current day has to be
+        // built on the day it runs.
+        let modes = declaredModes;
+        if (walkKinds !== undefined) {
+          const configured = materialiseConfiguredWalks({
+            adapterKey: opts.adapterKey,
+            config,
+            cursor,
+            walkKinds,
+          });
+          if (Result.isError(configured)) {
+            return configured;
+          }
+          // No policy is not an empty traversal: it is the plain walk.
+          modes = configured.value.length > 0 ? configured.value : undefined;
+        }
+
         const walk = modes ? decodeTraversalCursor(cursor, modes) : null;
         const offset = walk
           ? walk.offset
-          : decodeOffsetCursor({
+          : decodePlainWalkCursor({
               cursor,
               firstPage,
               legacyPageSize: opts.legacyPageSize ?? opts.pageSize,

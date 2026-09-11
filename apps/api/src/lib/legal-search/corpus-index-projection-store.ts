@@ -216,8 +216,8 @@ export const corpusProjectionReservationQueue = (
 
 /**
  * Reserve exact append attempts only after every earlier revision for the
- * entity is terminal. This enforces delete-old, settle, then append-new; Plane
- * controls how often and how broadly this bounded primitive runs.
+ * entity is terminal. This enforces delete-old, settle, then append-new; the
+ * operator controls how often and how broadly this bounded primitive runs.
  */
 export const reserveCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,

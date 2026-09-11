@@ -67,6 +67,22 @@ export type RepositoryPolicy = {
   landing: Landing;
 };
 
+/**
+ * What the bar requires of a repository this one does not enumerate.
+ *
+ * Such a repository is private, so its workflow names are not readable from
+ * here and the bar cannot enumerate them. The entry is deliberately
+ * fail-closed on both axes it can decide: the named check has to be present
+ * and green, so a repository that publishes a different one is refused rather
+ * than merged on an empty check list, and landing is a plain merge, because a
+ * merge queue is a fact about a repository the bar would have to observe.
+ */
+const PRIVATE_REPOSITORY_POLICY: RepositoryPolicy = {
+  requiredCheckRuns: ["Overlay check"],
+  migrationDirectory: null,
+  landing: "merge",
+};
+
 export const mergeBarRepositoryPolicy = (repo: string): RepositoryPolicy => {
   switch (repo.toLowerCase()) {
     case "stella/stella":
@@ -85,14 +101,8 @@ export const mergeBarRepositoryPolicy = (repo: string): RepositoryPolicy => {
         migrationDirectory: null,
         landing: "merge",
       };
-    case "stella/stella-plane":
-      return {
-        requiredCheckRuns: ["Overlay check"],
-        migrationDirectory: null,
-        landing: "merge",
-      };
     default:
-      return panic(`No merge-bar policy is registered for ${repo}`);
+      return PRIVATE_REPOSITORY_POLICY;
   }
 };
 

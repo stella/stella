@@ -14,6 +14,9 @@ import {
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
 
+/** Any repository this one does not enumerate, which the bar treats alike. */
+const PRIVATE_REPO = "stella/private";
+
 describe("merge handoff state", () => {
   test("the merge gate reads with the workflow token and pins writes with the App token", () => {
     const directory = mkdtempSync(
@@ -62,7 +65,7 @@ esac
           fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
           "123",
           "--repo",
-          "stella/stella-plane",
+          PRIVATE_REPO,
         ],
         env: {
           ...process.env,
@@ -205,11 +208,6 @@ describe("merge bar", () => {
     expect(mergeBarRepositoryPolicy("Stella/Stella").landing).toBe(
       "merge-when-ready",
     );
-    expect(mergeBarRepositoryPolicy("stella/stella-plane")).toEqual({
-      requiredCheckRuns: ["Overlay check"],
-      migrationDirectory: null,
-      landing: "merge",
-    });
     expect(mergeBarRepositoryPolicy("stella/stella-infra")).toEqual({
       requiredCheckRuns: [
         "Lint & Validate",
@@ -219,8 +217,16 @@ describe("merge bar", () => {
       migrationDirectory: null,
       landing: "merge",
     });
-    expect(() => mergeBarRepositoryPolicy("stella/unknown")).toThrow(
-      "No merge-bar policy is registered for stella/unknown",
+    // A repository this one does not enumerate is private: the bar cannot
+    // read its workflows, so it lands with a plain merge and still demands a
+    // named check rather than merging on an empty check list.
+    expect(mergeBarRepositoryPolicy(PRIVATE_REPO)).toEqual({
+      requiredCheckRuns: ["Overlay check"],
+      migrationDirectory: null,
+      landing: "merge",
+    });
+    expect(mergeBarRepositoryPolicy("stella/unknown")).toEqual(
+      mergeBarRepositoryPolicy(PRIVATE_REPO),
     );
   });
 
