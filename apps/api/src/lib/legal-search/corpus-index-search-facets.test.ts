@@ -427,3 +427,24 @@ test("the court aggregation asks for every court, not the display limit", async 
     isRecord(terms) ? Number(terms["segment_size"]) : 0,
   ).toBeGreaterThanOrEqual(LIMITS.caseLawCourtFacetBuckets);
 });
+
+/**
+ * The era narrowing under `newest` is not one of the reader's filters, so no
+ * facet may drop it: a facet counting past it advertises decisions the pages
+ * cannot reach. The handler applies it to every query it hands over, and this
+ * holds the read to passing whatever it is given straight through.
+ */
+test("the read counts under exactly the query each facet was given", async () => {
+  const engine = fakeEngine();
+  const era = "decision_date:[1970-01-01T00:00:00Z TO 2100-01-01T00:00:00Z]";
+
+  await read(engine, (facet) => `(${QUERY} AND facet:${facet}) AND ${era}`);
+
+  expect(engine.requests).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 1);
+  for (const name of CORPUS_SEARCH_FACET_NAMES) {
+    const request = engine.requests.find((candidate) =>
+      Object.keys(candidate.aggs).includes(name),
+    );
+    expect(request?.query).toBe(`(${QUERY} AND facet:${name}) AND ${era}`);
+  }
+});

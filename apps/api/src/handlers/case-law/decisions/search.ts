@@ -64,7 +64,10 @@ import {
   labelSourceBuckets,
   readCaseLawSourceNames,
 } from "@/api/lib/case-law/decision-search-facets";
-import { decisionSortKeySql } from "@/api/lib/case-law/decision-search-order-sql";
+import {
+  decisionDatedFilterSql,
+  decisionSortKeySql,
+} from "@/api/lib/case-law/decision-search-order-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
@@ -81,6 +84,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
+import { withCaseLawNewestEra } from "@/api/lib/legal-search/case-law-newest-era";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
@@ -262,6 +266,10 @@ const searchPostgresDecisions = async (
     lexicalRank: ftsSearch.rank,
   });
   const sortKeyExpr = decisionSortKeySql(sort, scoreExpr);
+  // Never dropped by a facet's cross-filter: it is not one of the reader's
+  // filters, it is what the requested order can rank, so a facet counting past
+  // it would advertise decisions no page can reach.
+  const datedFilter = decisionDatedFilterSql(sort);
 
   // The ORDER BY and the cursor predicate read the same materialized sort
   // column: keyset pagination is only stable while the two agree.
@@ -273,6 +281,7 @@ const searchPostgresDecisions = async (
     : sql``;
 
   const allFilters = sql`
+    ${datedFilter}
     ${courtFilter}
     ${countryFilter}
     ${dateFromFilter}
@@ -425,6 +434,7 @@ const searchPostgresDecisions = async (
     SELECT d.court AS value, ${judgmentCountSql} AS count
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
+      ${datedFilter}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -458,6 +468,7 @@ const searchPostgresDecisions = async (
     SELECT d.decision_type AS value, ${judgmentCountSql} AS count
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
+      ${datedFilter}
       ${courtFilter}
       ${countryFilter}
       ${dateFromFilter}
@@ -474,6 +485,7 @@ const searchPostgresDecisions = async (
     SELECT d.source_id::text AS value, ${judgmentCountSql} AS count
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
+      ${datedFilter}
       ${courtFilter}
       ${countryFilter}
       ${dateFromFilter}
@@ -489,6 +501,7 @@ const searchPostgresDecisions = async (
     SELECT d.language AS value, count(distinct sd.decision_id)::int AS count
     ${facetFrom}
     WHERE ${ftsSearch.predicate}
+      ${datedFilter}
       ${courtFilter}
       ${countryFilter}
       ${dateFromFilter}
@@ -711,6 +724,7 @@ const resolveCorpusIndexQuery = async ({
   generation,
   jurisdictionClause,
 }: ResolveCorpusIndexQueryOptions): Promise<ResolvedCorpusIndexQuery> => {
+  const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const fields = caseLawCorpusQueryFields({
     generation,
     jurisdiction: body.country,
@@ -750,17 +764,20 @@ const resolveCorpusIndexQuery = async ({
     }
     const expand = expanderByQuery.get(resolved.query);
     return (facet) =>
-      buildCorpusIndexQuery({
-        body: bodyWithoutFacetFilter(body, facet),
-        jurisdictionClause,
-        fields,
-        expand,
-      }) ??
-      // Dropping a filter only ever widens the query. What can build to
-      // nothing is the reader's text, and it did not, or the resolver would
-      // have answered `empty` above.
-      panic(
-        `The ${facet} facet query built to nothing while the search did not`,
+      withCaseLawNewestEra(
+        buildCorpusIndexQuery({
+          body: bodyWithoutFacetFilter(body, facet),
+          jurisdictionClause,
+          fields,
+          expand,
+        }) ??
+          // Dropping a filter only ever widens the query. What can build to
+          // nothing is the reader's text, and it did not, or the resolver
+          // would have answered `empty` above.
+          panic(
+            `The ${facet} facet query built to nothing while the search did not`,
+          ),
+        sort,
       );
   };
 
@@ -1549,11 +1566,16 @@ export const searchCorpusIndexDecisions = async (
   // The facets and the total describe the whole result set, so they are read
   // beside the scan rather than after it: nothing in the page depends on them,
   // and a reader waits through the slower of the two instead of the sum.
+  // What the requested order can actually rank. The page, the total and every
+  // facet read the same narrowed query, so the counts describe the decisions
+  // the pages reach.
+  const scopedQuery = withCaseLawNewestEra(resolved.query, sort);
+
   const [searchPage, facetsAndTotal] = await Promise.all([
     readCorpusIndexSearchPage({
       cluster: serving.cluster,
       indexId,
-      query: resolved.query,
+      query: scopedQuery,
       limit,
       order: corpusSearchOrder(sort),
       parsedCursor,
@@ -1585,7 +1607,7 @@ export const searchCorpusIndexDecisions = async (
           decisionCountField,
           indexId,
           queryFor: facetQueries(),
-          totalQuery: resolved.query,
+          totalQuery: scopedQuery,
         })
       : null,
   ]);

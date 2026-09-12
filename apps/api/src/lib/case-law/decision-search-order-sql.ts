@@ -5,17 +5,26 @@ import type { SQL } from "drizzle-orm";
 import type { SearchSort } from "@/api/lib/legal-search/corpus-search-order";
 
 /**
- * Where a decision with no published date sorts under `newest`: below every
- * date the column can hold, and finite, because the keyset cursor carries the
- * sort key as a number and refuses a non-finite one. `-infinity` would be the
- * natural floor and is exactly what cannot travel.
+ * Restricts `newest` to the decisions that order has a place for. A decision
+ * the source never dated cannot be ranked by date at all, so it is left out
+ * of the page, the total and every facet alike rather than piled at one end.
  *
- * The corpus-index branch cannot use this value — the engine requires its
- * timestamp field on every document, so undated decisions are banded at
- * `UNDATED_DECISION_TIMESTAMP` there instead. The two orders therefore agree
- * except about a decision dated before that band.
+ * The corpus-index branch draws the same line one step tighter — its
+ * descending sort misorders a negative epoch, so it floors at 1970 (see
+ * `case-law-newest-era.ts`). Postgres orders every date correctly, so this
+ * side keeps the decisions that one cannot rank.
  */
-export const UNDATED_DECISION_SORT_KEY = -1e15;
+export const decisionDatedFilterSql = (sort: SearchSort): SQL => {
+  switch (sort) {
+    case "relevance":
+      return sql``;
+    case "newest":
+      return sql`AND d.decision_date IS NOT NULL`;
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
+  }
+};
 
 /**
  * The column the ORDER BY, the keyset predicate and the language-group
@@ -23,7 +32,7 @@ export const UNDATED_DECISION_SORT_KEY = -1e15;
  * pagination is only stable while they agree, and one per order, because the
  * order is what they have to agree about.
  *
- * `d` is the decisions table; both call sites bind it under that alias.
+ * `d` is the decisions table; every call site binds it under that alias.
  */
 export const decisionSortKeySql = (
   sort: SearchSort,
@@ -33,10 +42,9 @@ export const decisionSortKeySql = (
     case "relevance":
       return relevanceScore;
     case "newest":
-      return sql`coalesce(
-        extract(epoch FROM d.decision_date),
-        ${UNDATED_DECISION_SORT_KEY}::float8
-      )`;
+      // Never null: `decisionDatedFilterSql` has already excluded the
+      // decisions with no date, so the key needs no floor to put them at.
+      return sql`extract(epoch FROM d.decision_date)`;
     default:
       sort satisfies never;
       return panic(`Unhandled search sort: ${String(sort)}`);
