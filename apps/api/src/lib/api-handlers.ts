@@ -112,6 +112,9 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  * - `contact_extraction_ui`: AI-assisted contact intake from an uploaded
  *   source document (e.g. a procuração); review-before-create only, not a
  *   standing agent capability. Mirrors `template_authoring_ui`.
+ * - `external_sharing`: publishing and managing deliberately external,
+ *   immutable document snapshots. Recipient access remains outside the
+ *   internal capability surface.
  */
 export type McpCapabilityReason =
   | "template_authoring_ui"
@@ -128,7 +131,8 @@ export type McpCapabilityReason =
   | "assistant_chat"
   | "chat_thread_ui"
   | "file_transport"
-  | "contact_extraction_ui";
+  | "contact_extraction_ui"
+  | "external_sharing";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from

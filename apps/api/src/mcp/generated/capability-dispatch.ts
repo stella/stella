@@ -688,6 +688,19 @@ export const CAPABILITY_DISPATCH = {
   "reports.read-export": {
     load: async () => await import("@/api/handlers/reports/read-export"),
   },
+  "share-spaces.create": {
+    load: async () => await import("@/api/handlers/share-spaces/create"),
+  },
+  "share-spaces.get": {
+    load: async () => await import("@/api/handlers/share-spaces/get"),
+  },
+  "share-spaces.list": {
+    load: async () => await import("@/api/handlers/share-spaces/list"),
+  },
+  "share-spaces.revocations.create": {
+    load: async () =>
+      await import("@/api/handlers/share-spaces/revocations/create"),
+  },
   "signals.acceptances.create": {
     load: async () => await import("@/api/handlers/signals/acceptances/create"),
   },

@@ -104,6 +104,7 @@ import {
 } from "./properties";
 import { reportExports } from "./reports";
 import { savedSearches } from "./saved-searches";
+import { shareItems, shareRecipients, shareSpaces } from "./sharing";
 import { scoutRuns, signalEvents, signals } from "./signals";
 import { agentSkillResources, agentSkills } from "./skills";
 import { styleSets } from "./style-sets";
@@ -233,6 +234,9 @@ export const relations = defineRelations(
     legalListGenerationCandidateSources,
     legalListItemComments,
     legalListItemReviews,
+    shareSpaces,
+    shareRecipients,
+    shareItems,
   },
   (r) => ({
     contacts: {
@@ -419,6 +423,49 @@ export const relations = defineRelations(
       legalLists: r.many.legalLists({
         from: r.workspaces.id,
         to: r.legalLists.workspaceId,
+      }),
+      shareSpaces: r.many.shareSpaces({
+        from: r.workspaces.id,
+        to: r.shareSpaces.workspaceId,
+      }),
+    },
+    shareSpaces: {
+      workspace: r.one.workspaces({
+        from: r.shareSpaces.workspaceId,
+        to: r.workspaces.id,
+      }),
+      recipients: r.many.shareRecipients({
+        from: r.shareSpaces.id,
+        to: r.shareRecipients.shareSpaceId,
+      }),
+      items: r.many.shareItems({
+        from: r.shareSpaces.id,
+        to: r.shareItems.shareSpaceId,
+      }),
+      createdByUser: r.one.user({
+        from: r.shareSpaces.createdBy,
+        to: r.user.id,
+      }),
+    },
+    shareRecipients: {
+      shareSpace: r.one.shareSpaces({
+        from: r.shareRecipients.shareSpaceId,
+        to: r.shareSpaces.id,
+      }),
+      user: r.one.user({
+        from: r.shareRecipients.userId,
+        to: r.user.id,
+      }),
+      invitedByUser: r.one.user({
+        from: r.shareRecipients.invitedBy,
+        to: r.user.id,
+        alias: "shareRecipientInvitedBy",
+      }),
+    },
+    shareItems: {
+      shareSpace: r.one.shareSpaces({
+        from: r.shareItems.shareSpaceId,
+        to: r.shareSpaces.id,
       }),
     },
     legalLists: {

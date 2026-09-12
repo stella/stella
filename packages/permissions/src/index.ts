@@ -37,6 +37,7 @@ export const statements = {
   auditLog: ["read"],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: ["create", "update"],
+  shareSpace: ["create", "read", "update", "revoke", "audit"],
 } as const;
 
 type PermissionMap = {
@@ -79,6 +80,7 @@ const externalStellaGrants = {
   auditLog: [],
   agentSkill: [],
   firmMemory: [],
+  shareSpace: [],
 } satisfies StellaPermissionMap;
 
 const internStellaGrants = {
@@ -112,6 +114,7 @@ const memberStellaGrants = {
   auditLog: [],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: [],
+  shareSpace: ["create", "read", "update", "revoke", "audit"],
 } satisfies StellaPermissionMap;
 
 const managementStellaGrants = {

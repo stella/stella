@@ -15,6 +15,7 @@ import {
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
 import { STALE_TIME } from "@/lib/consts";
+import { isExternalSharePath } from "@/lib/external-share-privacy";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { routeTree } from "@/routeTree.gen";
 
@@ -69,6 +70,14 @@ export function getRouter() {
     const path = router.state.matches.at(-1)?.fullPath;
     if (path === undefined) {
       return;
+    }
+    if (isExternalSharePath(path)) {
+      analyticsValue.client?.opt_out_capturing();
+      routeErrorLifecycle.routeResolved(path);
+      return;
+    }
+    if (analyticsValue.client?.has_opted_out_capturing()) {
+      analyticsValue.client.opt_in_capturing();
     }
     routeErrorLifecycle.routeResolved(path);
     analyticsValue.analytics.capturePageViewed({ path });
