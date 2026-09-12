@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.26.3
+
+### Patch Changes
+
+- [#3270](https://github.com/stella/stella/pull/3270) [`f43eeec`](https://github.com/stella/stella/commit/f43eeecc7013b0deec45f6dbf272abe3da58b813) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A loading button shows only its loader, so a button with its own leading icon no longer spins two icons at once.
+
 ## 0.26.2
 
 ### Patch Changes
