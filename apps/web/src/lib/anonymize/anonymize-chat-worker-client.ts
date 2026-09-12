@@ -1,5 +1,7 @@
 import type { ChatAnonResult } from "@stll/anonymize-chat";
 
+import { getAnalytics } from "@/lib/analytics/provider";
+
 // eslint-disable-next-line import/default -- Vite ?worker&url import returns the emitted worker script URL as default export
 import anonymizeChatWorkerUrl from "../../workers/anonymize-chat-worker?worker&url";
 
@@ -183,11 +185,12 @@ export const warmupChatAnonymizeWorker = (): void => {
   // `loadNameDictionaries()` + the wasm pipeline once. The `"x"`
   // here has no semantic meaning; we just need *some* token so
   // the heavy initialisation happens before the user types.
-  anonymizeChatTextInWorker({ text: "x", workspaceId: "warmup" }).catch(() => {
-    // Swallow — a cold-start failure shouldn't bubble; the
-    // next real call will surface the error properly. We also
-    // reset the flag so a transient worker crash can be
-    // retried on the next mount.
-    warmedUp = false;
-  });
+  anonymizeChatTextInWorker({ text: "x", workspaceId: "warmup" }).catch(
+    (error: unknown) => {
+      // Warmup is non-blocking; record the failure and allow the next mount
+      // to retry a transient worker crash.
+      getAnalytics().captureError(error);
+      warmedUp = false;
+    },
+  );
 };

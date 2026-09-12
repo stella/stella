@@ -54,12 +54,14 @@ export const _unionKeyVariant = (
 );
 
 // A second spread after the pin can override it just as the first would.
+// oxlint-disable react/jsx-props-no-spread-multi -- Keep the duplicate spread to exercise the custom prop-order guard independently.
 export const _lastSpreadWins = ({
   ...props
 }: Omit<PanelProps, "orientation">) => (
   // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
   <Panel {...props} orientation="horizontal" {...props} />
 );
+// oxlint-enable react/jsx-props-no-spread-multi
 
 // The omit is reached through a file-local alias.
 export const _viaAlias = ({ ...props }: ShellProps) => (
@@ -182,7 +184,7 @@ export const _ok_shadowedBinding = ({
 }: Omit<PanelProps, "orientation">) => (
   <Panel {...props} orientation="horizontal">
     {[<span key="a" />].map((props: PanelProps) => (
-      <Panel {...props} />
+      <Panel key="inner" {...props} />
     ))}
   </Panel>
 );
@@ -193,7 +195,7 @@ export const _ok_shadowedSecondParam = ({
 }: Omit<PanelProps, "orientation">) => (
   <Panel {...props} orientation="horizontal">
     {[<span key="a" />].map((_item, props: PanelProps) => (
-      <Panel {...props} />
+      <Panel key="inner" {...props} />
     ))}
   </Panel>
 );

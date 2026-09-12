@@ -345,11 +345,21 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "yjs",
 ]
   .map(noLlmsTxt)
-  .concat({
-    checkedAt: "2026-09-08T00:00:00.000Z",
-    dependency: "temporal-polyfill",
-    explanation:
-      "The package publishes Markdown documentation at https://github.com/fullcalendar/temporal-polyfill and API documentation at https://tc39.es/proposal-temporal/docs/, but neither publishes llms.txt. Use those canonical references directly.",
-    expiresAt: "2026-10-08T00:00:00.000Z",
-    reason: "no-llms-txt",
-  });
+  .concat(
+    {
+      checkedAt: "2026-09-12T00:00:00.000Z",
+      dependency: "stylelint",
+      explanation:
+        "https://stylelint.io/llms.txt returns 404. Use https://stylelint.io/user-guide/rules/ and https://stylelint.io/user-guide/configure/ directly for the CSS correctness configuration.",
+      expiresAt: "2026-10-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-08T00:00:00.000Z",
+      dependency: "temporal-polyfill",
+      explanation:
+        "The package publishes Markdown documentation at https://github.com/fullcalendar/temporal-polyfill and API documentation at https://tc39.es/proposal-temporal/docs/, but neither publishes llms.txt. Use those canonical references directly.",
+      expiresAt: "2026-10-08T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+  );

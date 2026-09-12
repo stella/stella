@@ -88,6 +88,22 @@ describe("changed-file result boundary lint", () => {
 });
 
 describe("affected code-check planning", () => {
+  test.each([
+    ["apps/web/src/styles/app.css", ["apps/web"]],
+    ["packages/ui/src/styles/theme.css", ["packages/ui"]],
+    [".stylelintrc.json", []],
+    [".gitignore", []],
+    ["scripts/stylelint.test.ts", []],
+    ["package.json", []],
+    ["bun.lock", []],
+  ])("runs CSS checks when %s changes", (changedPath, affected) => {
+    const planned = plan([changedPath], affected);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(scopedCommands(planned)).toContainEqual(["bun", "run", "lint:css"]);
+  });
+
   test("checks complete changed workspaces and reverse dependants", () => {
     expect(
       plan(
@@ -235,6 +251,8 @@ describe("affected code-check planning", () => {
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
+    ["scripts/oxlint-typebox-unsafe.test.ts", "plugin-fixtures"],
+    ["scripts/oxlint-additional-guards.test.ts", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],
     ["scripts/tsconfig.json", "root-script-lint"],
     ["tsconfig.json", "plugin-fixtures"],

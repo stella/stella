@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { sessionOptions } from "@/lib/auth-queries";
@@ -28,8 +29,12 @@ export const loadAuthContext = async (queryClient: QueryClient) => {
 // route loader uses loadAuthContext and therefore preserves read failures.
 export const loadAuthContextForRootRedirect = async (
   queryClient: QueryClient,
-) =>
-  await loadAuthContext(queryClient).catch(() => ({
+) => {
+  const result = await Result.tryPromise(
+    async () => await loadAuthContext(queryClient),
+  );
+  return result.unwrapOr({
     session: null,
     user: null,
-  }));
+  });
+};

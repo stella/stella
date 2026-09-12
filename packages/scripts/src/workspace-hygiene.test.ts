@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import repositoryPackage from "../../../package.json";
 import { validateWorkspaceRoot } from "./workspace-hygiene";
 
 let tempRoots: string[] = [];
@@ -401,7 +402,7 @@ const createWorkspaceRoot = ({
       ...(isRecord(rootPackageJson["catalog"])
         ? rootPackageJson["catalog"]
         : {}),
-      oxlint: "1.81.0",
+      oxlint: repositoryPackage.catalog.oxlint,
       typescript: "6.0.3",
     },
     devDependencies: {

@@ -141,28 +141,21 @@ export const resolveWithCache = async (
     }
     // A negative entry that outlived its TTL falls through to a refetch.
   }
-  const promise = (async (): Promise<GithubSkillContentResult> => {
-    const result = await fetcher();
-    // Successes are immutable (pinned SHA) so they never expire; errors
-    // get a short TTL so a broken upstream is retried, not memoized.
-    const expiresAt =
-      result.status === "ok"
-        ? Number.POSITIVE_INFINITY
-        : now() + NEGATIVE_CACHE_TTL_MS;
-    cache.set(key, { state: "resolved", result, expiresAt });
-    return result;
-  })().catch((): GithubSkillContentResult => {
-    // `loadRawSkill` already catches internally, so a rejection here is
-    // defensive: still land it as a TTL'd negative entry so the in-flight
-    // slot is not poisoned past the window.
-    const result: GithubSkillContentResult = { status: "error" };
-    cache.set(key, {
-      state: "resolved",
-      result,
-      expiresAt: now() + NEGATIVE_CACHE_TTL_MS,
-    });
-    return result;
-  });
+  const promise = Result.tryPromise(fetcher).then(
+    (fetched): GithubSkillContentResult => {
+      const result = fetched.unwrapOr({
+        status: "error",
+      } as const satisfies GithubSkillContentResult);
+      // Successes are immutable (pinned SHA) so they never expire; errors
+      // get a short TTL so a broken upstream is retried, not memoized.
+      const expiresAt =
+        result.status === "ok"
+          ? Number.POSITIVE_INFINITY
+          : now() + NEGATIVE_CACHE_TTL_MS;
+      cache.set(key, { state: "resolved", result, expiresAt });
+      return result;
+    },
+  );
   // Publish the in-flight promise so concurrent callers share this fetch.
   cache.set(key, { state: "pending", promise });
   return await promise;

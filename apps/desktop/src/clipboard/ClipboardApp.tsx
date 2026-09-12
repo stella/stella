@@ -2,6 +2,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -405,18 +406,16 @@ const ClipboardCard = ({
               {"… "}
             </span>
           ) : null}
-          {highlightedText.map((segment, segmentIndex) =>
+          {highlightedText.map((segment) =>
             segment.match ? (
               <mark
                 className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
-                key={`${segmentIndex}-${segment.text}`}
+                key={segment.start}
               >
                 {segment.text}
               </mark>
             ) : (
-              <span key={`${segmentIndex}-${segment.text}`}>
-                {segment.text}
-              </span>
+              <span key={segment.start}>{segment.text}</span>
             ),
           )}
         </div>
@@ -1911,7 +1910,7 @@ const ClipboardApp = () => {
     controls.at(nextIndex)?.focus();
   };
 
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (dialog.type !== "closed" || welcomeOpen) {
       return;
     }
@@ -2041,27 +2040,9 @@ const ClipboardApp = () => {
         applySnapshotCommand("clipboard_delete_item", { id: item.id });
       }
     }
-  };
+  });
 
-  const handleKeyDownCapture = (event: KeyboardEvent) => {
-    if (
-      dialog.type === "closed" &&
-      !welcomeOpen &&
-      !event.isComposing &&
-      event.target instanceof HTMLElement &&
-      !(event.target instanceof HTMLInputElement) &&
-      controlsRef.current?.contains(event.target) &&
-      clipboardControlsKeyAction({ direction: railDirection, key: event.key })
-    ) {
-      // Keep arrows in the two-row navigation; Enter/Space open the menu.
-      event.stopPropagation();
-      handleControlsKeyDown(event, event.target);
-      return;
-    }
-    handleEscape(event);
-  };
-
-  const handleEscape = (event: KeyboardEvent) => {
+  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
     if (event.key !== "Escape" || event.isComposing || event.defaultPrevented) {
       return;
     }
@@ -2082,7 +2063,25 @@ const ClipboardApp = () => {
       return;
     }
     requestHide();
-  };
+  });
+
+  const handleKeyDownCapture = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      dialog.type === "closed" &&
+      !welcomeOpen &&
+      !event.isComposing &&
+      event.target instanceof HTMLElement &&
+      !(event.target instanceof HTMLInputElement) &&
+      controlsRef.current?.contains(event.target) &&
+      clipboardControlsKeyAction({ direction: railDirection, key: event.key })
+    ) {
+      // Keep arrows in the two-row navigation; Enter/Space open the menu.
+      event.stopPropagation();
+      handleControlsKeyDown(event, event.target);
+      return;
+    }
+    handleEscape(event);
+  });
 
   useEffect(() => {
     const timeline = timelineRef.current;
@@ -2099,7 +2098,7 @@ const ClipboardApp = () => {
       timeline.removeEventListener("keydown", handleKeyDownCapture, true);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [handleEscape, handleKeyDown, handleKeyDownCapture]);
+  }, []);
 
   const captureActive = snapshot.captureStatus === "active";
   const nextCaptureStatus: ClipboardCaptureStatus = captureActive

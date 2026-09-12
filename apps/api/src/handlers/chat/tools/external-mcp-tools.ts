@@ -1,5 +1,6 @@
 import type { AnyServerTool, MCPToolSource } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
+import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -178,9 +179,16 @@ export const createLazyExternalMcpToolsLoader = (
     if (loadPromise === null) {
       return;
     }
-    closePromise ??= loadPromise.then(
-      (loaded): void | Promise<void> => loaded.close(),
-      () => undefined,
+    const pendingLoad = loadPromise;
+    closePromise ??= Result.tryPromise(async () => await pendingLoad).then(
+      async (loaded) => {
+        // The loader's caller owns a failed load; only a successful load has
+        // resources to close. Closing failures still reject closePromise.
+        if (loaded.isOk()) {
+          return await loaded.value.close();
+        }
+        return undefined;
+      },
     );
     await closePromise;
   };
@@ -328,7 +336,7 @@ const loadConnectorTools = async ({
           // Sequencing only: this rejection is the same `error` the
           // surrounding branch already handled, so re-reporting it here
           // would double-count one failure.
-          // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+          // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
           .catch(() => undefined)
           .then(
             async () =>

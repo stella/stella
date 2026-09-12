@@ -83,6 +83,7 @@ type ClipboardDragData = Record<string | symbol, unknown>;
 
 export type ClipboardTextSegment = {
   match: boolean;
+  start: number;
   text: string;
 };
 
@@ -268,7 +269,7 @@ const clipboardQueryTerms = (query: string) => {
 export const highlightClipboardText = (text: string, query: string) => {
   const terms = clipboardQueryTerms(query);
   if (terms.length === 0) {
-    return [{ match: false, text }] satisfies ClipboardTextSegment[];
+    return [{ match: false, start: 0, text }] satisfies ClipboardTextSegment[];
   }
 
   const foldedText = foldSearchMatchTextWithOffsets(text);
@@ -288,13 +289,21 @@ export const highlightClipboardText = (text: string, query: string) => {
       continue;
     }
     if (range.start > cursor) {
-      segments.push({ match: false, text: text.slice(cursor, range.start) });
+      segments.push({
+        match: false,
+        start: cursor,
+        text: text.slice(cursor, range.start),
+      });
     }
-    segments.push({ match: true, text: text.slice(range.start, range.end) });
+    segments.push({
+      match: true,
+      start: range.start,
+      text: text.slice(range.start, range.end),
+    });
     cursor = range.end;
   }
   if (cursor < text.length) {
-    segments.push({ match: false, text: text.slice(cursor) });
+    segments.push({ match: false, start: cursor, text: text.slice(cursor) });
   }
   return segments;
 };

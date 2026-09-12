@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/dialog";
 import { stellaToast } from "@stll/ui/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -61,7 +62,8 @@ export const ClauseImportDialog = ({
         setPreviewCount(getClauseImportPreviewCount(text, selected.name));
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        getAnalytics().captureError(error);
         setPreviewCount(null);
       });
 

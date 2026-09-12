@@ -127,7 +127,11 @@ unprefixed global names.
 - **TypeScript**: strict mode, `type` over `interface`, no `any`,
   no non-null assertions. See [CLAUDE.md](CLAUDE.md) for full
   coding conventions.
-- **Linting**: oxlint (ultracite preset). **Formatting**: oxfmt.
+- **Linting**: Oxlint (Ultracite plus the [custom guards](.oxlint-plugins/README.md))
+  for TypeScript; `bun run lint:css` runs Stylelint's correctness checks over
+  authored CSS. CSS checks also run in `lint`, `code-check`, and affected CI.
+  Tailwind v4 directives and deliberate fallback declarations are supported;
+  embedded Astro styles are not scanned. **Formatting**: Oxfmt.
 - **Tests**: write tests for new functionality when applicable.
 
 ## Changesets

@@ -54,7 +54,8 @@ scope.addEventListener("message", (event: MessageEvent<unknown>) => {
       );
       return undefined;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
+      scope.reportError(error);
       const response: PageTransformResponse = {
         requestId: requestIdOf(event.data),
         status: "error",

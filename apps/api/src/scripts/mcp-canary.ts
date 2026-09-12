@@ -384,7 +384,10 @@ const inspectNotificationStream = async (
       const readObservation = await Promise.race([
         reader.read().then(
           ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
-          () => "read_failed" as const,
+          (error: unknown) => {
+            console.error("MCP probe stream read failed", error);
+            return "read_failed" as const;
+          },
         ),
         Bun.sleep(remainingMs).then(() => "open" as const),
       ]);

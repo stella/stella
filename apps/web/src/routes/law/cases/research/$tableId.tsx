@@ -13,7 +13,7 @@ import {
   notFound,
   redirect,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH } from "@stll/api-contract";
@@ -764,9 +764,14 @@ function TableNameField({
     }
     if (trimmed !== name) {
       detached(
-        onRename(trimmed).catch(() => {
-          setDraft(name);
-        }),
+        Result.tryPromise(async () => await onRename(trimmed)).then(
+          (result) => {
+            if (result.isErr()) {
+              setDraft(name);
+            }
+            return undefined;
+          },
+        ),
         "research-table.rename",
       );
     }

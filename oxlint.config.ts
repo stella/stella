@@ -650,6 +650,19 @@ export default defineConfig({
     "logical-assignment-operators": "off",
 
     "react/rules-of-hooks": "error",
+    // Override libraryRules so React correctness is checked in every app and
+    // shared package.
+    "react/jsx-key": "error",
+    "react/jsx-props-no-spread-multi": "error",
+    "react/no-array-index-key": "error",
+    "react/no-danger-with-children": "error",
+    "react/void-dom-elements-no-children": "error",
+    // The web sync wrapper owns a dependency array just like useEffect.
+    // useMountEffect is deliberately dependency-less and stays unregistered.
+    "react/exhaustive-deps": [
+      "error",
+      { additionalHooks: "(useExternalSyncEffect)" },
+    ],
     // Ultracite configures only named components as arrows, leaving Oxlint's
     // function-expression default for memo callbacks in conflict with
     // `prefer-arrow-callback`. Use one total component style.
@@ -687,8 +700,8 @@ export default defineConfig({
     // The rule has 0 current hits, but its job is regression protection.
     "import/no-cycle": "error",
 
-    // Disabled: `verbatimModuleSyntax` is on in the shared tsconfig, so
-    // the TypeScript compiler already enforces the type-import semantic.
+    // Disabled: `typescript/consistent-type-imports` already enforces type-only
+    // imports, including web where `verbatimModuleSyntax` is disabled.
     // The lint rule only checks the stylistic placement of the `type`
     // keyword inside the import (`import { type X }` vs `import type
     // { X }`) — pure formatting, ~11% of lint time, no bug-catching value.
@@ -812,7 +825,10 @@ export default defineConfig({
     "no-unexpected-multiline": "off",
     "max-classes-per-file": "off",
     "class-methods-use-this": "off",
-    "no-unmodified-loop-condition": "error",
+    "no-unmodified-loop-condition": [
+      "error",
+      { checkConditionalExpressions: true },
+    ],
     "no-loop-func": "error",
     complexity: ["error", 50],
     "func-style": "off",
@@ -883,11 +899,6 @@ export default defineConfig({
     // categories remain enabled by Ultracite.
     "react/invariant": "off",
     "react/todo": "off",
-    // `react/jsx-key` and `react/no-array-index-key` are enabled ("error") for
-    // apps/web/src and packages/workspace-ui/src via the overrides below. The
-    // other React surfaces (folio, ui, desktop, landing, playground) are not
-    // swept yet, and `react/hook-use-state` above is off everywhere.
-    "react/no-array-index-key": "off",
     "react/no-children-prop": "off",
     "react/no-danger": "off",
     "react/jsx-handler-names": "off",
@@ -1127,6 +1138,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
     "./.oxlint-plugins/require-toast-error-capture.ts",
     "./.oxlint-plugins/no-swallowed-rejection.ts",
+    "./.oxlint-plugins/no-unreviewed-typebox-unsafe.ts",
+    "./.oxlint-plugins/no-known-value-widening.ts",
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
@@ -1817,6 +1830,98 @@ export default defineConfig({
       },
     },
     {
+      // Unsafe schemas require an exact adapter owner and a reviewed reason;
+      // another call in the same source file is not implicitly approved.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-unreviewed-typebox-unsafe.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe": [
+          "error",
+          {
+            approvedAdapters: [
+              {
+                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+                binding: "decisionIdentifiersSchema",
+                reason:
+                  "Runtime array bounds preserve the canonical non-empty readonly identifier contract.",
+              },
+              {
+                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+                binding: "languageAlternatesSchema",
+                reason:
+                  "JSON arrays lack readonly metadata; the runtime element schema preserves the public contract.",
+              },
+              {
+                path: "apps/api/src/lib/case-law/decision-headnote-schema.ts",
+                binding: "decisionHeadnotePreviewSchema",
+                reason:
+                  "Closed runtime branches are exhaustively checked against the canonical discriminated union.",
+              },
+              {
+                path: "apps/api/src/lib/search/total-schema.ts",
+                binding: "searchTotalSchema",
+                reason:
+                  "Closed runtime branches are exhaustively checked against the canonical discriminated union.",
+              },
+              {
+                path: "apps/api/src/lib/custom-schema.ts",
+                binding: "tSafeId",
+                reason:
+                  "The UUID runtime validator constructs the nominal identifier brand.",
+              },
+              {
+                path: "apps/api/src/lib/conditions/contract.ts",
+                binding: "tConditionNode",
+                reason:
+                  "Bounded runtime recursion exposes the canonical recursive AST, with compile-time shape parity.",
+              },
+              {
+                path: "apps/api/src/lib/views-schema.ts",
+                binding: "tViewLayoutSchema",
+                reason:
+                  "The runtime discriminator branches preserve the canonical layout union without TypeBox intersection inference.",
+              },
+              {
+                path: "apps/api/src/lib/permissive-route-schema.ts",
+                binding: "permissiveRouteSchema",
+                reason:
+                  "Branded optional route fields defer strict validation until token authorization succeeds.",
+              },
+              {
+                path: "apps/api/src/lib/permissive-route-schema.ts",
+                binding: "permissiveBodySchema",
+                reason:
+                  "Branded permissive request bodies defer strict validation until token authorization succeeds.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-known-value-widening.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-known-value-widening/no-known-value-widening": "error",
+      },
+    },
+    {
       // The other half of the detached-promise guard: `.catch(() => null)`
       // passes every floating-promise check while discarding the rejection,
       // which is what the `void` ban exists to prevent. Product code only;
@@ -1829,6 +1934,7 @@ export default defineConfig({
       ],
       rules: {
         "no-swallowed-rejection/no-swallowed-rejection": "error",
+        "no-swallowed-rejection/require-rejection-parameter": "error",
       },
     },
     {
@@ -1864,6 +1970,7 @@ export default defineConfig({
       ],
       rules: {
         "no-swallowed-rejection/no-swallowed-rejection": "off",
+        "no-swallowed-rejection/require-rejection-parameter": "off",
       },
     },
     {
@@ -2304,17 +2411,6 @@ export default defineConfig({
       rules: { "oxc/no-barrel-file": "off" },
     },
     {
-      // The workspace kit's components came out of apps/web and keep its key
-      // hygiene: a list keyed by index is the same bug here. Only `jsx-key` and
-      // `no-array-index-key`, so the package is not swept for the rest of the
-      // app's set.
-      files: ["packages/workspace-ui/src/**/*.{ts,tsx}"],
-      rules: {
-        "react/jsx-key": "error",
-        "react/no-array-index-key": "error",
-      },
-    },
-    {
       files: ["apps/web/src/hooks/use-effect.ts"],
       rules: {
         // These generic wrappers intentionally accept opaque callbacks and
@@ -2326,8 +2422,6 @@ export default defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
-        "react/jsx-key": "error",
-        "react/no-array-index-key": "error",
         "require-cn-for-classname-composition/require-cn-for-classname-composition":
           "error",
         // Direct useEffect is banned; route external-system sync through
@@ -2335,13 +2429,6 @@ export default defineConfig({
         "no-raw-use-effect/no-raw-use-effect": [
           "error",
           { allowedFiles: ["apps/web/src/hooks/use-effect.ts"] },
-        ],
-        // useExternalSyncEffect takes a dependency array, so exhaustive-deps
-        // must inspect it like useEffect. useMountEffect is deliberately
-        // dependency-less (mount-only) and is left unregistered.
-        "react-hooks/exhaustive-deps": [
-          "error",
-          { additionalHooks: "(useExternalSyncEffect)" },
         ],
         "@tanstack/query/exhaustive-deps": "error",
         "@tanstack/query/infinite-query-property-order": "error",
