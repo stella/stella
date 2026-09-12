@@ -101,6 +101,11 @@ against writes racing the preflight.
    rates and new-account failures. Keep the maintenance control available for
    a forward fix.
 
+The shipped sign-in replay uses local provider responses and always rolls back
+its database transaction, including successful callbacks, token updates, and
+session refreshes. It verifies stored-account resolution; the separate runtime
+smoke must still exercise the deployed application's sign-in path.
+
 ## Failure and recovery boundaries
 
 - **Migration fails before cutover:** keep traffic paused and inspect the
