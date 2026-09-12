@@ -1,7 +1,7 @@
-diff --git a/dist/introspect-6ew7sakf.mjs b/dist/introspect-6ew7sakf.mjs
-index 8786e0d65d7d61e2b1537a959fc43f0a3e624e33..8a14147f46b2d5411c322eab5aab3ae888fb7e0c 100644
---- a/dist/introspect-6ew7sakf.mjs
-+++ b/dist/introspect-6ew7sakf.mjs
+diff --git a/dist/introspect-CbhhXT0E.mjs b/dist/introspect-CbhhXT0E.mjs
+index e5829d8e200dbb7fe3f451b62d085b0f29856b05..5a1867b754d7507f74ef9e7b1a0191b076fd017e 100644
+--- a/dist/introspect-CbhhXT0E.mjs
++++ b/dist/introspect-CbhhXT0E.mjs
 @@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
@@ -11,7 +11,7 @@ index 8786e0d65d7d61e2b1537a959fc43f0a3e624e33..8a14147f46b2d5411c322eab5aab3ae8
  	for (const rawInput of inputs) {
  		const check = await checkIdentifier(opts, rawInput.identifier);
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
-index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..131bb887b6fe106aaf3c1ca0987be91764bb7d64 100644
+index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644
 --- a/dist/oauth-1Ud-hvZY.d.mts
 +++ b/dist/oauth-1Ud-hvZY.d.mts
 @@ -1118,6 +1118,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
