@@ -10,7 +10,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 COMMIT;--> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - Better Auth 1.7.3
+-- stella-migration-safety: reviewed drop-object - Better Auth 1.7.3
 -- removed issuer from account identity; rollback can recreate this index only
 -- after every account has a trusted issuer again.
 DROP INDEX CONCURRENTLY IF EXISTS "account_issuer_account_id_uidx";--> statement-breakpoint
@@ -21,7 +21,5 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Keep historical issuer values for rollout compatibility, but permit the new
 -- application version to insert accounts without a field it no longer writes.
--- stella-migration-safety: reviewed destructive-change - dropping NOT NULL is
--- reversible after a future trusted backfill; no row data is changed here.
 -- squawk-ignore ban-drop-not-null
 ALTER TABLE "account" ALTER COLUMN "issuer" DROP NOT NULL;
