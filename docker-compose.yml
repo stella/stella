@@ -53,21 +53,27 @@ services:
 
   rustfs-setup:
     profiles: [dev]
-    # RustFS documents `mc` as its supported non-interactive S3 client.
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    # One-shot bucket bootstrap over RustFS's S3 API. The AWS CLI is the
+    # maintained generic client; the MinIO client it replaces is no longer
+    # published.
+    image: amazon/aws-cli:2.36.44@sha256:e8467f2c319f9bc9a1471808a69949a76915e9c95eaf4a09ece9f9e85fd32747
     depends_on:
       rustfs:
         condition: service_healthy
     environment:
+      AWS_ACCESS_KEY_ID: stella-rustfs-dev
+      AWS_SECRET_ACCESS_KEY: stella-rustfs-dev-secret
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://rustfs:9000
       QUICKWIT09_INDEX_ROOT_URI: *quickwit09-index-root-uri
     entrypoint: >
       /bin/sh -c "
       quickwit09_bucket=$${QUICKWIT09_INDEX_ROOT_URI#s3://} &&
       quickwit09_bucket=$${quickwit09_bucket%%/*} &&
-      mc alias set rustfs http://rustfs:9000 stella-rustfs-dev stella-rustfs-dev-secret &&
-      mc mb rustfs/stella --ignore-existing &&
-      mc mb rustfs/stella-legal-corpus --ignore-existing &&
-      mc mb rustfs/$${quickwit09_bucket} --ignore-existing
+      for bucket in stella stella-legal-corpus $${quickwit09_bucket}; do
+      aws s3api head-bucket --bucket $${bucket} 2>/dev/null ||
+      aws s3 mb s3://$${bucket} || exit 1;
+      done
       "
 
   valkey:
