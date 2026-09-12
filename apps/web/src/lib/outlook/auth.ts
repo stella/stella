@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { normalizeRedirectTo } from "@/lib/redirect";
 
 const OUTLOOK_HANDOFF_PATH = "/sign-in-outlook";
@@ -49,14 +51,11 @@ type ResolveOutlookSessionLookupOptions<TError> = {
 export const resolveOutlookSessionLookup = <TError>({
   mapError,
   result,
-}: ResolveOutlookSessionLookupOptions<TError>):
-  | OutlookSession
-  | null
-  | undefined => {
+}: ResolveOutlookSessionLookupOptions<TError>) => {
   if (result.error !== null && result.error !== undefined) {
-    throw mapError(result.error);
+    return Result.err(mapError(result.error));
   }
-  return result.data?.session;
+  return Result.ok(result.data?.session);
 };
 
 export const outlookSessionHandoff = (
@@ -74,9 +73,13 @@ export const outlookSessionHandoff = (
 export const surfaceOutlookHandoffFailure = async (
   operation: Promise<void>,
   showError: () => void,
-): Promise<void> => {
-  await operation.catch((error: unknown) => {
-    showError();
-    throw error;
+) => {
+  const result = await Result.tryPromise({
+    try: async () => await operation,
+    catch: (cause) => cause,
   });
+  if (Result.isError(result)) {
+    showError();
+  }
+  return result;
 };

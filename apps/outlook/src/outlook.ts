@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { env } from "@/env";
 import {
   attachmentCapabilityError,
@@ -419,7 +421,7 @@ const createBrowserSampleSnapshot = (
   itemInstanceKey,
   itemId: "sample-item",
   mode: "browser",
-  sentAt: new Date().toISOString(),
+  sentAt: Temporal.Now.instant().toString(),
   sourceId: "00000000-0000-7000-8000-000000000001",
   subject: "SPA review before Friday",
   to: [{ email: "lawyer@stella.local", name: "Lawyer" }],

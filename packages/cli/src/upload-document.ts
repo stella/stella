@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { open } from "node:fs/promises";
 import path from "node:path";
 
+import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
+
 import { inferFileMimeType } from "./file-mime-type.js";
 import { formatCapabilityCommand } from "./generate-capability-tree.js";
 import {
@@ -25,11 +27,7 @@ const UPLOAD_CAPABILITIES = {
 const UPLOAD_PURPOSE = {
   createEntity: "entity_create",
 } as const;
-export const DOCUMENT_UPLOAD_POLICY = {
-  maxBytes: 52_428_800, // 50 MiB
-  minimumBytesPerSecond: 32_768, // 32 KiB/s
-  putTimeoutMs: 1_800_000, // 30 minutes
-} as const;
+export { DOCUMENT_UPLOAD_POLICY };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

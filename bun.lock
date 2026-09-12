@@ -292,6 +292,8 @@
       "dependencies": {
         "@base-ui/react": "catalog:",
         "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
+        "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -677,6 +679,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/client": "2.0.0",
+        "@stll/api-contract": "workspace:*",
         "@stll/stable-stringify": "workspace:^",
         "@stricli/core": "^1.3.0",
         "better-result": "catalog:",

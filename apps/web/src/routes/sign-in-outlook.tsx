@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { env } from "@/env";
@@ -14,7 +15,7 @@ import {
   outlookSessionHandoff,
   resolveOutlookSessionLookup,
   surfaceOutlookHandoffFailure,
-} from "@/lib/outlook-auth";
+} from "@/lib/outlook/auth";
 
 const OFFICE_JS_URL =
   "https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js";
@@ -96,10 +97,14 @@ const SignInOutlook = () => {
       const office = await loadOfficeJs();
 
       const sessionLookup = await authClient.getSession();
-      const session = resolveOutlookSessionLookup({
+      const resolvedSession = resolveOutlookSessionLookup({
         mapError: toAuthClientError,
         result: sessionLookup,
       });
+      if (Result.isError(resolvedSession)) {
+        throw resolvedSession.error;
+      }
+      const session = resolvedSession.value;
       const handoff = outlookSessionHandoff(session);
       switch (handoff) {
         case "signed-out":
@@ -138,12 +143,19 @@ const SignInOutlook = () => {
       setState({ type: "delivered" });
     };
 
-    detached(
-      surfaceOutlookHandoffFailure(tryDeliverToken(), () => {
-        setState({ message: t("error.generic"), type: "error" });
-      }),
-      "outlook-handoff.deliver-token",
-    );
+    const deliverToken = async () => {
+      const delivered = await surfaceOutlookHandoffFailure(
+        tryDeliverToken(),
+        () => {
+          setState({ message: t("error.generic"), type: "error" });
+        },
+      );
+      if (Result.isError(delivered)) {
+        throw delivered.error;
+      }
+    };
+
+    detached(deliverToken(), "outlook-handoff.deliver-token");
   });
 
   return (

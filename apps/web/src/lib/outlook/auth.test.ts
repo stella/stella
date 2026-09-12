@@ -8,7 +8,7 @@ import {
   outlookSessionHandoff,
   resolveOutlookSessionLookup,
   surfaceOutlookHandoffFailure,
-} from "@/lib/outlook-auth";
+} from "@/lib/outlook/auth";
 
 describe("Outlook authentication handoff", () => {
   test("routes social sign-in through organization selection", () => {
@@ -43,15 +43,18 @@ describe("Outlook authentication handoff", () => {
     const lookupError = { status: 503 };
     const mappedError = new Error("Session lookup failed");
 
-    expect(() =>
-      resolveOutlookSessionLookup({
-        mapError: (error) => {
-          expect(error).toBe(lookupError);
-          return mappedError;
-        },
-        result: { data: null, error: lookupError },
-      }),
-    ).toThrow(mappedError);
+    const result = resolveOutlookSessionLookup({
+      mapError: (error) => {
+        expect(error).toBe(lookupError);
+        return mappedError;
+      },
+      result: { data: null, error: lookupError },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBe(mappedError);
+    }
   });
 
   test("encodes the dialog origin in a safe relative handoff", () => {
@@ -70,13 +73,12 @@ describe("Outlook authentication handoff", () => {
     const error = new Error("Office initialization failed");
     let surfaced = false;
 
-    const result = await Result.tryPromise({
-      try: async () =>
-        await surfaceOutlookHandoffFailure(Promise.reject(error), () => {
-          surfaced = true;
-        }),
-      catch: (cause) => cause,
-    });
+    const result = await surfaceOutlookHandoffFailure(
+      Promise.reject(error),
+      () => {
+        surfaced = true;
+      },
+    );
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {

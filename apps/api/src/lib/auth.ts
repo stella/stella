@@ -346,24 +346,28 @@ const relativeFrontendCallback = ({
     return DEFAULT_AUTH_REDIRECT;
   }
 
-  try {
-    const callback = new URL(callbackURL);
-    if (callback.origin !== new URL(frontendURL).origin) {
-      return DEFAULT_AUTH_REDIRECT;
-    }
-
-    if (callback.pathname === ORGANIZATION_SELECTION_PATH) {
-      const redirectTo = callback.searchParams.get("redirectTo");
-      return redirectTo && isSafeRelativeRedirect(redirectTo)
-        ? redirectTo
-        : DEFAULT_AUTH_REDIRECT;
-    }
-
-    const relative = `${callback.pathname}${callback.search}${callback.hash}`;
-    return isSafeRelativeRedirect(relative) ? relative : DEFAULT_AUTH_REDIRECT;
-  } catch {
+  const parsed = Result.try(() => ({
+    callback: new URL(callbackURL),
+    frontendOrigin: new URL(frontendURL).origin,
+  }));
+  if (Result.isError(parsed)) {
     return DEFAULT_AUTH_REDIRECT;
   }
+
+  const { callback, frontendOrigin } = parsed.value;
+  if (callback.origin !== frontendOrigin) {
+    return DEFAULT_AUTH_REDIRECT;
+  }
+
+  if (callback.pathname === ORGANIZATION_SELECTION_PATH) {
+    const redirectTo = callback.searchParams.get("redirectTo");
+    return redirectTo && isSafeRelativeRedirect(redirectTo)
+      ? redirectTo
+      : DEFAULT_AUTH_REDIRECT;
+  }
+
+  const relative = `${callback.pathname}${callback.search}${callback.hash}`;
+  return isSafeRelativeRedirect(relative) ? relative : DEFAULT_AUTH_REDIRECT;
 };
 
 type SocialTwoFactorRedirectUrlOptions = {

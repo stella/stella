@@ -8,7 +8,7 @@
     "build": "bun scripts/build.ts",
     "cert": "bun scripts/create-dev-cert.ts",
     "dev": "bun scripts/dev.ts",
-    "format": "oxfmt .",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/outlook",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/outlook",
     "probe:deployment": "bun scripts/probe-deployment.ts",
@@ -19,6 +19,8 @@
   "dependencies": {
     "@base-ui/react": "catalog:",
     "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/time": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",

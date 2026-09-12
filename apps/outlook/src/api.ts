@@ -21,13 +21,13 @@ import type {
   ReservedEmailUpload,
   UploadingEmailUpload,
 } from "@/ingestion-state";
-import { requestOutlookApi } from "@/lib/api";
-import { APIError } from "@/lib/api-error";
 import { buildEmlFile } from "@/lib/eml";
 import {
   diagnosticBase,
   ingestionDiagnostic,
 } from "@/lib/ingestion-diagnostics";
+import { requestOutlookApi } from "@/lib/outlook-api-client";
+import { OutlookAPIError } from "@/lib/outlook-api-error";
 import { OutlookError } from "@/lib/outlook-error";
 import type {
   AttachmentDownloadResult,
@@ -199,7 +199,7 @@ export const putPresignedEmail = async (
   onAbortComplete?.();
 
   const responseSuffix = Result.isOk(putResult) ? ` (${status})` : "";
-  throw new APIError({
+  throw new OutlookAPIError({
     message: `Upload failed${responseSuffix}`,
     status,
   });
@@ -399,8 +399,8 @@ export const reconcileEmailUpload = async (
 const SERVER_ERROR_STATUS = 500;
 
 export const shouldRetainPendingEmailUpload = (error: unknown): boolean =>
-  !(error instanceof APIError) ||
+  !(error instanceof OutlookAPIError) ||
   error.status === 409 ||
   error.status >= SERVER_ERROR_STATUS;
 
-export { APIError };
+export { OutlookAPIError };

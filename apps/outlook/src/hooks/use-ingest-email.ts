@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Result, panic } from "better-result";
 
 import type { OutlookIngestionRetryStage } from "@stll/api-contract";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import {
   abortEmailUploadReservation,
@@ -26,14 +27,16 @@ import {
   transitionIngestState,
   type UploadingEmailUpload,
 } from "@/ingestion-state";
-import { APIError, userErrorMessage } from "@/lib/api-error";
 import { attachmentsForIngestion } from "@/lib/attachment-selection";
-import { mapConcurrent } from "@/lib/bounded-concurrency";
 import {
   createIngestionDiagnosticBase,
   diagnosticBase,
   ingestionDiagnostic,
 } from "@/lib/ingestion-diagnostics";
+import {
+  OutlookAPIError,
+  outlookUserErrorMessage,
+} from "@/lib/outlook-api-error";
 import { isAttachmentReadError } from "@/lib/outlook-error";
 import { downloadAttachment } from "@/outlook";
 import type { MailSnapshot } from "@/types";
@@ -186,11 +189,11 @@ const ingestErrorMessage = ({
   if (isAttachmentReadError(error)) {
     return attachmentErrorFallback;
   }
-  if (error instanceof APIError) {
+  if (error instanceof OutlookAPIError) {
     if (error.status === 409) {
       return conflictFallback;
     }
-    return userErrorMessage(error, errorFallback);
+    return outlookUserErrorMessage(error, errorFallback);
   }
   return errorFallback;
 };
@@ -250,10 +253,13 @@ export const useIngestEmail = ({
         if (pending.type === "aborting") {
           return null;
         }
-        throw new APIError({ message: reconciliation.reason, status: 422 });
+        throw new OutlookAPIError({
+          message: reconciliation.reason,
+          status: 422,
+        });
       case "finalizing":
         remember(toFinalizing(pending));
-        throw new APIError({
+        throw new OutlookAPIError({
           message: "Finalize already in progress for this upload",
           status: 409,
         });
@@ -318,14 +324,14 @@ export const useIngestEmail = ({
           pendingUpload.type !== "aborting" &&
           pendingUpload.workspaceId !== workspaceId
         ) {
-          throw new APIError({ message: errorFallback, status: 409 });
+          throw new OutlookAPIError({ message: errorFallback, status: 409 });
         }
         if (pendingUpload) {
           const resumed = await resumePending(pendingUpload);
           if (resumed) {
             if (!pendingMatchesSnapshot) {
               setPendingEmailUpload(null);
-              throw new APIError({
+              throw new OutlookAPIError({
                 message: previousEmailSaveCompleted,
                 status: 422,
               });
@@ -357,10 +363,10 @@ export const useIngestEmail = ({
           ),
           type: "downloading",
         });
-        const downloaded = await mapConcurrent({
-          concurrency: OUTLOOK_INGESTION_CONFIG.attachmentDownloadConcurrency,
+        const downloaded = await mapWithConcurrency({
           items: attachments,
-          map: downloadAttachment,
+          limit: OUTLOOK_INGESTION_CONFIG.attachmentDownloadConcurrency,
+          operation: downloadAttachment,
         });
         if (
           !isLatestSnapshotForSave({
@@ -369,7 +375,7 @@ export const useIngestEmail = ({
             latestItemInstanceKey: latest.itemInstanceKey,
           })
         ) {
-          throw new APIError({ message: errorFallback, status: 409 });
+          throw new OutlookAPIError({ message: errorFallback, status: 409 });
         }
         const reserved = await reserveEmailUpload({
           attachments: downloaded,
@@ -383,7 +389,7 @@ export const useIngestEmail = ({
           if (resumed) {
             return resumed;
           }
-          throw new APIError({ message: errorFallback, status: 409 });
+          throw new OutlookAPIError({ message: errorFallback, status: 409 });
         }
         return await finalizeEmailUpload(await uploadPending(reserved));
       },

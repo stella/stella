@@ -3,8 +3,8 @@ import { Result } from "better-result";
 import { buildVersionedApiUrl } from "@stll/api-contract";
 
 import { env } from "@/env";
-import { APIError, toAPIError } from "@/lib/api-error";
-import { getAuthToken } from "@/lib/auth";
+import { OutlookAPIError, toOutlookAPIError } from "@/lib/outlook-api-error";
+import { getAuthToken } from "@/lib/outlook-auth";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -59,13 +59,13 @@ export const requestOutlookApi = async <TResponse>({
     catch: (cause) => cause,
   });
   if (Result.isError(decoded)) {
-    throw new APIError({
+    throw new OutlookAPIError({
       message: response.ok ? "Invalid API response" : "API request failed",
       status: response.ok ? 502 : response.status,
     });
   }
   if (!response.ok) {
-    throw toAPIError({
+    throw toOutlookAPIError({
       status: response.status,
       value: errorValue(decoded.value),
     });
@@ -73,7 +73,7 @@ export const requestOutlookApi = async <TResponse>({
 
   const parsed = parse(decoded.value);
   if (!parsed.success) {
-    throw new APIError({ message: "Invalid API response", status: 502 });
+    throw new OutlookAPIError({ message: "Invalid API response", status: 502 });
   }
   return parsed.output;
 };

@@ -5,8 +5,11 @@ import { Result } from "better-result";
 import { parseOutlookAIDraftResponse } from "@stll/api-contract";
 
 import { buildAIDraftRequest } from "@/hooks/ai-request.logic";
-import { requestOutlookApi } from "@/lib/api";
-import { APIError, userErrorMessage } from "@/lib/api-error";
+import { requestOutlookApi } from "@/lib/outlook-api-client";
+import {
+  OutlookAPIError,
+  outlookUserErrorMessage,
+} from "@/lib/outlook-api-error";
 import type { MailSnapshot } from "@/types";
 
 const AI_REQUEST_TIMEOUT_MS = 70_000;
@@ -45,8 +48,8 @@ export const useAIDraft = (errorFallback: string): UseAIDraft => {
     if (Result.isError(result)) {
       setState({
         message:
-          result.error instanceof APIError
-            ? userErrorMessage(result.error, errorFallback)
+          result.error instanceof OutlookAPIError
+            ? outlookUserErrorMessage(result.error, errorFallback)
             : errorFallback,
         type: "error",
       });

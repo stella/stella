@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildDialogStartAddress, parseHandoffToken } from "@/lib/auth";
+import { buildDialogStartAddress, parseHandoffToken } from "@/lib/outlook-auth";
 
 describe("buildDialogStartAddress", () => {
   test("bootstraps the dialog on the task-pane origin", () => {

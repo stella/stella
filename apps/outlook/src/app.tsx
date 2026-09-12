@@ -24,7 +24,11 @@ import { useWorkspaceSelection } from "@/hooks/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import type { PendingEmailUpload } from "@/ingestion-state";
 import { selectedOrdinaryAttachmentIds } from "@/lib/attachment-selection";
-import { getAuthToken, signInViaDialog, subscribeAuthToken } from "@/lib/auth";
+import {
+  getAuthToken,
+  signInViaDialog,
+  subscribeAuthToken,
+} from "@/lib/outlook-auth";
 import { placeDraft } from "@/outlook";
 import type { DraftPlacement } from "@/outlook";
 import type { MailSnapshot } from "@/types";

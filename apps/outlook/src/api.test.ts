@@ -5,7 +5,7 @@ import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
 import { toSafeId } from "@stll/api-contract/safe-id";
 
 import {
-  APIError,
+  OutlookAPIError,
   PendingUploadCleanupError,
   putPresignedEmail,
   shouldRetainPendingEmailUpload,
@@ -158,18 +158,18 @@ describe("pending email finalize retry", () => {
     );
     expect(
       shouldRetainPendingEmailUpload(
-        new APIError({ message: "in progress", status: 409 }),
+        new OutlookAPIError({ message: "in progress", status: 409 }),
       ),
     ).toBe(true);
     expect(
       shouldRetainPendingEmailUpload(
-        new APIError({ message: "temporary", status: 500 }),
+        new OutlookAPIError({ message: "temporary", status: 500 }),
       ),
     ).toBe(true);
     for (const status of [502, 503, 504]) {
       expect(
         shouldRetainPendingEmailUpload(
-          new APIError({ message: "gateway response", status }),
+          new OutlookAPIError({ message: "gateway response", status }),
         ),
       ).toBe(true);
     }
@@ -178,12 +178,12 @@ describe("pending email finalize retry", () => {
   test("releases the upload after a terminal finalize response", () => {
     expect(
       shouldRetainPendingEmailUpload(
-        new APIError({ message: "missing", status: 404 }),
+        new OutlookAPIError({ message: "missing", status: 404 }),
       ),
     ).toBe(false);
     expect(
       shouldRetainPendingEmailUpload(
-        new APIError({ message: "rejected", status: 422 }),
+        new OutlookAPIError({ message: "rejected", status: 422 }),
       ),
     ).toBe(false);
   });

@@ -3,7 +3,10 @@ import { useEffect, useState } from "react";
 import { Result } from "better-result";
 
 import { readWorkspaces } from "@/api";
-import { APIError, userErrorMessage } from "@/lib/api-error";
+import {
+  OutlookAPIError,
+  outlookUserErrorMessage,
+} from "@/lib/outlook-api-error";
 import type { WorkspaceSummary } from "@/types";
 
 type UseWorkspaces = {
@@ -23,8 +26,8 @@ export const useWorkspaces = (errorFallback: string): UseWorkspaces => {
       if (Result.isError(result)) {
         const { error: cause } = result;
         setError(
-          cause instanceof APIError
-            ? userErrorMessage(cause, errorFallback)
+          cause instanceof OutlookAPIError
+            ? outlookUserErrorMessage(cause, errorFallback)
             : errorFallback,
         );
         return;
