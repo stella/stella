@@ -225,6 +225,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   workspace_contact: "team",
   case_law_matter_link: "court",
   case_law_decision_annotation: "court",
+  case_law_research_column: "court",
   case_law_research_table: "court",
   bilingual_translation_run: "automation",
   document_translation_run: "automation",

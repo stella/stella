@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import {
-  caseLawResearchColumns,
   caseLawResearchTableDecisions,
   caseLawResearchTables,
 } from "@/api/db/schema";
+import { readOrganizationResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import {
   researchTableParamsSchema,
   toResearchColumnResponse,
@@ -20,9 +20,9 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   description:
-    "Read one research table: its saved query, its question columns, every " +
-    "pinned or excluded decision, and the row facts of the pinned ones so " +
-    "they can be merged with the query's own results.",
+    "Read one research table: its saved query, the organization's question " +
+    "columns, every pinned or excluded decision, and the row facts of the " +
+    "pinned ones so they can be merged with the query's own results.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },
@@ -71,23 +71,12 @@ const readResearchTable = createSafeRootHandler(
             asc(caseLawResearchTableDecisions.decisionId),
           )
           .limit(LIMITS.caseLawResearchTableDecisionsMax);
-        const columns = await tx
-          .select()
-          .from(caseLawResearchColumns)
-          .where(
-            and(
-              eq(caseLawResearchColumns.tableId, tableId),
-              eq(
-                caseLawResearchColumns.organizationId,
-                session.activeOrganizationId,
-              ),
-            ),
-          )
-          .orderBy(
-            asc(caseLawResearchColumns.position),
-            asc(caseLawResearchColumns.id),
-          )
-          .limit(LIMITS.caseLawResearchColumnsPerTable);
+        // Question columns are the organization's now, not this table's: the
+        // retiring view shows the same set the results table does.
+        const columns = await readOrganizationResearchColumns({
+          tx,
+          organizationId: session.activeOrganizationId,
+        });
         return { table, decisions, columns };
       }),
     );

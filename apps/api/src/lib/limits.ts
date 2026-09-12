@@ -393,8 +393,8 @@ export const LIMITS = {
   caseLawResearchTablesPageSizeMax: 100,
   /** Pinned plus excluded decisions per research table. */
   caseLawResearchTableDecisionsMax: 500,
-  /** Question columns per research table. */
-  caseLawResearchColumnsPerTable: 20,
+  /** Question columns one organization may keep; every search shows them all. */
+  caseLawResearchColumnsPerOrganization: 20,
   /** Decisions one run request may queue; the client batches beyond it. */
   caseLawResearchRunDecisionsMax: 100,
   /** Decisions answered concurrently inside one run. */

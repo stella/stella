@@ -2,10 +2,17 @@ import type { SafeId } from "./safe-id";
 import type { SearchSort } from "./search";
 
 /**
+ * Question columns and their answers, and the research tables they are being
+ * moved off.
+ *
+ * A question column belongs to the organization: every member sees it, and an
+ * answer keyed `(columnId, decisionId)` is reusable on every search that
+ * surfaces the decision. Rows are the public corpus itself, addressed by
+ * decision id; nothing about a decision is copied.
+ *
  * A research table is a saved case-law search a lawyer keeps working on: the
- * query it was made from, the decisions pinned into or excluded from its rows,
- * and (later) the questions asked of every row. Rows are the public corpus
- * itself, addressed by decision id; nothing about a decision is copied.
+ * query it was made from and the decisions pinned into or excluded from its
+ * rows. It is retiring into the results table.
  */
 export const CASE_LAW_RESEARCH_QUERY_VERSION = 1 as const;
 
@@ -39,7 +46,7 @@ export type CaseLawResearchSavedQuery = {
   sort?: SearchSort;
 };
 
-/** What a research-table question expects for an answer. */
+/** What a question column expects for an answer. */
 export const CASE_LAW_RESEARCH_ANSWER_TYPES = ["yes_no", "text"] as const;
 
 export type CaseLawResearchAnswerType =
