@@ -71,9 +71,10 @@ const readViews = createSafeHandler(
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
           .orderBy(workspaceViews.position)
-          // Complete by construction (unfiltered, capped at the creation
-          // limit): the web client drops per-view state for any view absent
-          // from this list (`lib/workspaces/queries/views.ts`).
+          // Must return every view: the web client treats absence from
+          // this list as deletion and drops that view's per-view state
+          // (`lib/workspaces/table-store.ts`, `installTableStoreReconcile`).
+          // Never filter or paginate here.
           .limit(LIMITS.viewsCount),
       ),
     );

@@ -4,7 +4,6 @@ import type { StorageValue } from "zustand/middleware";
 
 import { readStoredJson } from "@/lib/stored-json";
 
-/** No migration: a payload at any other version reads as absent. */
 export const TABLE_STORE_VERSION = 1;
 
 const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
@@ -20,9 +19,9 @@ export type TableViewRef = {
 export type TableViewRecord<T> = Record<string, Record<string, T>>;
 
 /**
- * `record` with one matter's views filtered by `keep`. An emptied matter is
- * dropped; other matters are returned as they are. Returns `record` itself
- * when nothing is filtered out, so a caller can tell a no-op by identity.
+ * Remove the views of `workspaceId` that `keep` rejects. Drops the matter's
+ * entry when no view survives. Returns the same `record` object when nothing
+ * was removed, so callers can skip a store write by identity check.
  */
 export const pruneMatterViews = <T>(
   record: TableViewRecord<T>,

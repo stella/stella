@@ -5,10 +5,7 @@ export const viewsRootKey = (workspaceId: string) => [
   workspaceId,
 ];
 
-/**
- * The matter whose views list `queryKey` holds, or `null` for any other key.
- * Takes `unknown` because query cache events carry untyped keys.
- */
+/** The matter whose views list `queryKey` holds, or `null` for any other key. */
 export const viewsQueryWorkspaceId = (queryKey: unknown): string | null => {
   if (!Array.isArray(queryKey)) {
     return null;
