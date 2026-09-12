@@ -1,21 +1,6 @@
 import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
-import {
-  isRailwayPrivateHostname,
-  isTlsOrLoopbackUrl,
-} from "@/api/lib/secure-service-url";
-
-const isSecureRedisUrl = (value: string) => {
-  const url = new URL(value);
-  return (
-    isTlsOrLoopbackUrl(value, {
-      plaintextProtocol: "redis:",
-      tlsProtocol: "rediss:",
-    }) ||
-    (url.protocol === "redis:" && isRailwayPrivateHostname(url.hostname))
-  );
-};
 
 /**
  * Environment shared by the API process and document-processing worker.
@@ -23,17 +8,6 @@ const isSecureRedisUrl = (value: string) => {
  * unrelated HTTP-server concerns such as auth, email, and Gotenberg.
  */
 export const envDocumentProcessingWorkerServerSchema = {
-  REDIS_URL: v.pipe(v.string(), v.url()),
-  /**
-   * Whether a `rediss://` connection verifies the server's certificate chain.
-   * On by default. Set to false only where the endpoint presents a
-   * certificate no trust anchor can validate — a self-signed certificate
-   * bound to a private address, say — and the network itself is the boundary.
-   */
-  REDIS_TLS_REJECT_UNAUTHORIZED: v.optional(
-    v.pipe(v.string(), v.parseBoolean()),
-    "true",
-  ),
   FEATURE_INBOX_DOCUMENT_SCOUTS: featureFlagSchema,
   DOCUMENT_OCR_MODEL_DIR: v.optional(v.string()),
   /**
@@ -57,16 +31,22 @@ export const envDocumentProcessingWorkerServerSchema = {
 type DocumentProcessingEnvInvariantInput = {
   contentEncryptionKey: string | undefined;
   nodeEnv: string | undefined;
-  redisUrl: string;
+  redisUrl: string | undefined;
 };
 
+/**
+ * REDIS_URL is declared in the base schema and optional there, so a process
+ * that runs with the base environment only never has to supply one. Both
+ * entrypoints validated here queue and broadcast over Redis, so for them its
+ * absence is a configuration error rather than an unused setting.
+ */
 export const documentProcessingEnvInvariantViolation = ({
   contentEncryptionKey,
   nodeEnv,
   redisUrl,
 }: DocumentProcessingEnvInvariantInput): string | null => {
-  if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !isSecureRedisUrl(redisUrl)) {
-    return "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.";
+  if (redisUrl === undefined) {
+    return "REDIS_URL is required by the API server and the document-processing worker.";
   }
   if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !contentEncryptionKey) {
     return "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.";

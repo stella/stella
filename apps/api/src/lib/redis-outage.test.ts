@@ -107,9 +107,8 @@ describe("the outage under test", () => {
   // be running, or wherever the client has been mocked: every consumer below
   // would succeed for the ordinary reason.
   test("a real client cannot reach Valkey", async () => {
-    const { envDocumentProcessingWorker } =
-      await import("@/api/env-document-processing-worker");
-    expect(envDocumentProcessingWorker.REDIS_URL).toBe(UNREACHABLE_REDIS_URL);
+    const { envBase } = await import("@/api/env-base");
+    expect(envBase.REDIS_URL).toBe(UNREACHABLE_REDIS_URL);
 
     const client = createRedisClient({
       connectionTimeout: 500,

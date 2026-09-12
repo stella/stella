@@ -431,6 +431,7 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
   S3_SECRET_ACCESS_KEY: 'S3_CREDENTIALS_PROVIDER is "env"',
   SES_REGION: "EMAIL_PROVIDER is ses",

@@ -182,3 +182,39 @@ describe("query expansion mode", () => {
     ).toBe(false);
   });
 });
+
+describe("redis transport", () => {
+  test("a process without REDIS_URL passes the base invariant", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_STORAGE_MODE: "canonical",
+        CORPUS_PROJECTION_OWNER: "external",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a plaintext Redis endpoint outside local development", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_STORAGE_MODE: "canonical",
+        CORPUS_PROJECTION_OWNER: "external",
+        REDIS_URL: "redis://cache.internal:6379",
+      }),
+    ).toBe(
+      "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.",
+    );
+  });
+
+  test("accepts a TLS Redis endpoint outside local development", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_STORAGE_MODE: "canonical",
+        CORPUS_PROJECTION_OWNER: "external",
+        REDIS_URL: "rediss://cache.internal:6380",
+      }),
+    ).toBeNull();
+  });
+});

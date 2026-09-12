@@ -11,11 +11,11 @@
 
 import type { RedisOptions } from "bun";
 
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { envBase } from "@/api/env-base";
 
 export const redisConnectionOptions = (
-  url = envDocumentProcessingWorker.REDIS_URL,
-  rejectUnauthorized = envDocumentProcessingWorker.REDIS_TLS_REJECT_UNAUTHORIZED,
+  url: string,
+  rejectUnauthorized = envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
 ): RedisOptions => {
   const useTls = url.toLowerCase().startsWith("rediss://");
   return useTls ? { tls: { rejectUnauthorized } } : {};
