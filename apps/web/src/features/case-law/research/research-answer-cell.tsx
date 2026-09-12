@@ -6,7 +6,7 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import type { ResearchAnswer } from "@/features/case-law/research/queries";
+import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -24,7 +24,7 @@ const YES_NO_TONE = {
 
 type ResearchAnswerCellProps = {
   /** Absent when the cell was never queued. */
-  answer: ResearchAnswer | undefined;
+  answer: QuestionAnswer | undefined;
   onShowSource: (anchorId: string) => void;
 };
 

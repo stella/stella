@@ -1,7 +1,12 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useState } from "react";
 
-import { SearchIcon, XIcon } from "lucide-react";
+import {
+  AlignJustifyIcon,
+  SearchIcon,
+  WrapTextIcon,
+  XIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SEARCH_SORTS } from "@stll/api-contract/search";
@@ -9,6 +14,7 @@ import type { SearchSort } from "@stll/api-contract/search";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
@@ -18,6 +24,9 @@ import {
 } from "@stll/ui/select";
 
 import { DecisionColumnChooser } from "@/features/case-law/components/decision-table";
+import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
+import type { DecisionContentMode } from "@/features/case-law/decision-columns.logic";
+import type { QuestionColumn } from "@/features/case-law/research/question-columns.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 const SORT_LABEL_KEYS = {
@@ -31,8 +40,10 @@ type DecisionResultsToolbarProps = {
    * rather than props, so the toolbar owes nothing to the research slice.
    */
   actions?: ReactNode;
-  hiddenColumnIds: readonly string[];
-  onHiddenColumnIdsChange: (hiddenColumnIds: string[]) => void;
+  layout: DecisionTableLayout;
+  onLayoutChange: (layout: DecisionTableLayout) => void;
+  /** Drawn in the column chooser too, so a question can be hidden like any column. */
+  questionColumns: readonly QuestionColumn[];
   /** Adds the entry to the query as one more thing every hit must say. */
   onRefine: (entry: string) => void;
   onSortChange: (sort: SearchSort) => void;
@@ -49,10 +60,11 @@ type DecisionResultsToolbarProps = {
  */
 export const DecisionResultsToolbar = ({
   actions,
-  hiddenColumnIds,
-  onHiddenColumnIdsChange,
+  layout,
+  onLayoutChange,
   onRefine,
   onSortChange,
+  questionColumns,
   sort,
   summary,
 }: DecisionResultsToolbarProps) => {
@@ -98,15 +110,52 @@ export const DecisionResultsToolbar = ({
           </>
         )}
         <span className="bg-border mx-1 h-4 w-px" />
+        <SegmentedIconToggle
+          onChange={(contentMode) => onLayoutChange({ ...layout, contentMode })}
+          options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
+            value: option.mode,
+            icon: option.icon,
+            label: t(option.labelKey),
+          }))}
+          value={layout.contentMode}
+        />
         <DecisionColumnChooser
-          hiddenColumnIds={hiddenColumnIds}
-          onHiddenColumnIdsChange={onHiddenColumnIdsChange}
+          layout={layout}
+          onLayoutChange={onLayoutChange}
+          questionColumns={questionColumns}
         />
         {actions}
       </div>
     </div>
   );
 };
+
+/**
+ * How much of a prose cell a row shows. The same two modes, icons and words as
+ * the workspace table's own density control; the state is this page's, because
+ * a public results table has no view to hang it on.
+ */
+const TABLE_CONTENT_MODE_OPTIONS = [
+  {
+    mode: "tight",
+    icon: AlignJustifyIcon,
+    labelKey: "workspaces.table.tightContent",
+  },
+  {
+    mode: "fit-content",
+    icon: WrapTextIcon,
+    labelKey: "workspaces.table.wrapContent",
+  },
+] as const satisfies readonly {
+  mode: DecisionContentMode;
+  icon: ComponentType<{ className?: string }>;
+  labelKey: TranslationKey;
+}[];
+
+// Every mode is offered, always: a control that silently dropped one would be
+// a mode the reader cannot get back to.
+type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["mode"];
+true satisfies DecisionContentMode extends OfferedContentMode ? true : never;
 
 /**
  * One more word every hit has to carry. It is written into the query itself,

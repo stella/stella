@@ -309,7 +309,7 @@ const ImportSkillDialogBody = ({
                   type="button"
                   variant="ghost"
                 >
-                  {t("folio.selectAll")}
+                  {t("common.selectAll")}
                 </Button>
               )}
             </div>
