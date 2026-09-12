@@ -1,5 +1,11 @@
 # @stll/template-conditions
 
+## 0.5.3
+
+### Patch Changes
+
+- [#3266](https://github.com/stella/stella/pull/3266) [`7178ef2`](https://github.com/stella/stella/commit/7178ef2e2107ccf1b9be73a7ae9eb80b24a54a69) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve negative zero when rendering numeric filter arguments so template markers round-trip without changing their values.
+
 ## 0.5.2
 
 ### Patch Changes

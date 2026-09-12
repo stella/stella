@@ -912,7 +912,7 @@
     },
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
-      "version": "0.5.2",
+      "version": "0.5.3",
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",
