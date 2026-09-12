@@ -25,13 +25,17 @@ const VIEW_LAYOUT_POLICY = {
 >;
 
 export type RequiredViewLayoutType = {
-  [TType in ViewLayoutType]: (typeof VIEW_LAYOUT_POLICY)[TType]["provisioning"] extends "required"
+  [
+    TType in ViewLayoutType
+  ]: (typeof VIEW_LAYOUT_POLICY)[TType]["provisioning"] extends "required"
     ? TType
     : never;
 }[ViewLayoutType];
 
 export type DirectlyCreatableViewLayoutType = {
-  [TType in ViewLayoutType]: (typeof VIEW_LAYOUT_POLICY)[TType]["creation"] extends "direct"
+  [
+    TType in ViewLayoutType
+  ]: (typeof VIEW_LAYOUT_POLICY)[TType]["creation"] extends "direct"
     ? TType
     : never;
 }[ViewLayoutType];

@@ -202,7 +202,9 @@ type ResolvedTanStackTextModelForProvider<
 };
 
 export type ResolvedTanStackTextModel = {
-  [TProvider in TanStackTextProvider]: ResolvedTanStackTextModelForProvider<TProvider>;
+  [
+    TProvider in TanStackTextProvider
+  ]: ResolvedTanStackTextModelForProvider<TProvider>;
 }[TanStackTextProvider];
 
 export type ResolvedTanStackTextModelInfo = Pick<

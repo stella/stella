@@ -13,7 +13,7 @@ import type { QueryOptionsInput } from "@/lib/react-query";
 type ActiveFileContext = {
   docxEditSnapshot?:
     | {
-        blocks: {
+        blocks: readonly {
           /** Folio's normalized text hash; the model echoes it as an edit precondition. */
           blockTextHash?: string | undefined;
           displayLabel?: string | undefined;

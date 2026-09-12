@@ -32,7 +32,9 @@ export const BUSINESS_REGISTRY_CONFIGURATION = {
 >;
 
 export type BusinessRegistryCredentialSlug = {
-  [Slug in BusinessRegistrySlug]: (typeof BUSINESS_REGISTRY_CONFIGURATION)[Slug] extends "none"
+  [
+    Slug in BusinessRegistrySlug
+  ]: (typeof BUSINESS_REGISTRY_CONFIGURATION)[Slug] extends "none"
     ? never
     : Slug;
 }[BusinessRegistrySlug];

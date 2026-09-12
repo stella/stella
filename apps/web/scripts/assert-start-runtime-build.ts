@@ -54,6 +54,11 @@ const RUNTIME_ASSET_CONTRACTS = [
     pattern: "dist/client/assets/render-worker-host-*.js",
   },
   {
+    expectedCount: 1,
+    label: "Office delimited-text worker host",
+    pattern: "dist/client/assets/delimited-text-worker-host-????????.js",
+  },
+  {
     expectedCount: 2,
     label: "Office render workers",
     pattern: "dist/client/assets/render-worker-????????-????????.js",

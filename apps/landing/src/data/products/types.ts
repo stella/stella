@@ -181,8 +181,9 @@ type InvalidCatalogAdjacentId<TSlug extends ProductSlug> = Exclude<
 >;
 
 type ProductAdjacentLinks<TSlug extends ProductSlug> = {
-  readonly [TId in CatalogAdjacentId<TSlug> &
-    ProductLinkId]: ProductLinkForId<TId>;
+  readonly [
+    TId in CatalogAdjacentId<TSlug> & ProductLinkId
+  ]: ProductLinkForId<TId>;
 };
 
 export type Product<TSlug extends ProductSlug> = {

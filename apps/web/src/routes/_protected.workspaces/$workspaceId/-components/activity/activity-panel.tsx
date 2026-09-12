@@ -1409,7 +1409,9 @@ const ActivityDetailsSheet = ({
                             )}
                           </time>
                           <span aria-hidden="true"> · </span>
-                          {t("workspaces.overview.activity.details.eventId")}:{" "}
+                          {t(
+                            "workspaces.overview.activity.details.eventId",
+                          )}:{" "}
                           <BidiText as="span" className="break-all">
                             {batchItem.id}
                           </BidiText>

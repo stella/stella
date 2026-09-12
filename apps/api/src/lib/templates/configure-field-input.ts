@@ -839,9 +839,9 @@ const FORMAT_FOLD = {
 /** Derived from {@link FORMAT_FOLD}, so a property that becomes `default`
  *  cannot ship without saying what its default is. */
 type DefaultFoldProperty = {
-  [Property in keyof typeof FORMAT_FOLD]: (typeof FORMAT_FOLD)[Property] extends "default"
-    ? Property
-    : never;
+  [
+    Property in keyof typeof FORMAT_FOLD
+  ]: (typeof FORMAT_FOLD)[Property] extends "default" ? Property : never;
 }[keyof typeof FORMAT_FOLD];
 
 /**

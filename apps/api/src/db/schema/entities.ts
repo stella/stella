@@ -1064,7 +1064,9 @@ const PENDING_UPLOAD_RECOVERY_POLICY = {
 >;
 
 type RecoverablePendingUploadStatus = {
-  [TStatus in PendingUploadStatus]: (typeof PENDING_UPLOAD_RECOVERY_POLICY)[TStatus] extends "recoverable"
+  [
+    TStatus in PendingUploadStatus
+  ]: (typeof PENDING_UPLOAD_RECOVERY_POLICY)[TStatus] extends "recoverable"
     ? TStatus
     : never;
 }[PendingUploadStatus];

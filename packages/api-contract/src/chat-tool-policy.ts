@@ -21,7 +21,9 @@ export const CHAT_TOOL_POLICY_REQUIRES_APPROVAL = {
 
 /** Approval-gated kinds derived from the same map the API consumes at runtime. */
 export type NeedsApprovalPolicyKind = {
-  [TKind in ChatToolPolicyKind]: (typeof CHAT_TOOL_POLICY_REQUIRES_APPROVAL)[TKind] extends true
+  [
+    TKind in ChatToolPolicyKind
+  ]: (typeof CHAT_TOOL_POLICY_REQUIRES_APPROVAL)[TKind] extends true
     ? TKind
     : never;
 }[ChatToolPolicyKind];
@@ -100,7 +102,9 @@ export type BuiltInChatToolPolicyKindByName =
   typeof BUILT_IN_CHAT_TOOL_POLICY_KINDS;
 
 export type ApprovalRequiredBuiltInChatToolName = {
-  [TName in keyof BuiltInChatToolPolicyKindByName]: BuiltInChatToolPolicyKindByName[TName] extends NeedsApprovalPolicyKind
+  [
+    TName in keyof BuiltInChatToolPolicyKindByName
+  ]: BuiltInChatToolPolicyKindByName[TName] extends NeedsApprovalPolicyKind
     ? TName
     : never;
 }[keyof BuiltInChatToolPolicyKindByName];

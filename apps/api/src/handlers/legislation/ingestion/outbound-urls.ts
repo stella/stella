@@ -18,9 +18,9 @@ import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 
 /** Every `…Url` field the persisted document input carries. */
 export type LegislationUrlBearingField = keyof {
-  [K in keyof LegislationDocumentInput as K extends `${string}Url`
-    ? K
-    : never]: unknown;
+  [
+    K in keyof LegislationDocumentInput as K extends `${string}Url` ? K : never
+  ]: unknown;
 };
 
 /**

@@ -88,7 +88,9 @@ const SEARCH_SUMMARY_CITATION_POLICY = {
 >;
 
 type CitableSearchResultType = {
-  [TType in GlobalSearchResultType]: (typeof SEARCH_SUMMARY_CITATION_POLICY)[TType] extends "exclude"
+  [
+    TType in GlobalSearchResultType
+  ]: (typeof SEARCH_SUMMARY_CITATION_POLICY)[TType] extends "exclude"
     ? never
     : TType;
 }[GlobalSearchResultType];

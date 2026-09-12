@@ -84,7 +84,9 @@ const JSON_SCHEMA_KEYWORD_OMISSION_POLICY = {
 } as const satisfies Record<ProviderSafeJsonSchemaKeyword, "omit" | "preserve">;
 
 type ValueConstraintJsonSchemaKeyword = {
-  [TKeyword in ProviderSafeJsonSchemaKeyword]: (typeof JSON_SCHEMA_KEYWORD_OMISSION_POLICY)[TKeyword] extends "omit"
+  [
+    TKeyword in ProviderSafeJsonSchemaKeyword
+  ]: (typeof JSON_SCHEMA_KEYWORD_OMISSION_POLICY)[TKeyword] extends "omit"
     ? TKeyword
     : never;
 }[ProviderSafeJsonSchemaKeyword];

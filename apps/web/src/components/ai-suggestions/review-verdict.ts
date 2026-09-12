@@ -63,13 +63,17 @@ const REVIEW_VERDICT_POLICY = {
 >;
 
 export type FlaggedReviewVerdict = {
-  [TVerdict in ReviewVerdict]: (typeof REVIEW_VERDICT_POLICY)[TVerdict]["risk"] extends "flagged"
+  [
+    TVerdict in ReviewVerdict
+  ]: (typeof REVIEW_VERDICT_POLICY)[TVerdict]["risk"] extends "flagged"
     ? TVerdict
     : never;
 }[ReviewVerdict];
 
 type NegotiableReviewVerdict = {
-  [TVerdict in ReviewVerdict]: (typeof REVIEW_VERDICT_POLICY)[TVerdict]["negotiation"] extends "available"
+  [
+    TVerdict in ReviewVerdict
+  ]: (typeof REVIEW_VERDICT_POLICY)[TVerdict]["negotiation"] extends "available"
     ? TVerdict
     : never;
 }[ReviewVerdict];

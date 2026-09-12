@@ -30,7 +30,9 @@ export const CONDITIONAL_KINDS = BLOCK_DIRECTIVE_KINDS.filter(
 /** The two blocks a selection can be wrapped in from the gesture bar, the
  *  context menu, or the insert menu. Both are grammar opener kinds. */
 export type BlockGestureKind = {
-  [TKind in BlockDirectiveKind]: (typeof BLOCK_DIRECTIVE_LAYOUT)[TKind]["type"] extends "opener"
+  [
+    TKind in BlockDirectiveKind
+  ]: (typeof BLOCK_DIRECTIVE_LAYOUT)[TKind]["type"] extends "opener"
     ? TKind
     : never;
 }[BlockDirectiveKind];
@@ -39,7 +41,9 @@ export type BlockGestureKind = {
  *  branch that continues it. Derived from the layout map, so a new directive
  *  joins or stays out of this set by the disposition declared there. */
 export type GroupDirectiveKind = {
-  [TKind in BlockDirectiveKind]: (typeof BLOCK_DIRECTIVE_LAYOUT)[TKind]["type"] extends "closer"
+  [
+    TKind in BlockDirectiveKind
+  ]: (typeof BLOCK_DIRECTIVE_LAYOUT)[TKind]["type"] extends "closer"
     ? never
     : TKind;
 }[BlockDirectiveKind];

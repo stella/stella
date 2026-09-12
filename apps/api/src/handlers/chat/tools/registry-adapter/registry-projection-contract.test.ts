@@ -247,7 +247,9 @@ type ContractCall = {
  * adding a projectable tool without a contract fixture fails typecheck.
  */
 type ProjectableReadToolName = {
-  [K in RegistryReadToolName]: (typeof READ_TOOL_REF_FIELD_MAP)[K]["chatProjectable"] extends true
+  [
+    K in RegistryReadToolName
+  ]: (typeof READ_TOOL_REF_FIELD_MAP)[K]["chatProjectable"] extends true
     ? K
     : never;
 }[RegistryReadToolName];

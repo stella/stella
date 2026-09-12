@@ -108,7 +108,9 @@ export const FIELD_META_FILTERS = {
 /** The manifest keys a marker actually carries: everything the catalogue does
  *  not deliberately exclude. */
 type WrittenFieldMetaKey = {
-  [TKey in keyof typeof FIELD_META_FILTERS]: (typeof FIELD_META_FILTERS)[TKey] extends {
+  [
+    TKey in keyof typeof FIELD_META_FILTERS
+  ]: (typeof FIELD_META_FILTERS)[TKey] extends {
     via: readonly FilterName[];
   }
     ? TKey
@@ -130,7 +132,9 @@ true satisfies Exclude<keyof MarkerFieldConfig, keyof FieldMeta> extends never
 true satisfies FieldMeta extends MarkerFieldConfig ? true : never;
 
 type CoveredFilter = {
-  [TKey in keyof typeof FIELD_META_FILTERS]: (typeof FIELD_META_FILTERS)[TKey] extends {
+  [
+    TKey in keyof typeof FIELD_META_FILTERS
+  ]: (typeof FIELD_META_FILTERS)[TKey] extends {
     via: readonly (infer TFilter)[];
   }
     ? TFilter

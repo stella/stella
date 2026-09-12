@@ -54,7 +54,9 @@ const FLOW_RUN_STATUS_LIFECYCLE = {
 } as const satisfies Record<FlowRunStatus, "active" | "terminal">;
 
 export type TerminalFlowRunStatus = {
-  [TStatus in FlowRunStatus]: (typeof FLOW_RUN_STATUS_LIFECYCLE)[TStatus] extends "terminal"
+  [
+    TStatus in FlowRunStatus
+  ]: (typeof FLOW_RUN_STATUS_LIFECYCLE)[TStatus] extends "terminal"
     ? TStatus
     : never;
 }[FlowRunStatus];
