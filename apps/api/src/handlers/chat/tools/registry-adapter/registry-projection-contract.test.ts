@@ -304,6 +304,7 @@ const CONTRACT_CORPUS = {
             displayName: "Acme s.r.o.",
             color: null,
           },
+          stampedVersionCount: 0,
         } satisfies Awaited<ReturnType<typeof readWorkspaceHandler>>);
         readOverviewHandlerMock.mockResolvedValue({
           entityCount: 1,

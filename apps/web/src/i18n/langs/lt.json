@@ -4661,9 +4661,9 @@
     "slugRequired": "Slug yra privalomas"
   },
   "verify": {
+    "history": "{history, select, refiled {Atspausdinta su nuorodos numeriu <bdi>{reference}</bdi>; dabar dokumentas registruotas numeriu <bdi>{currentReference}</bdi> byloje <bdi>{matterName}</bdi>.} superseded {Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}.} other {Atspausdinta su nuorodos numeriu <bdi>{reference}</bdi>; dabar dokumentas registruotas numeriu <bdi>{currentReference}</bdi> byloje <bdi>{matterName}</bdi>. Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}.}}",
     "notFound": "Jūsų organizacijoje nėra dokumento su šiuo nuorodos numeriu.",
-    "opened": "Atidaryta pagal nuorodos numerį <bdi>{reference}</bdi>.",
-    "superseded": "Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}."
+    "opened": "Atidaryta pagal nuorodos numerį <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Šis failas yra dokumento <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number} versija byloje <bdi>{matterName}</bdi>.",
         "referenceHere": "Šis failas yra dokumento <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number} versija.",
         "referenceLineRemoved": "Iš šio failo pašalinta nuorodos numerio eilutė, todėl jis laikomas nauju dokumentu, nebent pasirinksite kitaip.",
+        "referenceRefiled": "Dokumentas dabar registruotas numeriu <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Jis parengtas pagal {basedOn, number} versiją; dabartinė yra {current, number} versija.",
         "replaceOption": "Įkelti kaip naują versiją",
         "title": "Įkelti naują versiją ar sukurti naują failą?",
@@ -5322,8 +5323,12 @@
       "untitledColumn": "Stulpelio pavadinimas, pvz., įsigaliojimo data"
     },
     "reference": "Nuorodos numeris",
+    "referenceChangeConfirmDescription": "{count, plural, one {# dokumento versija turi} few {# dokumentų versijos turi} many {# dokumentų versijos turi} other {# dokumentų versijų turi}} nuorodos numerį <bdi>{oldReference}</bdi>. Atspausdinti egzemplioriai jį išsaugo ir toliau atidaromi pagal savo patvirtinimo kodą. Naujos versijos bus numeruojamos pagal <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmTitle": "Keisti bylos nuorodos numerį?",
     "referenceConventionHint": "Pageidaujamas formatas: {example}",
     "referenceFormatWarning": "Neatitinka pageidaujamo formato.",
+    "referenceNumberingContinuesDescription": "Dokumentų numeracija tęsiama nuo {sequence, number}.",
+    "referenceNumberingContinuesTitle": "Nuorodos numeris <bdi>{reference}</bdi> jau buvo naudotas",
     "referenceNumberingEmptyHint": "Nurodykite nuorodos numerį, kad šios bylos dokumentai būtų numeruojami.",
     "referenceNumberingHint": "Šios bylos dokumentai numeruojami <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> ir taip toliau; kiekviena versija prideda <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "pvz. 2024/001",

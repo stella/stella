@@ -15,6 +15,7 @@
 
 import { panic } from "better-result";
 import { and, eq, isNull, max } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { DocumentReferenceMatch } from "@stll/api-contract";
 
@@ -27,6 +28,12 @@ type LookupOptions = {
   organizationId: SafeId<"organization">;
 };
 
+/**
+ * The version the document shows now, joined beside the matched one so the
+ * reference it was refiled under costs no extra round trip.
+ */
+const currentVersions = alias(entityVersions, "current_version");
+
 /** The columns the lookup projects, before the current-version read. */
 const MATCH_COLUMNS = {
   entityId: entities.id,
@@ -35,6 +42,7 @@ const MATCH_COLUMNS = {
   workspaceName: workspaces.name,
   stamp: entityVersions.stamp,
   versionNumber: entityVersions.versionNumber,
+  currentStamp: currentVersions.stamp,
 };
 
 /** What {@link completeMatch} reads off a matched row, structurally, so the
@@ -46,6 +54,7 @@ type MatchedVersion = {
   workspaceName: string;
   stamp: string | null;
   versionNumber: number;
+  currentStamp: string | null;
 };
 
 /**
@@ -79,6 +88,7 @@ const completeMatch = async (
     workspaceName: row.workspaceName,
     stamp: row.stamp,
     versionNumber: row.versionNumber,
+    currentStamp: row.currentStamp,
     // The matched row is itself non-deleted and belongs to this aggregate's
     // set, so a maximum exists.
     currentVersionNumber:
@@ -109,6 +119,10 @@ export const lookupByVerificationCode = async ({
         eq(entities.workspaceId, workspaces.id),
         eq(workspaces.organizationId, organizationId),
       ),
+    )
+    .leftJoin(
+      currentVersions,
+      eq(entities.currentVersionId, currentVersions.id),
     )
     .where(
       and(

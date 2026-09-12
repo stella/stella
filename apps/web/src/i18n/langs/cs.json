@@ -4661,9 +4661,9 @@
     "slugRequired": "Slug je povinný"
   },
   "verify": {
+    "history": "{history, select, refiled {Vytištěno pod číslem <bdi>{reference}</bdi>; nyní je dokument veden pod číslem <bdi>{currentReference}</bdi> ve spisu <bdi>{matterName}</bdi>.} superseded {Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}.} other {Vytištěno pod číslem <bdi>{reference}</bdi>; nyní je dokument veden pod číslem <bdi>{currentReference}</bdi> ve spisu <bdi>{matterName}</bdi>. Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}.}}",
     "notFound": "Ve vaší organizaci není k dispozici žádný dokument s tímto referenčním číslem.",
-    "opened": "Otevřeno podle referenčního čísla <bdi>{reference}</bdi>.",
-    "superseded": "Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}."
+    "opened": "Otevřeno podle referenčního čísla <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Tento soubor je verze {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) ve spisu <bdi>{matterName}</bdi>.",
         "referenceHere": "Tento soubor je verze {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "Z tohoto souboru byl odstraněn řádek s referenčním číslem, proto s ním nakládáme jako s novým dokumentem, pokud nezvolíte jinak.",
+        "referenceRefiled": "Dokument je nyní veden pod číslem <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Vychází z verze {basedOn, number}; aktuální je verze {current, number}.",
         "replaceOption": "Nahrát jako novou verzi",
         "title": "Nahrát novou verzi nebo vložit jako nový soubor?",
@@ -5322,8 +5323,12 @@
       "untitledColumn": "Název sloupce, např. Datum účinnosti"
     },
     "reference": "Referenční číslo",
+    "referenceChangeConfirmDescription": "{count, plural, one {# verze dokumentu nese} few {# verze dokumentů nesou} other {# verzí dokumentů nese}} referenční číslo <bdi>{oldReference}</bdi>. Vytištěné kopie si ho ponechají a stále se otevřou podle svého ověřovacího kódu. Nové verze se budou číslovat pod <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmTitle": "Změnit referenční číslo spisu?",
     "referenceConventionHint": "Preferovaný formát: {example}",
     "referenceFormatWarning": "Neodpovídá preferovanému formátu.",
+    "referenceNumberingContinuesDescription": "Číslování dokumentů pokračuje od {sequence, number}.",
+    "referenceNumberingContinuesTitle": "Referenční číslo <bdi>{reference}</bdi> už bylo použito",
     "referenceNumberingEmptyHint": "Zadejte referenční číslo a dokumenty v tomto spisu se začnou číslovat.",
     "referenceNumberingHint": "Dokumenty v tomto spisu se číslují <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> a tak dále; každá verze přidává <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "např. 2024/001",

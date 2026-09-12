@@ -139,7 +139,9 @@ export type {
   DocumentPropertyValue,
 } from "./document-properties";
 export {
+  documentReferenceBase,
   isVerificationCode,
+  refiledStamp,
   VERIFICATION_CODE_ALPHABET,
   VERIFICATION_CODE_LENGTH,
   VERIFICATION_CODE_PATTERN,

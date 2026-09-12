@@ -6,7 +6,13 @@ import type { Static } from "elysia";
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  contacts,
+  documentCounters,
+  documentReferenceCounters,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -95,6 +101,53 @@ const validateLeadIsMember = async (
     };
   }
   return null;
+};
+
+type ReferenceNumberingFloorOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  reference: string;
+};
+
+/**
+ * The sequence number the matter's next stamped document will carry under
+ * `reference`, when that reference has already been used for stamped documents
+ * in this organization; null when it has not, and numbering is the matter's
+ * own affair.
+ *
+ * Taking over a used reference does not restart numbering: allocation floors
+ * the matter's counter at the reference ledger's high-water mark, so the
+ * reported value is whichever of the two is ahead (see `document-counter.ts`).
+ */
+const readReferenceNumberingFloor = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  reference,
+}: ReferenceNumberingFloorOptions): Promise<number | null> => {
+  const ledgerRows = await tx
+    .select({ lastValue: documentReferenceCounters.lastValue })
+    .from(documentReferenceCounters)
+    .where(
+      and(
+        eq(documentReferenceCounters.organizationId, organizationId),
+        eq(documentReferenceCounters.reference, reference),
+      ),
+    )
+    .limit(1);
+  const ledgerLastValue = ledgerRows.at(0)?.lastValue ?? 0;
+  if (ledgerLastValue === 0) {
+    return null;
+  }
+
+  const counterRows = await tx
+    .select({ lastValue: documentCounters.lastValue })
+    .from(documentCounters)
+    .where(eq(documentCounters.workspaceId, workspaceId))
+    .limit(1);
+
+  return Math.max(ledgerLastValue, counterRows.at(0)?.lastValue ?? 0) + 1;
 };
 
 export type UpdateWorkspaceHandlerProps = {
@@ -243,6 +296,16 @@ export const updateWorkspaceHandler = async function* ({
       })
       .where(eq(workspaces.id, workspaceId));
 
+    const referenceNumberingContinuesFrom =
+      body.reference !== undefined && body.reference !== workspace.reference
+        ? await readReferenceNumberingFloor({
+            tx,
+            organizationId,
+            workspaceId,
+            reference: body.reference,
+          })
+        : null;
+
     // Audit reflects rows actually inserted, not the raw request:
     // onConflictDoNothing silently skips users already on the
     // workspace (e.g., the creator on a freshly-promoted personal
@@ -316,7 +379,7 @@ export const updateWorkspaceHandler = async function* ({
 
     await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
 
-    return { ok: true as const };
+    return { ok: true as const, referenceNumberingContinuesFrom };
   });
 
   if (Result.isError(txResult)) {
@@ -342,7 +405,10 @@ export const updateWorkspaceHandler = async function* ({
 
   flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
 
-  return Result.ok({});
+  return Result.ok({
+    referenceNumberingContinuesFrom:
+      txResult.value.referenceNumberingContinuesFrom,
+  });
 };
 
 const updateWorkspace = createSafeHandler(

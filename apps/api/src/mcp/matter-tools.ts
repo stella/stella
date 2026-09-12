@@ -405,6 +405,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
+  let referenceNumberingContinuesFrom: number | null = null;
   if (
     input.name !== undefined ||
     input.reference !== undefined ||
@@ -430,6 +431,8 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     if (Result.isError(updated)) {
       return internalFailureResult(updated.error);
     }
+    referenceNumberingContinuesFrom =
+      updated.value.referenceNumberingContinuesFrom;
   }
 
   if (input.status === "archived") {
@@ -459,6 +462,11 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   return toolDataResult({
     matterId: workspaceId,
     updated: true,
+    // Taking over a reference another matter already stamped documents under
+    // continues that numbering; the agent is told where it resumes.
+    ...(referenceNumberingContinuesFrom === null
+      ? {}
+      : { referenceNumberingContinuesFrom }),
   } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
 };
 

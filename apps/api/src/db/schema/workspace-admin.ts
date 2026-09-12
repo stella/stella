@@ -101,6 +101,42 @@ export const documentCounters = p.pgTable(
   ],
 );
 
+/**
+ * Per-organization high-water mark for every matter reference ever stamped.
+ *
+ * A matter's `reference` is editable and, once freed, can be handed to another
+ * matter whose own `document_counters` row starts at zero — so the workspace
+ * counter alone cannot keep `{reference}/{seq}.v{n}` unique within an
+ * organization. This ledger carries the sequence forward across the reference
+ * rather than across the matter: an allocation floors the workspace counter at
+ * the reference's high-water mark, so a reused reference resumes where the
+ * previous holder stopped and no printed stamp can repeat inside a tenant.
+ */
+export const documentReferenceCounters = p.pgTable(
+  "document_reference_counters",
+  {
+    id: pUuid<"documentReferenceCounter">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    reference: p.varchar("reference", { length: 64 }).notNull(),
+    lastValue: p.integer("last_value").notNull().default(0),
+  },
+  (table) => [
+    // Named explicitly: the inferred constraint name exceeds PostgreSQL's
+    // 63-byte identifier limit and would be silently truncated.
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "document_reference_counters_org_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("document_reference_counters_org_ref_uidx")
+      .on(table.organizationId, table.reference),
+    ...orgPolicies(),
+  ],
+);
+
 export const organizationSettings = p.pgTable(
   "organization_settings",
   {

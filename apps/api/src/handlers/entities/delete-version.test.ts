@@ -223,6 +223,7 @@ describe("delete-version chain-of-custody guard", () => {
     // appear within QUERY_WINDOW lines after the match (the where clause).
     const READ_PATTERNS = ["from(entityVersions)", "query.entityVersions."];
     const QUERY_WINDOW = 24;
+    const COLUMN_PROJECTION_RE = /deletedAt:\s*(?:true|false)/u;
     // Comments/aliases that justify an exception may sit just above the read.
     const CONTEXT_BEFORE = 8;
 
@@ -260,7 +261,7 @@ describe("delete-version chain-of-custody guard", () => {
         {
           anchor: "Include tombstones: a deleted newer version",
           reason:
-            "Search provenance reads only the newest version ID across tombstones so legacy extracted text cannot be attributed to a promoted older version.",
+            "Search provenance needs the newest version ID across tombstones so legacy extracted text cannot be attributed to a promoted older version. The same rows carry each version's reference stamp; the projection drops the tombstoned ones, so no withdrawn version's text is served.",
         },
       ],
       "handlers/entities/finalize-desktop-edit-session.ts": [
@@ -310,9 +311,16 @@ describe("delete-version chain-of-custody guard", () => {
         }
 
         // Forward-only window for the tombstone predicate (drizzle's where
-        // clause follows `from`/`query`).
+        // clause follows `from`/`query`). A `columns: { deletedAt: true }`
+        // projection is not a predicate: it selects the tombstone rather than
+        // excluding it, so a read that spans tombstones and sorts them out in
+        // JavaScript still owes a reviewed exception.
         const guardWindow = lines.slice(index, index + QUERY_WINDOW + 1);
-        if (guardWindow.some((l) => l.includes("deletedAt"))) {
+        if (
+          guardWindow.some(
+            (l) => l.includes("deletedAt") && !COLUMN_PROJECTION_RE.test(l),
+          )
+        ) {
           continue;
         }
 

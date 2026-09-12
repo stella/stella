@@ -154,6 +154,15 @@ const DecisionNote = ({
             reference: document.documentReference,
             version: document.versionNumber,
           })}
+      {document.refiledReference !== null && (
+        <>
+          {" "}
+          {t.rich("workspaces.files.versionOrNewFile.referenceRefiled", {
+            bdi,
+            reference: document.refiledReference,
+          })}
+        </>
+      )}
       {supersededBase && (
         <>
           {" "}

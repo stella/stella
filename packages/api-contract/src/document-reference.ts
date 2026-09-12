@@ -44,4 +44,35 @@ export type DocumentReferenceMatch = {
   versionNumber: number;
   /** Highest non-deleted version number the document currently has. */
   currentVersionNumber: number;
+  /**
+   * The reference frozen onto the document's current version, or null when
+   * that version carries none. It differs from {@link stamp} once the document
+   * has been refiled.
+   */
+  currentStamp: string | null;
 };
+
+/** A reference such as `2026/001/015.v3` with its version suffix removed. */
+const STAMP_VERSION_SUFFIX_RE = /\.v\d+$/u;
+
+/** The document-identifying part of a stamp, without the version it names. */
+export const documentReferenceBase = (stamp: string): string =>
+  stamp.replace(STAMP_VERSION_SUFFIX_RE, "");
+
+/**
+ * The stamp the document carries now, when that is no longer the one printed
+ * on the file in hand; null while the two agree.
+ *
+ * Moving a document to another matter, or editing a matter's reference, leaves
+ * every stamp already frozen onto a version untouched and files the next one
+ * under the new reference. A higher version suffix is ordinary supersession
+ * and is reported as such, so only the reference itself is compared here.
+ */
+export const refiledStamp = ({
+  stamp,
+  currentStamp,
+}: Pick<DocumentReferenceMatch, "stamp" | "currentStamp">): string | null =>
+  currentStamp !== null &&
+  documentReferenceBase(currentStamp) !== documentReferenceBase(stamp)
+    ? currentStamp
+    : null;
