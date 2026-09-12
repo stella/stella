@@ -649,6 +649,18 @@
       "matchedIn": "Dopasowanie w języku {language}"
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "matterLinks": {
+      "empty": "W tej sprawie nie zapisano jeszcze żadnego orzeczenia.",
+      "emptyAction": "Szukaj w orzecznictwie",
+      "note": "Notatka",
+      "notePlaceholder": "Dlaczego te orzeczenia są tu istotne…",
+      "remove": "Usuń ze sprawy",
+      "save": "Zapisz do sprawy",
+      "savePage": "Z tej strony {count, plural, one {zostanie zapisane # orzeczenie} few {zostaną zapisane # orzeczenia} many {zostanie zapisanych # orzeczeń} other {zostanie zapisanych # orzeczeń}}.",
+      "saveSelection": "{count, plural, one {Zostanie zapisane # wybrane orzeczenie} few {Zostaną zapisane # wybrane orzeczenia} many {Zostanie zapisanych # wybranych orzeczeń} other {Zostanie zapisanych # wybranych orzeczeń}}.",
+      "saveTitle": "Zapisz do sprawy",
+      "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
+    },
     "newestDecisions": "Najnowsze orzeczenia",
     "notesFilter": {
       "ai": "AI",

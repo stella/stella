@@ -60,8 +60,37 @@ export type StoredDecisionLayouts = v.InferOutput<
 
 type StoredDecisionLayout = StoredDecisionLayouts[string];
 
+/**
+ * Every stored arrangement, read once.
+ *
+ * The table's state is handed to TanStack as controlled state, which it
+ * compares by identity: a layout rebuilt during render is a different object
+ * every time, so the table publishes state the component did not change, the
+ * publish re-renders the component, and the render rebuilds the layout again.
+ * Normalising at the storage read, and looking the country up afterwards, is
+ * what makes that loop impossible rather than merely unlikely.
+ */
+export const decisionTableLayouts = (
+  stored: StoredDecisionLayouts,
+): Record<string, DecisionTableLayout> => {
+  const layouts: Record<string, DecisionTableLayout> = {};
+  for (const [country, value] of Object.entries(stored)) {
+    layouts[country] = decisionTableLayout(value);
+  }
+  return layouts;
+};
+
+/**
+ * The arrangement of one jurisdiction: the same object on every call, because
+ * the table is given it on every render.
+ */
+export const layoutForCountry = (
+  layouts: Record<string, DecisionTableLayout> | null,
+  country: string,
+): DecisionTableLayout => layouts?.[country] ?? DEFAULT_DECISION_TABLE_LAYOUT;
+
 /** The layout a stored value stands for; the defaults for anything it omits. */
-export const decisionTableLayout = (
+const decisionTableLayout = (
   stored: StoredDecisionLayout | undefined,
 ): DecisionTableLayout => {
   if (stored === undefined) {

@@ -649,6 +649,18 @@
       "matchedIn": "Correspondance en {language}"
     },
     "loadingMore": "Chargement en cours…",
+    "matterLinks": {
+      "empty": "Aucune jurisprudence n’est encore conservée dans ce dossier.",
+      "emptyAction": "Rechercher dans la jurisprudence",
+      "note": "Remarque",
+      "notePlaceholder": "Pourquoi ces décisions comptent ici…",
+      "remove": "Retirer du dossier",
+      "save": "Enregistrer dans un dossier",
+      "savePage": "{count, plural, one {# décision de cette page sera enregistrée.} other {# décisions de cette page seront enregistrées.}}",
+      "saveSelection": "{count, plural, one {# décision sélectionnée sera enregistrée.} other {# décisions sélectionnées seront enregistrées.}}",
+      "saveTitle": "Enregistrer dans un dossier",
+      "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
+    },
     "newestDecisions": "Décisions les plus récentes",
     "notesFilter": {
       "ai": "IA",

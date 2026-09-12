@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+
 import { useTable } from "@tanstack/react-table";
 import type {
   ColumnDef,
@@ -89,8 +92,23 @@ export type DecisionQuestionSurface = {
   isRunning: boolean;
 };
 
+/**
+ * A column the host adds to the decision model: a note the matter recorded, a
+ * row action only that screen has. It is arranged, hidden and pinned like any
+ * other column, because a reader does not care where a column came from.
+ */
+export type DecisionExtraColumn = {
+  id: string;
+  /** Already translated; also the label the column chooser shows. */
+  label: string;
+  size: number;
+  render: (decision: Decision) => ReactNode;
+};
+
 type DecisionTableProps = {
   decisions: readonly Decision[];
+  /** Columns this screen adds to the shared model; empty on the results page. */
+  extraColumns?: readonly DecisionExtraColumn[] | undefined;
   isLoading: boolean;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
@@ -133,6 +151,7 @@ type ColumnArrangement = {
  */
 export const DecisionTable = ({
   decisions,
+  extraColumns = NO_EXTRA_COLUMNS,
   isLoading,
   layout,
   onLayoutChange,
@@ -145,25 +164,46 @@ export const DecisionTable = ({
   const t = useTranslations();
   const questionColumns =
     questions === null ? NO_QUESTION_COLUMNS : questions.columns;
-  const columns = decisionColumnDefs(questionColumns, questions !== null);
+  const columns = decisionColumnDefs({
+    extraColumns,
+    questionColumns,
+    withSelection: questions !== null,
+  });
   const availableIds = columns.map((column) => column.id ?? "");
 
-  const columnOrder: ColumnOrderState = decisionColumnOrder(
-    availableIds,
-    layout.order,
-  );
-  const columnPinning: ColumnPinningState = {
-    start: decisionColumnPins(availableIds, layout.pinned),
-    end: [],
-  };
-  const columnVisibility: ColumnVisibilityState = {};
-  for (const columnId of layout.hidden) {
-    columnVisibility[columnId] = false;
-  }
-  const rowSelection: RowSelectionState = {};
-  for (const decisionId of selectedIds) {
-    rowSelection[decisionId] = true;
-  }
+  // TanStack compares controlled state by identity, one level deep, and
+  // publishes it back to the table from a layout effect whenever it differs.
+  // A fresh array here is therefore not a wasted allocation but a render loop:
+  // publish, re-render, rebuild, publish. The identity has to be tied to the
+  // arrangement, which is what these two memos do — the one case the
+  // no-prophylactic-memo rule exempts, because a library contract requires it.
+  //
+  // The ids travel into the memo as one string and are read back inside it:
+  // the array is rebuilt every render, so what the memo may depend on is what
+  // the ids say, not which array said it.
+  const columnKey = availableIds.join("\u0000");
+  const { columnOrder, columnPinning, columnVisibility } = useMemo(() => {
+    const visibility: ColumnVisibilityState = {};
+    for (const columnId of layout.hidden) {
+      visibility[columnId] = false;
+    }
+    const ids = columnKey.length === 0 ? [] : columnKey.split("\u0000");
+    return {
+      columnOrder: decisionColumnOrder(ids, layout.order),
+      columnPinning: {
+        start: decisionColumnPins(ids, layout.pinned),
+        end: [],
+      } satisfies ColumnPinningState,
+      columnVisibility: visibility,
+    };
+  }, [columnKey, layout.hidden, layout.order, layout.pinned]);
+  const rowSelection: RowSelectionState = useMemo(() => {
+    const selection: RowSelectionState = {};
+    for (const decisionId of selectedIds) {
+      selection[decisionId] = true;
+    }
+    return selection;
+  }, [selectedIds]);
 
   const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
     const next = typeof updater === "function" ? updater(columnOrder) : updater;
@@ -306,6 +346,26 @@ export const DecisionTable = ({
       continue;
     }
 
+    const extra = extraColumns.find((candidate) => candidate.id === column.id);
+    if (extra !== undefined) {
+      rendered.push({
+        id: extra.id,
+        header: (
+          <ColumnHeader
+            arrangement={arrangement}
+            columnId={extra.id}
+            label={extra.label}
+          >
+            {extra.label}
+          </ColumnHeader>
+        ),
+        headClassName: "align-top",
+        cellClassName: "align-top whitespace-normal",
+        render: extra.render,
+      });
+      continue;
+    }
+
     const descriptor = decisionTableSchema.columns.find(
       (candidate) => candidate.id === column.id,
     );
@@ -366,6 +426,8 @@ export const DecisionTable = ({
 
 const QUESTION_COLUMN_SIZE = 220;
 
+const NO_EXTRA_COLUMNS: readonly DecisionExtraColumn[] = [];
+
 /**
  * One row picked or let go. A selection map holds only picked rows, so letting
  * one go removes its key rather than storing a false against it.
@@ -388,10 +450,15 @@ const withRowSelected = (
  * cell draws stays the shared decision schema's, resolved at render time, so
  * the two cannot end up describing different columns.
  */
-const decisionColumnDefs = (
-  questionColumns: readonly QuestionColumn[],
-  withSelection: boolean,
-): ColumnDef<WorkspaceTableFeatures, Decision>[] => {
+const decisionColumnDefs = ({
+  extraColumns,
+  questionColumns,
+  withSelection,
+}: {
+  extraColumns: readonly DecisionExtraColumn[];
+  questionColumns: readonly QuestionColumn[];
+  withSelection: boolean;
+}): ColumnDef<WorkspaceTableFeatures, Decision>[] => {
   const defs: ColumnDef<WorkspaceTableFeatures, Decision>[] = [];
   if (withSelection) {
     defs.push({
@@ -414,6 +481,14 @@ const decisionColumnDefs = (
     defs.push({
       id: questionColumnId(column.id),
       size: QUESTION_COLUMN_SIZE,
+      enableHiding: true,
+      enablePinning: true,
+    });
+  }
+  for (const column of extraColumns) {
+    defs.push({
+      id: column.id,
+      size: column.size,
       enableHiding: true,
       enablePinning: true,
     });
@@ -589,6 +664,7 @@ const QuestionColumnHeader = ({
 };
 
 type DecisionColumnChooserProps = {
+  extraColumns?: readonly DecisionExtraColumn[] | undefined;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   questionColumns: readonly QuestionColumn[];
@@ -596,6 +672,7 @@ type DecisionColumnChooserProps = {
 
 /** Which columns show; the arrangement itself lives in each column's header. */
 export const DecisionColumnChooser = ({
+  extraColumns = NO_EXTRA_COLUMNS,
   layout,
   onLayoutChange,
   questionColumns,
@@ -650,6 +727,15 @@ export const DecisionColumnChooser = ({
             }
           >
             {column.question}
+          </MenuCheckboxItem>
+        ))}
+        {extraColumns.map((column) => (
+          <MenuCheckboxItem
+            checked={!hidden.has(column.id)}
+            key={column.id}
+            onCheckedChange={(checked) => toggle(column.id, checked)}
+          >
+            {column.label}
           </MenuCheckboxItem>
         ))}
         <MenuSeparator />

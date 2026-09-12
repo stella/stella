@@ -649,6 +649,18 @@
       "matchedIn": "Coincidencia en {language}"
     },
     "loadingMore": "Cargando más...",
+    "matterLinks": {
+      "empty": "Todavía no hay jurisprudencia guardada en este asunto.",
+      "emptyAction": "Buscar jurisprudencia",
+      "note": "Nota",
+      "notePlaceholder": "Por qué estas resoluciones son relevantes aquí…",
+      "remove": "Eliminar del asunto",
+      "save": "Guardar en un asunto",
+      "savePage": "{count, plural, one {Se guardará # resolución de esta página.} other {Se guardarán # resoluciones de esta página.}}",
+      "saveSelection": "{count, plural, one {Se guardará # resolución seleccionada.} other {Se guardarán # resoluciones seleccionadas.}}",
+      "saveTitle": "Guardar en un asunto",
+      "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
+    },
     "newestDecisions": "Resoluciones más recientes",
     "notesFilter": {
       "ai": "IA",
