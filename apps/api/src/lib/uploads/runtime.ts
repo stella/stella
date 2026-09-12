@@ -8,17 +8,21 @@
  * bookkeeping) is identical and lives here.
  */
 import { Result, TaggedError } from "better-result";
+import { and, eq } from "drizzle-orm";
 
+import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
+
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { pendingUploads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
- * S3 lifetime of the issued URL. Short enough that an intercepted
- * URL has a tight window for abuse; long enough that a slow
- * client on a hotel uplink can still finish a 50 MB PUT. The
- * matching `tmp/` bucket-level lifecycle is 24h — plenty of margin
- * either way.
+ * S3 lifetime of the issued URL and the matching pending-upload reservation.
+ * The URL is scoped to the organization/workspace and exact size/checksum;
+ * this window covers the slowest supported maximum-size transfer.
  */
-export const PRESIGN_URL_EXPIRY_SECONDS = 5 * 60;
+export const PRESIGN_URL_EXPIRY_SECONDS =
+  DOCUMENT_UPLOAD_POLICY.putTimeoutMs / 1000;
 
 /**
  * Maximum time a `scanning` claim can sit before the next finalize
@@ -27,6 +31,49 @@ export const PRESIGN_URL_EXPIRY_SECONDS = 5 * 60;
  * down once async scanning lands in phase 6.
  */
 export const FINALIZE_CLAIM_TIMEOUT_MS = 60_000;
+
+export const UPLOAD_REJECT_REASON = {
+  CLIENT_ABORT: "Aborted by client",
+  URL_EXPIRED: "Upload URL expired",
+} as const;
+
+type RenewFinalizeClaimOptions = {
+  claimRequestId: string;
+  safeDb: SafeDb;
+  uploadId: SafeId<"pendingUpload">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Extend an upload lease immediately before destructive rollback work.
+ * A successful renewal prevents a competing finalizer from reclaiming the
+ * row while the bounded cleanup runs; a lost or uncertain claim must never
+ * delete retry-stable object keys that a newer owner may have published.
+ */
+export const renewFinalizeClaim = async ({
+  claimRequestId,
+  safeDb,
+  uploadId,
+  userId,
+  workspaceId,
+}: RenewFinalizeClaimOptions): Promise<Result<boolean, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    const renewed = await tx
+      .update(pendingUploads)
+      .set({ claimedAt: new Date() })
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.userId, userId),
+          eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
+        ),
+      )
+      .returning({ id: pendingUploads.id });
+    return renewed.at(0) !== undefined;
+  });
 
 type TmpUploadKeyProps = {
   organizationId: SafeId<"organization">;

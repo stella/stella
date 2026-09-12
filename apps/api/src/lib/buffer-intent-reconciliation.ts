@@ -1,7 +1,12 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
+import {
+  createConcurrencyLimiter,
+  type ConcurrencyLimiter,
+  mapWithConcurrency,
+} from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -29,6 +34,7 @@ export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
 export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+const RECOVERY_DELETE_CONCURRENCY = 4;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
@@ -45,6 +51,21 @@ export const OBJECT_INTENT_WORKSPACE_AVAILABILITY = {
 
 type ObjectIntentWorkspaceAvailability =
   (typeof OBJECT_INTENT_WORKSPACE_AVAILABILITY)[keyof typeof OBJECT_INTENT_WORKSPACE_AVAILABILITY];
+
+const bufferCleanupIntentIdentityPredicate = (
+  rows: Pick<
+    typeof bufferObjectCleanupIntents.$inferSelect,
+    "id" | "objectKey"
+  >[],
+) =>
+  or(
+    ...rows.map(({ id, objectKey }) =>
+      and(
+        eq(bufferObjectCleanupIntents.id, id),
+        eq(bufferObjectCleanupIntents.objectKey, objectKey),
+      ),
+    ),
+  );
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
 
@@ -93,6 +114,11 @@ type RecoverableBufferIntent = PendingUploadPurposeData & {
   reservedFileId: string;
   type: BufferIntentPurpose;
 };
+
+type RecoverableEmailIngest = Extract<
+  PendingUploadPurposeData,
+  { type: "email_ingest" }
+> & { recoveryObjectKeys: string[] };
 
 type BufferIntentDeletionRow = Pick<
   typeof pendingUploads.$inferSelect,
@@ -635,6 +661,16 @@ export const isBufferIntentPurpose = (
 ): purpose is BufferIntentPurpose =>
   purpose === "entity_create" || purpose === "entity_version";
 
+const isRecoverableEmailIngest = (
+  value: PendingUploadPurposeData,
+): value is RecoverableEmailIngest =>
+  value.type === "email_ingest" &&
+  Array.isArray(value.recoveryObjectKeys) &&
+  value.recoveryObjectKeys.length > 0 &&
+  value.recoveryObjectKeys.every(
+    (objectKey) => typeof objectKey === "string" && objectKey.length > 0,
+  );
+
 export const bufferIntentObjectKey = (
   row: BufferIntentDeletionRow,
 ): string | null => {
@@ -652,6 +688,22 @@ export const bufferIntentObjectKey = (
   });
 };
 
+export const pendingUploadRecoveryObjectKeys = (
+  row: BufferIntentDeletionRow,
+): string[] => {
+  const bufferKey = bufferIntentObjectKey(row);
+  if (bufferKey !== null) {
+    return [bufferKey];
+  }
+  if (
+    row.purpose === "email_ingest" &&
+    isRecoverableEmailIngest(row.purposeData)
+  ) {
+    return row.purposeData.recoveryObjectKeys;
+  }
+  return [];
+};
+
 /**
  * Transfer final-key cleanup ownership before lifecycle cascades remove the
  * pending-upload row. The tombstone has no user/workspace foreign keys, so a
@@ -661,21 +713,15 @@ export const preserveBufferObjectCleanupIntents = async (
   tx: Transaction,
   rows: BufferIntentDeletionRow[],
 ): Promise<void> => {
-  const values = rows.flatMap((row) => {
-    const objectKey = bufferIntentObjectKey(row);
-    if (objectKey === null) {
-      return [];
-    }
-    return [
-      {
-        id: row.id,
-        organizationId: row.organizationId,
-        workspaceId: row.workspaceId,
-        objectKey,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
-      },
-    ];
-  });
+  const values = rows.flatMap((row) =>
+    pendingUploadRecoveryObjectKeys(row).map((objectKey) => ({
+      id: row.id,
+      organizationId: row.organizationId,
+      workspaceId: row.workspaceId,
+      objectKey,
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+    })),
+  );
   if (values.length === 0) {
     return;
   }
@@ -692,19 +738,21 @@ const reconcileStaleBufferIntentBatch = async ({
   limit,
   signal,
   deleteObject = deleteS3ObjectWithSignal,
+  deleteLimiter,
 }: {
   safeDb: SafeDb;
   scope?: BufferIntentScope | undefined;
   limit: number;
   signal?: AbortSignal | undefined;
   deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteLimiter?: ConcurrencyLimiter | undefined;
 }): Promise<number> => {
   signal?.throwIfAborted();
   const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
   const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
   const ownershipPredicate =
     scope === undefined
-      ? sql`${pendingUploads.purpose} IN ('entity_create', 'entity_version')`
+      ? sql`${pendingUploads.purpose} IN ('entity_create', 'entity_version', 'email_ingest')`
       : sql`${pendingUploads.organizationId} = ${scope.organizationId}
           AND ${pendingUploads.workspaceId} = ${scope.workspaceId}
           AND ${pendingUploads.purpose} = ${scope.purpose}`;
@@ -722,7 +770,13 @@ const reconcileStaleBufferIntentBatch = async ({
       .where(
         and(
           ownershipPredicate,
-          sql`${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL`,
+          sql`(
+            ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
+            OR (
+              ${pendingUploads.purpose} = 'email_ingest'
+              AND jsonb_array_length(COALESCE(${pendingUploads.purposeData}->'recoveryObjectKeys', '[]'::jsonb)) > 0
+            )
+          )`,
           inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
           sql`${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
         ),
@@ -756,51 +810,51 @@ const reconcileStaleBufferIntentBatch = async ({
     throw claimedResult.error;
   }
 
-  const cleanupResults = await Promise.all(
-    claimedResult.value.map(async (row) => {
-      if (
-        !isBufferIntentPurpose(row.purpose) ||
-        !isRecoverableBufferIntent(row.purposeData, row.purpose)
-      ) {
-        return null;
-      }
-      const objectKey = createFileKey({
-        organizationId: row.organizationId,
-        workspaceId: row.workspaceId,
-        fileId: row.purposeData.reservedFileId,
-        mimeType: row.declaredMime,
-      });
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (operationSignal) =>
-              await deleteObject(objectKey, operationSignal),
-            {
-              label: "buffer-intent-reconciliation.delete",
-              signal,
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(cleanup)) {
-        if (signal?.aborted) {
-          return null;
-        }
-        captureError(cleanup.error, {
-          objectKey,
-          pendingUploadId: row.id,
-          stage: `buffer-${row.purpose}-intent-reconcile`,
-        });
-        return null;
-      }
-      return row.id;
-    }),
-  );
+  const runDelete =
+    deleteLimiter ?? createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
+
+  const cleanupResults = await mapWithConcurrency({
+    items: claimedResult.value.flatMap((row) =>
+      pendingUploadRecoveryObjectKeys(row).map((objectKey) => ({
+        objectKey,
+        row,
+      })),
+    ),
+    limit: RECOVERY_DELETE_CONCURRENCY,
+    operation: async ({ objectKey, row }) =>
+      await runDelete(async () => ({
+        result: await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (operationSignal) =>
+                await deleteObject(objectKey, operationSignal),
+              {
+                label: "buffer-intent-reconciliation.delete",
+                signal,
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
+        }),
+        row,
+      })),
+  });
   signal?.throwIfAborted();
-  const cleanedIds = cleanupResults.filter(
-    (id): id is SafeId<"pendingUpload"> => id !== null,
-  );
+  const failedIds = new Set<SafeId<"pendingUpload">>();
+  for (const { result, row } of cleanupResults) {
+    if (!Result.isError(result) || failedIds.has(row.id)) {
+      continue;
+    }
+    failedIds.add(row.id);
+    captureError(result.error, {
+      pendingUploadId: row.id,
+      stage: `buffer-${row.purpose}-intent-reconcile`,
+    });
+  }
+  const cleanedIds = claimedResult.value.flatMap((row) => {
+    const hasRecoveryObjects = pendingUploadRecoveryObjectKeys(row).length > 0;
+    return hasRecoveryObjects && !failedIds.has(row.id) ? [row.id] : [];
+  });
   if (cleanedIds.length === 0) {
     return claimedResult.value.length;
   }
@@ -818,7 +872,9 @@ const reconcileStaleBufferIntentBatch = async ({
         rejectReason: sql<string>`CASE
           WHEN ${pendingUploads.purpose} = 'entity_create'
             THEN ${rejectionReason("entity_create")}
-          ELSE ${rejectionReason("entity_version")}
+          WHEN ${pendingUploads.purpose} = 'entity_version'
+            THEN ${rejectionReason("entity_version")}
+          ELSE 'Reconciled abandoned email ingest bytes'
         END`,
         status: "failed",
       })
@@ -849,11 +905,13 @@ export const reconcileBufferObjectCleanupIntents = async ({
   limit,
   signal,
   deleteObject = deleteS3ObjectWithSignal,
+  deleteLimiter,
 }: {
   safeDb: SafeDb;
   limit: number;
   signal?: AbortSignal | undefined;
   deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteLimiter?: ConcurrencyLimiter | undefined;
 }): Promise<number> => {
   if (limit === 0) {
     return 0;
@@ -878,7 +936,6 @@ export const reconcileBufferObjectCleanupIntents = async ({
     if (rows.length === 0) {
       return [];
     }
-    const ids = rows.map(({ id }) => id);
     // audit: skip — bounded durable cleanup retry bookkeeping only.
     await tx
       .update(bufferObjectCleanupIntents)
@@ -897,49 +954,55 @@ export const reconcileBufferObjectCleanupIntents = async ({
           ELSE ${bufferObjectCleanupIntents.status}
         END`,
       })
-      .where(inArray(bufferObjectCleanupIntents.id, ids));
+      .where(bufferCleanupIntentIdentityPredicate(rows));
     return rows;
   });
   if (Result.isError(claimedResult)) {
     throw claimedResult.error;
   }
 
-  const cleanupResults = await Promise.all(
-    claimedResult.value.map(async (row) => {
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (operationSignal) =>
-              await deleteObject(row.objectKey, operationSignal),
-            {
-              label: "buffer-object-cleanup.delete",
-              signal,
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(cleanup) && !signal?.aborted) {
-        captureError(cleanup.error, {
-          pendingUploadId: row.id,
-          stage: "buffer-object-cleanup-reconcile",
+  const runDelete =
+    deleteLimiter ?? createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
+
+  const cleanupResults = await mapWithConcurrency({
+    items: claimedResult.value,
+    limit: RECOVERY_DELETE_CONCURRENCY,
+    operation: async (row) =>
+      await runDelete(async () => {
+        const cleanup = await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (operationSignal) =>
+                await deleteObject(row.objectKey, operationSignal),
+              {
+                label: "buffer-object-cleanup.delete",
+                signal,
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
         });
-      }
-      if (Result.isError(cleanup)) {
+        if (Result.isError(cleanup) && !signal?.aborted) {
+          captureError(cleanup.error, {
+            pendingUploadId: row.id,
+            stage: "buffer-object-cleanup-reconcile",
+          });
+        }
+        if (Result.isError(cleanup)) {
+          return null;
+        }
+        if (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED) {
+          return row.id;
+        }
+        if (
+          row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
+          row.attemptCount >= BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS
+        ) {
+          return row.id;
+        }
         return null;
-      }
-      if (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED) {
-        return row.id;
-      }
-      if (
-        row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
-        row.attemptCount >= BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS
-      ) {
-        return row.id;
-      }
-      return null;
-    }),
-  );
+      }),
+  });
   signal?.throwIfAborted();
   const retiredIds = cleanupResults.filter(
     (id): id is SafeId<"pendingUpload"> => id !== null,
@@ -1009,19 +1072,28 @@ export const reconcileStaleBufferIntentsGlobally = async ({
 }): Promise<number> => {
   const pendingLimit = Math.ceil(limit / 2);
   const transferredLimit = Math.floor(limit / 2);
-  const [pendingCount, transferredCount] = await Promise.all([
+  const deleteLimiter = createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
+  const [pendingResult, transferredResult] = await Promise.allSettled([
     reconcileStaleBufferIntentBatch({
       safeDb,
       limit: pendingLimit,
       signal,
       deleteObject,
+      deleteLimiter,
     }),
     reconcileBufferObjectCleanupIntents({
       safeDb,
       limit: transferredLimit,
       signal,
       deleteObject,
+      deleteLimiter,
     }),
   ]);
-  return pendingCount + transferredCount;
+  if (pendingResult.status === "rejected") {
+    throw pendingResult.reason;
+  }
+  if (transferredResult.status === "rejected") {
+    throw transferredResult.reason;
+  }
+  return pendingResult.value + transferredResult.value;
 };

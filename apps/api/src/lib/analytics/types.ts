@@ -1,3 +1,8 @@
+import type {
+  OutlookIngestionHost,
+  OutlookIngestionPlatform,
+} from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
@@ -9,6 +14,7 @@ export const SERVER_ANALYTICS_EVENTS = {
   aiGenerationFailed: "ai_generation_failed",
   exception: "$exception",
   mcpSessionInitialized: "mcp_session_initialized",
+  outlookEmailIngestion: "outlook_email_ingestion",
 } as const;
 
 export type AnalyticsPrimitive = boolean | number | string;
@@ -104,6 +110,32 @@ export type ExceptionProperties = {
   session_id?: string;
 };
 
+export type OutlookEmailIngestionProperties = {
+  aggregate_attachment_bytes?: number;
+  attachment_count: number;
+  durable_state: string;
+  host?: OutlookIngestionHost;
+  host_version?: string;
+  mailbox_requirement_set_supported?: boolean;
+  operation: "abort" | "finalize" | "reconcile" | "reserve";
+  organization_id: string;
+  outcome:
+    | "complete"
+    | "in_progress"
+    | "retryable_failure"
+    | "terminal_failure";
+  platform?: OutlookIngestionPlatform;
+  retry_stage:
+    | "abort"
+    | "finalize"
+    | "none"
+    | "reconcile"
+    | "reserve"
+    | "upload";
+  trace_id: string;
+  workspace_id: string;
+};
+
 type DebugAIProperties = Record<string, unknown>;
 
 // PostHog group attachment. `organization` is the only group type; it must
@@ -139,6 +171,10 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
     | {
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.outlookEmailIngestion;
+        properties: OutlookEmailIngestionProperties;
       }
   );
 

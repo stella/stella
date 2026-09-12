@@ -53,10 +53,12 @@ of whether a source document was previously public.
    provider credentials additionally use application-layer encryption in
    deployed environments.
 
-5. **Short-lived access.** Presigned URLs for file downloads
-   expire after 15 minutes
-   (`apps/api/src/handlers/files/get.ts`). URLs are
-   generated on demand and never persisted.
+5. **Bounded presigned access.** Presigned URLs for file downloads expire
+   after 15 minutes (`apps/api/src/handlers/files/get.ts`). Upload URLs expire
+   after the shared 30-minute maximum-size transfer window
+   (`packages/api-contract/src/upload-policy.ts`); each URL is restricted to
+   the caller's organization/workspace and the declared size and checksum.
+   URLs are generated on demand and never persisted.
 
 6. **Private ACL.** All S3 objects are stored with
    `acl: "private"` (`apps/api/src/lib/s3.ts`). No objects

@@ -71,6 +71,10 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // The Outlook-facing summarize/draft routes accept email text and return AI
+  // output. They do not address tenant resources by ID or expose a read/list
+  // surface that the cross-tenant RLS matrix can probe.
+  ai: WAIVER_REASON.noTenantReadSurface,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,

@@ -18,6 +18,7 @@ import { Route as DevRouteImport } from './routes/dev'
 import { Route as LawRouteRouteImport } from './routes/law/route'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SignInOutlookRouteImport } from './routes/sign-in-outlook'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ToolsRouteRouteImport } from './routes/tools/route'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
@@ -140,6 +141,11 @@ const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInOutlookRoute = SignInOutlookRouteImport.update({
+  id: '/sign-in-outlook',
+  path: '/sign-in-outlook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -594,6 +600,7 @@ export interface FileRoutesByFullPath {
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/sign-in-outlook': typeof SignInOutlookRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/chat': typeof ProtectedChatRouteRouteWithChildren
   '/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
@@ -680,6 +687,7 @@ export interface FileRoutesByTo {
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/sign-in-outlook': typeof SignInOutlookRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
@@ -765,6 +773,7 @@ export interface FileRoutesById {
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/sign-in-outlook': typeof SignInOutlookRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
   '/_protected/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
@@ -856,6 +865,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/dev'
     | '/robots.txt'
+    | '/sign-in-outlook'
     | '/sitemap.xml'
     | '/chat'
     | '/knowledge'
@@ -942,6 +952,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/dev'
     | '/robots.txt'
+    | '/sign-in-outlook'
     | '/sitemap.xml'
     | '/auth/error'
     | '/auth/organization'
@@ -1026,6 +1037,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/dev'
     | '/robots.txt'
+    | '/sign-in-outlook'
     | '/sitemap.xml'
     | '/_protected/chat'
     | '/_protected/knowledge'
@@ -1117,6 +1129,7 @@ export interface RootRouteChildren {
   ConsentRoute: typeof ConsentRoute
   DevRoute: typeof DevRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SignInOutlookRoute: typeof SignInOutlookRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DevAvtRoute: typeof DevAvtRoute
   McpOauthCallbackRoute: typeof McpOauthCallbackRoute
@@ -1189,6 +1202,13 @@ declare module '@tanstack/react-router' {
       path: '/robots.txt'
       fullPath: '/robots.txt'
       preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in-outlook': {
+      id: '/sign-in-outlook'
+      path: '/sign-in-outlook'
+      fullPath: '/sign-in-outlook'
+      preLoaderRoute: typeof SignInOutlookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -2045,6 +2065,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsentRoute: ConsentRoute,
   DevRoute: DevRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
+  SignInOutlookRoute: SignInOutlookRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   DevAvtRoute: DevAvtRoute,
   McpOauthCallbackRoute: McpOauthCallbackRoute,

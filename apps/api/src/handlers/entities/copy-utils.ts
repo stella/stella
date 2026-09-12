@@ -9,7 +9,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { allocateEntityStamps } from "@/api/lib/document-counter";
+import {
+  allocateEntityStamps,
+  entityKindHasDocumentReference,
+} from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -442,7 +445,7 @@ export const resolveEntityName = async ({
   return `${base}_${maxN + 1}${ext}`;
 };
 
-export const getFolderSubtree = (
+export const getEntitySubtree = (
   allEntities: EntitySnapshot[],
   rootId: SafeId<"entity">,
 ): EntitySnapshot[] | null => {
@@ -648,14 +651,16 @@ export const copyEntities = async ({
   };
   const nativeExtractionRequests: NativeExtractionRunRequest[] = [];
   const fileFields: CopiedFileField[] = [];
-  // The document rows are known before the copy starts, so the whole run of
+  // The reference-bearing rows are known before the copy starts, so the run of
   // sequence numbers is allocated in one counter upsert plus one reference
-  // read instead of two statements per copied document. The filter keeps
-  // source order, so each document consumes the stamp for its own position.
-  const documentStamps = await allocateEntityStamps({
+  // read instead of two statements per copied item. The filter keeps source
+  // order, so each item consumes the stamp for its own position.
+  const entityStamps = await allocateEntityStamps({
     tx,
     workspaceId: targetWorkspaceId,
-    count: sourceEntities.filter((source) => source.kind === "document").length,
+    count: sourceEntities.filter((source) =>
+      entityKindHasDocumentReference(source.kind),
+    ).length,
   });
   let nextStampIndex = 0;
 
@@ -697,9 +702,9 @@ export const copyEntities = async ({
         : source.name;
 
     const entityStamp =
-      source.kind === "document"
-        ? (documentStamps.at(nextStampIndex++) ??
-          panic("Fewer document stamps allocated than documents copied"))
+      entityKindHasDocumentReference(source.kind)
+        ? (entityStamps.at(nextStampIndex++) ??
+          panic("Fewer entity stamps allocated than reference-bearing items"))
         : null;
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row

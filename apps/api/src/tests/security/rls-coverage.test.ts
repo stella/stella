@@ -102,6 +102,7 @@ describe("policy coverage", () => {
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const INSERT_ONLY = new Set([
+    "email_ingest_effects",
     "entity_deletion_cleanup_requests",
     "template_deletion_cleanup_requests",
   ]);

@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
+import { panic } from "better-result";
 
 import { completeEntityVersionUpload } from "./upload-entity-version.logic";
 
@@ -67,7 +68,11 @@ export const uploadEntityVersion = async ({
     },
     signal ? { fetch: { signal } } : undefined,
   );
-  const { uploadId, url, headers } = unwrapEden(presign);
+  const reservation = unwrapEden(presign);
+  if (reservation.state !== "reserved") {
+    panic("Entity-version upload returned an existing reservation");
+  }
+  const { uploadId, url, headers } = reservation;
 
   await completeEntityVersionUpload({
     abort: async () => await abortUpload(workspaceId, uploadId),

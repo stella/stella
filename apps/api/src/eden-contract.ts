@@ -12,7 +12,7 @@ type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
 type MemoriesRoutes = (typeof memoriesRoute)["~Routes"];
 type EmptyElysia = Elysia;
 type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> & {
+  v1: Omit<ApiV1Routes, "ai" | "entities" | "memories" | "time-entries"> & {
     entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
       ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
         entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {

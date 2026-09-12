@@ -52,6 +52,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
+    "@stll/api-contract": "workspace:*",
     "@stll/stable-stringify": "workspace:^",
     "@stricli/core": "^1.3.0",
     "better-result": "catalog:",

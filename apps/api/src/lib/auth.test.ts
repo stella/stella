@@ -24,6 +24,7 @@ import {
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
+  socialTwoFactorRedirectUrl,
   resolveMemberAuthorization,
   resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
@@ -414,6 +415,42 @@ describe("isSessionCreatingAuthPath", () => {
     expect(isSessionCreatingAuthPath("/oauth2/authorize")).toBe(false);
     expect(isSessionCreatingAuthPath("/get-session")).toBe(false);
     expect(isSessionCreatingAuthPath(undefined)).toBe(false);
+  });
+});
+
+describe("socialTwoFactorRedirectUrl", () => {
+  test("preserves the Outlook handoff through organization selection", () => {
+    const callback =
+      "https://my.example.test/auth/organization?redirectTo=%2Fsign-in-outlook%3FparentOrigin%3Dhttps%253A%252F%252Foutlook.example.test";
+
+    expect(
+      socialTwoFactorRedirectUrl({
+        callbackURL: callback,
+        frontendURL: "https://my.example.test",
+      }),
+    ).toBe(
+      "https://my.example.test/auth/two-factor?redirectTo=%2Fsign-in-outlook%3FparentOrigin%3Dhttps%253A%252F%252Foutlook.example.test",
+    );
+  });
+
+  test("preserves an ordinary same-origin callback", () => {
+    expect(
+      socialTwoFactorRedirectUrl({
+        callbackURL: "https://my.example.test/matters?view=recent",
+        frontendURL: "https://my.example.test",
+      }),
+    ).toBe(
+      "https://my.example.test/auth/two-factor?redirectTo=%2Fmatters%3Fview%3Drecent",
+    );
+  });
+
+  test("drops a callback from another origin", () => {
+    expect(
+      socialTwoFactorRedirectUrl({
+        callbackURL: "https://attacker.example/redirect",
+        frontendURL: "https://my.example.test",
+      }),
+    ).toBe("https://my.example.test/auth/two-factor");
   });
 });
 

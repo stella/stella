@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { mapWithConcurrency, streamWithConcurrency } from "./index";
+import {
+  createConcurrencyLimiter,
+  mapWithConcurrency,
+  streamWithConcurrency,
+} from "./index";
 
 const elapsedMs = async (
   operation: () => Promise<unknown>,
@@ -58,6 +62,31 @@ describe("mapWithConcurrency", () => {
       },
     });
     expect(values).toEqual([1, 2, 3, 4, 5]);
+    expect(peakActive).toBe(2);
+  });
+});
+
+describe("createConcurrencyLimiter", () => {
+  test("shares a FIFO limit across independent callers", async () => {
+    const limit = createConcurrencyLimiter(2);
+    const started: number[] = [];
+    let active = 0;
+    let peakActive = 0;
+
+    await Promise.all(
+      [0, 1, 2, 3, 4, 5].map(
+        async (value) =>
+          await limit(async () => {
+            started.push(value);
+            active += 1;
+            peakActive = Math.max(peakActive, active);
+            await Bun.sleep(1);
+            active -= 1;
+          }),
+      ),
+    );
+
+    expect(started).toEqual([0, 1, 2, 3, 4, 5]);
     expect(peakActive).toBe(2);
   });
 });
