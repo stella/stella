@@ -10,13 +10,17 @@ export const loadAuthContext = async (queryClient: QueryClient) => {
   // with no session. A rejection means the session could not be read at all;
   // preserve that distinction so route recovery handles an outage instead of
   // redirecting an authenticated user to sign-in.
-  const sessionData = await ensureRouteQueryData(
-    queryClient,
-    sessionOptions,
-  ).catch((error: unknown) => {
-    getAnalytics().captureError(error);
-    throw error;
+  const sessionPromise = ensureRouteQueryData(queryClient, sessionOptions);
+  const sessionResult = await Result.tryPromise({
+    try: async () => await sessionPromise,
+    catch: (error) => error,
   });
+  if (sessionResult.isErr()) {
+    getAnalytics().captureError(sessionResult.error);
+  }
+  // Re-observe the same promise so route recovery receives the original
+  // rejection, not a Result unwrap error, without repeating the query.
+  const sessionData = await sessionPromise;
 
   return {
     session: sessionData?.session ?? null,

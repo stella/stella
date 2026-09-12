@@ -91,9 +91,12 @@ run_rust_format() {
 }
 
 run_code_check() {
-  # Oxc performs the repository-wide type-aware lint and type diagnostics in
-  # one pass. The typecheck-cost baseline guard remains CI-only because it
-  # intentionally re-runs every native project to measure compiler workload.
+  # Match CI's exact changed-file boundary checks as well as its affected
+  # package checks. Full runs retain the repository-wide pipeline.
+  if [[ -n "$affected_flag" ]]; then
+    bun run code-check:affected -- --base "$base_ref"
+    return $?
+  fi
   bun run code-check
 }
 
