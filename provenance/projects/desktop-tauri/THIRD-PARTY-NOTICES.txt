@@ -124,6 +124,7 @@ Project: desktop-tauri
 - digest 0.11.3 — Apache-2.0 OR MIT
 - dirs 4.0.0 — Apache-2.0 OR MIT
 - dirs 6.0.0 — Apache-2.0 OR MIT
+- dirs 7.0.0 — Apache-2.0 OR MIT
 - dirs-sys 0.3.7 — Apache-2.0 OR MIT
 - dirs-sys 0.5.0 — Apache-2.0 OR MIT
 - dispatch2 0.3.1 — Apache-2.0 OR MIT OR Zlib
