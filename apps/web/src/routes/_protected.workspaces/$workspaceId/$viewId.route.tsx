@@ -45,6 +45,7 @@ import {
   timeEntryTeamSummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { useTableStore } from "@/lib/workspaces/table-store";
 import { windowIncludesAssignees } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import {
   resolveTableFind,
@@ -53,7 +54,6 @@ import {
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
@@ -221,7 +221,7 @@ export const Route = createFileRoute(
         : ["folder", "task"];
       // A live find is part of the window's key: without it the layout would
       // suspend a second time on the window it actually reads.
-      const find = useTableStore.getState().find[activeView.id];
+      const find = useTableStore.getState().find[workspaceId]?.[activeView.id];
       const { request } = resolveTableFind({
         layout: activeView.layout,
         properties,

@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import { useTableStore } from "@/lib/workspaces/table-store";
 import {
   resolveTableFind,
   UNRESTRICTED_FIND,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { TableFindResolution } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 /**
  * One resolution of a view's find bar, read by the toolbar that edits it and by
@@ -21,13 +21,17 @@ import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hook
 export const useTableFind = ({
   properties,
   view,
+  workspaceId,
 }: {
   properties: WorkspaceProperty[];
   view: WorkspaceView<"table">;
+  workspaceId: string;
 }): TableFindResolution => {
-  const term = useTableStore((state) => state.find[view.id]?.submitted ?? "");
+  const term = useTableStore(
+    (state) => state.find[workspaceId]?.[view.id]?.submitted ?? "",
+  );
   const selection = useTableStore(
-    (state) => state.find[view.id]?.scope ?? UNRESTRICTED_FIND,
+    (state) => state.find[workspaceId]?.[view.id]?.scope ?? UNRESTRICTED_FIND,
   );
   const { layout } = view;
 

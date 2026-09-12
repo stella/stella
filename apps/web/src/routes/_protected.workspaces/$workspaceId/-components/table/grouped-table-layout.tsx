@@ -55,6 +55,7 @@ import { visibleEntityFieldIds } from "@/lib/workspaces/queries/entities";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
+import { useTableStore } from "@/lib/workspaces/table-store";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
@@ -93,7 +94,6 @@ import {
   getWorkspaceGridTemplateColumns,
   tableEndFillerCellStyle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
@@ -160,7 +160,9 @@ export const GroupedTableLayout = ({
   const columns = useTableColumns({ properties, view });
   // Deferred alongside the group keys (each section defers its own), so the
   // marks describe the rows on screen, not a term still being fetched.
-  const find = useDeferredValue(useTableFind({ properties, view }));
+  const find = useDeferredValue(
+    useTableFind({ properties, view, workspaceId }),
+  );
   // One shared scroller for the whole grouped view: every group's table flows
   // inside it (no nested scroll boxes), so the sticky group headers stack
   // correctly and a single horizontal scroll keeps every group aligned.
@@ -291,7 +293,11 @@ export const GroupedTableLayout = ({
     }
     return unique;
   }, [treeDataByGroup]);
-  useSyncSelectedEntities({ viewId: view.id, treeData: allTreeData });
+  useSyncSelectedEntities({
+    workspaceId,
+    viewId: view.id,
+    treeData: allTreeData,
+  });
   // Every row id across all sections, so a section's select-all keeps the other
   // sections' selections (they share one selection) without resurrecting stale
   // ids.
@@ -310,8 +316,10 @@ export const GroupedTableLayout = ({
   // defines it, not threaded through props and invoked from a click handler
   // several components away.)
   useExternalSyncEffect(() => {
-    useTableStore.getState().setPreservableRowIds(view.id, allRowIds);
-  }, [view.id, allRowIds]);
+    useTableStore
+      .getState()
+      .setPreservableRowIds({ workspaceId, viewId: view.id }, allRowIds);
+  }, [workspaceId, view.id, allRowIds]);
 
   if (groupByPropertyId === null || isUnsupportedGrouping) {
     return (

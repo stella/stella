@@ -20,6 +20,8 @@ import { countDescendants } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable as WorkspaceTableType } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
+import { useTableStore } from "@/lib/workspaces/table-store";
+import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import {
@@ -65,8 +67,6 @@ import {
   toColumnDropEdge,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 type WorkspaceTableProps = {
   workspaceId: string;
@@ -227,7 +227,7 @@ export const WorkspaceTable = ({
     // the table store (never subscribed), so this table never re-renders as
     // that union grows during load.
     const preservableRowIds = viewId
-      ? useTableStore.getState().preservableRowIds[viewId]
+      ? useTableStore.getState().preservableRowIds[workspaceId]?.[viewId]
       : undefined;
     table.setRowSelection(
       getNextSelectAllRowSelection({
@@ -236,7 +236,7 @@ export const WorkspaceTable = ({
         ...(preservableRowIds && { preservableRowIds }),
       }),
     );
-  }, [selectableRowIds, viewId, table]);
+  }, [selectableRowIds, workspaceId, viewId, table]);
 
   const rowLabels = useMemo(() => {
     // Compute logical row labels that account for collapsed

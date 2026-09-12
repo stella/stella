@@ -18,9 +18,9 @@ import type { PropertyContentType } from "@/lib/api-contract";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
 import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
+import type { TableFindSelection } from "@/lib/workspaces/table-store";
 import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
-import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 /**
  * A row in the find bar's column picker.

@@ -16,6 +16,7 @@ import {
 } from "@/lib/analytics/route-error-lifecycle";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -34,6 +35,7 @@ export function getRouter() {
   });
   installPDFDocumentCleanup(queryClient);
   installChatRuntimeCleanup(queryClient);
+  installTableStoreReconcile(queryClient);
   let readCaughtRouteTemplate = () => "unknown";
 
   const router = createRouter({

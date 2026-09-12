@@ -14,6 +14,11 @@ import { cn } from "@stll/ui/utils";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { useFindSurface } from "@/lib/find-owner";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import { useTableStore } from "@/lib/workspaces/table-store";
+import type {
+  TableFindSelection,
+  TableViewRef,
+} from "@/lib/workspaces/table-store";
 import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import {
   searchableColumnIds,
@@ -21,8 +26,6 @@ import {
   toPickerFindColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 
 // The band every server-backed search in this app types at (the global search
@@ -35,6 +38,7 @@ type ViewToolbarSearchProps = {
   paneRef: RefObject<HTMLElement | null>;
   properties: WorkspaceProperty[];
   view: WorkspaceView<"table">;
+  workspaceId: string;
 };
 
 /**
@@ -49,9 +53,15 @@ export const ViewToolbarSearch = ({
   paneRef,
   properties,
   view,
+  workspaceId,
 }: ViewToolbarSearchProps) => {
   const t = useTranslations();
-  const { columns, request, selection } = useTableFind({ properties, view });
+  const viewRef = { workspaceId, viewId: view.id };
+  const { columns, request, selection } = useTableFind({
+    properties,
+    view,
+    workspaceId,
+  });
   // The picker also lists the metadata columns, disabled. They are read off the
   // rendered schema so the list cannot drift from the grid.
   const schema = useWorkspaceTableSchema({ properties, view });
@@ -59,7 +69,7 @@ export const ViewToolbarSearch = ({
     findColumns: columns,
     schemaColumns: schema.columns,
   });
-  const find = useTableStore((state) => state.find[view.id]);
+  const find = useTableStore((state) => state.find[workspaceId]?.[view.id]);
   const openFind = useTableStore((state) => state.openFind);
   const closeFind = useTableStore((state) => state.closeFind);
   const clearFind = useTableStore((state) => state.clearFind);
@@ -85,8 +95,8 @@ export const ViewToolbarSearch = ({
   // stays mounted across a switch between two table views, so a timer
   // scheduled in one can fire under the other, and the term belongs to the
   // view it was typed into.
-  const submit = useDebouncedCallback((viewId: string) => {
-    submitFind(viewId);
+  const submit = useDebouncedCallback((ref: TableViewRef) => {
+    submitFind(ref);
   }, FIND_DEBOUNCE_MS);
 
   // The pane is the root, not this button: a press with a grid cell focused
@@ -96,7 +106,7 @@ export const ViewToolbarSearch = ({
     bar: popupRef,
     enabled: true,
     onFind: () => {
-      openFind(view.id);
+      openFind(viewRef);
       inputRef.current?.focus();
     },
     owner: "table",
@@ -137,14 +147,14 @@ export const ViewToolbarSearch = ({
     <Popover
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
-          openFind(view.id);
+          openFind(viewRef);
           return;
         }
         // Flush rather than cancel: the last keystrokes were only waiting out
         // the debounce, and the find they belong to survives this close.
         submit.flush();
         setColumnsShownFor(null);
-        closeFind(view.id);
+        closeFind(viewRef);
       }}
       open={open}
     >
@@ -185,7 +195,7 @@ export const ViewToolbarSearch = ({
           <Button
             aria-label={t("common.remove")}
             onClick={() => {
-              clearFind(view.id);
+              clearFind(viewRef);
             }}
             size="icon-xs"
             variant="ghost"
@@ -208,8 +218,8 @@ export const ViewToolbarSearch = ({
             autoFocus
             className="flex-1"
             onChange={(event) => {
-              setFindTyped(view.id, event.target.value);
-              submit(view.id);
+              setFindTyped(viewRef, event.target.value);
+              submit(viewRef);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -250,7 +260,7 @@ export const ViewToolbarSearch = ({
           <FindColumnList
             columns={pickerColumns}
             onChange={(next) => {
-              setFindScope(view.id, next);
+              setFindScope(viewRef, next);
             }}
             searchable={searchable}
             selection={selection}

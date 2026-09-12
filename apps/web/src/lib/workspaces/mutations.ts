@@ -16,6 +16,7 @@ import {
 } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
+import { useTableStore } from "@/lib/workspaces/table-store";
 
 // Hardcoded in English: these are persisted in the DB and shared
 // across all organization members regardless of their locale.
@@ -239,6 +240,9 @@ export const useDeleteWorkspace = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
+    },
+    onSuccess: (_data, { workspaceId }) => {
+      useTableStore.getState().dropMatter(workspaceId);
     },
     onError: (error) => {
       analytics.captureError(error);
