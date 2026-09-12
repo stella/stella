@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -15,6 +16,7 @@ import {
   clausesOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { ClauseDetailView } from "@/routes/_protected.knowledge/-components/clause-detail";
@@ -50,6 +52,28 @@ type View = { kind: "list" } | { kind: "detail"; clauseId: string };
 // ── Route ────────────────────────────────────────────
 
 export const Route = createFileRoute("/_protected/knowledge/clauses")({
+  loader: ({ context }) => {
+    const organizationId = context.user.activeOrganizationId;
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+
+    detached(
+      Promise.all([
+        prefetchRouteQuery(
+          context.queryClient,
+          clauseCategoriesOptions(organizationId),
+          onPrefetchError,
+        ),
+        prefetchRouteQuery(
+          context.queryClient,
+          clausesOptions(organizationId, { categoryId: null, search: "" }),
+          onPrefetchError,
+        ),
+      ]),
+      "knowledge-clauses.prefetch",
+    );
+  },
   component: RouteComponent,
 });
 
