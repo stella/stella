@@ -5,8 +5,10 @@ import {
   type CourtWeightEntry,
   loadCourtWeightsForCountry,
 } from "@/api/lib/case-law/court-weights";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
  * Which courts the entry shelf shows: the jurisdiction's apex courts by
@@ -24,6 +26,13 @@ const SHELF_TIER_LABELS: ReadonlySet<string> = new Set([
 /** How many stored spellings of one apex court the candidate bound allows for. */
 const SHELF_SPELLINGS_PER_COURT = 3;
 
+/**
+ * A court of the jurisdiction with the docket size the browse facets report
+ * for it. The count orders courts within a tier and nothing else: it never
+ * decides which courts exist. The facets hold only the jurisdiction's largest
+ * `LIMITS.caseLawFacetLimit` courts, so a court with no bucket counts as zero
+ * and orders after its tier's bucketed courts, then by name.
+ */
 export type CourtCount = {
   court: string;
   count: number;
@@ -46,40 +55,80 @@ const rowsOf = (result: unknown): Record<string, unknown>[] => {
   return Array.isArray(rows) ? rows.filter(isRecord) : [];
 };
 
-type ReadCourtCountsOptions = {
+type ReadCourtNamesOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
 };
 
 /**
- * Every court of the jurisdiction with its decision count. Deliberately
- * join-free: the statement is a parallel index-only walk of the
- * `(country, court, date)` index (planner cost 550k for the largest
- * jurisdiction, against 1.4M with a bitmap heap scan once the sources table
- * is joined in for `source_id`). Source policy is applied by the shelf
- * statement that follows, which drops a court whose public rows are none;
- * the cap on shown courts is taken after that, so a withheld court cannot
- * hold a slot. The counts only order courts within a tier.
+ * Every court spelling the jurisdiction holds, by loose index scan: one
+ * `min(court)` per distinct court, each a descent of the
+ * `(country, court, date)` index. 611 buffers and 3.5 ms on the production
+ * reader, for a jurisdiction with 116 courts.
+ *
+ * `GROUP BY court` is what this replaces, and its planner cost said nothing:
+ * priced as a cheap parallel index-only scan, it reads every index entry of
+ * the country and, where the pages are not all-visible, falls back to the
+ * heap — 216k heap fetches, 966,716 shared buffers, 284 ms warm and ~11 s
+ * cold, on every five-minute cache miss. The lateral that follows touches
+ * 261 buffers, so the count was the whole cold cost, and cold it exceeded the
+ * page's 10 s critical-query timeout.
+ *
+ * Join-free by design: source policy is applied by the shelf statement that
+ * follows, which drops a court whose public rows are none; the cap on shown
+ * courts is taken after that, so a withheld court cannot hold a slot.
  */
-export const readCourtCounts = async ({
+const readCourtNames = async ({
   caseLawDb,
   country,
-}: ReadCourtCountsOptions): Promise<CourtCount[]> => {
+}: ReadCourtNamesOptions): Promise<string[]> => {
   const result: unknown = await caseLawDb(
     async (tx) =>
       await tx.execute(sql`
-        SELECT d.court, count(*)::int AS decision_count
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-        GROUP BY d.court
+        WITH RECURSIVE court_walk AS (
+          SELECT min(d.court) AS court
+          FROM case_law_decisions d
+          WHERE d.country = ${country}
+          UNION ALL
+          SELECT (
+            SELECT min(d.court)
+            FROM case_law_decisions d
+            WHERE d.country = ${country}
+              AND d.court > court_walk.court
+          )
+          FROM court_walk
+          WHERE court_walk.court IS NOT NULL
+        )
+        SELECT court_walk.court
+        FROM court_walk
+        WHERE court_walk.court IS NOT NULL
       `),
   );
   return rowsOf(result).flatMap((row) => {
     const court = row["court"];
-    return typeof court === "string" && court.length > 0
-      ? [{ court, count: Number(row["decision_count"]) || 0 }]
-      : [];
+    return typeof court === "string" && court.length > 0 ? [court] : [];
   });
+};
+
+type CourtDocketSizesOptions = {
+  /** Every court the table holds; presence on the shelf is decided here alone. */
+  courts: readonly string[];
+  /** The browse facets' `court` buckets: the largest courts, exact counts. */
+  buckets: readonly FacetBucket[];
+};
+
+/** Each court with its facet count, zero for a court the buckets do not name. */
+export const courtDocketSizes = ({
+  courts,
+  buckets,
+}: CourtDocketSizesOptions): CourtCount[] => {
+  const countByCourt = new Map(
+    buckets.map(({ value, count }) => [value, count]),
+  );
+  return courts.map((court) => ({
+    court,
+    count: countByCourt.get(court) ?? 0,
+  }));
 };
 
 type SelectShelfCourtsOptions = {
@@ -104,9 +153,10 @@ const byCodePoint = (a: string, b: string): number => {
 };
 
 /**
- * Apex courts first by tier, then by docket size within a tier, capped at
- * `limit`. A court no entry matches, or one whose label is below the shelf,
- * is left out.
+ * Apex courts first by tier, then by docket size within a tier, then by name,
+ * capped at `limit`. A court no entry matches, or one whose label is below the
+ * shelf, is left out. An uncounted court is ordered last within its tier, never
+ * dropped: the count ranks courts, it does not admit them.
  */
 export const selectShelfCourts = ({
   counts,
@@ -149,6 +199,12 @@ type ReadShelfCourtsOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
   entries: readonly CourtWeightEntry[];
+  /**
+   * The jurisdiction's browse facets, whose `court` buckets order the shelf
+   * within a tier. It degrades to empty facets, and the shelf then lists the
+   * same courts in name order.
+   */
+  readFacets: (country: string) => Promise<LegalBrowseFacets>;
 };
 
 /** The shelf's courts for a jurisdiction, ranked by the given entries. */
@@ -156,17 +212,22 @@ export const readShelfCourts = async ({
   caseLawDb,
   country,
   entries,
+  readFacets,
 }: ReadShelfCourtsOptions): Promise<ShelfCourt[]> => {
-  const counts = await readCourtCounts({ caseLawDb, country });
+  const [courts, facets] = await Promise.all([
+    readCourtNames({ caseLawDb, country }),
+    readFacets(country),
+  ]);
+  const counts = courtDocketSizes({ courts, buckets: facets.court });
   // Candidates, not the shown set: a publisher spells an apex court several
   // ways, and the shelf statement drops the spellings with no public rows
   // before the caller caps what it shows.
-  const courts = selectShelfCourts({
+  const shelf = selectShelfCourts({
     counts,
     entries,
     limit: LIMITS.caseLawLatestCourts * SHELF_SPELLINGS_PER_COURT,
   });
-  if (courts.length === 0 && counts.length > 0) {
+  if (shelf.length === 0 && counts.length > 0) {
     // Rows exist but none rank as an apex court: a seed or a court-name
     // spelling has drifted from the corpus. The page shows no shelf rather
     // than a wrong one, and this is the only trace of why.
@@ -175,5 +236,5 @@ export const readShelfCourts = async ({
       courts: counts.length,
     });
   }
-  return courts;
+  return shelf;
 };

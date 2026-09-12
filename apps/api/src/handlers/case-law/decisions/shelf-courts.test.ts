@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { seededCourtWeightEntries } from "@/api/handlers/case-law/court-weight-seed";
-import { selectShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
+import {
+  courtDocketSizes,
+  selectShelfCourts,
+} from "@/api/handlers/case-law/decisions/shelf-courts";
+import type { FacetBucket } from "@/api/lib/search/types";
 
 const entriesFor = seededCourtWeightEntries;
 
@@ -60,5 +64,42 @@ describe("selectShelfCourts", () => {
     expect(shelf).toEqual([
       { court: "COURT OF JUSTICE", tierLabel: "constitutional" },
     ]);
+  });
+});
+
+/** The shelf as it is composed: courts from the table, counts from the facets. */
+const shelfOf = (courts: readonly string[], buckets: FacetBucket[]) =>
+  selectShelfCourts({
+    counts: courtDocketSizes({ courts, buckets }),
+    entries: entriesFor("CZE"),
+    limit: 4,
+  }).map((shelfCourt) => shelfCourt.court);
+
+describe("the shelf composed from the table's courts and the facets", () => {
+  test("the facet bucket, not the name, orders a tier", () => {
+    expect(
+      shelfOf(
+        ["Nejvyšší soud", "Nejvyšší správní soud"],
+        [
+          { value: "Nejvyšší správní soud", count: 9000 },
+          { value: "Nejvyšší soud", count: 10 },
+        ],
+      ),
+    ).toEqual(["Nejvyšší správní soud", "Nejvyšší soud"]);
+  });
+
+  test("a court the facet cap left out is listed after its tier's counted courts, by name", () => {
+    expect(
+      shelfOf(
+        ["Nejvyšší správní soud", "Nejvyšší soud ČR", "Nejvyšší soud"],
+        [{ value: "Nejvyšší soud", count: 50 }],
+      ),
+    ).toEqual(["Nejvyšší soud", "Nejvyšší soud ČR", "Nejvyšší správní soud"]);
+  });
+
+  test("without facets every court is still listed, in name order", () => {
+    expect(
+      shelfOf(["Nejvyšší správní soud", "Nejvyšší soud", "Ústavní soud"], []),
+    ).toEqual(["Ústavní soud", "Nejvyšší soud", "Nejvyšší správní soud"]);
   });
 });
