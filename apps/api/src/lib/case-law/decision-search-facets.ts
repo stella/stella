@@ -1,8 +1,6 @@
 import { inArray } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
-// eslint-disable-next-line no-restricted-imports -- search boundary: brands source ids the index returned before reading their names back
-import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   COURT_TIER_LABELS,
@@ -12,6 +10,7 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
+import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * What a search's filter rail is made of, on both providers.
@@ -135,7 +134,7 @@ export const readCaseLawSourceNames = async (
         .where(
           inArray(
             caseLawSources.id,
-            sourceIds.map((id) => toSafeId<"caseLawSource">(id)),
+            sourceIds.map((id) => brandPersistedCaseLawSourceId(id)),
           ),
         ),
   );

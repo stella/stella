@@ -516,8 +516,8 @@ const searchPostgresDecisions = async (
 
   type RawRows = Record<string, unknown>[];
   const emptyRows: Promise<RawRows> = Promise.resolve([]);
-  const onFirstPage = (query: SQL): Promise<RawRows> =>
-    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(query));
+  const onFirstPage = async (query: SQL): Promise<RawRows> =>
+    parsedCursor ? await emptyRows : await caseLawDb((tx) => tx.execute(query));
 
   // Skip the expensive COUNT(*) and the facet queries on paginated requests;
   // these values describe the result set, not the page.

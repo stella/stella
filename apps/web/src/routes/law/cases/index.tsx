@@ -58,6 +58,7 @@ import {
 import type { DecisionFilterChip } from "@/features/case-law/components/decision-results-toolbar";
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
+import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { DEFAULT_HIDDEN_DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
 import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import {
@@ -81,10 +82,6 @@ import {
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
-import {
-  setHiddenDecisionColumnIds,
-  useHiddenDecisionColumnIds,
-} from "@/lib/case-law-column-preferences";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -404,7 +401,8 @@ function PublicCaseLawIndex() {
     }
   }
 
-  const hiddenColumnIds = useHiddenDecisionColumnIds(countryParam);
+  const { hiddenColumnIds, setHiddenColumnIds } =
+    useDecisionColumnPreferences(countryParam);
 
   const { data: browseFacets } = useSuspenseQuery(decisionFacetsOptions(scope));
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -556,9 +554,7 @@ function PublicCaseLawIndex() {
           <DecisionResultsToolbar
             actions={<ResearchTableActions filters={filters} />}
             hiddenColumnIds={hiddenColumnIds}
-            onHiddenColumnIdsChange={(next) =>
-              setHiddenDecisionColumnIds(countryParam, next)
-            }
+            onHiddenColumnIdsChange={setHiddenColumnIds}
             onRefine={(entry) => setQuery(addRefineTerm(search.q, entry))}
             onSortChange={(next) => {
               detached(

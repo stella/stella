@@ -139,19 +139,24 @@ const isCourtTier = (value: string): value is CourtTier =>
 export const orderCourtTiers = (
   tiers: readonly { tierLabel: string; courts: readonly FacetSourceBucket[] }[],
 ): CourtTierBuckets[] => {
-  const byTier = new Map<CourtTier, FacetSourceBucket[]>();
+  // A bucket per tier up front, so every tier has a list to collect into and
+  // there is no absent case to stand in for. A tier added to the union has to
+  // be given one here before this compiles.
+  // Annotated, not inferred: empty literals would otherwise infer `never[]`
+  // and nothing could be collected into them.
+  const byTier: Record<CourtTier, FacetSourceBucket[]> = {
+    constitutional: [],
+    supreme: [],
+    regional: [],
+    other: [],
+  };
+
   for (const { courts, tierLabel } of tiers) {
-    const tier = isCourtTier(tierLabel) ? tierLabel : "other";
-    const collected = byTier.get(tier) ?? [];
-    collected.push(...courts);
-    byTier.set(tier, collected);
+    byTier[isCourtTier(tierLabel) ? tierLabel : "other"].push(...courts);
   }
-  return COURT_TIER_ORDER.flatMap((tier) => {
-    const courts = byTier.get(tier);
-    return courts === undefined || courts.length === 0
-      ? []
-      : [{ tier, courts }];
-  });
+  return COURT_TIER_ORDER.flatMap((tier) =>
+    byTier[tier].length === 0 ? [] : [{ tier, courts: byTier[tier] }],
+  );
 };
 
 /**

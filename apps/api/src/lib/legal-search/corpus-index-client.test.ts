@@ -20,6 +20,7 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { isRecord } from "@/api/lib/type-guards";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -536,10 +537,10 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
  * rank-based position score the cursor is built from would be meaningless.
  */
 const requestedSortOrders = (): unknown[] =>
-  requests.map(
-    (request) =>
-      (JSON.parse(request.body) as Record<string, unknown>)["sort_by"],
-  );
+  requests.map((request) => {
+    const body: unknown = JSON.parse(request.body);
+    return isRecord(body) ? body["sort_by"] : null;
+  });
 
 test("a relevance scan requests BM25 order on every call", async () => {
   await readSortedPage(RELEVANCE_ORDER);
