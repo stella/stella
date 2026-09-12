@@ -1365,6 +1365,7 @@ export const FileTabPanel = ({
               activeFieldId={tab.id}
               entityId={tab.entityId}
               isVisible={isActive}
+              mimeType={tab.mimeType}
               workspaceId={tab.workspaceId}
             />
           )}
