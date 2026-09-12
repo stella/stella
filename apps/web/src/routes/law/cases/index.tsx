@@ -80,9 +80,10 @@ import { railFacets } from "@/features/case-law/rail-facets";
 import { ResearchTableActions } from "@/features/case-law/research/research-actions";
 import {
   addRefineTerm,
+  canonicalRefinements,
+  queryWithRefinements,
   refineTermsOfQuery,
   removeRefineTerm,
-  withoutRefineTerms,
 } from "@/features/case-law/search-refine.logic";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
@@ -106,6 +107,7 @@ import {
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
+const MAX_REFINEMENT_LENGTH = 240;
 
 const optionalBrowseStringSchema = (maxLength: number) =>
   v.optional(
@@ -116,6 +118,18 @@ const optionalBrowseStringSchema = (maxLength: number) =>
       v.transform((value) => (value.length > 0 ? value : undefined)),
     ),
   );
+
+const optionalRefinementsSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(MAX_REFINEMENT_LENGTH),
+      v.transform(canonicalRefinements),
+    ),
+  ),
+  undefined,
+);
 
 /**
  * A calendar date, dropped rather than refused when it is not one: a public
@@ -145,6 +159,7 @@ const searchSchema = v.object({
   source: optionalBrowseStringSchema(128),
   to: optionalDateSchema,
   type: optionalBrowseStringSchema(128),
+  within: optionalRefinementsSchema,
   // Accepted, never written: links made before the range existed still work,
   // and `decisionDateRange` resolves them to that year's whole span.
   year: optionalBrowseStringSchema(4),
@@ -267,6 +282,7 @@ export const Route = createFileRoute("/law/cases/")({
     // the browse slice the home's country links and the crawler follow.
     if (
       search.q === undefined &&
+      search.within === undefined &&
       search.country === undefined &&
       !hasActiveCaseLawFilter(search)
     ) {
@@ -391,6 +407,7 @@ function PublicCaseLawIndex() {
       source,
       to,
       type,
+      within,
       year,
     }) => ({
       country,
@@ -402,6 +419,7 @@ function PublicCaseLawIndex() {
       source,
       to,
       type,
+      within,
       year,
     }),
   });
@@ -412,7 +430,8 @@ function PublicCaseLawIndex() {
     publicCaseLawCountryFromParam(search.country) ??
     panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
-  const intent = readDecisionIntent(search.q, { jurisdiction: scope });
+  const effectiveQuery = queryWithRefinements(search.q, search.within);
+  const intent = readDecisionIntent(effectiveQuery, { jurisdiction: scope });
   const filters = createDecisionFiltersFromSearch(search);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
@@ -518,16 +537,7 @@ function PublicCaseLawIndex() {
     );
   };
 
-  const setQuery = (next: string | undefined) => {
-    setQueryInput(next ?? "");
-    setRequestedQuery((next ?? "").trim());
-    detached(
-      searchNavigation((previous) => ({ ...previous, q: next })),
-      "cases.refine-navigate",
-    );
-  };
-
-  const refineTerms = refineTermsOfQuery(search.q);
+  const refineTerms = refineTermsOfQuery(search.within);
   const dateRange = decisionDateRange(search);
   const chips: DecisionFilterChip[] = [];
   // The same three shapes, and the same strings, the workspace view's own
@@ -572,7 +582,15 @@ function PublicCaseLawIndex() {
   for (const term of refineTerms) {
     chips.push({
       id: `refine:${term}`,
-      onRemove: () => setQuery(removeRefineTerm(search.q, term)),
+      onRemove: () => {
+        detached(
+          searchNavigation((previous) => ({
+            ...previous,
+            within: removeRefineTerm(previous.within, term),
+          })),
+          "cases.remove-refinement-navigate",
+        );
+      },
       value: `"${term}"`,
     });
   }
@@ -643,7 +661,15 @@ function PublicCaseLawIndex() {
             actions={<ResearchTableActions filters={filters} />}
             hiddenColumnIds={hiddenColumnIds}
             onHiddenColumnIdsChange={setHiddenColumnIds}
-            onRefine={(entry) => setQuery(addRefineTerm(search.q, entry))}
+            onRefine={(entry) => {
+              detached(
+                searchNavigation((previous) => ({
+                  ...previous,
+                  within: addRefineTerm(previous.within, entry),
+                })),
+                "cases.refine-navigate",
+              );
+            }}
             onSortChange={(next) => {
               detached(
                 searchNavigation((previous) => ({ ...previous, sort: next })),
@@ -663,14 +689,14 @@ function PublicCaseLawIndex() {
           <DecisionFilterChips
             chips={chips}
             onClearAll={() => {
-              // Every chip on the row, including the refinements that live in
-              // the query rather than in a facet.
-              setQueryInput("");
+              // Clear the chips, not the query the reader typed into the main
+              // field. Refinements have their own URL field, so the visible
+              // query and the result set cannot diverge here.
               detached(
                 searchNavigation((previous) => ({
                   ...previous,
                   ...clearedCaseLawFilters(),
-                  q: withoutRefineTerms(previous.q),
+                  within: undefined,
                 })),
                 "cases.clear-filters",
               );
@@ -682,7 +708,7 @@ function PublicCaseLawIndex() {
             hiddenColumnIds={hiddenColumnIds}
             isLoading={isLoading}
             order={order}
-            query={search.q}
+            query={effectiveQuery}
           />
           {hasNextPage && (
             <div className="flex justify-center py-4">

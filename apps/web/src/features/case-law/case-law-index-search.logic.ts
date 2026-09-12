@@ -29,6 +29,8 @@ export type CaseLawIndexSearch = {
   /** The end of the decision-date range, inclusive. */
   to?: string | undefined;
   type?: string | undefined;
+  /** Refinements added by the results toolbar, separate from reader-entered `q`. */
+  within?: string | undefined;
   /**
    * A whole year, as links made before the range existed spell it. Read, never
    * written: the rail's year list is a quick pick for `from`/`to` now, so one
@@ -175,7 +177,7 @@ export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
 ): `/law/cases${string}` => {
-  const { country, court, lang, q, sort, source, type } = search;
+  const { country, court, lang, q, sort, source, type, within } = search;
   const params = new URLSearchParams();
   const range = decisionDateRange(search);
   if (country) {
@@ -203,6 +205,9 @@ export const createCaseLawIndexPath = (
   }
   if (q) {
     params.set("q", q);
+  }
+  if (within) {
+    params.set("within", within);
   }
   const sortParam = decisionSortParam(sort);
   if (sortParam !== undefined) {

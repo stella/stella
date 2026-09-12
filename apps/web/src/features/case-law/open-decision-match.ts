@@ -19,6 +19,7 @@ import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
 } from "@/features/case-law/queries/decisions";
+import { queryWithRefinements } from "@/features/case-law/search-refine.logic";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
@@ -80,6 +81,7 @@ export const createDecisionFiltersFromSearch = ({
   source,
   to,
   type,
+  within,
   year,
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
@@ -88,7 +90,9 @@ export const createDecisionFiltersFromSearch = ({
   }
   const range = decisionDateRange({ from, to, year });
   const search = searchTextOfIntent(
-    readDecisionIntent(q, { jurisdiction: scope }),
+    readDecisionIntent(queryWithRefinements(q, within), {
+      jurisdiction: scope,
+    }),
   );
 
   return {
@@ -125,9 +129,12 @@ export const openDecisionMatch = async ({
   search,
   uiLocale,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
-  const intent = readDecisionIntent(search.q, {
-    jurisdiction: caseLawCountryScope(search.country),
-  });
+  const intent = readDecisionIntent(
+    queryWithRefinements(search.q, search.within),
+    {
+      jurisdiction: caseLawCountryScope(search.country),
+    },
+  );
   if (intent.type !== "identifier") {
     return false;
   }

@@ -64,9 +64,10 @@ describe("the filters the URL carries", () => {
         source: "nsoud",
         to: "2024-12-31",
         type: "rozsudek",
+        within: '"dobré mravy"',
       }),
     ).toBe(
-      "/law/cases?country=cz&court=Nejvy%C5%A1%C5%A1%C3%AD+soud&from=2024-01-01&to=2024-12-31&type=rozsudek&source=nsoud&lang=cs&q=n%C3%A1jem",
+      "/law/cases?country=cz&court=Nejvy%C5%A1%C5%A1%C3%AD+soud&from=2024-01-01&to=2024-12-31&type=rozsudek&source=nsoud&lang=cs&q=n%C3%A1jem&within=%22dobr%C3%A9+mravy%22",
     );
   });
 

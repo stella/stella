@@ -410,7 +410,7 @@ const CourtTierSection = ({
       <button
         aria-controls={panelId}
         aria-expanded={expanded}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1 py-1 text-start text-xs font-medium transition-colors"
+        className="text-foreground-strong-muted hover:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-start text-xs font-medium transition-colors"
         onClick={() => setOpen(!expanded)}
         type="button"
       >
@@ -452,7 +452,7 @@ const ShowAllButton = ({
   onClick: () => void;
 }) => (
   <button
-    className="text-muted-foreground hover:text-foreground -mx-1 px-1 py-1.5 text-xs transition-colors"
+    className="text-muted-foreground hover:text-foreground -mx-1 min-h-11 px-1 py-1.5 text-xs transition-colors"
     onClick={onClick}
     type="button"
   >
@@ -487,7 +487,7 @@ const FacetOptions = ({
         const checked = item.value === selectedValue;
         return (
           <li key={item.value}>
-            <label className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex cursor-pointer items-center gap-2 rounded-sm py-1.5 ps-1 pe-1 text-xs transition-colors has-[:focus-visible]:ring-2">
+            <label className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm py-1.5 ps-1 pe-1 text-xs transition-colors has-[:focus-visible]:ring-2">
               <input
                 checked={checked}
                 className="accent-primary size-3.5 shrink-0"

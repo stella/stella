@@ -1,6 +1,8 @@
 /**
- * "Search within results" as a change to `q`, because `q` is the only text the
- * search endpoint reads: there is no second field to put a narrowing term in.
+ * "Search within results" is stored separately from the reader-entered `q`,
+ * then appended before the search endpoint is called. The endpoint has only
+ * one free-text field, but the URL must preserve which phrases the toolbar
+ * added so quoted reader input never becomes a removable refinement.
  *
  * Grammar assumption, verified against both read paths:
  *
@@ -79,6 +81,34 @@ export const refineTermsOfQuery = (
     }
   }
   return terms;
+};
+
+/**
+ * Only balanced quoted phrases are valid toolbar refinements. Canonicalizing
+ * at the route boundary prevents a hand-edited URL from applying loose terms
+ * that the UI cannot display or remove.
+ */
+export const canonicalRefinements = (value: string): string | undefined => {
+  const terms = refineTermsOfQuery(value);
+  return terms.length === 0
+    ? undefined
+    : terms.map((term) => `${QUOTE}${term}${QUOTE}`).join(" ");
+};
+
+/**
+ * The endpoint query: reader-entered text plus the independently represented
+ * refinements the results toolbar added. Keeping the sources separate in the
+ * URL means a quoted phrase the reader typed can never become a removable
+ * refinement merely because it uses the same search grammar.
+ */
+export const queryWithRefinements = (
+  query: string | undefined,
+  refinements: string | undefined,
+): string | undefined => {
+  const parts = [query?.trim(), refinements?.trim()].filter(
+    (part): part is string => part !== undefined && part.length > 0,
+  );
+  return parts.length === 0 ? undefined : parts.join(" ");
 };
 
 /**

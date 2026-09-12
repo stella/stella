@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   addRefineTerm,
+  canonicalRefinements,
   normalizeRefineTerm,
+  queryWithRefinements,
   refineTermsOfQuery,
   removeRefineTerm,
   withoutRefineTerms,
@@ -70,6 +72,38 @@ describe("refining a query", () => {
 
     expect(quotedSpanCount(refined ?? "")).toBe(1);
     expect(refineTermsOfQuery(refined)).toEqual(["dobrá víra"]);
+  });
+});
+
+describe("combining independently represented refinements", () => {
+  test("keeps a quoted reader query out of the refinement list", () => {
+    const query = '"good faith"';
+
+    expect(refineTermsOfQuery(undefined)).toEqual([]);
+    expect(queryWithRefinements(query, undefined)).toBe(query);
+  });
+
+  test("adds toolbar refinements without changing reader-entered text", () => {
+    const query = 'tenant "good faith"';
+    const within = addRefineTerm(undefined, "notice period");
+
+    expect(queryWithRefinements(query, within)).toBe(
+      'tenant "good faith" "notice period"',
+    );
+    expect(refineTermsOfQuery(within)).toEqual(["notice period"]);
+    expect(query).toBe('tenant "good faith"');
+  });
+});
+
+describe("canonicalizing refinements at the route boundary", () => {
+  test("drops loose terms a hand-edited URL could hide from the toolbar", () => {
+    expect(canonicalRefinements("hidden terms")).toBeUndefined();
+  });
+
+  test("keeps unique balanced phrases in their canonical form", () => {
+    expect(
+      canonicalRefinements('loose " notice   period " "notice period"'),
+    ).toBe('"notice period"');
   });
 });
 
