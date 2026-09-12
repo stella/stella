@@ -625,8 +625,12 @@ export const ChatTabPanel = ({
         >
           <Conversation className="min-h-0 flex-1">
             {/* Bottom padding keeps the last messages readable above the
-                floating composer block (veil + pill + status row). */}
-            <ConversationContent className="gap-3 pb-32">
+                floating composer block (veil + pill + status row). Extra
+                space when follow-up chips are showing so Copy/Retry can
+                scroll clear of the chip row. */}
+            <ConversationContent
+              className={cn("gap-3", hasSuggestedFollowups ? "pb-44" : "pb-32")}
+            >
               {messages.length === 0 && !isGenerating && !error ? (
                 <ChatEmptyState
                   onSelectPrompt={handleSelectPrompt}
