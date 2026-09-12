@@ -22,13 +22,17 @@ type AllocateEntityStampsOptions = {
 /**
  * Allocate a run of document sequence numbers and their frozen stamps.
  *
- * Two invariants hold together. A sequence number never repeats inside a
- * workspace, because `document_counters` only ever moves forward. A printed
- * stamp string never repeats inside an organization, because the per-reference
- * ledger (`document_reference_counters`) floors the workspace counter at the
- * high-water mark that reference has already reached — a matter that gives up
- * a reference and a matter that later takes it over do not restart numbering,
- * and neither does a matter that returns to a reference it used before.
+ * The first allocation under a reference claims it in
+ * `document_reference_counters`, recording this workspace as its owner. That
+ * claim is the user-facing rule: the matter update refuses to move a claimed
+ * reference to a different matter, so a printed stamp names one matter for
+ * good.
+ *
+ * The `GREATEST` floor below is the backstop, not the rule. A sequence number
+ * never repeats inside a workspace because `document_counters` only moves
+ * forward; flooring it at the reference's own high-water mark means a stamp
+ * string cannot repeat under one reference either, even if some future path
+ * writes a reference the refusal never saw.
  *
  * Lock order is always the reference ledger row first, then the workspace
  * counter row. Callers reach this function with the `workspaces` rows already
@@ -61,7 +65,8 @@ export const allocateEntityStamps = async ({
 
   // The ledger row is created on first use and then locked, so concurrent
   // allocations under the same reference serialize here rather than racing
-  // for the same block of sequence numbers.
+  // for the same block of sequence numbers. `DO NOTHING` leaves an existing
+  // row's owner alone: the first matter to number under a reference keeps it.
   let referenceFloor = 0;
   if (matterReference) {
     await tx
@@ -70,6 +75,7 @@ export const allocateEntityStamps = async ({
         id: createSafeId<"documentReferenceCounter">(),
         organizationId,
         reference: matterReference,
+        workspaceId,
       })
       .onConflictDoNothing({
         target: [

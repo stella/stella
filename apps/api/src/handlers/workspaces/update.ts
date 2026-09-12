@@ -3,12 +3,13 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   contacts,
-  documentCounters,
   documentReferenceCounters,
   workspaceMembers,
   workspaces,
@@ -103,31 +104,39 @@ const validateLeadIsMember = async (
   return null;
 };
 
-type ReferenceNumberingFloorOptions = {
+type RetiredReferenceCheckOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   reference: string;
 };
 
+type RetiredReferenceFailure = {
+  ok: false;
+  status: 409;
+  code: typeof MATTER_REFERENCE_RETIRED_CODE;
+  message: string;
+};
+
 /**
- * The sequence number the matter's next stamped document will carry under
- * `reference`, when that reference has already been used for stamped documents
- * in this organization; null when it has not, and numbering is the matter's
- * own affair.
+ * Refuse a reference another matter has already numbered documents under.
  *
- * Taking over a used reference does not restart numbering: allocation floors
- * the matter's counter at the reference ledger's high-water mark, so the
- * reported value is whichever of the two is ahead (see `document-counter.ts`).
+ * Those stamps are printed inside files that cannot be reissued, so the
+ * reference names that matter permanently. A null owner is a deleted matter:
+ * the ledger row outlives it precisely so the reference stays retired instead
+ * of looking free. The matter that owns the reference may always return to it.
  */
-const readReferenceNumberingFloor = async ({
+const checkReferenceNotRetired = async ({
   tx,
   organizationId,
   workspaceId,
   reference,
-}: ReferenceNumberingFloorOptions): Promise<number | null> => {
+}: RetiredReferenceCheckOptions): Promise<RetiredReferenceFailure | null> => {
   const ledgerRows = await tx
-    .select({ lastValue: documentReferenceCounters.lastValue })
+    .select({
+      lastValue: documentReferenceCounters.lastValue,
+      workspaceId: documentReferenceCounters.workspaceId,
+    })
     .from(documentReferenceCounters)
     .where(
       and(
@@ -136,18 +145,20 @@ const readReferenceNumberingFloor = async ({
       ),
     )
     .limit(1);
-  const ledgerLastValue = ledgerRows.at(0)?.lastValue ?? 0;
-  if (ledgerLastValue === 0) {
+
+  const ledger = ledgerRows.at(0);
+  if (!ledger || ledger.lastValue === 0 || ledger.workspaceId === workspaceId) {
     return null;
   }
 
-  const counterRows = await tx
-    .select({ lastValue: documentCounters.lastValue })
-    .from(documentCounters)
-    .where(eq(documentCounters.workspaceId, workspaceId))
-    .limit(1);
-
-  return Math.max(ledgerLastValue, counterRows.at(0)?.lastValue ?? 0) + 1;
+  return {
+    ok: false,
+    status: 409,
+    code: MATTER_REFERENCE_RETIRED_CODE,
+    message:
+      "Documents have already been numbered under this reference, so it " +
+      "belongs to the matter that numbered them and cannot be reused.",
+  };
 };
 
 export type UpdateWorkspaceHandlerProps = {
@@ -281,6 +292,23 @@ export const updateWorkspaceHandler = async function* ({
       return leadCheck;
     }
 
+    // Before the write, so a reference that is both retired and currently held
+    // answers with the specific refusal rather than the unique-violation 409.
+    if (
+      body.reference !== undefined &&
+      body.reference !== workspace.reference
+    ) {
+      const retired = await checkReferenceNotRetired({
+        tx,
+        organizationId,
+        workspaceId,
+        reference: body.reference,
+      });
+      if (retired) {
+        return retired;
+      }
+    }
+
     await tx
       .update(workspaces)
       .set({
@@ -295,16 +323,6 @@ export const updateWorkspaceHandler = async function* ({
         ...promotionUpdate,
       })
       .where(eq(workspaces.id, workspaceId));
-
-    const referenceNumberingContinuesFrom =
-      body.reference !== undefined && body.reference !== workspace.reference
-        ? await readReferenceNumberingFloor({
-            tx,
-            organizationId,
-            workspaceId,
-            reference: body.reference,
-          })
-        : null;
 
     // Audit reflects rows actually inserted, not the raw request:
     // onConflictDoNothing silently skips users already on the
@@ -379,7 +397,7 @@ export const updateWorkspaceHandler = async function* ({
 
     await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
 
-    return { ok: true as const, referenceNumberingContinuesFrom };
+    return { ok: true as const };
   });
 
   if (Result.isError(txResult)) {
@@ -394,21 +412,22 @@ export const updateWorkspaceHandler = async function* ({
     return yield* Result.err(txResult.error);
   }
 
-  if (!txResult.value.ok) {
+  const failure = txResult.value;
+  if (!failure.ok) {
     return yield* Result.err(
       new HandlerError({
-        status: txResult.value.status,
-        message: txResult.value.message,
+        status: failure.status,
+        message: failure.message,
+        // Only the retired-reference refusal carries a code; the status is its
+        // discriminator, so a branch without one cannot reach this spread.
+        ...(failure.status === 409 ? { code: failure.code } : {}),
       }),
     );
   }
 
   flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
 
-  return Result.ok({
-    referenceNumberingContinuesFrom:
-      txResult.value.referenceNumberingContinuesFrom,
-  });
+  return Result.ok({});
 };
 
 const updateWorkspace = createSafeHandler(

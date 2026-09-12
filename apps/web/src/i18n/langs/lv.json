@@ -5323,15 +5323,14 @@
       "untitledColumn": "Kolonnas nosaukums, piem., spēkā stāšanās datums"
     },
     "reference": "Atsauces numurs",
-    "referenceChangeConfirmDescription": "{count, plural, zero {# dokumentu versiju} one {# dokumenta versija} other {# dokumentu versijas}} satur atsauces numuru <bdi>{oldReference}</bdi>. Izdrukātie eksemplāri to saglabā un joprojām atveras pēc sava pārbaudes koda. Jaunās versijas tiks numurētas ar <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, zero {# dokumentu versiju} one {# dokumenta versija} other {# dokumentu versijas}} satur atsauces numuru <bdi>{oldReference}</bdi>. Izdrukātie eksemplāri to saglabā un joprojām atveras pēc sava pārbaudes koda. Jaunās versijas tiks numurētas ar <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> paliek rezervēts šai lietai, un to nevar piešķirt citai.",
     "referenceChangeConfirmTitle": "Mainīt lietas atsauces numuru?",
     "referenceConventionHint": "Vēlamais formāts: {example}",
     "referenceFormatWarning": "Neatbilst vēlamajam formātam.",
-    "referenceNumberingContinuesDescription": "Dokumentu numerācija turpinās no {sequence, number}.",
-    "referenceNumberingContinuesTitle": "Atsauces numurs <bdi>{reference}</bdi> jau ir bijis izmantots",
     "referenceNumberingEmptyHint": "Norādiet atsauces numuru, lai sāktu numurēt šīs lietas dokumentus.",
     "referenceNumberingHint": "Šīs lietas dokumenti tiek numurēti <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> un tā tālāk; katra versija pievieno <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "piem. 2024/001",
+    "referenceRetired": "Ar numuru {reference} dokumenti ir reģistrēti citā lietā, tāpēc to nevar izmantot atkārtoti.",
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
       "parties": "Puses"

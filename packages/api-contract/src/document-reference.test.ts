@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  documentReferenceBase,
+  isDocumentReferenceQuery,
   isVerificationCode,
   VERIFICATION_CODE_ALPHABET,
   VERIFICATION_CODE_LENGTH,
@@ -48,5 +50,40 @@ describe("isVerificationCode", () => {
     ["abcd mnp23"],
   ])("rejects %p", (code) => {
     expect(isVerificationCode(code)).toBe(false);
+  });
+});
+
+describe("isDocumentReferenceQuery", () => {
+  test.each([
+    ["2026/001/015"],
+    ["2026/001/015.v3"],
+    ["2026/001/015.v12"],
+    // The matter reference is free-form: any shape, with or without slashes.
+    ["AB/12/001"],
+    ["contracts/001"],
+  ])("accepts %p", (query) => {
+    expect(isDocumentReferenceQuery(query)).toBe(true);
+  });
+
+  test.each([
+    ["2026"], // no sequence segment
+    ["report/1"], // an unpadded number is not a sequence
+    ["two words/001"], // a reference is one token
+    ["minutes.docx"], // a file name, not a reference
+    ["2026/001/015.docx"], // a reference-looking file name
+    ["/001"], // no matter reference in front
+    ["2026/001/0"], // still being typed
+    [""],
+  ])("rejects %p", (query) => {
+    expect(isDocumentReferenceQuery(query)).toBe(false);
+  });
+
+  // Both halves read the same grammar: a stamp is a reference query, and so is
+  // what stripping its version suffix leaves.
+  test("accepts a stamp and its version-less base alike", () => {
+    const stamp = "2026/001/015.v3";
+    expect(documentReferenceBase(stamp)).not.toBe(stamp);
+    expect(isDocumentReferenceQuery(stamp)).toBe(true);
+    expect(isDocumentReferenceQuery(documentReferenceBase(stamp))).toBe(true);
   });
 });

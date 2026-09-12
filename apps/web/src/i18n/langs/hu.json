@@ -5323,15 +5323,14 @@
       "untitledColumn": "Oszlop neve, pl. Hatálybalépés dátuma"
     },
     "reference": "Hivatkozási szám",
-    "referenceChangeConfirmDescription": "{count, plural, one {# dokumentumverzió} other {# dokumentumverzió}} viseli a(z) <bdi>{oldReference}</bdi> hivatkozási számot. A kinyomtatott példányok megtartják, és továbbra is megnyithatók az ellenőrző kódjukkal. Az új verziók a(z) <bdi>{newReference}</bdi> szám alatt kapnak számozást.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# dokumentumverzió} other {# dokumentumverzió}} viseli a(z) <bdi>{oldReference}</bdi> hivatkozási számot. A kinyomtatott példányok megtartják, és továbbra is megnyithatók az ellenőrző kódjukkal. Az új verziók a(z) <bdi>{newReference}</bdi> szám alatt kapnak számozást. A(z) <bdi>{oldReference}</bdi> fenntartva marad ennek az ügynek, és nem adható másiknak.",
     "referenceChangeConfirmTitle": "Módosítja az ügy hivatkozási számát?",
     "referenceConventionHint": "Előnyben részesített formátum: {example}",
     "referenceFormatWarning": "Nem egyezik az előnyben részesített formátummal.",
-    "referenceNumberingContinuesDescription": "A dokumentumok számozása {sequence, number} számtól folytatódik.",
-    "referenceNumberingContinuesTitle": "A(z) <bdi>{reference}</bdi> hivatkozási számot már használták",
     "referenceNumberingEmptyHint": "Adjon meg hivatkozási számot, hogy az ügy dokumentumai számozást kapjanak.",
     "referenceNumberingHint": "Az ügy dokumentumai a következő számozást kapják: <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> és így tovább; minden verzió <bdi>.v1</bdi>, <bdi>.v2</bdi> végződést kap.",
     "referencePlaceholder": "pl. 2024/001",
+    "referenceRetired": "A(z) {reference} szám alatt egy másik ügyben már vannak dokumentumok, ezért nem használható újra.",
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {
       "parties": "Felek"

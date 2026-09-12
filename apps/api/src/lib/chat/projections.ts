@@ -1715,15 +1715,10 @@ export const LIST_TEMPLATES_PROJECTION = v.union([
 // documented per entry. The four mediated kinds are exactly the ones the chat
 // ref registry mints: matter, entity, contact, property.
 
-/**
- * save_matter: create returns `{ matterId }`; update adds `updated: true`, and
- * `referenceNumberingContinuesFrom` when the new reference already carries
- * stamped documents elsewhere in the organization.
- */
+/** save_matter: create returns `{ matterId }`; update adds `updated: true`. */
 export const SAVE_MATTER_PROJECTION = v.strictObject({
   matterId: chatRef("matter"),
   updated: v.optional(v.literal(true)),
-  referenceNumberingContinuesFrom: v.optional(v.number()),
 });
 
 export const DELETED_TRUE_PROJECTION = v.strictObject({

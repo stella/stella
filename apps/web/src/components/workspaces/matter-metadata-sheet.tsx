@@ -43,7 +43,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   useDeleteWorkspace,
@@ -51,6 +50,7 @@ import {
   useUpdateWorkspace,
 } from "@/lib/workspaces/mutations";
 import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
+import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
 
 type MatterMetadataPanelProps = {
   workspaceId: string;
@@ -91,6 +91,7 @@ export const MatterMetadataPanel = ({
   const canCreateWorkspace = usePermissions({ workspace: ["create"] });
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
+  const referenceConflictMessage = useReferenceConflictMessage();
 
   useExternalSyncEffect(() => {
     if (!workspace) {
@@ -162,21 +163,8 @@ export const MatterMetadataPanel = ({
         update: { type: "reference", value: reference },
       },
       {
-        onSuccess: ({ referenceNumberingContinuesFrom }) => {
+        onSuccess: () => {
           setReferenceDirty(false);
-          if (referenceNumberingContinuesFrom !== null) {
-            stellaToast.add({
-              title: t.rich("workspaces.referenceNumberingContinuesTitle", {
-                bdi: (chunks: ReactNode) => <BidiText>{chunks}</BidiText>,
-                reference,
-              }),
-              description: t(
-                "workspaces.referenceNumberingContinuesDescription",
-                { sequence: referenceNumberingContinuesFrom },
-              ),
-              type: "info",
-            });
-          }
           detached(
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.byId(workspaceId),
@@ -185,8 +173,9 @@ export const MatterMetadataPanel = ({
           );
         },
         onError: (error) => {
-          if (APIError.is(error) && error.status === 409) {
-            setReferenceError(t("workspaces.referenceTaken"));
+          const conflict = referenceConflictMessage(error, reference);
+          if (conflict !== null) {
+            setReferenceError(conflict);
             return;
           }
 

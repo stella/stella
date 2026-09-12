@@ -5323,15 +5323,14 @@
       "untitledColumn": "Spaltenname, z. B. Vertragsbeginn"
     },
     "reference": "Aktenzeichen",
-    "referenceChangeConfirmDescription": "{count, plural, one {# Dokumentversion trägt} other {# Dokumentversionen tragen}} das Aktenzeichen <bdi>{oldReference}</bdi>. Gedruckte Exemplare behalten es und lassen sich weiterhin über ihren Prüfcode öffnen. Neue Versionen werden unter <bdi>{newReference}</bdi> nummeriert.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# Dokumentversion trägt} other {# Dokumentversionen tragen}} das Aktenzeichen <bdi>{oldReference}</bdi>. Gedruckte Exemplare behalten es und lassen sich weiterhin über ihren Prüfcode öffnen. Neue Versionen werden unter <bdi>{newReference}</bdi> nummeriert. <bdi>{oldReference}</bdi> bleibt dieser Akte vorbehalten und kann keiner anderen zugewiesen werden.",
     "referenceChangeConfirmTitle": "Aktenzeichen ändern?",
     "referenceConventionHint": "Bevorzugtes Format: {example}",
     "referenceFormatWarning": "Entspricht nicht dem bevorzugten Format.",
-    "referenceNumberingContinuesDescription": "Die Dokumentnummerierung wird ab {sequence, number} fortgesetzt.",
-    "referenceNumberingContinuesTitle": "Aktenzeichen <bdi>{reference}</bdi> wurde bereits verwendet",
     "referenceNumberingEmptyHint": "Vergeben Sie eine Referenznummer, damit die Dokumente in dieser Akte nummeriert werden.",
     "referenceNumberingHint": "Dokumente in dieser Akte werden mit <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> und so weiter nummeriert; jede Version ergänzt <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "z. B. 2024/001",
+    "referenceRetired": "Unter {reference} sind Dokumente in einer anderen Akte geführt, daher ist es nicht erneut verwendbar.",
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {
       "parties": "Parteien"

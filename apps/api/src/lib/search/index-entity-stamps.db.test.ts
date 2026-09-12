@@ -3,6 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { isDocumentReferenceQuery } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import {
@@ -234,10 +236,37 @@ test("a document is found by every reference it has carried", async () => {
   }
 });
 
-test("a reference the document never carried does not identify it", async () => {
-  // Same year and sequence as a reference it does carry, different matter:
-  // the whole stamp is one token, so a near miss is still a miss.
-  expect(await matchesReferenceExactly(NEVER_CARRIED_REFERENCE)).toBe(false);
-  expect(await matchesReferenceExactly(`${firstReference}.v9`)).toBe(false);
-  expect(await matchesSearch(UNRELATED_REFERENCE)).toBe(false);
+test("a reference the document never carried does not find it", async () => {
+  // Both share the year and the sequence with a reference the document does
+  // carry, which is what the loose fallback used to recall on. A whole
+  // reference is answered exactly, so a near miss is a miss.
+  for (const reference of [NEVER_CARRIED_REFERENCE, UNRELATED_REFERENCE]) {
+    expect(isDocumentReferenceQuery(reference)).toBe(true);
+    expect(await matchesSearch(reference)).toBe(false);
+    expect(await matchesReferenceExactly(reference)).toBe(false);
+  }
+});
+
+/**
+ * A version suffix the document never reached still names the document the
+ * reference in front of it identifies, so search returns that document rather
+ * than nothing: `normalizeFileNameVariantForSearch` contributes the
+ * version-less form, which the document does carry. Only the version is out
+ * of range, and the version history says so once the document is open.
+ */
+test("a reference naming a version that does not exist finds the document", async () => {
+  const unreachedVersion = `${firstReference}.v9`;
+
+  expect(await matchesReferenceExactly(unreachedVersion)).toBe(false);
+  expect(await matchesSearch(unreachedVersion)).toBe(true);
+});
+
+// The exactness is bought by the reference grammar, not by luck: a query the
+// grammar does not accept must keep the recall-widening fallbacks.
+test("an ordinary query still matches loosely", async () => {
+  const partialReference = firstReference.slice(0, -1);
+
+  expect(isDocumentReferenceQuery(partialReference)).toBe(false);
+  expect(await matchesSearch(partialReference)).toBe(true);
+  expect(await matchesReferenceExactly(partialReference)).toBe(false);
 });

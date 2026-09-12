@@ -7,10 +7,17 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+
+import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { entities, entityVersions, workspaces } from "@/api/db/schema";
+import {
+  documentReferenceCounters,
+  entities,
+  entityVersions,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
@@ -191,77 +198,121 @@ describe("document stamp allocation across a matter reference", () => {
 });
 
 describe("matter reference change", () => {
-  test("reports where numbering continues when the reference is in use", async () => {
-    const takenOver = "TAKEOVER/2026";
-    const donor = await createMatter(takenOver);
-    await allocate(donor, 4);
-    await setReference(donor, "TAKEOVER-RETIRED/2026");
+  const changeReference = async (
+    workspaceId: SafeId<"workspace">,
+    reference: string,
+  ) => {
+    const { safeDb } = scopeFor([workspaceId]);
+    return await Result.gen(() =>
+      updateWorkspaceHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        workspaceId,
+        recordAuditEvent,
+        body: { reference },
+      }),
+    );
+  };
+
+  test("refuses a reference another matter has numbered documents under", async () => {
+    const claimed = "CLAIMED/2026";
+    const owner = await createMatter(claimed);
+    await allocate(owner, 2);
+    await setReference(owner, "CLAIMED-MOVED-ON/2026");
 
     const receiver = await createMatter("RECEIVER/2026");
-    const { safeDb } = scopeFor([receiver]);
-    const updated = await Result.gen(() =>
-      updateWorkspaceHandler({
-        safeDb,
-        organizationId: ids.orgA,
-        workspaceId: receiver,
-        recordAuditEvent,
-        body: { reference: takenOver },
-      }),
-    );
+    const updated = await changeReference(receiver, claimed);
+
+    expect(Result.isError(updated)).toBe(true);
+    expect(Result.isError(updated) && updated.error).toMatchObject({
+      status: 409,
+      code: MATTER_REFERENCE_RETIRED_CODE,
+    });
+
+    // The write is refused, not merely reported: the matter keeps its own
+    // reference and the ledger keeps its owner.
+    const [unchanged] = await testDb
+      .select({ reference: workspaces.reference })
+      .from(workspaces)
+      .where(eq(workspaces.id, receiver));
+    expect(unchanged?.reference).toBe("RECEIVER/2026");
+  });
+
+  test("refuses a reference whose owning matter was deleted", async () => {
+    const orphaned = "ORPHANED/2026";
+    const owner = await createMatter(orphaned);
+    await allocate(owner, 1);
+    await testDb.delete(workspaces).where(eq(workspaces.id, owner));
+
+    // The ledger row outlives the matter with a null owner, which is what
+    // keeps the reference retired instead of letting it look unclaimed.
+    const [ledger] = await testDb
+      .select({ workspaceId: documentReferenceCounters.workspaceId })
+      .from(documentReferenceCounters)
+      .where(
+        and(
+          eq(documentReferenceCounters.organizationId, ids.orgA),
+          eq(documentReferenceCounters.reference, orphaned),
+        ),
+      );
+    expect(ledger?.workspaceId).toBeNull();
+
+    const receiver = await createMatter("ORPHAN-RECEIVER/2026");
+    const updated = await changeReference(receiver, orphaned);
+
+    expect(Result.isError(updated) && updated.error).toMatchObject({
+      status: 409,
+      code: MATTER_REFERENCE_RETIRED_CODE,
+    });
+  });
+
+  test("allows the owning matter to return to its own reference", async () => {
+    const original = "OWN-RETURN/2026";
+    const matter = await createMatter(original);
+    await allocate(matter, 2);
+    await setReference(matter, "OWN-RETURN-INTERIM/2026");
+
+    const updated = await changeReference(matter, original);
 
     expect(Result.isOk(updated)).toBe(true);
-    expect(Result.isOk(updated) && updated.value).toEqual({
-      referenceNumberingContinuesFrom: 5,
-    });
+    expect(Result.isOk(updated) && updated.value).toEqual({});
+
+    // Numbering resumes above the mark the matter already reached under it.
+    const next = await allocate(matter, 1);
+    expect(next.map(({ stamp }) => stamp)).toEqual([`${original}/003.v1`]);
   });
 
-  test("reports the matter's own counter when it is ahead of the reference", async () => {
-    const takenOver = "AHEAD/2026";
-    const donor = await createMatter(takenOver);
-    await allocate(donor, 2);
-    await setReference(donor, "AHEAD-RETIRED/2026");
-
-    // The receiver has already stamped five documents under its own
-    // reference, so allocation floors at its counter, not at the ledger's 2.
-    const receiver = await createMatter("AHEAD-RECEIVER/2026");
-    await allocate(receiver, 5);
-
-    const { safeDb } = scopeFor([receiver]);
-    const updated = await Result.gen(() =>
-      updateWorkspaceHandler({
-        safeDb,
-        organizationId: ids.orgA,
-        workspaceId: receiver,
-        recordAuditEvent,
-        body: { reference: takenOver },
-      }),
-    );
-
-    expect(Result.isOk(updated) && updated.value).toEqual({
-      referenceNumberingContinuesFrom: 6,
-    });
-
-    const next = await allocate(receiver, 1);
-    expect(next.map(({ stamp }) => stamp)).toEqual([`${takenOver}/006.v1`]);
-  });
-
-  test("reports no continuation for a reference nothing has stamped", async () => {
+  test("allows a reference nothing has numbered documents under", async () => {
     const matter = await createMatter("FRESH-BEFORE/2026");
-    const { safeDb } = scopeFor([matter]);
 
-    const updated = await Result.gen(() =>
-      updateWorkspaceHandler({
-        safeDb,
-        organizationId: ids.orgA,
-        workspaceId: matter,
-        recordAuditEvent,
-        body: { reference: "FRESH-AFTER/2026" },
-      }),
-    );
+    const updated = await changeReference(matter, "FRESH-AFTER/2026");
 
-    expect(Result.isOk(updated) && updated.value).toEqual({
-      referenceNumberingContinuesFrom: null,
-    });
+    expect(Result.isOk(updated)).toBe(true);
+    expect(Result.isOk(updated) && updated.value).toEqual({});
+  });
+});
+
+describe("reference ledger ownership", () => {
+  test("records the matter that first numbers documents under a reference", async () => {
+    const reference = "OWNERSHIP/2026";
+    const matter = await createMatter(reference);
+
+    await allocate(matter, 1);
+
+    const [ledger] = await testDb
+      .select({
+        workspaceId: documentReferenceCounters.workspaceId,
+        lastValue: documentReferenceCounters.lastValue,
+      })
+      .from(documentReferenceCounters)
+      .where(
+        and(
+          eq(documentReferenceCounters.organizationId, ids.orgA),
+          eq(documentReferenceCounters.reference, reference),
+        ),
+      );
+
+    expect(ledger).toEqual({ workspaceId: matter, lastValue: 1 });
   });
 });
 

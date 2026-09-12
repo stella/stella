@@ -102,15 +102,19 @@ export const documentCounters = p.pgTable(
 );
 
 /**
- * Per-organization high-water mark for every matter reference ever stamped.
+ * Every matter reference documents have been numbered under, with the matter
+ * that owns it and how far its numbering has run.
  *
- * A matter's `reference` is editable and, once freed, can be handed to another
- * matter whose own `document_counters` row starts at zero — so the workspace
- * counter alone cannot keep `{reference}/{seq}.v{n}` unique within an
- * organization. This ledger carries the sequence forward across the reference
- * rather than across the matter: an allocation floors the workspace counter at
- * the reference's high-water mark, so a reused reference resumes where the
- * previous holder stopped and no printed stamp can repeat inside a tenant.
+ * A printed stamp `{reference}/{seq}.v{n}` names a matter for as long as the
+ * file exists, so a reference that has numbered anything belongs to its matter
+ * for good: the matter update refuses to hand it to a different matter, and
+ * `workspaceId` is what that refusal reads. A null owner is a deleted matter,
+ * which retires the reference rather than freeing it.
+ *
+ * `lastValue` is the high-water mark the reference has reached. Allocation
+ * floors the matter's own counter at it, so a sequence number cannot repeat
+ * under one reference even if some future path writes a reference the refusal
+ * did not see.
  */
 export const documentReferenceCounters = p.pgTable(
   "document_reference_counters",
@@ -118,6 +122,12 @@ export const documentReferenceCounters = p.pgTable(
     id: pUuid<"documentReferenceCounter">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     reference: p.varchar("reference", { length: 64 }).notNull(),
+    /**
+     * The matter that first numbered documents under this reference. Nullable
+     * and `SET NULL` on delete: the row outlives the matter so the reference
+     * stays retired rather than becoming available again.
+     */
+    workspaceId: safeWorkspaceId("workspace_id"),
     lastValue: p.integer("last_value").notNull().default(0),
   },
   (table) => [
@@ -131,8 +141,16 @@ export const documentReferenceCounters = p.pgTable(
       })
       .onDelete("cascade"),
     p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "document_reference_counters_workspace_fk",
+      })
+      .onDelete("set null"),
+    p
       .uniqueIndex("document_reference_counters_org_ref_uidx")
       .on(table.organizationId, table.reference),
+    p.index("document_reference_counters_workspace_idx").on(table.workspaceId),
     ...orgPolicies(),
   ],
 );

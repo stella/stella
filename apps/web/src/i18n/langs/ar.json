@@ -5323,15 +5323,14 @@
       "untitledColumn": "اسم العمود، مثل تاريخ السريان"
     },
     "reference": "الرقم المرجعي",
-    "referenceChangeConfirmDescription": "{count, plural, zero {لا توجد إصدارات مستندات تحمل} one {إصدار مستند واحد يحمل} two {إصداران من المستندات يحملان} few {# إصدارات مستندات تحمل} many {# إصدارًا من المستندات تحمل} other {# إصدار مستند يحمل}} الرقم المرجعي <bdi>{oldReference}</bdi>. تحتفظ النسخ المطبوعة به ولا تزال تُفتح عبر رمز التحقق الخاص بها. أما الإصدارات الجديدة فسترقَّم ضمن <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, zero {لا توجد إصدارات مستندات تحمل} one {إصدار مستند واحد يحمل} two {إصداران من المستندات يحملان} few {# إصدارات مستندات تحمل} many {# إصدارًا من المستندات تحمل} other {# إصدار مستند يحمل}} الرقم المرجعي <bdi>{oldReference}</bdi>. تحتفظ النسخ المطبوعة به ولا تزال تُفتح عبر رمز التحقق الخاص بها. أما الإصدارات الجديدة فسترقَّم ضمن <bdi>{newReference}</bdi>. ويبقى <bdi>{oldReference}</bdi> محجوزًا لهذا الملف القانوني ولا يمكن منحه لملف آخر.",
     "referenceChangeConfirmTitle": "هل تريد تغيير الرقم المرجعي للملف القانوني؟",
     "referenceConventionHint": "التنسيق المفضل: {example}",
     "referenceFormatWarning": "لا يطابق التنسيق المفضل.",
-    "referenceNumberingContinuesDescription": "يستمر ترقيم المستندات من {sequence, number}.",
-    "referenceNumberingContinuesTitle": "الرقم المرجعي <bdi>{reference}</bdi> سبق استخدامه",
     "referenceNumberingEmptyHint": "أدخل رقمًا مرجعيًا لبدء ترقيم مستندات هذا الملف القانوني.",
     "referenceNumberingHint": "تُرقَّم مستندات هذا الملف القانوني هكذا: <bdi>{firstDocument}</bdi>، <bdi>{secondDocument}</bdi>، وهكذا؛ ويضيف كل إصدار <bdi>.v1</bdi> و<bdi>.v2</bdi>.",
     "referencePlaceholder": "مثال: 2024/001",
+    "referenceRetired": "توجد مستندات مسجَّلة تحت {reference} في ملف قانوني آخر، لذا لا يمكن إعادة استخدامه.",
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {
       "parties": "الأطراف"

@@ -5323,15 +5323,14 @@
       "untitledColumn": "Nom de colonne, p. ex. Date d'effet"
     },
     "reference": "Numéro de référence",
-    "referenceChangeConfirmDescription": "{count, plural, one {# version de document porte} other {# versions de documents portent}} la référence <bdi>{oldReference}</bdi>. Les copies imprimées la conservent et restent accessibles avec leur code de vérification. Les nouvelles versions seront numérotées sous <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# version de document porte} other {# versions de documents portent}} la référence <bdi>{oldReference}</bdi>. Les copies imprimées la conservent et restent accessibles avec leur code de vérification. Les nouvelles versions seront numérotées sous <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> reste réservée à ce dossier et ne peut pas être attribuée à un autre.",
     "referenceChangeConfirmTitle": "Modifier la référence du dossier ?",
     "referenceConventionHint": "Format préféré : {example}",
     "referenceFormatWarning": "Ne correspond pas au format préféré.",
-    "referenceNumberingContinuesDescription": "La numérotation des documents reprend à partir de {sequence, number}.",
-    "referenceNumberingContinuesTitle": "La référence <bdi>{reference}</bdi> a déjà été utilisée",
     "referenceNumberingEmptyHint": "Renseignez un numéro de référence pour numéroter les documents de ce dossier.",
     "referenceNumberingHint": "Les documents de ce dossier sont numérotés <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi>, et ainsi de suite ; chaque version ajoute <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "ex. 2024/001",
+    "referenceRetired": "Des documents sont enregistrés sous {reference} dans un autre dossier ; elle ne peut donc pas être réutilisée.",
     "referenceTaken": "Ce numéro de référence est déjà utilisé",
     "sections": {
       "parties": "Parties"

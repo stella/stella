@@ -76,3 +76,31 @@ export const refiledStamp = ({
   documentReferenceBase(currentStamp) !== documentReferenceBase(stamp)
     ? currentStamp
     : null;
+
+/**
+ * A matter reference that documents were once numbered under belongs to that
+ * matter for good: printed stamps keep naming it, so no other matter may take
+ * it over. The matter update returns this code with status 409 when a request
+ * tries; a live matter already holding the reference is a plain 409.
+ */
+export const MATTER_REFERENCE_RETIRED_CODE = "matter_reference_retired";
+
+/**
+ * The same grammar {@link documentReferenceBase} strips from, read forwards:
+ * one whitespace-free token whose last segment is the zero-padded document
+ * sequence, optionally followed by the version suffix. The matter reference
+ * in front of it is free-form and may itself contain slashes (`AB/12/001`).
+ *
+ * The padding is three places, so a matter past its 999th document produces a
+ * longer sequence that reads as an ordinary query rather than a reference.
+ * That costs precision, never recall: such a query keeps the fuzzy fallbacks.
+ */
+const DOCUMENT_REFERENCE_QUERY_RE = /^\S+\/\d{3}(?:\.v\d+)?$/u;
+
+/**
+ * Whether a search string is a whole document reference. A reference names
+ * one document, so a query shaped like one is answered exactly; anything else
+ * stays a text search, where widening recall is the right trade.
+ */
+export const isDocumentReferenceQuery = (query: string): boolean =>
+  DOCUMENT_REFERENCE_QUERY_RE.test(query);
