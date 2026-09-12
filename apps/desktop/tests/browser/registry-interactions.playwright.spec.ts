@@ -38,6 +38,7 @@ const SECOND_RESPONSE = {
 } as const satisfies DesktopRegistrySearchResponse;
 const PRIVATE_CLIPBOARD_TEXT =
   "Privileged synthetic clipboard text must stay local";
+const CONNECTED_EXPIRES_AT = new Date(Date.now() + 86_400_000).toISOString();
 const SNAPSHOT = {
   captureStatus: "active",
   groupLimit: 24,
@@ -63,7 +64,11 @@ const SNAPSHOT = {
 
 type Connection =
   | { status: "disconnected" }
-  | ({ status: "connected"; accountLabel: string } & DesktopRegistryConfig);
+  | ({
+      status: "connected";
+      accountLabel: string;
+      expiresAt: string;
+    } & DesktopRegistryConfig);
 type Invocation = { args: Record<string, unknown>; command: string };
 type BoundaryMode = "normal" | "reject-first-search" | "defer-first-search";
 type Audit = {
@@ -177,8 +182,8 @@ const installNativeBoundary = async (
             case "desktop_report_timing":
             case "desktop_report_error":
             case "clipboard_hide":
-            case "registry_connect":
-            case "registry_disconnect":
+            case "open_stella_account":
+            case "account_disconnect":
             case "registry_copy":
             case "registry_open_company_format":
               return undefined;
@@ -271,6 +276,7 @@ const connected = (
 ): Connection => ({
   status: "connected",
   accountLabel: "https://api.example.test",
+  expiresAt: CONNECTED_EXPIRES_AT,
   defaultRegistryId,
   registries: [...REGISTRIES],
 });
@@ -348,7 +354,7 @@ test("sign-in stays available without disabling local clipboard search", async (
     .click();
   await expect
     .poll(async () => await readInvocations(page))
-    .toContainEqual({ command: "registry_connect", args: {} });
+    .toContainEqual({ command: "open_stella_account", args: {} });
   expect(await searches(page)).toEqual([]);
 });
 
@@ -457,7 +463,7 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
     const subscription = invocations.findLast(
       (entry: { args: Record<string, unknown>; command: string }) =>
         entry.command === "plugin:event|listen" &&
-        entry.args["event"] === "registry-connection-changed",
+        entry.args["event"] === "desktop-account-changed",
     );
     const id = subscription?.args["handler"];
     if (typeof id !== "number") {
@@ -472,7 +478,7 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
       throw new TypeError("Tauri callback registry is missing");
     }
     callbacks.get(id)?.({
-      event: "registry-connection-changed",
+      event: "desktop-account-changed",
       id,
       payload: null,
     });
@@ -736,6 +742,7 @@ test("opens the selected company's specification formats from the format menu", 
   await openClipboard(page, {
     status: "connected",
     accountLabel: "https://api.example.test",
+    expiresAt: CONNECTED_EXPIRES_AT,
     defaultRegistryId: "ares",
     registries: [{ id: "ares", name: "Czech commercial registry" }],
   });
@@ -762,6 +769,7 @@ test("labels non-company directory templates as registry results", async ({
   await openClipboard(page, {
     status: "connected",
     accountLabel: "https://api.example.test",
+    expiresAt: CONNECTED_EXPIRES_AT,
     defaultRegistryId: "denue",
     registries: [
       {

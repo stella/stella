@@ -27,6 +27,8 @@
     "clipboard-manager:allow-write-text",
     "deep-link:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "allow-account-get-state",
+    "allow-account-disconnect"
   ]
 }

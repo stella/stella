@@ -123,7 +123,7 @@ describe("desktop registry API-key configuration", () => {
     }
   });
 
-  test("rejects a caller-selected lifetime beyond the one-hour bounds", async () => {
+  test("rejects a caller-selected lifetime beyond the desktop account lifetime bounds", async () => {
     const auth = createTestAuth();
     const signedUp = await auth.api.signUpEmail({
       body: {

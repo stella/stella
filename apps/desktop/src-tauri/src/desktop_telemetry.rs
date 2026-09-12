@@ -1,4 +1,4 @@
-use reqwest::{Client, Url};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -10,6 +10,7 @@ use tauri::State;
 use tokio::sync::mpsc;
 
 use crate::clipboard_window::ClipboardStartupTrace;
+use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const ANALYTICS_CAPTURE_PATH: &str = "capture/";
 const DEFAULT_ANALYTICS_HOST: &str = "https://eu.i.posthog.com/";
@@ -651,7 +652,10 @@ async fn run_observability_worker(
   config: AnalyticsSinkConfig,
   mut receiver: mpsc::Receiver<DesktopTelemetryEvent>,
 ) {
-  let Ok(client) = Client::builder().timeout(REQUEST_TIMEOUT).build() else {
+  let Ok(client) = DesktopHttpClient::new(HttpClientOptions {
+    timeout: Some(REQUEST_TIMEOUT),
+    ..Default::default()
+  }) else {
     tracing::warn!("desktop telemetry client could not start");
     return;
   };

@@ -1,3 +1,4 @@
+mod account;
 mod app_lifecycle;
 mod autostart;
 mod bridge;
@@ -16,6 +17,7 @@ mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod http_client;
 mod i18n;
 mod keychain;
 mod logging;
@@ -58,7 +60,7 @@ pub fn run() {
   let allowed_origins = config::resolve_allowed_origins();
 
   let manager = Arc::new(Mutex::new(SessionManager::new()));
-  let registry = Arc::new(Mutex::new(registry::RegistryConnection::default()));
+  let account = Arc::new(Mutex::new(account::AccountStore::default()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   let launch_args = std::env::args().collect::<Vec<_>>();
   #[cfg(target_os = "macos")]
@@ -104,11 +106,10 @@ pub fn run() {
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .manage::<AppState>(Arc::clone(&manager))
-    .manage::<registry::RegistryState>(Arc::clone(&registry))
+    .manage::<account::AccountState>(Arc::clone(&account))
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .manage(clipboard_window::ClipboardStartupTrace::default())
-    .manage(clipboard_window::ClipboardWindowPark::default())
     .setup(move |app| {
       let handle = app.handle().clone();
       #[cfg(target_os = "macos")]
@@ -321,18 +322,16 @@ pub fn run() {
       {
         let manager_for_bridge = Arc::clone(&manager);
         let bridge_app = handle.clone();
-        let notify_registry: bridge::RegistryNotifier = Arc::new(move || {
-          if let Err(error) = bridge_app.emit(registry::CONNECTION_CHANGED_EVENT, ()) {
-            tracing::warn!(error = %error, "registry connection event was not delivered");
-          }
+        let notify_account: bridge::AccountNotifier = Arc::new(move || {
+          account::notify(&bridge_app);
         });
         tauri::async_runtime::spawn(async move {
           bridge::start_bridge(
             bridge_port,
             allowed_origins,
             manager_for_bridge,
-            registry,
-            notify_registry,
+            account,
+            notify_account,
           )
           .await;
         });

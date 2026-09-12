@@ -29,8 +29,28 @@ define_class!(
     fn can_become_main_window(&self) -> bool {
       false
     }
+
+    /// AppKit owns outside-click detection for a non-activating panel. Tao's
+    /// generic focus event is not guaranteed for this runtime class, so park
+    /// the panel at the lifecycle boundary that AppKit always calls when
+    /// another window takes key status.
+    #[unsafe(method(resignKeyWindow))]
+    fn resign_key_window(&self) {
+      // SAFETY: this forwards the parameter-free NSWindow lifecycle method to
+      // NSPanel before changing presentation-only window properties.
+      unsafe {
+        let () = msg_send![super(self), resignKeyWindow];
+      }
+      set_panel_parked(self);
+    }
+
   }
 );
+
+fn set_panel_parked(ns_window: &NSWindow) {
+  ns_window.setAlphaValue(0.0);
+  ns_window.setIgnoresMouseEvents(true);
+}
 
 fn ns_window<R: Runtime>(
   window: &WebviewWindow<R>,
@@ -139,8 +159,7 @@ pub fn park_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   let Some((_, ns_window)) = ns_window(window) else {
     return false;
   };
-  ns_window.setAlphaValue(0.0);
-  ns_window.setIgnoresMouseEvents(true);
+  set_panel_parked(ns_window);
   // Ordering out is the only public way to give key status back. Ordering
   // straight back in keeps the page on screen; WebKit coalesces the two into
   // no visibility change.
@@ -149,6 +168,16 @@ pub fn park_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
     ns_window.orderFront(None);
   }
   true
+}
+
+/// Whether the persistent clipboard panel is currently presented. Native
+/// presentation state is the source of truth because AppKit can park the panel
+/// directly when an outside click makes it resign key status.
+pub fn is_panel_presented<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+  let Some((_, ns_window)) = ns_window(window) else {
+    return false;
+  };
+  ns_window.alphaValue() > 0.0 && !ns_window.ignoresMouseEvents()
 }
 
 /// Stops the webview from tracking window occlusion, so a parked window

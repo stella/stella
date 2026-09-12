@@ -2680,6 +2680,12 @@ jobs:
         if: matrix.os == 'windows'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
 
+      - name: Smoke native desktop transport against hosted API
+        if: matrix.os == 'macos'
+        env:
+          STELLA_DESKTOP_SMOKE_API_URL: https://api.stll.app
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::hosted_api_accepts_native_desktop_requests -- --ignored --exact
+
       - name: Install cargo-deny
         if: matrix.os == 'macos'
         run: cargo install cargo-deny --version 0.19.0 --locked

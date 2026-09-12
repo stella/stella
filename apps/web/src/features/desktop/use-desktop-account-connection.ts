@@ -1,20 +1,15 @@
 import { useSyncExternalStore } from "react";
 
-import { panic } from "better-result";
-
 import { env } from "@/env";
 import { watchForDesktopBridge } from "@/features/desktop/desktop-bridge-watch.logic";
 import { createDesktopConnectionStore } from "@/features/desktop/desktop-connection-store.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
-import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
-  connectDesktopRegistry,
   connectSelfHostedDesktop,
   isDesktopAccountLinkReachable,
   linkDesktopAccount,
-  readDesktopRegistryNonce,
 } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 
@@ -27,39 +22,11 @@ const linkAccountToRunningDesktop = async () => {
     });
   }
 
-  const linkedAccount = await getFreshLinkedAccount();
-  if (!linkedAccount) {
-    panic("Desktop account link ran without a signed-in account.");
-  }
-
-  await linkDesktopAccount({ apiBaseUrl, linkedAccount });
-  return linkedAccount.email;
-};
-
-const connectRegistryAndAccount = async () => {
-  const apiBaseUrl = externalApiOrigin();
-  if (env.VITE_SELFHOST) {
-    await connectSelfHostedDesktop({
-      apiBaseUrl,
-      webOrigin: window.location.origin,
-    });
-  }
-  const nonce = readDesktopRegistryNonce(window.location.hash);
-  if (nonce) {
-    await connectDesktopRegistry({ apiBaseUrl, nonce });
-    window.history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}${window.location.search}`,
-    );
-  }
-
-  return await linkAccountToRunningDesktop();
+  return await linkDesktopAccount({ apiBaseUrl });
 };
 
 const store = createDesktopConnectionStore({
   link: linkAccountToRunningDesktop,
-  manualLink: connectRegistryAndAccount,
   onError: (error) => getAnalytics().captureError(error),
   // A self-hosted origin is untrusted until the user runs the connect deep
   // link, and the bridge refuses an untrusted origin, so there is nothing a
@@ -89,7 +56,7 @@ export const useDesktopAccountConnection = () => {
   useMountEffect(() => store.retain());
 
   return {
-    connect: async () => await store.connect(true),
+    connect: async () => await store.connect(),
     startWatch: () => {
       detached(store.startWatch(), "desktop-account-connection.watch");
     },

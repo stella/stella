@@ -17,7 +17,7 @@ import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-s
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
-import { readDesktopRegistryNonce } from "@/lib/desktop-bridge";
+import { isDesktopAccountLink } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -43,10 +43,15 @@ function DesktopPage() {
         : { title: t("errors.actionFailed"), type: "error" },
     );
   };
-  // The desktop app opens this page with its handoff nonce in the hash; a
+  // The desktop app opens this page with an account-link marker; a
   // signed-in session completes the connection without another click.
   useMountEffect(() => {
-    if (readDesktopRegistryNonce(window.location.hash) !== null) {
+    if (isDesktopAccountLink(window.location.hash)) {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
       detached(handleConnectDesktop(), "settings-account-desktop.handoff");
     }
   });

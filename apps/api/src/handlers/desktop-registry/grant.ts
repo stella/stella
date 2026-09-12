@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { Temporal } from "@stll/time";
+
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { getAuth } from "@/api/lib/auth";
@@ -19,13 +21,29 @@ export default createSafeRootHandler(
   },
   async function* ({ user, session, safeDb, recordAuditEvent, set }) {
     set.headers["cache-control"] = "no-store";
+    const account = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.user.findFirst({
+          where: { id: { eq: user.id } },
+          columns: { email: true, name: true },
+        }),
+      ),
+    );
+    if (!account) {
+      return Result.err(
+        new HandlerError({
+          status: 401,
+          message: "Desktop account is unavailable",
+        }),
+      );
+    }
     const minted = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await getAuth().api.createApiKey({
             body: {
               configId: DESKTOP_REGISTRY_KEY_CONFIG,
-              name: "Desktop registry search",
+              name: "Desktop account",
               userId: user.id,
               expiresIn: DESKTOP_REGISTRY_KEY_SECONDS,
               metadata: {
@@ -76,6 +94,11 @@ export default createSafeRootHandler(
       panic("Registry grant was minted without an expiry");
     }
     return Result.ok({
+      account: {
+        email: account.email,
+        name: account.name,
+        verifiedAt: Temporal.Now.instant().toString(),
+      },
       key: minted.key,
       expiresAt: minted.expiresAt.toISOString(),
     });

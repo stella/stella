@@ -10,7 +10,11 @@ bridgeVersion: number,
 /**
  * See [`BRIDGE_CAPABILITIES`].
  */
-capabilities: string[], linkedAccount: LinkedAccountSnapshot | null, notificationPreferences: DesktopNotificationPreferences, runningSince: string, sessions: SessionSnapshot[], trustedSelfHostConnections: TrustedSelfHostConnection[], update: DesktopUpdateSnapshot, };
+capabilities: string[], notificationPreferences: DesktopNotificationPreferences, runningSince: string, sessions: SessionSnapshot[], trustedSelfHostConnections: TrustedSelfHostConnection[], update: DesktopUpdateSnapshot, };
+
+export type DesktopAccountCredential = { key: string, expiresAt: string, };
+
+export type DesktopAccountSnapshot = { "status": "disconnected" } | { "status": "connected", account: LinkedAccountSnapshot, expiresAt: string, };
 
 export type DesktopEditFileType = "docx" | "xlsx" | "pptx";
 
@@ -20,7 +24,7 @@ export type DesktopUpdateSnapshot = { baseUrl: string | null, channel: string | 
 
 export type DesktopUpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "applying" | "up_to_date" | "error" | "disabled";
 
-export type LinkAccountRequest = { apiBaseUrl: string, linkedAccount: LinkedAccountSnapshot, };
+export type LinkAccountRequest = { apiBaseUrl: string, credential: DesktopAccountCredential, };
 
 export type LinkedAccountSnapshot = { email: string, name: string | null, verifiedAt: string, };
 

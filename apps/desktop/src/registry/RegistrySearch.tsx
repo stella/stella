@@ -14,6 +14,7 @@ import type {
   DesktopRegistryConfig,
   DesktopRegistrySearchResponse,
 } from "@stll/api-contract/desktop-registry";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Menu,
@@ -25,6 +26,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -37,11 +39,12 @@ import {
 const SEARCH_DEBOUNCE_MS = 300;
 // Emitted by the native bridge once a browser handoff stored a credential;
 // the non-activating panel gets no focus event to notice it otherwise.
-const CONNECTION_CHANGED_EVENT = "registry-connection-changed";
+const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
 
 type Connection =
   | { status: "disconnected" }
-  | ({ status: "connected" } & DesktopRegistryConfig);
+  | { status: "unavailable" }
+  | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
 type ResultCard = DesktopRegistrySearchResponse["results"][number] & {
   formatId: string | null;
   status: "ready" | "formatting";
@@ -60,6 +63,7 @@ type RegistrySearchProps = {
   query: string;
   composing: boolean;
   source: "clips" | "registry";
+  onConnectAccount: () => Promise<unknown>;
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
   /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
@@ -76,6 +80,7 @@ export const RegistrySearch = ({
   query,
   composing,
   source,
+  onConnectAccount,
   onConnectionFlowChange,
   searchInput,
   children,
@@ -94,6 +99,7 @@ export const RegistrySearch = ({
     null,
   );
   const [attempt, setAttempt] = useState(0);
+  const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const generation = useRef(0);
   const connectionGeneration = useRef(0);
@@ -131,7 +137,7 @@ export const RegistrySearch = ({
           }
           setConnection(resolved);
           setRegistryId((current) => {
-            if (resolved.status === "disconnected") {
+            if (resolved.status !== "connected") {
               return "";
             }
             if (resolved.registries.some(({ id }) => id === current)) {
@@ -152,7 +158,7 @@ export const RegistrySearch = ({
           if (disposed || request !== connectionGeneration.current) {
             return;
           }
-          setConnection({ status: "disconnected" });
+          setConnection({ status: "unavailable" });
           setConnectionFailure(connectionError);
         });
     };
@@ -171,6 +177,7 @@ export const RegistrySearch = ({
         });
       },
     });
+    connectionRefresh.current = refresh;
     return () => {
       disposed = true;
       generation.current += 1;
@@ -178,6 +185,22 @@ export const RegistrySearch = ({
       stopListening();
     };
   }, [connectionError]);
+
+  const connectionExpiresAt =
+    connection?.status === "connected" ? connection.expiresAt : null;
+  useEffect(() => {
+    if (!connectionExpiresAt) {
+      return () => undefined;
+    }
+    const timer = window.setTimeout(
+      () => connectionRefresh.current(),
+      accountExpiryDelay(
+        connectionExpiresAt,
+        Temporal.Now.instant().epochMilliseconds,
+      ),
+    );
+    return () => window.clearTimeout(timer);
+  }, [connectionExpiresAt]);
 
   useEffect(() => {
     const request = ++generation.current;
@@ -250,7 +273,7 @@ export const RegistrySearch = ({
     setSearchState({ status: "idle" });
     setError(null);
     onConnectionFlowChange("signIn");
-    void invoke("registry_connect").catch(() => {
+    void onConnectAccount().catch(() => {
       onConnectionFlowChange("idle");
       setError(t("registryErrorConnect"));
     });
@@ -259,7 +282,7 @@ export const RegistrySearch = ({
     connectionGeneration.current += 1;
     generation.current += 1;
     setSearchState({ status: "idle" });
-    void invoke("registry_disconnect")
+    void invoke("account_disconnect")
       .then(() => {
         connectionGeneration.current += 1;
         setConnection({ status: "disconnected" });

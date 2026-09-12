@@ -2316,6 +2316,7 @@ const ClipboardApp = () => {
         query={query}
         composing={searchComposing}
         source={searchSource}
+        onConnectAccount={async () => await invoke("open_stella_account")}
         onConnectionFlowChange={(flow) => {
           connectionFlowRef.current = flow;
         }}

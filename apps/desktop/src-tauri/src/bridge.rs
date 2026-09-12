@@ -13,22 +13,22 @@ use tokio::sync::Mutex;
 use crate::session_manager::{LinkedAccountOriginUpdate, SessionManager};
 use crate::types::{
   BRIDGE_CAPABILITIES, BRIDGE_VERSION, LinkAccountRequest, OpenFileRequest,
-  is_safe_session_id, is_valid_linked_account,
+  is_safe_session_id,
 };
 
 const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
-pub type RegistryNotifier = Arc<dyn Fn() + Send + Sync>;
+pub type AccountNotifier = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone)]
 pub struct BridgeState {
-  pub registry: crate::registry::RegistryState,
+  pub account: crate::account::AccountState,
   pub manager: Arc<Mutex<SessionManager>>,
   pub static_allowed_origins: HashSet<String>,
   pub bridge_port: u16,
-  /// Runs after a registry handoff is stored so the panel can refresh.
-  pub notify_registry: RegistryNotifier,
+  /// Runs after the account link changes so every desktop surface can refresh.
+  pub notify_account: AccountNotifier,
 }
 
 async fn is_allowed_origin(state: &BridgeState, origin: Option<&str>) -> bool {
@@ -46,6 +46,7 @@ async fn is_allowed_origin(state: &BridgeState, origin: Option<&str>) -> bool {
 fn cors_headers(origin: Option<&str>, allowed: bool) -> HeaderMap {
   let mut headers = HeaderMap::new();
   headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+  headers.insert("Cache-Control", HeaderValue::from_static("no-store"));
 
   if allowed
     && let Some(o) = origin
@@ -121,14 +122,103 @@ async fn health(
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SelfHostConnectionQuery {
+struct ApiBaseUrlQuery {
   api_base_url: String,
+}
+
+async fn account_status(
+  State(state): State<BridgeState>,
+  headers: HeaderMap,
+  Query(query): Query<ApiBaseUrlQuery>,
+) -> axum::response::Response {
+  let origin = get_origin(&headers);
+  let origin_ref = origin.as_deref();
+  if !is_allowed_origin(&state, origin_ref).await {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({"message":"Desktop bridge origin is not allowed."}),
+      origin_ref,
+      false,
+    )
+    .into_response();
+  }
+  let Ok(api_base_url) =
+    crate::config::normalize_self_host_api_base_url(&query.api_base_url)
+  else {
+    return json_response(
+      StatusCode::BAD_REQUEST,
+      serde_json::json!({"message":"Invalid desktop account server"}),
+      origin_ref,
+      true,
+    )
+    .into_response();
+  };
+  let Ok(saved) = crate::account::current(&state.account).await else {
+    return json_response(
+      StatusCode::SERVICE_UNAVAILABLE,
+      serde_json::json!({"message":"Desktop account is unavailable"}),
+      origin_ref,
+      true,
+    )
+    .into_response();
+  };
+  let snapshot = if let Some(saved) = saved {
+    if saved.api_base_url != api_base_url
+      || Some(saved.web_origin.as_str()) != origin_ref
+    {
+      return json_response(StatusCode::CONFLICT,
+        serde_json::json!({"message":"Disconnect the current desktop account before connecting another"}),
+        origin_ref, true).into_response();
+    }
+    match crate::registry::request(
+      saved.request_auth(),
+      serde_json::json!({"type":"config"}),
+    )
+    .await
+    {
+      Ok(_) => saved.snapshot(),
+      Err(error) if error == crate::registry::not_connected() => {
+        if crate::account::invalidate(&state.account, &saved)
+          .await
+          .is_err()
+        {
+          return json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            serde_json::json!({"message":"Desktop account is unavailable"}),
+            origin_ref,
+            true,
+          )
+          .into_response();
+        }
+        (state.notify_account)();
+        crate::types::DesktopAccountSnapshot::Disconnected
+      }
+      Err(_) => {
+        return json_response(
+          StatusCode::SERVICE_UNAVAILABLE,
+          serde_json::json!({"message":"Desktop account verification is unavailable"}),
+          origin_ref,
+          true,
+        )
+        .into_response();
+      }
+    }
+  } else {
+    crate::types::DesktopAccountSnapshot::Disconnected
+  };
+  json_response(
+    StatusCode::OK,
+    serde_json::json!(snapshot),
+    origin_ref,
+    true,
+  )
+  .into_response()
 }
 
 async fn self_host_connection(
   State(state): State<BridgeState>,
   headers: HeaderMap,
-  Query(query): Query<SelfHostConnectionQuery>,
+  Query(query): Query<ApiBaseUrlQuery>,
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let origin_ref = origin.as_deref();
@@ -321,17 +411,14 @@ async fn link_account(
     .into_response();
   }
 
-  let request = match serde_json::from_value::<LinkAccountRequest>(body) {
-    Ok(request) if is_valid_linked_account(&request.linked_account) => request,
-    _ => {
-      return json_response(
-        StatusCode::BAD_REQUEST,
-        serde_json::json!({ "message": "Invalid linked account payload" }),
-        origin_ref,
-        allowed,
-      )
-      .into_response();
-    }
+  let Ok(request) = serde_json::from_value::<LinkAccountRequest>(body) else {
+    return json_response(
+      StatusCode::BAD_REQUEST,
+      serde_json::json!({ "message": "Invalid linked account payload" }),
+      origin_ref,
+      allowed,
+    )
+    .into_response();
   };
 
   let is_static_origin = state
@@ -356,25 +443,35 @@ async fn link_account(
     .into_response();
   }
 
-  let linked_account_web_origin =
-    trusted_self_host_connection.then(|| origin_ref.unwrap_or_default().to_string());
-  let link_result = {
-    let mut manager = state.manager.lock().await;
-    manager
-      .link_account(request.linked_account, linked_account_web_origin)
-      .await
-  };
-  if link_result.is_err() {
-    tracing::error!("failed to persist linked desktop account");
+  let trusted_api = trusted_self_host_connection
+    || is_static_origin
+      && crate::config::resolve_trusted_api_base_urls().contains(
+        &crate::config::normalize_api_base_url(&request.api_base_url),
+      );
+  if !trusted_api {
     return json_response(
-      StatusCode::INTERNAL_SERVER_ERROR,
-      serde_json::json!({
-        "message": "Stella Desktop could not save the linked account."
-      }),
+      StatusCode::FORBIDDEN,
+      serde_json::json!({"message":"Desktop account connection is not allowed"}),
       origin_ref,
       allowed,
     )
     .into_response();
+  }
+  match crate::account::link(&state.account, request, origin_ref.unwrap_or_default())
+    .await
+  {
+    Ok(crate::account::LinkOutcome::Linked) => (state.notify_account)(),
+    Ok(crate::account::LinkOutcome::Unchanged) => {}
+    Err(error) => {
+      tracing::warn!(reason = %error, "desktop account link failed");
+      return json_response(
+        StatusCode::BAD_REQUEST,
+        serde_json::json!({"message":"Desktop account connection failed"}),
+        origin_ref,
+        allowed,
+      )
+      .into_response();
+    }
   }
 
   json_response(
@@ -384,39 +481,6 @@ async fn link_account(
     allowed,
   )
   .into_response()
-}
-
-async fn registry_connect(
-  State(state): State<BridgeState>,
-  headers: HeaderMap,
-  Json(body): Json<crate::registry::RegistryHandoff>,
-) -> impl IntoResponse {
-  let origin = get_origin(&headers);
-  let allowed = is_allowed_origin(&state, origin.as_deref()).await;
-  let origin_ref = origin.as_deref().unwrap_or_default();
-  let trusted_pair = {
-    let manager = state.manager.lock().await;
-    manager.is_trusted_self_host_connection(origin_ref, &body.api_base_url)
-      || state.static_allowed_origins.contains(origin_ref)
-        && crate::config::resolve_trusted_api_base_urls()
-          .contains(&crate::config::normalize_api_base_url(&body.api_base_url))
-  };
-  if !allowed || !trusted_pair {
-    return json_response(
-      StatusCode::FORBIDDEN,
-      serde_json::json!({"message":"Registry connection is not allowed"}),
-      origin.as_deref(),
-      allowed,
-    )
-    .into_response();
-  }
-  match crate::registry::accept_handoff(&state.registry, origin_ref, body).await {
-    Ok(()) => {
-      (state.notify_registry)();
-      json_response(StatusCode::OK, serde_json::json!({"connected":true}), origin.as_deref(), true).into_response()
-    }
-    Err(_) => json_response(StatusCode::BAD_REQUEST, serde_json::json!({"message":"Registry connection failed; reconnect from desktop"}), origin.as_deref(), true).into_response(),
-  }
 }
 
 async fn open_file(
@@ -449,7 +513,7 @@ fn build_router(state: BridgeState) -> Router {
     .route("/health", get(health))
     .route("/v1/self-host-connection", get(self_host_connection))
     .route("/v1/link-account", post(link_account))
-    .route("/v1/registry-connect", post(registry_connect))
+    .route("/v1/account", get(account_status))
     .route("/v1/open-file", post(open_file))
     .fallback(not_found)
     .layer(axum::middleware::from_fn_with_state(
@@ -477,15 +541,15 @@ pub async fn start_bridge(
   bridge_port: u16,
   static_allowed_origins: HashSet<String>,
   manager: Arc<Mutex<SessionManager>>,
-  registry: crate::registry::RegistryState,
-  notify_registry: RegistryNotifier,
+  account: crate::account::AccountState,
+  notify_account: AccountNotifier,
 ) {
   let state = BridgeState {
-    registry,
+    account,
     manager,
     static_allowed_origins,
     bridge_port,
-    notify_registry,
+    notify_account,
   };
 
   let app = build_router(state);
@@ -527,11 +591,11 @@ mod tests {
     let mut allowed = HashSet::new();
     allowed.insert("http://localhost:3000".to_string());
     BridgeState {
-      registry: Arc::new(Mutex::new(crate::registry::RegistryConnection::default())),
+      account: Arc::new(Mutex::new(crate::account::AccountStore::Memory(None))),
       manager: Arc::new(Mutex::new(SessionManager::new())),
       static_allowed_origins: allowed,
       bridge_port: 0,
-      notify_registry: Arc::new(|| ()),
+      notify_account: Arc::new(|| ()),
     }
   }
 
@@ -721,156 +785,275 @@ mod tests {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
   }
 
-  #[tokio::test]
-  async fn link_account_persists_authenticated_snapshot() {
-    let state = test_state();
-    let manager = Arc::clone(&state.manager);
-    let store_path = std::env::temp_dir().join(format!(
-      "stella-desktop-link-account-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    manager
-      .lock()
-      .await
-      .set_store_path_for_test(store_path.clone());
-    let app = build_router(state);
-    let request = Request::builder()
-      .method("POST")
-      .uri("/v1/link-account")
-      .header("origin", "http://localhost:3000")
-      .header("content-type", "application/json")
-      .body(Body::from(
-        serde_json::to_vec(&serde_json::json!({
-          "apiBaseUrl": "https://api.example.com",
-          "linkedAccount": {
-            "email": "user@example.com",
-            "name": "Test User",
-            "verifiedAt": "2026-08-31T10:00:00Z"
-          }
-        }))
-        .unwrap(),
-      ))
-      .unwrap();
+  struct AccountLinkHarness {
+    router: Router,
+    account: crate::account::AccountState,
+    notifications: Arc<std::sync::atomic::AtomicUsize>,
+    api_url: String,
+    server: tokio::task::JoinHandle<()>,
+  }
 
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), 65_536).await.unwrap();
-    assert_eq!(
-      serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
-      serde_json::json!({ "linked": true })
-    );
-    assert_eq!(
-      manager
+  impl AccountLinkHarness {
+    async fn new(status: StatusCode, store: crate::account::AccountStore) -> Self {
+      let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+      let api_url = format!("http://{}", listener.local_addr().unwrap());
+      let api = Router::new().route(
+        "/v1/desktop-registry/request",
+        post(move || async move {
+          (
+            status,
+            Json(serde_json::json!({"registries":[], "defaultRegistryId":null, "account": {"email":"desktop@example.test", "name":"Desktop Account", "verifiedAt":chrono::Utc::now().to_rfc3339()}})),
+          )
+        }),
+      );
+      let server = tokio::spawn(async move {
+        axum::serve(listener, api).await.unwrap();
+      });
+      let mut state = test_state();
+      state
+        .manager
         .lock()
         .await
-        .get_snapshot()
-        .linked_account
-        .as_ref()
-        .map(|account| account.email.as_str()),
-      Some("user@example.com")
-    );
-    let loaded = crate::session_store::load_session_store(&store_path).await;
-    assert_eq!(
-      loaded
-        .linked_account
-        .as_ref()
-        .map(|account| account.email.as_str()),
-      Some("user@example.com")
-    );
+        .trust_self_host_connection_for_test(
+          "http://localhost:3000".into(),
+          api_url.clone(),
+        );
+      state.account = Arc::new(Mutex::new(store));
+      let notifications = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+      let observed = Arc::clone(&notifications);
+      state.notify_account = Arc::new(move || {
+        observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      });
+      Self {
+        account: Arc::clone(&state.account),
+        router: build_router(state),
+        notifications,
+        api_url,
+        server,
+      }
+    }
 
-    tokio::fs::remove_file(store_path).await.unwrap();
+    fn payload(&self) -> serde_json::Value {
+      serde_json::to_value(LinkAccountRequest {
+        api_base_url: self.api_url.clone(),
+        credential: crate::types::DesktopAccountCredential {
+          key: "stella_dr_fixture".into(),
+          expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+        },
+      })
+      .unwrap()
+    }
+
+    async fn status(
+      &self,
+      origin: Option<&str>,
+      api_base_url: &str,
+    ) -> axum::response::Response {
+      let mut url = reqwest::Url::parse("http://localhost/v1/account").unwrap();
+      url
+        .query_pairs_mut()
+        .append_pair("apiBaseUrl", api_base_url);
+      let mut request =
+        Request::builder().uri(format!("{}?{}", url.path(), url.query().unwrap()));
+      if let Some(origin) = origin {
+        request = request.header("origin", origin);
+      }
+      self
+        .router
+        .clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+    }
+
+    async fn link(&self, body: serde_json::Value) -> axum::response::Response {
+      let request = Request::builder()
+        .method("POST")
+        .uri("/v1/link-account")
+        .header("origin", "http://localhost:3000")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+        .unwrap();
+      self.router.clone().oneshot(request).await.unwrap()
+    }
+  }
+
+  impl Drop for AccountLinkHarness {
+    fn drop(&mut self) {
+      self.server.abort();
+    }
   }
 
   #[tokio::test]
-  async fn link_account_records_its_trusted_self_host_origin() {
-    let mut state = test_state();
-    state
-      .static_allowed_origins
-      .insert("https://stella.example".to_string());
-    let manager = Arc::clone(&state.manager);
-    let store_path = std::env::temp_dir().join(format!(
-      "stella-desktop-self-host-link-account-{}.json",
-      uuid::Uuid::new_v4()
-    ));
-    {
-      let mut manager = manager.lock().await;
-      manager.set_store_path_for_test(store_path.clone());
-      manager.trust_self_host_connection_for_test(
-        "https://stella.example".to_string(),
-        "https://api.stella.example".to_string(),
-      );
-    }
-    let app = build_router(state);
-    let request = Request::builder()
-      .method("POST")
-      .uri("/v1/link-account")
-      .header("origin", "https://stella.example")
-      .header("content-type", "application/json")
-      .body(Body::from(
-        serde_json::to_vec(&serde_json::json!({
-          "apiBaseUrl": "https://api.stella.example",
-          "linkedAccount": {
-            "email": "user@example.com",
-            "name": "Test User",
-            "verifiedAt": "2026-08-31T10:00:00Z"
-          }
-        }))
-        .unwrap(),
-      ))
-      .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-
+  async fn account_link_commits_profile_and_search_access_in_one_event() {
+    let harness = AccountLinkHarness::new(
+      StatusCode::OK,
+      crate::account::AccountStore::Memory(None),
+    )
+    .await;
+    let response = harness.link(harness.payload()).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-      manager.lock().await.linked_self_host_origin(),
-      Some("https://stella.example")
+      harness.link(harness.payload()).await.status(),
+      StatusCode::OK
     );
-
-    tokio::fs::remove_file(store_path).await.unwrap();
+    let linked = crate::account::current(&harness.account)
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(linked.account.email, "desktop@example.test");
+    assert_eq!(linked.credential.key, "stella_dr_fixture");
+    assert_eq!(linked.web_origin, "http://localhost:3000");
+    assert_eq!(linked.api_base_url, harness.api_url);
+    assert!(
+      crate::registry::request(
+        linked.request_auth(),
+        serde_json::json!({"type":"search", "registry":"ares", "query":"fixture"})
+      )
+      .await
+      .is_ok()
+    );
+    assert_eq!(
+      harness
+        .notifications
+        .load(std::sync::atomic::Ordering::SeqCst),
+      1
+    );
   }
 
   #[tokio::test]
-  async fn link_account_reports_persistence_failure() {
-    let state = test_state();
-    let manager = Arc::clone(&state.manager);
-    let blocked_parent = std::env::temp_dir().join(format!(
-      "stella-desktop-link-account-blocked-{}",
-      uuid::Uuid::new_v4()
-    ));
-    tokio::fs::write(&blocked_parent, b"not a directory")
-      .await
-      .unwrap();
-    manager
-      .lock()
-      .await
-      .set_store_path_for_test(blocked_parent.join("sessions.json"));
-    let app = build_router(state);
-    let request = Request::builder()
-      .method("POST")
-      .uri("/v1/link-account")
-      .header("origin", "http://localhost:3000")
-      .header("content-type", "application/json")
-      .body(Body::from(
-        serde_json::to_vec(&serde_json::json!({
-          "apiBaseUrl": "https://api.example.com",
-          "linkedAccount": {
-            "email": "user@example.com",
-            "name": "Test User",
-            "verifiedAt": "2026-08-31T10:00:00Z"
-          }
-        }))
-        .unwrap(),
-      ))
-      .unwrap();
+  async fn account_preflight_is_origin_bound_and_never_exposes_credentials() {
+    let harness = AccountLinkHarness::new(
+      StatusCode::OK,
+      crate::account::AccountStore::Memory(None),
+    )
+    .await;
+    for origin in [None, Some("https://evil.example")] {
+      assert_eq!(
+        harness.status(origin, &harness.api_url).await.status(),
+        StatusCode::FORBIDDEN
+      );
+    }
+    let empty = harness
+      .status(Some("http://localhost:3000"), &harness.api_url)
+      .await;
+    assert_eq!(empty.status(), StatusCode::OK);
+    assert_eq!(
+      serde_json::from_slice::<serde_json::Value>(
+        &to_bytes(empty.into_body(), 4096).await.unwrap()
+      )
+      .unwrap(),
+      serde_json::json!({"status":"disconnected"})
+    );
+    assert_eq!(
+      harness.link(harness.payload()).await.status(),
+      StatusCode::OK
+    );
+    for _ in 0..3 {
+      let response = harness
+        .status(Some("http://localhost:3000"), &harness.api_url)
+        .await;
+      assert_eq!(response.status(), StatusCode::OK);
+      assert_eq!(response.headers().get("cache-control").unwrap(), "no-store");
+      let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+      let snapshot: crate::types::DesktopAccountSnapshot =
+        serde_json::from_slice(&bytes).unwrap();
+      assert!(matches!(
+        snapshot,
+        crate::types::DesktopAccountSnapshot::Connected { .. }
+      ));
+      let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+      assert!(json.get("credential").is_none());
+      assert!(
+        !String::from_utf8(bytes.to_vec())
+          .unwrap()
+          .contains("stella_dr_fixture")
+      );
+    }
+    assert_eq!(
+      harness
+        .notifications
+        .load(std::sync::atomic::Ordering::SeqCst),
+      1
+    );
+    assert_eq!(
+      harness
+        .status(Some("http://localhost:3000"), "https://other.example")
+        .await
+        .status(),
+      StatusCode::CONFLICT
+    );
+    assert_eq!(
+      harness
+        .status(Some("http://localhost:3000"), "not a URL")
+        .await
+        .status(),
+      StatusCode::BAD_REQUEST
+    );
+  }
 
-    let response = app.oneshot(request).await.unwrap();
+  #[tokio::test]
+  async fn rejected_or_unsaved_credentials_never_publish_a_linked_profile() {
+    for (status, store) in [
+      (
+        StatusCode::UNAUTHORIZED,
+        crate::account::AccountStore::Memory(None),
+      ),
+      (
+        StatusCode::FORBIDDEN,
+        crate::account::AccountStore::Memory(None),
+      ),
+      (
+        StatusCode::SERVICE_UNAVAILABLE,
+        crate::account::AccountStore::Memory(None),
+      ),
+      (StatusCode::OK, crate::account::AccountStore::ReadOnly(None)),
+    ] {
+      let harness = AccountLinkHarness::new(status, store).await;
+      assert_eq!(
+        harness.link(harness.payload()).await.status(),
+        StatusCode::BAD_REQUEST
+      );
+      assert!(
+        crate::account::current(&harness.account)
+          .await
+          .unwrap()
+          .is_none()
+      );
+      assert_eq!(
+        harness
+          .notifications
+          .load(std::sync::atomic::Ordering::SeqCst),
+        0
+      );
+    }
+  }
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(manager.lock().await.get_snapshot().linked_account.is_none());
-
-    tokio::fs::remove_file(blocked_parent).await.unwrap();
+  #[tokio::test]
+  async fn profile_only_and_untrusted_api_links_are_rejected() {
+    let harness = AccountLinkHarness::new(
+      StatusCode::OK,
+      crate::account::AccountStore::Memory(None),
+    )
+    .await;
+    let mut profile_only = harness.payload();
+    profile_only.as_object_mut().unwrap().remove("credential");
+    assert_eq!(
+      harness.link(profile_only).await.status(),
+      StatusCode::BAD_REQUEST
+    );
+    let mut untrusted_api = harness.payload();
+    untrusted_api["apiBaseUrl"] = serde_json::json!("http://127.0.0.1:9");
+    assert_eq!(
+      harness.link(untrusted_api).await.status(),
+      StatusCode::FORBIDDEN
+    );
+    assert!(
+      crate::account::current(&harness.account)
+        .await
+        .unwrap()
+        .is_none()
+    );
   }
 
   #[tokio::test]

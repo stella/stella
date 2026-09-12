@@ -1,4 +1,7 @@
 import type { BusinessRegistrySlug } from "./business-registries";
+import desktopAccountPolicy from "./desktop-account-policy.json";
+
+export const DESKTOP_ACCOUNT_POLICY = desktopAccountPolicy;
 
 export type DesktopRegistryConfig = {
   registries: {

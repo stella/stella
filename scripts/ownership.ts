@@ -57,6 +57,28 @@ export type OwnershipEntry = {
 
 export const OWNERSHIP = [
   {
+    id: "desktop-http-client",
+    capability: "Identified native desktop HTTP clients",
+    owner: ["apps/desktop/src-tauri/src/http_client.rs"],
+    summary:
+      "DesktopHttpClient is the only constructor for native desktop HTTP. " +
+      "It always supplies the desktop User-Agent; Clippy bans raw reqwest Client/ClientBuilder " +
+      "types and constructors outside this owner, including aliases and Default paths. " +
+      "Local HTTP tests exercise the outgoing headers across configuration choices.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "desktop-account",
+    capability: "Desktop account link and credential lifecycle",
+    owner: ["apps/desktop/src-tauri/src/account.rs"],
+    summary:
+      "One Keychain record holds account identity and its validated credential. " +
+      "Settings and registry search read the same account; expiry, revocation and disconnect " +
+      "cannot leave a profile-only connected state. The credential lifetime and prefix " +
+      "are derived from the API contract policy shared with the server.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "schema-form-options",
     capability: "Web form validation and submission normalization",
     owner: ["apps/web/src/lib/schema.ts"],

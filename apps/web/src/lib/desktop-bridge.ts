@@ -1,9 +1,16 @@
-import type { LinkAccountRequest } from "@stll/api-contract/desktop-rpc";
+import { panic, Result, TaggedError } from "better-result";
+
+import type {
+  DesktopAccountSnapshot,
+  LinkAccountRequest,
+  LinkedAccountSnapshot,
+} from "@stll/api-contract/desktop-rpc";
 import { FetchBoundaryError } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import { api } from "@/lib/api";
+import { getFreshLinkedAccount } from "@/lib/auth-session";
 import type { DesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { unwrapEden } from "@/lib/errors/api";
@@ -20,11 +27,8 @@ const DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS = 750;
 const DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS = 120_000;
 const MIN_DESKTOP_BRIDGE_VERSION = 9;
 const REQUIRED_DESKTOP_BRIDGE_CAPABILITY = "office-edit.v1";
-const DESKTOP_ACCOUNT_LINK_CAPABILITY = "account-link.v1";
-const DESKTOP_REGISTRY_HASH_PREFIX = "#desktop-registry=";
-const DESKTOP_REGISTRY_NONCE_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const DESKTOP_REGISTRY_CAPABILITY = "registry-search.v1";
+const DESKTOP_ACCOUNT_LINK_CAPABILITY = "account-link.v2";
+const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
 export class DesktopBridgeUnavailableError extends Error {
   public constructor() {
@@ -40,11 +44,9 @@ export class DesktopBridgeIncompatibleError extends Error {
   }
 }
 
-type LinkedAccountSnapshot = {
-  email: string;
-  name: string | null;
-  verifiedAt: string;
-};
+export class DesktopAccountConflictError extends TaggedError(
+  "DesktopAccountConflictError",
+)<{ message: string }> {}
 
 type RemoteDesktopSession = {
   baseVersionNumber: number;
@@ -95,23 +97,59 @@ type SelfHostConnectionStatus = {
 };
 
 type DesktopRegistryGrant = {
+  account: LinkedAccountSnapshot;
   expiresAt: string;
   key: string;
 };
 
-type DesktopRegistryConnectInput = {
+export const desktopAccountLinkRequest = (
+  apiBaseUrl: string,
+  grant: DesktopRegistryGrant,
+) =>
+  ({
+    apiBaseUrl,
+    credential: { expiresAt: grant.expiresAt, key: grant.key },
+  }) satisfies LinkAccountRequest;
+
+type CompleteDesktopAccountLinkOptions = {
   apiBaseUrl: string;
-  nonce: string;
+  grant: DesktopRegistryGrant;
+  postLink: (
+    body: ReturnType<typeof desktopAccountLinkRequest>,
+  ) => Promise<void>;
+  revoke: (key: string) => Promise<Result<void, unknown>>;
 };
 
-export const readDesktopRegistryNonce = (hash: string): string | null => {
-  if (!hash.startsWith(DESKTOP_REGISTRY_HASH_PREFIX)) {
-    return null;
+export const completeDesktopAccountLink = async ({
+  apiBaseUrl,
+  grant,
+  postLink,
+  revoke,
+}: CompleteDesktopAccountLinkOptions) => {
+  const linked = await Result.tryPromise({
+    try: async () => {
+      await postLink(desktopAccountLinkRequest(apiBaseUrl, grant));
+    },
+    catch: (cause) => cause,
+  });
+  if (linked.isOk()) {
+    return Result.ok(grant.account.email);
   }
-
-  const nonce = hash.slice(DESKTOP_REGISTRY_HASH_PREFIX.length);
-  return DESKTOP_REGISTRY_NONCE_PATTERN.test(nonce) ? nonce : null;
+  const cleaned = await revoke(grant.key);
+  if (cleaned.isErr()) {
+    return Result.err(
+      new AggregateError(
+        [linked.error, cleaned.error],
+        "Desktop account link failed and credential cleanup failed",
+        { cause: linked.error },
+      ),
+    );
+  }
+  return Result.err(linked.error);
 };
+
+export const isDesktopAccountLink = (hash: string) =>
+  hash === DESKTOP_ACCOUNT_LINK_HASH;
 
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
@@ -133,6 +171,31 @@ const isSelfHostConnectionStatus = (
   value !== null &&
   "trusted" in value &&
   typeof value.trusted === "boolean";
+
+const isDesktopAccountSnapshot = (
+  value: unknown,
+): value is DesktopAccountSnapshot => {
+  if (typeof value !== "object" || value === null || !("status" in value)) {
+    return false;
+  }
+  if (value.status === "disconnected") {
+    return true;
+  }
+  return (
+    value.status === "connected" &&
+    "expiresAt" in value &&
+    typeof value.expiresAt === "string" &&
+    "account" in value &&
+    typeof value.account === "object" &&
+    value.account !== null &&
+    "email" in value.account &&
+    typeof value.account.email === "string" &&
+    "name" in value.account &&
+    (typeof value.account.name === "string" || value.account.name === null) &&
+    "verifiedAt" in value.account &&
+    typeof value.account.verifiedAt === "string"
+  );
+};
 
 /**
  * Every call here targets the app's loopback listener. Chromium's Local
@@ -504,37 +567,169 @@ const postBridgeCommand = async ({ path, body }: BridgeCommand) => {
   throw new DesktopBridgeUnavailableError();
 };
 
-export const linkDesktopAccount = async (request: LinkAccountRequest) => {
-  await requireCompatibleBridge({
-    requiredCapability: DESKTOP_ACCOUNT_LINK_CAPABILITY,
-    signalUpdateCheck: true,
-    readHealth: async () =>
-      (await readBridgeHealth(500)) ?? (await wakeDesktopAndReadBridgeHealth()),
+const readDesktopAccount = async (apiBaseUrl: string) => {
+  const query = new URLSearchParams({ apiBaseUrl });
+  const url = `${DESKTOP_BRIDGE_URL}/v1/account?${query.toString()}`;
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(
+        url,
+        loopback({ method: "GET", timeoutMs: 10_000 }),
+      ),
+    catch: () => new DesktopBridgeUnavailableError(),
   });
-  await postBridgeCommand({ path: "/v1/link-account", body: request });
+  if (fetched.isErr()) {
+    return fetched;
+  }
+  const response = fetched.value;
+  if (!response.ok) {
+    const payload = await parseBridgeResponse(response);
+    return Result.err(
+      new FetchBoundaryError({
+        message: payload?.message ?? "Desktop account state unavailable",
+        status: response.status,
+        statusText: response.statusText,
+        url,
+      }),
+    );
+  }
+  const parsed = await Result.tryPromise({
+    try: async () => {
+      const payload: unknown = await response.json();
+      return payload;
+    },
+    catch: () => new DesktopBridgeIncompatibleError(),
+  });
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  const payload = parsed.value;
+  if (!isDesktopAccountSnapshot(payload)) {
+    return Result.err(new DesktopBridgeIncompatibleError());
+  }
+  return Result.ok(payload);
 };
 
-// The grant is minted only once the bridge is known to accept it, so an
-// absent desktop never leaves an unused credential behind.
-export const connectDesktopRegistry = async ({
+type ResolveDesktopAccountLinkOptions = {
+  apiBaseUrl: string;
+  browserAccount: LinkedAccountSnapshot;
+  desktopAccount: DesktopAccountSnapshot;
+  mintGrant: () => Promise<DesktopRegistryGrant>;
+  postLink: CompleteDesktopAccountLinkOptions["postLink"];
+  revoke: CompleteDesktopAccountLinkOptions["revoke"];
+};
+
+export const resolveDesktopAccountLink = async ({
   apiBaseUrl,
-  nonce,
-}: DesktopRegistryConnectInput) => {
-  await requireCompatibleBridge({
-    requiredCapability: DESKTOP_REGISTRY_CAPABILITY,
-    signalUpdateCheck: false,
-    readHealth: async () => await readBridgeHealth(500),
+  browserAccount,
+  desktopAccount,
+  mintGrant,
+  postLink,
+  revoke,
+}: ResolveDesktopAccountLinkOptions) => {
+  switch (desktopAccount.status) {
+    case "connected":
+      if (desktopAccount.account.email !== browserAccount.email) {
+        return Result.err(
+          new DesktopAccountConflictError({
+            message: "desktop_account_conflict",
+          }),
+        );
+      }
+      return Result.ok(desktopAccount.account.email);
+    case "disconnected": {
+      const minted = await Result.tryPromise({
+        try: mintGrant,
+        catch: (cause) => cause,
+      });
+      if (minted.isErr()) {
+        return minted;
+      }
+      return await completeDesktopAccountLink({
+        apiBaseUrl,
+        grant: minted.value,
+        postLink,
+        revoke,
+      });
+    }
+    default:
+      desktopAccount satisfies never;
+      return panic("Unknown desktop account state");
+  }
+};
+
+export const linkDesktopAccount = async ({
+  apiBaseUrl,
+}: Pick<LinkAccountRequest, "apiBaseUrl">) => {
+  const compatible = await Result.tryPromise({
+    try: async () =>
+      await requireCompatibleBridge({
+        requiredCapability: DESKTOP_ACCOUNT_LINK_CAPABILITY,
+        signalUpdateCheck: true,
+        readHealth: async () =>
+          (await readBridgeHealth(500)) ??
+          (await wakeDesktopAndReadBridgeHealth()),
+      }),
+    catch: (cause) => cause,
   });
-  const grant = unwrapEden(
-    await api["desktop-registry"].grant.post({}),
-  ) satisfies DesktopRegistryGrant;
-  await postBridgeCommand({
-    path: "/v1/registry-connect",
-    body: {
-      apiBaseUrl,
-      expiresAt: grant.expiresAt,
-      key: grant.key,
-      nonce,
+  if (compatible.isErr()) {
+    return compatible;
+  }
+  const [desktopAccount, browserAccountResult] = await Promise.all([
+    readDesktopAccount(apiBaseUrl),
+    Result.tryPromise({
+      try: getFreshLinkedAccount,
+      catch: (cause) => cause,
+    }),
+  ]);
+  if (desktopAccount.isErr()) {
+    return desktopAccount;
+  }
+  if (browserAccountResult.isErr()) {
+    return browserAccountResult;
+  }
+  if (!browserAccountResult.value) {
+    return Result.err(
+      new DesktopAccountConflictError({ message: "desktop_account_conflict" }),
+    );
+  }
+  return await resolveDesktopAccountLink({
+    apiBaseUrl,
+    browserAccount: browserAccountResult.value,
+    desktopAccount: desktopAccount.value,
+    // Mint only after the compatible bridge answers and confirms that no live
+    // account is linked, so retries cannot create unused credentials.
+    mintGrant: async () =>
+      unwrapEden(
+        await api["desktop-registry"].grant.post({}),
+      ) satisfies DesktopRegistryGrant,
+    postLink: async (body) => {
+      await postBridgeCommand({ path: "/v1/link-account", body });
+    },
+    revoke: async (key) => {
+      const response = await fetchWithTimeout(
+        `${apiBaseUrl}/v1/desktop-registry/request`,
+        {
+          body: JSON.stringify({ type: "revoke" }),
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+          timeoutMs: 10_000,
+        },
+      );
+      if (!response.ok && response.status !== 401) {
+        return Result.err(
+          new FetchBoundaryError({
+            message: "Desktop account credential cleanup failed",
+            status: response.status,
+            statusText: response.statusText,
+            url: response.url,
+          }),
+        );
+      }
+      return Result.ok(undefined);
     },
   });
 };

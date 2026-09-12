@@ -11,6 +11,7 @@ export const PPTX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.pptx.mimeType;
 export { DESKTOP_EDIT_FILE_TYPE_CONFIG as DESKTOP_EDIT_FILE_TYPES };
 export type {
   AppSnapshot,
+  DesktopAccountSnapshot,
   DesktopEditFileType,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,

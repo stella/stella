@@ -353,7 +353,7 @@ struct RedeemDesktopEditHandoffRequest<'a> {
 }
 
 async fn redeem_desktop_edit_handoff(
-  client: &reqwest::Client,
+  client: &crate::http_client::DesktopHttpClient,
   api_base_url: &str,
   handoff_token: &str,
 ) -> Result<OpenFileRequest, String> {
@@ -391,7 +391,7 @@ struct AcknowledgeDesktopEditHandoffOpenedRequest<'a> {
 }
 
 async fn acknowledge_desktop_edit_handoff_opened(
-  client: &reqwest::Client,
+  client: &crate::http_client::DesktopHttpClient,
   api_base_url: &str,
   handoff_id: &str,
   handoff_token: &str,

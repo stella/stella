@@ -6,8 +6,6 @@
     "allow-get-desktop-language",
     "allow-set-desktop-language",
     "allow-registry-get-state",
-    "allow-registry-connect",
-    "allow-registry-disconnect",
     "allow-registry-search",
     "allow-registry-format",
     "allow-registry-open-company-format",
@@ -37,6 +35,9 @@
     "allow-clipboard-hide",
     "allow-clipboard-open-stella",
     "allow-desktop-report-error",
-    "allow-desktop-report-timing"
+    "allow-desktop-report-timing",
+    "allow-account-get-state",
+    "allow-account-disconnect",
+    "allow-open-stella-account"
   ]
 }

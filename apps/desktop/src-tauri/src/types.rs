@@ -155,10 +155,30 @@ pub fn is_valid_linked_account(account: &LinkedAccountSnapshot) -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LinkAccountRequest {
   pub api_base_url: String,
-  pub linked_account: LinkedAccountSnapshot,
+  pub credential: DesktopAccountCredential,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DesktopAccountCredential {
+  pub key: String,
+  pub expires_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum DesktopAccountSnapshot {
+  Disconnected,
+  Connected {
+    account: LinkedAccountSnapshot,
+    #[serde(rename = "expiresAt")]
+    expires_at: String,
+  },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,16 +263,12 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 13;
+pub const BRIDGE_VERSION: u32 = 14;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
-pub const BRIDGE_CAPABILITIES: &[&str] = &[
-  "office-edit.v1",
-  "self-host.connect",
-  "account-link.v1",
-  "registry-search.v1",
-];
+pub const BRIDGE_CAPABILITIES: &[&str] =
+  &["office-edit.v1", "self-host.connect", "account-link.v2"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -263,7 +279,6 @@ pub struct AppSnapshot {
   pub bridge_version: u32,
   /// See [`BRIDGE_CAPABILITIES`].
   pub capabilities: Vec<String>,
-  pub linked_account: Option<LinkedAccountSnapshot>,
   pub notification_preferences: DesktopNotificationPreferences,
   pub running_since: String,
   pub sessions: Vec<SessionSnapshot>,
@@ -491,11 +506,6 @@ mod tests {
         .iter()
         .map(|s| (*s).to_string())
         .collect(),
-      linked_account: Some(LinkedAccountSnapshot {
-        email: "test@test.com".into(),
-        name: Some("Jane".into()),
-        verified_at: "2026-01-01T00:00:00Z".into(),
-      }),
       notification_preferences: DesktopNotificationPreferences::default(),
       running_since: "2026-01-01T00:00:00Z".into(),
       sessions: vec![SessionSnapshot {
@@ -528,10 +538,6 @@ mod tests {
     assert_eq!(deserialized.sessions.len(), 1);
     assert_eq!(deserialized.sessions[0].id, "sess-42");
     assert_eq!(deserialized.sessions[0].status, SessionStatus::Ready);
-    assert_eq!(
-      deserialized.linked_account.as_ref().unwrap().email,
-      "test@test.com"
-    );
   }
 
   // -- OpenFileRequest round-trip --
@@ -653,6 +659,7 @@ mod rpc_codegen_tests {
 
   type DesktopRpcContract = (
     AppSnapshot,
+    DesktopAccountSnapshot,
     LinkAccountRequest,
     OpenFileRequest,
     OpenFileResponse,
