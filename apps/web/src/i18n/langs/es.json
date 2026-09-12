@@ -2171,6 +2171,7 @@
     "bulletList": "Lista con viñetas",
     "checkingDocxEditDescription": "stella sigue comprobando si este DOCX se puede editar de forma segura. Vuelve a intentarlo cuando el documento termine de cargarse.",
     "checkingDocxEditTitle": "Comprobando el documento",
+    "chooseEvidence": "Elija un archivo para insertar una referencia de prueba numerada.",
     "comment": "Comentario",
     "comments": {
       "addPlaceholder": "Añadir comentario...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "No tienes permiso para editar este documento.",
     "editSaveFailedTitle": "No se pudo guardar el DOCX",
     "editSessionTakenOver": "Esta sesión de edición se tomó en otro lugar.",
+    "evidenceReferences": "Referencias de prueba",
+    "evidenceUnavailable": "Esta referencia de prueba no se puede abrir en este asunto.",
     "findReplace": {
       "close": "Cerrar búsqueda",
       "findAndReplace": "Buscar y reemplazar",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Aumentar sangría",
     "insertColumnLeft": "Insertar columna a la izquierda",
     "insertColumnRight": "Insertar columna a la derecha",
+    "insertEvidence": "Insertar referencia de prueba",
     "insertRowAbove": "Insertar fila encima",
     "insertRowBelow": "Insertar fila debajo",
     "inserted": "Insertado",

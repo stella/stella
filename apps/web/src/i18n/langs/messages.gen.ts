@@ -2174,6 +2174,7 @@ type Messages = {
     "bulletList": "Bullet List";
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
+    "chooseEvidence": "Choose a file to insert a numbered evidence reference.";
     "comment": "Comment";
     "comments": {
       "addPlaceholder": "Add a comment...";
@@ -2216,6 +2217,8 @@ type Messages = {
     "editPermissionDenied": "You do not have permission to edit this document.";
     "editSaveFailedTitle": "Could not save DOCX";
     "editSessionTakenOver": "Another tab, window, or device opened this document for editing, so this session was released. Unsaved local changes are preserved — reopen the doc to continue.";
+    "evidenceReferences": "Evidence references";
+    "evidenceUnavailable": "This evidence reference cannot be opened in this matter.";
     "findReplace": {
       "close": "Close search";
       "findAndReplace": "Find and replace";
@@ -2244,6 +2247,7 @@ type Messages = {
     "increaseIndent": "Increase Indent";
     "insertColumnLeft": "Insert column left";
     "insertColumnRight": "Insert column right";
+    "insertEvidence": "Insert evidence reference";
     "insertRowAbove": "Insert row above";
     "insertRowBelow": "Insert row below";
     "inserted": "Inserted";

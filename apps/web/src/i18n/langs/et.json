@@ -2171,6 +2171,7 @@
     "bulletList": "Täpploend",
     "checkingDocxEditDescription": "stella kontrollib veel, kas seda DOCX-i saab turvaliselt muuta. Proovige uuesti, kui dokument on laadimise lõpetanud.",
     "checkingDocxEditTitle": "Dokumendi kontrollimine",
+    "chooseEvidence": "Valige fail, et lisada nummerdatud tõendiviide.",
     "comment": "Kommenteeri",
     "comments": {
       "addPlaceholder": "Lisa kommentaar…",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Sul pole õigust seda dokumenti muuta.",
     "editSaveFailedTitle": "DOCX-i ei saanud salvestada",
     "editSessionTakenOver": "See muutmisseanss võeti mujal üle.",
+    "evidenceReferences": "Tõendiviited",
+    "evidenceUnavailable": "Seda tõendiviidet ei saa selles toimikus avada.",
     "findReplace": {
       "close": "Sulge otsing",
       "findAndReplace": "Leia ja asenda",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Suurenda taanet",
     "insertColumnLeft": "Lisa veerg vasakule",
     "insertColumnRight": "Lisa veerg paremale",
+    "insertEvidence": "Lisa tõendiviide",
     "insertRowAbove": "Lisa rida ülespoole",
     "insertRowBelow": "Lisa rida allapoole",
     "inserted": "Lisatud",

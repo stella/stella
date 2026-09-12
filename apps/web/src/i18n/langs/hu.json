@@ -2171,6 +2171,7 @@
     "bulletList": "Felsorolás",
     "checkingDocxEditDescription": "A stella még ellenőrzi, hogy ez a DOCX biztonságosan szerkeszthető-e. Próbálja újra, amikor a dokumentum betöltődött.",
     "checkingDocxEditTitle": "Dokumentum ellenőrzése",
+    "chooseEvidence": "Válasszon ki egy fájlt számozott bizonyíték-hivatkozás beszúrásához.",
     "comment": "Megjegyzés",
     "comments": {
       "addPlaceholder": "Megjegyzés hozzáadása…",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Nincs jogosultsága a dokumentum szerkesztéséhez.",
     "editSaveFailedTitle": "A DOCX nem menthető",
     "editSessionTakenOver": "Ezt a szerkesztési munkamenetet máshol vették át.",
+    "evidenceReferences": "Bizonyíték-hivatkozások",
+    "evidenceUnavailable": "Ez a bizonyíték-hivatkozás ebben az ügyben nem nyitható meg.",
     "findReplace": {
       "close": "Keresés bezárása",
       "findAndReplace": "Keresés és csere",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Behúzás növelése",
     "insertColumnLeft": "Oszlop beszúrása balra",
     "insertColumnRight": "Oszlop beszúrása jobbra",
+    "insertEvidence": "Bizonyíték-hivatkozás beszúrása",
     "insertRowAbove": "Sor beszúrása fölé",
     "insertRowBelow": "Sor beszúrása alá",
     "inserted": "Beszúrva",

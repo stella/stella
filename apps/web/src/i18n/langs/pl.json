@@ -2171,6 +2171,7 @@
     "bulletList": "Lista punktowana",
     "checkingDocxEditDescription": "stella nadal sprawdza, czy ten DOCX można bezpiecznie edytować. Spróbuj ponownie, gdy dokument się załaduje.",
     "checkingDocxEditTitle": "Sprawdzanie dokumentu",
+    "chooseEvidence": "Wybierz plik, aby wstawić numerowane odniesienie do dowodu.",
     "comment": "Komentarz",
     "comments": {
       "addPlaceholder": "Dodaj komentarz...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Nie masz uprawnień do edycji tego dokumentu.",
     "editSaveFailedTitle": "Nie udało się zapisać pliku DOCX",
     "editSessionTakenOver": "Ta sesja edycji została przejęta gdzie indziej.",
+    "evidenceReferences": "Odniesienia do dowodów",
+    "evidenceUnavailable": "Nie można otworzyć tego odniesienia do dowodu w tej sprawie.",
     "findReplace": {
       "close": "Zamknij wyszukiwanie",
       "findAndReplace": "Znajdź i zamień",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Zwiększ wcięcie",
     "insertColumnLeft": "Wstaw kolumnę z lewej",
     "insertColumnRight": "Wstaw kolumnę z prawej",
+    "insertEvidence": "Wstaw odniesienie do dowodu",
     "insertRowAbove": "Wstaw wiersz powyżej",
     "insertRowBelow": "Wstaw wiersz poniżej",
     "inserted": "Wstawiono",

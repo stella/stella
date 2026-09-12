@@ -71,8 +71,10 @@ import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import { EvidenceReferences } from "@/components/docx/evidence-references";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useDocxFind } from "@/components/docx/use-docx-find";
+import { useEvidenceReferences } from "@/components/docx/use-evidence-references";
 import { useFolioCollaborationRoom } from "@/components/docx/use-folio-collaboration-room";
 import { useSyncDocxSuggestions } from "@/components/docx/use-sync-docx-suggestions";
 import {
@@ -999,6 +1001,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [onClose, resetError, state, t]);
 
   const isUnlocked = canEditCollaboratively || state.status === "editing";
+  const evidence = useEvidenceReferences(
+    isUnlocked && editorMode !== "viewing",
+  );
   const wasUnlockedRef = useRef(false);
 
   useExternalSyncEffect(() => {
@@ -1685,6 +1690,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return (
         <>
           {actionBarControls}
+          <EvidenceReferences
+            workspaceId={workspaceId}
+            entityId={entityId}
+            view={editorViewForAnonymization}
+            document={evidence.document}
+            editable={isUnlocked && editorMode !== "viewing"}
+            onPrepareEditor={() => {
+              editorRef.current?.ensureEditorView({ focus: false });
+            }}
+          />
           {showActionBar && collaborationState.room !== null && (
             <>
               <Button
@@ -1924,6 +1939,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             selectedAnonymizationCanonical={sidebarSelectedCanonical}
             anonymizationSelectionSeq={sidebarSelectionSeq}
             onEditorViewReady={setEditorViewForAnonymization}
+            plugins={evidence.plugins}
             showToolbar={showActionBar ? true : isUnlocked}
             toolbarExtra={toolbarExtra}
             {...(activeCollaboration !== undefined

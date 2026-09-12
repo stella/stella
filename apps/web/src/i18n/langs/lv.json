@@ -2171,6 +2171,7 @@
     "bulletList": "Aizzīmju saraksts",
     "checkingDocxEditDescription": "stella vēl pārbauda, vai šo DOCX var droši rediģēt. Mēģiniet vēlreiz, kad dokuments būs pilnībā ielādēts.",
     "checkingDocxEditTitle": "Pārbauda dokumentu",
+    "chooseEvidence": "Izvēlieties failu, lai ievietotu numurētu pierādījuma atsauci.",
     "comment": "Komentārs",
     "comments": {
       "addPlaceholder": "Pievienot komentāru…",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Jums nav tiesību rediģēt šo dokumentu.",
     "editSaveFailedTitle": "Neizdevās saglabāt DOCX",
     "editSessionTakenOver": "Šo rediģēšanas sesiju pārņēma citur.",
+    "evidenceReferences": "Pierādījumu atsauces",
+    "evidenceUnavailable": "Šo pierādījuma atsauci šajā lietā nevar atvērt.",
     "findReplace": {
       "close": "Aizvērt meklēšanu",
       "findAndReplace": "Meklēt un aizstāt",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Palielināt atkāpi",
     "insertColumnLeft": "Ievietot kolonnu pa kreisi",
     "insertColumnRight": "Ievietot kolonnu pa labi",
+    "insertEvidence": "Ievietot pierādījuma atsauci",
     "insertRowAbove": "Ievietot rindu virs",
     "insertRowBelow": "Ievietot rindu zem",
     "inserted": "Ievietots",

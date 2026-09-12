@@ -2171,6 +2171,7 @@
     "bulletList": "Lista com marcadores",
     "checkingDocxEditDescription": "stella ainda está verificando se este DOCX pode ser editado com segurança. Tente novamente quando o documento terminar de carregar.",
     "checkingDocxEditTitle": "Verificando documento",
+    "chooseEvidence": "Escolha um arquivo para inserir uma referência numerada de prova.",
     "comment": "Comentário",
     "comments": {
       "addPlaceholder": "Adicione um comentário...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Você não tem permissão para editar este documento.",
     "editSaveFailedTitle": "Não foi possível salvar DOCX",
     "editSessionTakenOver": "Esta sessão de edição foi assumida em outro lugar.",
+    "evidenceReferences": "Referências de prova",
+    "evidenceUnavailable": "Não é possível abrir esta referência de prova neste caso.",
     "findReplace": {
       "close": "Fechar pesquisa",
       "findAndReplace": "Localizar e substituir",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Aumentar recuo",
     "insertColumnLeft": "Inserir coluna à esquerda",
     "insertColumnRight": "Inserir coluna à direita",
+    "insertEvidence": "Inserir referência de prova",
     "insertRowAbove": "Inserir linha acima",
     "insertRowBelow": "Inserir linha abaixo",
     "inserted": "Inserido",

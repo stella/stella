@@ -2171,6 +2171,7 @@
     "bulletList": "Aufzählung",
     "checkingDocxEditDescription": "stella prüft noch, ob diese DOCX-Datei sicher bearbeitet werden kann. Versuchen Sie es erneut, sobald das Dokument vollständig geladen ist.",
     "checkingDocxEditTitle": "Dokument wird geprüft",
+    "chooseEvidence": "Wählen Sie eine Datei aus, um einen nummerierten Beweisverweis einzufügen.",
     "comment": "Kommentar",
     "comments": {
       "addPlaceholder": "Kommentar hinzufügen...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Sie haben keine Berechtigung, dieses Dokument zu bearbeiten.",
     "editSaveFailedTitle": "DOCX-Datei konnte nicht gespeichert werden",
     "editSessionTakenOver": "Diese Bearbeitungssitzung wurde an anderer Stelle übernommen.",
+    "evidenceReferences": "Beweisverweise",
+    "evidenceUnavailable": "Dieser Beweisverweis kann in dieser Akte nicht geöffnet werden.",
     "findReplace": {
       "close": "Suche schließen",
       "findAndReplace": "Suchen und ersetzen",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Einzug vergrößern",
     "insertColumnLeft": "Spalte links einfügen",
     "insertColumnRight": "Spalte rechts einfügen",
+    "insertEvidence": "Beweisverweis einfügen",
     "insertRowAbove": "Zeile oberhalb einfügen",
     "insertRowBelow": "Zeile unterhalb einfügen",
     "inserted": "Eingefügt",
