@@ -114,6 +114,25 @@ const preferredRouteParams = (
 };
 
 /**
+ * The version that actually matched, not the reader's preferred one.
+ *
+ * A block anchor is version-local: the passage the snippet came from exists in
+ * the matched text and its identifier means nothing in a translation, so an
+ * anchored link has to stay on the version that produced it. The preferred
+ * alternate is still one click away through the language control.
+ */
+const matchedRouteParams = (decision: Decision): CaseLawDecisionRouteParams =>
+  createCaseLawDecisionRouteParams({
+    caseNumber: decision.caseNumber,
+    country: decision.country,
+    court: decision.court,
+    decisionId: decision.id,
+    language: decision.language,
+    languageAlternates: decision.languageAlternates,
+    slug: decision.slug,
+  });
+
+/**
  * Identity, and nothing a column of its own is saying. A multilingual
  * decision is one row: the case number opens the version the reader is most
  * likely to want, and the language menu offers every other one.
@@ -212,7 +231,6 @@ export const SummaryCell = ({
   context: DecisionRenderContext;
   decision: Decision;
 }) => {
-  const uiLocale = useLocale();
   const headnoteSegments = headnotePreviewSegments(
     decision.headnote,
     context.queryTokens,
@@ -255,7 +273,7 @@ export const SummaryCell = ({
     children: passage,
     className: "block hover:underline",
     hash: anchorId,
-    params: preferredRouteParams(decision, uiLocale),
+    params: matchedRouteParams(decision),
   });
 };
 

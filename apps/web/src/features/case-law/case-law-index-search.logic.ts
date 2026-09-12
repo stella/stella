@@ -54,6 +54,29 @@ export const clearedCaseLawFilters = (): Record<
   year: undefined,
 });
 
+/**
+ * The URL a navigation should start from while the search field holds text the
+ * URL has not been told about yet.
+ *
+ * The field writes `q` on a debounce. A filter, sort or refine change that
+ * cancelled that write and navigated from the URL would lose the edit for
+ * good: `q` would not change, so the field would never resync and would keep
+ * showing text no result set reflects. Folding the pending value in first
+ * makes the change carry the edit instead of discarding it.
+ */
+export const withPendingQuery = (
+  previous: CaseLawIndexSearch,
+  pendingQuery: string | null,
+): CaseLawIndexSearch => {
+  if (pendingQuery === null) {
+    return previous;
+  }
+  return {
+    ...previous,
+    q: pendingQuery.trim().length > 0 ? pendingQuery : undefined,
+  };
+};
+
 export const hasActiveCaseLawFilter = (search: CaseLawIndexSearch): boolean =>
   CASE_LAW_FILTER_KEYS.some((key) => search[key] !== undefined);
 

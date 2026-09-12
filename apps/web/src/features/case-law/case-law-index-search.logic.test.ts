@@ -8,6 +8,7 @@ import {
   decisionSortOrder,
   decisionSortParam,
   hasActiveCaseLawFilter,
+  withPendingQuery,
 } from "@/features/case-law/case-law-index-search.logic";
 
 describe("the sort the URL carries", () => {
@@ -91,5 +92,40 @@ describe("the filters the URL carries", () => {
 
   test("a query alone is not a filter", () => {
     expect(hasActiveCaseLawFilter({ country: "cz", q: "nájem" })).toBe(false);
+  });
+});
+
+describe("a query edit still pending when something else changes", () => {
+  test("carries the typed text into the change instead of losing it", () => {
+    expect(
+      withPendingQuery({ country: "cz", q: "nájem" }, "nájem bytu"),
+    ).toEqual({ country: "cz", q: "nájem bytu" });
+  });
+
+  test("leaves the URL alone when no write is pending", () => {
+    const previous = { country: "cz", q: "nájem" } as const;
+
+    expect(withPendingQuery(previous, null)).toBe(previous);
+  });
+
+  test("clears the query when the field was emptied", () => {
+    expect(withPendingQuery({ country: "cz", q: "nájem" }, "   ")).toEqual({
+      country: "cz",
+      q: undefined,
+    });
+  });
+
+  test("keeps every other field of the URL", () => {
+    expect(
+      withPendingQuery(
+        { country: "cz", court: "Nejvyšší soud", sort: "newest" },
+        "nájem",
+      ),
+    ).toEqual({
+      country: "cz",
+      court: "Nejvyšší soud",
+      sort: "newest",
+      q: "nájem",
+    });
   });
 });

@@ -5,6 +5,7 @@ import {
   normalizeRefineTerm,
   refineTermsOfQuery,
   removeRefineTerm,
+  withoutRefineTerms,
 } from "@/features/case-law/search-refine.logic";
 
 /**
@@ -44,6 +45,24 @@ describe("refining a query", () => {
   test("ignores an entry with nothing to search for", () => {
     expect(addRefineTerm("promlčení", '  " "  ')).toBe("promlčení");
     expect(normalizeRefineTerm('""')).toBeNull();
+  });
+
+  test("drops an unmatched quote in the query before appending", () => {
+    // The stray quote would otherwise pair with the one opened here, so the
+    // chip would name "b c" and the phrase actually asked for could never be
+    // taken back out. Both engines already read it as loose terms.
+    const refined = addRefineTerm('a "b c', "d e");
+
+    expect(refined).toBe('a b c "d e"');
+    expect(refineTermsOfQuery(refined)).toEqual(["d e"]);
+    expect(removeRefineTerm(refined, "d e")).toBe("a b c");
+  });
+
+  test("leaves a balanced query's own phrases alone when refining", () => {
+    const refined = addRefineTerm('a "b c"', "d e");
+
+    expect(refined).toBe('a "b c" "d e"');
+    expect(refineTermsOfQuery(refined)).toEqual(["b c", "d e"]);
   });
 
   test("strips quotes out of the entry so the span cannot close early", () => {
@@ -101,5 +120,26 @@ describe("removing a refinement", () => {
     expect(
       removeRefineTerm(addRefineTerm(original, "dobrá víra"), "dobrá víra"),
     ).toBe(original);
+  });
+});
+
+describe("clearing every refinement at once", () => {
+  test("keeps the words the reader typed and drops the phrases", () => {
+    expect(withoutRefineTerms('nájem bytu "dobré mravy" "promlčení"')).toBe(
+      "nájem bytu",
+    );
+  });
+
+  test("clears the query when the phrases were all it asked for", () => {
+    expect(withoutRefineTerms('"dobré mravy"')).toBeUndefined();
+  });
+
+  test("leaves a query with no phrases untouched", () => {
+    expect(withoutRefineTerms("nájem bytu")).toBe("nájem bytu");
+    expect(withoutRefineTerms(undefined)).toBeUndefined();
+  });
+
+  test("leaves nothing the chip row would still show", () => {
+    expect(refineTermsOfQuery(withoutRefineTerms('a "b" c "d"'))).toEqual([]);
   });
 });

@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from "react";
 
+import { Result } from "better-result";
 import * as v from "valibot";
 import { createStore } from "zustand/vanilla";
 
 import { DEFAULT_HIDDEN_DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import { ClientOperationError } from "@/lib/errors/client";
+import { readStoredJson } from "@/lib/stored-json";
 
 const STORAGE_KEY = "case_law_hidden_columns";
 
@@ -45,18 +47,47 @@ const hydrate = (): void => {
   if (preferencesStore.getState().hydrated) {
     return;
   }
-  let stored: Preferences | null = null;
-  try {
-    stored = readStoredJson(
-      localStorage.getItem(STORAGE_KEY),
-      PreferencesSchema,
-    );
-  } catch {
-    // Storage can be blocked outright (private browsing, a locked-down
-    // profile); the reader then gets the defaults for this visit.
-  }
-  preferencesStore.setState({ byCountry: stored ?? {}, hydrated: true });
+  preferencesStore.setState({
+    byCountry: readPreferences().unwrapOr({}),
+    hydrated: true,
+  });
 };
+
+/**
+ * What storage holds, or the failure that kept it from being read. Storage can
+ * be blocked outright (private browsing, a locked-down profile) and reading it
+ * throws rather than returning nothing, so the access is a `Result` and the
+ * caller falls back to the defaults for the visit.
+ */
+const readPreferences = (): Result<Preferences, ClientOperationError> =>
+  Result.try({
+    try: () => localStorage.getItem(STORAGE_KEY),
+    catch: (cause) =>
+      new ClientOperationError({
+        action: "read-case-law-column-preferences",
+        cause,
+        message: "Case-law column preferences could not be read",
+      }),
+  }).map((raw) => readStoredJson(raw, PreferencesSchema) ?? {});
+
+/**
+ * Persistence of a column choice is best effort: a reader whose storage is
+ * blocked or full still gets the choice for this visit, from the store.
+ */
+const writePreferences = (
+  preferences: Preferences,
+): Result<void, ClientOperationError> =>
+  Result.try({
+    try: () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    },
+    catch: (cause) =>
+      new ClientOperationError({
+        action: "write-case-law-column-preferences",
+        cause,
+        message: "Case-law column preferences could not be saved",
+      }),
+  });
 
 const subscribe = (onChange: () => void) => {
   const unsubscribe = preferencesStore.subscribe(onChange);
@@ -77,7 +108,7 @@ export const setHiddenDecisionColumnIds = (
     ...preferencesStore.getState().byCountry,
     [country]: [...hiddenColumnIds],
   };
-  writeStoredJson(localStorage, STORAGE_KEY, next);
+  writePreferences(next);
   preferencesStore.setState({ byCountry: next, hydrated: true });
 };
 

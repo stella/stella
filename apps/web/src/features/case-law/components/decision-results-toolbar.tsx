@@ -63,7 +63,7 @@ export const DecisionResultsToolbar = ({
       <div className="text-muted-foreground min-w-0 flex-1 text-xs">
         {summary}
       </div>
-      <div className="flex min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <RefineWithinResults onRefine={onRefine} />
         {sort !== null && (
           <>

@@ -37,6 +37,7 @@ import {
   decisionSortOrder,
   hasActiveCaseLawFilter,
   validDecisionYear,
+  withPendingQuery,
 } from "@/features/case-law/case-law-index-search.logic";
 import type {
   CaseLawFilterKey,
@@ -60,6 +61,7 @@ import type { DecisionFilterChip } from "@/features/case-law/components/decision
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { DEFAULT_HIDDEN_DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
+import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -76,6 +78,7 @@ import {
   addRefineTerm,
   refineTermsOfQuery,
   removeRefineTerm,
+  withoutRefineTerms,
 } from "@/features/case-law/search-refine.logic";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
@@ -159,6 +162,36 @@ const withFilter = (
       return { ...previous, type: value };
     case "year":
       return { ...previous, year: value };
+    default:
+      key satisfies never;
+      return panic(`Unhandled case-law filter: ${String(key)}`);
+  }
+};
+
+/**
+ * What a chip shows for a selected value. A source is an opaque id the facets
+ * attach a name to, and a language is a code; every other facet's value is
+ * already the words the reader picked off the rail.
+ */
+const chipValue = (
+  key: CaseLawFilterKey,
+  value: string,
+  {
+    facets,
+    format,
+  }: { facets: DecisionRailFacets; format: ReturnType<typeof useFormatter> },
+): string => {
+  switch (key) {
+    case "lang":
+      return languageLabel(format, value);
+    case "source":
+      return (
+        facets.source.find((bucket) => bucket.value === value)?.label ?? value
+      );
+    case "court":
+    case "type":
+    case "year":
+      return value;
     default:
       key satisfies never;
       return panic(`Unhandled case-law filter: ${String(key)}`);
@@ -406,14 +439,21 @@ function PublicCaseLawIndex() {
     search: data?.pages.at(0)?.facets ?? null,
   });
 
-  // A pending debounced query write would otherwise land after a filter
-  // navigation and re-apply the old field value to the new filters. Returns
-  // the navigation so each caller tags it with its own literal label.
+  // A pending debounced query write holds text the URL has not seen yet.
+  // Letting it land after this navigation would re-apply the old field value
+  // to the new filters; cancelling it alone would strand the edit for good,
+  // because `search.q` never changes and the field never resyncs. So the
+  // pending text is folded in first and the caller's own change applied over
+  // it. Returns the navigation so each caller tags it with a literal label.
   const searchNavigation = async (
     nextSearch: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
   ) => {
+    const pending = writeQuery.isPending() ? queryInput : null;
     writeQuery.cancel();
-    await navigate({ replace: true, search: nextSearch });
+    await navigate({
+      replace: true,
+      search: (previous) => nextSearch(withPendingQuery(previous, pending)),
+    });
   };
 
   const selectFacet = (key: CaseLawFilterKey, value: string | undefined) => {
@@ -443,7 +483,7 @@ function PublicCaseLawIndex() {
       id: `filter:${key}`,
       kind: t(FILTER_KIND_LABEL_KEYS[key]),
       onRemove: () => selectFacet(key, undefined),
-      value: key === "lang" ? languageLabel(format, value) : value,
+      value: chipValue(key, value, { facets, format }),
     });
   }
   for (const term of refineTerms) {
@@ -475,11 +515,15 @@ function PublicCaseLawIndex() {
     );
   };
 
-  const browsing = intent.type === "empty";
-  const sort: DecisionSortOrder | null = browsing
-    ? null
-    : decisionSortOrder(search.sort);
-  const order = sort ?? "newest";
+  // No sort control where no order applies: a browse listing is newest-first
+  // by definition, and an identifier lookup is answered by the identity path,
+  // which ranks by relevance whatever the URL asks for. Offering a choice the
+  // answer ignores would also mark the date column as sorted when it is not.
+  const sortable = intent.type === "text";
+  const sort: DecisionSortOrder | null = sortable
+    ? decisionSortOrder(search.sort)
+    : null;
+  const order = intent.type === "empty" ? "newest" : (sort ?? "relevance");
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -537,10 +581,14 @@ function PublicCaseLawIndex() {
           <DecisionFilterChips
             chips={chips}
             onClearAll={() => {
+              // Every chip on the row, including the refinements that live in
+              // the query rather than in a facet.
+              setQueryInput("");
               detached(
                 searchNavigation((previous) => ({
                   ...previous,
                   ...clearedCaseLawFilters(),
+                  q: withoutRefineTerms(previous.q),
                 })),
                 "cases.clear-filters",
               );
