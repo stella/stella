@@ -243,6 +243,8 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 // Keeping them explicit means a newly added authenticated route fails the
 // coverage assertion until it is either smoked or deliberately placed here.
 const INTENTIONALLY_NOT_SMOKED = new Set([
+  // Requires a connected desktop registry account and a real company record.
+  "/knowledge/company-formats/$registry/$companyId",
   "/knowledge/tools/$skillId",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
