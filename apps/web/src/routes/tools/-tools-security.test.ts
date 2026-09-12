@@ -186,7 +186,7 @@ describe("public tools security invariants", () => {
     expect(source).toContain(
       'import("@/routes/tools/-components/add-to-stella")',
     );
-    expect(source).toContain("<ClientOnly");
+    expect(source).toContain("<BrowserOnly");
     expect(source).not.toContain(
       'from "@/routes/tools/-components/add-to-stella"',
     );

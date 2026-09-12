@@ -27,8 +27,8 @@
     "expo-router": "~57.0.19",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.3",
-    "react": "catalog:react19",
-    "react-dom": "catalog:react19",
+    "react": "catalog:reactNative",
+    "react-dom": "catalog:reactNative",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.26.2",
@@ -37,7 +37,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@stll/typescript-config": "workspace:*",
-    "@types/react": "catalog:react19",
+    "@types/react": "catalog:reactNative",
     "bun-types": "catalog:",
     "expo-doctor": "1.20.4"
   },

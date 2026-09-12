@@ -1,9 +1,8 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 import type { ReactNode } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import {
-  ClientOnly,
   createRootRouteWithContext,
   HeadContent,
   Outlet,
@@ -12,6 +11,7 @@ import {
 
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-banner";
+import { BrowserOnly } from "@/components/browser-only";
 import {
   DefaultErrorComponent,
   DefaultPendingComponent,
@@ -105,11 +105,9 @@ function RootApp() {
       <ApiVersionMismatchProvider>
         <Outlet />
         {DevRoot ? (
-          <ClientOnly>
-            <Suspense fallback={null}>
-              <DevRoot />
-            </Suspense>
-          </ClientOnly>
+          <BrowserOnly>
+            <DevRoot />
+          </BrowserOnly>
         ) : null}
       </ApiVersionMismatchProvider>
     </div>

@@ -22,6 +22,7 @@
     "@react-email/components": "^1.0.12",
     "@stll/locales": "workspace:*",
     "react": "catalog:react19",
+    "react-dom": "catalog:react19",
     "use-intl": "catalog:"
   },
   "devDependencies": {

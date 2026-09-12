@@ -12,6 +12,13 @@ minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
+  # React 19.3 stabilizes View Transitions, Fragment refs and browser-only
+  # rendering. Keep the runtime, renderer, scheduler and types together.
+  "react", # quarantine-expires: 2026-09-14T17:21:30.071Z
+  "react-dom", # quarantine-expires: 2026-09-14T17:17:39.744Z
+  "scheduler", # quarantine-expires: 2026-09-14T17:17:30.281Z
+  "@types/react", # quarantine-expires: 2026-09-14T18:08:49.750Z
+  "@types/react-dom", # quarantine-expires: 2026-09-14T18:07:51.886Z
   # TanStack's paired SSR releases stream query arrays, avoiding an undefined
   # whole-state hydration path with Query 5.102.5. Keep the pair coherent.
   # @silurus/ooxml 0.82.1 adds host-controlled XLSX viewer chrome colors.

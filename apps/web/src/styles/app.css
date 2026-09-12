@@ -18,3 +18,17 @@
  * compiled package output must be scanned explicitly: node_modules is outside
  * Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
+
+/* Only the regions explicitly wrapped in ViewTransition should animate. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
