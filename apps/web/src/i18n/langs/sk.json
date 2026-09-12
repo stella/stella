@@ -649,6 +649,18 @@
       "matchedIn": "Zhoda v jazyku {language}"
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "matterLinks": {
+      "empty": "V tomto spise zatiaľ nie je uložená žiadna judikatúra.",
+      "emptyAction": "Hľadať v judikatúre",
+      "note": "Poznámka",
+      "notePlaceholder": "Prečo sú tieto rozhodnutia dôležité práve tu…",
+      "remove": "Odstrániť zo spisu",
+      "save": "Uložiť do spisu",
+      "savePage": "Z tejto stránky {count, plural, one {sa uloží # rozhodnutie} few {sa uložia # rozhodnutia} other {sa uloží # rozhodnutí}}.",
+      "saveSelection": "{count, plural, one {Uloží sa # vybrané rozhodnutie} few {Uložia sa # vybrané rozhodnutia} other {Uloží sa # vybraných rozhodnutí}}.",
+      "saveTitle": "Uložiť do spisu",
+      "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
+    },
     "newestDecisions": "Najnovšie rozhodnutia",
     "notesFilter": {
       "ai": "AI",

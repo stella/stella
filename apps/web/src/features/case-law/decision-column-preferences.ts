@@ -3,9 +3,9 @@ import { useState } from "react";
 import { Result } from "better-result";
 
 import {
-  DEFAULT_DECISION_TABLE_LAYOUT,
   StoredDecisionLayoutSchema,
-  decisionTableLayout,
+  decisionTableLayouts,
+  layoutForCountry,
 } from "@/features/case-law/decision-column-preferences.logic";
 import type {
   DecisionTableLayout,
@@ -30,6 +30,7 @@ const STORAGE_KEY = "case_law_hidden_columns";
  * drive this with a fake.
  */
 const EMPTY: StoredDecisionLayouts = {};
+const NO_LAYOUTS: Record<string, DecisionTableLayout> = {};
 
 /**
  * What storage holds, or the failure that kept it from being read. Reading can
@@ -38,7 +39,7 @@ const EMPTY: StoredDecisionLayouts = {};
  */
 const readDecisionLayouts = (
   storage: Storage,
-): Result<StoredDecisionLayouts, ClientOperationError> =>
+): Result<Record<string, DecisionTableLayout>, ClientOperationError> =>
   Result.try({
     try: () => storage.getItem(STORAGE_KEY),
     catch: (cause) =>
@@ -47,7 +48,11 @@ const readDecisionLayouts = (
         cause,
         message: "Case-law column preferences could not be read",
       }),
-  }).map((raw) => readStoredJson(raw, StoredDecisionLayoutSchema) ?? EMPTY);
+  }).map((raw) =>
+    decisionTableLayouts(
+      readStoredJson(raw, StoredDecisionLayoutSchema) ?? EMPTY,
+    ),
+  );
 
 /**
  * Persistence is best effort: a reader whose storage is full or blocked still
@@ -55,7 +60,7 @@ const readDecisionLayouts = (
  */
 const writeDecisionLayouts = (
   storage: Storage,
-  layouts: StoredDecisionLayouts,
+  layouts: Record<string, DecisionTableLayout>,
 ): Result<void, ClientOperationError> =>
   Result.try({
     try: () => {
@@ -75,30 +80,24 @@ export const useDecisionColumnPreferences = (country: string) => {
   const storage = useLocalStorage();
   // Null until storage has been read, which is after hydration: the server and
   // the first client render both see the defaults, so the markup agrees.
-  const [layouts, setLayouts] = useState<StoredDecisionLayouts | null>(null);
+  const [layouts, setLayouts] = useState<Record<
+    string,
+    DecisionTableLayout
+  > | null>(null);
   const [readFrom, setReadFrom] = useState<Storage | null>(null);
   if (storage !== null && readFrom !== storage) {
     setReadFrom(storage);
-    setLayouts(readDecisionLayouts(storage).unwrapOr(EMPTY));
+    setLayouts(readDecisionLayouts(storage).unwrapOr(NO_LAYOUTS));
   }
 
-  const layout =
-    layouts === null
-      ? DEFAULT_DECISION_TABLE_LAYOUT
-      : decisionTableLayout(layouts[country]);
+  // The same object until the reader changes it: the table compares its
+  // controlled state by identity, and a layout rebuilt per render loops it.
+  const layout = layoutForCountry(layouts, country);
 
   return {
     layout,
     setLayout: (next: DecisionTableLayout) => {
-      const stored = {
-        ...layouts,
-        [country]: {
-          hidden: [...next.hidden],
-          order: [...next.order],
-          pinned: [...next.pinned],
-          contentMode: next.contentMode,
-        },
-      };
+      const stored = { ...layouts, [country]: next };
       setLayouts(stored);
       if (storage === null) {
         return;

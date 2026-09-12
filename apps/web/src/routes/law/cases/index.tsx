@@ -76,6 +76,8 @@ import {
 } from "@/features/case-law/decision-pagination.logic";
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
 import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
+import { SaveIntoMatterAction } from "@/features/case-law/matter-links/save-into-matter";
+import { openDecisionAtPassage } from "@/features/case-law/open-decision-at-passage";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -126,49 +128,6 @@ const MAX_REFINEMENT_LENGTH = 240;
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
-
-/**
- * Open a decision at the passage an answer leaned on. Two routes, because a
- * multilingual decision addresses its version in the path; the same branch the
- * decision links themselves take.
- */
-const openDecisionAtPassage = async (
-  navigate: ReturnType<typeof useNavigate>,
-  decision: Decision,
-  anchorId: string,
-) => {
-  const params = createCaseLawDecisionRouteParams({
-    caseNumber: decision.caseNumber,
-    country: decision.country,
-    court: decision.court,
-    decisionId: decision.id,
-    language: decision.language,
-    languageAlternates: decision.languageAlternates,
-    slug: decision.slug,
-  });
-  if (params.language === undefined) {
-    await navigate({
-      to: "/law/$country/cases/$court/$slug",
-      params: {
-        country: params.country,
-        court: params.court,
-        slug: params.slug,
-      },
-      hash: anchorId,
-    });
-    return;
-  }
-  await navigate({
-    to: "/law/$country/cases/$court/$language/$slug",
-    params: {
-      country: params.country,
-      court: params.court,
-      language: params.language,
-      slug: params.slug,
-    },
-    hash: anchorId,
-  });
-};
 
 const optionalBrowseStringSchema = (maxLength: number) =>
   v.optional(
@@ -685,6 +644,7 @@ function PublicCaseLawIndex() {
     setSelectionPage(pager.currentPage);
     setSelectedIds(EMPTY_SELECTION);
   }
+  const pageDecisionIds = decisions.map((decision) => decision.id);
   const questions = useQuestionColumns({
     onShowSource: (decision, anchorId) => {
       detached(
@@ -692,7 +652,7 @@ function PublicCaseLawIndex() {
         "cases.show-source",
       );
     },
-    pageDecisionIds: decisions.map((decision) => decision.id),
+    pageDecisionIds,
     selectedDecisionIds: selectedIds,
   });
 
@@ -848,7 +808,15 @@ function PublicCaseLawIndex() {
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <DecisionResultsToolbar
-            actions={<QuestionColumnControls controller={questions} />}
+            actions={
+              <>
+                <QuestionColumnControls controller={questions} />
+                <SaveIntoMatterAction
+                  pageDecisionIds={pageDecisionIds}
+                  selectedDecisionIds={selectedIds}
+                />
+              </>
+            }
             layout={layout}
             onLayoutChange={setLayout}
             onRefine={(entry) => {

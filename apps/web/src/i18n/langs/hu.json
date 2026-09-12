@@ -649,6 +649,18 @@
       "matchedIn": "Találat {language} nyelven"
     },
     "loadingMore": "Betöltés folyamatban...",
+    "matterLinks": {
+      "empty": "Ebben az ügyben még nincs mentett ítélkezési gyakorlat.",
+      "emptyAction": "Keresés az ítélkezési gyakorlatban",
+      "note": "Megjegyzés",
+      "notePlaceholder": "Miért fontosak itt ezek a határozatok…",
+      "remove": "Eltávolítás az ügyből",
+      "save": "Mentés ügybe",
+      "savePage": "Erről az oldalról {count, plural, one {# határozat} other {# határozat}} lesz elmentve.",
+      "saveSelection": "{count, plural, one {# kijelölt határozat} other {# kijelölt határozat}} lesz elmentve.",
+      "saveTitle": "Mentés ügybe",
+      "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
+    },
     "newestDecisions": "Legújabb határozatok",
     "notesFilter": {
       "ai": "MI",

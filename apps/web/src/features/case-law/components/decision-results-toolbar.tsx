@@ -124,7 +124,12 @@ export const DecisionResultsToolbar = ({
           onLayoutChange={onLayoutChange}
           questionColumns={questionColumns}
         />
-        {actions}
+        {actions !== undefined && (
+          <>
+            <span className="bg-border mx-1 h-4 w-px" />
+            {actions}
+          </>
+        )}
       </div>
     </div>
   );

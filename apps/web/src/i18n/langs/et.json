@@ -649,6 +649,18 @@
       "matchedIn": "Vaste keeles: {language}"
     },
     "loadingMore": "Laadib rohkem...",
+    "matterLinks": {
+      "empty": "Sellesse toimikusse pole veel kohtupraktikat salvestatud.",
+      "emptyAction": "Otsi kohtupraktikat",
+      "note": "Märkus",
+      "notePlaceholder": "Miks need lahendid siin olulised on…",
+      "remove": "Eemalda toimikust",
+      "save": "Salvesta toimikusse",
+      "savePage": "Sellelt lehelt salvestatakse {count, plural, one {# lahend} other {# lahendit}}.",
+      "saveSelection": "Salvestatakse {count, plural, one {# valitud lahend} other {# valitud lahendit}}.",
+      "saveTitle": "Salvesta toimikusse",
+      "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
+    },
     "newestDecisions": "Uusimad lahendid",
     "notesFilter": {
       "ai": "AI",

@@ -6,33 +6,31 @@ import {
   StoredDecisionLayoutSchema,
   decisionColumnOrder,
   decisionColumnPins,
-  decisionTableLayout,
+  decisionTableLayouts,
+  layoutForCountry,
   withDecisionColumnMoved,
   withDecisionColumnPinned,
 } from "./decision-column-preferences.logic";
 
 const parse = (raw: unknown) => v.parse(StoredDecisionLayoutSchema, raw);
 
+const layoutOf = (raw: unknown, country = "cz") =>
+  layoutForCountry(decisionTableLayouts(parse(raw)), country);
+
 describe("what a stored arrangement means", () => {
   test("a jurisdiction nobody arranged gets the defaults", () => {
-    expect(decisionTableLayout(undefined)).toEqual(
-      DEFAULT_DECISION_TABLE_LAYOUT,
-    );
+    expect(layoutForCountry({}, "cz")).toEqual(DEFAULT_DECISION_TABLE_LAYOUT);
   });
 
   test("a value written before order and pins existed is still its hidden set", () => {
-    const stored = parse({ cz: ["headnote", "language"] });
-
-    expect(decisionTableLayout(stored["cz"])).toEqual({
+    expect(layoutOf({ cz: ["headnote", "language"] })).toEqual({
       ...DEFAULT_DECISION_TABLE_LAYOUT,
       hidden: ["headnote", "language"],
     });
   });
 
   test("a partial arrangement keeps the defaults for what it omits", () => {
-    const stored = parse({ cz: { pinned: ["caseNumber"] } });
-
-    expect(decisionTableLayout(stored["cz"])).toEqual({
+    expect(layoutOf({ cz: { pinned: ["caseNumber"] } })).toEqual({
       ...DEFAULT_DECISION_TABLE_LAYOUT,
       order: [],
       pinned: ["caseNumber"],
@@ -47,7 +45,35 @@ describe("what a stored arrangement means", () => {
       contentMode: "fit-content" as const,
     };
 
-    expect(decisionTableLayout(parse({ cz: layout })["cz"])).toEqual(layout);
+    expect(layoutOf({ cz: layout })).toEqual(layout);
+  });
+
+  /**
+   * The table's arrangement is handed to TanStack as controlled state, which
+   * it compares by identity and publishes back whenever it differs. A layout
+   * rebuilt while rendering is a different object every time, so the table
+   * publishes state nobody changed, the publish re-renders, and the render
+   * rebuilds it: the page pegs the main thread with no error anywhere. The
+   * arrangement is therefore normalised once, when storage is read.
+   */
+  test("the same jurisdiction reads back as the same object, not a fresh one", () => {
+    const layouts = decisionTableLayouts(
+      parse({ cz: ["headnote"], pl: { pinned: ["caseNumber"] } }),
+    );
+
+    expect(layoutForCountry(layouts, "cz")).toBe(
+      layoutForCountry(layouts, "cz"),
+    );
+    expect(layoutForCountry(layouts, "pl")).toBe(
+      layoutForCountry(layouts, "pl"),
+    );
+  });
+
+  test("a jurisdiction with no arrangement reads back as the one shared default", () => {
+    const layouts = decisionTableLayouts(parse({ cz: ["headnote"] }));
+
+    expect(layoutForCountry(layouts, "sk")).toBe(DEFAULT_DECISION_TABLE_LAYOUT);
+    expect(layoutForCountry(null, "sk")).toBe(DEFAULT_DECISION_TABLE_LAYOUT);
   });
 
   test("a stored value of the wrong shape is refused rather than half-read", () => {

@@ -649,6 +649,18 @@
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "loadingMore": "Ielādē vairāk...",
+    "matterLinks": {
+      "empty": "Šajā lietā vēl nav saglabāta tiesu prakse.",
+      "emptyAction": "Meklēt tiesu praksē",
+      "note": "Piezīme",
+      "notePlaceholder": "Kāpēc šie nolēmumi šeit ir svarīgi…",
+      "remove": "Noņemt no lietas",
+      "save": "Saglabāt lietā",
+      "savePage": "No šīs lapas {count, plural, zero {tiks saglabāti # nolēmumu} one {tiks saglabāts # nolēmums} other {tiks saglabāti # nolēmumi}}.",
+      "saveSelection": "{count, plural, zero {Tiks saglabāti # atlasītu nolēmumu} one {Tiks saglabāts # atlasīts nolēmums} other {Tiks saglabāti # atlasīti nolēmumi}}.",
+      "saveTitle": "Saglabāt lietā",
+      "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
+    },
     "newestDecisions": "Jaunākie nolēmumi",
     "notesFilter": {
       "ai": "MI",

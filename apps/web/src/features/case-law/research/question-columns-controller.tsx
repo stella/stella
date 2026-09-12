@@ -301,7 +301,6 @@ export const QuestionColumnControls = ({
 
   return (
     <>
-      <span className="bg-border mx-1 h-4 w-px" />
       <Button
         className="h-7 min-h-0 text-xs"
         onClick={() => controller.onDraftChange({ type: "create" })}

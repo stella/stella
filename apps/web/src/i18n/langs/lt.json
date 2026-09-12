@@ -649,6 +649,18 @@
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "loadingMore": "Kraunama daugiau...",
+    "matterLinks": {
+      "empty": "Šioje byloje kol kas neišsaugota jokios teismų praktikos.",
+      "emptyAction": "Ieškoti teismų praktikoje",
+      "note": "Pastaba",
+      "notePlaceholder": "Kodėl šie sprendimai čia svarbūs…",
+      "remove": "Pašalinti iš bylos",
+      "save": "Išsaugoti byloje",
+      "savePage": "Iš šio puslapio {count, plural, one {bus išsaugotas # sprendimas} few {bus išsaugoti # sprendimai} many {bus išsaugota # sprendimo} other {bus išsaugota # sprendimų}}.",
+      "saveSelection": "{count, plural, one {Bus išsaugotas # pasirinktas sprendimas} few {Bus išsaugoti # pasirinkti sprendimai} many {Bus išsaugota # pasirinkto sprendimo} other {Bus išsaugota # pasirinktų sprendimų}}.",
+      "saveTitle": "Išsaugoti byloje",
+      "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
+    },
     "newestDecisions": "Naujausi sprendimai",
     "notesFilter": {
       "ai": "DI",

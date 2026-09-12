@@ -649,6 +649,18 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "matterLinks": {
+      "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",
+      "emptyAction": "Rechtsprechung durchsuchen",
+      "note": "Notiz",
+      "notePlaceholder": "Warum diese Entscheidungen hier relevant sind…",
+      "remove": "Aus der Akte entfernen",
+      "save": "In Akte speichern",
+      "savePage": "{count, plural, one {# Entscheidung auf dieser Seite wird gespeichert.} other {# Entscheidungen auf dieser Seite werden gespeichert.}}",
+      "saveSelection": "{count, plural, one {# ausgewählte Entscheidung wird gespeichert.} other {# ausgewählte Entscheidungen werden gespeichert.}}",
+      "saveTitle": "In Akte speichern",
+      "saved": "{count, plural, one {# Entscheidung} other {# Entscheidungen}} in {matter} gespeichert"
+    },
     "newestDecisions": "Neueste Entscheidungen",
     "notesFilter": {
       "ai": "KI",

@@ -649,6 +649,18 @@
       "matchedIn": "Correspondência em {language}"
     },
     "loadingMore": "Carregando mais...",
+    "matterLinks": {
+      "empty": "Ainda não há jurisprudência salva neste caso.",
+      "emptyAction": "Pesquisar jurisprudência",
+      "note": "Nota",
+      "notePlaceholder": "Por que estas decisões importam aqui…",
+      "remove": "Remover do caso",
+      "save": "Salvar em um caso",
+      "savePage": "{count, plural, one {# decisão desta página será salva.} many {# decisões desta página serão salvas.} other {# decisões desta página serão salvas.}}",
+      "saveSelection": "{count, plural, one {# decisão selecionada será salva.} many {# decisões selecionadas serão salvas.} other {# decisões selecionadas serão salvas.}}",
+      "saveTitle": "Salvar em um caso",
+      "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
+    },
     "newestDecisions": "Decisões mais recentes",
     "notesFilter": {
       "ai": "IA",

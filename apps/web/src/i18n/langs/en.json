@@ -649,6 +649,18 @@
       "matchedIn": "Matched in {language}"
     },
     "loadingMore": "Loading more...",
+    "matterLinks": {
+      "empty": "No case law is kept in this matter yet.",
+      "emptyAction": "Search case law",
+      "note": "Note",
+      "notePlaceholder": "Why these decisions matter here…",
+      "remove": "Remove from the matter",
+      "save": "Save into a matter",
+      "savePage": "{count, plural, one {# decision on this page} other {# decisions on this page}} will be saved.",
+      "saveSelection": "{count, plural, one {# selected decision} other {# selected decisions}} will be saved.",
+      "saveTitle": "Save into a matter",
+      "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}"
+    },
     "newestDecisions": "Newest decisions",
     "notesFilter": {
       "ai": "AI",

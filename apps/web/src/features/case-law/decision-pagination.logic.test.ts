@@ -71,6 +71,27 @@ describe("pages this browser can actually show", () => {
     expect(decisionPageIndex(5, 0)).toBe(0);
   });
 
+  /**
+   * The route redirects when the page the URL carries is not the page it can
+   * serve. A URL with no page must therefore resolve to no page, whatever the
+   * chain holds — otherwise every load of `/law/cases` redirects to itself.
+   */
+  test("a URL without a page asks for no redirect, cold chain or warm", () => {
+    for (const walked of [0, 1, 5, 40]) {
+      expect(
+        decisionPageSearchValue(reachableDecisionPage(1, walked)),
+      ).toBeUndefined();
+    }
+  });
+
+  test("a page the chain can serve asks for no redirect either", () => {
+    for (const page of [2, 3, 7]) {
+      expect(decisionPageSearchValue(reachableDecisionPage(page, 8))).toBe(
+        page,
+      );
+    }
+  });
+
   test("a walked page is shown as asked", () => {
     expect(reachableDecisionPage(3, 4)).toBe(3);
     expect(decisionPageIndex(3, 4)).toBe(2);
