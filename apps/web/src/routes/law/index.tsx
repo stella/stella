@@ -16,7 +16,6 @@ import { panic } from "better-result";
 import {
   ActivityIcon,
   BookOpenIcon,
-  GlobeIcon,
   HistoryIcon,
   ScaleIcon,
   SearchIcon,
@@ -24,7 +23,6 @@ import {
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { ComposerPicker } from "@stll/ui/composer";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -38,13 +36,14 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { PublicLawCountryMenu } from "@/components/public-law-country-menu";
 import {
-  caseLawCountryRegion,
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
+import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import {
   decisionLinkElement,
   formatDecisionDate,
@@ -319,13 +318,6 @@ function LawHome() {
   });
   const history = useLawSearchHistory();
 
-  const countryName = (code: string): string => {
-    const region = caseLawCountryRegion(code);
-    return region === null
-      ? code
-      : format.displayName(region, { type: "region" });
-  };
-
   /**
    * The one dispatch every entry takes, whether typed and submitted or
    * pressed as a row: the named act, else the named decision, else the
@@ -417,11 +409,24 @@ function LawHome() {
       }
       hero={
         <>
+          <PublicLawCountryMenu
+            countries={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
+              label: caseLawCountryName(format, code),
+              value: toCaseLawCountryParam(code),
+            }))}
+            country={countryParam}
+            onCountryChange={(next) => {
+              detached(
+                routeNavigate({ replace: true, search: { country: next } }),
+                "law-home.switch-country",
+              );
+            }}
+          />
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
           <LawEntryBox
             askPrompt={(entry) =>
               t("caseLaw.searchAskPrompt", {
-                country: countryName(scope),
+                country: caseLawCountryName(format, scope),
                 query: entry,
               })
             }
@@ -429,31 +434,11 @@ function LawHome() {
             onQueryChange={setQueryInput}
             onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}
             pickers={
-              <>
-                <ComposerPicker
-                  ariaLabel={t("common.country")}
-                  icon={<GlobeIcon />}
-                  onChange={(next) => {
-                    detached(
-                      routeNavigate({
-                        replace: true,
-                        search: { country: next },
-                      }),
-                      "law-home.switch-country",
-                    );
-                  }}
-                  options={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
-                    label: countryName(code),
-                    value: toCaseLawCountryParam(code),
-                  }))}
-                  value={countryParam}
-                />
-                <LawScopePicker
-                  corpora={corpora}
-                  onScopeChange={setRequestedScope}
-                  scope={activeScope}
-                />
-              </>
+              <LawScopePicker
+                corpora={corpora}
+                onScopeChange={setRequestedScope}
+                scope={activeScope}
+              />
             }
             placeholder={t("lawHome.searchPlaceholder")}
             query={queryInput}

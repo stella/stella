@@ -4,17 +4,13 @@ import { PublicLawSearch } from "@/components/public-law-search";
 import {
   caseLawCountryRegion,
   fromCaseLawCountryParam,
-  toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type CaseLawSearchProps = {
-  /** The pill's value: a country param, or `all`. */
+  /** The jurisdiction the page is scoped to, as a country param. */
   country: string;
-  /** Corpus country codes the pill offers, as the facets report them. */
-  countries: readonly string[];
   maxLength: number;
-  onCountryChange: (country: string) => void;
   onQueryChange: (value: string) => void;
   onSubmit: () => void;
   query: string;
@@ -22,42 +18,29 @@ type CaseLawSearchProps = {
 
 /**
  * The case-law browser's instance of the shared public-law box: a docket
- * number, an ECLI or words, scoped by the jurisdiction pill. Dockets repeat
- * across countries, so the chat prompt carries the scope.
+ * number, an ECLI or words. Dockets repeat across countries, so the chat
+ * prompt carries the scope even though the row no longer shows it — the
+ * jurisdiction is chosen once, in the top bar.
  */
 export const CaseLawSearch = ({
-  countries,
   country,
   maxLength,
-  onCountryChange,
   onQueryChange,
   onSubmit,
   query,
 }: CaseLawSearchProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const countryName = (code: string): string => {
-    const region = caseLawCountryRegion(code);
-    return region === null
-      ? code
-      : format.displayName(region, { type: "region" });
-  };
 
   return (
     <PublicLawSearch
       askPrompt={(entry) =>
         t("caseLaw.searchAskPrompt", {
-          country: countryName(fromCaseLawCountryParam(country)),
+          country: caseLawCountryName(format, fromCaseLawCountryParam(country)),
           query: entry,
         })
       }
-      countries={countries.map((code) => ({
-        label: countryName(code),
-        value: toCaseLawCountryParam(code),
-      }))}
-      country={country}
       maxLength={maxLength}
-      onCountryChange={onCountryChange}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
       placeholder={t("caseLaw.searchPlaceholder")}
@@ -65,4 +48,19 @@ export const CaseLawSearch = ({
       searchLabel={t("caseLaw.searchLabel")}
     />
   );
+};
+
+/**
+ * A corpus country as a reader names it. One helper, because the search box,
+ * the top-bar menu and the home all have to say the same country the same
+ * way.
+ */
+export const caseLawCountryName = (
+  format: ReturnType<typeof useFormatter>,
+  code: string,
+): string => {
+  const region = caseLawCountryRegion(code);
+  return region === null
+    ? code
+    : format.displayName(region, { type: "region" });
 };

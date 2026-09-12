@@ -23,10 +23,19 @@ export type PublicLawSearchCountry = {
 };
 
 type PublicLawSearchProps = {
-  country: string;
-  countries: readonly PublicLawSearchCountry[];
+  /**
+   * The jurisdiction pill, for a browser that scopes itself from this row.
+   * Omitted where the scope lives in the top bar instead, which leaves the
+   * row to the entry it is for.
+   */
+  countryPicker?:
+    | {
+        country: string;
+        countries: readonly PublicLawSearchCountry[];
+        onCountryChange: (country: string) => void;
+      }
+    | undefined;
   maxLength: number;
-  onCountryChange: (country: string) => void;
   onQueryChange: (value: string) => void;
   /** Submitted: open what the entry names, when it names one thing. */
   onSubmit: () => void;
@@ -34,25 +43,22 @@ type PublicLawSearchProps = {
   query: string;
   searchLabel: string;
   /**
-   * The chat prompt for the current entry, scoped the way the pill is. Null
+   * The chat prompt for the current entry, scoped the way the page is. Null
    * hides the chat button (nothing to ask about yet).
    */
   askPrompt: (query: string) => string | null;
 };
 
 /**
- * The one box of a public-law browser: an identifier, an alias or words,
- * scoped by the jurisdiction pill beside it. A form so Enter submits the way
- * the browser already knows how to. The statutes and case-law browsers share
- * it so a reader learns one box, not two; the home's entry box is built from
- * the same parts.
+ * The one box of a public-law browser: an identifier, an alias or words. A
+ * form so Enter submits the way the browser already knows how to. The
+ * statutes and case-law browsers share it so a reader learns one box, not
+ * two; the home's entry box is built from the same parts.
  */
 export const PublicLawSearch = ({
   askPrompt,
-  country,
-  countries,
+  countryPicker,
   maxLength,
-  onCountryChange,
   onQueryChange,
   onSubmit,
   placeholder,
@@ -71,11 +77,13 @@ export const PublicLawSearch = ({
       }}
       role="search"
     >
-      <PublicLawCountrySelect
-        countries={countries}
-        country={country}
-        onCountryChange={onCountryChange}
-      />
+      {countryPicker !== undefined && (
+        <PublicLawCountrySelect
+          countries={countryPicker.countries}
+          country={countryPicker.country}
+          onCountryChange={countryPicker.onCountryChange}
+        />
+      )}
       <Input
         aria-label={searchLabel}
         className="min-w-64 flex-1 sm:max-w-md"
@@ -92,9 +100,8 @@ export const PublicLawSearch = ({
   );
 };
 
-type PublicLawCountrySelectProps = Pick<
-  PublicLawSearchProps,
-  "countries" | "country" | "onCountryChange"
+type PublicLawCountrySelectProps = NonNullable<
+  PublicLawSearchProps["countryPicker"]
 >;
 
 /** The jurisdiction pill: one value, the route's, in the route's own form. */
