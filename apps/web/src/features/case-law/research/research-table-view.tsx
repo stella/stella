@@ -32,10 +32,9 @@ import {
   decisionIdentityLineFields,
 } from "@/features/case-law/decision-columns.logic";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
-import type {
-  ResearchAnswer,
-  ResearchColumn,
-} from "@/features/case-law/research/queries";
+import type { ResearchColumn } from "@/features/case-law/research/queries";
+import { answerKey } from "@/features/case-law/research/question-columns.logic";
+import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
 import {
   ResearchAnswerCell,
   YES_NO_LABEL_KEYS,
@@ -60,15 +59,13 @@ export const answerGroupColumnId = (groupBy: ResearchGroupBy): string | null =>
     ? groupBy.slice(ANSWER_GROUP_PREFIX.length)
     : null;
 
-/** Cells are keyed by column and decision, the way the server stores them. */
-export const answerKey = (columnId: string, decisionId: string): string =>
-  `${columnId}:${decisionId}`;
+export { answerKey };
 
 export type ResearchColumnAction = "run" | "edit" | "delete";
 
 type ResearchTableViewProps = {
   answerColumns: readonly ResearchColumn[];
-  answersByKey: ReadonlyMap<string, ResearchAnswer>;
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
   groupBy: ResearchGroupBy;
   isLoading: boolean;
   onColumnAction: (
@@ -189,7 +186,7 @@ export const ResearchTableView = ({
 };
 
 /** The group key of a cell: its yes/no answer, or the state that stands in for one. */
-const answerGroupKeyFor = (answer: ResearchAnswer | undefined): string => {
+const answerGroupKeyFor = (answer: QuestionAnswer | undefined): string => {
   if (answer === undefined) {
     return "";
   }
@@ -238,7 +235,7 @@ type ColumnLabels = Record<DecisionColumnId, string>;
 
 type BuildColumnsOptions = {
   answerColumns: readonly ResearchColumn[];
-  answersByKey: ReadonlyMap<string, ResearchAnswer>;
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
   labels: ColumnLabels;
   onShowSource: (decision: Decision, anchorId: string) => void;
   renderActions: (row: ResearchRow<Decision>) => React.ReactNode;
@@ -268,6 +265,7 @@ const buildColumns = ({
 ] => {
   const decisionColumns: DataTableColumn<ResearchRow<Decision>>[] = [];
   const context = {
+    contentMode: "tight" as const,
     identityLineFields: decisionIdentityLineFields([...visibleColumns]),
     // A saved research table is not a live query, so nothing is marked.
     queryTokens: [],
@@ -322,7 +320,7 @@ type RowGroup = { key: string | null; rows: ResearchRow<Decision>[] };
 const groupRows = (
   rows: readonly ResearchRow<Decision>[],
   groupBy: ResearchGroupBy,
-  answersByKey: ReadonlyMap<string, ResearchAnswer>,
+  answersByKey: ReadonlyMap<string, QuestionAnswer>,
 ): RowGroup[] => {
   if (groupBy === "none") {
     return [{ key: null, rows: [...rows] }];

@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
     },
     "columns": {
+      "arrange": "Uporządkuj kolumnę {column}",
       "caseNumber": "Sygnatura akt",
       "citedBy": "Cytowane przez",
       "headnote": "Teza",
+      "hide": "Ukryj tę kolumnę",
+      "moveEarlier": "Przesuń do przodu",
+      "moveLater": "Przesuń do tyłu",
+      "pin": "Przypnij na początku",
+      "reset": "Resetuj kolumny",
       "summary": "Teza / trafienie"
     },
     "copyMenu": {
@@ -648,6 +654,14 @@
       "ai": "AI",
       "human": "Ludzkie"
     },
+    "pagination": {
+      "goToPage": "Przejdź do strony {page}",
+      "label": "Strony wyników",
+      "page": "Strona {page}",
+      "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "perPage": "Na stronę"
+    },
     "provision": {
       "article": "art. {value}",
       "letter": "litera {value})",
@@ -661,6 +675,7 @@
     },
     "refineWithinResults": "Szukaj w wynikach",
     "research": {
+      "addColumn": "Dodaj kolumnę",
       "addQuestion": "Dodaj pytanie",
       "addQuestionHint": "Pytanie jest zadawane każdemu orzeczeniu w tabeli; odpowiedzi powstają po uruchomieniu kolumny.",
       "answerType": "Rodzaj odpowiedzi",
@@ -703,6 +718,9 @@
       "rows": "{count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "runAll": "Odpowiedz na wszystko",
       "runColumn": "Odpowiedz w tej kolumnie",
+      "runConfirm": "Odpowiedz teraz",
+      "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
+      "runTitle": "Odpowiedz na tej stronie",
       "save": "Zapisz jako tabelę badawczą",
       "saved": "Utworzono tabelę badawczą",
       "savedQuery": "Zapisane wyszukiwanie",
@@ -966,7 +984,6 @@
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
     "openCitation": "Otwórz cytowanie {label}",
     "openThread": "Otwórz konwersację",
-    "pageNumber": "Strona {page}",
     "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
@@ -1497,6 +1514,7 @@
     "searchIn": "Szukaj w",
     "selectAMatter": "Wybierz sprawę",
     "selectARole": "Wybierz rolę",
+    "selectAll": "Zaznacz wszystkie",
     "selectDate": "Wybierz datę…",
     "sessions": "Sesje",
     "settings": "Ustawienia",
@@ -2279,7 +2297,6 @@
     "saveSerializeFailedDescription": "Folio nie mogło utworzyć bezpiecznego pliku DOCX z bieżącej edycji. Twoja sesja jest nadal otwarta.",
     "saveSerializeFailedTitle": "Nie udało się utworzyć pliku DOCX",
     "savingDocument": "Zapisywanie...",
-    "selectAll": "Zaznacz wszystkie",
     "showDetails": "Pokaż szczegóły",
     "somethingWentWrong": "Coś poszło nie tak",
     "synced": "Zsynchronizowano",

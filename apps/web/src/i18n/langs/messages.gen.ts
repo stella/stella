@@ -618,9 +618,15 @@ type Messages = {
       "yearTitle": "{year}: {count, plural, one {# citation} other {# citations}}";
     };
     "columns": {
+      "arrange": "Arrange column {column}";
       "caseNumber": "Case number";
       "citedBy": "Cited by";
       "headnote": "Headnote";
+      "hide": "Hide this column";
+      "moveEarlier": "Move earlier";
+      "moveLater": "Move later";
+      "pin": "Keep in front";
+      "reset": "Reset columns";
       "summary": "Headnote / match";
     };
     "copyMenu": {
@@ -651,6 +657,14 @@ type Messages = {
       "ai": "AI";
       "human": "Human";
     };
+    "pagination": {
+      "goToPage": "Go to page {page}";
+      "label": "Result pages";
+      "page": "Page {page}";
+      "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}";
+      "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
+      "perPage": "Per page";
+    };
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";
@@ -664,6 +678,7 @@ type Messages = {
     };
     "refineWithinResults": "Search within results";
     "research": {
+      "addColumn": "Add column";
       "addQuestion": "Add question";
       "addQuestionHint": "The question is asked of every decision in the table; answers are produced when you run the column.";
       "answerType": "Kind of answer";
@@ -706,6 +721,9 @@ type Messages = {
       "rows": "{count, plural, one {# decision} other {# decisions}}";
       "runAll": "Answer all";
       "runColumn": "Answer this column";
+      "runConfirm": "Answer now";
+      "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.";
+      "runTitle": "Answer this page";
       "save": "Save as research table";
       "saved": "Research table created";
       "savedQuery": "Saved search";
@@ -969,7 +987,6 @@ type Messages = {
     "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
-    "pageNumber": "Page {page}";
     "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
@@ -1500,6 +1517,7 @@ type Messages = {
     "searchIn": "Search in";
     "selectAMatter": "Select a matter";
     "selectARole": "Select a role";
+    "selectAll": "Select all";
     "selectDate": "Select date…";
     "sessions": "Sessions";
     "settings": "Settings";
@@ -2282,7 +2300,6 @@ type Messages = {
     "saveSerializeFailedDescription": "Folio could not produce a safe DOCX file from the current edit. Your session is still open.";
     "saveSerializeFailedTitle": "Could not create DOCX";
     "savingDocument": "Saving...";
-    "selectAll": "Select all";
     "showDetails": "Show details";
     "somethingWentWrong": "Something went wrong";
     "synced": "Synced";

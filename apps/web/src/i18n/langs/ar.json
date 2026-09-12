@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, zero {لا استشهادات} one {استشهاد واحد} two {استشهادان} few {# استشهادات} many {# استشهادًا} other {# استشهاد}}"
     },
     "columns": {
+      "arrange": "ترتيب العمود {column}",
       "caseNumber": "رقم القضية",
       "citedBy": "مُستشهد به",
       "headnote": "خلاصة الحكم",
+      "hide": "إخفاء هذا العمود",
+      "moveEarlier": "نقل إلى الأمام",
+      "moveLater": "نقل إلى الخلف",
+      "pin": "تثبيت في المقدمة",
+      "reset": "إعادة تعيين الأعمدة",
       "summary": "المبدأ القانوني / الموضع المطابق"
     },
     "copyMenu": {
@@ -648,6 +654,14 @@
       "ai": "ذكاء اصطناعي",
       "human": "بشرية"
     },
+    "pagination": {
+      "goToPage": "الانتقال إلى الصفحة {page}",
+      "label": "صفحات النتائج",
+      "page": "الصفحة {page}",
+      "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
+      "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
+      "perPage": "لكل صفحة"
+    },
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",
@@ -661,6 +675,7 @@
     },
     "refineWithinResults": "ابحث داخل النتائج",
     "research": {
+      "addColumn": "إضافة عمود",
       "addQuestion": "إضافة سؤال",
       "addQuestionHint": "يُطرح السؤال على كل حكم في الجدول؛ وتُنتَج الإجابات عند تشغيل العمود.",
       "answerType": "طبيعة الإجابة",
@@ -703,6 +718,9 @@
       "rows": "{count, plural, zero {لا أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
       "runAll": "الإجابة عن الكل",
       "runColumn": "الإجابة في هذا العمود",
+      "runConfirm": "الإجابة الآن",
+      "runEstimate": "{rows, plural, zero {لا أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}} × {columns, plural, zero {لا أسئلة} one {سؤال واحد} two {سؤالان} few {# أسئلة} many {# سؤالًا} other {# سؤال}} في هذه الصفحة: ستُنتَج {cells, plural, zero {لا إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}.",
+      "runTitle": "الإجابة عن هذه الصفحة",
       "save": "حفظ كجدول بحث",
       "saved": "تم إنشاء جدول البحث",
       "savedQuery": "البحث المحفوظ",
@@ -966,7 +984,6 @@
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
     "openCitation": "فتح الاستشهاد {label}",
     "openThread": "فتح المحادثة",
-    "pageNumber": "الصفحة {page}",
     "pastedChars": "تم اللصق · {count} حرف",
     "pastedText": {
       "expand": "عرض النص الكامل",
@@ -1497,6 +1514,7 @@
     "searchIn": "البحث في",
     "selectAMatter": "اختر ملفًا",
     "selectARole": "اختر دورًا",
+    "selectAll": "تحديد الكل",
     "selectDate": "اختر تاريخًا…",
     "sessions": "الجلسات",
     "settings": "الإعدادات",
@@ -2279,7 +2297,6 @@
     "saveSerializeFailedDescription": "تعذّر على Folio إنتاج ملف DOCX آمن من التعديل الحالي. لا تزال جلستك مفتوحة.",
     "saveSerializeFailedTitle": "تعذّر إنشاء ملف DOCX",
     "savingDocument": "جارٍ الحفظ...",
-    "selectAll": "تحديد الكل",
     "showDetails": "إظهار التفاصيل",
     "somethingWentWrong": "حدث خطأ ما",
     "synced": "تمت المزامنة",

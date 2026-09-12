@@ -37,21 +37,21 @@ const contentColumn = {
   sort: false,
   hide: false,
   resize: true,
-  pin: false,
+  pin: true,
 } as const;
 
 const hideableContentColumn = {
   sort: false,
   hide: true,
   resize: true,
-  pin: false,
+  pin: true,
 } as const;
 
 const metadataColumn = {
   sort: false,
   hide: true,
   resize: true,
-  pin: false,
+  pin: true,
 } as const;
 
 export const decisionTableSchema: TableSchema<DecisionColumnRender> = {
@@ -112,7 +112,9 @@ export const decisionTableSchema: TableSchema<DecisionColumnRender> = {
     {
       id: "headnote",
       label: "",
-      render: (decision) => <HeadnoteCell decision={decision} />,
+      render: (decision, context) => (
+        <HeadnoteCell contentMode={context.contentMode} decision={decision} />
+      ),
       size: 420,
       capabilities: hideableContentColumn,
       emphasis: "content",

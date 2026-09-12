@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
     },
     "columns": {
+      "arrange": "Uspořádat sloupec {column}",
       "caseNumber": "Spisová značka",
       "citedBy": "Citováno",
       "headnote": "Právní věta",
+      "hide": "Skrýt tento sloupec",
+      "moveEarlier": "Posunout dopředu",
+      "moveLater": "Posunout dozadu",
+      "pin": "Připnout na začátek",
+      "reset": "Resetovat sloupce",
       "summary": "Právní věta / shoda"
     },
     "copyMenu": {
@@ -648,6 +654,14 @@
       "ai": "AI",
       "human": "Lidské"
     },
+    "pagination": {
+      "goToPage": "Přejít na stránku {page}",
+      "label": "Stránky výsledků",
+      "page": "Stránka {page}",
+      "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "perPage": "Na stránku"
+    },
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -661,6 +675,7 @@
     },
     "refineWithinResults": "Hledat ve výsledcích",
     "research": {
+      "addColumn": "Přidat sloupec",
       "addQuestion": "Přidat otázku",
       "addQuestionHint": "Otázka se položí každému rozhodnutí v tabulce; odpovědi vzniknou, když sloupec spustíte.",
       "answerType": "Druh odpovědi",
@@ -703,6 +718,9 @@
       "rows": "{count, plural, one {# rozhodnutí} few {# rozhodnutí} many {# rozhodnutí} other {# rozhodnutí}}",
       "runAll": "Odpovědět na vše",
       "runColumn": "Odpovědět v tomto sloupci",
+      "runConfirm": "Odpovědět nyní",
+      "runEstimate": "{rows, plural, one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázek}} na této stránce: {cells, plural, one {vznikne # odpověď} few {vzniknou # odpovědi} other {vznikne # odpovědí}}.",
+      "runTitle": "Odpovědět na této stránce",
       "save": "Uložit jako rešeršní tabulku",
       "saved": "Rešeršní tabulka vytvořena",
       "savedQuery": "Uložené hledání",
@@ -966,7 +984,6 @@
     "officeCitationUnavailable": "Tato citace už není dostupná.",
     "openCitation": "Otevřít citaci {label}",
     "openThread": "Otevřít konverzaci",
-    "pageNumber": "Strana {page}",
     "pastedChars": "Vloženo · {count} znaků",
     "pastedText": {
       "expand": "Zobrazit celý text",
@@ -1497,6 +1514,7 @@
     "searchIn": "Hledat v",
     "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte roli",
+    "selectAll": "Vybrat vše",
     "selectDate": "Vybrat datum…",
     "sessions": "Sezení",
     "settings": "Nastavení",
@@ -2279,7 +2297,6 @@
     "saveSerializeFailedDescription": "Folio nedokázalo z aktuální úpravy bezpečně vytvořit DOCX. Relace zůstává otevřená.",
     "saveSerializeFailedTitle": "DOCX se nepodařilo vytvořit",
     "savingDocument": "Ukládání...",
-    "selectAll": "Vybrat vše",
     "showDetails": "Zobrazit podrobnosti",
     "somethingWentWrong": "Něco se pokazilo",
     "synced": "Synchronizováno",

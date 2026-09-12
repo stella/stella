@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
     },
     "columns": {
+      "arrange": "{column} oszlop elrendezése",
       "caseNumber": "Ügyszám",
       "citedBy": "Hivatkozások",
       "headnote": "Jogi tétel",
+      "hide": "Ezen oszlop elrejtése",
+      "moveEarlier": "Mozgatás előrébb",
+      "moveLater": "Mozgatás hátrébb",
+      "pin": "Rögzítés elöl",
+      "reset": "Oszlopok visszaállítása",
       "summary": "Jogtétel / találat"
     },
     "copyMenu": {
@@ -648,6 +654,14 @@
       "ai": "MI",
       "human": "Emberi"
     },
+    "pagination": {
+      "goToPage": "Ugrás a(z) {page}. oldalra",
+      "label": "Találati oldalak",
+      "page": "{page}. oldal",
+      "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
+      "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
+      "perPage": "Oldalanként"
+    },
     "provision": {
       "article": "{value}. cikk",
       "letter": "{value}) pont",
@@ -661,6 +675,7 @@
     },
     "refineWithinResults": "Keresés a találatok között",
     "research": {
+      "addColumn": "Oszlop hozzáadása",
       "addQuestion": "Kérdés hozzáadása",
       "addQuestionHint": "A kérdést a táblázat minden határozatára feltesszük; a válaszok az oszlop futtatásakor készülnek.",
       "answerType": "A válasz jellege",
@@ -703,6 +718,9 @@
       "rows": "{count, plural, one {# határozat} other {# határozat}}",
       "runAll": "Mind megválaszolása",
       "runColumn": "Ezen oszlop megválaszolása",
+      "runConfirm": "Válaszadás most",
+      "runEstimate": "{rows, plural, one {# határozat} other {# határozat}} × {columns, plural, one {# kérdés} other {# kérdés}} ezen az oldalon: {cells, plural, one {# válasz} other {# válasz}} készül.",
+      "runTitle": "Ezen oldal megválaszolása",
       "save": "Mentés kutatási táblaként",
       "saved": "Kutatási tábla létrehozva",
       "savedQuery": "Mentett keresés",
@@ -966,7 +984,6 @@
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
     "openCitation": "Hivatkozás megnyitása: {label}",
     "openThread": "Beszélgetés megnyitása",
-    "pageNumber": "{page}. oldal",
     "pastedChars": "Beillesztve · {count} karakter",
     "pastedText": {
       "expand": "Teljes szöveg megjelenítése",
@@ -1497,6 +1514,7 @@
     "searchIn": "Keresés itt",
     "selectAMatter": "Válasszon ügyet",
     "selectARole": "Válasszon szerepkört",
+    "selectAll": "Összes kijelölése",
     "selectDate": "Dátum kiválasztása…",
     "sessions": "Munkamenetek",
     "settings": "Beállítások",
@@ -2279,7 +2297,6 @@
     "saveSerializeFailedDescription": "A Folio nem tudott biztonságos DOCX-fájlt létrehozni a jelenlegi szerkesztésből. A munkamenete továbbra is nyitva van.",
     "saveSerializeFailedTitle": "A DOCX létrehozása nem sikerült",
     "savingDocument": "Mentés...",
-    "selectAll": "Összes kijelölése",
     "showDetails": "Részletek megjelenítése",
     "somethingWentWrong": "Hiba történt",
     "synced": "Szinkronizálva",

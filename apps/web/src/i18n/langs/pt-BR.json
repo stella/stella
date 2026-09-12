@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citação} other {# citações}}"
     },
     "columns": {
+      "arrange": "Organizar a coluna {column}",
       "caseNumber": "Número do processo",
       "citedBy": "Citada por",
       "headnote": "Ementa",
+      "hide": "Ocultar esta coluna",
+      "moveEarlier": "Mover antes",
+      "moveLater": "Mover depois",
+      "pin": "Manter no início",
+      "reset": "Redefinir colunas",
       "summary": "Ementa / trecho encontrado"
     },
     "copyMenu": {
@@ -648,6 +654,14 @@
       "ai": "IA",
       "human": "Humanas"
     },
+    "pagination": {
+      "goToPage": "Ir para a página {page}",
+      "label": "Páginas de resultados",
+      "page": "Página {page}",
+      "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "perPage": "Por página"
+    },
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",
@@ -661,6 +675,7 @@
     },
     "refineWithinResults": "Pesquisar nos resultados",
     "research": {
+      "addColumn": "Adicionar coluna",
       "addQuestion": "Adicionar pergunta",
       "addQuestionHint": "A pergunta é feita a cada decisão da tabela; as respostas são geradas ao executar a coluna.",
       "answerType": "Natureza da resposta",
@@ -703,6 +718,9 @@
       "rows": "{count, plural, one {# decisão} other {# decisões}}",
       "runAll": "Responder tudo",
       "runColumn": "Responder esta coluna",
+      "runConfirm": "Responder agora",
+      "runEstimate": "{rows, plural, one {# decisão} other {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas}}.",
+      "runTitle": "Responder esta página",
       "save": "Salvar como tabela de pesquisa",
       "saved": "Tabela de pesquisa criada",
       "savedQuery": "Busca salva",
@@ -966,7 +984,6 @@
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
     "openCitation": "Abrir citação {label}",
     "openThread": "Abrir conversa",
-    "pageNumber": "Página {page}",
     "pastedChars": "Colado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",
@@ -1497,6 +1514,7 @@
     "searchIn": "Pesquisar em",
     "selectAMatter": "Selecione um caso",
     "selectARole": "Selecione uma função",
+    "selectAll": "Selecionar tudo",
     "selectDate": "Selecionar data…",
     "sessions": "Sessões",
     "settings": "Configurações",
@@ -2279,7 +2297,6 @@
     "saveSerializeFailedDescription": "O Folio não conseguiu produzir um arquivo DOCX seguro a partir da edição atual. Sua sessão ainda está aberta.",
     "saveSerializeFailedTitle": "Não foi possível criar DOCX",
     "savingDocument": "Salvando...",
-    "selectAll": "Selecionar tudo",
     "showDetails": "Mostrar detalhes",
     "somethingWentWrong": "Algo deu errado",
     "synced": "Sincronizado",

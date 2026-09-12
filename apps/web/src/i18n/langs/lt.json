@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
     },
     "columns": {
+      "arrange": "Tvarkyti stulpelį {column}",
       "caseNumber": "Bylos numeris",
       "citedBy": "Cituojama",
       "headnote": "Santrauka",
+      "hide": "Slėpti šį stulpelį",
+      "moveEarlier": "Perkelti pirmyn",
+      "moveLater": "Perkelti atgal",
+      "pin": "Prisegti priekyje",
+      "reset": "Atstatyti stulpelius",
       "summary": "Teisės taisyklė / atitiktis"
     },
     "copyMenu": {
@@ -648,6 +654,14 @@
       "ai": "DI",
       "human": "Žmonių"
     },
+    "pagination": {
+      "goToPage": "Eiti į {page} psl.",
+      "label": "Rezultatų puslapiai",
+      "page": "{page} psl.",
+      "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "perPage": "Viename puslapyje"
+    },
     "provision": {
       "article": "{value} str.",
       "letter": "{value} papunktis",
@@ -661,6 +675,7 @@
     },
     "refineWithinResults": "Ieškoti rezultatuose",
     "research": {
+      "addColumn": "Pridėti stulpelį",
       "addQuestion": "Pridėti klausimą",
       "addQuestionHint": "Klausimas užduodamas kiekvienam lentelės sprendimui; atsakymai sukuriami paleidus stulpelį.",
       "answerType": "Atsakymo rūšis",
@@ -703,6 +718,9 @@
       "rows": "{count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "runAll": "Atsakyti į visus",
       "runColumn": "Atsakyti šiame stulpelyje",
+      "runConfirm": "Atsakyti dabar",
+      "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
+      "runTitle": "Atsakyti šiame puslapyje",
       "save": "Išsaugoti kaip tyrimo lentelę",
       "saved": "Tyrimo lentelė sukurta",
       "savedQuery": "Išsaugota paieška",
@@ -966,7 +984,6 @@
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
     "openCitation": "Atidaryti citatą {label}",
     "openThread": "Atidaryti pokalbį",
-    "pageNumber": "{page} psl.",
     "pastedChars": "Įklijuota · {count} simb.",
     "pastedText": {
       "expand": "Rodyti visą tekstą",
@@ -1497,6 +1514,7 @@
     "searchIn": "Ieškoti",
     "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
+    "selectAll": "Pasirinkti visus",
     "selectDate": "Pasirinkti datą…",
     "sessions": "Sesijos",
     "settings": "Nustatymai",
@@ -2279,7 +2297,6 @@
     "saveSerializeFailedDescription": "Folio nepavyko sukurti saugaus DOCX failo iš dabartinio keitimo. Jūsų sesija vis dar atidaryta.",
     "saveSerializeFailedTitle": "Nepavyko sukurti DOCX",
     "savingDocument": "Įrašoma...",
-    "selectAll": "Pasirinkti visus",
     "showDetails": "Rodyti detales",
     "somethingWentWrong": "Kažkas nepavyko",
     "synced": "Sinchronizuota",
