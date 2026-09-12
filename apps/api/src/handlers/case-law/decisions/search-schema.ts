@@ -11,8 +11,10 @@ import {
   safeHandlerErrorResponseSchema,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
+import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
+import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   tPaginationCursor,
   tPaginationLimit,
@@ -35,6 +37,9 @@ export const searchDecisionsBodySchema = t.Object({
   decisionType: t.Optional(t.String({ maxLength: 128 })),
   sourceId: t.Optional(tSafeId("caseLawSource")),
   language: t.Optional(t.String({ maxLength: 8 })),
+  // A literal union, not `UnionEnum`: Elysia coerces an absent optional
+  // `UnionEnum` to its first member, and the handler owns the default.
+  sort: t.Optional(searchSortSchema),
 });
 
 const nullableStringSchema = t.Union([t.String(), t.Null()]);
@@ -80,11 +85,37 @@ const languageAlternatesSchema = Type.Unsafe<
   readonly PublicDecisionLanguageAlternate[]
 >(t.Array(languageAlternateSchema));
 
-const facetValuesSchema = t.Array(
+/**
+ * One filter value a reader can narrow to, with how many DECISIONS the query
+ * would still return under it. Never a passage count: the corpus index holds
+ * several passages per decision, so its counts are cardinalities over the
+ * decision id rather than hit counts.
+ *
+ * `label` is the display name when the value is an identifier the reader
+ * should not see (a source id); null when the value is already what a reader
+ * reads.
+ */
+const searchFacetBucketsSchema = t.Array(
   t.Object(
     {
       value: t.String(),
-      count: t.Number(),
+      label: nullableStringSchema,
+      count: t.Integer({ minimum: 0 }),
+    },
+    { additionalProperties: false },
+  ),
+);
+
+/**
+ * Courts grouped by where they sit in their jurisdiction, apex first: a
+ * reader narrowing to "the supreme courts" is doing one thing, not picking
+ * names off a flat list of twenty.
+ */
+const searchCourtTiersSchema = t.Array(
+  t.Object(
+    {
+      tierLabel: t.UnionEnum([...COURT_TIER_LABELS]),
+      courts: searchFacetBucketsSchema,
     },
     { additionalProperties: false },
   ),
@@ -116,12 +147,16 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
         { additionalProperties: false },
       ),
     ),
+    // Page one only. The counts describe the whole result set, not the page,
+    // so they do not change as a reader pages and are not recomputed.
     facets: t.Union([
       t.Object(
         {
-          court: facetValuesSchema,
-          country: facetValuesSchema,
-          language: facetValuesSchema,
+          court: searchCourtTiersSchema,
+          year: searchFacetBucketsSchema,
+          decisionType: searchFacetBucketsSchema,
+          source: searchFacetBucketsSchema,
+          language: searchFacetBucketsSchema,
         },
         { additionalProperties: false },
       ),

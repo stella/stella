@@ -12,42 +12,26 @@ import {
   DecisionLanguageCell,
   decisionYear,
   HeadnoteCell,
+  SummaryCell,
 } from "@/features/case-law/components/decision-cells";
-import type { Decision } from "@/features/case-law/components/decision-cells";
-import type { TranslationKey } from "@/i18n/types";
+import type {
+  Decision,
+  DecisionRenderContext,
+} from "@/features/case-law/components/decision-cells";
 import { normalizeCaseLawLanguageSegment } from "@/lib/case-law-route";
 
 /**
  * The one column model for decision rows, wherever they are shown: the public
  * results table and a research table draw the same cells, so a row saved from
- * a search looks the same in the table it lands in.
+ * a search looks the same in the table it lands in. Which columns exist and
+ * what they are called is data, and lives in `decision-columns.logic.ts`.
  */
-export const DECISION_COLUMN_IDS = [
-  "caseNumber",
-  "court",
-  "country",
-  "date",
-  "type",
-  "headnote",
-  "citedBy",
-  "language",
-] as const;
-
-export type DecisionColumnId = (typeof DECISION_COLUMN_IDS)[number];
 
 /** Synchronous by type: a cell is an element or text, never a promise. */
-export type DecisionColumnRender = (decision: Decision) => JSX.Element | string;
-
-export const DECISION_COLUMN_LABEL_KEYS = {
-  caseNumber: "caseLaw.columns.caseNumber",
-  court: "common.court",
-  country: "common.country",
-  date: "common.date",
-  type: "common.type",
-  headnote: "caseLaw.columns.headnote",
-  citedBy: "caseLaw.columns.citedBy",
-  language: "common.language",
-} as const satisfies Record<DecisionColumnId, TranslationKey>;
+export type DecisionColumnRender = (
+  decision: Decision,
+  context: DecisionRenderContext,
+) => JSX.Element | string;
 
 const contentColumn = {
   sort: false,
@@ -76,9 +60,21 @@ export const decisionTableSchema: TableSchema<DecisionColumnRender> = {
     {
       id: "caseNumber",
       label: "",
-      render: (decision) => <CaseNumberCell decision={decision} />,
+      render: (decision, context) => (
+        <CaseNumberCell context={context} decision={decision} />
+      ),
       size: 320,
       capabilities: contentColumn,
+      emphasis: "content",
+    },
+    {
+      id: "summary",
+      label: "",
+      render: (decision, context) => (
+        <SummaryCell context={context} decision={decision} />
+      ),
+      size: 460,
+      capabilities: hideableContentColumn,
       emphasis: "content",
     },
     {

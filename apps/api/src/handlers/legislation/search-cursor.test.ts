@@ -26,6 +26,7 @@ const CASE_LAW_CURSOR = encodeCorpusSearchCursor({
   dictionary: { contentHash: "a".repeat(64), type: "dictionary" },
   id: DOCUMENT_ID,
   score: 0.5,
+  sort: "relevance",
   windowStart: 0,
 });
 

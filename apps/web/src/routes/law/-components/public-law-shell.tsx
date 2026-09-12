@@ -14,6 +14,7 @@ import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
+import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import {
   resolveStatuteDisplayStatus,
@@ -217,6 +218,7 @@ function PublicLawTopBar() {
         </BreadcrumbList>
         <TopBarCitations />
       </Breadcrumb>
+      <TopBarCountry />
       <DecisionLanguageSelect />
       <ChromeHeaderActionsSlot />
     </header>

@@ -62,7 +62,7 @@ function Button({
   const defaultProps = {
     children: loading ? (
       <>
-        <LoaderIcon className="animate-spin" />
+        <LoaderIcon className="animate-spin" data-slot="button-loader" />
         {children}
       </>
     ) : (
@@ -70,6 +70,9 @@ function Button({
     ),
     className: cn(
       buttonVariants({ className, size, variant }),
+      // While loading, the loader is the button's only icon: a caller's own
+      // leading icon would otherwise sit beside it as a second spinner.
+      loading && "[&_svg:not([data-slot=button-loader])]:hidden",
       isAccessibleDisabled && buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",

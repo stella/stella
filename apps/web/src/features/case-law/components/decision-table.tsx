@@ -5,13 +5,17 @@ import { Button } from "@stll/ui/button";
 import { DataTable, visibleColumnIds } from "@stll/ui/data-table";
 import type { DataTableColumn } from "@stll/ui/data-table";
 import { Menu, MenuCheckboxItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { cn } from "@stll/ui/utils";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import { decisionTableSchema } from "@/features/case-law/decision-columns";
 import {
   DECISION_COLUMN_LABEL_KEYS,
-  decisionTableSchema,
-} from "@/features/case-law/decision-columns";
-import type { DecisionColumnId } from "@/features/case-law/decision-columns";
+  decisionColumnWidthClassNames,
+  decisionIdentityLineFields,
+} from "@/features/case-law/decision-columns.logic";
+import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
+import { queryHighlightTokens } from "@/features/case-law/headnote-highlight.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
 
@@ -26,6 +30,8 @@ type DecisionTableProps = {
   hiddenColumnIds: readonly string[];
   isLoading: boolean;
   order: DecisionTableOrder;
+  /** What was searched for, so the summary cell can say why a row matched. */
+  query?: string | undefined;
 };
 
 const isDecisionColumnId = (value: string): value is DecisionColumnId =>
@@ -42,18 +48,23 @@ export const DecisionTable = ({
   hiddenColumnIds,
   isLoading,
   order,
+  query,
 }: DecisionTableProps) => {
   const t = useTranslations();
-  const visible = new Set(
-    visibleColumnIds(decisionTableSchema, hiddenColumnIds),
-  );
+  const visible = visibleColumnIds(decisionTableSchema, hiddenColumnIds);
+  const visibleSet = new Set(visible);
+  const context = {
+    identityLineFields: decisionIdentityLineFields(visible),
+    queryTokens: queryHighlightTokens(query),
+  };
   const columns: DataTableColumn<Decision>[] = [];
   for (const column of decisionTableSchema.columns) {
-    if (!visible.has(column.id) || !isDecisionColumnId(column.id)) {
+    if (!visibleSet.has(column.id) || !isDecisionColumnId(column.id)) {
       continue;
     }
     const label = t(DECISION_COLUMN_LABEL_KEYS[column.id]);
     const sortedByThis = column.id === "date" && order === "newest";
+    const width = decisionColumnWidthClassNames(column.id);
     columns.push({
       id: column.id,
       header: sortedByThis ? (
@@ -65,13 +76,12 @@ export const DecisionTable = ({
         label
       ),
       ...(sortedByThis ? { ariaSort: "descending" } : {}),
-      ...(column.emphasis === "metadata"
-        ? {
-            headClassName: "w-px",
-            cellClassName: "text-muted-foreground whitespace-nowrap",
-          }
-        : {}),
-      render: column.render,
+      headClassName: width.head,
+      cellClassName: cn(
+        width.cell,
+        column.emphasis === "metadata" && "text-muted-foreground",
+      ),
+      render: (decision) => column.render(decision, context),
     });
   }
   const [first, ...rest] = columns;

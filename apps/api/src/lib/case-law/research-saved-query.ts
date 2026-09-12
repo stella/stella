@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { CASE_LAW_RESEARCH_QUERY_VERSION } from "@stll/api-contract";
 import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
+import { SEARCH_SORTS } from "@stll/api-contract/search";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -43,6 +44,10 @@ export const caseLawResearchSavedQuerySchema = v.strictObject({
       v.transform(brandPersistedCaseLawSourceId),
     ),
   ),
+  // The order the table re-runs under. An order this service does not declare
+  // is rejected rather than silently read as the default: a table saved under
+  // one ranking and re-run under another is a different table.
+  sort: v.exactOptional(v.picklist(SEARCH_SORTS)),
 });
 
 export const parseCaseLawResearchSavedQuery = (

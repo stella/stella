@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Spisová značka",
       "citedBy": "Citováno",
-      "headnote": "Právní věta"
+      "headnote": "Právní věta",
+      "summary": "Právní věta / shoda"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citací",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Citát s citací",
       "textOnly": "Pouze text"
     },
+    "courtTiers": {
+      "constitutional": "Ústavní soudy",
+      "other": "Ostatní soudy",
+      "regional": "Krajské a vrchní soudy",
+      "supreme": "Nejvyšší soudy"
+    },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
+    "filters": {
+      "remove": "Odebrat filtr {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků}}",
       "matchedIn": "Shoda v jazyce {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Úvodní část"
     },
+    "refineWithinResults": "Hledat ve výsledcích",
     "research": {
       "addQuestion": "Přidat otázku",
       "addQuestionHint": "Otázka se položí každému rozhodnutí v tabulce; odpovědi vzniknou, když sloupec spustíte.",
@@ -704,11 +715,9 @@
     "searchAskPrompt": "{query} (judikatura, {country})",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Procházet judikaturu",
-      "countries": "Země",
-      "courts": "Soudy",
-      "years": "Roky"
+    "sort": {
+      "newest": "Nejnovější",
+      "relevance": "Nejrelevantnější"
     },
     "viewer": {
       "abstract": "Abstrakt",

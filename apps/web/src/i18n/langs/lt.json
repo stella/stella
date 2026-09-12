@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Bylos numeris",
       "citedBy": "Cituojama",
-      "headnote": "Santrauka"
+      "headnote": "Santrauka",
+      "summary": "Teisės taisyklė / atitiktis"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Citata su nuoroda",
       "textOnly": "Tik tekstas"
     },
+    "courtTiers": {
+      "constitutional": "Konstituciniai teismai",
+      "other": "Kiti teismai",
+      "regional": "Apeliaciniai ir apygardų teismai",
+      "supreme": "Aukščiausieji teismai"
+    },
     "decisionNotFound": "Sprendimas nerastas",
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
+    "filters": {
+      "remove": "Pašalinti filtrą {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
       "matchedIn": "Atitikmuo {language} kalba"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Antraštinė dalis"
     },
+    "refineWithinResults": "Ieškoti rezultatuose",
     "research": {
       "addQuestion": "Pridėti klausimą",
       "addQuestionHint": "Klausimas užduodamas kiekvienam lentelės sprendimui; atsakymai sukuriami paleidus stulpelį.",
@@ -704,11 +715,9 @@
     "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Naršyti teismų praktiką",
-      "countries": "Šalys",
-      "courts": "Teismai",
-      "years": "Metai"
+    "sort": {
+      "newest": "Naujausi",
+      "relevance": "Tinkamiausi"
     },
     "viewer": {
       "abstract": "Santrauka",

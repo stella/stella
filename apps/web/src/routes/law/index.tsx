@@ -16,7 +16,6 @@ import { panic } from "better-result";
 import {
   ActivityIcon,
   BookOpenIcon,
-  GlobeIcon,
   HistoryIcon,
   ScaleIcon,
   SearchIcon,
@@ -24,7 +23,6 @@ import {
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { ComposerPicker } from "@stll/ui/composer";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -39,21 +37,16 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  caseLawCountryRegion,
-  PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
+import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import {
   decisionLinkElement,
   formatDecisionDate,
 } from "@/features/case-law/components/decision-cells";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
-import {
-  decisionFacetsOptions,
-  latestDecisionsOptions,
-} from "@/features/case-law/queries/decisions";
+import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { formatValidityDate } from "@/features/statutes/statute-format";
@@ -179,7 +172,6 @@ export const Route = createFileRoute("/law/")({
     const statuteCountry = statuteCountryOf(scope);
     const [latest] = await Promise.all([
       ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
-      ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
       statuteCountry === null
         ? Promise.resolve(null)
         : ensureRouteQueryData(queryClient, legislationShelfOptions(scope)),
@@ -311,20 +303,12 @@ function LawHome() {
       ? "all"
       : requestedScope;
 
-  const { data: facets } = useSuspenseQuery(decisionFacetsOptions(scope));
   const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
   const { data: shelf } = useQuery({
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
   const history = useLawSearchHistory();
-
-  const countryName = (code: string): string => {
-    const region = caseLawCountryRegion(code);
-    return region === null
-      ? code
-      : format.displayName(region, { type: "region" });
-  };
 
   /**
    * The one dispatch every entry takes, whether typed and submitted or
@@ -412,16 +396,13 @@ function LawHome() {
 
   return (
     <LandingLayout
-      footer={
-        <CaseLawBrowseLinks countryParam={countryParam} facets={facets} />
-      }
       hero={
         <>
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
           <LawEntryBox
             askPrompt={(entry) =>
               t("caseLaw.searchAskPrompt", {
-                country: countryName(scope),
+                country: caseLawCountryName(format, scope),
                 query: entry,
               })
             }
@@ -429,31 +410,11 @@ function LawHome() {
             onQueryChange={setQueryInput}
             onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}
             pickers={
-              <>
-                <ComposerPicker
-                  ariaLabel={t("common.country")}
-                  icon={<GlobeIcon />}
-                  onChange={(next) => {
-                    detached(
-                      routeNavigate({
-                        replace: true,
-                        search: { country: next },
-                      }),
-                      "law-home.switch-country",
-                    );
-                  }}
-                  options={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
-                    label: countryName(code),
-                    value: toCaseLawCountryParam(code),
-                  }))}
-                  value={countryParam}
-                />
-                <LawScopePicker
-                  corpora={corpora}
-                  onScopeChange={setRequestedScope}
-                  scope={activeScope}
-                />
-              </>
+              <LawScopePicker
+                corpora={corpora}
+                onScopeChange={setRequestedScope}
+                scope={activeScope}
+              />
             }
             placeholder={t("lawHome.searchPlaceholder")}
             query={queryInput}
@@ -482,8 +443,15 @@ function LawHome() {
               : formatDecisionDate(decision.decisionDate, format);
           return (
             <Fragment key={decision.id}>
-              {decisionLinkElement(
-                createCaseLawDecisionRouteParams({
+              {decisionLinkElement({
+                children: (
+                  <LandingItemText
+                    meta={date === null ? court : `${court} · ${date}`}
+                    title={decision.caseNumber}
+                  />
+                ),
+                className: LANDING_ROW_CLASS,
+                params: createCaseLawDecisionRouteParams({
                   caseNumber: decision.caseNumber,
                   country: decision.country,
                   court: decision.court,
@@ -492,12 +460,7 @@ function LawHome() {
                   languageAlternates: decision.languageAlternates,
                   slug: decision.slug,
                 }),
-                LANDING_ROW_CLASS,
-                <LandingItemText
-                  meta={date === null ? court : `${court} · ${date}`}
-                  title={decision.caseNumber}
-                />,
-              )}
+              })}
             </Fragment>
           );
         })}

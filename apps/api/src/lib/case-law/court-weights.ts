@@ -6,6 +6,11 @@ import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
+import {
+  type CourtTierLabel,
+  courtTierLabel,
+} from "@/api/lib/case-law/court-tiers";
+import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
 import { logger } from "@/api/lib/observability/logger";
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -150,7 +155,8 @@ export const invalidateCourtWeightsCache = (): void => {
 // -- Lookup --------------------------------------------------------------
 
 const DEFAULT_WEIGHT = 1;
-const DEFAULT_TIER = 1;
+/** The rank a court nobody ranked carries: the bottom of the pinned scale. */
+const DEFAULT_TIER = LOWEST_COURT_TIER;
 
 /**
  * Rank a court name: its own jurisdiction's patterns first, then every
@@ -182,6 +188,17 @@ export const courtWeightFromMap = (
     ? { weight: DEFAULT_WEIGHT, tier: DEFAULT_TIER }
     : { weight: matched.weight, tier: matched.tier };
 };
+
+/**
+ * The tier a court name is presented under: the registry's own precedence
+ * rules, then the bucket every unranked court falls into.
+ */
+export const courtTierLabelFromMap = (
+  map: CourtWeightMap,
+  court: string,
+  country?: string,
+): CourtTierLabel =>
+  courtTierLabel(courtWeightFromMap(map, court, country).tier);
 
 /** A single-quoted SQL literal; the registry is operator-seeded, not input. */
 const sqlLiteral = (value: string): string =>

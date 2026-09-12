@@ -70,3 +70,32 @@ describe("Button disabled disposition", () => {
     expect(isAccessiblyDisabled(markup)).toBe(false);
   });
 });
+
+describe("Button loading icon", () => {
+  const RetryIcon = () => <svg data-testid="retry-icon" />;
+
+  // A retry button carries its own icon; while it loads, the loader must be
+  // the only icon a reader sees, not a second spinner beside the first.
+  test("the loader stands in for the caller's icon while loading", () => {
+    const markup = renderToStaticMarkup(
+      <Button loading>
+        <RetryIcon /> Try again
+      </Button>,
+    );
+
+    expect(markup).toContain('data-slot="button-loader"');
+    // The ampersand of the arbitrary variant is HTML-escaped in markup.
+    expect(markup).toContain("_svg:not([data-slot=button-loader])]:hidden");
+  });
+
+  test("the caller's icon shows once the button is idle", () => {
+    const markup = renderToStaticMarkup(
+      <Button>
+        <RetryIcon /> Try again
+      </Button>,
+    );
+
+    expect(markup).toContain('data-testid="retry-icon"');
+    expect(markup).not.toContain("button-loader");
+  });
+});

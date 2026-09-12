@@ -11,6 +11,7 @@ import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1260,10 +1261,27 @@ export const GET_USAGE_PROJECTION = v.union([
   projectionBranch(GET_USAGE_ENTITLED_PROJECTION),
 ]);
 
-/** One facet bucket of the case-law search response. */
+/**
+ * One filter value of the case-law search response, with how many DECISIONS
+ * the query still returns under it. `label` carries the display name where the
+ * value is an identifier an agent should not show a reader (a source id), and
+ * is null where the value already reads as itself.
+ */
 const caseLawFacetBucketProjection = v.strictObject({
   value: v.string(),
+  label: v.nullable(v.string()),
   count: v.number(),
+});
+
+/**
+ * Courts grouped by where they sit in their jurisdiction, apex first. The
+ * tiers are the ones `court-weights.ts` derives from the seeded rank scale, so
+ * an agent narrowing to "the supreme courts" picks a tier rather than guessing
+ * which of twenty names outranks which.
+ */
+const caseLawCourtTierProjection = v.strictObject({
+  tierLabel: v.picklist(COURT_TIER_LABELS),
+  courts: v.array(caseLawFacetBucketProjection),
 });
 
 type CountedSearchTotalType = Extract<
@@ -1296,10 +1314,17 @@ const searchTotalProjection = v.variant("type", [
  * public case-law corpus ids, not tenant refs.
  */
 export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
+  // Page one only: the counts describe the whole result set, so they do not
+  // change as an agent pages and are null on every page after the first.
   facets: v.nullable(
     v.strictObject({
-      court: v.array(caseLawFacetBucketProjection),
-      country: v.array(caseLawFacetBucketProjection),
+      court: v.array(caseLawCourtTierProjection),
+      // Civil years the result set spans, newest first. Empty where the search
+      // index cannot answer for them.
+      year: v.array(caseLawFacetBucketProjection),
+      decisionType: v.array(caseLawFacetBucketProjection),
+      // `value` is the source id `search_case_law` accepts as `source_id`.
+      source: v.array(caseLawFacetBucketProjection),
       language: v.array(caseLawFacetBucketProjection),
     }),
   ),

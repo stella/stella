@@ -9,27 +9,23 @@ import {
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
 
+import {
+  decisionDateRange,
+  decisionSortOrder,
+} from "@/features/case-law/case-law-index-search.logic";
+import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
 } from "@/features/case-law/queries/decisions";
+import { queryWithRefinements } from "@/features/case-law/search-refine.logic";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */
-export type CaseLawSearchScope = {
-  /** The pill's country param, or nothing before route canonicalisation. */
-  country?: string | undefined;
-  court?: string | undefined;
-  q?: string | undefined;
-  year?: string | undefined;
-};
-
-export const validDecisionYear = (
-  year: string | undefined,
-): string | undefined => (/^\d{4}$/u.test(year ?? "") ? year : undefined);
+export type CaseLawSearchScope = CaseLawIndexSearch;
 
 /**
  * The corpus country the pill names. A URL without a country is scoped by
@@ -58,30 +54,58 @@ export const readDecisionIntent = (
   return parseDecisionQuery(q, { grammar });
 };
 
+/** The text a query intent hands the search endpoint, if any. */
+const searchTextOfIntent = (
+  intent: DecisionQueryIntent,
+): string | undefined => {
+  switch (intent.type) {
+    case "identifier":
+      return intent.value;
+    case "text":
+      return intent.text;
+    case "empty":
+      return undefined;
+    default:
+      intent satisfies never;
+      return panic("Unhandled decision query intent");
+  }
+};
+
 export const createDecisionFiltersFromSearch = ({
   country,
   court,
+  from,
+  lang,
   q,
+  sort,
+  source,
+  to,
+  type,
+  within,
   year,
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
   if (scope === undefined) {
     return panic("Case-law search requires a country.");
   }
-  const normalizedYear = validDecisionYear(year);
-  const intent = readDecisionIntent(q, { jurisdiction: scope });
+  const range = decisionDateRange({ from, to, year });
+  const search = searchTextOfIntent(
+    readDecisionIntent(queryWithRefinements(q, within), {
+      jurisdiction: scope,
+    }),
+  );
 
   return {
     country: scope,
     ...(court ? { court } : {}),
-    ...(normalizedYear
-      ? {
-          dateFrom: `${normalizedYear}-01-01`,
-          dateTo: `${normalizedYear}-12-31`,
-        }
-      : {}),
-    ...(intent.type === "identifier" ? { search: intent.value } : {}),
-    ...(intent.type === "text" ? { search: intent.text } : {}),
+    ...(range.from === undefined ? {} : { dateFrom: range.from }),
+    ...(range.to === undefined ? {} : { dateTo: range.to }),
+    ...(type ? { decisionType: type } : {}),
+    ...(source ? { sourceId: source } : {}),
+    ...(lang ? { language: lang } : {}),
+    // An order is a property of a ranked answer, so a browse listing carries
+    // none: it is newest-first by definition.
+    ...(search === undefined ? {} : { search, sort: decisionSortOrder(sort) }),
   };
 };
 
@@ -105,9 +129,12 @@ export const openDecisionMatch = async ({
   search,
   uiLocale,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
-  const intent = readDecisionIntent(search.q, {
-    jurisdiction: caseLawCountryScope(search.country),
-  });
+  const intent = readDecisionIntent(
+    queryWithRefinements(search.q, search.within),
+    {
+      jurisdiction: caseLawCountryScope(search.country),
+    },
+  );
   if (intent.type !== "identifier") {
     return false;
   }

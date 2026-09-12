@@ -9,7 +9,7 @@ import {
   readNonRedistributableCaseLawSourceIds,
 } from "@/api/lib/case-law/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
-import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
+import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
@@ -87,7 +87,7 @@ export const readBrowseFacetsUnderPolicy = async ({
   });
 
 /** The same facets under the current source policy. */
-export const readBrowseFacetsResult = async (
+const readBrowseFacetsResult = async (
   country: string,
 ): Promise<Result<LegalBrowseFacets, BrowseFacetsReadError>> => {
   // Read ahead of the cache, not inside it: source policy is an input to the
@@ -108,19 +108,31 @@ export const readBrowseFacetsResult = async (
  * The same facets, degraded to an empty set on any failure: facets are
  * navigation chrome, and the callers (the facets route, the newest-decisions
  * shelf) render without them.
+ *
+ * "Any failure" includes a rejection, not only a returned error: the read
+ * opens a database transaction to resolve the serving generation, and that
+ * throws rather than answering. A caller awaiting this beside something it
+ * does need — the shelf reads its courts in the same `Promise.all` — would
+ * otherwise lose the whole page to a facet read, which is the one thing this
+ * function exists to prevent.
  */
 export const readBrowseFacets = async (
   country: string,
 ): Promise<LegalBrowseFacets> => {
-  const result = await readBrowseFacetsResult(country);
-  if (Result.isError(result)) {
+  const result = await Result.tryPromise({
+    try: async () => await readBrowseFacetsResult(country),
+    catch: (cause) =>
+      new LegalBrowseFacetsError({ message: "read failed", cause }),
+  });
+  const facets = Result.isError(result) ? result : result.value;
+  if (Result.isError(facets)) {
     // An empty set collapses the selects into free-text filters, which is a
     // degraded page, not a broken one.
     logger.warn("case_law.browse_facets.unavailable", {
-      "error.type": errorTag(result.error),
+      "error.type": errorTag(facets.error),
     });
     return EMPTY_FACETS;
   }
 
-  return result.value;
+  return facets.value;
 };

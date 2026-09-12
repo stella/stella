@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Kohtuasja number",
       "citedBy": "Viidatud",
-      "headnote": "Lühikokkuvõte"
+      "headnote": "Lühikokkuvõte",
+      "summary": "Õiguslik seisukoht / vaste"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Plokktsitaat viitega",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Tsitaat viitega",
       "textOnly": "Ainult tekst"
     },
+    "courtTiers": {
+      "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
+      "other": "Muud kohtud",
+      "regional": "Ringkonnakohtud",
+      "supreme": "Riigikohtud"
+    },
     "decisionNotFound": "Otsust ei leitud",
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
+    "filters": {
+      "remove": "Eemalda filter {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# keel} other {# keelt}}",
       "matchedIn": "Vaste keeles: {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Päis"
     },
+    "refineWithinResults": "Otsi tulemuste seast",
     "research": {
       "addQuestion": "Lisa küsimus",
       "addQuestionHint": "Küsimus esitatakse tabeli igale lahendile; vastused luuakse veeru käivitamisel.",
@@ -704,11 +715,9 @@
     "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Sirvi kohtupraktikat",
-      "countries": "Riigid",
-      "courts": "Kohtud",
-      "years": "Aastad"
+    "sort": {
+      "newest": "Uusimad",
+      "relevance": "Asjakohaseimad"
     },
     "viewer": {
       "abstract": "Kokkuvõte",

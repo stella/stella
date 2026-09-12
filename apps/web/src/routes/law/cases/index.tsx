@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import {
   keepPreviousData,
@@ -22,43 +22,72 @@ import {
   exactDecisionMatches,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
+  type SearchSort,
   type SearchTotal,
 } from "@stll/api-contract/search";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import {
-  PUBLIC_CASE_LAW_COUNTRIES,
+  CASE_LAW_FILTER_KEYS,
+  clearedCaseLawFilters,
+  createCaseLawIndexPath,
+  decisionDateRange,
+  decisionSortOrder,
+  hasActiveCaseLawFilter,
+  validDecisionDate,
+  withPendingQuery,
+} from "@/features/case-law/case-law-index-search.logic";
+import type {
+  CaseLawFilterKey,
+  DecisionDateRange,
+} from "@/features/case-law/case-law-index-search.logic";
+import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
 import {
-  DecisionFilterChips,
-  type DecisionFilterSelection,
-} from "@/features/case-law/components/decision-filter-chips";
+  DecisionFacetRail,
+  DecisionFacetRailSkeleton,
+} from "@/features/case-law/components/decision-facet-rail";
+import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import {
-  DecisionColumnChooser,
-  DecisionTable,
-} from "@/features/case-law/components/decision-table";
+  DecisionFilterChips,
+  DecisionResultsToolbar,
+} from "@/features/case-law/components/decision-results-toolbar";
+import type { DecisionFilterChip } from "@/features/case-law/components/decision-results-toolbar";
+import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
+import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
+import { DEFAULT_HIDDEN_DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
+import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
   openDecisionMatch,
   readDecisionIntent,
-  validDecisionYear,
 } from "@/features/case-law/open-decision-match";
 import {
   decisionFacetsOptions,
   decisionsInfiniteOptions,
 } from "@/features/case-law/queries/decisions";
+import { railFacets } from "@/features/case-law/rail-facets";
 import { ResearchTableActions } from "@/features/case-law/research/research-actions";
-import { useLocale } from "@/i18n/formatting-context";
+import {
+  addRefineTerm,
+  canonicalRefinements,
+  queryWithRefinements,
+  refineTermsOfQuery,
+  removeRefineTerm,
+} from "@/features/case-law/search-refine.logic";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -78,6 +107,7 @@ import {
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
+const MAX_REFINEMENT_LENGTH = 240;
 
 const optionalBrowseStringSchema = (maxLength: number) =>
   v.optional(
@@ -89,46 +119,133 @@ const optionalBrowseStringSchema = (maxLength: number) =>
     ),
   );
 
+const optionalRefinementsSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(MAX_REFINEMENT_LENGTH),
+      v.transform(canonicalRefinements),
+    ),
+  ),
+  undefined,
+);
+
+/**
+ * A calendar date, dropped rather than refused when it is not one: a public
+ * URL may be typed or crawled, and a bad date is a page without that bound,
+ * not an error screen.
+ */
+const optionalDateSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.transform((value) => validDecisionDate(value)),
+    ),
+  ),
+  undefined,
+);
+
 const searchSchema = v.object({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
+  from: optionalDateSchema,
+  lang: optionalBrowseStringSchema(16),
   q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
+  // A link is public and may be edited by hand or by a crawler; an order this
+  // build does not know is not an error page, it is the default order.
+  sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
+  source: optionalBrowseStringSchema(128),
+  to: optionalDateSchema,
+  type: optionalBrowseStringSchema(128),
+  within: optionalRefinementsSchema,
+  // Accepted, never written: links made before the range existed still work,
+  // and `decisionDateRange` resolves them to that year's whole span.
   year: optionalBrowseStringSchema(4),
 });
 
 type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;
 
-const createCaseLawIndexPath = ({
-  country,
-  court,
-  q,
-  year,
-}: CaseLawIndexSearch): `/law/cases${string}` => {
-  const params = new URLSearchParams();
-  const normalizedYear = validDecisionYear(year);
-  if (country) {
-    params.set("country", country.toLowerCase());
-  }
-  if (court) {
-    params.set("court", court);
-  }
-  if (normalizedYear) {
-    params.set("year", normalizedYear);
-  }
-  if (q) {
-    params.set("q", q);
-  }
+/** Which facet a chip belongs to, for the label the chip carries. */
+const FILTER_KIND_LABEL_KEYS = {
+  court: "common.court",
+  lang: "common.language",
+  source: "common.source",
+  type: "common.type",
+} as const satisfies Record<CaseLawFilterKey, TranslationKey>;
 
-  const query = params.toString();
-  return query ? `/law/cases?${query}` : "/law/cases";
+/**
+ * The URL with one facet set or unset. Written out per key rather than by a
+ * computed property, so a filter key that is not in the search schema cannot
+ * be navigated to.
+ */
+const withFilter = (
+  previous: CaseLawIndexSearch,
+  key: CaseLawFilterKey,
+  value: string | undefined,
+): CaseLawIndexSearch => {
+  switch (key) {
+    case "court":
+      return { ...previous, court: value };
+    case "lang":
+      return { ...previous, lang: value };
+    case "source":
+      return { ...previous, source: value };
+    case "type":
+      return { ...previous, type: value };
+    default:
+      key satisfies never;
+      return panic(`Unhandled case-law filter: ${String(key)}`);
+  }
 };
 
-const createCaseLawIndexDescription = ({
-  country,
-  court,
-  year,
-}: CaseLawIndexSearch): string => {
-  const scope = [court, caseLawCountryScope(country), validDecisionYear(year)]
+/**
+ * What a chip shows for a selected value. A source is an opaque id the facets
+ * attach a name to, and a language is a code; every other facet's value is
+ * already the words the reader picked off the rail.
+ */
+const chipValue = (
+  key: CaseLawFilterKey,
+  value: string,
+  {
+    facets,
+    format,
+  }: { facets: DecisionRailFacets; format: ReturnType<typeof useFormatter> },
+): string => {
+  switch (key) {
+    case "lang":
+      return languageLabel(format, value);
+    case "source":
+      return (
+        facets.source.find((bucket) => bucket.value === value)?.label ?? value
+      );
+    case "court":
+    case "type":
+      return value;
+    default:
+      key satisfies never;
+      return panic(`Unhandled case-law filter: ${String(key)}`);
+  }
+};
+
+const formatIsoDate = (
+  value: string,
+  format: ReturnType<typeof useFormatter>,
+): string =>
+  format.dateTime(
+    Temporal.PlainDate.from(value).toZonedDateTime("UTC").epochMilliseconds,
+    { dateStyle: "medium", timeZone: "UTC" },
+  );
+
+const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
+  const range = decisionDateRange(search);
+  const scope = [
+    search.court,
+    caseLawCountryScope(search.country),
+    range.from,
+    range.to,
+  ]
     .filter(Boolean)
     .join(", ");
   if (scope) {
@@ -165,9 +282,9 @@ export const Route = createFileRoute("/law/cases/")({
     // the browse slice the home's country links and the crawler follow.
     if (
       search.q === undefined &&
-      search.court === undefined &&
-      search.year === undefined &&
-      search.country === undefined
+      search.within === undefined &&
+      search.country === undefined &&
+      !hasActiveCaseLawFilter(search)
     ) {
       throw redirect({
         to: "/law",
@@ -242,8 +359,8 @@ export const Route = createFileRoute("/law/cases/")({
 });
 
 // The loader fetches decisions and facets, so without a pendingComponent the
-// route flashes the glowing logo. Reuse the real table skeleton plus the page
-// chrome during route-pending.
+// route flashes the glowing logo. Reuse the real page chrome — rail, toolbar
+// and the table's own header — so only the values shimmer in.
 function PublicCaseLawIndexPending() {
   const t = useTranslations();
   return (
@@ -253,23 +370,58 @@ function PublicCaseLawIndexPending() {
         <Skeleton className="h-9 w-40 rounded-md" />
         <Skeleton className="h-9 w-full max-w-md flex-1 rounded-md" />
       </div>
-      <Skeleton className="h-4 w-40" />
-      <DecisionTable
-        decisions={[]}
-        hiddenColumnIds={[]}
-        isLoading
-        order="newest"
-      />
+      <div className="flex min-w-0 flex-1 items-start gap-6">
+        <DecisionFacetRailSkeleton />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <Skeleton className="h-7 w-full max-w-sm" />
+          {/*
+            The defaults, not the reader's stored choice: storage is not
+            readable during SSR, and a header that changes on hydration is a
+            worse shift than one that occasionally shows a column too many.
+          */}
+          <DecisionTable
+            decisions={[]}
+            hiddenColumnIds={DEFAULT_HIDDEN_DECISION_COLUMN_IDS}
+            isLoading
+            order="newest"
+          />
+        </div>
+      </div>
     </main>
   );
 }
 
 function PublicCaseLawIndex() {
   const t = useTranslations();
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const uiLocale = useLocale();
   const search = Route.useSearch({
-    select: ({ country, court, q, year }) => ({ country, court, q, year }),
+    select: ({
+      country,
+      court,
+      from,
+      lang,
+      q,
+      sort,
+      source,
+      to,
+      type,
+      within,
+      year,
+    }) => ({
+      country,
+      court,
+      from,
+      lang,
+      q,
+      sort,
+      source,
+      to,
+      type,
+      within,
+      year,
+    }),
   });
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
@@ -278,7 +430,8 @@ function PublicCaseLawIndex() {
     publicCaseLawCountryFromParam(search.country) ??
     panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
-  const intent = readDecisionIntent(search.q, { jurisdiction: scope });
+  const effectiveQuery = queryWithRefinements(search.q, search.within);
+  const intent = readDecisionIntent(effectiveQuery, { jurisdiction: scope });
   const filters = createDecisionFiltersFromSearch(search);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
@@ -297,14 +450,11 @@ function PublicCaseLawIndex() {
       "cases.search-navigate",
     );
   }, 300);
-  const handleQueryChange = useCallback(
-    (value: string) => {
-      setQueryInput(value);
-      setRequestedQuery(value.trim());
-      writeQuery(value);
-    },
-    [writeQuery],
-  );
+  const handleQueryChange = (value: string) => {
+    setQueryInput(value);
+    setRequestedQuery(value.trim());
+    writeQuery(value);
+  };
   // Resync the field when the route query changes underneath it. Adjust state
   // during render (the React-sanctioned pattern) instead of an effect.
   const [syncedQuery, setSyncedQuery] = useState(search.q);
@@ -315,7 +465,8 @@ function PublicCaseLawIndex() {
     }
   }
 
-  const [hiddenColumnIds, setHiddenColumnIds] = useState<string[]>([]);
+  const { hiddenColumnIds, setHiddenColumnIds } =
+    useDecisionColumnPreferences(countryParam);
 
   const { data: browseFacets } = useSuspenseQuery(decisionFacetsOptions(scope));
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -342,31 +493,107 @@ function PublicCaseLawIndex() {
       ? decisions
       : [...exact, ...decisions.filter((d) => !exactIds.has(d.id))];
 
-  const searchFacets = data?.pages.at(0)?.facets ?? null;
   const searchTotal = data?.pages.at(0)?.total ?? SEARCH_TOTAL_NOT_COUNTED;
-  const courtBuckets = searchFacets?.court ?? browseFacets.court;
-  const yearBuckets = browseFacets.year;
+  const facets = railFacets({
+    browse: browseFacets,
+    search: data?.pages.at(0)?.facets ?? null,
+  });
 
-  const selection: DecisionFilterSelection = {
-    court: search.court,
-    year: validDecisionYear(search.year),
-  };
-  const setSelection = (next: DecisionFilterSelection) => {
-    // A pending debounced query write would otherwise land after this
-    // navigation and re-apply the old field value to the new filters.
+  // A pending debounced query write holds text the URL has not seen yet.
+  // Letting it land after this navigation would re-apply the old field value
+  // to the new filters; cancelling it alone would strand the edit for good,
+  // because `search.q` never changes and the field never resyncs. So the
+  // pending text is folded in first and the caller's own change applied over
+  // it. Returns the navigation so each caller tags it with a literal label.
+  const searchNavigation = async (
+    nextSearch: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
+  ) => {
+    const pending = writeQuery.isPending() ? queryInput : null;
     writeQuery.cancel();
+    await navigate({
+      replace: true,
+      search: (previous) => nextSearch(withPendingQuery(previous, pending)),
+    });
+  };
+
+  const selectFacet = (key: CaseLawFilterKey, value: string | undefined) => {
     detached(
-      navigate({
-        replace: true,
-        search: (previous) => ({
-          ...previous,
-          court: next.court,
-          year: next.year,
-        }),
-      }),
+      searchNavigation((previous) => withFilter(previous, key, value)),
       "cases.filter-navigate",
     );
   };
+
+  // Only `from`/`to` are written; a `year` the reader arrived with is dropped
+  // the moment they touch the range, so the two can never disagree.
+  const setDateRange = (range: DecisionDateRange) => {
+    detached(
+      searchNavigation((previous) => ({
+        ...previous,
+        from: validDecisionDate(range.from),
+        to: validDecisionDate(range.to),
+        year: undefined,
+      })),
+      "cases.date-range-navigate",
+    );
+  };
+
+  const refineTerms = refineTermsOfQuery(search.within);
+  const dateRange = decisionDateRange(search);
+  const chips: DecisionFilterChip[] = [];
+  // The same three shapes, and the same strings, the workspace view's own
+  // date chip uses; built here rather than in a helper taking `t`, because
+  // handing the translator through a parameter widens its key union at the
+  // boundary and the instantiation cost lands on every build.
+  const dateFrom =
+    dateRange.from === undefined ? null : formatIsoDate(dateRange.from, format);
+  const dateTo =
+    dateRange.to === undefined ? null : formatIsoDate(dateRange.to, format);
+  let dateRangeLabel: string | null = null;
+  if (dateFrom !== null && dateTo !== null) {
+    dateRangeLabel = t("workspaces.filters.date.customRange", {
+      from: dateFrom,
+      to: dateTo,
+    });
+  } else if (dateFrom !== null) {
+    dateRangeLabel = t("workspaces.filters.date.from", { date: dateFrom });
+  } else if (dateTo !== null) {
+    dateRangeLabel = t("workspaces.filters.date.to", { date: dateTo });
+  }
+  if (dateRangeLabel !== null) {
+    chips.push({
+      id: "filter:date",
+      kind: t("common.date"),
+      onRemove: () => setDateRange({}),
+      value: dateRangeLabel,
+    });
+  }
+  for (const key of CASE_LAW_FILTER_KEYS) {
+    const value = search[key];
+    if (value === undefined) {
+      continue;
+    }
+    chips.push({
+      id: `filter:${key}`,
+      kind: t(FILTER_KIND_LABEL_KEYS[key]),
+      onRemove: () => selectFacet(key, undefined),
+      value: chipValue(key, value, { facets, format }),
+    });
+  }
+  for (const term of refineTerms) {
+    chips.push({
+      id: `refine:${term}`,
+      onRemove: () => {
+        detached(
+          searchNavigation((previous) => ({
+            ...previous,
+            within: removeRefineTerm(previous.within, term),
+          })),
+          "cases.remove-refinement-navigate",
+        );
+      },
+      value: `"${term}"`,
+    });
+  }
 
   // Enter on an identifier opens the decision when exactly one answers to it.
   // Several (the same docket at several courts) stay listed, so the reader
@@ -389,93 +616,128 @@ function PublicCaseLawIndex() {
     );
   };
 
-  const order = intent.type === "empty" ? "newest" : "relevance";
+  // No sort control where no order applies: a browse listing is newest-first
+  // by definition, and an identifier lookup is answered by the identity path,
+  // which ranks by relevance whatever the URL asks for. Offering a choice the
+  // answer ignores would also mark the date column as sorted when it is not.
+  const sortable = intent.type === "text";
+  const sort: SearchSort | null = sortable
+    ? decisionSortOrder(search.sort)
+    : null;
+  const order = intent.type === "empty" ? "newest" : (sort ?? "relevance");
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">{t("common.caseLaw")}</h1>
-        <ResearchTableActions filters={filters} />
-      </div>
+      {/*
+        The breadcrumb already names the screen, so the heading is for the
+        document outline and for a screen reader, not for the eye.
+      */}
+      <h1 className="sr-only">{t("common.caseLaw")}</h1>
 
       <CaseLawSearch
-        countries={PUBLIC_CASE_LAW_COUNTRIES}
         country={countryParam}
         maxLength={MAX_QUERY_LENGTH}
-        onCountryChange={(country) => {
-          writeQuery.cancel();
-          detached(
-            navigate({
-              replace: true,
-              search: (previous) => ({
-                ...previous,
-                country,
-                court: undefined,
-                year: undefined,
-              }),
-            }),
-            "cases.switch-country",
-          );
-        }}
         onQueryChange={handleQueryChange}
         onSubmit={openSingleMatch}
         query={queryInput}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <ListHeading
-          exactCount={exact.length}
-          intent={intent}
-          total={searchTotal}
+      <div className="flex min-w-0 flex-1 items-start gap-6">
+        <DecisionFacetRail
+          dateRange={dateRange}
+          facets={facets}
+          onDateRangeChange={setDateRange}
+          onSelect={selectFacet}
+          selection={{
+            court: search.court,
+            lang: search.lang,
+            source: search.source,
+            type: search.type,
+          }}
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <DecisionFilterChips
-            courts={courtBuckets}
-            onSelectionChange={setSelection}
-            selection={selection}
-            years={yearBuckets}
-          />
-          <DecisionColumnChooser
+
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <DecisionResultsToolbar
+            actions={<ResearchTableActions filters={filters} />}
             hiddenColumnIds={hiddenColumnIds}
             onHiddenColumnIdsChange={setHiddenColumnIds}
-          />
-        </div>
-      </div>
-
-      <DecisionTable
-        decisions={ordered}
-        hiddenColumnIds={hiddenColumnIds}
-        isLoading={isLoading}
-        order={order}
-      />
-      {hasNextPage && (
-        <div className="flex justify-center py-4">
-          <Button
-            disabled={isFetchingNextPage}
-            onClick={() => {
+            onRefine={(entry) => {
               detached(
-                (async () => await fetchNextPage())(),
-                "cases.fetch-next-page",
+                searchNavigation((previous) => ({
+                  ...previous,
+                  within: addRefineTerm(previous.within, entry),
+                })),
+                "cases.refine-navigate",
               );
             }}
-            variant="outline"
-          >
-            {isFetchingNextPage
-              ? t("caseLaw.loadingMore")
-              : t("common.loadMore")}
-          </Button>
-        </div>
-      )}
+            onSortChange={(next) => {
+              detached(
+                searchNavigation((previous) => ({ ...previous, sort: next })),
+                "cases.sort-navigate",
+              );
+            }}
+            sort={sort}
+            summary={
+              <ListHeading
+                exactCount={exact.length}
+                intent={intent}
+                total={searchTotal}
+              />
+            }
+          />
 
-      <CaseLawBrowseLinks countryParam={countryParam} facets={browseFacets} />
+          <DecisionFilterChips
+            chips={chips}
+            onClearAll={() => {
+              // Clear the chips, not the query the reader typed into the main
+              // field. Refinements have their own URL field, so the visible
+              // query and the result set cannot diverge here.
+              detached(
+                searchNavigation((previous) => ({
+                  ...previous,
+                  ...clearedCaseLawFilters(),
+                  within: undefined,
+                })),
+                "cases.clear-filters",
+              );
+            }}
+          />
+
+          <DecisionTable
+            decisions={ordered}
+            hiddenColumnIds={hiddenColumnIds}
+            isLoading={isLoading}
+            order={order}
+            query={effectiveQuery}
+          />
+          {hasNextPage && (
+            <div className="flex justify-center py-4">
+              <Button
+                disabled={isFetchingNextPage}
+                onClick={() => {
+                  detached(
+                    (async () => await fetchNextPage())(),
+                    "cases.fetch-next-page",
+                  );
+                }}
+                variant="outline"
+              >
+                {isFetchingNextPage
+                  ? t("caseLaw.loadingMore")
+                  : t("common.loadMore")}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
 
 /**
  * What the list under the box is: newest first while a filter alone narrows
- * it, a choice between courts when a docket names several decisions, nothing
- * for a plain search.
+ * it, a choice between courts when a docket names several decisions, a count
+ * for a search that could be counted.
  */
 function ListHeading({
   exactCount,
@@ -497,7 +759,7 @@ function ListHeading({
   }
   if (intent.type === "identifier" && exactCount > 1) {
     return (
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs">
         {t("caseLaw.sameCaseNumber", { count: exactCount })}
       </p>
     );
@@ -505,13 +767,13 @@ function ListHeading({
   switch (total.type) {
     case SEARCH_TOTAL_TYPE.EXACT:
       return (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs tabular-nums">
           {t("search.resultCount", { count: total.count })}
         </p>
       );
     case SEARCH_TOTAL_TYPE.ESTIMATE:
       return (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs tabular-nums">
           {t("search.estimatedResultCount", { count: total.count })}
         </p>
       );

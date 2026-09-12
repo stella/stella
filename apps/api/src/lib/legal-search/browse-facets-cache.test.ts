@@ -224,15 +224,17 @@ test("a slow failure is held from the moment it settles", async () => {
     load: async (query: string) => {
       calls += 1;
       // Longer than the hold: a hold counted from the start would have
-      // expired before the failure even arrived.
-      await Bun.sleep(30);
+      // expired before the failure even arrived. Both numbers are far above
+      // scheduler jitter, so the second read lands inside the hold on a busy
+      // machine rather than intermittently outside it.
+      await Bun.sleep(200);
       return Result.err(
         new LegalBrowseFacetsError({ message: `${query} down` }),
       );
     },
     key: (query: string) => query,
     ttlMs: 60_000,
-    failureTtlMs: 10,
+    failureTtlMs: 100,
     maxEntries: 3,
   });
 

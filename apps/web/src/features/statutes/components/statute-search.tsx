@@ -48,17 +48,19 @@ export const StatuteSearch = ({
           query: entry,
         })
       }
-      countries={Object.keys(STATUTE_COUNTRIES).map((segment) => ({
-        label: countryName(segment),
-        value: segment,
-      }))}
-      country={country}
-      maxLength={maxLength}
-      onCountryChange={(value) => {
-        if (isStatuteCountry(value)) {
-          onCountryChange(value);
-        }
+      countryPicker={{
+        countries: Object.keys(STATUTE_COUNTRIES).map((segment) => ({
+          label: countryName(segment),
+          value: segment,
+        })),
+        country,
+        onCountryChange: (value) => {
+          if (isStatuteCountry(value)) {
+            onCountryChange(value);
+          }
+        },
       }}
+      maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
       placeholder={t("statutes.searchPlaceholder")}

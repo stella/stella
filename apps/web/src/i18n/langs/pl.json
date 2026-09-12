@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Sygnatura akt",
       "citedBy": "Cytowane przez",
-      "headnote": "Teza"
+      "headnote": "Teza",
+      "summary": "Teza / trafienie"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Cytat z odesłaniem",
       "textOnly": "Tylko tekst"
     },
+    "courtTiers": {
+      "constitutional": "Trybunały konstytucyjne",
+      "other": "Pozostałe sądy",
+      "regional": "Sądy apelacyjne i okręgowe",
+      "supreme": "Sądy najwyższe"
+    },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
+    "filters": {
+      "remove": "Usuń filtr {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
       "matchedIn": "Dopasowanie w języku {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Część wstępna"
     },
+    "refineWithinResults": "Szukaj w wynikach",
     "research": {
       "addQuestion": "Dodaj pytanie",
       "addQuestionHint": "Pytanie jest zadawane każdemu orzeczeniu w tabeli; odpowiedzi powstają po uruchomieniu kolumny.",
@@ -704,11 +715,9 @@
     "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
-    "seo": {
-      "browse": "Przeglądaj orzecznictwo",
-      "countries": "Kraje",
-      "courts": "Sądy",
-      "years": "Lata"
+    "sort": {
+      "newest": "Najnowsze",
+      "relevance": "Najtrafniejsze"
     },
     "viewer": {
       "abstract": "Streszczenie",

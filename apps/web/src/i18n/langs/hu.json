@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Ügyszám",
       "citedBy": "Hivatkozások",
-      "headnote": "Jogi tétel"
+      "headnote": "Jogi tétel",
+      "summary": "Jogtétel / találat"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Idézet hivatkozással",
       "textOnly": "Csak szöveg"
     },
+    "courtTiers": {
+      "constitutional": "Alkotmánybíróságok",
+      "other": "Egyéb bíróságok",
+      "regional": "Ítélőtáblák és törvényszékek",
+      "supreme": "Legfelsőbb bíróságok"
+    },
     "decisionNotFound": "A határozat nem található",
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
+    "filters": {
+      "remove": "A(z) {filter} szűrő eltávolítása"
+    },
     "languages": {
       "count": "{count, plural, one {# nyelv} other {# nyelv}}",
       "matchedIn": "Találat {language} nyelven"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Fejrész"
     },
+    "refineWithinResults": "Keresés a találatok között",
     "research": {
       "addQuestion": "Kérdés hozzáadása",
       "addQuestionHint": "A kérdést a táblázat minden határozatára feltesszük; a válaszok az oszlop futtatásakor készülnek.",
@@ -704,11 +715,9 @@
     "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Ítélkezési gyakorlat böngészése",
-      "countries": "Országok",
-      "courts": "Bíróságok",
-      "years": "Évek"
+    "sort": {
+      "newest": "Legújabb",
+      "relevance": "Legrelevánsabb"
     },
     "viewer": {
       "abstract": "Kivonat",

@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Número do processo",
       "citedBy": "Citada por",
-      "headnote": "Ementa"
+      "headnote": "Ementa",
+      "summary": "Ementa / trecho encontrado"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citação em bloco com referência",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Citação com referência",
       "textOnly": "Somente texto"
     },
+    "courtTiers": {
+      "constitutional": "Tribunais constitucionais",
+      "other": "Demais tribunais",
+      "regional": "Tribunais regionais e de justiça",
+      "supreme": "Tribunais superiores"
+    },
     "decisionNotFound": "Decisão não encontrada",
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
+    "filters": {
+      "remove": "Remover o filtro {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
       "matchedIn": "Correspondência em {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Cabeçalho"
     },
+    "refineWithinResults": "Pesquisar nos resultados",
     "research": {
       "addQuestion": "Adicionar pergunta",
       "addQuestionHint": "A pergunta é feita a cada decisão da tabela; as respostas são geradas ao executar a coluna.",
@@ -704,11 +715,9 @@
     "searchAskPrompt": "{query} (jurisprudência de {country})",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Explorar jurisprudência",
-      "countries": "Países",
-      "courts": "Tribunais",
-      "years": "Anos"
+    "sort": {
+      "newest": "Mais recentes",
+      "relevance": "Mais relevantes"
     },
     "viewer": {
       "abstract": "Resumo",

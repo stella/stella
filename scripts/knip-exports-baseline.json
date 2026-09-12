@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 764,
+    "count": 761,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -22,7 +22,6 @@
       "apps/api/src/handlers/case-law/citation-resolution-census-consts.ts": 10,
       "apps/api/src/handlers/case-law/citation-score.ts": 1,
       "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 3,
-      "apps/api/src/handlers/case-law/decisions/facets.ts": 1,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
       "apps/api/src/handlers/case-law/document-ast.ts": 24,
@@ -217,7 +216,7 @@
       "apps/api/src/lib/legal-search/authority-sql.ts": 1,
       "apps/api/src/lib/legal-search/backfill-statement-timeout.ts": 1,
       "apps/api/src/lib/legal-search/case-law-corpus-projection.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 6,
+      "apps/api/src/lib/legal-search/corpus-index-client.ts": 4,
       "apps/api/src/lib/legal-search/corpus-index-config.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-manifest.ts": 1,
@@ -373,7 +372,7 @@
     }
   },
   "apps/web": {
-    "count": 422,
+    "count": 420,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -479,7 +478,7 @@
       "apps/web/src/features/case-law/components/decision-table.tsx": 1,
       "apps/web/src/features/case-law/provision-label.ts": 2,
       "apps/web/src/features/case-law/queries/citations.ts": 2,
-      "apps/web/src/features/case-law/queries/decisions.ts": 2,
+      "apps/web/src/features/case-law/queries/decisions.ts": 1,
       "apps/web/src/features/case-law/research/research-question-dialog.tsx": 1,
       "apps/web/src/features/case-law/research/research-table-view.tsx": 1,
       "apps/web/src/features/chat/chat-query-contract.ts": 1,
@@ -593,7 +592,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-schema.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/table-store.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/time-entries.ts": 5,
       "apps/web/src/routes/_protected.workspaces/-filters/filter-pipeline.ts": 1,
       "apps/web/src/routes/_protected.workspaces/-utils.ts": 1,

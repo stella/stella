@@ -623,6 +623,21 @@ export const corpusIndexPublisherFields = (
   }
 };
 
+/**
+ * The fields a generation's mapping marks fast, read off that mapping rather
+ * than off the generation name. Only a fast field has a columnar store, which
+ * is what an aggregation reads; a reader asking whether it may aggregate over
+ * a field asks this.
+ */
+export const corpusIndexFastFields = (
+  manifest: CorpusIndexManifest,
+): ReadonlySet<string> =>
+  new Set(
+    manifest.engine.indexConfig.doc_mapping.field_mappings
+      .filter((field) => field.fast)
+      .map((field) => field.name),
+  );
+
 export type CorpusIndexStemFields = {
   text: (typeof STEM_FIELD_OF)["text"];
   publisherSummary: (typeof STEM_FIELD_OF)[typeof PUBLISHER_SUMMARY_FIELD];

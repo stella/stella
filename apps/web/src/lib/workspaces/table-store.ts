@@ -56,7 +56,7 @@ export type TableFindSelection =
  * `typed` would mark runs the server has not answered for, so the marks would
  * run ahead of the rows they are meant to explain.
  */
-export type TableFind = {
+type TableFind = {
   scope: TableFindSelection;
   status: "closed" | "open";
   submitted: string;

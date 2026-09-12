@@ -14,6 +14,7 @@ import type {
   caseLawResearchColumns,
   caseLawResearchTables,
 } from "@/api/db/schema";
+import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -29,6 +30,9 @@ export const researchSavedQueryBodySchema = t.Object(
     decisionType: t.Optional(t.String({ maxLength: 128 })),
     language: t.Optional(t.String({ maxLength: 8 })),
     sourceId: t.Optional(tSafeId("caseLawSource")),
+    // Declared, because `additionalProperties: false` would otherwise reject
+    // the body a table saved under `newest` sends back.
+    sort: t.Optional(searchSortSchema),
   },
   { additionalProperties: false },
 );

@@ -426,6 +426,23 @@ export const LIMITS = {
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
+  /**
+   * Buckets a facet aggregation asks the engine for, before the display cap.
+   * Deliberately above any jurisdiction's value count (CZE spells 116 courts),
+   * because the engine ranks buckets by passage volume before the decision
+   * count is known: asking only for the display cap lets a court, source or
+   * type with a long docket crowd out one with more decisions, and an apex
+   * court's presence must not depend on how much the district courts
+   * published.
+   */
+  caseLawFacetCandidateBuckets: 512,
+  /**
+   * Year buckets one search facet may list. A year facet is a timeline rather
+   * than a top-20 list — a reader narrowing to the 1990s has to find the
+   * 1990s in it — so it is bounded by how many years a corpus can span, not
+   * by how many values fit a filter rail.
+   */
+  caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
   caseLawHeadnoteMaxChars: 240,
   /** Courts on the browse page's "newest decisions" shelf, by corpus size. */

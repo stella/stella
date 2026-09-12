@@ -47,15 +47,15 @@ import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
-  DECISION_COLUMN_IDS,
-  DECISION_COLUMN_LABEL_KEYS,
   DECISION_GROUP_BY_OPTIONS,
   decisionTableSchema,
 } from "@/features/case-law/decision-columns";
-import type {
-  DecisionColumnId,
-  DecisionGroupBy,
-} from "@/features/case-law/decision-columns";
+import type { DecisionGroupBy } from "@/features/case-law/decision-columns";
+import {
+  DECISION_COLUMN_IDS,
+  DECISION_COLUMN_LABEL_KEYS,
+} from "@/features/case-law/decision-columns.logic";
+import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
 import { decisionsInfiniteOptions } from "@/features/case-law/queries/decisions";
 import {
   createResearchColumn,
@@ -160,9 +160,14 @@ export const Route = createFileRoute("/law/cases/research/$tableId")({
   pendingComponent: ResearchTablePending,
 });
 
-/** Every column but the language: the case-number cell already names it. */
+/**
+ * Every column but the language, which the case-number cell already names,
+ * and the headnote, which the summary column already shows.
+ */
 const defaultVisibleColumns = (): ReadonlySet<DecisionColumnId> =>
-  new Set(DECISION_COLUMN_IDS.filter((id) => id !== "language"));
+  new Set(
+    DECISION_COLUMN_IDS.filter((id) => id !== "language" && id !== "headnote"),
+  );
 
 const GROUP_BY_LABEL_KEYS = {
   none: "common.none",

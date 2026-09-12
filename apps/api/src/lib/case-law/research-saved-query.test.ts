@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { SEARCH_SORTS } from "@stll/api-contract/search";
 import { propertyConfig } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -32,6 +33,7 @@ const validQuery = fc.record(
     decisionType: filterText(32),
     language: filterText(8),
     sourceId: fc.uuid().map((id) => toSafeId<"caseLawSource">(id)),
+    sort: fc.constantFrom(...SEARCH_SORTS),
   },
   { requiredKeys: ["version", "query"] },
 );
@@ -83,4 +85,49 @@ describe("research table saved query", () => {
       propertyConfig(),
     );
   });
+});
+
+/**
+ * A table saved under an order has to re-run under it: the rows a reader kept
+ * working on are the first page of that ranking, and re-running the other one
+ * silently replaces them.
+ */
+describe("the saved order", () => {
+  test.each([...SEARCH_SORTS])("round-trips %s", (sort) => {
+    const parsed = parseCaseLawResearchSavedQuery({
+      version: 1,
+      query: "promlčení",
+      sort,
+    });
+
+    expect(Result.isError(parsed) ? null : parsed.value.sort).toBe(sort);
+  });
+
+  // Absent is the default, and is what every table saved before the order
+  // existed carries.
+  test("stays absent when the table never named one", () => {
+    const parsed = parseCaseLawResearchSavedQuery({
+      version: 1,
+      query: "promlčení",
+    });
+
+    expect(Result.isError(parsed) ? "error" : "sort" in parsed.value).toBe(
+      false,
+    );
+  });
+
+  test.each(["oldest", "RELEVANCE", "", null, 1])(
+    "rejects the undeclared order %p",
+    (sort) => {
+      expect(
+        Result.isError(
+          parseCaseLawResearchSavedQuery({
+            version: 1,
+            query: "promlčení",
+            sort,
+          }),
+        ),
+      ).toBe(true);
+    },
+  );
 });

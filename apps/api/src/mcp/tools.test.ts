@@ -1240,9 +1240,16 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_case_law maps filters and returns decision links", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: {
-        country: [{ count: 1, value: "CZE" }],
-        court: [{ count: 1, value: "Nejvyšší soud" }],
-        language: [{ count: 1, value: "cs" }],
+        court: [
+          {
+            tierLabel: "supreme",
+            courts: [{ count: 1, label: null, value: "Nejvyšší soud" }],
+          },
+        ],
+        year: [{ count: 1, label: null, value: "2024" }],
+        decisionType: [{ count: 1, label: null, value: "rozsudek" }],
+        source: [{ count: 1, label: "Nejvyšší soud ČR", value: "source-id" }],
+        language: [{ count: 1, label: null, value: "cs" }],
       },
       hits: [
         {
@@ -1316,9 +1323,16 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
-        country: [{ count: 1, value: "CZE" }],
-        court: [{ count: 1, value: "Nejvyšší soud" }],
-        language: [{ count: 1, value: "cs" }],
+        court: [
+          {
+            tierLabel: "supreme",
+            courts: [{ count: 1, label: null, value: "Nejvyšší soud" }],
+          },
+        ],
+        year: [{ count: 1, label: null, value: "2024" }],
+        decisionType: [{ count: 1, label: null, value: "rozsudek" }],
+        source: [{ count: 1, label: "Nejvyšší soud ČR", value: "source-id" }],
+        language: [{ count: 1, label: null, value: "cs" }],
       },
       nextCursor: "cursor_2",
       results: [
@@ -1345,8 +1359,10 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_case_law returns the same payload in anonymized mode", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       facets: {
-        country: [{ count: 1, value: "CZE" }],
         court: [],
+        year: [],
+        decisionType: [],
+        source: [],
         language: [],
       },
       hits: [
@@ -1378,8 +1394,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
-        country: [{ count: 1, value: "CZE" }],
         court: [],
+        year: [],
+        decisionType: [],
+        source: [],
         language: [],
       },
       nextCursor: null,
@@ -1485,8 +1503,10 @@ describe("OpenAI-compatible MCP tools", () => {
     await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
       searchDecisionsHandlerMock.mockResolvedValue({
         facets: {
-          country: [{ count: 1, value: "CZE" }],
           court: [],
+          year: [],
+          decisionType: [],
+          source: [],
           language: [],
         },
         hits: [
