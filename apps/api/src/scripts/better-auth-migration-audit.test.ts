@@ -112,12 +112,49 @@ describe("Better Auth migration audit command", () => {
         "https://api.stll.app/",
       ]).status,
     ).toBe("ok");
+    expect(
+      parseBetterAuthAuditArgs([
+        BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY,
+        "--baseline",
+        "/private/baseline.json",
+        "--oauth-base-url",
+        "https://api.stll.app/",
+      ]),
+    ).toMatchObject({
+      status: "ok",
+      value: {
+        baselinePath: "/private/baseline.json",
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY,
+        oauthBaseUrl: "https://api.stll.app",
+      },
+    });
+    expect(
+      parseBetterAuthAuditArgs([
+        BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY,
+        "--baseline",
+        "/private/baseline.json",
+        "--oauth-base-url",
+        "https://api.stll.app",
+      ]),
+    ).toMatchObject({
+      status: "ok",
+      value: { mode: BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY },
+    });
     for (const args of [
       [],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION],
       ["unknown", "--baseline", "/private/baseline.json"],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--output", "x"],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", ""],
+      [
+        BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY,
+        "--baseline",
+        "/private/baseline.json",
+        "--identity-map",
+        "/private/identity-map.json",
+        "--oauth-base-url",
+        "https://api.stll.app",
+      ],
       [BETTER_AUTH_AUDIT_MODES.HEALTH],
       [
         BETTER_AUTH_AUDIT_MODES.HEALTH,

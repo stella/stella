@@ -24,9 +24,11 @@ Upstream reference: [Better Auth 1.7 upgrade guide](https://better-auth.com/docs
    ingestion, and other external side effects there. Use test provider
    credentials for actual provider sign-ins; never redirect production
    callbacks to the rehearsal.
-3. Run the exact candidate's shipped `db:migrate` entrypoint on the restored
-   copy. Require a successful exit, all migration receipts, online index
-   validation, and schema parity. Run it again and confirm no state changes.
+3. Use the candidate's `pre-account-key` audit to capture the frozen baseline,
+   then run its shipped `db:migrate` entrypoint on the restored copy. Require a successful exit, all migration receipts, online index
+   validation, and schema parity. Require `post-account-key` to confirm every
+   auth row and current policy survived. Run the migrator again and repeat
+   that audit to confirm the retry preserves the same baseline.
 4. Exercise existing sign-in identities for every enabled provider, account
    linking, new registration, an existing session, session renewal, logout,
    and the OAuth/MCP refresh flow if enabled. Confirm existing identities keep
@@ -78,12 +80,15 @@ against writes racing the preflight.
    does not freeze writes. Session-dependent requests may be temporarily
    unavailable during this window.
 2. Re-run preflight after draining writers and take a recoverable checkpoint.
-   Keep traffic paused through migration and smoke tests.
+   Run `pre-account-key` below. Keep traffic paused through migration and smoke
+   tests. Do not rerun the historical 1.6 identity/OAuth backfill: its legacy
+   client fields can be stale after the 1.7 runtime has accepted new clients.
 3. Run the candidate image's shipped migration command. It builds and repairs
    the provider/account unique index before making issuer nullable. The online
    migration phase verifies the replacement's definition, readiness, and
    validity before dropping the issuer index. Require the entire command to
-   succeed, not just a migration receipt.
+   succeed, not just a migration receipt. Run `post-account-key` against the
+   saved baseline before any runtime smoke test can create or update rows.
 4. Start only the candidate API instances behind the maintenance boundary.
    Require startup checks and verify that no old image remains routable.
    Use an operator-only route for smoke tests with dedicated test accounts.
@@ -114,6 +119,27 @@ against writes racing the preflight.
   discards subsequent writes and requires an explicit recovery decision;
   it is not a lossless rollback. Never invent issuers to make old constraints
   pass.
+
+## Frozen account-key migration audit
+
+Run these commands in the candidate image, before and after migration:
+
+```sh
+bun /app/better-auth-migration-audit.js pre-account-key \
+  --baseline /private/auth-account-key-baseline.json \
+  --oauth-base-url "${PUBLIC_URL:-$BETTER_AUTH_URL}"
+
+# Run the shipped migration command while all writers remain stopped.
+
+bun /app/better-auth-migration-audit.js post-account-key \
+  --baseline /private/auth-account-key-baseline.json \
+  --oauth-base-url "${PUBLIC_URL:-$BETTER_AUTH_URL}"
+```
+
+Keep the baseline in private ephemeral storage; never publish it as an
+artifact. These modes compare the current auth data without applying the
+historical issuer or OAuth projections. They are for the frozen transition;
+use health mode once writes resume.
 
 ## Recurring database health check
 

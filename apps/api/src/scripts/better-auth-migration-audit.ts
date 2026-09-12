@@ -1,6 +1,7 @@
 /**
  * Usage:
  *   bun src/scripts/better-auth-migration-audit.ts pre-migration --baseline <path> --identity-map <path> --oauth-base-url <https-origin>
+ *   bun src/scripts/better-auth-migration-audit.ts pre-account-key --baseline <path> --oauth-base-url <https-origin>
  *   bun src/scripts/better-auth-migration-audit.ts <post-mode> --baseline <path> --oauth-base-url <https-origin>
  *   bun src/scripts/better-auth-migration-audit.ts health --oauth-base-url <https-origin>
  *
@@ -29,6 +30,7 @@ import {
   parseBetterAuthAuditBaseline,
   parseBetterAuthTrustedIdentityMap,
   renderBetterAuthAuditReport,
+  runBetterAuthAccountKeyAudit,
   runBetterAuthHealthAudit,
   runBetterAuthMigrationAudit,
 } from "@/api/scripts/better-auth-migration-audit.logic";
@@ -36,6 +38,7 @@ import type {
   BetterAuthAuditBaseline,
   BetterAuthAuditReport,
   BetterAuthAuditMode,
+  BetterAuthAccountKeyAuditMode,
   BetterAuthMigrationAuditMode,
   BetterAuthTrustedIdentityMap,
 } from "@/api/scripts/better-auth-migration-audit.logic";
@@ -77,10 +80,17 @@ type BetterAuthAuditCommandArgs =
     }
   | {
       baselinePath: string;
-      mode: Exclude<
-        BetterAuthMigrationAuditMode,
-        typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
-      >;
+      mode: typeof BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY;
+      oauthBaseUrl: string;
+    }
+  | {
+      baselinePath: string;
+      mode:
+        | Exclude<
+            BetterAuthMigrationAuditMode,
+            typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
+          >
+        | typeof BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY;
       oauthBaseUrl: string;
     };
 
@@ -92,7 +102,7 @@ type BetterAuthAuditCommandRunResult =
   | {
       baseline: BetterAuthAuditBaseline;
       report: BetterAuthAuditReport;
-      type: BetterAuthMigrationAuditMode;
+      type: BetterAuthMigrationAuditMode | BetterAuthAccountKeyAuditMode;
     };
 
 const isAuditMode = (value: string): value is BetterAuthAuditMode =>
@@ -107,7 +117,7 @@ export const parseBetterAuthAuditArgs = (
       new BetterAuthAuditCommandError({
         code: "invalid-arguments",
         message:
-          "Usage: better-auth-migration-audit health --oauth-base-url <https-url> | pre-migration --baseline <private-path> --identity-map <private-path> --oauth-base-url <https-url> | <post-backfill|post-migration> --baseline <private-path> --oauth-base-url <https-url>",
+          "Usage: better-auth-migration-audit health --oauth-base-url <https-url> | pre-migration --baseline <private-path> --identity-map <private-path> --oauth-base-url <https-url> | pre-account-key --baseline <private-path> --oauth-base-url <https-url> | <post-backfill|post-migration|post-account-key> --baseline <private-path> --oauth-base-url <https-url>",
       }),
     );
   if (mode === undefined || !isAuditMode(mode)) {
@@ -151,7 +161,9 @@ export const parseBetterAuthAuditArgs = (
           })
         : invalidArguments();
     }
+    case BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY:
     case BETTER_AUTH_AUDIT_MODES.POST_BACKFILL:
+    case BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY:
     case BETTER_AUTH_AUDIT_MODES.POST_MIGRATION: {
       const baselinePath = args.at(2);
       const oauthBaseUrl = args.at(4);
@@ -335,7 +347,10 @@ const run = async (
       trustedIdentityMap = loadedIdentityMap.value;
       break;
     }
+    case BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY:
+      break;
     case BETTER_AUTH_AUDIT_MODES.POST_BACKFILL:
+    case BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY:
     case BETTER_AUTH_AUDIT_MODES.POST_MIGRATION: {
       const loadedBaseline = await readBetterAuthAuditBaseline(
         parsed.value.baselinePath,
@@ -422,6 +437,20 @@ const run = async (
               type: commandMode,
             }));
           }
+          case BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY:
+          case BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY: {
+            const audited = await runBetterAuthAccountKeyAudit({
+              baseline,
+              database: auditDatabase,
+              expectedOAuthResources,
+              mode: commandMode,
+            });
+            return audited.map(({ baseline: auditBaseline, report }) => ({
+              baseline: auditBaseline,
+              report,
+              type: commandMode,
+            }));
+          }
           default: {
             commandMode satisfies never;
             return panic("Unhandled Better Auth audit mode");
@@ -445,10 +474,14 @@ const run = async (
 
   const auditResult = executed.value.value;
   if (
-    parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION &&
+    (parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ||
+      parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY) &&
     auditResult.report.status === "passed"
   ) {
-    if (auditResult.type !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
+    if (
+      auditResult.type !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION &&
+      auditResult.type !== BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY
+    ) {
       return Result.err(
         new BetterAuthAuditCommandError({
           code: "baseline-write-failed",

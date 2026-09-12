@@ -22,6 +22,8 @@ import { isRecord } from "@/api/lib/type-guards";
 
 export const BETTER_AUTH_AUDIT_MODES = {
   HEALTH: "health",
+  PRE_ACCOUNT_KEY: "pre-account-key",
+  POST_ACCOUNT_KEY: "post-account-key",
   POST_BACKFILL: "post-backfill",
   POST_MIGRATION: "post-migration",
   PRE_MIGRATION: "pre-migration",
@@ -30,9 +32,13 @@ export const BETTER_AUTH_AUDIT_MODES = {
 export type BetterAuthAuditMode =
   (typeof BETTER_AUTH_AUDIT_MODES)[keyof typeof BETTER_AUTH_AUDIT_MODES];
 
+export type BetterAuthAccountKeyAuditMode =
+  | typeof BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY
+  | typeof BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY;
+
 export type BetterAuthMigrationAuditMode = Exclude<
   BetterAuthAuditMode,
-  typeof BETTER_AUTH_AUDIT_MODES.HEALTH
+  typeof BETTER_AUTH_AUDIT_MODES.HEALTH | BetterAuthAccountKeyAuditMode
 >;
 
 const AUTH_PROVIDER_IDS = {
@@ -1767,6 +1773,38 @@ const oauthResourceReferencesStatement = sql`
   ) AS "passed"
 `;
 
+const issuerAccountConstraintsStatement = sql`
+  SELECT
+    EXISTS (
+      SELECT 1
+        FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'account'
+         AND column_name = 'issuer'
+         AND is_nullable = 'NO'
+    )
+    AND EXISTS (
+      SELECT 1
+        FROM pg_index index_record
+        JOIN pg_class table_record ON table_record.oid = index_record.indrelid
+        JOIN pg_namespace namespace ON namespace.oid = table_record.relnamespace
+       WHERE namespace.nspname = 'public'
+         AND table_record.relname = 'account'
+         AND index_record.indisunique
+         AND index_record.indisready
+         AND index_record.indisvalid
+         AND index_record.indpred IS NULL
+         AND index_record.indexprs IS NULL
+         AND (
+           SELECT array_agg(attribute.attname ORDER BY key_position.ordinality)
+             FROM unnest(index_record.indkey) WITH ORDINALITY key_position(attnum, ordinality)
+             JOIN pg_attribute attribute
+               ON attribute.attrelid = table_record.oid
+              AND attribute.attnum = key_position.attnum
+         ) = ARRAY['issuer', 'account_id']::name[]
+    ) AS "passed"
+`;
+
 const finalAccountConstraintsStatement = sql`
   SELECT
     EXISTS (
@@ -2015,17 +2053,19 @@ const columnInventory = async (database: BetterAuthAuditDatabase) => {
 };
 
 type ReadTableCensusOptions = {
+  accountIdentity: "project-microsoft" | "preserve";
   preservedColumns: readonly string[];
   tableName: string;
 };
 
 const readTableCensus = async (
   database: BetterAuthAuditDatabase,
-  { preservedColumns, tableName }: ReadTableCensusOptions,
+  { preservedColumns, tableName, accountIdentity }: ReadTableCensusOptions,
 ) => {
   const primaryKeyHasher = new Bun.CryptoHasher("sha256");
   const rowContentHasher = new Bun.CryptoHasher("sha256");
   const preservedValues = preservedColumns.map((column) =>
+    accountIdentity === "project-microsoft" &&
     tableName === AUTH_TABLE_AUDIT_POLICY.account.tableName &&
     column === "account_id"
       ? sql`CASE
@@ -2146,6 +2186,7 @@ const readAuthCensus = async (
     }
     const policy = AUTH_TABLE_AUDIT_POLICY[model];
     const census = await readTableCensus(database, {
+      accountIdentity: "project-microsoft",
       preservedColumns:
         baseline?.tables[model]?.preservedColumns ?? policy.preservedColumns,
       tableName: policy.tableName,
@@ -2236,12 +2277,14 @@ const evaluateBooleanChecks = async (
 };
 
 type RunBetterAuthHealthAuditOptions = {
+  expectedAccountKey?: "issuer" | "provider";
   database: BetterAuthAuditDatabase;
   expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
 };
 
 /** Current invariants, without frozen row counts or historical issuer mappings. */
 export const runBetterAuthHealthAudit = async ({
+  expectedAccountKey = "provider",
   database,
   expectedOAuthResources,
 }: RunBetterAuthHealthAuditOptions): Promise<
@@ -2319,7 +2362,9 @@ export const runBetterAuthHealthAudit = async ({
     ],
     [
       BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
-      finalAccountConstraintsStatement,
+      expectedAccountKey === "issuer"
+        ? issuerAccountConstraintsStatement
+        : finalAccountConstraintsStatement,
     ],
     [
       BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
@@ -2367,6 +2412,109 @@ export const runBetterAuthHealthAudit = async ({
     ),
   );
   return Result.ok(report(mode, checks));
+};
+
+type RunBetterAuthAccountKeyAuditOptions = {
+  baseline: BetterAuthAuditBaseline | null;
+  database: BetterAuthAuditDatabase;
+  expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
+  mode: BetterAuthAccountKeyAuditMode;
+};
+
+/** The account-key cleanup changes constraints only; every auth value survives. */
+export const runBetterAuthAccountKeyAudit = async ({
+  baseline,
+  database,
+  expectedOAuthResources,
+  mode,
+}: RunBetterAuthAccountKeyAuditOptions): Promise<
+  Result<AuditRunResult, BetterAuthAuditError>
+> => {
+  if (mode === BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY && baseline === null) {
+    return Result.err(
+      new BetterAuthAuditError({
+        code: "invalid-baseline",
+        message: "The frozen account-key baseline is required",
+      }),
+    );
+  }
+  const health = await runBetterAuthHealthAudit({
+    database,
+    expectedOAuthResources,
+    expectedAccountKey:
+      mode === BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY ? "issuer" : "provider",
+  });
+  if (Result.isError(health)) {
+    return health;
+  }
+  const checks = [...health.value.checks];
+  if (health.value.status !== "passed") {
+    return Result.ok({
+      baseline: baseline ?? emptyBaseline(),
+      report: report(mode, checks),
+    });
+  }
+
+  const tables: BetterAuthAuditBaseline["tables"] = {};
+  for (const [model, table] of Object.entries(authSchema)) {
+    const census = await readTableCensus(database, {
+      accountIdentity: "preserve",
+      preservedColumns: columnNames(table),
+      tableName: getTableName(table),
+    });
+    if (Result.isError(census)) {
+      return census;
+    }
+    tables[model] = census.value;
+  }
+  const accessPolicy = await readAccessPolicyDigest(database);
+  if (Result.isError(accessPolicy)) {
+    return accessPolicy;
+  }
+
+  if (mode === BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY && baseline !== null) {
+    const preserved =
+      accessPolicy.value === baseline.accessPolicyDigest &&
+      Object.keys(baseline.tables).length === Object.keys(tables).length &&
+      Object.entries(tables).every(([model, actual]) => {
+        const expected = baseline.tables[model];
+        return (
+          expected !== undefined &&
+          expected.preservedColumns.length === actual.preservedColumns.length &&
+          expected.preservedColumns.every(
+            (column, index) => actual.preservedColumns.at(index) === column,
+          ) &&
+          expected.rowCount === actual.rowCount &&
+          expected.primaryKeyDigest === actual.primaryKeyDigest &&
+          expected.rowContentDigest === actual.rowContentDigest
+        );
+      });
+    checks.push(check(BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_PRESERVED, preserved));
+    return Result.ok({ baseline, report: report(mode, checks) });
+  }
+
+  const identities = await readActualAccountIdentities(database);
+  if (Result.isError(identities)) {
+    return identities;
+  }
+  const policy = await readActualOAuthPolicy(database);
+  if (Result.isError(policy)) {
+    return policy;
+  }
+  checks.push(
+    check(BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_BASELINED, policy.value.valid),
+  );
+  const nextBaseline = createBaseline(
+    tables,
+    accessPolicy.value,
+    identities.value,
+    {
+      clientCount: policy.value.clientCount,
+      digest: policy.value.digest,
+      resourceCount: policy.value.resourceCount,
+    },
+  );
+  return Result.ok({ baseline: nextBaseline, report: report(mode, checks) });
 };
 
 type RunBetterAuthMigrationAuditOptions = {
@@ -2771,6 +2919,42 @@ const betterAuthAuditBaselineSchema: v.GenericSchema<
   ),
 });
 
+const betterAuthAccountKeyBaselineSchema = v.strictObject({
+  accountIdentityProjection: v.strictObject({
+    digest: digestSchema,
+    rowCount: rowCountSchema,
+  }),
+  accessPolicyDigest: digestSchema,
+  formatVersion: v.literal(4),
+  oauthPolicyProjection: v.strictObject({
+    clientCount: rowCountSchema,
+    digest: digestSchema,
+    resourceCount: rowCountSchema,
+  }),
+  tables: v.strictObject(
+    Object.fromEntries(
+      Object.entries(authSchema).map(([model, table]) => [
+        model,
+        v.strictObject({
+          preservedColumns: v.pipe(
+            v.array(v.string()),
+            v.check((columns) => {
+              const expected = columnNames(table);
+              return (
+                columns.length === expected.length &&
+                columns.every((column, index) => expected.at(index) === column)
+              );
+            }, "The account-key baseline must preserve every current column"),
+          ),
+          primaryKeyDigest: digestSchema,
+          rowContentDigest: digestSchema,
+          rowCount: rowCountSchema,
+        }),
+      ]),
+    ),
+  ),
+});
+
 const GUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const MICROSOFT_ISSUER_PATTERN =
@@ -2823,7 +3007,13 @@ export const parseBetterAuthAuditBaseline = (
         message: "Better Auth audit baseline is invalid",
       }),
     );
-  const parsed = v.safeParse(betterAuthAuditBaselineSchema, value);
+  const parsed = v.safeParse(
+    v.union([
+      betterAuthAuditBaselineSchema,
+      betterAuthAccountKeyBaselineSchema,
+    ]),
+    value,
+  );
   return parsed.success ? Result.ok(parsed.output) : invalidBaseline();
 };
 
