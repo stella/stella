@@ -88,13 +88,14 @@ const parseCourtFile = (
   entries: AresVrSpisZn[] | undefined,
 ): AresCourtFile | null => {
   const entry = findCurrentEntry(entries);
-  if (!entry?.soud || !entry.oddil || !entry.vlozka) {
+  const insert = entry?.vlozka;
+  if (!entry?.soud || !entry.oddil || insert === undefined || insert === "") {
     return null;
   }
   return {
     court: getAresCourtName(entry.soud),
     section: entry.oddil,
-    insert: entry.vlozka,
+    insert: String(insert),
   };
 };
 

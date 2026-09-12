@@ -8,6 +8,7 @@ import {
 } from "react";
 import type {
   CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
@@ -26,6 +27,8 @@ import { TauriEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 import {
+  Building2Icon,
+  ChevronsUpDownIcon,
   ClipboardIcon,
   CircleHelpIcon,
   CopyPlusIcon,
@@ -49,6 +52,7 @@ import {
   VideoIcon,
   XIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
@@ -90,6 +94,7 @@ import {
 import { StellaMark } from "@stll/ui/stella-mark";
 import { cn } from "@stll/ui/utils";
 
+import { RegistrySearch } from "../registry/RegistrySearch";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -112,8 +117,12 @@ import {
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  clipboardTimelineKeyAction,
+  CLIPBOARD_SEARCH_SCOPES,
+  adjacentClipboardScope,
   clipboardControlsKeyAction,
+  clipboardScopeKeyAction,
+  clipboardSearchScope,
+  clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -122,10 +131,13 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
-  shouldReturnToTimelineFromInput,
   shouldLeaveClipboardSearch,
+  shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
-import type { ClipboardPointerPosition } from "./clipboard-logic";
+import type {
+  ClipboardPointerPosition,
+  ClipboardSearchScope,
+} from "./clipboard-logic";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -196,6 +208,17 @@ const CLIPBOARD_RAIL_OVERSCAN = 3;
 const CLIPBOARD_RAIL_PADDING = 20;
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
+
+// The search field shows which scope it searches; the up/down glyph beside
+// the icon is the affordance for the arrow keys that switch it.
+const CLIPBOARD_SCOPE_PRESENTATION = {
+  clips: { icon: ClipboardIcon, label: "allClips" },
+  registry: { icon: Building2Icon, label: "externalRegistry" },
+  groups: { icon: TagsIcon, label: "groups" },
+} as const satisfies Record<
+  ClipboardSearchScope,
+  { icon: LucideIcon; label: "allClips" | "externalRegistry" | "groups" }
+>;
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
@@ -241,7 +264,14 @@ const focusTimeline = (node: HTMLDivElement | null) => {
 const clipboardInputDirection = (input: HTMLInputElement) =>
   getComputedStyle(input).direction === "rtl" ? "rtl" : "ltr";
 
-const focusCard = (rail: HTMLDivElement | null, id: string) => {
+type CardRevealOptions = {
+  rail: HTMLDivElement | null;
+  id: string;
+  /** Move keyboard focus onto the card, or only scroll it into the rail. */
+  focus: boolean;
+};
+
+const revealCard = ({ rail, id, focus }: CardRevealOptions) => {
   if (!rail) {
     return;
   }
@@ -251,9 +281,11 @@ const focusCard = (rail: HTMLDivElement | null, id: string) => {
   if (!card) {
     return;
   }
-  card
-    .querySelector<HTMLElement>("[data-clipboard-card-trigger]")
-    ?.focus({ preventScroll: true });
+  if (focus) {
+    card
+      .querySelector<HTMLElement>("[data-clipboard-card-trigger]")
+      ?.focus({ preventScroll: true });
+  }
 
   const railBounds = rail.getBoundingClientRect();
   const cardBounds = card.getBoundingClientRect();
@@ -1349,6 +1381,7 @@ const ClipboardApp = () => {
     ? getUiLocaleDirection(locale)
     : "ltr";
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const connectionFlowRef = useRef<"signIn" | "idle">("idle");
   const timelineRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLElement>(null);
   const timelineRailRef = useRef<HTMLDivElement>(null);
@@ -1360,6 +1393,10 @@ const ClipboardApp = () => {
     () => Temporal.Now.instant().epochMilliseconds,
   );
   const [query, setQuery] = useState("");
+  const [searchSource, setSearchSource] = useState<"clips" | "registry">(
+    "clips",
+  );
+  const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
@@ -1517,6 +1554,9 @@ const ClipboardApp = () => {
 
   useEffect(() => {
     const prepareNextOpen = () => {
+      if (connectionFlowRef.current === "signIn") {
+        return;
+      }
       if (welcomeOpen) {
         return;
       }
@@ -1528,22 +1568,25 @@ const ClipboardApp = () => {
       railPointerRef.current = null;
       flushSync(() => {
         setQuery("");
+        setSearchSource("clips");
+        setSearchComposing(false);
         setSelectedIndex(0);
       });
       timelineRailRef.current?.scrollTo({ behavior: "instant", left: 0 });
+    };
+    const onError = () => {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+      });
+      setError({ message: t("errorUpdateHistory"), source: "operation" });
     };
     const stopListening = subscribeDesktopEvent({
       event: TauriEvent.WINDOW_BLUR,
       handler: prepareNextOpen,
       options: { target: { kind: "Window", label: getCurrentWindow().label } },
-      onError: () => {
-        reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
-          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
-          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-        });
-        setError({ message: t("errorUpdateHistory"), source: "operation" });
-      },
+      onError,
     });
     window.addEventListener("blur", prepareNextOpen);
     return () => {
@@ -1555,7 +1598,11 @@ const ClipboardApp = () => {
   useEffect(() => {
     const focusActiveCard = () => {
       if (activeItemId) {
-        focusCard(timelineRailRef.current, activeItemId);
+        revealCard({
+          rail: timelineRailRef.current,
+          id: activeItemId,
+          focus: true,
+        });
         return;
       }
       timelineRef.current?.focus();
@@ -1565,11 +1612,18 @@ const ClipboardApp = () => {
       // The pointer may have moved while the window was hidden; the next
       // pointer move only seeds the position.
       railPointerRef.current = null;
+      if (connectionFlowRef.current === "signIn") {
+        connectionFlowRef.current = "idle";
+        searchInputRef.current?.focus();
+        return;
+      }
       if (welcomeOpen) {
         return;
       }
       flushSync(() => {
         setQuery("");
+        setSearchSource("clips");
+        setSearchComposing(false);
         setSelectedIndex(0);
       });
       const newestItem = filterClipboardItems(
@@ -1578,7 +1632,11 @@ const ClipboardApp = () => {
         activeGroupId,
       ).at(0);
       if (newestItem) {
-        focusCard(timelineRailRef.current, newestItem.id);
+        revealCard({
+          rail: timelineRailRef.current,
+          id: newestItem.id,
+          focus: true,
+        });
         return;
       }
       timelineRef.current?.focus();
@@ -1838,10 +1896,9 @@ const ClipboardApp = () => {
     flushSync(() => setSelectedIndex(index));
     const item = filteredItems.at(index);
     if (item) {
-      focusCard(timelineRailRef.current, item.id);
+      revealCard({ rail: timelineRailRef.current, id: item.id, focus: true });
     }
   };
-
   const handleRailPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "mouse") {
       return;
@@ -1881,26 +1938,11 @@ const ClipboardApp = () => {
       return;
     }
     event.preventDefault();
-    switch (railAction) {
-      case "stay":
-        return;
-      case "focusTimeline":
-        if (activeItem) {
-          selectIndex(activeIndex);
-        }
-        return;
-      case "previous":
-      case "next":
-        break;
-      default:
-        railAction satisfies never;
-        panic("Unknown clipboard control navigation action.");
-    }
     const controls = Array.from(
       footer.querySelectorAll<HTMLElement>(
-        "button:not([disabled]):not([aria-disabled='true']), a[href], input:not([disabled])",
+        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), a[href], input:not([disabled])",
       ),
-    );
+    ).filter((control) => !control.closest("[inert]"));
     const control = target.closest<HTMLElement>("button, a, input");
     const index = control ? controls.indexOf(control) : -1;
     const nextIndex = index + (railAction === "next" ? 1 : -1);
@@ -1908,6 +1950,92 @@ const ClipboardApp = () => {
       return;
     }
     controls.at(nextIndex)?.focus();
+  };
+
+  const handleRegistryKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) {
+      return true;
+    }
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest("[data-registry-controls], [data-registry-results]")
+    ) {
+      return true;
+    }
+    return (
+      searchSource === "registry" && !(event.target instanceof HTMLInputElement)
+    );
+  };
+
+  const searchScope = clipboardSearchScope({
+    activeGroupId,
+    source: searchSource,
+  });
+  const ScopeIcon = CLIPBOARD_SCOPE_PRESENTATION[searchScope].icon;
+  const availableScopes: readonly ClipboardSearchScope[] =
+    snapshot.groups.length === 0
+      ? CLIPBOARD_SEARCH_SCOPES.filter((scope) => scope !== "groups")
+      : CLIPBOARD_SEARCH_SCOPES;
+  // Scopes are the only thing vertical arrows do, from the rail, the search
+  // field, and the footer alike. Focus returns to the search field so typing
+  // continues in the new scope without another keystroke.
+  const switchScope = (action: "next" | "previous") => {
+    const next = adjacentClipboardScope({
+      action,
+      available: availableScopes,
+      current: searchScope,
+    });
+    if (next !== null) {
+      applyScope({ next, focusSearch: false });
+    }
+  };
+  type ApplyScopeOptions = {
+    next: ClipboardSearchScope;
+    /** A click hands focus to the field; the keyboard keeps the switcher. */
+    focusSearch: boolean;
+  };
+  const applyScope = ({ next, focusSearch }: ApplyScopeOptions) => {
+    setContextMenu({ type: "closed" });
+    switch (next) {
+      case "clips":
+        setSelectedGroupId(null);
+        setSearchSource("clips");
+        break;
+      case "registry":
+        setSearchSource("registry");
+        break;
+      case "groups": {
+        const remembered = snapshot.groups.find(
+          (group) => group.id === selectedGroupId,
+        );
+        setSelectedGroupId((remembered ?? snapshot.groups.at(0))?.id ?? null);
+        setSearchSource("clips");
+        break;
+      }
+      default:
+        next satisfies never;
+        panic("Unknown clipboard search scope.");
+    }
+    if (focusSearch) {
+      searchInputRef.current?.focus();
+    }
+  };
+  // The pointer path through the scopes: a click steps forward and wraps.
+  const cycleScope = () => {
+    const index = availableScopes.indexOf(searchScope);
+    const next = availableScopes.at((index + 1) % availableScopes.length);
+    if (next === undefined) {
+      return;
+    }
+    applyScope({ next, focusSearch: true });
+  };
+  const handleSwitcherKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    const action = clipboardScopeKeyAction(event.key);
+    if (!action || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    switchScope(action);
   };
 
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -1925,6 +2053,9 @@ const ClipboardApp = () => {
       event.preventDefault();
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
+      return;
+    }
+    if (handleRegistryKeyDown(event)) {
       return;
     }
     if (primaryModifier) {
@@ -1965,7 +2096,6 @@ const ClipboardApp = () => {
           valueLength: event.target.value.length,
         })
       ) {
-        event.preventDefault();
         handleControlsKeyDown(event, event.target);
       }
       return;
@@ -1995,7 +2125,10 @@ const ClipboardApp = () => {
     const interactiveTarget = target?.closest(
       "button, a, input, textarea, select, [contenteditable='true']",
     );
-    if (interactiveTarget && !cardTrigger) {
+    // Typing on the scope switcher still reaches the search field; every
+    // other key there belongs to the switcher itself.
+    const scopeSwitcher = target?.closest("[data-clipboard-scope]");
+    if (interactiveTarget && !cardTrigger && !scopeSwitcher) {
       return;
     }
     if (cardTrigger && event.key === " ") {
@@ -2009,6 +2142,9 @@ const ClipboardApp = () => {
       setQuery((currentQuery) => currentQuery + event.key);
       setSelectedIndex(0);
       searchInputRef.current?.focus();
+      return;
+    }
+    if (scopeSwitcher) {
       return;
     }
     const keyAction = clipboardTimelineKeyAction({
@@ -2175,386 +2311,466 @@ const ClipboardApp = () => {
           }
         />
       )}
-      <main className="relative min-h-0 flex-1">
-        {feedback}
-
-        {filteredItems.length === 0 ? (
-          <div className="text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-            <span className="bg-foreground/6 text-foreground/70 grid size-11 place-items-center rounded-2xl shadow-sm/5">
-              {filterQuery ? (
-                <SearchIcon aria-hidden="true" className="size-5" />
-              ) : (
-                <ClipboardIcon aria-hidden="true" className="size-5" />
-              )}
-            </span>
-            <p className="text-foreground/82 max-w-sm text-sm font-medium text-balance">
-              {filterQuery || activeGroupId
-                ? emptyStateTitle
-                : t(
-                    IMAGE_CLIPBOARD_CAPTURE_SUPPORTED
-                      ? "emptyDescription"
-                      : "emptyDescriptionTextOnly",
-                  )}
-            </p>
-          </div>
-        ) : (
-          <div
-            aria-label={t("timeline")}
-            className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
-            onPointerMove={handleRailPointerMove}
-            ref={timelineRailRef}
-            role="list"
-          >
-            {railWindow.start > 0 ? (
-              <div
-                aria-hidden="true"
-                className="shrink-0"
-                style={{
-                  width:
-                    railWindow.start * CLIPBOARD_CARD_STRIDE -
-                    CLIPBOARD_CARD_GAP,
-                }}
-              />
-            ) : null}
-            {filteredItems
-              // Index-based filtering keeps the callback shape the React
-              // Compiler can memoize; slicing and re-deriving the index here
-              // made it drop the component's manual memoization.
-              .map((item, index) => {
-                if (index < railWindow.start || index >= railWindow.end) {
-                  return null;
-                }
-                const group = item.groupId
-                  ? (groupsById.get(item.groupId) ?? null)
-                  : null;
-                return (
-                  <ClipboardCard
-                    active={index === activeIndex}
-                    ageReferenceTime={ageReferenceTime}
-                    dragging={
-                      dragState.type === "dragging" &&
-                      dragState.itemId === item.id
-                    }
-                    groupColor={group?.color ?? null}
-                    groupName={group?.name ?? null}
-                    index={index}
-                    item={item}
-                    key={item.id}
-                    onOpenMenu={openContextMenu}
-                    onCopy={copyItem}
-                    onRename={(id, name) =>
-                      applySnapshotCommand("clipboard_set_item_name", {
-                        id,
-                        name,
-                      })
-                    }
-                    onSelect={setSelectedIndex}
-                    query={filterQuery}
-                    sourceVisual={
-                      item.sourceApp?.visualKey
-                        ? (sourceAppVisuals.get(item.sourceApp.visualKey) ??
-                          null)
-                        : null
-                    }
-                  />
-                );
-              })}
-            {railWindow.end < filteredItems.length ? (
-              <div
-                aria-hidden="true"
-                className="shrink-0"
-                style={{
-                  width:
-                    (filteredItems.length - railWindow.end) *
-                      CLIPBOARD_CARD_STRIDE -
-                    CLIPBOARD_CARD_GAP,
-                }}
-              />
-            ) : null}
-          </div>
-        )}
-      </main>
-
-      <footer
-        className="clipboard-controls grid h-14 shrink-0 grid-cols-[auto_minmax(8rem,22rem)_minmax(0,1fr)_auto_auto] items-center gap-2 px-3"
-        ref={controlsRef}
+      {feedback}
+      <RegistrySearch
+        query={query}
+        composing={searchComposing}
+        source={searchSource}
+        onConnectionFlowChange={(flow) => {
+          connectionFlowRef.current = flow;
+        }}
+        searchInput={searchInputRef}
       >
-        <div className="flex shrink-0 items-center gap-0.5">
-          <a
-            aria-label="Stella"
-            className="text-foreground grid size-11 place-items-center"
-            href={STELLA_WEB_APP_URL}
-            onClick={(event) => {
-              event.preventDefault();
-              void invoke("clipboard_open_stella").catch((error: unknown) => {
-                reportDesktopError({
-                  code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-                  detail: describeError(error),
-                  operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
-                  window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-                });
-                setError({
-                  message: t("errorOpenStella"),
-                  source: "operation",
-                });
-              });
-            }}
-            title="Stella"
-          >
-            <StellaMark className="size-5" />
-          </a>
-          {snapshot.captureStatus === "paused" ? (
-            <Button
-              aria-label={t("resume")}
-              className="size-11 shrink-0 rounded-full text-(--option-orange)"
-              onClick={() => {
-                applySnapshotCommand("clipboard_set_capture_status", {
-                  status: "active",
-                });
-              }}
-              size="icon"
-              title={t("resume")}
-              variant="ghost"
-            >
-              <PauseIcon aria-hidden="true" className="size-4" />
-            </Button>
-          ) : null}
-          {snapshot.persistence.status === "memoryOnly" ||
-          snapshot.persistence.status === "deletionOnly" ||
-          imageCleanupPending ? (
-            <span
-              aria-label={persistenceWarningLabel}
-              className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
-              role="status"
-              title={persistenceWarningLabel}
-            >
-              <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
-            </span>
-          ) : null}
-        </div>
+        {({ controls, results, feedback: registryFeedback }) => (
+          <>
+            {searchSource === "clips" ? (
+              <main className="relative min-h-0 flex-1">
+                {filteredItems.length === 0 ? (
+                  <div className="text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                    <span className="bg-foreground/6 text-foreground/70 grid size-11 place-items-center rounded-2xl shadow-sm/5">
+                      {filterQuery ? (
+                        <SearchIcon aria-hidden="true" className="size-5" />
+                      ) : (
+                        <ClipboardIcon aria-hidden="true" className="size-5" />
+                      )}
+                    </span>
+                    <p className="text-foreground/82 max-w-sm text-sm font-medium text-balance">
+                      {filterQuery || activeGroupId
+                        ? emptyStateTitle
+                        : t(
+                            IMAGE_CLIPBOARD_CAPTURE_SUPPORTED
+                              ? "emptyDescription"
+                              : "emptyDescriptionTextOnly",
+                          )}
+                    </p>
+                    {filterQuery ? (
+                      <Button
+                        className="text-muted-foreground h-auto max-w-sm px-2 py-1 text-wrap"
+                        onClick={() =>
+                          applyScope({ next: "registry", focusSearch: true })
+                        }
+                        size="sm"
+                        variant="link"
+                      >
+                        {t("noResultsDescription", { query: filterQuery })}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div
+                    aria-label={t("timeline")}
+                    className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    onPointerMove={handleRailPointerMove}
+                    ref={timelineRailRef}
+                    role="list"
+                  >
+                    {railWindow.start > 0 ? (
+                      <div
+                        aria-hidden="true"
+                        className="shrink-0"
+                        style={{
+                          width:
+                            railWindow.start * CLIPBOARD_CARD_STRIDE -
+                            CLIPBOARD_CARD_GAP,
+                        }}
+                      />
+                    ) : null}
+                    {filteredItems
+                      // Index-based filtering keeps the callback shape the React
+                      // Compiler can memoize; slicing and re-deriving the index here
+                      // made it drop the component's manual memoization.
+                      .map((item, index) => {
+                        if (
+                          index < railWindow.start ||
+                          index >= railWindow.end
+                        ) {
+                          return null;
+                        }
+                        const group = item.groupId
+                          ? (groupsById.get(item.groupId) ?? null)
+                          : null;
+                        return (
+                          <ClipboardCard
+                            active={index === activeIndex}
+                            ageReferenceTime={ageReferenceTime}
+                            dragging={
+                              dragState.type === "dragging" &&
+                              dragState.itemId === item.id
+                            }
+                            groupColor={group?.color ?? null}
+                            groupName={group?.name ?? null}
+                            index={index}
+                            item={item}
+                            key={item.id}
+                            onOpenMenu={openContextMenu}
+                            onCopy={copyItem}
+                            onRename={(id, name) =>
+                              applySnapshotCommand("clipboard_set_item_name", {
+                                id,
+                                name,
+                              })
+                            }
+                            onSelect={setSelectedIndex}
+                            query={filterQuery}
+                            sourceVisual={
+                              item.sourceApp?.visualKey
+                                ? (sourceAppVisuals.get(
+                                    item.sourceApp.visualKey,
+                                  ) ?? null)
+                                : null
+                            }
+                          />
+                        );
+                      })}
+                    {railWindow.end < filteredItems.length ? (
+                      <div
+                        aria-hidden="true"
+                        className="shrink-0"
+                        style={{
+                          width:
+                            (filteredItems.length - railWindow.end) *
+                              CLIPBOARD_CARD_STRIDE -
+                            CLIPBOARD_CARD_GAP,
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                )}
+              </main>
+            ) : (
+              results
+            )}
 
-        <InputGroup className="clipboard-search h-11 w-full rounded-full">
-          <InputGroupAddon className="text-foreground/65">
-            <SearchIcon aria-hidden="true" className="size-4" />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label={t("search")}
-            className="clipboard-search-input h-full px-0 text-sm"
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setSelectedIndex(0);
-            }}
-            placeholder={t("searchPlaceholder")}
-            ref={searchInputRef}
-            role="searchbox"
-            spellCheck={false}
-            type="text"
-            value={query}
-          />
-          <InputGroupAddon align="inline-end" className="pe-4 [&>kbd]:me-0">
-            <kbd className="text-foreground-muted me-0 font-mono text-[10px]">
-              {PRIMARY_MODIFIER_LABEL}K
-            </kbd>
-          </InputGroupAddon>
-        </InputGroup>
+            <footer
+              className="clipboard-controls grid h-14 shrink-0 grid-cols-[auto_minmax(8rem,22rem)_minmax(0,1fr)_auto_auto] items-center gap-2 px-3"
+              ref={controlsRef}
+            >
+              <div className="flex shrink-0 items-center gap-0.5">
+                <a
+                  aria-label="Stella"
+                  className="text-foreground grid size-11 place-items-center"
+                  href={STELLA_WEB_APP_URL}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void invoke("clipboard_open_stella").catch(
+                      (error: unknown) => {
+                        reportDesktopError({
+                          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                          detail: describeError(error),
+                          operation:
+                            DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+                        });
+                        setError({
+                          message: t("errorOpenStella"),
+                          source: "operation",
+                        });
+                      },
+                    );
+                  }}
+                  title="Stella"
+                >
+                  <StellaMark className="size-5" />
+                </a>
+                {snapshot.captureStatus === "paused" ? (
+                  <Button
+                    aria-label={t("resume")}
+                    className="size-11 shrink-0 rounded-full text-(--option-orange)"
+                    onClick={() => {
+                      applySnapshotCommand("clipboard_set_capture_status", {
+                        status: "active",
+                      });
+                    }}
+                    size="icon"
+                    title={t("resume")}
+                    variant="ghost"
+                  >
+                    <PauseIcon aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
+                {snapshot.persistence.status === "memoryOnly" ||
+                snapshot.persistence.status === "deletionOnly" ||
+                imageCleanupPending ? (
+                  <span
+                    aria-label={persistenceWarningLabel}
+                    className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
+                    role="status"
+                    title={persistenceWarningLabel}
+                  >
+                    <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
+                  </span>
+                ) : null}
+              </div>
 
-        <nav
-          aria-label={t("groups")}
-          className="clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2"
-        >
-          <Button
-            aria-pressed={activeGroupId === null}
-            className="h-11 shrink-0 rounded-full px-3 text-xs"
-            data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
-            data-drop-target={isDropTarget(null) ? "" : undefined}
-            onClick={() => {
-              setSelectedGroupId(null);
-              setSelectedIndex(0);
-            }}
-            variant={activeGroupId === null ? "secondary" : "ghost"}
-          >
-            {t("allClips")}
-          </Button>
-          <Button
-            aria-label={t("createGroup")}
-            className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
-            disabled={snapshot.groups.length >= snapshot.groupLimit}
-            onClick={() =>
-              setDialog({
-                color: nextGroupColor,
-                itemId: null,
-                name: "",
-                type: "createGroup",
-              })
-            }
-            size="icon"
-            title={t("createGroup")}
-            variant="ghost"
-          >
-            <FolderPlusIcon aria-hidden="true" className="size-4" />
-          </Button>
-          {snapshot.groups.map((group) => {
-            const groupStyle: ClipboardGroupStyle = {
-              "--clipboard-group-accent": group.color,
-            };
-            return (
-              <ContextMenu
-                actions={[
-                  {
-                    icon: <PencilIcon aria-hidden="true" />,
-                    label: t("editGroup"),
-                    onClick: () =>
-                      setDialog({
-                        color: group.color,
-                        groupId: group.id,
-                        name: group.name,
-                        type: "editGroup",
-                      }),
-                  },
-                  {
-                    icon: <Trash2Icon aria-hidden="true" />,
-                    label: t("deleteGroup"),
-                    onClick: () =>
-                      setDialog({
-                        groupId: group.id,
-                        groupName: group.name,
-                        mode: "keepClips",
-                        type: "deleteGroup",
-                      }),
-                    separatorBefore: true,
-                    variant: "destructive",
-                  },
-                ]}
-                key={group.id}
-              >
-                <Button
-                  aria-pressed={activeGroupId === group.id}
-                  className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
-                  data-clipboard-group-id={group.id}
-                  data-drop-target={isDropTarget(group.id) ? "" : undefined}
-                  data-group-chip=""
-                  onClick={() => {
-                    setSelectedGroupId(group.id);
+              <InputGroup className="clipboard-search h-11 w-full rounded-full">
+                <InputGroupAddon className="text-foreground/65">
+                  <button
+                    aria-label={t(
+                      CLIPBOARD_SCOPE_PRESENTATION[searchScope].label,
+                    )}
+                    aria-keyshortcuts="ArrowUp ArrowDown"
+                    className="focus-visible:ring-ring ms-1.5 flex h-8 items-center gap-1 rounded-full px-1.5 outline-none focus-visible:ring-2"
+                    data-clipboard-scope={searchScope}
+                    onClick={cycleScope}
+                    onKeyDown={handleSwitcherKeyDown}
+                    title={t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
+                    type="button"
+                  >
+                    <ScopeIcon aria-hidden="true" className="size-4" />
+                    <ChevronsUpDownIcon aria-hidden="true" className="size-3" />
+                  </button>
+                </InputGroupAddon>
+                <InputGroupInput
+                  aria-label={t("search")}
+                  aria-describedby={
+                    searchSource === "registry" ? "registry-error" : undefined
+                  }
+                  autoComplete="off"
+                  dir="auto"
+                  className="clipboard-search-input h-full px-0 text-sm"
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    if (!event.target.value.trim()) {
+                      setSearchSource("clips");
+                    }
                     setSelectedIndex(0);
                   }}
-                  style={groupStyle}
-                  variant="ghost"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                  />
-                  {group.name}
-                </Button>
-              </ContextMenu>
-            );
-          })}
-        </nav>
-        <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  aria-label={t("moreOptions")}
-                  className="size-11 rounded-full"
-                  size="icon"
-                  title={t("moreOptions")}
-                  variant="ghost"
+                  onCompositionStart={() => setSearchComposing(true)}
+                  onCompositionEnd={() => setSearchComposing(false)}
+                  placeholder={t("searchPlaceholder")}
+                  ref={searchInputRef}
+                  role="searchbox"
+                  spellCheck={false}
+                  type="text"
+                  value={query}
                 />
-              }
-            >
-              <EllipsisVerticalIcon aria-hidden="true" className="size-4" />
-            </MenuTrigger>
-            <MenuPopup align="end" className="w-60" side="top">
-              <MenuItem
-                className="min-h-11 rounded-xl"
-                onClick={() => {
-                  applySnapshotCommand("clipboard_set_capture_status", {
-                    status: nextCaptureStatus,
-                  });
-                }}
-              >
-                {captureActive ? <PauseIcon /> : <PlayIcon />}
-                {captureActionLabel}
-              </MenuItem>
-              <MenuSub>
-                <MenuSubTrigger className="min-h-11 rounded-xl">
-                  <ClockIcon />
-                  {t("retention")}
-                </MenuSubTrigger>
-                <MenuSubPopup className="w-56">
-                  <MenuRadioGroup value={snapshot.retention}>
-                    {CLIPBOARD_RETENTIONS.map((retention) => (
-                      <MenuRadioItem
-                        className="min-h-11 rounded-xl"
-                        key={retention}
-                        onClick={() => {
-                          applySnapshotCommand("clipboard_set_retention", {
-                            retention,
-                          });
-                        }}
-                        value={retention}
+                <InputGroupAddon
+                  align="inline-end"
+                  className="pe-4 [&>kbd]:me-0"
+                >
+                  <kbd className="text-foreground-muted me-0 font-mono text-[10px]">
+                    {PRIMARY_MODIFIER_LABEL}K
+                  </kbd>
+                </InputGroupAddon>
+              </InputGroup>
+
+              <div className="flex min-w-0 items-center gap-2">
+                {controls}
+                {registryFeedback}
+                <nav
+                  aria-hidden={searchSource === "registry"}
+                  inert={searchSource === "registry"}
+                  aria-label={t("groups")}
+                  className={cn(
+                    "clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2",
+                    searchSource === "registry" && "hidden",
+                  )}
+                >
+                  <Button
+                    aria-pressed={activeGroupId === null}
+                    className="h-11 shrink-0 rounded-full px-3 text-xs"
+                    data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
+                    data-drop-target={isDropTarget(null) ? "" : undefined}
+                    onClick={() => {
+                      setSelectedGroupId(null);
+                      setSelectedIndex(0);
+                    }}
+                    variant={activeGroupId === null ? "secondary" : "ghost"}
+                  >
+                    {t("allClips")}
+                  </Button>
+                  <Button
+                    aria-label={t("createGroup")}
+                    className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
+                    disabled={snapshot.groups.length >= snapshot.groupLimit}
+                    onClick={() =>
+                      setDialog({
+                        color: nextGroupColor,
+                        itemId: null,
+                        name: "",
+                        type: "createGroup",
+                      })
+                    }
+                    size="icon"
+                    title={t("createGroup")}
+                    variant="ghost"
+                  >
+                    <FolderPlusIcon aria-hidden="true" className="size-4" />
+                  </Button>
+                  {snapshot.groups.map((group) => {
+                    const groupStyle: ClipboardGroupStyle = {
+                      "--clipboard-group-accent": group.color,
+                    };
+                    return (
+                      <ContextMenu
+                        actions={[
+                          {
+                            icon: <PencilIcon aria-hidden="true" />,
+                            label: t("editGroup"),
+                            onClick: () =>
+                              setDialog({
+                                color: group.color,
+                                groupId: group.id,
+                                name: group.name,
+                                type: "editGroup",
+                              }),
+                          },
+                          {
+                            icon: <Trash2Icon aria-hidden="true" />,
+                            label: t("deleteGroup"),
+                            onClick: () =>
+                              setDialog({
+                                groupId: group.id,
+                                groupName: group.name,
+                                mode: "keepClips",
+                                type: "deleteGroup",
+                              }),
+                            separatorBefore: true,
+                            variant: "destructive",
+                          },
+                        ]}
+                        key={group.id}
                       >
-                        {t(RETENTION_LABEL_KEYS[retention])}
-                      </MenuRadioItem>
-                    ))}
-                  </MenuRadioGroup>
-                </MenuSubPopup>
-              </MenuSub>
-              <MenuCheckboxItem
-                checked={snapshot.screenCapture === "visible"}
-                className="min-h-11 rounded-xl"
-                onCheckedChange={(checked) => {
-                  applySnapshotCommand("clipboard_set_screen_capture", {
-                    capture: checked ? "visible" : "hidden",
-                  });
-                }}
-                variant="switch"
+                        <Button
+                          aria-pressed={activeGroupId === group.id}
+                          className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
+                          data-clipboard-group-id={group.id}
+                          data-drop-target={
+                            isDropTarget(group.id) ? "" : undefined
+                          }
+                          data-group-chip=""
+                          onClick={() => {
+                            setSelectedGroupId(group.id);
+                            setSelectedIndex(0);
+                          }}
+                          style={groupStyle}
+                          variant="ghost"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                          />
+                          {group.name}
+                        </Button>
+                      </ContextMenu>
+                    );
+                  })}
+                </nav>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
+                <Menu>
+                  <MenuTrigger
+                    render={
+                      <Button
+                        aria-label={t("moreOptions")}
+                        className="size-11 rounded-full"
+                        size="icon"
+                        title={t("moreOptions")}
+                        variant="ghost"
+                      />
+                    }
+                  >
+                    <EllipsisVerticalIcon
+                      aria-hidden="true"
+                      className="size-4"
+                    />
+                  </MenuTrigger>
+                  <MenuPopup align="end" className="w-60" side="top">
+                    <MenuItem
+                      className="min-h-11 rounded-xl"
+                      onClick={() => {
+                        applySnapshotCommand("clipboard_set_capture_status", {
+                          status: nextCaptureStatus,
+                        });
+                      }}
+                    >
+                      {captureActive ? <PauseIcon /> : <PlayIcon />}
+                      {captureActionLabel}
+                    </MenuItem>
+                    <MenuSub>
+                      <MenuSubTrigger className="min-h-11 rounded-xl">
+                        <ClockIcon />
+                        {t("retention")}
+                      </MenuSubTrigger>
+                      <MenuSubPopup className="w-56">
+                        <MenuRadioGroup value={snapshot.retention}>
+                          {CLIPBOARD_RETENTIONS.map((retention) => (
+                            <MenuRadioItem
+                              className="min-h-11 rounded-xl"
+                              key={retention}
+                              onClick={() => {
+                                applySnapshotCommand(
+                                  "clipboard_set_retention",
+                                  {
+                                    retention,
+                                  },
+                                );
+                              }}
+                              value={retention}
+                            >
+                              {t(RETENTION_LABEL_KEYS[retention])}
+                            </MenuRadioItem>
+                          ))}
+                        </MenuRadioGroup>
+                      </MenuSubPopup>
+                    </MenuSub>
+                    <MenuCheckboxItem
+                      checked={snapshot.screenCapture === "visible"}
+                      className="min-h-11 rounded-xl"
+                      onCheckedChange={(checked) => {
+                        applySnapshotCommand("clipboard_set_screen_capture", {
+                          capture: checked ? "visible" : "hidden",
+                        });
+                      }}
+                      variant="switch"
+                    >
+                      <span className="flex items-center gap-2">
+                        <VideoIcon />
+                        {t("showInRecordings")}
+                      </span>
+                    </MenuCheckboxItem>
+                    <MenuItem
+                      className="min-h-11 rounded-xl"
+                      disabled={
+                        snapshot.items.length === 0 &&
+                        snapshot.persistence.status !== "deletionOnly"
+                      }
+                      onClick={() => {
+                        setDialog({ type: "clearHistory" });
+                      }}
+                      variant="destructive"
+                    >
+                      <Trash2Icon />
+                      {t("clear")}
+                    </MenuItem>
+                    <MenuSeparator />
+                    <MenuItem
+                      className="min-h-11 rounded-xl"
+                      onClick={() => {
+                        setWelcomeDismissed(false);
+                        setWelcomeRequested(true);
+                      }}
+                    >
+                      <CircleHelpIcon />
+                      {t("welcomeHelp")}
+                    </MenuItem>
+                  </MenuPopup>
+                </Menu>
+              </div>
+              <Button
+                aria-label={t("close")}
+                className="size-11 shrink-0 rounded-full"
+                onClick={requestHide}
+                size="icon"
+                title={t("close")}
+                variant="ghost"
               >
-                <span className="flex items-center gap-2">
-                  <VideoIcon />
-                  {t("showInRecordings")}
-                </span>
-              </MenuCheckboxItem>
-              <MenuItem
-                className="min-h-11 rounded-xl"
-                disabled={
-                  snapshot.items.length === 0 &&
-                  snapshot.persistence.status !== "deletionOnly"
-                }
-                onClick={() => {
-                  setDialog({ type: "clearHistory" });
-                }}
-                variant="destructive"
-              >
-                <Trash2Icon />
-                {t("clear")}
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem
-                className="min-h-11 rounded-xl"
-                onClick={() => {
-                  setWelcomeDismissed(false);
-                  setWelcomeRequested(true);
-                }}
-              >
-                <CircleHelpIcon />
-                {t("welcomeHelp")}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-        </div>
-        <Button
-          aria-label={t("close")}
-          className="size-11 shrink-0 rounded-full"
-          onClick={requestHide}
-          size="icon"
-          title={t("close")}
-          variant="ghost"
-        >
-          <XIcon aria-hidden="true" className="size-4" />
-        </Button>
-      </footer>
+                <XIcon aria-hidden="true" className="size-4" />
+              </Button>
+            </footer>
+          </>
+        )}
+      </RegistrySearch>
     </div>
   );
 };

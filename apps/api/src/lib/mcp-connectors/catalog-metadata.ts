@@ -237,7 +237,7 @@ export const getDisabledNativeToolSlugsFromSettingsRow = (
     nativeToolOverrides: row?.nativeToolOverrides ?? {},
   });
 
-const arrayOrEmpty = <T>(
+export const arrayOrEmpty = <T>(
   value: readonly T[] | null | undefined,
 ): readonly T[] => {
   if (value === undefined || value === null) {

@@ -28,6 +28,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
@@ -680,6 +681,7 @@ const api = new Elysia()
       .use(catalogueRoute)
       .use(organizationSettingsRoute)
       .use(apiKeysRoute)
+      .use(desktopRegistryRoute)
       .use(aiConfigPublicRoute)
       .use(clauseCategoriesRoute)
       .use(clausesRoute)

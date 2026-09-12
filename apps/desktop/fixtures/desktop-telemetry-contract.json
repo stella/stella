@@ -18,6 +18,7 @@
     "clipboardHistorySubscribe",
     "clipboardHistoryUpdate",
     "clipboardWindowHide",
+    "registryConnectionSubscribe",
     "render",
     "runtime"
   ],

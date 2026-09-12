@@ -83,12 +83,37 @@ fn make_nonactivating_panel(ns_window: &NSWindow) {
   ns_window.setHidesOnDeactivate(false);
 }
 
+fn configure_transient_overlay(ns_window: &NSWindow) {
+  // Transient webviews must keep their original runtime class: WebKit and
+  // AppKit register KVO observers against it and remove them during teardown.
+  ns_window.setCollectionBehavior(
+    ns_window.collectionBehavior()
+      | NSWindowCollectionBehavior::FullScreenAuxiliary
+      | NSWindowCollectionBehavior::CanJoinAllSpaces,
+  );
+  ns_window.setHidesOnDeactivate(false);
+}
+
+/// Prepares a disposable overlay without the persistent clipboard panel's
+/// class conversion. The caller uses Tauri's ordinary show/focus lifecycle.
+pub fn prepare_transient_overlay<R: Runtime>(window: &WebviewWindow<R>) {
+  if let Some((_, ns_window)) = ns_window(window) {
+    configure_transient_overlay(ns_window);
+  }
+}
+
 /// Shows the window as the key window without activating the app (so the app
 /// underneath stays frontmost), restoring it from a park first. Re-classes it
 /// into a non-activating panel on first use. Returns false when the change
 /// could not be applied (not on the main thread, or no window handle); the
 /// caller then falls back to an activating show.
 pub fn present_key_panel<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+  // This legacy conversion is restricted to the process-lifetime clipboard
+  // window, which parks instead of closing. Disposable windows retain their
+  // runtime class so AppKit/WebKit can unregister their observers safely.
+  if window.label() != "clipboard" {
+    return false;
+  }
   let Some((main_thread, ns_window)) = ns_window(window) else {
     return false;
   };

@@ -63,18 +63,21 @@ const CompanySpecificationError = ({
 type CompanySpecificationProps = {
   registry: LookupRegistryOption["slug"];
   companyId: string;
+  initialSettingsVisibility?: "closed" | "open";
 };
 
 /** Editable legal-description format backed by the document-template engine. */
 export const CompanySpecification = ({
   registry,
   companyId,
+  initialSettingsVisibility = "closed",
 }: CompanySpecificationProps) => {
   const { activeOrganizationId } = useAuthenticatedUser();
   return (
     <CompanySpecificationEditor
       key={`${activeOrganizationId}:${registry}:${companyId}`}
       companyId={companyId}
+      initialSettingsVisibility={initialSettingsVisibility}
       registry={registry}
     />
   );
@@ -83,6 +86,7 @@ export const CompanySpecification = ({
 const CompanySpecificationEditor = ({
   registry,
   companyId,
+  initialSettingsVisibility = "closed",
 }: CompanySpecificationProps) => {
   const t = useTranslations();
   const { activeOrganizationId } = useAuthenticatedUser();
@@ -90,7 +94,7 @@ const CompanySpecificationEditor = ({
   const settingsId = useId();
   const [settingsVisibility, setSettingsVisibility] = useState<
     "open" | "closed"
-  >("closed");
+  >(initialSettingsVisibility);
   const [draftFormat, setFormat] = useState<string | null>(null);
   const library = useCompanyFormatLibrary({
     registry,

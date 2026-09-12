@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::types::DEFAULT_BRIDGE_PORT;
 
 const DEFAULT_WEB_PORT: u16 = 3000;
+const DEFAULT_API_PORT: u16 = 3001;
 const PRODUCTION_API_BASE_URL: &str = "https://api.stll.app";
 
 // Development builds must never claim production's persisted data or Keychain
@@ -146,8 +147,11 @@ pub fn resolve_allowed_origins() -> HashSet<String> {
 }
 
 pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
+  let api_port = parse_port(std::env::var("STELLA_API_PORT").ok(), DEFAULT_API_PORT);
   let mut urls = HashSet::new();
   urls.insert(PRODUCTION_API_BASE_URL.to_string());
+  urls.insert(format!("http://127.0.0.1:{api_port}"));
+  urls.insert(format!("http://localhost:{api_port}"));
 
   for origin in resolve_allowed_origins() {
     urls.insert(normalize_api_base_url(&origin));
@@ -192,5 +196,12 @@ mod tests {
       normalize_self_host_api_base_url("https://my.stll.app").unwrap(),
       "https://api.stll.app"
     );
+  }
+
+  #[test]
+  fn trusts_default_local_api_origins() {
+    let urls = resolve_trusted_api_base_urls();
+    assert!(urls.contains("http://localhost:3001"));
+    assert!(urls.contains("http://127.0.0.1:3001"));
   }
 }

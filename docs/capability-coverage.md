@@ -545,7 +545,7 @@ mechanics, and similar), not gaps in coverage.
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
 | assistant_chat         | 15    |
-| auth_plumbing          | 8     |
+| auth_plumbing          | 9     |
 | billing_ui             | 1     |
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
@@ -555,7 +555,7 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
 | native_tool_ui         | 8     |
-| provider_secret        | 23    |
+| provider_secret        | 24    |
 | public_indexing        | 4     |
 | reader_annotations     | 4     |
 | realtime_stream        | 3     |
@@ -565,4 +565,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 171
+Total: 173

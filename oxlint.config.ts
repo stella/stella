@@ -283,6 +283,7 @@ const fixtureRuleOverrides = [
     "require-complete-compaction-generation/require-complete-compaction-generation",
   ]),
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
+    "require-safe-route-handlers/no-direct-handler-config",
     "require-safe-route-handlers/require-safe-route-handlers",
   ]),
   fixtureRuleOverride("require-safe-outbound-target.fixture.ts", [
@@ -3637,6 +3638,15 @@ export default defineConfig({
       ],
       rules: {
         "no-restricted-imports": ["error", { paths: [noZodImport] }],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/**/*routes.ts",
+        "apps/api/src/handlers/**/*route.ts",
+      ],
+      rules: {
+        "require-safe-route-handlers/no-direct-handler-config": "error",
       },
     },
     {

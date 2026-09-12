@@ -20,6 +20,7 @@ mod i18n;
 mod keychain;
 mod logging;
 mod marker_file;
+mod registry;
 mod relaunch;
 mod session_manager;
 mod session_store;
@@ -57,6 +58,7 @@ pub fn run() {
   let allowed_origins = config::resolve_allowed_origins();
 
   let manager = Arc::new(Mutex::new(SessionManager::new()));
+  let registry = Arc::new(Mutex::new(registry::RegistryConnection::default()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   let launch_args = std::env::args().collect::<Vec<_>>();
   #[cfg(target_os = "macos")]
@@ -102,6 +104,7 @@ pub fn run() {
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .manage::<AppState>(Arc::clone(&manager))
+    .manage::<registry::RegistryState>(Arc::clone(&registry))
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .manage(clipboard_window::ClipboardStartupTrace::default())
@@ -317,8 +320,21 @@ pub fn run() {
       // Spawn HTTP bridge server
       {
         let manager_for_bridge = Arc::clone(&manager);
+        let bridge_app = handle.clone();
+        let notify_registry: bridge::RegistryNotifier = Arc::new(move || {
+          if let Err(error) = bridge_app.emit(registry::CONNECTION_CHANGED_EVENT, ()) {
+            tracing::warn!(error = %error, "registry connection event was not delivered");
+          }
+        });
         tauri::async_runtime::spawn(async move {
-          bridge::start_bridge(bridge_port, allowed_origins, manager_for_bridge).await;
+          bridge::start_bridge(
+            bridge_port,
+            allowed_origins,
+            manager_for_bridge,
+            registry,
+            notify_registry,
+          )
+          .await;
         });
       }
 

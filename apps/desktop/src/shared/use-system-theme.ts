@@ -5,7 +5,13 @@ const suppressTransitions = () => {
   style.textContent = "*, *::before, *::after { transition: none !important; }";
   document.head.append(style);
   void getComputedStyle(document.documentElement).opacity;
-  return () => requestAnimationFrame(() => style.remove());
+  return () => {
+    // Commit the themed values while transitions are still suppressed. A
+    // requestAnimationFrame callback runs before paint, so removing the style
+    // without this second flush can animate the theme change after all.
+    void getComputedStyle(document.documentElement).opacity;
+    requestAnimationFrame(() => style.remove());
+  };
 };
 
 export const useSystemTheme = () => {
@@ -18,6 +24,7 @@ export const useSystemTheme = () => {
       const isDark = mediaQuery.matches;
       root.classList.toggle("dark", isDark);
       root.style.colorScheme = isDark ? "dark" : "light";
+      root.style.removeProperty("background-color");
       restore();
     };
 

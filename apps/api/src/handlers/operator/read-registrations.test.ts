@@ -63,7 +63,7 @@ const buildCountedApp = ({
     app: new Elysia({ prefix: "/operator" }).get(
       "/registrations",
       endpoint.handler,
-      endpoint.config,
+      { query: endpoint.config.query },
     ),
     getCallCount,
   };

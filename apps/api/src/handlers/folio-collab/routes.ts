@@ -9,28 +9,18 @@ import storeFolioCollabSnapshotHandler from "@/api/handlers/folio-collab/snapsho
 export const folioCollabRoute = new Elysia({
   prefix: "/folio-collab-rooms",
 })
-  .post(
-    "/authorize",
-    authorizeFolioCollabRoomHandler.handler,
-    authorizeFolioCollabRoomHandler.config,
-  )
-  .post(
-    "/refresh-token",
-    refreshFolioCollabToken.handler,
-    refreshFolioCollabToken.config,
-  )
-  .post(
-    "/heartbeat",
-    heartbeatFolioCollabRoom.handler,
-    heartbeatFolioCollabRoom.config,
-  )
-  .post(
-    "/snapshot/load",
-    loadFolioCollabSnapshotHandler.handler,
-    loadFolioCollabSnapshotHandler.config,
-  )
-  .post(
-    "/snapshot/store",
-    storeFolioCollabSnapshotHandler.handler,
-    storeFolioCollabSnapshotHandler.config,
-  );
+  .post("/authorize", authorizeFolioCollabRoomHandler.handler, {
+    body: authorizeFolioCollabRoomHandler.config.body,
+  })
+  .post("/refresh-token", refreshFolioCollabToken.handler, {
+    body: refreshFolioCollabToken.config.body,
+  })
+  .post("/heartbeat", heartbeatFolioCollabRoom.handler, {
+    body: heartbeatFolioCollabRoom.config.body,
+  })
+  .post("/snapshot/load", loadFolioCollabSnapshotHandler.handler, {
+    body: loadFolioCollabSnapshotHandler.config.body,
+  })
+  .post("/snapshot/store", storeFolioCollabSnapshotHandler.handler, {
+    body: storeFolioCollabSnapshotHandler.config.body,
+  });

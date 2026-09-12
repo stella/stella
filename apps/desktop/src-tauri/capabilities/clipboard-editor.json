@@ -3,6 +3,8 @@
   "description": "Clipboard editor commands",
   "windows": ["clipboard-editor"],
   "permissions": [
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "allow-get-desktop-language",

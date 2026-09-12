@@ -15,7 +15,9 @@ import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import { env } from "@/env";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
+import { readDesktopRegistryNonce } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -41,6 +43,13 @@ function DesktopPage() {
         : { title: t("errors.actionFailed"), type: "error" },
     );
   };
+  // The desktop app opens this page with its handoff nonce in the hash; a
+  // signed-in session completes the connection without another click.
+  useMountEffect(() => {
+    if (readDesktopRegistryNonce(window.location.hash) !== null) {
+      detached(handleConnectDesktop(), "settings-account-desktop.handoff");
+    }
+  });
 
   return (
     <>

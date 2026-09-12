@@ -35,12 +35,14 @@ import { sanitizeHref } from "@/lib/sanitize-href";
 type CompanyRegistryPreviewProps = {
   companyId: string;
   registry: LookupRegistryOption["slug"];
+  initialSettingsVisibility?: "closed" | "open";
 };
 
 /** Full company record shared by global search and registry citations. */
 export const CompanyRegistryPreview = ({
   companyId,
   registry,
+  initialSettingsVisibility = "closed",
 }: CompanyRegistryPreviewProps) => {
   const t = useTranslations();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
@@ -101,7 +103,11 @@ export const CompanyRegistryPreview = ({
   return (
     <div className="h-full space-y-6 overflow-y-auto overscroll-contain p-5">
       <CompanyIdentity hit={hit} registry={registry} />
-      <CompanySpecification companyId={hit.id} registry={registry} />
+      <CompanySpecification
+        companyId={hit.id}
+        initialSettingsVisibility={initialSettingsVisibility}
+        registry={registry}
+      />
       {hit.details ? <RegistryDetails details={hit.details} /> : null}
     </div>
   );

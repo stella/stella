@@ -695,6 +695,10 @@
       "apps/api/src/lib/search/index-entity.ts": 1
     }
   },
+  "require-safe-route-handlers-no-direct-handler-config-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "require-safe-route-handlers-suppressions": {
     "count": 0,
     "files": {}

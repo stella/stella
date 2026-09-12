@@ -10,9 +10,11 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
+  connectDesktopRegistry,
   connectSelfHostedDesktop,
   isDesktopAccountLinkReachable,
   linkDesktopAccount,
+  readDesktopRegistryNonce,
 } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 
@@ -34,8 +36,30 @@ const linkAccountToRunningDesktop = async () => {
   return linkedAccount.email;
 };
 
+const connectRegistryAndAccount = async () => {
+  const apiBaseUrl = externalApiOrigin();
+  if (env.VITE_SELFHOST) {
+    await connectSelfHostedDesktop({
+      apiBaseUrl,
+      webOrigin: window.location.origin,
+    });
+  }
+  const nonce = readDesktopRegistryNonce(window.location.hash);
+  if (nonce) {
+    await connectDesktopRegistry({ apiBaseUrl, nonce });
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+  }
+
+  return await linkAccountToRunningDesktop();
+};
+
 const store = createDesktopConnectionStore({
   link: linkAccountToRunningDesktop,
+  manualLink: connectRegistryAndAccount,
   onError: (error) => getAnalytics().captureError(error),
   // A self-hosted origin is untrusted until the user runs the connect deep
   // link, and the bridge refuses an untrusted origin, so there is nothing a
@@ -65,7 +89,7 @@ export const useDesktopAccountConnection = () => {
   useMountEffect(() => store.retain());
 
   return {
-    connect: store.connect,
+    connect: async () => await store.connect(true),
     startWatch: () => {
       detached(store.startWatch(), "desktop-account-connection.watch");
     },

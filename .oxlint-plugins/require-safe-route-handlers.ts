@@ -14,8 +14,10 @@
 //   .post("/", handler)
 //   .delete("/", rawHandler, { permissions: ... })
 //
-// Protocol, public, streaming, and dev-only routes should disable this rule in
-// oxlint.config.ts with a short justification.
+// Protocol, public, streaming, and dev-only routes may disable the sibling
+// `require-safe-route-handlers` rule in oxlint.config.ts with a short
+// justification. `no-direct-handler-config` remains applicable because Elysia
+// mutates route options regardless of the endpoint's authentication model.
 
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
@@ -53,14 +55,59 @@ const isCallExpression = (node: unknown): node is CallExpressionNode =>
   Array.isArray(node.arguments) &&
   "callee" in node;
 
-const isSafeHandlerMember = (node: unknown) =>
+const isSafeHandlerMember = (node: unknown): node is MemberExpressionNode =>
   isMemberExpression(node) &&
   !node.computed &&
   getPropertyName(node.property) === "handler";
 
+const isDirectHandlerConfig = (node: unknown): node is MemberExpressionNode =>
+  isMemberExpression(node) &&
+  !node.computed &&
+  getPropertyName(node.property) === "config";
+
 export default eslintCompatPlugin({
   meta: { name: "require-safe-route-handlers" },
   rules: {
+    "no-direct-handler-config": {
+      meta: {
+        type: "problem",
+        messages: {
+          noDirectHandlerConfig:
+            "Do not pass `endpoint.config` directly to Elysia. Elysia " +
+            "normalizes route options in place, which can delete safe-handler " +
+            "metadata such as permissions. Pass a fresh object selecting the " +
+            "route fields instead.",
+        },
+      },
+      createOnce(context) {
+        return {
+          CallExpression(node: unknown) {
+            if (
+              !isCallExpression(node) ||
+              !isMemberExpression(node.callee) ||
+              node.callee.computed
+            ) {
+              return;
+            }
+
+            const method = getPropertyName(node.callee.property);
+            if (method === null || !HTTP_METHODS.has(method)) {
+              return;
+            }
+
+            const routeOptions = node.arguments[2];
+            if (!isDirectHandlerConfig(routeOptions)) {
+              return;
+            }
+
+            context.report({
+              node: routeOptions,
+              messageId: "noDirectHandlerConfig",
+            });
+          },
+        };
+      },
+    },
     "require-safe-route-handlers": {
       meta: {
         type: "problem",

@@ -2852,6 +2852,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-body-ownership-ids/no-body-ownership-ids": 0,
   "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param": 0,
   "require-search-scope/require-search-scope": 0,
+  "require-safe-route-handlers/no-direct-handler-config": 0,
   "require-safe-route-handlers/require-safe-route-handlers": 0,
   "security-guards/no-raw-filename-write": 0,
   "security-guards/no-unsanitized-href": 0,

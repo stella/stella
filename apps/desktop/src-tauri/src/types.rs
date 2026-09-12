@@ -243,12 +243,16 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 12;
+pub const BRIDGE_VERSION: u32 = 13;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
-pub const BRIDGE_CAPABILITIES: &[&str] =
-  &["office-edit.v1", "self-host.connect", "account-link.v1"];
+pub const BRIDGE_CAPABILITIES: &[&str] = &[
+  "office-edit.v1",
+  "self-host.connect",
+  "account-link.v1",
+  "registry-search.v1",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]

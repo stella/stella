@@ -59,6 +59,7 @@ pub enum DesktopTelemetryOperation {
   ClipboardWindowOpen,
   ClipboardWindowHide,
   ClipboardShortcutRegister,
+  RegistryConnectionSubscribe,
 }
 
 impl DesktopTelemetryOperation {
@@ -81,6 +82,7 @@ impl DesktopTelemetryOperation {
       Self::ClipboardWindowOpen => "clipboardWindowOpen",
       Self::ClipboardWindowHide => "clipboardWindowHide",
       Self::ClipboardShortcutRegister => "clipboardShortcutRegister",
+      Self::RegistryConnectionSubscribe => "registryConnectionSubscribe",
     }
   }
 }
@@ -445,9 +447,24 @@ impl DesktopTelemetry {
     });
   }
 
-  /// A webview report, with its detail redacted here regardless of what the
-  /// webview did.
-  pub fn capture_frontend(&self, report: DesktopFrontendErrorReport) {
+  /// Clipboard views may report classifications, never free-form content or
+  /// content-derived digests. The native caller, not the payload, owns this rule.
+  pub fn capture_frontend(
+    &self,
+    mut report: DesktopFrontendErrorReport,
+    caller_label: &str,
+  ) {
+    match caller_label {
+      "clipboard" => {
+        report.window = DesktopTelemetryWindow::Clipboard;
+        report.detail = None;
+      }
+      "clipboard-editor" => {
+        report.window = DesktopTelemetryWindow::ClipboardEditor;
+        report.detail = None;
+      }
+      _ => {}
+    }
     self.capture_event(DesktopErrorEvent {
       report: DesktopErrorReport {
         window: report.window,
@@ -660,8 +677,9 @@ async fn run_observability_worker(
 pub fn desktop_report_error(
   report: DesktopFrontendErrorReport,
   telemetry: State<'_, DesktopTelemetry>,
+  window: tauri::WebviewWindow,
 ) {
-  telemetry.capture_frontend(report);
+  telemetry.capture_frontend(report, window.label());
 }
 
 #[tauri::command]
@@ -938,6 +956,40 @@ mod tests {
       telemetry.reported.lock().unwrap().len(),
       MAX_REPORTED_ERRORS
     );
+  }
+
+  #[test]
+  fn clipboard_error_reports_cannot_export_details_or_claim_another_window() {
+    for (caller_label, expected_window) in [
+      ("clipboard", DesktopTelemetryWindow::Clipboard),
+      ("clipboard-editor", DesktopTelemetryWindow::ClipboardEditor),
+    ] {
+      for error_name in ["TypeError", "Error", "secret_identifier"] {
+        let (sender, mut receiver) = mpsc::channel(1);
+        let telemetry = DesktopTelemetry {
+          reported: Arc::new(Mutex::new(HashSet::new())),
+          sender: Some(sender),
+        };
+        telemetry.capture_frontend(
+          DesktopFrontendErrorReport {
+            window: DesktopTelemetryWindow::Main,
+            operation: DesktopTelemetryOperation::Runtime,
+            code: DesktopTelemetryErrorCode::UnhandledError,
+            detail: Some(DesktopErrorDetail {
+              error_name: error_name.to_string(),
+              message: "sensitive clipboard text without quotes".to_string(),
+              frame: Some("sensitive_identifier@index.js:1:1".to_string()),
+            }),
+          },
+          caller_label,
+        );
+        let DesktopTelemetryEvent::Error(event) = receiver.try_recv().unwrap() else {
+          panic!("expected an error classification");
+        };
+        assert_eq!(event.report.window, expected_window);
+        assert_eq!(event.detail, None);
+      }
+    }
   }
 
   #[test]

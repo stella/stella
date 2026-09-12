@@ -1,3 +1,9 @@
+import { ARES_COURT_INSTRUMENTAL_TOKEN } from "@stll/business-registries/ares/court-names";
+import {
+  ARES_DEFAULT_FORMAT,
+  ARES_FILE_REFERENCE_TOKEN,
+} from "@stll/business-registries/ares/default-format";
+
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
 
 /** Cross-registry fields accepted by the lookup template renderer. */
@@ -18,6 +24,8 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
       ...REGISTRY_BASE_RETURN_FIELDS,
       "share capital",
       "court file",
+      ARES_COURT_INSTRUMENTAL_TOKEN,
+      ARES_FILE_REFERENCE_TOKEN,
       "registered on",
       "acting clause",
       "statutory bodies",
@@ -58,7 +66,7 @@ const GENERIC_DEFAULT_FORMAT = "[company name], [registry number], [address]";
 /** Default legal-description format seeded for each registry. */
 export const REGISTRY_DEFAULT_FORMAT: Record<LookupRegistry, string> = {
   krs: "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
-  ares: GENERIC_DEFAULT_FORMAT,
+  ares: ARES_DEFAULT_FORMAT,
   orsr: GENERIC_DEFAULT_FORMAT,
   "companies-house": GENERIC_DEFAULT_FORMAT,
   denue: GENERIC_DEFAULT_FORMAT,

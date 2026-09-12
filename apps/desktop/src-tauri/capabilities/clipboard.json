@@ -1,8 +1,17 @@
 {
   "identifier": "clipboard",
-  "description": "Clipboard timeline commands and history event subscriptions",
+  "description": "Clipboard timeline and explicit registry search through restricted native commands",
   "windows": ["clipboard"],
   "permissions": [
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-registry-get-state",
+    "allow-registry-connect",
+    "allow-registry-disconnect",
+    "allow-registry-search",
+    "allow-registry-format",
+    "allow-registry-open-company-format",
+    "allow-registry-copy",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "allow-get-desktop-language",

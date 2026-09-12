@@ -19,11 +19,16 @@ use crate::types::{
 const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
+pub type RegistryNotifier = Arc<dyn Fn() + Send + Sync>;
+
 #[derive(Clone)]
 pub struct BridgeState {
+  pub registry: crate::registry::RegistryState,
   pub manager: Arc<Mutex<SessionManager>>,
   pub static_allowed_origins: HashSet<String>,
   pub bridge_port: u16,
+  /// Runs after a registry handoff is stored so the panel can refresh.
+  pub notify_registry: RegistryNotifier,
 }
 
 async fn is_allowed_origin(state: &BridgeState, origin: Option<&str>) -> bool {
@@ -381,6 +386,39 @@ async fn link_account(
   .into_response()
 }
 
+async fn registry_connect(
+  State(state): State<BridgeState>,
+  headers: HeaderMap,
+  Json(body): Json<crate::registry::RegistryHandoff>,
+) -> impl IntoResponse {
+  let origin = get_origin(&headers);
+  let allowed = is_allowed_origin(&state, origin.as_deref()).await;
+  let origin_ref = origin.as_deref().unwrap_or_default();
+  let trusted_pair = {
+    let manager = state.manager.lock().await;
+    manager.is_trusted_self_host_connection(origin_ref, &body.api_base_url)
+      || state.static_allowed_origins.contains(origin_ref)
+        && crate::config::resolve_trusted_api_base_urls()
+          .contains(&crate::config::normalize_api_base_url(&body.api_base_url))
+  };
+  if !allowed || !trusted_pair {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({"message":"Registry connection is not allowed"}),
+      origin.as_deref(),
+      allowed,
+    )
+    .into_response();
+  }
+  match crate::registry::accept_handoff(&state.registry, origin_ref, body).await {
+    Ok(()) => {
+      (state.notify_registry)();
+      json_response(StatusCode::OK, serde_json::json!({"connected":true}), origin.as_deref(), true).into_response()
+    }
+    Err(_) => json_response(StatusCode::BAD_REQUEST, serde_json::json!({"message":"Registry connection failed; reconnect from desktop"}), origin.as_deref(), true).into_response(),
+  }
+}
+
 async fn open_file(
   state: State<BridgeState>,
   headers: HeaderMap,
@@ -411,6 +449,7 @@ fn build_router(state: BridgeState) -> Router {
     .route("/health", get(health))
     .route("/v1/self-host-connection", get(self_host_connection))
     .route("/v1/link-account", post(link_account))
+    .route("/v1/registry-connect", post(registry_connect))
     .route("/v1/open-file", post(open_file))
     .fallback(not_found)
     .layer(axum::middleware::from_fn_with_state(
@@ -438,11 +477,15 @@ pub async fn start_bridge(
   bridge_port: u16,
   static_allowed_origins: HashSet<String>,
   manager: Arc<Mutex<SessionManager>>,
+  registry: crate::registry::RegistryState,
+  notify_registry: RegistryNotifier,
 ) {
   let state = BridgeState {
+    registry,
     manager,
     static_allowed_origins,
     bridge_port,
+    notify_registry,
   };
 
   let app = build_router(state);
@@ -484,9 +527,11 @@ mod tests {
     let mut allowed = HashSet::new();
     allowed.insert("http://localhost:3000".to_string());
     BridgeState {
+      registry: Arc::new(Mutex::new(crate::registry::RegistryConnection::default())),
       manager: Arc::new(Mutex::new(SessionManager::new())),
       static_allowed_origins: allowed,
       bridge_port: 0,
+      notify_registry: Arc::new(|| ()),
     }
   }
 

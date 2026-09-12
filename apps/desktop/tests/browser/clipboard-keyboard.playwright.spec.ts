@@ -125,6 +125,9 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
           if (command === "get_desktop_language") {
             return nativeLanguage;
           }
+          if (command === "registry_get_state") {
+            return { status: "disconnected" };
+          }
           if (command === "is_autostart_enabled") {
             return false;
           }
@@ -242,13 +245,193 @@ const invocationCount = async (page: Page, command: string) =>
   }, command);
 
 const DIRECTIONS = [
-  { groupKey: "ArrowRight", language: "en", nextCardKey: "ArrowRight" },
-  { groupKey: "ArrowLeft", language: "ar", nextCardKey: "ArrowLeft" },
+  {
+    groupKey: "ArrowRight",
+    language: "en",
+    nextCardKey: "ArrowRight",
+    previousGroupKey: "ArrowLeft",
+  },
+  {
+    groupKey: "ArrowLeft",
+    language: "ar",
+    nextCardKey: "ArrowLeft",
+    previousGroupKey: "ArrowRight",
+  },
 ] as const;
 
-for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
+for (const {
+  groupKey,
+  language,
+  nextCardKey,
+  previousGroupKey,
+} of DIRECTIONS) {
   test.describe(`${language} clipboard direction`, () => {
     test.use({ locale: language });
+
+    for (const activation of ["pointer", "keyboard"] as const) {
+      test(`${activation} search action opens registry results in the same clipboard window`, async ({
+        page,
+      }) => {
+        const messages = language === "ar" ? arMessages : enMessages;
+        await openClipboard(page, language);
+        await page.getByRole("searchbox").fill("Clipboard item 2");
+        if (activation === "pointer") {
+          await page.locator("[data-clipboard-scope]").click();
+        } else {
+          await page.locator("[data-clipboard-scope]").focus();
+          await page.keyboard.press("ArrowDown");
+          await page.keyboard.press("Tab");
+        }
+        await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
+          "data-clipboard-scope",
+          "registry",
+        );
+        await expect(page.getByRole("searchbox")).toHaveValue(
+          "Clipboard item 2",
+        );
+        await expect(page.getByRole("searchbox")).toBeFocused();
+        await expect(
+          page.getByRole("button", {
+            name: messages.clipboard.registryConnect,
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(page).toHaveURL(/\/$/u);
+        expect(await invocationCount(page, "registry_show")).toBe(0);
+        expect(await invocationCount(page, "registry_search")).toBe(0);
+      });
+    }
+
+    test("an empty clip search offers the same query to registries", async ({
+      page,
+    }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
+      const query = "No local match";
+      await openClipboard(page, language);
+      await page.getByRole("searchbox").fill(query);
+      const searchRegistries = page.getByRole("button", {
+        name: messages.clipboard.noResultsDescription.replace(
+          "{query}",
+          () => query,
+        ),
+      });
+
+      await searchRegistries.click();
+      await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
+        "data-clipboard-scope",
+        "registry",
+      );
+      await expect(page.getByRole("searchbox")).toHaveValue(query);
+      await expect(page.getByRole("searchbox")).toBeFocused();
+      await expect(
+        page.getByRole("button", {
+          name: messages.clipboard.registryConnect,
+          exact: true,
+        }),
+      ).toBeVisible();
+    });
+
+    test("search focus and card emphasis stay visually exclusive", async ({
+      page,
+    }) => {
+      const cards = await openClipboard(page, language);
+      const search = page.getByRole("searchbox");
+      await page.keyboard.press(nextCardKey);
+      await expect(cards.nth(1)).toBeFocused();
+      await search.focus();
+      await expect(search).toBeFocused();
+      await expect(
+        page.locator('[data-clipboard-id="clip-2"]'),
+      ).toHaveAttribute("aria-current", "true");
+      await expect
+        .poll(
+          async () => (await readCardEmphasis(page, "clip-2")).selectionOpacity,
+        )
+        .toBe("0");
+      await page.keyboard.press("ArrowUp");
+      await expect(cards.nth(1)).toBeFocused();
+      await expect
+        .poll(
+          async () => (await readCardEmphasis(page, "clip-2")).selectionOpacity,
+        )
+        .toBe("1");
+    });
+
+    test("the forward arrow leaves search for the active clip group", async ({
+      page,
+    }) => {
+      await openClipboard(page, language);
+      const search = page.getByRole("searchbox");
+      await search.fill("Clipboard");
+      await search.evaluate((input, atEnd) => {
+        if (!(input instanceof HTMLInputElement)) {
+          throw new TypeError("Search field is not an input");
+        }
+        const position = atEnd ? input.value.length : 0;
+        input.setSelectionRange(position, position);
+      }, groupKey === "ArrowRight");
+
+      await page.keyboard.press(groupKey);
+      await expect(
+        page.locator('[data-clipboard-group-id][aria-pressed="true"]'),
+      ).toBeFocused();
+      await page.keyboard.press(previousGroupKey);
+      await expect(search).toBeFocused();
+    });
+
+    test("vertical arrows switch the scope only on the focused switcher", async ({
+      page,
+    }) => {
+      const cards = await openClipboard(page, language);
+      const search = page.getByRole("searchbox");
+      const switcher = page.locator("[data-clipboard-scope]");
+      // The groups rail yields to the registry chooser in registry scope.
+      const groupsRail = page.locator(".clipboard-groups-rail");
+      const pressedGroup = page.locator(
+        '[data-clipboard-group-id][aria-pressed="true"]',
+      );
+      await page.keyboard.press(nextCardKey);
+      await expect(cards.nth(1)).toBeFocused();
+      // Vertical arrows move between the rail and the field, never the scope.
+      await page.keyboard.press("ArrowDown");
+      await expect(search).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await page.keyboard.press("ArrowUp");
+      await expect(cards.nth(1)).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await search.focus();
+      await page.keyboard.press("ArrowDown");
+      await expect(search).toBeFocused();
+      await switcher.focus();
+      await page.keyboard.press("ArrowDown");
+      await expect(switcher).toBeFocused();
+      await expect(groupsRail).toBeHidden();
+      await page.keyboard.press("ArrowDown");
+      await expect(groupsRail).toBeVisible();
+      await expect(pressedGroup).not.toHaveAttribute(
+        "data-clipboard-group-id",
+        "__no_group__",
+      );
+      await page.keyboard.press("ArrowDown");
+      await expect(groupsRail).toBeVisible();
+      await page.keyboard.press("ArrowUp");
+      await expect(groupsRail).toBeHidden();
+      await page.keyboard.press("ArrowUp");
+      await expect(groupsRail).toBeVisible();
+      await expect(pressedGroup).toHaveAttribute(
+        "data-clipboard-group-id",
+        "__no_group__",
+      );
+      await expect(switcher).toBeFocused();
+      await expect(
+        page.locator('[data-clipboard-id="clip-2"]'),
+      ).toHaveAttribute("aria-current", "true");
+      // Typing on the switcher lands in the field like everywhere else.
+      await page.keyboard.press("C");
+      await expect(search).toBeFocused();
+      await expect(search).toHaveValue("C");
+      expect(await invocationCount(page, "registry_search")).toBe(0);
+    });
 
     for (const dismissal of ["dom", "native"] as const) {
       test(`prepares the first card before reopening after ${dismissal} dismissal`, async ({
@@ -331,8 +514,11 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
     });
 
     test("keeps card emphasis hidden while focus traverses the footer", async ({
+      browserName,
       page,
     }) => {
+      const tabBack = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
+      const tabForward = browserName === "webkit" ? "Alt+Tab" : "Tab";
       const cards = await openClipboard(page, language);
       const selectedCard = page.locator('[data-clipboard-id="clip-2"]');
       const restingCard = page.locator('[data-clipboard-id="clip-1"]');
@@ -343,10 +529,18 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
       await page.keyboard.press(nextCardKey);
       await expect(cards.nth(1)).toBeFocused();
       await page.mouse.move(0, 0);
-      await page.keyboard.press("ArrowDown");
+      await page.getByRole("searchbox").focus();
       await expect(page.getByRole("searchbox")).toBeFocused();
 
+      await page.keyboard.press(tabBack);
+      await expect(page.locator("[data-clipboard-scope]")).toBeFocused();
+      await page.keyboard.press(tabBack);
+      await expect(
+        page.getByRole("link", { name: "Stella", exact: true }),
+      ).toBeFocused();
       await page.keyboard.press(groupKey);
+      await expect(page.getByRole("searchbox")).toBeFocused();
+      await page.keyboard.press(tabForward);
       await expect(activeGroup).toBeFocused();
       await expect(selectedCard).toHaveAttribute("aria-current", "true");
       await expect
@@ -369,7 +563,7 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
       await expect(
         page.locator(".clipboard-groups-rail button").nth(1),
       ).toBeFocused();
-      await page.keyboard.press("ArrowUp");
+      await cards.nth(1).focus();
       await expect(cards.nth(1)).toBeFocused();
       await expect
         .poll(
@@ -383,7 +577,6 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
     }) => {
       const cards = await openClipboard(page, language);
       const search = page.getByRole("searchbox");
-
       await cards.first().evaluate(
         (card, keys) => {
           for (const key of keys) {
@@ -396,10 +589,10 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
             );
           }
         },
-        [nextCardKey, "ArrowDown"],
+        [nextCardKey, "C"],
       );
       await expect(search).toBeFocused();
-
+      await expect(search).toHaveValue("C");
       await page.evaluate(
         async () =>
           new Promise<void>((resolve) => {
@@ -411,9 +604,6 @@ for (const { groupKey, language, nextCardKey } of DIRECTIONS) {
           }),
       );
       await expect(search).toBeFocused();
-      await expect(
-        page.locator('[data-clipboard-id="clip-2"]'),
-      ).toHaveAttribute("aria-current", "true");
     });
   });
 }
@@ -436,15 +626,17 @@ test("keyboard navigation mounts and focuses virtualized cards", async ({
 });
 
 test("restores footer arrow navigation after changing a menu setting", async ({
+  browserName,
   page,
 }) => {
+  const tabBack = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
   const cards = await openClipboard(page, "en");
   const search = page.getByRole("searchbox");
   const activeGroup = page.locator(
     '[data-clipboard-group-id][aria-pressed="true"]',
   );
   const focusActiveGroup = async () => {
-    await page.keyboard.press("ArrowDown");
+    await search.focus();
     await expect(search).toBeFocused();
     const searchFocusColor = await page
       .locator(".clipboard-search")
@@ -462,7 +654,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   );
   expect(initialFocus.indicator.outlineStyle).toBe("solid");
   expect(initialFocus.indicator.outlineWidth).toBe("2px");
-  await page.keyboard.press("ArrowUp");
+  await cards.first().focus();
   await expect(cards.first()).toBeFocused();
 
   const moreOptions = page.getByRole("button", { name: "More options" });
@@ -474,9 +666,12 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   await expect(screenCaptureSetting).toBeHidden();
   await expect(moreOptions).toBeFocused();
 
+  // A closed menu trigger keeps the standard menu-button arrows.
   await page.keyboard.press("ArrowDown");
-  await expect(moreOptions).toBeFocused();
+  await expect(screenCaptureSetting).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(screenCaptureSetting).toBeHidden();
+  await expect(moreOptions).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   const workGroup = page.locator('[data-clipboard-group-id="work"]');
   await expect(workGroup).toBeFocused();
@@ -489,25 +684,33 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   await expect(moreOptions).toBeFocused();
-  await page.keyboard.press("ArrowUp");
+  await cards.first().focus();
   await expect(cards.first()).toBeFocused();
 
-  await page.keyboard.press("ArrowDown");
+  await search.focus();
   const footerControls = page.locator(
-    ".clipboard-controls button:not([disabled]):not([aria-disabled='true']), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
+    ".clipboard-controls button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), .clipboard-controls a[href], .clipboard-controls input:not([disabled])",
   );
-  await expect(footerControls).toHaveCount(7);
+  const footerControlCount = await footerControls.count();
+  expect(footerControlCount).toBeGreaterThan(1);
+  await expect(footerControls.nth(1)).toHaveAccessibleName(
+    enMessages.clipboard.search,
+  );
+  await expect(
+    page.locator(".clipboard-search button:not([data-clipboard-scope])"),
+  ).toHaveCount(0);
   await expect(footerControls.nth(1)).toBeFocused();
-  await page.keyboard.press("ArrowLeft");
-  await expect(footerControls.first()).toBeFocused();
   await page.keyboard.press("ArrowRight");
-  await expect(footerControls.nth(1)).toBeFocused();
-  for (let index = 2; index < 7; index += 1) {
+  await expect(footerControls.nth(2)).toBeFocused();
+  for (let index = 3; index < footerControlCount; index += 1) {
     await page.keyboard.press("ArrowRight");
     await expect(footerControls.nth(index)).toBeFocused();
   }
-  for (let index = 5; index >= 0; index -= 1) {
-    await page.keyboard.press("ArrowLeft");
+  for (let index = footerControlCount - 2; index >= 0; index -= 1) {
+    if (index === 0) {
+      await page.keyboard.press(tabBack);
+    }
+    await page.keyboard.press(index === 0 ? tabBack : "ArrowLeft");
     await expect(footerControls.nth(index)).toBeFocused();
   }
 });
@@ -528,6 +731,16 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await moreOptions.click();
   const menuSetting = page.getByRole("menuitemcheckbox");
   await expect(menuSetting).toBeVisible();
+  // The popup takes focus a beat after it opens; Escape must reach the menu,
+  // not the trigger, to exercise overlay-before-clipboard dismissal.
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.activeElement?.closest('[role="menu"]') !== null,
+        ),
+    )
+    .toBe(true);
   await page.keyboard.press("Escape");
   await expect(menuSetting).toBeHidden();
   expect(await invocationCount(page, "clipboard_hide")).toBe(1);

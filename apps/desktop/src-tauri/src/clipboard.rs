@@ -6,7 +6,6 @@ use clipboard_rs::{
   Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
   ClipboardWatcherContext, ContentFormat, RustImageData,
 };
-use futures_util::StreamExt;
 use image::{
   ExtendedColorType, ImageEncoder, ImageReader, Limits as ImageLimits,
   codecs::png::PngEncoder,
@@ -18,10 +17,9 @@ use std::{
   borrow::Cow,
   collections::{BTreeSet, HashMap, HashSet},
   io::{Cursor, Write},
-  net::IpAddr,
   path::Path,
   sync::{Arc, Mutex},
-  time::{Duration as StdDuration, Instant},
+  time::Instant,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -104,9 +102,6 @@ const CHROMIUM_SOURCE_URL_FORMAT: &str = "org.chromium.source-url";
 /// CF_HTML carries the copying page's URL in its `SourceURL:` header line.
 #[cfg(target_os = "windows")]
 const WINDOWS_HTML_FORMAT: &str = "HTML Format";
-const FAVICON_PATH: &str = "/favicon.ico";
-const FAVICON_TIMEOUT: StdDuration = StdDuration::from_secs(5);
-const MAX_FAVICON_BYTES: usize = 512 * 1024;
 #[cfg(target_os = "linux")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["image/png"];
 #[cfg(target_os = "macos")]
@@ -187,7 +182,7 @@ pub struct ClipboardSourceApp {
 
 impl ClipboardSourceApp {
   /// Keys of this source's entries in the visual map, most specific first:
-  /// the page's favicon, then the app's icon.
+  /// a previously stored page icon, then the locally captured app icon.
   fn visual_keys(&self) -> impl Iterator<Item = &str> {
     self
       .page
@@ -203,7 +198,7 @@ impl ClipboardSourceApp {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSourcePage {
-  /// Display name; `origin` keys the favicon so ports and schemes stay apart.
+  /// Display name; `origin` also identifies page icons stored by older installs.
   pub host: String,
   pub origin: String,
   pub url: String,
@@ -1210,16 +1205,6 @@ enum ClipboardCapture {
   Text(ClipboardTextCapture),
 }
 
-impl ClipboardCapture {
-  fn source_page(&self) -> Option<&ClipboardSourcePage> {
-    let source_app = match self {
-      Self::Image(capture) => capture.source_app.as_ref(),
-      Self::Text(capture) => capture.source_app.as_ref(),
-    };
-    source_app?.page.as_ref()
-  }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ClipboardCaptureOutcome {
   Captured,
@@ -1665,32 +1650,6 @@ impl ClipboardManager {
       .source_visual_keys()
       .find_map(|key| self.source_app_visuals.get(key))
       .cloned()
-  }
-
-  pub fn has_source_app_visual(&self, key: &str) -> bool {
-    self.source_app_visuals.contains_key(key)
-  }
-
-  /// Records a visual resolved after capture (a fetched favicon). Dropped when
-  /// no item references it any more or the capped map is full.
-  pub fn insert_source_app_visual(
-    &mut self,
-    visual: ClipboardSourceAppVisual,
-  ) -> Result<bool, String> {
-    let referenced = self
-      .items
-      .iter()
-      .flat_map(ClipboardItem::source_visual_keys)
-      .any(|key| key == visual.key);
-    if !referenced {
-      return Ok(false);
-    }
-    let checkpoint = self.checkpoint();
-    if !self.remember_source_app_visual(Some(visual)) {
-      return Ok(false);
-    }
-    self.persist_or_restore(checkpoint)?;
-    Ok(true)
   }
 
   fn remember_source_app_visual(
@@ -2929,7 +2888,9 @@ fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
       let _ = sender.send(frontmost_source_app_on_main_thread());
     })
     .ok()?;
-  let source = receiver.recv_timeout(StdDuration::from_secs(1)).ok()??;
+  let source = receiver
+    .recv_timeout(std::time::Duration::from_secs(1))
+    .ok()??;
   let key = source
     .app
     .identifier
@@ -3027,37 +2988,6 @@ fn source_page_from_url(raw: &str) -> Option<ClipboardSourcePage> {
   })
 }
 
-/// Whether an address may be contacted for a favicon. Loopback, private,
-/// link-local and other non-public ranges are refused so clipboard metadata
-/// cannot steer the app into probing the local network.
-fn is_public_address(address: IpAddr) -> bool {
-  match address {
-    IpAddr::V4(v4) => {
-      !(v4.is_private()
-        || v4.is_loopback()
-        || v4.is_link_local()
-        || v4.is_broadcast()
-        || v4.is_documentation()
-        || v4.is_unspecified()
-        || v4.is_multicast()
-        || v4.octets()[0] == 0
-        // Shared address space (100.64.0.0/10) and benchmarking (198.18.0.0/15).
-        || (v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]))
-        || (v4.octets()[0] == 198 && (18..20).contains(&v4.octets()[1])))
-    }
-    IpAddr::V6(v6) => {
-      if let Some(mapped) = v6.to_ipv4_mapped() {
-        return is_public_address(IpAddr::V4(mapped));
-      }
-      !(v6.is_loopback()
-        || v6.is_unspecified()
-        || v6.is_multicast()
-        || v6.is_unique_local()
-        || v6.is_unicast_link_local())
-    }
-  }
-}
-
 /// Extracts the `SourceURL:` header from a CF_HTML payload. Header lines
 /// precede the markup, whose first line opens a tag.
 #[cfg(any(target_os = "windows", test))]
@@ -3108,165 +3038,9 @@ fn clipboard_source_page(
   None
 }
 
-/// Resolves page favicons after capture so the watcher never waits on the
-/// network. Each origin is fetched at most once per process; a site without a
-/// reachable favicon keeps the browser's icon.
-#[derive(Clone)]
-struct FaviconFetcher {
-  attempted_origins: Arc<Mutex<HashSet<String>>>,
-  client: reqwest::Client,
-}
-
-impl FaviconFetcher {
-  fn new() -> Self {
-    Self {
-      attempted_origins: Arc::new(Mutex::new(HashSet::new())),
-      // Redirects are refused: the address check below covers the advertised
-      // origin only, and a redirect could point anywhere.
-      client: reqwest::Client::builder()
-        .timeout(FAVICON_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new()),
-    }
-  }
-
-  fn schedule(
-    &self,
-    app: &AppHandle,
-    manager: &ClipboardAppState,
-    telemetry: &DesktopTelemetry,
-    page: ClipboardSourcePage,
-  ) {
-    let already_resolved = manager
-      .lock()
-      .is_ok_and(|manager| manager.has_source_app_visual(&page.origin));
-    if already_resolved {
-      return;
-    }
-    let first_attempt = self
-      .attempted_origins
-      .lock()
-      .is_ok_and(|mut origins| origins.insert(page.origin.clone()));
-    if !first_attempt {
-      return;
-    }
-    let app = app.clone();
-    let client = self.client.clone();
-    let manager = Arc::clone(manager);
-    let telemetry = telemetry.clone();
-    tauri::async_runtime::spawn(async move {
-      let bytes = match fetch_favicon(&client, &page.origin).await {
-        Ok(bytes) => bytes,
-        Err(error) => {
-          tracing::debug!(error = %error, origin = %page.origin, "favicon was not fetched");
-          return;
-        }
-      };
-      let Some(visual) = favicon_visual(page.origin, &bytes) else {
-        return;
-      };
-      let inserted = match manager.lock() {
-        Ok(mut manager) => match manager.insert_source_app_visual(visual) {
-          Ok(inserted) => inserted,
-          Err(error) => {
-            tracing::error!(error = %error, "favicon could not be persisted");
-            telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
-            false
-          }
-        },
-        Err(_) => {
-          tracing::error!("clipboard manager lock is poisoned during favicon update");
-          telemetry.capture(DesktopErrorReport {
-            window: DesktopTelemetryWindow::Clipboard,
-            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-            code: DesktopTelemetryErrorCode::LockPoisoned,
-          });
-          false
-        }
-      };
-      if inserted {
-        let _ = app.emit(HISTORY_EVENT, ());
-      }
-    });
-  }
-}
-
-async fn fetch_favicon(
-  client: &reqwest::Client,
-  origin: &str,
-) -> Result<Vec<u8>, String> {
-  let url = Url::parse(origin)
-    .and_then(|url| url.join(FAVICON_PATH))
-    .map_err(|error| format!("favicon url is invalid: {error}"))?;
-  let host = url
-    .host_str()
-    .ok_or_else(|| "favicon url has no host".to_string())?
-    .to_string();
-  let port = url
-    .port_or_known_default()
-    .ok_or_else(|| "favicon url has no port".to_string())?;
-  let mut addresses = tokio::net::lookup_host((host, port))
-    .await
-    .map_err(|error| format!("favicon host did not resolve: {error}"))?
-    .peekable();
-  if addresses.peek().is_none() {
-    return Err("favicon host did not resolve".to_string());
-  }
-  if !addresses.all(|address| is_public_address(address.ip())) {
-    return Err("favicon host resolves to a non-public address".to_string());
-  }
-  let response = client
-    .get(url)
-    .send()
-    .await
-    .map_err(|error| format!("favicon request failed: {error}"))?;
-  if !response.status().is_success() {
-    return Err(format!("favicon responded with {}", response.status()));
-  }
-  if response
-    .content_length()
-    .is_some_and(|length| length > MAX_FAVICON_BYTES as u64)
-  {
-    return Err("favicon exceeds the size limit".to_string());
-  }
-  let mut bytes = Vec::new();
-  let mut stream = response.bytes_stream();
-  while let Some(chunk) = stream.next().await {
-    let chunk = chunk.map_err(|error| format!("favicon body failed: {error}"))?;
-    if bytes.len() + chunk.len() > MAX_FAVICON_BYTES {
-      return Err("favicon exceeds the size limit".to_string());
-    }
-    bytes.extend_from_slice(&chunk);
-  }
-  Ok(bytes)
-}
-
-fn favicon_visual(origin: String, bytes: &[u8]) -> Option<ClipboardSourceAppVisual> {
-  let mut reader = ImageReader::new(Cursor::new(bytes))
-    .with_guessed_format()
-    .ok()?;
-  reader.limits(source_icon_image_limits());
-  let icon = reader.decode().ok()?.to_rgba8();
-  source_app_visual_metadata(origin, source_app_visual(icon))
-}
-
-fn source_icon_image_limits() -> ImageLimits {
-  let mut limits = ImageLimits::default();
-  limits.max_image_width = Some(1024);
-  limits.max_image_height = Some(1024);
-  limits.max_alloc = Some(16 * 1024 * 1024);
-  limits
-}
-
 struct HistoryClipboardHandler {
   app: AppHandle,
   clipboard: ClipboardContext,
-  favicons: FaviconFetcher,
   manager: ClipboardAppState,
   telemetry: DesktopTelemetry,
 }
@@ -3448,7 +3222,6 @@ impl HistoryClipboardHandler {
   }
 
   fn capture(&self, capture: ClipboardCapture) -> ClipboardCaptureOutcome {
-    let source_page = capture.source_page().cloned();
     let outcome = match self.manager.lock() {
       Ok(mut manager) => match manager.capture(capture) {
         Ok(outcome) => outcome,
@@ -3474,11 +3247,6 @@ impl HistoryClipboardHandler {
     };
     if outcome == ClipboardCaptureOutcome::Captured {
       let _ = self.app.emit(HISTORY_EVENT, ());
-      if let Some(page) = source_page {
-        self
-          .favicons
-          .schedule(&self.app, &self.manager, &self.telemetry, page);
-      }
     }
     outcome
   }
@@ -3916,7 +3684,6 @@ pub fn initialize_and_watch(
   let mut handler = HistoryClipboardHandler {
     app,
     clipboard,
-    favicons: FaviconFetcher::new(),
     manager,
     telemetry: telemetry.clone(),
   };
@@ -4494,63 +4261,11 @@ mod tests {
   }
 
   #[test]
-  fn favicon_hosts_must_resolve_to_public_addresses() {
-    for blocked in [
-      "127.0.0.1",
-      "10.1.2.3",
-      "172.16.0.9",
-      "192.168.1.1",
-      "169.254.169.254",
-      "100.64.0.1",
-      "0.0.0.0",
-      "::1",
-      "fc00::1",
-      "fe80::1",
-      "::ffff:10.0.0.1",
-    ] {
-      let address: IpAddr = blocked.parse().unwrap();
-      assert!(!is_public_address(address), "{blocked} must be refused");
-    }
-    for allowed in ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"] {
-      let address: IpAddr = allowed.parse().unwrap();
-      assert!(is_public_address(address), "{allowed} must be allowed");
-    }
-  }
-
-  #[test]
   fn cf_html_source_url_comes_from_the_header_not_the_markup() {
     let payload = b"Version:0.9\r\nStartHTML:0000000105\r\nEndHTML:0000000200\r\nStartFragment:0000000141\r\nEndFragment:0000000164\r\nSourceURL:https://example.org/a\r\n<html>\r\n<body>\r\n<!--StartFragment-->SourceURL:https://evil.test<!--EndFragment-->\r\n</body>\r\n</html>";
 
     assert_eq!(cf_html_source_url(payload), Some("https://example.org/a"));
     assert_eq!(cf_html_source_url(b"Version:0.9\r\n<html></html>"), None);
-  }
-
-  #[test]
-  fn favicon_visual_decodes_ico_payloads_into_a_bounded_png() {
-    let icon = image::RgbaImage::from_pixel(
-      SOURCE_APP_ICON_SIZE,
-      SOURCE_APP_ICON_SIZE,
-      image::Rgba([200, 40, 40, 255]),
-    );
-    let mut ico = Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgba8(icon)
-      .write_to(&mut ico, image::ImageFormat::Ico)
-      .unwrap();
-
-    let visual =
-      favicon_visual("https://example.org".to_string(), &ico.into_inner()).unwrap();
-
-    assert_eq!(visual.key, "https://example.org");
-    assert_eq!(visual.color.as_deref(), Some("#c82828"));
-    assert!(
-      visual
-        .icon_data_url
-        .unwrap()
-        .starts_with("data:image/png;base64,")
-    );
-    assert!(
-      favicon_visual("https://example.org".to_string(), b"<html>404</html>").is_none()
-    );
   }
 
   fn page_capture() -> ClipboardCapture {
@@ -4578,7 +4293,7 @@ mod tests {
   }
 
   #[test]
-  fn page_items_fall_back_to_the_browser_icon_until_the_favicon_arrives() {
+  fn copied_pages_use_the_locally_captured_browser_icon() {
     let mut manager = ready_manager();
     assert_eq!(
       manager.capture(page_capture()).unwrap(),
@@ -4589,60 +4304,40 @@ mod tests {
       manager.source_app_visual(&item).unwrap().key,
       "com.google.Chrome"
     );
-    assert!(!manager.has_source_app_visual("https://example.org"));
-    let webview_key = |manager: &ClipboardManager| {
-      manager
-        .snapshot()
-        .items
-        .remove(0)
+    let snapshot = manager.snapshot();
+    assert_eq!(snapshot.source_app_visuals.len(), 1);
+    assert_eq!(
+      snapshot.items[0]
         .source_app()
         .unwrap()
         .visual_key
-        .clone()
-    };
-    assert_eq!(webview_key(&manager).as_deref(), Some("com.google.Chrome"));
-
-    let favicon = ClipboardSourceAppVisual {
-      color: Some("#c82828".to_string()),
-      icon_data_url: Some("data:image/png;base64,REVG".to_string()),
-      key: "https://example.org".to_string(),
-    };
-    assert!(manager.insert_source_app_visual(favicon).unwrap());
-
-    assert_eq!(
-      manager.source_app_visual(&item).unwrap().key,
-      "https://example.org"
+        .as_deref(),
+      Some("com.google.Chrome")
     );
-    assert_eq!(
-      webview_key(&manager).as_deref(),
-      Some("https://example.org")
-    );
-    // The resolved key is a webview detail; the stored item keeps none.
-    assert_eq!(manager.items[0].source_app().unwrap().visual_key, None);
-    // Both the page and the browser stay referenced, so neither is collected.
-    let keys = manager
-      .snapshot()
-      .source_app_visuals
-      .into_iter()
-      .map(|visual| visual.key)
-      .collect::<Vec<_>>();
-    assert_eq!(keys, vec!["com.google.Chrome", "https://example.org"]);
   }
 
   #[test]
-  fn favicons_for_forgotten_pages_are_dropped() {
+  fn previously_stored_page_icons_remain_readable_and_expire_with_their_clip() {
     let mut manager = ready_manager();
     manager.capture(page_capture()).unwrap();
-    let id = manager.items[0].id().to_string();
-    assert!(manager.delete_item(&id).unwrap());
-
-    let favicon = ClipboardSourceAppVisual {
-      color: None,
+    // Represents an icon already persisted by an older installation.
+    manager.remember_source_app_visual(Some(ClipboardSourceAppVisual {
+      color: Some("#c82828".to_string()),
       icon_data_url: Some("data:image/png;base64,REVG".to_string()),
       key: "https://example.org".to_string(),
-    };
-
-    assert!(!manager.insert_source_app_visual(favicon).unwrap());
+    }));
+    let snapshot = manager.snapshot();
+    assert_eq!(
+      snapshot.items[0]
+        .source_app()
+        .unwrap()
+        .visual_key
+        .as_deref(),
+      Some("https://example.org")
+    );
+    assert_eq!(snapshot.source_app_visuals.len(), 2);
+    let id = manager.items[0].id().to_string();
+    assert!(manager.delete_item(&id).unwrap());
     assert!(manager.source_app_visuals.is_empty());
   }
 
