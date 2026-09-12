@@ -1445,7 +1445,7 @@ type CreateCanaryConfigOptions = {
   rotatedModelId?: string;
 };
 
-const createCanaryConfig = ({
+export const createCanaryConfig = ({
   apiKey,
   provider,
   rotatedModelId,

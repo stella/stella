@@ -1,9 +1,11 @@
-import type { DocumentPart, TextPart } from "@tanstack/ai";
+import type { DocumentPart, ImagePart, TextPart } from "@tanstack/ai";
 import type {
   AnthropicDocumentMetadata,
   AnthropicTextMetadata,
 } from "@tanstack/ai-anthropic";
 import { panic, Result } from "better-result";
+
+import { isNativeHeicInputSupported } from "@stll/ai-catalog";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -136,6 +138,83 @@ export const buildWorkflowAIAnalyticsProps = ({
   ...(usageMetering ? { usageMetering } : {}),
 });
 
+type WorkflowMessagePart =
+  | DocumentPart<AnthropicDocumentMetadata>
+  | ImagePart
+  | TextPart<AnthropicTextMetadata>;
+
+export const buildWorkflowFileMessages = (
+  files: PreparedInputFile[],
+): WorkflowMessagePart[] => {
+  const messageContent: WorkflowMessagePart[] = [];
+  const extractedTextFileCount = files.filter(
+    (file) => file.kind === "extracted-text",
+  ).length;
+
+  for (const file of files) {
+    switch (file.kind) {
+      case "pdf":
+        messageContent.push({
+          type: "document",
+          source: {
+            type: "data",
+            value: Buffer.from(file.content).toString("base64"),
+            mimeType: file.mimeType,
+          },
+        });
+        continue;
+      case "native-image":
+        messageContent.push(
+          {
+            type: "text",
+            content: `IMAGE FILE ${file.simplifiedName}: Analyze the following image normally. This source has no navigable citation locator; the justification schema omits it.`,
+          },
+          {
+            type: "image",
+            source: {
+              type: "data",
+              value: Buffer.from(file.content).toString("base64"),
+              mimeType: file.mimeType,
+            },
+          },
+        );
+        continue;
+      case "extracted-text":
+        messageContent.push({
+          type: "text",
+          content: buildExtractedFileMessage({
+            content: sanitizeForPrompt(
+              untrustedText(
+                limitExtractedTextPromptContent({
+                  content: file.content,
+                  fileCount: extractedTextFileCount,
+                }),
+              ),
+            ),
+            simplifiedName: file.simplifiedName,
+          }),
+        });
+        continue;
+      case "docx":
+        // DOCX: serialise folio blocks inline. The model cites block ids back in
+        // `justification.citations` instead of bates stamps.
+        messageContent.push({
+          type: "text",
+          content: buildDocxBlocksMessage({
+            simplifiedName: file.simplifiedName,
+            blocks: file.blocks,
+          }),
+        });
+        continue;
+      default:
+        file satisfies never;
+        panic("Unhandled prepared workflow file kind");
+    }
+  }
+
+  return messageContent;
+};
+
 export const generateWorkflowData = async ({
   files,
   properties,
@@ -169,6 +248,24 @@ export const generateWorkflowData = async ({
     return Result.err(model.error);
   }
   const { provider, modelId } = model.value;
+  if (
+    files.some(
+      (file) =>
+        file.kind === "native-image" &&
+        !isNativeHeicInputSupported({
+          provider,
+          modelId,
+          mimeType: file.mimeType,
+        }),
+    )
+  ) {
+    return Result.err(
+      new WorkflowIntegrationError({
+        message:
+          "The configured workflow model does not support this image format",
+      }),
+    );
+  }
 
   const chunks = splitPropertiesForBudget({
     provider,
@@ -196,54 +293,7 @@ export const generateWorkflowData = async ({
     scopeKey: entityVersionId,
   });
 
-  type WorkflowMessagePart =
-    | DocumentPart<AnthropicDocumentMetadata>
-    | TextPart<AnthropicTextMetadata>;
-
-  const messageContent: WorkflowMessagePart[] = [];
-  const extractedTextFileCount = files.filter(
-    (file) => file.kind === "extracted-text",
-  ).length;
-
-  for (const file of files) {
-    if (file.kind === "pdf") {
-      messageContent.push({
-        type: "document",
-        source: {
-          type: "data",
-          value: Buffer.from(file.content).toString("base64"),
-          mimeType: file.mimeType,
-        },
-      });
-      continue;
-    }
-    if (file.kind === "extracted-text") {
-      messageContent.push({
-        type: "text",
-        content: buildExtractedFileMessage({
-          content: sanitizeForPrompt(
-            untrustedText(
-              limitExtractedTextPromptContent({
-                content: file.content,
-                fileCount: extractedTextFileCount,
-              }),
-            ),
-          ),
-          simplifiedName: file.simplifiedName,
-        }),
-      });
-      continue;
-    }
-    // DOCX: serialise folio blocks inline. The model cites block ids back in
-    // `justification.citations` instead of bates stamps.
-    messageContent.push({
-      type: "text",
-      content: buildDocxBlocksMessage({
-        simplifiedName: file.simplifiedName,
-        blocks: file.blocks,
-      }),
-    });
-  }
+  const messageContent = buildWorkflowFileMessages(files);
 
   if (textInputs.length > 0) {
     messageContent.push({
@@ -255,7 +305,7 @@ export const generateWorkflowData = async ({
   const lastStaticIdx = messageContent.length - 1;
   if (lastStaticIdx >= 0) {
     const lastStatic = messageContent[lastStaticIdx];
-    if (lastStatic) {
+    if (lastStatic && lastStatic.type !== "image") {
       messageContent[lastStaticIdx] = markTanStackCacheBreakpoint(lastStatic, {
         decision: cachingDecision,
       });

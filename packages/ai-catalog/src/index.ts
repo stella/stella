@@ -29,6 +29,7 @@ import {
 } from "./capabilities.gen";
 import type { ModelRate } from "./model-rate";
 import { MODEL_RATES } from "./model-rates.gen";
+import nativeImageProbeSnapshot from "./native-image-probes.json";
 
 export {
   MODEL_RATE_UNITS_PER_USD,
@@ -603,6 +604,80 @@ export const isChatPdfAttachmentModelSupported = ({
     CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider];
   return supportedModels.includes(modelId);
 };
+
+const HEIC_MIME_TYPES = ["image/heic", "image/heif"] as const;
+
+export type HeicMimeType = (typeof HEIC_MIME_TYPES)[number];
+
+export const isHeicMimeType = (mimeType: string): mimeType is HeicMimeType =>
+  HEIC_MIME_TYPES.some((supported) => supported === mimeType);
+
+export const nativeImageProbeRecordSchema = v.strictObject({
+  provider: v.picklist(AI_PROVIDERS),
+  modelId: v.pipe(v.string(), v.minLength(1)),
+  mimeType: v.picklist(HEIC_MIME_TYPES),
+  status: v.picklist(["supported", "unsupported", "inconclusive"]),
+  checkedAt: v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    v.check(
+      (value) =>
+        Number.isFinite(Date.parse(value)) &&
+        new Date(value).toISOString() === value,
+      "Invalid canonical UTC timestamp",
+    ),
+  ),
+  fixtureSha256: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
+  adapterVersion: v.pipe(v.string(), v.minLength(1)),
+  sourceRevision: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}:[a-f0-9]{64}$/u)),
+});
+
+export type NativeImageProbeRecord = v.InferOutput<
+  typeof nativeImageProbeRecordSchema
+>;
+
+export const nativeImageProbeReportSchema = v.strictObject({
+  probeVersion: v.literal(1),
+  records: v.array(nativeImageProbeRecordSchema),
+});
+
+export type NativeImageProbeReport = v.InferOutput<
+  typeof nativeImageProbeReportSchema
+>;
+
+export const parseNativeImageProbeReport = (
+  input: unknown,
+): NativeImageProbeReport => v.parse(nativeImageProbeReportSchema, input);
+
+const NATIVE_IMAGE_PROBE_REPORT = parseNativeImageProbeReport(
+  nativeImageProbeSnapshot,
+);
+
+type NativeHeicInputOptions = {
+  provider: AIProvider;
+  modelId: string;
+  mimeType: string;
+};
+
+export const hasNativeImageProbeSupport = (
+  records: readonly NativeImageProbeRecord[],
+  { provider, modelId, mimeType }: NativeHeicInputOptions,
+): boolean => {
+  const evidence = records.find(
+    (record) =>
+      record.provider === provider &&
+      record.modelId === modelId &&
+      record.mimeType === mimeType,
+  );
+  return evidence?.status === "supported";
+};
+
+// Only exact provider/model/format tuples proven by the committed canary
+// snapshot are enabled. An untested tuple or inconclusive latest probe is denied.
+export const isNativeHeicInputSupported = (
+  input: NativeHeicInputOptions,
+): boolean =>
+  hasNativeImageProbeSupport(NATIVE_IMAGE_PROBE_REPORT.records, input);
 
 /**
  * Whether a model id is currently offered for this provider+role: it

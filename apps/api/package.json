@@ -26,6 +26,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "ocr:fetch-models": "bun src/scripts/fetch-ocr-models.ts",
+    "canary:native-image": "bun --env-file=.env.example scripts/ai-native-image-canary.ts",
     "canary:ai-provider": "bun --env-file=.env.example scripts/ai-provider-canary.ts",
     "canary:mcp": "bun --env-file=.env.example src/scripts/mcp-canary.ts",
     "bench:chat-read-surface": "NODE_ENV=development bun scripts/benchmark-chat-read-surface.ts",
