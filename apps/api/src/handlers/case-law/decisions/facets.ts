@@ -87,7 +87,7 @@ export const readBrowseFacetsUnderPolicy = async ({
   });
 
 /** The same facets under the current source policy. */
-export const readBrowseFacetsResult = async (
+const readBrowseFacetsResult = async (
   country: string,
 ): Promise<Result<LegalBrowseFacets, BrowseFacetsReadError>> => {
   // Read ahead of the cache, not inside it: source policy is an input to the
