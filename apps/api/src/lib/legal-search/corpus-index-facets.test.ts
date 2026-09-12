@@ -82,25 +82,67 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const termsAggregation = (
-  buckets: { key: string | number; count: number }[],
-) => ({
+type TermsBucket = { key: string | number; count: number };
+
+/**
+ * The engine reports `doc_count_error_upper_bound` for a `_count`-ordered
+ * terms aggregation, where the merged per-split top-k can miss a term, and
+ * omits it entirely for a `_key`-ordered one. A fixture that carried the
+ * bound everywhere would never show the parser the shape production sends.
+ */
+const keyOrderedAggregation = (buckets: TermsBucket[]) => ({
   buckets: buckets.map(({ key, count }) => ({ key, doc_count: count })),
-  doc_count_error_upper_bound: 0,
   sum_other_doc_count: 0,
 });
+const countOrderedAggregation = (buckets: TermsBucket[]) => ({
+  ...keyOrderedAggregation(buckets),
+  doc_count_error_upper_bound: 0,
+});
 
+/** Trimmed from a production response to the request the code sends. */
 const engineResponse = () => ({
   aggregations: {
-    country: termsAggregation([{ key: "CZE", count: 1_271_387 }]),
-    court: termsAggregation([{ key: "Nejvyšší soud", count: 203_722 }]),
+    country: countOrderedAggregation([{ key: "CZE", count: 1_034_713 }]),
+    court: countOrderedAggregation([
+      { key: "Nejvyšší soud", count: 165_146 },
+      { key: "Ústavní soud", count: 104_627 },
+      { key: "Nejvyšší správní soud", count: 79_436 },
+    ]),
     // A u64 fast field comes back as a JSON float.
-    year: termsAggregation([{ key: 2024, count: 1_425_310 }]),
+    year: keyOrderedAggregation([
+      { key: 2026, count: 42_961 },
+      { key: 2025, count: 85_590 },
+      { key: 2024, count: 85_939 },
+    ]),
   },
 });
 
+const aggregationsSchema = v.record(
+  v.string(),
+  v.record(v.string(), v.unknown()),
+);
+
+const respondedAggregations = (): Record<string, Record<string, unknown>> =>
+  v.parse(aggregationsSchema, engineResponse().aggregations);
+
+const respondedAggregation = (name: string): Record<string, unknown> =>
+  v.parse(v.record(v.string(), v.unknown()), respondedAggregations()[name]);
+
 const requestedAggregations = (): Record<string, unknown> =>
   v.parse(v.record(v.string(), v.unknown()), requests.at(0)?.body["aggs"]);
+
+const orderingsSchema = v.record(
+  v.string(),
+  v.object({ terms: v.object({ order: v.record(v.string(), v.string()) }) }),
+);
+
+/** Facet name to the single key of the order it was requested with. */
+const requestedOrderings = (): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(v.parse(orderingsSchema, requests.at(0)?.body["aggs"])).map(
+      ([name, { terms }]) => [name, Object.keys(terms.order).join(",")],
+    ),
+  );
 
 test("aggregates over opening passages only, so buckets count decisions", async () => {
   responseBody = engineResponse();
@@ -161,13 +203,100 @@ test("reads string and numeric bucket keys into the same bucket shape", async ()
     throw result.error;
   }
 
-  expect(result.value.country).toEqual([{ value: "CZE", count: 1_271_387 }]);
-  expect(result.value.court).toEqual([
-    { value: "Nejvyšší soud", count: 203_722 },
-  ]);
+  expect(result.value.country).toEqual([{ value: "CZE", count: 1_034_713 }]);
+  expect(result.value.court.at(0)).toEqual({
+    value: "Nejvyšší soud",
+    count: 165_146,
+  });
   // The year facet's contract is a string bucket value, as the Postgres path
-  // produced with to_char; "2024", never "2024.0".
-  expect(result.value.year).toEqual([{ value: "2024", count: 1_425_310 }]);
+  // produced with to_char; "2026", never "2026.0".
+  expect(result.value.year.at(0)).toEqual({ value: "2026", count: 42_961 });
+});
+
+test("the fixture omits the exactness bound exactly where the engine does", async () => {
+  responseBody = engineResponse();
+
+  await corpusIndexBrowseFacets({ excludedSourceIds: [], limit: 20 });
+
+  // Binds the fixture to the ordering the code actually requests, so changing
+  // a facet's order cannot leave a fixture the engine would never send.
+  expect(
+    Object.fromEntries(
+      Object.entries(respondedAggregations()).map(([name, aggregation]) => [
+        name,
+        "doc_count_error_upper_bound" in aggregation,
+      ]),
+    ),
+  ).toEqual(
+    Object.fromEntries(
+      Object.entries(requestedOrderings()).map(([name, orderedBy]) => [
+        name,
+        orderedBy === "_count",
+      ]),
+    ),
+  );
+});
+
+test("a key-ordered facet is exact without a bound the engine never sends", async () => {
+  responseBody = engineResponse();
+  // The fault boundary: rejecting this facet emptied all three in production.
+  expect("doc_count_error_upper_bound" in respondedAggregation("year")).toBe(
+    false,
+  );
+
+  const result = await corpusIndexBrowseFacets({
+    excludedSourceIds: [],
+    limit: 20,
+  });
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+
+  expect(result.value.year).toEqual([
+    { value: "2026", count: 42_961 },
+    { value: "2025", count: 85_590 },
+    { value: "2024", count: 85_939 },
+  ]);
+  expect(result.value.country).not.toHaveLength(0);
+  expect(result.value.court).not.toHaveLength(0);
+});
+
+test("a key-ordered facet stating an error bound fails like any other", async () => {
+  responseBody = {
+    aggregations: {
+      ...engineResponse().aggregations,
+      year: {
+        ...keyOrderedAggregation([{ key: 2026, count: 42_961 }]),
+        // Absence is the contract, not a licence to ignore a stated bound.
+        doc_count_error_upper_bound: 17,
+      },
+    },
+  };
+
+  const result = await corpusIndexBrowseFacets({
+    excludedSourceIds: [],
+    limit: 20,
+  });
+
+  expect(Result.isError(result)).toBe(true);
+});
+
+test("a count-ordered facet missing its error bound fails", async () => {
+  responseBody = {
+    aggregations: {
+      ...engineResponse().aggregations,
+      // The engine always states the bound for `_count` ordering, so its
+      // absence here is an unrecognized response, not an exact one.
+      court: keyOrderedAggregation([{ key: "Nejvyšší soud", count: 165_146 }]),
+    },
+  };
+
+  const result = await corpusIndexBrowseFacets({
+    excludedSourceIds: [],
+    limit: 20,
+  });
+
+  expect(Result.isError(result)).toBe(true);
 });
 
 test("scopes to one jurisdiction index, and to the generation glob without one", async () => {
@@ -250,7 +379,7 @@ test("an approximate aggregation fails rather than serving wrong counts", async 
     aggregations: {
       ...engineResponse().aggregations,
       court: {
-        ...termsAggregation([{ key: "Nejvyšší soud", count: 203_722 }]),
+        ...countOrderedAggregation([{ key: "Nejvyšší soud", count: 165_146 }]),
         // The engine's own statement that the merged top-k is not exact.
         doc_count_error_upper_bound: 17,
       },
@@ -287,7 +416,7 @@ test("an unreadable aggregation fails rather than reporting an empty corpus", as
 });
 
 test("a missing aggregation fails rather than reporting an empty corpus", async () => {
-  responseBody = { aggregations: { country: termsAggregation([]) } };
+  responseBody = { aggregations: { country: countOrderedAggregation([]) } };
 
   const result = await corpusIndexBrowseFacets({
     excludedSourceIds: [],
