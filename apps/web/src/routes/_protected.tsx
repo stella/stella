@@ -220,8 +220,8 @@ export const Route = createFileRoute("/_protected")({
       },
     };
   },
-  loader: ({ context }) =>
-    prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
+  loader: async ({ context }) =>
+    await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
       getAnalytics().captureError(error);
     }),
   component: ProtectedComponent,
