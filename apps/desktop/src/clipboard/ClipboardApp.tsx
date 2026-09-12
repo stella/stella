@@ -1899,24 +1899,6 @@ const ClipboardApp = () => {
       revealCard({ rail: timelineRailRef.current, id: item.id, focus: true });
     }
   };
-  // The search field keeps focus while the horizontal arrows walk the rail,
-  // so typing and Enter continue to act on the highlighted card.
-  const highlightAdjacent = (direction: "next" | "previous") => {
-    const nextIndex = adjacentClipboardIndex(
-      activeIndex,
-      direction,
-      filteredItems.length,
-    );
-    if (nextIndex === null) {
-      return;
-    }
-    flushSync(() => setSelectedIndex(nextIndex));
-    const item = filteredItems.at(nextIndex);
-    if (item) {
-      revealCard({ rail: timelineRailRef.current, id: item.id, focus: false });
-    }
-  };
-
   const handleRailPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "mouse") {
       return;
@@ -1980,7 +1962,9 @@ const ClipboardApp = () => {
     ) {
       return true;
     }
-    return searchSource === "registry";
+    return (
+      searchSource === "registry" && !(event.target instanceof HTMLInputElement)
+    );
   };
 
   const searchScope = clipboardSearchScope({
@@ -2112,14 +2096,7 @@ const ClipboardApp = () => {
           valueLength: event.target.value.length,
         })
       ) {
-        const direction = clipboardControlsKeyAction({
-          direction: railDirection,
-          key: event.key,
-        });
-        if (direction) {
-          event.preventDefault();
-          highlightAdjacent(direction);
-        }
+        handleControlsKeyDown(event, event.target);
       }
       return;
     }
@@ -2366,6 +2343,18 @@ const ClipboardApp = () => {
                               : "emptyDescriptionTextOnly",
                           )}
                     </p>
+                    {filterQuery ? (
+                      <Button
+                        className="text-muted-foreground h-auto max-w-sm px-2 py-1 text-wrap"
+                        onClick={() =>
+                          applyScope({ next: "registry", focusSearch: true })
+                        }
+                        size="sm"
+                        variant="link"
+                      >
+                        {t("noResultsDescription", { query: filterQuery })}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <div

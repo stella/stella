@@ -10,6 +10,7 @@
     "allow-registry-disconnect",
     "allow-registry-search",
     "allow-registry-format",
+    "allow-registry-open-company-format",
     "allow-registry-copy",
     "core:event:allow-listen",
     "core:event:allow-unlisten",

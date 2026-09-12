@@ -302,25 +302,43 @@ for (const {
       });
     }
 
-    test("horizontal arrows from the search field move the highlight without leaving it", async ({
+    test("an empty clip search offers the same query to registries", async ({
       page,
     }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
+      const query = "No local match";
       await openClipboard(page, language);
+      await page.getByRole("searchbox").fill(query);
+      const searchRegistries = page.getByRole("button", {
+        name: messages.clipboard.noResultsDescription.replace(
+          "{query}",
+          () => query,
+        ),
+      });
+
+      await searchRegistries.click();
+      await expect(page.locator("[data-clipboard-scope]")).toHaveAttribute(
+        "data-clipboard-scope",
+        "registry",
+      );
+      await expect(page.getByRole("searchbox")).toHaveValue(query);
+      await expect(page.getByRole("searchbox")).toBeFocused();
+      await expect(
+        page.getByRole("button", {
+          name: messages.clipboard.registryConnect,
+          exact: true,
+        }),
+      ).toBeVisible();
+    });
+
+    test("search focus and card emphasis stay visually exclusive", async ({
+      page,
+    }) => {
+      const cards = await openClipboard(page, language);
       const search = page.getByRole("searchbox");
-      await search.fill("Clipboard");
-      // The query is Latin text, so the caret edge follows the arrow, not
-      // the rail direction: the arrow leaves the text only at its own edge.
-      // WebKit ignores Home/End in a field, so the caret is placed directly.
-      const placeCaret = async (key: string) =>
-        await search.evaluate((input, atEnd) => {
-          if (!(input instanceof HTMLInputElement)) {
-            throw new TypeError("Search field is not an input");
-          }
-          const position = atEnd ? input.value.length : 0;
-          input.setSelectionRange(position, position);
-        }, key === "ArrowRight");
-      await placeCaret(nextCardKey);
       await page.keyboard.press(nextCardKey);
+      await expect(cards.nth(1)).toBeFocused();
+      await search.focus();
       await expect(search).toBeFocused();
       await expect(
         page.locator('[data-clipboard-id="clip-2"]'),
@@ -329,16 +347,36 @@ for (const {
         .poll(
           async () => (await readCardEmphasis(page, "clip-2")).selectionOpacity,
         )
+        .toBe("0");
+      await page.keyboard.press("ArrowUp");
+      await expect(cards.nth(1)).toBeFocused();
+      await expect
+        .poll(
+          async () => (await readCardEmphasis(page, "clip-2")).selectionOpacity,
+        )
         .toBe("1");
-      await placeCaret(previousGroupKey);
+    });
+
+    test("the forward arrow leaves search for the active clip group", async ({
+      page,
+    }) => {
+      await openClipboard(page, language);
+      const search = page.getByRole("searchbox");
+      await search.fill("Clipboard");
+      await search.evaluate((input, atEnd) => {
+        if (!(input instanceof HTMLInputElement)) {
+          throw new TypeError("Search field is not an input");
+        }
+        const position = atEnd ? input.value.length : 0;
+        input.setSelectionRange(position, position);
+      }, groupKey === "ArrowRight");
+
+      await page.keyboard.press(groupKey);
+      await expect(
+        page.locator('[data-clipboard-group-id][aria-pressed="true"]'),
+      ).toBeFocused();
       await page.keyboard.press(previousGroupKey);
       await expect(search).toBeFocused();
-      await expect(
-        page.locator('[data-clipboard-id="clip-1"]'),
-      ).toHaveAttribute("aria-current", "true");
-      await expect(
-        page.getByRole("link", { name: "Stella", exact: true }),
-      ).not.toBeFocused();
     });
 
     test("vertical arrows switch the scope only on the focused switcher", async ({
@@ -592,7 +630,6 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   page,
 }) => {
   const tabBack = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
-  const tabForward = browserName === "webkit" ? "Alt+Tab" : "Tab";
   const cards = await openClipboard(page, "en");
   const search = page.getByRole("searchbox");
   const activeGroup = page.locator(
@@ -606,14 +643,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
       .evaluate(
         (control) => getComputedStyle(control, "::after").borderTopColor,
       );
-    await page.keyboard.press(tabBack);
-    await page.keyboard.press(tabBack);
-    await expect(
-      page.getByRole("link", { name: "Stella", exact: true }),
-    ).toBeFocused();
     await page.keyboard.press("ArrowRight");
-    await expect(search).toBeFocused();
-    await page.keyboard.press(tabForward);
     await expect(activeGroup).toBeFocused();
     return { indicator: await readFocusIndicator(page), searchFocusColor };
   };
@@ -670,14 +700,10 @@ test("restores footer arrow navigation after changing a menu setting", async ({
     page.locator(".clipboard-search button:not([data-clipboard-scope])"),
   ).toHaveCount(0);
   await expect(footerControls.nth(1)).toBeFocused();
-  // Arrows never leave the search field for the footer; Tab does.
-  await page.keyboard.press(tabBack);
-  await page.keyboard.press(tabBack);
-  await expect(footerControls.first()).toBeFocused();
   await page.keyboard.press("ArrowRight");
-  await expect(footerControls.nth(1)).toBeFocused();
-  for (let index = 2; index < footerControlCount; index += 1) {
-    await page.keyboard.press(index === 2 ? tabForward : "ArrowRight");
+  await expect(footerControls.nth(2)).toBeFocused();
+  for (let index = 3; index < footerControlCount; index += 1) {
+    await page.keyboard.press("ArrowRight");
     await expect(footerControls.nth(index)).toBeFocused();
   }
   for (let index = footerControlCount - 2; index >= 0; index -= 1) {

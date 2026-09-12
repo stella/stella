@@ -172,6 +172,7 @@ const installNativeBoundary = async (
             case "registry_connect":
             case "registry_disconnect":
             case "registry_copy":
+            case "registry_open_company_format":
               return undefined;
             case "registry_get_state":
               return currentConnection;
@@ -367,10 +368,6 @@ test("highlights the first registry result and copies it with Enter from the sea
   const result = page.locator('[data-registry-result="company-1"]');
   await expect(result).toHaveAttribute("aria-current", "true");
   await expect(searchBox(page)).toBeFocused();
-  await searchBox(page).press("End");
-  await searchBox(page).press("ArrowRight");
-  await expect(result).toHaveAttribute("aria-current", "true");
-  await expect(searchBox(page)).toBeFocused();
   await searchBox(page).press("Enter");
   await expect
     .poll(async () =>
@@ -506,6 +503,28 @@ test("registry chooser owns its arrow keys and Escape without closing the clipbo
       ({ command }) => command === "clipboard_hide",
     ),
   ).toEqual([]);
+});
+
+test("the forward arrow leaves search for the active registry chooser", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page);
+  const search = searchBox(page);
+  const chooser = page.getByRole("button", {
+    name: enMessages.clipboard.registrySelect,
+  });
+  await search.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      throw new TypeError("Search field is not an input");
+    }
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+
+  await page.keyboard.press("ArrowRight");
+  await expect(chooser).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(search).toBeFocused();
 });
 
 test("switches system themes without animating page colours in unified search", async ({
@@ -701,6 +720,27 @@ test("applies saved formatting and copies only the selected registry output", as
     command: "registry_copy",
     args: { text: "Saved detailed registry output" },
   });
+});
+
+test("opens the selected company's specification formats from the format menu", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page);
+  await page.getByRole("button", { name: "Format", exact: true }).click();
+  await page
+    .getByRole("menuitem", {
+      name: "Add a company specification template",
+      exact: true,
+    })
+    .click();
+
+  await expect
+    .poll(async () => await readInvocations(page))
+    .toContainEqual({
+      command: "registry_open_company_format",
+      args: { id: "company-1", registry: "ares" },
+    });
 });
 
 for (const language of ["en", "ar"] as const) {

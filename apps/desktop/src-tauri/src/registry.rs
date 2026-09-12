@@ -19,6 +19,36 @@ const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(300);
 
+fn registry_web_origin(
+  linked_self_host_origin: Option<&str>,
+) -> Result<String, String> {
+  let origin = linked_self_host_origin.unwrap_or_else(|| {
+    if cfg!(debug_assertions) {
+      option_env!("STELLA_DESKTOP_REGISTRY_WEB_ORIGIN").unwrap_or("https://my.stll.app")
+    } else {
+      "https://my.stll.app"
+    }
+  });
+  crate::config::normalize_self_host_web_origin(origin)
+}
+
+fn company_format_url(
+  web_origin: &str,
+  registry: &str,
+  id: &str,
+) -> Result<String, String> {
+  if registry.is_empty() || registry.len() > 64 || id.is_empty() || id.len() > 64 {
+    return Err("Invalid company format request".into());
+  }
+  let mut url =
+    reqwest::Url::parse(web_origin).map_err(|_| "Invalid stella web origin")?;
+  url
+    .path_segments_mut()
+    .map_err(|_| "Invalid stella web origin")?
+    .extend(["knowledge", "company-formats", registry, id]);
+  Ok(url.into())
+}
+
 fn require_registry(window: &WebviewWindow) -> Result<(), String> {
   if window.label() != crate::clipboard_window::CLIPBOARD_WINDOW_LABEL {
     return Err("registry command is not available in this window".into());
@@ -206,19 +236,8 @@ pub async fn registry_connect(
   require_registry(&window)?;
   let web_origin = {
     let manager = account.lock().await;
-    manager
-      .linked_self_host_origin()
-      .unwrap_or_else(|| {
-        if cfg!(debug_assertions) {
-          option_env!("STELLA_DESKTOP_REGISTRY_WEB_ORIGIN")
-            .unwrap_or("https://my.stll.app")
-        } else {
-          "https://my.stll.app"
-        }
-      })
-      .to_string()
+    registry_web_origin(manager.linked_self_host_origin())?
   };
-  let web_origin = crate::config::normalize_self_host_web_origin(&web_origin)?;
   let nonce = uuid::Uuid::new_v4().to_string();
   state.lock().await.pending = Some(PendingConnection {
     nonce: nonce.clone(),
@@ -232,6 +251,27 @@ pub async fn registry_connect(
       None::<&str>,
     )
     .map_err(|_| "Could not open account connection".into())
+}
+
+#[tauri::command]
+pub async fn registry_open_company_format(
+  app: tauri::AppHandle,
+  window: WebviewWindow,
+  account: State<'_, AppState>,
+  registry: String,
+  id: String,
+) -> Result<(), String> {
+  require_registry(&window)?;
+  let web_origin = {
+    let manager = account.lock().await;
+    registry_web_origin(manager.linked_self_host_origin())?
+  };
+  let url = company_format_url(&web_origin, &registry, &id)?;
+  app
+    .opener()
+    .open_url(url, None::<&str>)
+    .map_err(|_| "Could not open company specification formats")?;
+  crate::clipboard_window::hide(&window)
 }
 
 #[tauri::command]
@@ -324,6 +364,18 @@ mod tests {
         .claim("https://my.stll.app", "expected")
         .is_err()
     );
+  }
+
+  #[test]
+  fn company_format_links_stay_on_the_connected_web_origin() {
+    assert_eq!(
+      company_format_url("http://localhost:3000", "companies-house", "company / 1")
+        .unwrap(),
+      "http://localhost:3000/knowledge/company-formats/companies-house/company%20%2F%201"
+    );
+    for (registry, id) in [("", "company"), ("ares", "")] {
+      assert!(company_format_url("https://my.stll.app", registry, id).is_err());
+    }
   }
 
   #[test]

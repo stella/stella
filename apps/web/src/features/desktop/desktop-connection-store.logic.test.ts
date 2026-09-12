@@ -132,7 +132,7 @@ describe("desktop connection store", () => {
     expect(linkCalls.length).toBe(0);
   });
 
-  test("a manual connect during the watch joins the running attempt", async () => {
+  test("a second ordinary connect during the watch joins the running attempt", async () => {
     const { bridgeAnswered, linkCalls, linked, store } = scriptedStore();
     store.retain();
     const watching = store.startWatch();
@@ -148,6 +148,31 @@ describe("desktop connection store", () => {
     });
     await watching;
     expect(linkCalls.length).toBe(1);
+  });
+
+  test("an explicit connect during an automatic link still runs the explicit link", async () => {
+    const { bridgeAnswered, linkCalls, linked, manualLinkCalls, store } =
+      scriptedStore();
+    store.retain();
+    const watching = store.startWatch();
+    bridgeAnswered.resolve(true);
+    await flush();
+
+    const explicit = store.connect(true);
+    expect(manualLinkCalls.length).toBe(0);
+    linked.resolve("watch@example.com");
+
+    expect(await explicit).toEqual({
+      status: "connected",
+      email: "manual@example.com",
+    });
+    await watching;
+    expect(linkCalls.length).toBe(1);
+    expect(manualLinkCalls.length).toBe(1);
+    expect(store.getState()).toEqual({
+      status: "connected",
+      email: "manual@example.com",
+    });
   });
 
   test("a manual link that wins retires the watch instead of linking twice", async () => {

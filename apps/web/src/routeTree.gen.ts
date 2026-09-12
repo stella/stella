@@ -89,6 +89,7 @@ import { Route as LawCasesResearchIndexRouteImport } from './routes/law/cases/re
 import { Route as LawCasesResearchTableIdRouteImport } from './routes/law/cases/research/$tableId'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
 import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/new'
+import { Route as ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRouteImport } from './routes/_protected.knowledge/company-formats.$registry.$companyId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.document'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
@@ -535,6 +536,12 @@ const ProtectedChatWorkspacesWorkspaceIdNewRoute =
     path: '/workspaces/$workspaceId/new',
     getParentRoute: () => ProtectedChatRouteRoute,
   } as any)
+const ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute =
+  ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRouteImport.update({
+    id: '/company-formats/$registry/$companyId',
+    path: '/company-formats/$registry/$companyId',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdViewIdIndexRoute =
   ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport.update({
     id: '/',
@@ -664,6 +671,7 @@ export interface FileRoutesByFullPath {
   '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
+  '/knowledge/company-formats/$registry/$companyId': typeof ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
@@ -744,6 +752,7 @@ export interface FileRoutesByTo {
   '/law/cases/research': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
+  '/knowledge/company-formats/$registry/$companyId': typeof ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
@@ -835,6 +844,7 @@ export interface FileRoutesById {
   '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/_protected/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
+  '/_protected/knowledge/company-formats/$registry/$companyId': typeof ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute
   '/_protected/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/_protected/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
@@ -926,6 +936,7 @@ export interface FileRouteTypes {
     | '/law/cases/research/'
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/chat/workspaces/$workspaceId/new'
+    | '/knowledge/company-formats/$registry/$companyId'
     | '/workspaces/$workspaceId/$viewId/document'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/reports/$exportId'
@@ -1006,6 +1017,7 @@ export interface FileRouteTypes {
     | '/law/cases/research'
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/chat/workspaces/$workspaceId/new'
+    | '/knowledge/company-formats/$registry/$companyId'
     | '/workspaces/$workspaceId/$viewId/document'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/reports/$exportId'
@@ -1096,6 +1108,7 @@ export interface FileRouteTypes {
     | '/law/cases/research/'
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
     | '/_protected/chat/workspaces/$workspaceId/new'
+    | '/_protected/knowledge/company-formats/$registry/$companyId'
     | '/_protected/workspaces/$workspaceId/$viewId/document'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
     | '/_protected/workspaces/$workspaceId/reports/$exportId'
@@ -1688,6 +1701,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedChatWorkspacesWorkspaceIdNewRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
     }
+    '/_protected/knowledge/company-formats/$registry/$companyId': {
+      id: '/_protected/knowledge/company-formats/$registry/$companyId'
+      path: '/company-formats/$registry/$companyId'
+      fullPath: '/knowledge/company-formats/$registry/$companyId'
+      preLoaderRoute: typeof ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/$viewId/': {
       id: '/_protected/workspaces/$workspaceId/$viewId/'
       path: '/'
@@ -1844,6 +1864,7 @@ interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeWorkflowsRoute: typeof ProtectedKnowledgeWorkflowsRoute
   ProtectedKnowledgeIndexRoute: typeof ProtectedKnowledgeIndexRoute
   ProtectedKnowledgeToolsSkillIdRoute: typeof ProtectedKnowledgeToolsSkillIdRoute
+  ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute: typeof ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute
 }
 
 const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren =
@@ -1859,6 +1880,8 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
     ProtectedKnowledgeWorkflowsRoute: ProtectedKnowledgeWorkflowsRoute,
     ProtectedKnowledgeIndexRoute: ProtectedKnowledgeIndexRoute,
     ProtectedKnowledgeToolsSkillIdRoute: ProtectedKnowledgeToolsSkillIdRoute,
+    ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute:
+      ProtectedKnowledgeCompanyFormatsRegistryCompanyIdRoute,
   }
 
 const ProtectedKnowledgeRouteRouteWithChildren =

@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { Building2Icon, ChevronDownIcon, CircleAlertIcon } from "lucide-react";
+import {
+  Building2Icon,
+  ChevronDownIcon,
+  CircleAlertIcon,
+  PlusIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -25,6 +30,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 
@@ -55,7 +61,7 @@ type RegistrySearchProps = {
   composing: boolean;
   source: "clips" | "registry";
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
-  /** The shared search field; in registry scope its arrows and Enter act on the highlighted result. */
+  /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
     controls: ReactNode;
@@ -104,7 +110,8 @@ export const RegistrySearch = ({
     composing,
     attempt,
   ]);
-  const error = failure?.scope === scope ? failure.message : connectionFailure;
+  const errorMessage =
+    failure?.scope === scope ? failure.message : connectionFailure;
   const setError = (message: string | null) =>
     setFailure(message === null ? null : { scope, message });
 
@@ -258,30 +265,14 @@ export const RegistrySearch = ({
       })
       .catch(() => setError(t("registryErrorDisconnect")));
   };
-  // The highlighted result: the last one focused or stepped to, else the
-  // first, so Enter from the search field always has a target.
+  // The highlighted result: the last one focused, else the first, so Enter
+  // from the search field always has a target.
   const activeResult =
     currentSearch.status === "ready"
       ? (currentSearch.results.find(({ id }) => id === activeResultId) ??
         currentSearch.results.at(0) ??
         null)
       : null;
-  const stepActiveResult = (step: 1 | -1) => {
-    if (currentSearch.status !== "ready" || activeResult === null) {
-      return;
-    }
-    const index = currentSearch.results.indexOf(activeResult);
-    const next = currentSearch.results.at(
-      Math.max(0, Math.min(currentSearch.results.length - 1, index + step)),
-    );
-    if (next === undefined) {
-      return;
-    }
-    setActiveResultId(next.id);
-    rail.current
-      ?.querySelector(`[data-registry-result="${CSS.escape(next.id)}"]`)
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  };
   const copy = (card: ResultCard) => {
     if (card.status !== "ready" || currentSearch.status !== "ready") {
       return;
@@ -362,6 +353,21 @@ export const RegistrySearch = ({
         setError(t("registryErrorFormat"));
       });
   };
+  const openCompanyFormat = (card: ResultCard) => {
+    setError(null);
+    void invoke("registry_open_company_format", {
+      registry: registryId,
+      id: card.id,
+    }).catch((error: unknown) => {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        detail: describeError(error),
+        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+      });
+      setError(t("errorOpenStella"));
+    });
+  };
 
   useEffect(() => {
     const input = searchInput.current;
@@ -394,22 +400,6 @@ export const RegistrySearch = ({
           ?.focus();
         return;
       }
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-        return;
-      }
-      // Horizontal arrows leave the text only at the matching edge, so the
-      // caret keeps its native movement inside the query.
-      const length = input.value.length;
-      const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
-      const atEnd =
-        input.selectionStart === length && input.selectionEnd === length;
-      const rtl = getComputedStyle(input).direction === "rtl";
-      const forward = (event.key === "ArrowRight") !== rtl;
-      if (forward ? !atEnd : !atStart) {
-        return;
-      }
-      event.preventDefault();
-      stepActiveResult(forward ? 1 : -1);
     };
     input.addEventListener("keydown", handleSearchKey);
     return () => input.removeEventListener("keydown", handleSearchKey);
@@ -429,8 +419,8 @@ export const RegistrySearch = ({
     emptyText = t("registryEmpty");
   }
 
-  // Scope switching lives on the search field (arrows or the scope icon);
-  // the registry row only chooses which registry the scope searches.
+  // Scope switching lives on the scope button; the registry row only chooses
+  // which registry the active scope searches.
   const controls =
     source === "registry" ? (
       <div
@@ -610,6 +600,14 @@ export const RegistrySearch = ({
                         </MenuRadioItem>
                       ))}
                     </MenuRadioGroup>
+                    <MenuSeparator />
+                    <MenuItem
+                      closeOnClick
+                      onClick={() => openCompanyFormat(card)}
+                    >
+                      <PlusIcon aria-hidden="true" />
+                      {t("registryAddCompanyFormat")}
+                    </MenuItem>
                   </MenuPopup>
                 </Menu>
               </footer>
@@ -619,10 +617,10 @@ export const RegistrySearch = ({
       ) : (
         <div className="text-foreground-muted absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
           <p role="status" className="max-w-sm text-sm">
-            {error ? "" : emptyText}
+            {errorMessage ? "" : emptyText}
           </p>
           {connection?.status === "disconnected" ? (
-            <Button className="min-h-11" variant="ghost" onClick={connect}>
+            <Button className="min-h-11" onClick={connect}>
               {t("registryConnect")}
             </Button>
           ) : null}
@@ -632,15 +630,15 @@ export const RegistrySearch = ({
   );
   const feedback = (
     <div id="registry-error" className="min-w-0">
-      {source === "registry" && error ? (
+      {source === "registry" && errorMessage ? (
         <p
           className="text-foreground-muted flex min-w-0 items-center gap-1.5 text-xs"
           role="alert"
           aria-atomic="true"
         >
           <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="truncate" title={error}>
-            {error}
+          <span className="truncate" title={errorMessage}>
+            {errorMessage}
           </span>
         </p>
       ) : null}
