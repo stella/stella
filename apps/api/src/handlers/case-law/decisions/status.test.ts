@@ -29,7 +29,7 @@ const load = async (
   const result = await loadCaseLawCorpusStatus({
     country: COUNTRY,
     excludedSourceIds: [],
-    readFacets: async (country) => {
+    readFacets: async ({ country }) => {
       scopes.push(country);
       return await readFacets(country);
     },
@@ -80,4 +80,22 @@ test("a failed facets read fails the status instead of reporting zero", async ()
     throw new TypeError("expected the facets failure to reach the caller");
   }
   expect(result.error.message).toBe("corpus index unreachable");
+});
+
+test("a facets read that rejects fails the status as a value", async () => {
+  // The load sits behind a cache that keeps whatever promise it is handed;
+  // a rejection would be replayed to every caller for the whole window.
+  const result = await loadCaseLawCorpusStatus({
+    country: COUNTRY,
+    excludedSourceIds: [],
+    readFacets: async () => {
+      throw new TypeError("provider crashed");
+    },
+    readUpdatedAt: async () => UPDATED_AT,
+  });
+
+  if (!Result.isError(result)) {
+    throw new TypeError("expected the rejection to become an error value");
+  }
+  expect(result.error.message).toBe("provider crashed");
 });

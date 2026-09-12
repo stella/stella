@@ -56,11 +56,37 @@ type BrowseFacetsReadError =
   | LegalBrowseFacetsError
   | NonRedistributableSourcesError;
 
+export type BrowseFacetsUnderPolicyRead = {
+  country: string;
+  /** Sources whose redistribution is currently revoked; part of the cache key. */
+  excludedSourceIds: readonly string[];
+};
+
 /**
- * Cached facets for a validated jurisdiction, with the failure kept as a
- * value for a caller whose answer depends on them (the corpus status counts
- * from the country bucket, and a missing bucket must not read as zero).
+ * Cached facets for a validated jurisdiction under a source policy the
+ * caller already holds, so a reader combining the facets with another
+ * policy-scoped read (the corpus status) answers from one policy snapshot.
+ * The failure stays a value: the status counts from the country bucket, and
+ * a missing bucket must not read as zero.
  */
+export const readBrowseFacetsUnderPolicy = async ({
+  country,
+  excludedSourceIds,
+}: BrowseFacetsUnderPolicyRead): Promise<
+  Result<LegalBrowseFacets, LegalBrowseFacetsError>
+> =>
+  // The accepted code is case-insensitive, but the providers are not equally
+  // so: the corpus index lowercases it into an index name while the Postgres
+  // path compares it to the stored column, which is upper-case. Canonicalising
+  // once here is what keeps the two answering the same question — and keeps
+  // one jurisdiction to one cache entry.
+  await browseFacets({
+    jurisdiction: country.toUpperCase(),
+    excludedSourceIds,
+    limit: LIMITS.caseLawFacetLimit,
+  });
+
+/** The same facets under the current source policy. */
 export const readBrowseFacetsResult = async (
   country: string,
 ): Promise<Result<LegalBrowseFacets, BrowseFacetsReadError>> => {
@@ -72,16 +98,9 @@ export const readBrowseFacetsResult = async (
   if (Result.isError(excludedSourceIds)) {
     return excludedSourceIds;
   }
-
-  // The accepted code is case-insensitive, but the providers are not equally
-  // so: the corpus index lowercases it into an index name while the Postgres
-  // path compares it to the stored column, which is upper-case. Canonicalising
-  // once here is what keeps the two answering the same question — and keeps
-  // one jurisdiction to one cache entry.
-  return await browseFacets({
-    jurisdiction: country.toUpperCase(),
+  return await readBrowseFacetsUnderPolicy({
+    country,
     excludedSourceIds: excludedSourceIds.value,
-    limit: LIMITS.caseLawFacetLimit,
   });
 };
 

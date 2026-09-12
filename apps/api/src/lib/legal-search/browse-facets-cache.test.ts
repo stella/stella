@@ -217,3 +217,27 @@ test("retries once the failure window closes", async () => {
 
   expect(calls()).toBe(2);
 });
+
+test("a slow failure is held from the moment it settles", async () => {
+  let calls = 0;
+  const read = createTtlResultCache({
+    load: async (query: string) => {
+      calls += 1;
+      // Longer than the hold: a hold counted from the start would have
+      // expired before the failure even arrived.
+      await Bun.sleep(30);
+      return Result.err(
+        new LegalBrowseFacetsError({ message: `${query} down` }),
+      );
+    },
+    key: (query: string) => query,
+    ttlMs: 60_000,
+    failureTtlMs: 10,
+    maxEntries: 3,
+  });
+
+  await read("engine");
+  await read("engine");
+
+  expect(calls).toBe(1);
+});

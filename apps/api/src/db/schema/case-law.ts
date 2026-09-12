@@ -573,6 +573,12 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
+    // The corpus status's newest row of one country: led by country so the
+    // walk stops at the first row instead of filtering past every newer row
+    // of the other countries.
+    p
+      .index("case_law_decisions_country_updated_idx")
+      .on(t.country, t.updatedAt.desc(), t.id.desc()),
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),

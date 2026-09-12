@@ -9,7 +9,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions } from "@/api/db/schema";
-import { readBrowseFacetsResult } from "@/api/handlers/case-law/decisions/facets";
+import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -57,11 +57,13 @@ type ReadCaseLawCorpusStatusQuery = Static<
 >;
 
 /**
- * The newest public decision's timestamp: `case_law_decisions_updated_id_idx`
- * walked newest first and stopped at the first row the country and the source
- * policy admit. `max(updated_at)` cannot express that — an aggregate under a
- * country predicate has to read every row the predicate matches, which on a
- * corpus this size is a heap scan of a million rows per request.
+ * The newest public decision's timestamp:
+ * `case_law_decisions_country_updated_idx` walked newest first within the
+ * country and stopped at the first row the source policy admits. Led by
+ * country so a large ingestion batch elsewhere is never walked past.
+ * `max(updated_at)` cannot express that — an aggregate under a country
+ * predicate has to read every row the predicate matches, which on a corpus
+ * this size is a heap scan of a million rows per request.
  */
 export const readCaseLawCorpusStatusQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCorpusStatus,
@@ -96,18 +98,27 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
   /**
    * The facets with their failure kept: a facets read that degraded to an
    * empty set would count as a corpus of zero decisions beside a real
-   * timestamp, which is a wrong number, not an unknown status.
+   * timestamp, which is a wrong number, not an unknown status. Both reads
+   * take the same source-policy snapshot, so the count and the timestamp
+   * describe one set of decisions.
    */
   readFacets: (
-    country: string,
+    read: CorpusUpdatedAtRead,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
   readUpdatedAt: (read: CorpusUpdatedAtRead) => Promise<string | null>;
 };
 
+const corpusStatusError = (fallback: string) => (cause: unknown) =>
+  new CorpusStatusError({
+    message: cause instanceof Error ? cause.message : fallback,
+    cause,
+  });
+
 /**
  * Both halves of the status, each from the read that already answers it
  * cheaply: the count from the facets this page asks for anyway, the timestamp
- * from one index row.
+ * from one index row. Each read is normalised to a value: the cache that
+ * holds the load would otherwise keep a rejected promise for a full window.
  */
 export const loadCaseLawCorpusStatus = async ({
   country,
@@ -117,25 +128,25 @@ export const loadCaseLawCorpusStatus = async ({
 }: CorpusStatusLoad): Promise<
   Result<CaseLawCorpusStatus, CorpusStatusError>
 > => {
+  const read = { country, excludedSourceIds };
   const [facets, updatedAt] = await Promise.all([
-    readFacets(country),
     Result.tryPromise({
-      try: async () => await readUpdatedAt({ country, excludedSourceIds }),
-      catch: (cause) =>
-        new CorpusStatusError({
-          message:
-            cause instanceof Error
-              ? cause.message
-              : "reading the newest public decision failed",
-          cause,
-        }),
+      try: async () => await readFacets(read),
+      catch: corpusStatusError("reading the browse facets failed"),
+    }),
+    Result.tryPromise({
+      try: async () => await readUpdatedAt(read),
+      catch: corpusStatusError("reading the newest public decision failed"),
     }),
   ]);
   if (Result.isError(facets)) {
+    return facets;
+  }
+  if (Result.isError(facets.value)) {
     return Result.err(
       new CorpusStatusError({
-        message: facets.error.message,
-        cause: facets.error,
+        message: facets.value.error.message,
+        cause: facets.value.error,
       }),
     );
   }
@@ -144,7 +155,9 @@ export const loadCaseLawCorpusStatus = async ({
   }
   // A jurisdiction the corpus holds nothing for has no bucket at all: that is
   // the empty corpus, not a missed lookup.
-  const bucket = facets.value.country.find(({ value }) => value === country);
+  const bucket = facets.value.value.country.find(
+    ({ value }) => value === country,
+  );
   return Result.ok({
     decisions: bucket?.count ?? 0,
     updatedAt: updatedAt.value,
@@ -194,7 +207,7 @@ export const readCaseLawCorpusStatusHandler = async (
   const result = await corpusStatus({
     country: publicCountry,
     excludedSourceIds: excludedSourceIds.value,
-    readFacets: readBrowseFacetsResult,
+    readFacets: readBrowseFacetsUnderPolicy,
     readUpdatedAt: async (read) =>
       await caseLawDb(
         async (tx) => await readCaseLawCorpusStatusQuery(tx, read),

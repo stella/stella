@@ -91,12 +91,14 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
     // A failure must not pin an empty answer for the whole window: it is
     // dropped, or held for the shorter failure window where the caller asked
     // for one. Either way only while this call still owns the entry, so a
-    // newer one survives.
+    // newer one survives. The hold starts when the load settles, not when it
+    // began: a load that fails slowly would otherwise use up its own hold.
     if (Result.isError(result) && entries.get(key) === entry) {
       if (failureTtlMs === undefined) {
         entries.delete(key);
       } else {
-        entry.expiresAt = now + failureTtlMs;
+        entry.expiresAt =
+          Temporal.Now.instant().epochMilliseconds + failureTtlMs;
       }
     }
     return result;
