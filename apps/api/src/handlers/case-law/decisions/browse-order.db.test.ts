@@ -12,6 +12,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -261,6 +262,13 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
+/** The facets a jurisdiction has none of; the shelf orders by name instead. */
+const noFacets = async (): Promise<LegalBrowseFacets> => ({
+  country: [],
+  court: [],
+  year: [],
+});
+
 test(
   "the shelf's courts are the jurisdiction's apex courts, not its busiest",
   async () => {
@@ -268,6 +276,7 @@ test(
       caseLawDb,
       country: "SVK",
       entries: seededCourtWeightEntries("SVK"),
+      readFacets: noFacets,
     });
     // Six district judgments outnumber the one supreme judgment; rank wins.
     expect(courts).toEqual([
@@ -281,6 +290,28 @@ test(
     expect(
       shelf.map((group) => group.decisions.map((d) => d.caseNumber)),
     ).toEqual([["1 Cdo 9/2024"]]);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a court the facets do not list still reaches the shelf",
+  async () => {
+    const courts = await readShelfCourts({
+      caseLawDb,
+      country: "SVK",
+      entries: seededCourtWeightEntries("SVK"),
+      // The facet cap holds the jurisdiction's largest courts, which an apex
+      // court need not be among: the buckets order the shelf, never fill it.
+      readFacets: async () => ({
+        country: [],
+        court: [{ value: "Okresný súd Bratislava I", count: 6 }],
+        year: [],
+      }),
+    });
+    expect(courts).toEqual([
+      { court: "Najvyšší súd Slovenskej republiky", tierLabel: "supreme" },
+    ]);
   },
   DB_TEST_TIMEOUT_MS,
 );

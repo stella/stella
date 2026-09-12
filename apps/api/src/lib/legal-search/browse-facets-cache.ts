@@ -29,6 +29,13 @@ type TtlResultCacheOptions<TQuery, TValue, TError> = {
   key: (query: TQuery) => string;
   ttlMs: number;
   /**
+   * How long a failed load is held before the next request may retry it.
+   * Omitted, a failure is evicted at once, which is right for a load that is
+   * cheap to repeat; a load that fails slowly needs the hold, or a degraded
+   * dependency keeps one call in flight for as long as it stays degraded.
+   */
+  failureTtlMs?: number;
+  /**
    * Caller-influenced inputs (a jurisdiction validated against a pattern, not
    * a closed list) make the key space unbounded, so it is bounded here rather
    * than left to grow. The corpus has a handful of jurisdictions, so eviction
@@ -50,6 +57,7 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
   load,
   key: keyOf,
   ttlMs,
+  failureTtlMs,
   maxEntries,
 }: TtlResultCacheOptions<TQuery, TValue, TError>) => {
   const entries = new Map<string, CacheEntry<TValue, TError>>();
@@ -80,10 +88,18 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
     }
 
     const result = await entry.pending;
-    // A failure must not pin an empty answer for the whole window. Drop it
-    // only while this call still owns the entry, so a newer one survives.
+    // A failure must not pin an empty answer for the whole window: it is
+    // dropped, or held for the shorter failure window where the caller asked
+    // for one. Either way only while this call still owns the entry, so a
+    // newer one survives. The hold starts when the load settles, not when it
+    // began: a load that fails slowly would otherwise use up its own hold.
     if (Result.isError(result) && entries.get(key) === entry) {
-      entries.delete(key);
+      if (failureTtlMs === undefined) {
+        entries.delete(key);
+      } else {
+        entry.expiresAt =
+          Temporal.Now.instant().epochMilliseconds + failureTtlMs;
+      }
     }
     return result;
   };

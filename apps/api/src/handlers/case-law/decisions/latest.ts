@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
 
+import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
 import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
 import {
   loadShelfCourtEntries,
@@ -258,6 +259,7 @@ const loadLatestDecisions = async ({
         caseLawDb,
         country,
         entries: await loadShelfCourtEntries(country),
+        readFacets: readBrowseFacets,
       });
       const groups = await readLatestDecisionsByCourt({
         caseLawDb,

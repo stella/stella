@@ -78,9 +78,11 @@ const browseFacetsQuery = ({
 /**
  * Per-split candidate depth behind each bucket. Terms aggregations merge
  * per-split top-k lists, so a depth at `size` alone makes counts approximate
- * across many splits; at this depth the engine reports a
- * `doc_count_error_upper_bound` of 0 for every browse facet at current corpus
- * size, i.e. the counts are exact.
+ * across many splits. The engine reports a `doc_count_error_upper_bound` for
+ * `_count`-ordered aggregations only, and at this depth it reports 0 for both
+ * of them at current corpus size. For the `_key`-ordered `year` facet it
+ * reports no bound at all, so exactness there rests on this depth exceeding
+ * the field's cardinality: a few decades of years.
  */
 const FACET_SEGMENT_SIZE = 5000;
 
@@ -131,17 +133,23 @@ const buildAggregations = (
  * never an empty facet: silently reporting "no courts" would look like a
  * corpus with no decisions.
  */
-const parseTermsBuckets = (aggregation: unknown): FacetBucket[] | null => {
+const parseTermsBuckets = (
+  aggregation: unknown,
+  order: BrowseFacetSpec["order"],
+): FacetBucket[] | null => {
   if (!isRecord(aggregation) || !Array.isArray(aggregation["buckets"])) {
     return null;
   }
 
   // `FACET_SEGMENT_SIZE` is a claim about the corpus, not a property of the
-  // engine, and corpus growth or a split-topology change can outgrow it. The
-  // engine states when it has: anything but a reported zero means the counts
-  // are approximate, and serving them would put wrong numbers next to every
-  // court with nothing to notice.
-  if (aggregation["doc_count_error_upper_bound"] !== 0) {
+  // engine, and corpus growth or a split-topology change can outgrow it. A
+  // reported bound above zero is the engine saying it has: the counts are
+  // approximate, and serving them would put wrong numbers next to every court
+  // with nothing to notice. The engine reports the bound for `_count` ordering
+  // only, so its absence is the contract for a `_key`-ordered facet and a
+  // missing shape for any other.
+  const bound = aggregation["doc_count_error_upper_bound"];
+  if (bound === undefined ? !("_key" in order) : bound !== 0) {
     return null;
   }
 
@@ -217,9 +225,15 @@ export const corpusIndexBrowseFacets = async (
     );
   }
 
-  const country = parseTermsBuckets(aggregated.value["country"]);
-  const court = parseTermsBuckets(aggregated.value["court"]);
-  const year = parseTermsBuckets(aggregated.value["year"]);
+  // The parse reads each facet under the ordering its own spec requested: the
+  // engine's exactness bound is ordering-dependent.
+  const specs = browseFacetSpecs(readContract.yearFacetField);
+  const country = parseTermsBuckets(
+    aggregated.value["country"],
+    specs.country.order,
+  );
+  const court = parseTermsBuckets(aggregated.value["court"], specs.court.order);
+  const year = parseTermsBuckets(aggregated.value["year"], specs.year.order);
   if (country === null || court === null || year === null) {
     return Result.err(
       new LegalBrowseFacetsError({

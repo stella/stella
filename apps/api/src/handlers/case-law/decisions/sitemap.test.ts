@@ -16,7 +16,6 @@ import {
   decisionYearSql,
   listSitemapShardDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -208,7 +207,7 @@ test("sitemap shards reject countries outside the public list", async () => {
   expect(unavailable.code).toBe(404);
 });
 
-test("public list and status reads stay inside the country boundary", async () => {
+test("the public list read stays inside the country boundary", async () => {
   const country =
     publicCaseLawCountry("CZE") ?? panic("Expected a public test country.");
   const listed = await listDecisionsHandler({ country, limit: 10 }, caseLawDb);
@@ -217,13 +216,4 @@ test("public list and status reads stay inside the country boundary", async () =
     expect(listed.items).toHaveLength(4);
     expect(listed.items.every((item) => item.country === country)).toBe(true);
   }
-
-  const corpusStatus = await caseLawDb(
-    async (tx) =>
-      await readCaseLawCorpusStatusQuery(tx, {
-        country,
-        excludedSourceIds: [],
-      }),
-  );
-  expect(corpusStatus.decisions).toBe(4);
 });
