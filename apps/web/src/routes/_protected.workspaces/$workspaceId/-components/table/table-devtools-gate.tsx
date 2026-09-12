@@ -1,7 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 
-import { ClientOnly } from "@tanstack/react-router";
-
+import { BrowserOnly } from "@/components/browser-only";
 import type { WorkspaceTable } from "@/components/workspaces/table/types";
 import { useDevStore } from "@/lib/dev-store";
 
@@ -23,10 +22,8 @@ export default function TableDevtoolsGate({
   }
 
   return (
-    <ClientOnly>
-      <Suspense fallback={null}>
-        <TableDevtools table={table} />
-      </Suspense>
-    </ClientOnly>
+    <BrowserOnly>
+      <TableDevtools table={table} />
+    </BrowserOnly>
   );
 }

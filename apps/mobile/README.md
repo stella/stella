@@ -22,11 +22,13 @@ bun --filter @stll/mobile lint
 bun --filter @stll/mobile build
 ```
 
-The app intentionally shares the repository's React 19 patch release. React
-Native 0.86 supports that range, and using one copy prevents Metro and native
-autolinking from seeing duplicate React runtimes. Expo's exact bundled React
-pin is therefore excluded from its package-version comparison; all native
-module versions remain checked.
+The app uses the `reactNative` catalog to keep React and React DOM on 19.2.8
+while the DOM applications use React 19.3. React Native 0.86 embeds a React
+19.2 renderer; its peer range accepts the 19.2 patch updates, but does not
+establish compatibility with a newer reconciler. Rejoin the shared catalog
+when the supported Expo SDK ships a React 19.3 renderer. Expo's exact bundled
+React patch pin remains excluded from its package-version comparison; all
+native module versions remain checked.
 
 Expo Metro requires Babel 7 while the web build uses Babel 8. Both workspaces
 declare their required major directly, and the workspace-hygiene check ratchets

@@ -1,11 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import {
-  ClientOnly,
-  createFileRoute,
-  Link,
-  notFound,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -16,6 +11,7 @@ import {
 } from "@stll/catalogue";
 import { Button } from "@stll/ui/button";
 
+import { BrowserOnly } from "@/components/browser-only";
 import {
   CostBadge,
   FirstPartyMark,
@@ -164,22 +160,20 @@ function PublicToolDetail() {
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <ClientOnly fallback={<InstallButtonPlaceholder />}>
-            <Suspense fallback={<InstallButtonPlaceholder />}>
-              <AddToStella
-                displayName={displayName}
-                entry={entry}
-                installIntent={installIntent}
-                onClearInstallIntent={() => {
-                  navigate({ replace: true, search: {} }).catch(
-                    (error: unknown) => {
-                      getAnalytics().captureError(error);
-                    },
-                  );
-                }}
-              />
-            </Suspense>
-          </ClientOnly>
+          <BrowserOnly fallback={<InstallButtonPlaceholder />}>
+            <AddToStella
+              displayName={displayName}
+              entry={entry}
+              installIntent={installIntent}
+              onClearInstallIntent={() => {
+                navigate({ replace: true, search: {} }).catch(
+                  (error: unknown) => {
+                    getAnalytics().captureError(error);
+                  },
+                );
+              }}
+            />
+          </BrowserOnly>
           <DownloadAffordance entry={entry} />
           {homepage && (
             <a
