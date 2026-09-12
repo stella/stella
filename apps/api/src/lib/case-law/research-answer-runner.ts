@@ -578,7 +578,7 @@ const writeOutcomes = async (
               failureReason:
                 outcome.state === "failed" ? outcome.failureReason : null,
             };
-      // SAFETY: bounded by LIMITS.caseLawResearchColumnsPerTable, inside one
+      // SAFETY: bounded by LIMITS.caseLawResearchColumnsPerOrganization, inside one
       // transaction; each cell is its own row so a batch would be a VALUES join
       // of the same size.
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the column cap

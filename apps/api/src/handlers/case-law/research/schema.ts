@@ -86,7 +86,6 @@ export const setResearchTableDecisionBodySchema = t.Object(
 );
 
 export const researchColumnParamsSchema = t.Object({
-  tableId: tSafeId("caseLawResearchTable"),
   columnId: tSafeId("caseLawResearchColumn"),
 });
 
@@ -131,7 +130,7 @@ export const reorderResearchColumnsBodySchema = t.Object(
   {
     columnIds: t.Array(tSafeId("caseLawResearchColumn"), {
       minItems: 1,
-      maxItems: LIMITS.caseLawResearchColumnsPerTable,
+      maxItems: LIMITS.caseLawResearchColumnsPerOrganization,
     }),
   },
   { additionalProperties: false },
@@ -139,11 +138,11 @@ export const reorderResearchColumnsBodySchema = t.Object(
 
 export const runResearchAnswersBodySchema = t.Object(
   {
-    /** Absent: every column of the table. */
+    /** Absent: every column the organization keeps. */
     columnIds: t.Optional(
       t.Array(tSafeId("caseLawResearchColumn"), {
         minItems: 1,
-        maxItems: LIMITS.caseLawResearchColumnsPerTable,
+        maxItems: LIMITS.caseLawResearchColumnsPerOrganization,
       }),
     ),
     decisionIds: t.Array(tSafeId("caseLawDecision"), {
@@ -170,7 +169,7 @@ export const toResearchColumnResponse = (
   row: typeof caseLawResearchColumns.$inferSelect,
 ) => ({
   id: row.id,
-  tableId: row.tableId,
+  createdBy: row.createdBy,
   position: row.position,
   question: row.question,
   answerType: row.answerType,

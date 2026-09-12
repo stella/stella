@@ -16,6 +16,8 @@ import {
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawResearchAnswers,
+  caseLawResearchColumns,
   caseLawResearchTables,
   documentTranslationRuns,
   entities,
@@ -128,6 +130,9 @@ const foreignSignalB = toSafeId<"signal">(
 );
 const researchTableB = toSafeId<"caseLawResearchTable">(
   "22222222-2222-4222-8222-222222222252",
+);
+const researchColumnB = toSafeId<"caseLawResearchColumn">(
+  "22222222-2222-4222-8222-222222222253",
 );
 const visibleSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222247",
@@ -514,22 +519,25 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
-    // Answers hang off the table: naming another organization's table is a
-    // 404 before any cell is read.
+    // Answer cells are the organization's. Asking about a decision another
+    // organization has answered returns nothing: the cells are keyed by that
+    // organization's own question columns.
     name: "case-law research answers lookup",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(lookupResearchAnswers, workspaceA, {
-        params: { tableId: researchTableB },
         body: { decisionIds: [testIds.caseLawDecisionB] },
       }),
     runBPositive: async ({ ids: testIds, workspaceB }) =>
       await runHandler(lookupResearchAnswers, workspaceB, {
-        params: { tableId: researchTableB },
         body: { decisionIds: [testIds.caseLawDecisionB] },
       }),
-    expectDenied: expectStatus(404),
-    expectPositive: (result) => {
+    expectDenied: (result) => {
       expect(result).toMatchObject({ items: [] });
+    },
+    expectPositive: (result) => {
+      expect(result).toMatchObject({
+        items: [{ columnId: researchColumnB, state: "answered" }],
+      });
     },
   },
   {
@@ -682,6 +690,22 @@ beforeAll(async () => {
     ownerUserId: ids.userB1,
     name: "Organization B leases",
     savedQuery: { version: 1, query: "lease" },
+  });
+  await testDb.insert(caseLawResearchColumns).values({
+    id: researchColumnB,
+    organizationId: ids.orgB,
+    createdBy: ids.userB1,
+    position: 1,
+    question: "Does the decision allow termination?",
+    answerType: "yes_no",
+    tool: { version: 1, role: "fast" },
+  });
+  await testDb.insert(caseLawResearchAnswers).values({
+    columnId: researchColumnB,
+    organizationId: ids.orgB,
+    decisionId: ids.caseLawDecisionB,
+    state: "answered",
+    answer: { type: "yes_no", value: "yes" },
   });
   await testDb.insert(signals).values([
     {

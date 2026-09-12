@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -61,7 +61,7 @@ export const createMatterLinkHandler = async ({
     });
   }
 
-  const links = await scopedDb(async (tx) => {
+  const link = await scopedDb(async (tx) => {
     const inserted = await tx
       .insert(caseLawMatterLinks)
       .values({
@@ -76,26 +76,43 @@ export const createMatterLinkHandler = async ({
       .returning();
 
     const insertedLink = inserted.at(0);
-    if (insertedLink) {
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
-        resourceId: insertedLink.id,
-        workspaceId,
-        metadata: {
-          decisionId: body.decisionId,
-          hasNote: (body.note ?? null) !== null,
-        },
-      });
+    if (insertedLink === undefined) {
+      // Pinning a decision that is already pinned is what the caller asked
+      // for, so the existing link is the answer. Nothing changed, so nothing
+      // is audited.
+      const [existing] = await tx
+        .select()
+        .from(caseLawMatterLinks)
+        .where(
+          and(
+            eq(caseLawMatterLinks.decisionId, body.decisionId),
+            eq(caseLawMatterLinks.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      return existing ?? null;
     }
 
-    return inserted;
-  });
-  const link = links.at(0);
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
+      resourceId: insertedLink.id,
+      workspaceId,
+      metadata: {
+        decisionId: body.decisionId,
+        hasNote: (body.note ?? null) !== null,
+      },
+    });
 
-  if (!link) {
+    return insertedLink;
+  });
+
+  if (link === null) {
+    // The conflicting row is gone: an unlink landed between the insert and
+    // the read, so the caller is told to ask again rather than handed a link
+    // that no longer exists.
     return status(409, {
-      message: "Decision already linked to this matter",
+      message: "Decision link changed during the request",
     });
   }
 
@@ -105,9 +122,10 @@ export const createMatterLinkHandler = async ({
 const config = {
   description:
     "Link one case-law decision from the corpus to the current matter, with " +
-    "an optional note. A decision that is not in the corpus is a 404, a " +
-    "decision already linked to this matter is a 409, and the call is " +
-    "refused once the matter holds its maximum number of links.",
+    "an optional note. A decision that is not in the corpus is a 404; a " +
+    "decision already linked to this matter returns the existing link " +
+    "unchanged, note included. The call is refused once the matter holds its " +
+    "maximum number of links.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   body: createMatterLinkBodySchema,
