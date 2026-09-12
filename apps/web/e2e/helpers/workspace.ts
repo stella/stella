@@ -1,8 +1,8 @@
-import type { APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
 import { Result, panic } from "better-result";
 import { randomUUID } from "node:crypto";
 
-import { apiDelete, apiGet, apiPut } from "./api";
+import { apiDeleteStatus, apiGet, apiPut } from "./api";
 
 type FileProperty = { id: string };
 
@@ -112,5 +112,30 @@ export const deleteTestWorkspace = async (
   request: APIRequestContext,
   workspaceId: string,
 ): Promise<void> => {
-  await apiDelete(request, `/workspaces/${workspaceId}`);
+  const path = `/workspaces/${workspaceId}`;
+  await expect
+    .poll(
+      async () => {
+        const result = await apiDeleteStatus(request, path);
+        if (
+          result.status === 404 ||
+          (result.status >= 200 && result.status < 300)
+        ) {
+          return true;
+        }
+        if (
+          result.status === 409 &&
+          result.body.includes(
+            "Wait for document processing or another deletion attempt to finish",
+          )
+        ) {
+          return false;
+        }
+        throw new Error(
+          `DELETE ${path} -> ${String(result.status)}: ${result.body}`,
+        );
+      },
+      { timeout: 30_000, intervals: [250, 500, 1000, 2000] },
+    )
+    .toBe(true);
 };
