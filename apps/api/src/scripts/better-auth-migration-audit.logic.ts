@@ -1762,9 +1762,9 @@ const finalAccountConstraintsStatement = sql`
        WHERE table_schema = 'public'
          AND table_name = 'account'
          AND column_name = 'issuer'
-         AND is_nullable = 'NO'
+         AND is_nullable = 'YES'
     )
-    AND EXISTS (
+    AND NOT EXISTS (
       SELECT 1
         FROM pg_index index_record
         JOIN pg_class table_record ON table_record.oid = index_record.indrelid

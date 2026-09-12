@@ -278,6 +278,15 @@ const HOST_MEMBER_FIELDS = {
   }),
 } as const;
 
+// Better Auth 1.7.3 stopped writing the 1.7.0 issuer field. Keep the nullable
+// column as rollout-safe historical data until a later cleanup can remove it.
+const HOST_ACCOUNT_FIELDS = {
+  issuer: hostField("issuer", "string", {
+    input: "server-managed",
+    returned: false,
+  }),
+} as const;
+
 const referenceTo = (tableName: string): BetterAuthFieldReference => {
   if (tableName === "organization" || tableName === "user") {
     return { field: "id", model: tableName, onDelete: "cascade" };
@@ -440,7 +449,10 @@ describe("auth schema", () => {
         table: session,
       }),
       account: normalizeModel({
-        expectedFields: BETTER_AUTH_CORE_SCHEMA.account.fields,
+        expectedFields: {
+          ...BETTER_AUTH_CORE_SCHEMA.account.fields,
+          ...HOST_ACCOUNT_FIELDS,
+        },
         modelName: "account",
         table: account,
       }),
@@ -507,6 +519,7 @@ describe("auth schema", () => {
       },
       {
         fields: {
+          account: HOST_ACCOUNT_FIELDS,
           user: HOST_USER_FIELDS,
           member: HOST_MEMBER_FIELDS,
         },

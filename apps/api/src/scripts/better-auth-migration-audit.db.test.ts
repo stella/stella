@@ -462,7 +462,7 @@ test("post phases require resource links, final constraints, and the exact basel
          WHERE id = ${microsoftAccountRowId}
       `);
 
-      const beforeConstraints = await runBetterAuthMigrationAudit({
+      const relaxedAccountKey = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         expectedOAuthResources: TEST_OAUTH_RESOURCES,
@@ -471,18 +471,15 @@ test("post phases require resource links, final constraints, and the exact basel
       });
       expect(
         checkStatus(
-          beforeConstraints,
+          relaxedAccountKey,
           BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
         ),
-      ).toBe("failed");
+      ).toBe("passed");
 
       await transaction.execute(
         sql`ALTER TABLE account ALTER COLUMN issuer SET NOT NULL`,
       );
-      await transaction.execute(
-        sql`CREATE UNIQUE INDEX account_issuer_account_id_partial_uidx ON account (issuer, account_id) WHERE issuer IS NOT NULL`,
-      );
-      const partialIdentityIndex = await runBetterAuthMigrationAudit({
+      const requiredIssuer = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
         expectedOAuthResources: TEST_OAUTH_RESOURCES,
@@ -491,16 +488,30 @@ test("post phases require resource links, final constraints, and the exact basel
       });
       expect(
         checkStatus(
-          partialIdentityIndex,
+          requiredIssuer,
           BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
         ),
       ).toBe("failed");
       await transaction.execute(
-        sql`DROP INDEX account_issuer_account_id_partial_uidx`,
+        sql`ALTER TABLE account ALTER COLUMN issuer DROP NOT NULL`,
       );
       await transaction.execute(
         sql`CREATE UNIQUE INDEX account_issuer_account_id_uidx ON account (issuer, account_id)`,
       );
+      const obsoleteIdentityIndex = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
+      });
+      expect(
+        checkStatus(
+          obsoleteIdentityIndex,
+          BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
+        ),
+      ).toBe("failed");
+      await transaction.execute(sql`DROP INDEX account_issuer_account_id_uidx`);
       const postMigration = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
