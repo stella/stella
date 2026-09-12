@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -43,7 +44,7 @@ describe("the persisted table state's read boundary", () => {
 // The store's `persist` middleware writes on every change, so it needs a
 // Storage before the module is evaluated.
 const stored = new Map<string, string>();
-globalThis.localStorage = {
+const fakeLocalStorage: Storage = {
   clear: () => {
     stored.clear();
   },
@@ -59,8 +60,14 @@ globalThis.localStorage = {
     stored.set(key, value);
   },
 };
+globalThis.localStorage = fakeLocalStorage;
 
-const { useTableStore } = await import("@/lib/workspaces/table-store");
+const {
+  EMPTY_TABLE_VIEW_RECORDS,
+  TABLE_VIEW_RECORD_KEYS,
+  installTableStoreReconcile,
+  useTableStore,
+} = await import("@/lib/workspaces/table-store");
 
 const v1 = { workspaceId: "ws-1", viewId: "v1" };
 const v2 = { workspaceId: "ws-1", viewId: "v2" };
@@ -78,6 +85,27 @@ test("the persisted key is written at the current version", () => {
     },
     version: TABLE_STORE_VERSION,
   });
+});
+
+test("runs from memory when the localStorage getter throws", () => {
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get: () => {
+      throw new Error("site data blocked");
+    },
+  });
+  try {
+    useTableStore.getState().setColumnSizing(v1, { col_a: 90 });
+    useTableStore.getState().reconcileViews("ws-1", []);
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: fakeLocalStorage,
+      writable: true,
+    });
+  }
+
+  expect(useTableStore.getState().columnSizing).toEqual({});
 });
 
 describe("a view's find bar", () => {
@@ -172,44 +200,86 @@ describe("a view's find bar", () => {
   });
 });
 
+const seedEveryRecord = (refs: readonly (typeof v1)[]) => {
+  const store = useTableStore.getState();
+  for (const ref of refs) {
+    store.setColumnSizing(ref, { col_a: 100 });
+    store.setContentMode(ref, "fit-content");
+    store.setRowSelection(ref, { row: true });
+    store.setPreservableRowIds(ref, ["row"]);
+    store.openFind(ref);
+    // Seeded directly: the setter skips an empty selection for a view with none.
+    useTableStore.setState((state) => {
+      (state.selectedEntities[ref.workspaceId] ??= {})[ref.viewId] = [];
+    });
+  }
+  for (const key of TABLE_VIEW_RECORD_KEYS) {
+    for (const ref of refs) {
+      expect(useTableStore.getState()[key][ref.workspaceId]).toHaveProperty(
+        ref.viewId,
+      );
+    }
+  }
+};
+
 describe("reconciling the store against a matter's views", () => {
   beforeEach(() => {
-    useTableStore.setState({
-      columnSizing: {},
-      contentMode: {},
-      rowSelection: {},
-      selectedEntities: {},
-      preservableRowIds: {},
-      find: {},
-    });
+    useTableStore.setState(EMPTY_TABLE_VIEW_RECORDS);
+    stored.clear();
   });
 
   test("drops every record of a view the matter no longer lists", () => {
-    const store = useTableStore.getState();
-    for (const ref of [v1, v2]) {
-      store.setColumnSizing(ref, { col_a: 100 });
-      store.setContentMode(ref, "fit-content");
-      store.setRowSelection(ref, { row: true });
-      store.setPreservableRowIds(ref, ["row"]);
-      store.openFind(ref);
-    }
-    // Seeded directly: the setter skips an empty selection for a view with none.
-    useTableStore.setState({
-      selectedEntities: { "ws-1": { v1: [], v2: [] } },
-    });
+    seedEveryRecord([v1, v2]);
 
-    store.reconcileViews("ws-1", ["v2"]);
+    useTableStore.getState().reconcileViews("ws-1", ["v2"]);
 
     const state = useTableStore.getState();
-    for (const record of [
-      state.columnSizing,
-      state.contentMode,
-      state.rowSelection,
-      state.selectedEntities,
-      state.preservableRowIds,
-      state.find,
-    ]) {
-      expect(Object.keys(record["ws-1"] ?? {})).toEqual(["v2"]);
+    for (const key of TABLE_VIEW_RECORD_KEYS) {
+      expect(Object.keys(state[key]["ws-1"] ?? {})).toEqual(["v2"]);
+    }
+  });
+
+  test("writes nothing to storage when every stored view is still listed", () => {
+    seedEveryRecord([v1, v2]);
+    const before = useTableStore.getState();
+    stored.clear();
+
+    useTableStore.getState().reconcileViews("ws-1", ["v1", "v2", "v3"]);
+    useTableStore.getState().reconcileViews("ws-9", []);
+
+    expect(useTableStore.getState()).toBe(before);
+    expect(stored.has("stella:table")).toBe(false);
+  });
+
+  test("dropping a matter removes its records and keeps the others", () => {
+    seedEveryRecord([v1, otherMatter]);
+
+    useTableStore.getState().dropMatter("ws-1");
+
+    const state = useTableStore.getState();
+    for (const key of TABLE_VIEW_RECORD_KEYS) {
+      expect(Object.keys(state[key])).toEqual(["ws-2"]);
+    }
+  });
+
+  test("a views list landing in the query cache reconciles the matter", () => {
+    seedEveryRecord([v1, v2, otherMatter]);
+    const queryClient = new QueryClient();
+    installTableStoreReconcile(queryClient);
+    installTableStoreReconcile(queryClient);
+
+    queryClient.setQueryData(["not-views", "ws-1", "en"], [{ id: "v3" }]);
+    expect(Object.keys(useTableStore.getState().find["ws-1"] ?? {})).toEqual([
+      "v1",
+      "v2",
+    ]);
+
+    queryClient.setQueryData(["views", "ws-1", "en"], [{ id: "v2" }]);
+
+    const state = useTableStore.getState();
+    for (const key of TABLE_VIEW_RECORD_KEYS) {
+      expect(Object.keys(state[key]["ws-1"] ?? {})).toEqual(["v2"]);
+      expect(Object.keys(state[key]["ws-2"] ?? {})).toEqual(["v1"]);
     }
   });
 

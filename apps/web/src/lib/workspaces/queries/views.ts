@@ -7,7 +7,6 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
-import { useTableStore } from "@/lib/workspaces/table-store";
 
 export const viewsKeys = {
   // Locale-independent prefix. Mutations invalidate this so every cached locale
@@ -34,18 +33,8 @@ export const viewsOptions = (workspaceId: string) =>
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
-      const views = unwrapEden(response);
 
-      // Every path that removes a view ends in a fetch of this list, so this
-      // is the one owner of per-view table state cleanup. The list is
-      // complete (`handlers/views/list.ts`), so absence means deleted. Safe
-      // in a query function because protected routes are `ssr: false`.
-      useTableStore.getState().reconcileViews(
-        workspaceId,
-        views.map((view) => view.id),
-      );
-
-      return views;
+      return unwrapEden(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

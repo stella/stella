@@ -21,7 +21,8 @@ export type TableViewRecord<T> = Record<string, Record<string, T>>;
 
 /**
  * `record` with one matter's views filtered by `keep`. An emptied matter is
- * dropped; other matters are returned as they are.
+ * dropped; other matters are returned as they are. Returns `record` itself
+ * when nothing is filtered out, so a caller can tell a no-op by identity.
  */
 export const pruneMatterViews = <T>(
   record: TableViewRecord<T>,
@@ -32,7 +33,11 @@ export const pruneMatterViews = <T>(
   if (!bucket) {
     return record;
   }
-  const kept = Object.entries(bucket).filter(([viewId]) => keep(viewId));
+  const entries = Object.entries(bucket);
+  const kept = entries.filter(([viewId]) => keep(viewId));
+  if (kept.length === entries.length) {
+    return record;
+  }
   const others = Object.fromEntries(
     Object.entries(record).filter(([id]) => id !== workspaceId),
   );
