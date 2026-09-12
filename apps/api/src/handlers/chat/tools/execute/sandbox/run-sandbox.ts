@@ -219,7 +219,7 @@ export const trackSandboxHostWorkForTest = (work: Promise<void>): void => {
   const tracked: Promise<void> = work
     // The tracked wrapper only records in-flight host work; the real
     // rejection belongs to `work`, which the caller still owns.
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
     .catch(() => undefined)
     .finally(() => {
       sandboxHostWorkInFlight.delete(tracked);

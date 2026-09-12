@@ -108,6 +108,8 @@ export const PLUGIN_FIXTURE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
+  "$TURBO_ROOT$/scripts/oxlint-typebox-unsafe.test.ts",
+  "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
@@ -128,6 +130,7 @@ const RECURSIVE_GLOB_SUFFIX = "/**";
 
 const ROOT_CHECKS = {
   assets: "assets",
+  css: "css",
   env: "env",
   pluginFixtures: "plugin-fixtures",
   pluginRegistry: "plugin-registry",
@@ -138,6 +141,7 @@ type RootCheck = (typeof ROOT_CHECKS)[keyof typeof ROOT_CHECKS];
 const ROOT_CHECK_ORDER: readonly RootCheck[] = [
   ROOT_CHECKS.env,
   ROOT_CHECKS.assets,
+  ROOT_CHECKS.css,
   ROOT_CHECKS.pluginRegistry,
   ROOT_CHECKS.pluginFixtures,
   ROOT_CHECKS.rootScriptLint,
@@ -200,8 +204,23 @@ const invalidatesAllWorkspaceTypecheck = (file: string): boolean =>
 const invalidatesRootScriptLint = (file: string): boolean =>
   ROOT_SCRIPT_LINT_INPUTS.some((input) => matchesTurboInput(file, input));
 
+const isTypeScriptPath = (file: string): boolean =>
+  file.endsWith(".ts") ||
+  file.endsWith(".tsx") ||
+  file.endsWith(".mts") ||
+  file.endsWith(".cts");
+
 const rootChecksForPath = (file: string): readonly RootCheck[] => {
   const rootChecks: RootCheck[] = [];
+  if (
+    file.endsWith(".css") ||
+    file === ".stylelintrc.json" ||
+    file === ".gitignore" ||
+    file === "scripts/stylelint.test.ts" ||
+    DEPENDENCY_CACHE_INPUTS.some((input) => matchesTurboInput(file, input))
+  ) {
+    rootChecks.push(ROOT_CHECKS.css);
+  }
   if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
     rootChecks.push(ROOT_CHECKS.pluginRegistry);
   }
@@ -262,6 +281,15 @@ export const planCheck = ({
     for (const rootCheck of rootChecksForPath(changedPath)) {
       rootCheckSet.add(rootCheck);
     }
+  }
+  if (
+    changedPaths.some(
+      (changedPath) =>
+        isTypeScriptPath(changedPath) &&
+        !presentChangedPaths.includes(changedPath),
+    )
+  ) {
+    rootCheckSet.add(ROOT_CHECKS.pluginRegistry);
   }
   const rootChecks = ROOT_CHECK_ORDER.filter((rootCheck) =>
     rootCheckSet.has(rootCheck),
@@ -465,6 +493,9 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
   }
   if (rootChecks.has(ROOT_CHECKS.assets)) {
     commands.push(["bun", "run", "assets:check"]);
+  }
+  if (rootChecks.has(ROOT_CHECKS.css)) {
+    commands.push(["bun", "run", "lint:css"]);
   }
   if (rootChecks.has(ROOT_CHECKS.pluginRegistry)) {
     commands.push(["bun", "scripts/check-oxlint-plugin-registry.ts"]);

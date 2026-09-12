@@ -1,0 +1,17 @@
+{
+  "ignoreFiles": ["**/generated/**", "**/*.min.css", "**/.astro/**"],
+  "reportDescriptionlessDisables": true,
+  "reportInvalidScopeDisables": true,
+  "reportNeedlessDisables": true,
+  "reportUnscopedDisables": true,
+  "rules": {
+    "color-no-invalid-hex": true,
+    "declaration-block-no-duplicate-properties": [
+      true,
+      { "ignore": ["consecutive-duplicates-with-different-values"] }
+    ],
+    "declaration-property-value-no-unknown": true,
+    "property-no-unknown": true,
+    "selector-no-unmatchable": true
+  }
+}

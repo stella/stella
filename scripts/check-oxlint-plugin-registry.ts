@@ -1,11 +1,15 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+
+import oxlintConfig from "../oxlint.config.ts";
 
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
 const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 const NON_PLUGIN_MODULES = new Set(["physical-properties.ts", "utils.ts"]);
+const TYPEBOX_UNSAFE_RULE_ID =
+  "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)
   .filter((file) => file.endsWith(".ts") && !NON_PLUGIN_MODULES.has(file))
@@ -28,6 +32,63 @@ const enabledRuleIds = new Set(
 const readme = readFileSync(README_PATH, "utf-8");
 const errors: string[] = [];
 let ruleCount = 0;
+
+export const approvedAdapterPaths = (lintConfig: unknown): string[] => {
+  const paths: string[] = [];
+  if (typeof lintConfig !== "object" || lintConfig === null) {
+    return paths;
+  }
+  const overrides = Reflect.get(lintConfig, "overrides");
+  const ruleOwners = [
+    lintConfig,
+    ...(Array.isArray(overrides) ? overrides : []),
+  ];
+  for (const ruleOwner of ruleOwners) {
+    if (typeof ruleOwner !== "object" || ruleOwner === null) {
+      continue;
+    }
+    const rules = Reflect.get(ruleOwner, "rules");
+    if (typeof rules !== "object" || rules === null) {
+      continue;
+    }
+    const rule = Reflect.get(rules, TYPEBOX_UNSAFE_RULE_ID);
+    if (!Array.isArray(rule)) {
+      continue;
+    }
+    const options = rule.at(1);
+    if (typeof options !== "object" || options === null) {
+      continue;
+    }
+    const adapters = Reflect.get(options, "approvedAdapters");
+    if (!Array.isArray(adapters)) {
+      continue;
+    }
+    for (const adapter of adapters) {
+      if (typeof adapter !== "object" || adapter === null) {
+        continue;
+      }
+      const adapterPath = Reflect.get(adapter, "path");
+      if (typeof adapterPath === "string") {
+        paths.push(adapterPath);
+      }
+    }
+  }
+  return [...new Set(paths)];
+};
+
+const isFile = (file: string): boolean =>
+  statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
+
+export const approvedAdapterPathErrors = (
+  lintConfig: unknown,
+  pathIsFile = isFile,
+): string[] =>
+  approvedAdapterPaths(lintConfig)
+    .filter((approvedAdapterPath) => !pathIsFile(approvedAdapterPath))
+    .map(
+      (approvedAdapterPath) =>
+        `${CONFIG_PATH}: approved TypeBox adapter path does not exist: ${approvedAdapterPath}`,
+    );
 
 const ruleNamesFromSource = (source: string): string[] => {
   const literalNames = Array.from(
@@ -100,9 +161,7 @@ const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
     ).trimEnd();
     const rules = stripBlockCommentEnd(ruleList);
 
-    return rules
-      .split(",")
-      .some((rule) => rule.trim() === ruleId);
+    return rules.split(",").some((rule) => rule.trim() === ruleId);
   });
 
 for (const file of pluginFiles) {
@@ -174,6 +233,8 @@ for (const file of pluginFiles) {
   }
 }
 
+errors.push(...approvedAdapterPathErrors(oxlintConfig));
+
 for (const match of readme.matchAll(/\]\(\.\/(?<file>[a-z0-9-]+\.ts)\)/gu)) {
   const file = match.groups?.["file"];
   if (file !== undefined && !existsSync(path.join(PLUGIN_DIRECTORY, file))) {
@@ -181,14 +242,16 @@ for (const match of readme.matchAll(/\]\(\.\/(?<file>[a-z0-9-]+\.ts)\)/gu)) {
   }
 }
 
-if (errors.length > 0) {
-  console.error("Oxlint plugin registry check failed:");
-  for (const error of errors) {
-    console.error(`- ${error}`);
+if (import.meta.main) {
+  if (errors.length > 0) {
+    console.error("Oxlint plugin registry check failed:");
+    for (const error of errors) {
+      console.error(`- ${error}`);
+    }
+    process.exitCode = 1;
+  } else {
+    console.log(
+      `Oxlint plugin registry OK (${pluginFiles.length} plugins, ${ruleCount} rules, ${fixtureFiles.length} fixtures).`,
+    );
   }
-  process.exitCode = 1;
-} else {
-  console.log(
-    `Oxlint plugin registry OK (${pluginFiles.length} plugins, ${ruleCount} rules, ${fixtureFiles.length} fixtures).`,
-  );
 }

@@ -398,7 +398,7 @@ export const logDevError = createDevErrorLogger({
     // Best-effort dev-only file sink. Its own rejection cannot route through
     // the shared error-capture channel (that path logs back through here,
     // which would recurse), so it is handled locally and ignored.
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
     appendDevErrorJsonl({ error, context }).catch(() => undefined);
   },
 });

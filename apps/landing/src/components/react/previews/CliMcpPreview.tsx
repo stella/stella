@@ -716,10 +716,12 @@ const TypingCommand = ({ command }: { command: string }) => {
       aria-label={command}
       className="cli-command min-w-0 flex-1 font-semibold whitespace-pre-wrap"
     >
-      {command.split(/(\s+)/u).map((token, tokenIndex) => {
+      {[...command.matchAll(/\s+|\S+/gu)].map((tokenMatch) => {
+        const token = tokenMatch[0];
+        const tokenStart = tokenMatch.index;
         if (/^\s+$/u.test(token)) {
           return (
-            <span aria-hidden="true" key={`space-${tokenIndex}`}>
+            <span aria-hidden="true" key={`space-${tokenStart}`}>
               {token}
             </span>
           );
@@ -728,18 +730,19 @@ const TypingCommand = ({ command }: { command: string }) => {
           <span
             aria-hidden="true"
             className="inline-block whitespace-nowrap"
-            key={`${token}-${tokenIndex}`}
+            key={`token-${tokenStart}`}
           >
-            {/* eslint-disable-next-line no-misused-spread -- ASCII-only CLI command text, no grapheme clusters */}
-            {[...token].map((character, index) => {
+            {[...token.matchAll(/[\s\S]/gu)].map((characterMatch) => {
+              const character = characterMatch[0];
               const delay =
                 COMMAND_TYPE_DELAY_MS +
                 characterIndex * COMMAND_CHARACTER_DELAY_MS;
               characterIndex += 1;
+              const characterStart = tokenStart + characterMatch.index;
               return (
                 <span
                   className="cli-command-character"
-                  key={`${character}-${index}`}
+                  key={`character-${characterStart}`}
                   style={{ animationDelay: `${delay}ms` }}
                 >
                   {character}

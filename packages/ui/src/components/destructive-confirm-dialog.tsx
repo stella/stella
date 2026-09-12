@@ -69,7 +69,7 @@ const DestructiveConfirmDialog = ({
     // `handleConfirm` handles its own failure and cannot reject; this only
     // marks the promise as observed. The design-system layer stays free of an
     // app-specific telemetry channel.
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
     handleConfirm().catch(() => undefined);
   };
 

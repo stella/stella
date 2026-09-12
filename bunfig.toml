@@ -38,10 +38,31 @@ minimumReleaseAgeExcludes = [
   # oxc-transform-react 0.145.0 replaces the Babel React Compiler transform.
   # Keep every napi binding in the same temporary exception: Bun otherwise
   # skips quarantined optional bindings and leaves the parent unusable.
-  # Upgrading to Oxlint 1.81.0 requires the category-specific React Compiler
-  # rules used by Ultracite 7.10.7. Keep every native binding in the same
-  # temporary exception so Bun cannot silently omit the executable.
-  # Remove these exceptions after 2026-09-06T15:22:06.857Z.
+  # Oxlint 1.82 and Ultracite 7.11.1 add branch-wise loop-condition checking.
+  # Keep the plugin SDK and every native binding with the pinned release;
+  # quarantined optional bindings otherwise leave the executable unavailable.
+  "oxlint", # quarantine-expires: 2026-09-12T14:59:19.174Z
+  "@oxlint/plugins", # quarantine-expires: 2026-09-12T14:58:53.312Z
+  "ultracite", # quarantine-expires: 2026-09-14T13:44:07.879Z
+  "@oxlint/binding-android-arm-eabi", # quarantine-expires: 2026-09-12T14:54:41.672Z
+  "@oxlint/binding-android-arm64", # quarantine-expires: 2026-09-12T14:55:46.154Z
+  "@oxlint/binding-darwin-arm64", # quarantine-expires: 2026-09-12T15:02:15.374Z
+  "@oxlint/binding-darwin-x64", # quarantine-expires: 2026-09-12T15:03:53.734Z
+  "@oxlint/binding-freebsd-x64", # quarantine-expires: 2026-09-12T15:05:04.148Z
+  "@oxlint/binding-linux-arm-gnueabihf", # quarantine-expires: 2026-09-12T14:54:48.126Z
+  "@oxlint/binding-linux-arm-musleabihf", # quarantine-expires: 2026-09-12T14:54:54.815Z
+  "@oxlint/binding-linux-arm64-gnu", # quarantine-expires: 2026-09-12T15:02:34.175Z
+  "@oxlint/binding-linux-arm64-musl", # quarantine-expires: 2026-09-12T15:02:41.206Z
+  "@oxlint/binding-linux-ppc64-gnu", # quarantine-expires: 2026-09-12T14:55:08.030Z
+  "@oxlint/binding-linux-riscv64-gnu", # quarantine-expires: 2026-09-12T14:56:12.772Z
+  "@oxlint/binding-linux-riscv64-musl", # quarantine-expires: 2026-09-12T15:03:35.682Z
+  "@oxlint/binding-linux-s390x-gnu", # quarantine-expires: 2026-09-12T14:55:30.357Z
+  "@oxlint/binding-linux-x64-gnu", # quarantine-expires: 2026-09-12T15:05:12.306Z
+  "@oxlint/binding-linux-x64-musl", # quarantine-expires: 2026-09-12T14:57:22.621Z
+  "@oxlint/binding-openharmony-arm64", # quarantine-expires: 2026-09-12T14:54:35.708Z
+  "@oxlint/binding-win32-arm64-msvc", # quarantine-expires: 2026-09-12T15:08:31.010Z
+  "@oxlint/binding-win32-ia32-msvc", # quarantine-expires: 2026-09-12T14:55:00.719Z
+  "@oxlint/binding-win32-x64-msvc", # quarantine-expires: 2026-09-12T15:06:00.222Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z

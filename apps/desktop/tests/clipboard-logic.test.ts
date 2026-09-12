@@ -101,26 +101,26 @@ describe("clipboard search highlighting", () => {
     const segments = highlightClipboardText(text, "purchase share");
 
     expect(segments.filter((segment) => segment.match)).toEqual([
-      { match: true, text: "Share" },
-      { match: true, text: "PURCHASE" },
-      { match: true, text: "purchase" },
+      { match: true, start: 0, text: "Share" },
+      { match: true, start: 6, text: "PURCHASE" },
+      { match: true, start: 29, text: "purchase" },
     ]);
     expect(segments.map((segment) => segment.text).join("")).toBe(text);
   });
 
   test("treats punctuation in a query as literal text", () => {
     expect(highlightClipboardText("Price (net) + VAT", "(net) +")).toEqual([
-      { match: false, text: "Price " },
-      { match: true, text: "(net)" },
-      { match: false, text: " " },
-      { match: true, text: "+" },
-      { match: false, text: " VAT" },
+      { match: false, start: 0, text: "Price " },
+      { match: true, start: 6, text: "(net)" },
+      { match: false, start: 11, text: " " },
+      { match: true, start: 12, text: "+" },
+      { match: false, start: 13, text: " VAT" },
     ]);
   });
 
   test("returns one plain segment when the query is empty", () => {
     expect(highlightClipboardText("Closing date", "  ")).toEqual([
-      { match: false, text: "Closing date" },
+      { match: false, start: 0, text: "Closing date" },
     ]);
   });
 });
@@ -236,8 +236,8 @@ describe("diacritic-insensitive search", () => {
 
   test("highlights the accented original for a plain query", () => {
     expect(highlightClipboardText("Karel Čapek", "capek")).toEqual([
-      { match: false, text: "Karel " },
-      { match: true, text: "Čapek" },
+      { match: false, start: 0, text: "Karel " },
+      { match: true, start: 6, text: "Čapek" },
     ]);
   });
 });

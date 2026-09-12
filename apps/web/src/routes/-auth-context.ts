@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { sessionOptions } from "@/lib/auth-queries";
@@ -9,13 +10,17 @@ export const loadAuthContext = async (queryClient: QueryClient) => {
   // with no session. A rejection means the session could not be read at all;
   // preserve that distinction so route recovery handles an outage instead of
   // redirecting an authenticated user to sign-in.
-  const sessionData = await ensureRouteQueryData(
-    queryClient,
-    sessionOptions,
-  ).catch((error: unknown) => {
-    getAnalytics().captureError(error);
-    throw error;
+  const sessionPromise = ensureRouteQueryData(queryClient, sessionOptions);
+  const sessionResult = await Result.tryPromise({
+    try: async () => await sessionPromise,
+    catch: (error) => error,
   });
+  if (sessionResult.isErr()) {
+    getAnalytics().captureError(sessionResult.error);
+  }
+  // Re-observe the same promise so route recovery receives the original
+  // rejection, not a Result unwrap error, without repeating the query.
+  const sessionData = await sessionPromise;
 
   return {
     session: sessionData?.session ?? null,
@@ -28,8 +33,12 @@ export const loadAuthContext = async (queryClient: QueryClient) => {
 // route loader uses loadAuthContext and therefore preserves read failures.
 export const loadAuthContextForRootRedirect = async (
   queryClient: QueryClient,
-) =>
-  await loadAuthContext(queryClient).catch(() => ({
+) => {
+  const result = await Result.tryPromise(
+    async () => await loadAuthContext(queryClient),
+  );
+  return result.unwrapOr({
     session: null,
     user: null,
-  }));
+  });
+};

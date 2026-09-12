@@ -1,4 +1,12 @@
-import { Fragment, forwardRef, memo, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  forwardRef,
+  memo,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -473,6 +481,7 @@ const RichTextArea = memo(
   forwardRef<HTMLDivElement, RichTextAreaProps>(
     ({ item, label, onInput }, ref) => {
       const plainTextLines = item.plainText.split("\n");
+      let lineStart = 0;
       const content =
         item.type === "formattedText"
           ? {
@@ -480,12 +489,17 @@ const RichTextArea = memo(
               dangerouslySetInnerHTML: { __html: item.html },
             }
           : {
-              children: plainTextLines.map((line, index) => (
-                <Fragment key={index}>
-                  {index > 0 ? <br /> : null}
-                  {line}
-                </Fragment>
-              )),
+              children: plainTextLines.map((line) => {
+                const key = lineStart;
+                const needsLineBreak = lineStart > 0;
+                lineStart += line.length + 1;
+                return (
+                  <Fragment key={key}>
+                    {needsLineBreak ? <br /> : null}
+                    {line}
+                  </Fragment>
+                );
+              }),
             };
       return (
         <div
@@ -695,7 +709,7 @@ const ClipboardEditor = () => {
       });
   };
 
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.isComposing) {
       return;
     }
@@ -714,12 +728,12 @@ const ClipboardEditor = () => {
       event.preventDefault();
       save();
     }
-  };
+  });
 
   useEffect(() => {
     globalThis.addEventListener("keydown", handleKeyDown);
     return () => globalThis.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  }, []);
 
   if (state.type === "loading") {
     return <main className="clipboard-editor-window bg-background min-h-dvh" />;

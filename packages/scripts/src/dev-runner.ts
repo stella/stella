@@ -1821,7 +1821,7 @@ const main = async () => {
     await Promise.all(
       // Every child was just killed, so a non-zero settlement is the
       // expected outcome of the shutdown, not a fault to report.
-      // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+      // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
       children.map(async ({ child }) => await child.exited.catch(() => 1)),
     );
   };

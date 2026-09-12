@@ -56,8 +56,15 @@ export const unwritableMarkerLiteral = (
 const renderString = (value: string): string =>
   `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 
-const renderLiteral = (value: MarkerLiteral): string =>
-  typeof value === "string" ? renderString(value) : String(value);
+const renderLiteral = (value: MarkerLiteral): string => {
+  if (typeof value === "string") {
+    return renderString(value);
+  }
+  if (typeof value === "number" && Object.is(value, -0)) {
+    return "-0";
+  }
+  return String(value);
+};
 
 const renderArgument = (arg: FilterArgument): string =>
   arg.kind === "positional"

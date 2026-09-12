@@ -75,7 +75,7 @@ export const withTimeout = async <T>(
     // Cancellation is cooperative: operations that use the provided signal
     // stop their underlying work. Keep swallowing late settlement for APIs
     // that cannot cancel so their rejection is never reported as unhandled.
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
     op.catch(() => undefined);
   }
 };

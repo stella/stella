@@ -115,6 +115,6 @@ scope.addEventListener("message", (event: MessageEvent<AnonRequest>) => {
       scope.postMessage(response);
       return;
     })
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection -- the residual rejection is a postMessage failure the main thread already sees via onerror; see the note above
+    // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter -- the residual rejection is a postMessage failure the main thread already sees via onerror; see the note above
     .catch(() => undefined);
 });

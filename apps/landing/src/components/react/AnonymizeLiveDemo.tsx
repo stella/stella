@@ -121,7 +121,12 @@ const BUCKET_STYLE: Record<Bucket, { fg: string; displayLabel: string }> = {
   misc: { fg: "var(--muted-foreground)", displayLabel: "Other" },
 };
 
-type Segment = { text: string; bucket?: Bucket };
+type Segment = {
+  text: string;
+  bucket?: Bucket;
+  sourceStart: number;
+  sourceEnd: number;
+};
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/gu;
 const escapeRegExp = (value: string): string =>
@@ -139,7 +144,7 @@ const buildSegments = (
   pairs: readonly HighlightPair[],
 ): Segment[] => {
   if (text.length === 0 || pairs.length === 0) {
-    return [{ text }];
+    return [{ text, sourceStart: 0, sourceEnd: text.length }];
   }
   const bucketByOriginal = new Map<string, Bucket>();
   for (const pair of pairs) {
@@ -157,13 +162,26 @@ const buildSegments = (
     const index = match.index;
     const matched = match[0];
     if (index > lastIndex) {
-      segments.push({ text: text.slice(lastIndex, index) });
+      segments.push({
+        text: text.slice(lastIndex, index),
+        sourceStart: lastIndex,
+        sourceEnd: index,
+      });
     }
-    segments.push({ text: matched, bucket: bucketByOriginal.get(matched) });
+    segments.push({
+      text: matched,
+      bucket: bucketByOriginal.get(matched),
+      sourceStart: index,
+      sourceEnd: index + matched.length,
+    });
     lastIndex = index + matched.length;
   }
   if (lastIndex < text.length) {
-    segments.push({ text: text.slice(lastIndex) });
+    segments.push({
+      text: text.slice(lastIndex),
+      sourceStart: lastIndex,
+      sourceEnd: text.length,
+    });
   }
   return segments;
 };
@@ -230,10 +248,7 @@ export const AnonymizeLiveDemo = () => {
 
   useEffect(() => {
     runDebounced(text);
-    // Only the text itself should retrigger a run; `runDebounced`'s identity
-    // is stable across renders (useDebouncedCallback memoizes it) and does
-    // not need to be listed.
-  }, [text]);
+  }, [runDebounced, text]);
 
   const highlights = highlightsFor(engine, text);
   const segments = useMemo(
@@ -273,12 +288,14 @@ export const AnonymizeLiveDemo = () => {
           className={`${textLayerClassName} pointer-events-none absolute inset-0 overflow-hidden`}
           style={{ color: "var(--foreground)" }}
         >
-          {segments.map((segment, index) =>
+          {segments.map((segment) =>
             segment.bucket === undefined ? (
-              <span key={index}>{segment.text}</span>
+              <span key={`${segment.sourceStart}-${segment.sourceEnd}`}>
+                {segment.text}
+              </span>
             ) : (
               <span
-                key={index}
+                key={`${segment.sourceStart}-${segment.sourceEnd}`}
                 className="entity-span rounded-[0.2em]"
                 style={{
                   backgroundColor: `color-mix(in srgb, ${BUCKET_STYLE[segment.bucket].fg} 20%, transparent)`,
