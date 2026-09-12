@@ -5462,6 +5462,54 @@
       "version": "6.0.0"
     },
     {
+      "bom-ref": "pkg:cargo/dirs@7.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "dirs",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/dirs@7.0.0",
+      "type": "library",
+      "version": "7.0.0"
+    },
+    {
       "bom-ref": "pkg:cargo/dirs-sys@0.3.7",
       "evidence": {
         "identity": [
@@ -32572,7 +32620,7 @@
       "dependsOn": [
         "pkg:cargo/dirs-sys@0.5.0"
       ],
-      "ref": "pkg:cargo/dirs@6.0.0"
+      "ref": "pkg:cargo/dirs@7.0.0"
     },
     {
       "dependsOn": [
@@ -34974,7 +35022,7 @@
         "pkg:cargo/clipboard-rs@0.3.5",
         "pkg:cargo/clipboard-win@5.4.1",
         "pkg:cargo/csscolorparser@0.8.4",
-        "pkg:cargo/dirs@6.0.0",
+        "pkg:cargo/dirs@7.0.0",
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/hex@0.4.3",
         "pkg:cargo/icns@0.4.0",
