@@ -25,11 +25,15 @@ import {
 } from "@/api/lib/files/office-evidence-xlsx";
 
 const MEBIBYTE = 1024 * 1024;
+const ZIP_LOCAL_FILE_HEADER = [0x50, 0x4b, 0x03, 0x04] as const;
 const RESOURCE_LIMITS = {
   maxArchiveEntries: 2048,
   maxArchiveEntryBytes: 64 * MEBIBYTE,
   maxTotalInflatedBytes: 192 * MEBIBYTE,
 } as const;
+
+const hasZipLocalFileHeader = (bytes: Uint8Array): boolean =>
+  ZIP_LOCAL_FILE_HEADER.every((byte, index) => bytes.at(index) === byte);
 
 type MaterializedPresentation = Awaited<
   ReturnType<typeof materializePptxPresentation>
@@ -230,6 +234,15 @@ const main = async (): Promise<void> => {
   }
 
   const bytes = new Uint8Array(await Bun.stdin.arrayBuffer());
+  if (!hasZipLocalFileHeader(bytes)) {
+    const result = {
+      errorCode: OFFICE_EVIDENCE_UNAVAILABLE_CODE.parseFailed,
+      status: OFFICE_EVIDENCE_STATUS.unavailable,
+    } as const satisfies OfficeEvidenceWorkerResult;
+    process.stdout.write(JSON.stringify(result));
+    return;
+  }
+
   try {
     const payload =
       format === OFFICE_EVIDENCE_FORMAT.xlsx
