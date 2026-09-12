@@ -4310,6 +4310,7 @@
     "configureFields": "Configurar campos",
     "confirmDelete": "Esto eliminará la plantilla permanentemente.",
     "copyCompanySpecification": "Copiar la identificación de la empresa",
+    "copyRegistryResult": "Copiar resultado del registro",
     "createDocument": "Crear documento",
     "createDocumentAnyway": "Crear de todos modos",
     "createFromStyles": "Empezar con estilos de documento",

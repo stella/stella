@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Pievienot uzņēmuma rekvizītu veidni",
+    "registryAddRegistryFormat": "Pievienot reģistra rezultāta veidni",
     "registrySearchHint": "Rakstiet, lai meklētu šajā reģistrā.",
     "registrySelect": "Atlasīt reģistru",
     "registryErrorDisconnect": "Neizdevās atvienot reģistra kontu.",

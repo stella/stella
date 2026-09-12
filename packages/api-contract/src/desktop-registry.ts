@@ -1,7 +1,11 @@
 import type { BusinessRegistrySlug } from "./business-registries";
 
 export type DesktopRegistryConfig = {
-  registries: { id: BusinessRegistrySlug; name: string }[];
+  registries: {
+    id: BusinessRegistrySlug;
+    name: string;
+    formatType: "company-specification" | "registry-reference";
+  }[];
   defaultRegistryId: BusinessRegistrySlug | null;
 };
 

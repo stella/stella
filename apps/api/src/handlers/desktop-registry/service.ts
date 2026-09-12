@@ -7,6 +7,7 @@ import type {
   DesktopRegistrySearchResponse,
   DesktopRegistrySearchResult,
 } from "@stll/api-contract/desktop-registry";
+import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -133,7 +134,11 @@ export const getDesktopRegistryConfig = async (
   const registries = BUSINESS_REGISTRY_SLUGS.flatMap((id) => {
     const handler = dispatchResult.value[id];
     return handler.isDeployAvailable()
-      ? { id, name: `${handler.country} · ${handler.displayName}` }
+      ? {
+          id,
+          name: `${handler.country} · ${handler.displayName}`,
+          formatType: BUSINESS_REGISTRY_FORMAT_CAPABILITIES[id].type,
+        }
       : null;
   });
   const enabledRegistries = registries.filter((entry) => entry !== null);
@@ -204,7 +209,11 @@ export const searchDesktopRegistry = async (
       items: lookup.hits.slice(0, SEARCH_LIMIT),
       limit: DETAIL_CONCURRENCY,
       operation: async (hit) => {
-        if (formats.defaultFormat === null && registry !== "ares") {
+        if (
+          formats.defaultFormat === null &&
+          BUSINESS_REGISTRY_FORMAT_CAPABILITIES[registry].resultShape ===
+            "search-result"
+        ) {
           return Result.ok(hit);
         }
         const detail = await executeRegistryLookup({

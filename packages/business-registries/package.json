@@ -55,6 +55,7 @@
     "./brreg": "./src/brreg/index.ts",
     "./cnpj": "./src/cnpj/index.ts",
     "./companies-house": "./src/companies-house/index.ts",
+    "./default-formats": "./src/default-formats.ts",
     "./cpf": "./src/cpf/index.ts",
     "./denue": "./src/denue/index.ts",
     "./edgar": "./src/edgar/index.ts",

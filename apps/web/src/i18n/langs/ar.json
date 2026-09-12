@@ -4310,6 +4310,7 @@
     "configureFields": "تهيئة الحقول",
     "confirmDelete": "سيؤدي هذا إلى حذف القالب نهائياً.",
     "copyCompanySpecification": "نسخ بيانات الشركة",
+    "copyRegistryResult": "نسخ نتيجة السجل",
     "createDocument": "إنشاء مستند",
     "createDocumentAnyway": "الإنشاء على أي حال",
     "createFromStyles": "البدء بأنماط مستند",

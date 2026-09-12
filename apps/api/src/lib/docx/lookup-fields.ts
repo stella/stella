@@ -24,7 +24,6 @@ import {
   getAresCourtNameInstrumental,
 } from "@stll/business-registries/ares/court-names";
 import {
-  ARES_DEFAULT_FORMAT,
   ARES_DEFAULT_FORMAT_PARTS,
   ARES_FILE_REFERENCE_TOKEN,
   isAresCommercialCompany,
@@ -32,6 +31,10 @@ import {
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
+import {
+  BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
+  type RegistryFormatSlug,
+} from "@stll/business-registries/default-formats";
 import { validateEstablishmentId } from "@stll/business-registries/denue";
 import { validateCik } from "@stll/business-registries/edgar";
 import { validateTaxId } from "@stll/business-registries/gcis";
@@ -65,6 +68,13 @@ import type {
   RichPatchValue,
   RichRun,
 } from "./types";
+
+true satisfies [
+  Exclude<LookupRegistry, RegistryFormatSlug>,
+  Exclude<RegistryFormatSlug, LookupRegistry>,
+] extends [never, never]
+  ? true
+  : never;
 
 // ── Registry-number plausibility ─────────────────────────
 
@@ -152,8 +162,181 @@ export const createDispatchLookupResolver =
 
 // ── Deterministic rendering ──────────────────────────────
 
-/** Registry-specific default, or "name, seat" when no legal-description
- *  default exists. Missing particulars never produce dangling clauses. */
+const COMPANIES_HOUSE_LEGAL_FORM_NAMES: Readonly<Record<string, string>> = {
+  plc: "public limited company",
+  ltd: "private limited company",
+  "private-limited-guarant-nsc":
+    "private company limited by guarantee without share capital",
+  "private-limited-guarant-nsc-limited-exemption":
+    "private company limited by guarantee without share capital",
+  "private-unlimited": "private unlimited company",
+  "private-unlimited-nsc": "private unlimited company without share capital",
+  llp: "limited liability partnership",
+  "limited-partnership": "limited partnership",
+};
+
+const COMPANIES_HOUSE_JURISDICTION_NAMES: Readonly<Record<string, string>> = {
+  "england-wales": "England and Wales",
+  england: "England",
+  wales: "Wales",
+  scotland: "Scotland",
+  "northern-ireland": "Northern Ireland",
+  "united-kingdom": "the United Kingdom",
+  "european-union": "the European Union",
+};
+
+const wordsFromCode = (value: string): string => value.replaceAll("-", " ");
+
+const companiesHouseLegalFormName = (value: string | null): string =>
+  value === null
+    ? "company"
+    : (COMPANIES_HOUSE_LEGAL_FORM_NAMES[value] ?? wordsFromCode(value));
+
+const companiesHouseJurisdictionName = (
+  value: string | null | undefined,
+): string | null =>
+  value === null || value === undefined
+    ? null
+    : (COMPANIES_HOUSE_JURISDICTION_NAMES[value] ??
+      `${wordsFromCode(value).charAt(0).toUpperCase()}${wordsFromCode(value).slice(1)}`);
+
+const addressText = (hit: BusinessRegistryHit): string | null =>
+  hit.address?.textAddress ?? hit.address?.city ?? null;
+
+const renderGenericLookupHit = (hit: BusinessRegistryHit): string =>
+  [hit.name, addressText(hit)].filter((part) => part !== null).join(", ");
+
+const renderLabelledParts = (
+  name: string,
+  parts: readonly (string | null)[],
+): string =>
+  [`**${name}**`, ...parts.filter((part) => part !== null)].join(", ");
+
+const renderBrregLookupHit = (hit: BusinessRegistryHit): string =>
+  renderLabelledParts(hit.name, [
+    hit.legalForm,
+    `organisasjonsnummer ${hit.id}`,
+    addressText(hit) === null ? null : `forretningsadresse ${addressText(hit)}`,
+  ]);
+
+const renderCompaniesHouseLookupHit = (hit: BusinessRegistryHit): string => {
+  const jurisdiction = companiesHouseJurisdictionName(
+    hit.details?.registry === "companies-house"
+      ? hit.details.company.jurisdiction
+      : null,
+  );
+  const registration = [
+    `a ${companiesHouseLegalFormName(hit.legalForm)}`,
+    jurisdiction === null ? null : `registered in ${jurisdiction}`,
+    `under company number ${hit.id}`,
+  ]
+    .filter((part) => part !== null)
+    .join(" ");
+  return renderLabelledParts(hit.name, [
+    registration,
+    addressText(hit) === null
+      ? null
+      : `whose registered office is at ${addressText(hit)}`,
+  ]);
+};
+
+const renderDenueLookupHit = (hit: BusinessRegistryHit): string =>
+  renderLabelledParts(hit.name, [
+    `DENUE establishment ${hit.id}`,
+    addressText(hit),
+  ]);
+
+const renderEdgarLookupHit = (hit: BusinessRegistryHit): string => {
+  const ein =
+    hit.details?.registry === "edgar" ? hit.details.company.ein : null;
+  return renderLabelledParts(hit.name, [
+    `SEC CIK ${hit.id}`,
+    ein === null ? null : `EIN ${ein}`,
+    addressText(hit),
+  ]);
+};
+
+const renderGcisLookupHit = (hit: BusinessRegistryHit): string => {
+  const authority =
+    hit.details?.registry === "gcis"
+      ? hit.details.company.registerOrganization
+      : null;
+  return [
+    `**${hit.name}**`,
+    `統一編號 ${hit.id}`,
+    addressText(hit) === null ? null : `公司所在地 ${addressText(hit)}`,
+    authority === null ? null : `登記機關 ${authority}`,
+  ]
+    .filter((part) => part !== null)
+    .join("，");
+};
+
+const renderKrsLookupHit = (hit: BusinessRegistryHit): string => {
+  const entity = hit.details?.registry === "krs" ? hit.details.entity : null;
+  return renderLabelledParts(hit.name, [
+    entity?.registeredSeat?.locality
+      ? `siedziba: ${entity.registeredSeat.locality}`
+      : null,
+    addressText(hit) === null ? null : `adres: ${addressText(hit)}`,
+    `KRS: ${hit.id}`,
+    entity?.identifiers.nip ? `NIP: ${entity.identifiers.nip}` : null,
+    entity?.identifiers.regon ? `REGON: ${entity.identifiers.regon}` : null,
+    entity?.shareCapital
+      ? `kapitał zakładowy: ${entity.shareCapital.amount} ${entity.shareCapital.currency}`
+      : null,
+  ]);
+};
+
+const renderOrsrLookupHit = (hit: BusinessRegistryHit): string => {
+  const company = hit.details?.registry === "orsr" ? hit.details.company : null;
+  const courtFile = company?.courtFile
+    ? formatCourtFile({
+        court: company.courtFile.court,
+        section: company.courtFile.section,
+        insert: company.courtFile.insertNumber,
+      })
+    : null;
+  return renderLabelledParts(hit.name, [
+    addressText(hit) === null ? null : `sídlo: ${addressText(hit)}`,
+    `IČO: ${hit.id}`,
+    courtFile === null ? null : `zápis v obchodnom registri: ${courtFile}`,
+  ]);
+};
+
+const renderPrhLookupHit = (hit: BusinessRegistryHit): string =>
+  renderLabelledParts(hit.name, [
+    `Y-tunnus ${hit.id}`,
+    addressText(hit) === null ? null : `osoite ${addressText(hit)}`,
+  ]);
+
+const renderRechercheEntreprisesLookupHit = (
+  hit: BusinessRegistryHit,
+): string => {
+  const company =
+    hit.details?.registry === "recherche-entreprises"
+      ? hit.details.company
+      : null;
+  const headOfficeAddress = company?.headOffice?.address?.textAddress;
+  let addressPart: string | null = null;
+  if (headOfficeAddress) {
+    addressPart = `siège social : ${headOfficeAddress}`;
+  } else if (addressText(hit) !== null) {
+    addressPart = `adresse : ${addressText(hit)}`;
+  }
+  return renderLabelledParts(hit.name, [
+    `SIREN ${company?.siren ?? hit.id}`,
+    addressPart,
+    company?.matchedEstablishment
+      ? `SIRET ${company.matchedEstablishment.siret}`
+      : null,
+  ]);
+};
+
+const renderViesLookupHit = (hit: BusinessRegistryHit): string =>
+  renderLabelledParts(hit.name, [`VAT number ${hit.id}`, addressText(hit)]);
+
+/** Registry-owned built-in output. Missing particulars never produce dangling
+ * clauses; non-company sources render an explicit registry reference. */
 export const renderLookupHit = (hit: BusinessRegistryHit): string => {
   if (hit.registry === "ares") {
     const tokens = lookupTemplateTokens(hit);
@@ -174,8 +357,31 @@ export const renderLookupHit = (hit: BusinessRegistryHit): string => {
     }
     return renderLookupTemplate(parts.join(", "), hit);
   }
-  const seat = hit.address?.textAddress ?? hit.address?.city ?? null;
-  return [hit.name, seat].filter((part) => part !== null).join(", ");
+  switch (hit.registry) {
+    case "brreg":
+      return renderBrregLookupHit(hit);
+    case "companies-house":
+      return renderCompaniesHouseLookupHit(hit);
+    case "denue":
+      return renderDenueLookupHit(hit);
+    case "edgar":
+      return renderEdgarLookupHit(hit);
+    case "gcis":
+      return renderGcisLookupHit(hit);
+    case "krs":
+      return renderKrsLookupHit(hit);
+    case "orsr":
+      return renderOrsrLookupHit(hit);
+    case "prh":
+      return renderPrhLookupHit(hit);
+    case "recherche-entreprises":
+      return renderRechercheEntreprisesLookupHit(hit);
+    case "vies":
+      return renderViesLookupHit(hit);
+    default: {
+      return assertNever(hit.registry);
+    }
+  }
 };
 
 /** "court, section insert" court-file reference, or null when the registry
@@ -281,9 +487,12 @@ const lookupTemplateTokens = (
     }
     case "companies-house": {
       const { company } = details;
+      tokens["legal form"] = companiesHouseLegalFormName(company.type);
       tokens["registry number"] = company.companyNumber;
       tokens["registered on"] = company.dateOfCreation;
-      tokens["jurisdiction"] = company.jurisdiction;
+      tokens["jurisdiction"] = companiesHouseJurisdictionName(
+        company.jurisdiction,
+      );
       break;
     }
     case "denue": {
@@ -309,6 +518,10 @@ const lookupTemplateTokens = (
       // sets it to the matched establishment's SIRET (14 digits) for a branch
       // lookup, falling back to the SIREN — overriding with `company.siren`
       // would drop the SIRET that selected the address.
+      tokens["SIREN"] = company.siren;
+      tokens["SIRET"] = company.matchedEstablishment?.siret ?? null;
+      tokens["head office address"] =
+        company.headOffice?.address?.textAddress ?? null;
       tokens["registered on"] = company.registeredAt;
       break;
     }
@@ -321,6 +534,7 @@ const lookupTemplateTokens = (
     case "gcis": {
       const { company } = details;
       tokens["registry number"] = company.taxId;
+      tokens["registering authority"] = company.registerOrganization;
       tokens["registered on"] = company.setupDate;
       break;
     }
@@ -363,12 +577,23 @@ export const renderLookupOutput = (
   format: string | null | undefined,
   hit: BusinessRegistryHit,
 ): string => {
-  const template = format?.trim() ?? "";
-  if (hit.registry === "ares" && template === ARES_DEFAULT_FORMAT) {
+  if (format === null || format === undefined) {
     return renderLookupHit(hit);
   }
-  const rendered = template === "" ? "" : renderLookupTemplate(template, hit);
-  return rendered !== "" ? rendered : renderLookupHit(hit);
+  const template = format.trim();
+  if (
+    template ===
+    BUSINESS_REGISTRY_FORMAT_CAPABILITIES[hit.registry].defaultFormat
+  ) {
+    return renderLookupHit(hit);
+  }
+  if (template === "") {
+    return hit.registry === "ares"
+      ? renderLookupHit(hit)
+      : renderGenericLookupHit(hit);
+  }
+  const rendered = renderLookupTemplate(template, hit);
+  return rendered !== "" ? rendered : renderGenericLookupHit(hit);
 };
 
 // ── Inline markdown in the rendered output ───────────────

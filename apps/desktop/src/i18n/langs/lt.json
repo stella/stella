@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Pridėti įmonės rekvizitų šabloną",
+    "registryAddRegistryFormat": "Pridėti registro rezultato šabloną",
     "registrySearchHint": "Įveskite tekstą, kad ieškotumėte šiame registre.",
     "registrySelect": "Pasirinkite registrą",
     "registryErrorDisconnect": "Nepavyko atjungti registro paskyros.",

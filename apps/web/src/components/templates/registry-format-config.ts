@@ -1,8 +1,6 @@
 import { ARES_COURT_INSTRUMENTAL_TOKEN } from "@stll/business-registries/ares/court-names";
-import {
-  ARES_DEFAULT_FORMAT,
-  ARES_FILE_REFERENCE_TOKEN,
-} from "@stll/business-registries/ares/default-format";
+import { ARES_FILE_REFERENCE_TOKEN } from "@stll/business-registries/ares/default-format";
+import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
 
@@ -55,28 +53,39 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
     ),
     brreg: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
     prh: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
-    "recherche-entreprises": [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+    "recherche-entreprises": [
+      ...REGISTRY_BASE_RETURN_FIELDS,
+      "SIREN",
+      "SIRET",
+      "head office address",
+      "registered on",
+    ],
     edgar: [...REGISTRY_BASE_RETURN_FIELDS, "EIN"],
-    gcis: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+    gcis: [
+      ...REGISTRY_BASE_RETURN_FIELDS,
+      "registering authority",
+      "registered on",
+    ],
     vies: [...REGISTRY_BASE_RETURN_FIELDS, "VAT number"],
   };
 
-const GENERIC_DEFAULT_FORMAT = "[company name], [registry number], [address]";
-
-/** Default legal-description format seeded for each registry. */
-export const REGISTRY_DEFAULT_FORMAT: Record<LookupRegistry, string> = {
-  krs: "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
-  ares: ARES_DEFAULT_FORMAT,
-  orsr: GENERIC_DEFAULT_FORMAT,
-  "companies-house": GENERIC_DEFAULT_FORMAT,
-  denue: GENERIC_DEFAULT_FORMAT,
-  brreg: GENERIC_DEFAULT_FORMAT,
-  prh: GENERIC_DEFAULT_FORMAT,
-  "recherche-entreprises": GENERIC_DEFAULT_FORMAT,
-  edgar: GENERIC_DEFAULT_FORMAT,
-  gcis: GENERIC_DEFAULT_FORMAT,
-  vies: GENERIC_DEFAULT_FORMAT,
-};
+/** Built-in registry outputs shared with the desktop rendering path. */
+export const REGISTRY_DEFAULT_FORMAT = {
+  ares: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.ares.defaultFormat,
+  brreg: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.brreg.defaultFormat,
+  "companies-house":
+    BUSINESS_REGISTRY_FORMAT_CAPABILITIES["companies-house"].defaultFormat,
+  denue: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.denue.defaultFormat,
+  edgar: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.edgar.defaultFormat,
+  gcis: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.gcis.defaultFormat,
+  krs: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.krs.defaultFormat,
+  orsr: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.orsr.defaultFormat,
+  prh: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.prh.defaultFormat,
+  "recherche-entreprises":
+    BUSINESS_REGISTRY_FORMAT_CAPABILITIES["recherche-entreprises"]
+      .defaultFormat,
+  vies: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.vies.defaultFormat,
+} satisfies Record<LookupRegistry, string>;
 
 /** Curated token examples shown in Template Studio tooltips. */
 export const REGISTRY_FIELD_EXAMPLES: Partial<

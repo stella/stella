@@ -4313,6 +4313,7 @@ type Messages = {
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
     "copyCompanySpecification": "Copy company specification";
+    "copyRegistryResult": "Copy registry result";
     "createDocument": "Create document";
     "createDocumentAnyway": "Create anyway";
     "createFromStyles": "Start with document styles";

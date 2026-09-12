@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Ajouter un modèle de fiche d’entreprise",
+    "registryAddRegistryFormat": "Ajouter un modèle de résultat du registre",
     "registrySearchHint": "Saisissez du texte pour rechercher dans ce registre.",
     "registrySelect": "Sélectionner un registre",
     "registryErrorDisconnect": "Impossible de déconnecter le compte du registre.",

@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Lisa ettevõtte andmete mall",
+    "registryAddRegistryFormat": "Lisa registritulemuse mall",
     "registrySearchHint": "Selle registri otsimiseks sisestage tekst.",
     "registrySelect": "Vali register",
     "registryErrorDisconnect": "Registrikonto ühenduse katkestamine ebaõnnestus.",

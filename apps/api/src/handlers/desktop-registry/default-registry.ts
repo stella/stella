@@ -9,7 +9,10 @@ const sole = <T>(entries: T[]): T | null => {
 };
 
 type DefaultRegistryOptions = {
-  registries: DesktopRegistryConfig["registries"];
+  registries: readonly Pick<
+    DesktopRegistryConfig["registries"][number],
+    "id" | "name"
+  >[];
   practiceJurisdictions: readonly PracticeJurisdiction[];
 };
 

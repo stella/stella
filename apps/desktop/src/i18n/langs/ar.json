@@ -200,6 +200,7 @@
     "registryEmpty": "لا توجد نتائج في السجل.",
     "registryFormat": "التنسيق",
     "registryAddCompanyFormat": "إضافة قالب لمواصفات الشركة",
+    "registryAddRegistryFormat": "إضافة قالب لنتيجة السجل",
     "registrySearchHint": "اكتب للبحث في هذا السجل.",
     "registrySelect": "اختيار السجل",
     "registryErrorDisconnect": "تعذر فصل حساب السجل.",

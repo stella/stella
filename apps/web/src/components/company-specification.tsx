@@ -7,6 +7,7 @@ import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
+import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
@@ -269,7 +270,12 @@ const CompanySpecificationEditor = ({
         type="button"
       >
         <CopyIcon />
-        {t("templates.copyCompanySpecification")}
+        {t(
+          BUSINESS_REGISTRY_FORMAT_CAPABILITIES[registry].type ===
+            "company-specification"
+            ? "templates.copyCompanySpecification"
+            : "templates.copyRegistryResult",
+        )}
       </Button>
     </section>
   );
