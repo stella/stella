@@ -95,27 +95,27 @@ const selectedEntitiesEqual = (
 };
 
 /**
- * `localStorage` is read per call, never captured: the global is absent on
- * the server, and its getter throws where site data is blocked (a sandboxed
- * frame, "block all cookies"). Persistence is best-effort, so either case
- * runs the store from memory instead of failing the `set` that reached it.
+ * `localStorage` is reached inside each guard, never captured: the global is
+ * absent on the server and its getter throws where site data is blocked (a
+ * sandboxed frame, "block all cookies"), and the methods on a `Storage` that
+ * does resolve throw under those same conditions. Persistence is best-effort,
+ * so any of them runs the store from memory instead of failing the `set` that
+ * reached it.
  */
-const localStorageOrNull = (): Storage | null =>
-  Result.try(() => localStorage).unwrapOr(null);
-
 const validatingStorage: PersistStorage<PersistedTableState> = {
-  getItem: (name) => {
-    const storage = localStorageOrNull();
-    return storage ? readPersistedTableState(storage.getItem(name)) : null;
-  },
+  getItem: (name) =>
+    readPersistedTableState(
+      Result.try(() => localStorage.getItem(name)).unwrapOr(null),
+    ),
   setItem: (name, value) => {
-    const storage = localStorageOrNull();
-    if (storage) {
-      writeStoredJson(storage, name, value);
-    }
+    Result.try(() => {
+      writeStoredJson(localStorage, name, value);
+    }).unwrapOr(undefined);
   },
   removeItem: (name) => {
-    localStorageOrNull()?.removeItem(name);
+    Result.try(() => {
+      localStorage.removeItem(name);
+    }).unwrapOr(undefined);
   },
 };
 
@@ -379,14 +379,20 @@ const isViewList = (data: unknown): data is readonly { id: string }[] =>
   Array.isArray(data) && data.every(hasViewId);
 
 /**
- * Reconcile per-view records whenever a matter's views list lands in the
- * query cache: a fetch, a `setQueryData`, or a rollback. Every path that
- * removes a view ends in one of those, so this is the one owner of per-view
- * cleanup. The list is complete (`handlers/views/list.ts`), so absence means
- * deleted. Installed beside the `QueryClient`, like the PDF and chat runtime
- * cleanups, rather than inside the query function: a cache subscriber also
- * sees manual writes, and keeps this persisted store out of the query module
+ * Reconcile per-view records whenever a matter's views list is fetched. Every
+ * path that removes a view ends in a fetch of that list (`useDeleteView`
+ * invalidates rather than writing the cache optimistically), so this is the
+ * one owner of per-view cleanup. The list is complete
+ * (`handlers/views/list.ts`), so absence means deleted. Installed beside the
+ * `QueryClient`, like the PDF and chat runtime cleanups, rather than inside
+ * the query function, to keep this persisted store out of the query module
  * every route and chat provider imports.
+ *
+ * Manual cache writes are ignored. `setQueryData` carries whatever the caller
+ * already held, which is not evidence a view was deleted: an optimistic view
+ * edit (`useUpdateView.onMutate`) cancels the in-flight refetch and writes
+ * back a locale entry that can predate a view created in another locale, and
+ * pruning on that would drop a live view's widths for good.
  */
 export const installTableStoreReconcile = (queryClient: QueryClient) => {
   if (reconcileInstalledClients.has(queryClient)) {
@@ -395,7 +401,11 @@ export const installTableStoreReconcile = (queryClient: QueryClient) => {
   reconcileInstalledClients.add(queryClient);
 
   queryClient.getQueryCache().subscribe((event) => {
-    if (event.type !== "updated" || event.action.type !== "success") {
+    if (
+      event.type !== "updated" ||
+      event.action.type !== "success" ||
+      event.action.manual === true
+    ) {
       return;
     }
     const workspaceId = viewsQueryWorkspaceId(event.query.queryKey);

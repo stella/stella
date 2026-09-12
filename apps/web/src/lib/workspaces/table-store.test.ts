@@ -108,6 +108,49 @@ test("runs from memory when the localStorage getter throws", () => {
   expect(useTableStore.getState().columnSizing).toEqual({});
 });
 
+const throwingStorage: Storage = {
+  clear: () => {
+    throw new Error("site data blocked");
+  },
+  getItem: () => {
+    throw new Error("site data blocked");
+  },
+  key: () => {
+    throw new Error("site data blocked");
+  },
+  length: 0,
+  removeItem: () => {
+    throw new Error("site data blocked");
+  },
+  setItem: () => {
+    throw new Error("site data blocked");
+  },
+};
+
+test("runs from memory when the Storage resolves but its methods throw", async () => {
+  useTableStore.setState(EMPTY_TABLE_VIEW_RECORDS);
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: throwingStorage,
+    writable: true,
+  });
+  try {
+    await useTableStore.persist.rehydrate();
+    useTableStore.persist.clearStorage();
+    useTableStore.getState().setColumnSizing(v1, { col_a: 120 });
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: fakeLocalStorage,
+      writable: true,
+    });
+  }
+
+  expect(useTableStore.getState().columnSizing).toEqual({
+    "ws-1": { v1: { col_a: 120 } },
+  });
+});
+
 describe("a view's find bar", () => {
   beforeEach(() => {
     useTableStore.setState({ find: {} });
@@ -262,24 +305,45 @@ describe("reconciling the store against a matter's views", () => {
     }
   });
 
-  test("a views list landing in the query cache reconciles the matter", () => {
+  test("a fetched views list reconciles the matter", async () => {
     seedEveryRecord([v1, v2, otherMatter]);
     const queryClient = new QueryClient();
     installTableStoreReconcile(queryClient);
     installTableStoreReconcile(queryClient);
 
-    queryClient.setQueryData(["not-views", "ws-1", "en"], [{ id: "v3" }]);
+    await queryClient.query({
+      queryFn: () => [{ id: "v3" }],
+      queryKey: ["not-views", "ws-1", "en"],
+    });
     expect(Object.keys(useTableStore.getState().find["ws-1"] ?? {})).toEqual([
       "v1",
       "v2",
     ]);
 
-    queryClient.setQueryData(["views", "ws-1", "en"], [{ id: "v2" }]);
+    await queryClient.query({
+      queryFn: () => [{ id: "v2" }],
+      queryKey: ["views", "ws-1", "en"],
+    });
 
     const state = useTableStore.getState();
     for (const key of TABLE_VIEW_RECORD_KEYS) {
       expect(Object.keys(state[key]["ws-1"] ?? {})).toEqual(["v2"]);
       expect(Object.keys(state[key]["ws-2"] ?? {})).toEqual(["v1"]);
+    }
+  });
+
+  // An optimistic view edit writes back whatever that locale entry already
+  // held, which can predate a view created in another locale.
+  test("ignores a manual cache write, which is no proof a view was deleted", () => {
+    seedEveryRecord([v1, v2]);
+    const queryClient = new QueryClient();
+    installTableStoreReconcile(queryClient);
+
+    queryClient.setQueryData(["views", "ws-1", "en"], [{ id: "v2" }]);
+
+    const state = useTableStore.getState();
+    for (const key of TABLE_VIEW_RECORD_KEYS) {
+      expect(Object.keys(state[key]["ws-1"] ?? {})).toEqual(["v1", "v2"]);
     }
   });
 
