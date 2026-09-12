@@ -2,6 +2,23 @@ import { panic } from "better-result";
 
 import { ENTITY_KINDS } from "./entity-kinds";
 
+/**
+ * The orders a case-law search may be read in.
+ *
+ * Here rather than in the API because three surfaces declare it: the search
+ * body, the saved query a research table re-runs, and the web that sends both.
+ * A table saved under one order has to re-run under it, and a second list of
+ * these names is how that stops being true.
+ *
+ * `relevance` is first because Elysia coerces an absent optional `UnionEnum`
+ * to its first member, so slot 0 has to be the default a handler applies.
+ */
+export const SEARCH_SORTS = ["relevance", "newest"] as const;
+
+export type SearchSort = (typeof SEARCH_SORTS)[number];
+
+export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
+
 export const SEARCH_TOTAL_TYPE = {
   EXACT: "exact",
   ESTIMATE: "estimate",

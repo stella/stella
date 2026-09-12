@@ -110,9 +110,11 @@ export const requireCaseLawDecisionCountField = (
   if (corpusIndexFastFields(manifest).has(field)) {
     return field;
   }
-  throw new CorpusIndexReadContractError({
-    message: `Generation ${manifest.generation} does not mark ${field} fast, so a search cannot count decisions`,
-  });
+  const message = `Generation ${manifest.generation} does not mark ${field} fast, so a search cannot count decisions`;
+  // A panic, because no request can recover from it and no caller should try:
+  // the deployment is pointed at a generation it cannot read. The tagged error
+  // rides along as the cause so the failure still reports what it was.
+  return panic(message, new CorpusIndexReadContractError({ message }));
 };
 
 export type LegislationIndexReadContract = {

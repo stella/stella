@@ -487,3 +487,22 @@ export const caseLawCorpusQuery = ({
   }
   return clauses.join(" AND ");
 };
+
+/**
+ * The clause that keeps a source whose redistribution permission was revoked
+ * out of an answer.
+ *
+ * Projection is only the first half of the gate: revoking a permission queues
+ * that source's documents for removal, and the engine applies the deletion
+ * asynchronously, so a read that named no source clause would keep counting
+ * revoked decisions for a reconciliation window. Null when nothing is
+ * excluded, so a caller adds no clause rather than an empty one.
+ */
+export const corpusExcludedSourcesClause = (
+  excludedSourceIds: readonly string[],
+): string | null =>
+  excludedSourceIds.length === 0
+    ? null
+    : `NOT (${excludedSourceIds
+        .map((id) => `source:${quoteCorpusValue(id)}`)
+        .join(" OR ")})`;

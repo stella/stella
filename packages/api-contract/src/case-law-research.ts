@@ -1,4 +1,5 @@
 import type { SafeId } from "./safe-id";
+import type { SearchSort } from "./search";
 
 /**
  * A research table is a saved case-law search a lawyer keeps working on: the
@@ -31,6 +32,11 @@ export type CaseLawResearchSavedQuery = {
   decisionType?: string;
   language?: string;
   sourceId?: SafeId<"caseLawSource">;
+  /**
+   * The order the table was saved under. Absent means the default, which is
+   * what every table saved before the order existed was built from.
+   */
+  sort?: SearchSort;
 };
 
 /** What a research-table question expects for an answer. */

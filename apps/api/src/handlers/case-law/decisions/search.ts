@@ -70,6 +70,7 @@ import {
 } from "@/api/lib/case-law/decision-search-order-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import {
   redistributableCaseLawSource,
@@ -443,7 +444,7 @@ const searchPostgresDecisions = async (
       ${languageFilter}
     GROUP BY d.court
     ORDER BY count DESC
-    LIMIT ${LIMITS.caseLawCourtFacetBuckets}
+    LIMIT ${LIMITS.caseLawFacetCandidateBuckets}
   `;
 
   // The year facet's own filter is the date range, so this one drops it.
@@ -682,18 +683,31 @@ const bodyWithoutFacetFilter = (
   body: SearchDecisionsBody,
   facet: CorpusSearchFacetName,
 ): SearchDecisionsBody => {
+  // The keys are dropped, not set to `undefined`: under
+  // `exactOptionalPropertyTypes` an absent optional and one holding `undefined`
+  // are different types, and only the first is a body.
   switch (facet) {
-    case "court":
-      return { ...body, court: undefined };
-    case "decisionType":
-      return { ...body, decisionType: undefined };
-    case "source":
-      return { ...body, sourceId: undefined };
-    case "language":
-      return { ...body, language: undefined };
-    case "year":
+    case "court": {
+      const { court: _court, ...withoutCourt } = body;
+      return withoutCourt;
+    }
+    case "decisionType": {
+      const { decisionType: _decisionType, ...withoutType } = body;
+      return withoutType;
+    }
+    case "source": {
+      const { sourceId: _sourceId, ...withoutSource } = body;
+      return withoutSource;
+    }
+    case "language": {
+      const { language: _language, ...withoutLanguage } = body;
+      return withoutLanguage;
+    }
+    case "year": {
       // The year facet's own filter is the date range the request carries.
-      return { ...body, dateFrom: undefined, dateTo: undefined };
+      const { dateFrom: _dateFrom, dateTo: _dateTo, ...withoutDates } = body;
+      return withoutDates;
+    }
     default:
       facet satisfies never;
       return panic(`Unhandled search facet: ${String(facet)}`);
@@ -1342,9 +1356,21 @@ const readCaseLawSearchFacets = async ({
   if (queryFor === null) {
     return null;
   }
+  // Read ahead of the aggregations, and failing closed: source policy is an
+  // input to every count below, so a revocation this read cannot confirm means
+  // no facets rather than facets that might still advertise a revoked source.
+  const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
+  if (Result.isError(excludedSourceIds)) {
+    logger.warn("case_law.search_facets.unavailable", {
+      "error.type": errorTag(excludedSourceIds.error),
+    });
+    return null;
+  }
+
   const read = await readCorpusSearchFacets({
     aggregate: async (input) =>
       await getCorpusIndexClient(cluster).aggregate({ indexId, ...input }),
+    excludedSourceIds: excludedSourceIds.value,
     // The year buckets run to one year past this one, so a decision a
     // publisher dated ahead still lands in a bucket of its own.
     currentYear: Temporal.Now.instant().toZonedDateTimeISO("UTC").year,
@@ -1518,9 +1544,12 @@ export const searchCorpusIndexDecisions = async (
           nextCursor: null,
           pageRanked: identityPage,
           snippetById: new Map(),
+          // The decisions the lookup found, not the ones this page holds: a
+          // docket naming more decisions than fit a page still reports how
+          // many it named.
           total: countedSearchTotal(
             SEARCH_TOTAL_TYPE.EXACT,
-            identityPage.length,
+            identityRanking.ranked.length,
           ),
         });
         report(page.hits.length, emptyCorpusIndexScan());

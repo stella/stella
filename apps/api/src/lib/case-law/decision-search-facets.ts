@@ -7,6 +7,8 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
+} from "@/api/lib/case-law/court-tiers";
+import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";

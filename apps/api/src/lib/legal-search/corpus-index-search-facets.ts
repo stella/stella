@@ -16,6 +16,7 @@ import type {
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import { corpusExcludedSourcesClause } from "@/api/lib/legal-search/corpus-query";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -62,7 +63,14 @@ export type CorpusSearchFacetName = (typeof CORPUS_SEARCH_FACET_NAMES)[number];
  * where a fixed-interval histogram drifts a day per leap year.
  */
 type CorpusFacetSpec =
-  | { kind: "terms"; field: string; buckets: number }
+  | {
+      kind: "terms";
+      field: string;
+      /** Buckets asked of the engine, ranked by passage volume. */
+      candidates: number;
+      /** Buckets kept after re-ranking by decision count. */
+      display: number;
+    }
   | { kind: "year_range"; field: string };
 
 /**
@@ -72,25 +80,34 @@ type CorpusFacetSpec =
  * know about.
  */
 export const CORPUS_SEARCH_FACET_SPEC = {
-  // Every court of a jurisdiction, not the top twenty: the engine ranks
-  // buckets by passage volume before the cardinality sub-aggregation runs, so
-  // asking for the presentation limit here loses an apex court behind district
-  // courts with longer dockets. The tier grouping caps what a reader sees.
+  // Every terms facet over-fetches candidates and is cut down after the
+  // cardinality sub-aggregation has run, because the engine's own bucket order
+  // is passage volume: a value with many short decisions would otherwise
+  // disappear behind one with fewer, longer ones. Court keeps them all, since
+  // the tier grouping applies its cap per tier rather than across the list.
   court: {
     kind: "terms",
     field: "court",
-    buckets: LIMITS.caseLawCourtFacetBuckets,
+    candidates: LIMITS.caseLawFacetCandidateBuckets,
+    display: LIMITS.caseLawFacetCandidateBuckets,
   },
   decisionType: {
     kind: "terms",
     field: "document_type",
-    buckets: LIMITS.caseLawFacetLimit,
+    candidates: LIMITS.caseLawFacetCandidateBuckets,
+    display: LIMITS.caseLawFacetLimit,
   },
-  source: { kind: "terms", field: "source", buckets: LIMITS.caseLawFacetLimit },
+  source: {
+    kind: "terms",
+    field: "source",
+    candidates: LIMITS.caseLawFacetCandidateBuckets,
+    display: LIMITS.caseLawFacetLimit,
+  },
   language: {
     kind: "terms",
     field: "language",
-    buckets: LIMITS.caseLawFacetLimit,
+    candidates: LIMITS.caseLawFacetCandidateBuckets,
+    display: LIMITS.caseLawFacetLimit,
   },
   year: { kind: "year_range", field: DECISION_TIMESTAMP_FIELD },
 } as const satisfies Record<CorpusSearchFacetName, CorpusFacetSpec> &
@@ -169,6 +186,13 @@ const facetAggregations = ({
   withTotal,
   yearRanges,
 }: FacetAggregationsOptions): Record<string, unknown> => {
+  // KNOWN LIMITATION: this counts language versions, not judgments. The page
+  // folds the versions of one judgment into a representative
+  // (`collapseByLanguageGroup`), and the Postgres branch counts the fold, so a
+  // judgment matched in two languages counts twice here and once there. No
+  // field of the served generation carries the language-group identity, so
+  // there is nothing to take the cardinality over; correcting it needs a
+  // generation that projects the group key, not a change here.
   const decisions = {
     [DECISIONS_AGGREGATION]: {
       cardinality: { field: decisionCountField },
@@ -180,7 +204,7 @@ const facetAggregations = ({
         return {
           terms: {
             field: spec.field,
-            size: spec.buckets,
+            size: spec.candidates,
             segment_size: FACET_SEGMENT_SIZE,
             // Passage volume, because that is the only order the engine can
             // rank buckets by before the sub-aggregation runs. It decides
@@ -234,6 +258,7 @@ const readCardinality = (aggregation: unknown): number | null => {
  */
 const parseFacetBuckets = (
   aggregation: unknown,
+  display: number,
 ): SearchFacetBucket[] | null => {
   if (!isRecord(aggregation) || !Array.isArray(aggregation["buckets"])) {
     return null;
@@ -243,14 +268,24 @@ const parseFacetBuckets = (
     if (!isRecord(bucket)) {
       return null;
     }
-    const key = bucket["key"];
     const count = readCardinality(bucket[DECISIONS_AGGREGATION]);
-    if (typeof key !== "string" || key.length === 0 || count === null) {
+    // A bucket the engine did not count decisions for is the failure this
+    // parse exists to catch: its passage count is right there and serving it
+    // would look plausible.
+    if (count === null) {
       return null;
+    }
+    // A value no reader can filter by — a document whose court is the empty
+    // string — is one bucket to leave out, not a reason to drop the whole
+    // rail. These four fields are raw-tokenised text, so a non-string key
+    // cannot be a value either.
+    const key = bucket["key"];
+    if (typeof key !== "string" || key.length === 0) {
+      continue;
     }
     buckets.push({ value: key, label: null, count });
   }
-  return buckets.sort(compareFacetBuckets);
+  return buckets.sort(compareFacetBuckets).slice(0, display);
 };
 
 /**
@@ -297,7 +332,7 @@ const parseFacetAggregation = (
   const spec: CorpusFacetSpec = CORPUS_SEARCH_FACET_SPEC[name];
   switch (spec.kind) {
     case "terms":
-      return parseFacetBuckets(aggregation);
+      return parseFacetBuckets(aggregation, spec.display);
     case "year_range":
       return parseYearBuckets(aggregation, yearRanges);
     default:
@@ -321,9 +356,17 @@ type FacetRequest = {
 const facetRequests = (
   queryFor: CorpusFacetQuery,
   totalQuery: string,
+  excludedSourceIds: readonly string[],
 ): FacetRequest[] => {
+  // Applied here rather than by the caller, so no query this module sends can
+  // be the one that forgot it: hydration re-applies the policy to the hits, so
+  // without it a revoked source keeps a bucket and a count while contributing
+  // none of the decisions behind them.
+  const excluded = corpusExcludedSourcesClause(excludedSourceIds);
   const byQuery = new Map<string, FacetRequest>();
-  const requestFor = (query: string): FacetRequest => {
+  const requestFor = (rawQuery: string): FacetRequest => {
+    const query =
+      excluded === null ? rawQuery : `(${rawQuery}) AND ${excluded}`;
     const existing = byQuery.get(query);
     if (existing !== undefined) {
       return existing;
@@ -358,6 +401,11 @@ export type CorpusAggregate = (
 
 type ReadCorpusSearchFacetsOptions = {
   aggregate: CorpusAggregate;
+  /**
+   * Sources whose redistribution permission is revoked. Their documents leave
+   * the index asynchronously, so every aggregation excludes them by name.
+   */
+  excludedSourceIds: readonly string[];
   /** Newest year the facet offers a bucket for, minus the one-year lookahead. */
   currentYear: number;
   decisionCountField: string;
@@ -375,6 +423,7 @@ type CorpusSearchFacetsRead = {
 export const readCorpusSearchFacets = async ({
   aggregate,
   currentYear,
+  excludedSourceIds,
   decisionCountField,
   queryFor,
   totalQuery,
@@ -382,7 +431,7 @@ export const readCorpusSearchFacets = async ({
   Result<CorpusSearchFacetsRead, CorpusSearchFacetsError>
 > => {
   const yearRanges = corpusYearRanges(currentYear);
-  const requests = facetRequests(queryFor, totalQuery);
+  const requests = facetRequests(queryFor, totalQuery, excludedSourceIds);
   const answers = await Promise.all(
     requests.map(
       async ({ names, query, withTotal }) =>

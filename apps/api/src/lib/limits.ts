@@ -427,14 +427,15 @@ export const LIMITS = {
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
   /**
-   * Court buckets a facet aggregation asks for, before the tier grouping caps
-   * each tier at `caseLawFacetLimit`. Deliberately above any jurisdiction's
-   * court count (CZE spells 116), because the engine ranks buckets by passage
-   * volume before the decision count is known: at the presentation cap a
-   * district court with a long docket crowds an apex court out of the answer
-   * entirely, and whether the supreme court is listed must not depend on that.
+   * Buckets a facet aggregation asks the engine for, before the display cap.
+   * Deliberately above any jurisdiction's value count (CZE spells 116 courts),
+   * because the engine ranks buckets by passage volume before the decision
+   * count is known: asking only for the display cap lets a court, source or
+   * type with a long docket crowd out one with more decisions, and an apex
+   * court's presence must not depend on how much the district courts
+   * published.
    */
-  caseLawCourtFacetBuckets: 512,
+  caseLawFacetCandidateBuckets: 512,
   /**
    * Year buckets one search facet may list. A year facet is a timeline rather
    * than a top-20 list — a reader narrowing to the 1990s has to find the

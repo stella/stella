@@ -7,7 +7,10 @@ import {
   type ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
-import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusExcludedSourcesClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import type {
   LegalBrowseFacets,
@@ -66,11 +69,9 @@ const browseFacetsQuery = ({
   if (jurisdictionClause !== undefined) {
     clauses.push(`jurisdiction:${quoteCorpusValue(jurisdictionClause)}`);
   }
-  if (excludedSourceIds.length > 0) {
-    const excluded = excludedSourceIds
-      .map((id) => `source:${quoteCorpusValue(id)}`)
-      .join(" OR ");
-    clauses.push(`NOT (${excluded})`);
+  const excluded = corpusExcludedSourcesClause(excludedSourceIds);
+  if (excluded !== null) {
+    clauses.push(excluded);
   }
   return clauses.join(" AND ");
 };

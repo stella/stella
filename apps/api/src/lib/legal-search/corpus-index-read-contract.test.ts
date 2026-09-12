@@ -244,11 +244,25 @@ test("the decision-count field is the document id, proven aggregatable", () => {
   expect(requireCaseLawDecisionCountField("case_law_v7")).toBe("document_id");
 });
 
+// A panic, not a returned error: no request can recover from a deployment
+// pointed at a generation it cannot count decisions in, so the failure names
+// the generation and the field rather than degrading into a wrong number.
 test.each(["case_law_v5", "case_law_v6"])(
   "%s cannot count decisions and says so",
   (generation) => {
     expect(() => requireCaseLawDecisionCountField(generation)).toThrow(
-      CorpusIndexReadContractError,
+      `Generation ${generation} does not mark document_id fast`,
     );
   },
 );
+
+test("the panic carries the tagged contract error as its cause", () => {
+  try {
+    requireCaseLawDecisionCountField("case_law_v6");
+    expect.unreachable("the assertion must not accept case_law_v6");
+  } catch (error) {
+    expect(error instanceof Error ? error.cause : null).toBeInstanceOf(
+      CorpusIndexReadContractError,
+    );
+  }
+});

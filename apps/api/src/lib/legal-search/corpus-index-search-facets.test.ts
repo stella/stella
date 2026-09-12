@@ -82,6 +82,7 @@ const read = async (
     aggregate: engine.aggregate,
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor,
     totalQuery: QUERY,
   });
@@ -126,7 +127,7 @@ test("every facet aggregates its own index field, by its own kind", async () => 
       const body = aggregation[kind];
       if (isRecord(body)) {
         return kind === "terms"
-          ? { kind, field: body["field"], buckets: body["size"] }
+          ? { kind, field: body["field"], candidates: body["size"] }
           : { kind: "year_range", field: body["field"] };
       }
     }
@@ -140,7 +141,19 @@ test("every facet aggregates its own index field, by its own kind", async () => 
         ),
       ),
     ),
-  ).toEqual(CORPUS_SEARCH_FACET_SPEC);
+    // `display` is not part of a request: the engine is asked for candidates
+    // and the cut happens in the parse, so the request mirrors the spec minus
+    // that one field.
+  ).toEqual(
+    Object.fromEntries(
+      Object.entries(CORPUS_SEARCH_FACET_SPEC).map(([name, spec]) => [
+        name,
+        spec.kind === "terms"
+          ? { kind: spec.kind, field: spec.field, candidates: spec.candidates }
+          : { kind: spec.kind, field: spec.field },
+      ]),
+    ),
+  );
 });
 
 // A request with no filters cross-filters to the same query everywhere, and
@@ -167,6 +180,7 @@ test("a facet with its own filter dropped runs under its own query", async () =>
     aggregate: engine.aggregate,
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor: (facet) => (facet === "court" ? QUERY : filtered),
     totalQuery: filtered,
   });
@@ -188,6 +202,7 @@ test("a refused aggregation is an error, never an empty facet", async () => {
       Result.err(new CorpusIndexError({ message: "engine refused" })),
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor: sameQueryForEveryFacet(QUERY),
     totalQuery: QUERY,
   });
@@ -215,6 +230,7 @@ test("a bucket with no decision count fails the read", async () => {
       ),
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor: sameQueryForEveryFacet(QUERY),
     totalQuery: QUERY,
   });
@@ -247,6 +263,7 @@ test("buckets are ordered by decisions, not by the engine's passage order", asyn
       ),
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor: sameQueryForEveryFacet(QUERY),
     totalQuery: QUERY,
   });
@@ -346,6 +363,7 @@ test("a year bucket reports its distinct decisions, newest year first", async ()
       ),
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor: sameQueryForEveryFacet(QUERY),
     totalQuery: QUERY,
   });
@@ -365,6 +383,7 @@ test("the year facet runs under the query its own filter was dropped from", asyn
     aggregate: engine.aggregate,
     currentYear: CURRENT_YEAR,
     decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
     queryFor: (facet) => (facet === "year" ? QUERY : dated),
     totalQuery: dated,
   });
@@ -410,22 +429,136 @@ test("the court aggregation asks for every court, not the display limit", async 
 
   await read(engine);
 
-  const courtTerms = engine.requests
-    .flatMap((request) => Object.entries(request.aggs))
-    .find(([name]) => name === "court")
-    ?.at(1);
-  const terms = isRecord(courtTerms) ? courtTerms["terms"] : null;
-  expect(isRecord(terms) ? terms["size"] : null).toBe(
-    LIMITS.caseLawCourtFacetBuckets,
-  );
-  expect(LIMITS.caseLawCourtFacetBuckets).toBeGreaterThan(
+  const requestedSize = (name: string): unknown => {
+    const aggregation = engine.requests
+      .flatMap((request) => Object.entries(request.aggs))
+      .find(([candidate]) => candidate === name)
+      ?.at(1);
+    const terms = isRecord(aggregation) ? aggregation["terms"] : null;
+    return isRecord(terms) ? terms["size"] : null;
+  };
+  // Every terms facet over-fetches, not just court: the engine ranks buckets
+  // by passage volume, so a source with many short decisions would otherwise
+  // lose its place to one with fewer, longer ones before the decision count
+  // is known.
+  for (const name of ["court", "source", "decisionType", "language"]) {
+    expect(requestedSize(name)).toBe(LIMITS.caseLawFacetCandidateBuckets);
+  }
+  expect(LIMITS.caseLawFacetCandidateBuckets).toBeGreaterThan(
     LIMITS.caseLawFacetLimit,
   );
   // The per-split candidate depth has to cover the buckets asked for, or the
   // merge across splits is approximate again.
+  const courtAggregation = engine.requests
+    .flatMap((request) => Object.entries(request.aggs))
+    .find(([candidate]) => candidate === "court")
+    ?.at(1);
+  const courtTerms = isRecord(courtAggregation)
+    ? courtAggregation["terms"]
+    : null;
   expect(
-    isRecord(terms) ? Number(terms["segment_size"]) : 0,
-  ).toBeGreaterThanOrEqual(LIMITS.caseLawCourtFacetBuckets);
+    isRecord(courtTerms) ? Number(courtTerms["segment_size"]) : 0,
+  ).toBeGreaterThanOrEqual(LIMITS.caseLawFacetCandidateBuckets);
+});
+
+/**
+ * Projection keeps an ineligible source out of the index, but revoking a
+ * permission only queues its documents for removal and the engine applies the
+ * deletion asynchronously. Hydration re-applies the policy to the hits, so a
+ * facet that did not would show a revoked source's bucket and count beside
+ * none of its decisions.
+ */
+test("every aggregation excludes the sources that may no longer be served", async () => {
+  const engine = fakeEngine();
+
+  await readCorpusSearchFacets({
+    aggregate: engine.aggregate,
+    currentYear: CURRENT_YEAR,
+    decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: ["revoked-a", "revoked-b"],
+    queryFor: sameQueryForEveryFacet(QUERY),
+    totalQuery: QUERY,
+  });
+
+  expect(engine.requests.length).toBeGreaterThan(0);
+  for (const request of engine.requests) {
+    expect(request.query).toContain(
+      'NOT (source:"revoked-a" OR source:"revoked-b")',
+    );
+  }
+});
+
+// The display cap is applied after the decision-count sort, so the buckets a
+// reader sees are the biggest ones, not the first twenty the engine ranked.
+test("a terms facet is cut to the display cap by decision count", async () => {
+  const result = await readCorpusSearchFacets({
+    aggregate: async ({ aggs }) =>
+      Result.ok(
+        Object.fromEntries(
+          Object.keys(aggs).map((name) => [
+            name,
+            name === "total"
+              ? { value: 9 }
+              : {
+                  buckets: Array.from(
+                    { length: LIMITS.caseLawFacetLimit + 5 },
+                    (_unused, index) => engineBucket(`v${index}`, 10, index),
+                  ),
+                },
+          ]),
+        ),
+      ),
+    currentYear: CURRENT_YEAR,
+    decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
+    queryFor: sameQueryForEveryFacet(QUERY),
+    totalQuery: QUERY,
+  });
+
+  expect(Result.isError(result)).toBe(false);
+  if (Result.isError(result)) {
+    return;
+  }
+  expect(result.value.facets.language).toHaveLength(LIMITS.caseLawFacetLimit);
+  expect(result.value.facets.language.at(0)?.count).toBe(
+    LIMITS.caseLawFacetLimit + 4,
+  );
+  // Court keeps every bucket; the tier grouping caps it per tier instead.
+  expect(result.value.facets.court.length).toBeGreaterThan(
+    LIMITS.caseLawFacetLimit,
+  );
+});
+
+// One unusable value is one bucket to leave out. Dropping the whole rail would
+// take the result total with it.
+test("a bucket with an empty key is skipped, not fatal", async () => {
+  const result = await readCorpusSearchFacets({
+    aggregate: async ({ aggs }) =>
+      Result.ok(
+        Object.fromEntries(
+          Object.keys(aggs).map((name) => [
+            name,
+            name === "total"
+              ? { value: 9 }
+              : {
+                  buckets: [
+                    engineBucket("", 10, 4),
+                    engineBucket("usable", 10, 2),
+                  ],
+                },
+          ]),
+        ),
+      ),
+    currentYear: CURRENT_YEAR,
+    decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
+    queryFor: sameQueryForEveryFacet(QUERY),
+    totalQuery: QUERY,
+  });
+
+  expect(Result.isError(result) ? null : result.value.facets.language).toEqual([
+    { value: "usable", label: null, count: 2 },
+  ]);
 });
 
 /**

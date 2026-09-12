@@ -7,9 +7,10 @@ import { Temporal } from "@stll/time";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
 import {
-  HIGHEST_COURT_TIER,
-  LOWEST_COURT_TIER,
-} from "@/api/lib/legal-search/rerank";
+  type CourtTierLabel,
+  courtTierLabel,
+} from "@/api/lib/case-law/court-tiers";
+import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
 import { logger } from "@/api/lib/observability/logger";
 import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -186,46 +187,6 @@ export const courtWeightFromMap = (
   return matched === undefined
     ? { weight: DEFAULT_WEIGHT, tier: DEFAULT_TIER }
     : { weight: matched.weight, tier: matched.tier };
-};
-
-/**
- * The tiers a reader groups courts by, apex first. Four presentation buckets
- * over the seeded rank scale rather than the registry's own `tier_label`
- * column: that column is free text an operator writes per jurisdiction
- * ("appeal", "district", "procurement-review"), and a response shape cannot
- * be a function of what someone typed into a seed row. The rank scale is
- * closed — `rerank.ts` pins it, and `court-weight-seed.test.ts` holds the
- * seeded registry to it — so deriving the label from the rank is total.
- */
-export const COURT_TIER_LABELS = [
-  "constitutional",
-  "supreme",
-  "regional",
-  "other",
-] as const;
-
-export type CourtTierLabel = (typeof COURT_TIER_LABELS)[number];
-
-/**
- * The presentation tier of a seeded rank. Clamped to the pinned scale first,
- * so a registry row outside it groups with the courts nobody ranked instead
- * of producing a label the response contract does not declare.
- */
-export const courtTierLabel = (tier: number): CourtTierLabel => {
-  const ranked = Math.min(
-    Math.max(Math.trunc(tier), LOWEST_COURT_TIER),
-    HIGHEST_COURT_TIER,
-  );
-  switch (ranked) {
-    case HIGHEST_COURT_TIER:
-      return "constitutional";
-    case 3:
-      return "supreme";
-    case 2:
-      return "regional";
-    default:
-      return "other";
-  }
 };
 
 /**

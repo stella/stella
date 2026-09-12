@@ -10,13 +10,12 @@ import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
-import type {
-  searchSortSchema} from "@/api/handlers/case-law/decisions/search-schema";
 import {
   searchDecisionsBodySchema,
-  searchDecisionsSuccessResponseSchema
+  searchDecisionsSuccessResponseSchema,
 } from "@/api/handlers/case-law/decisions/search-schema";
-import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-weights";
+import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
+import type { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   SEARCH_SORTS,
   type SearchSort,

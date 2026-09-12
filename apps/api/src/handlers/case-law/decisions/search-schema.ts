@@ -11,25 +11,17 @@ import {
   safeHandlerErrorResponseSchema,
   safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
-import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-weights";
+import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
+import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   tPaginationCursor,
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
-import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
-
-// Spelled out per literal so Eden infers a tuple union rather than `never`
-// from a mapped array; the schema test holds these literals to `SEARCH_SORTS`.
-const [relevanceSort, newestSort] = SEARCH_SORTS;
-export const searchSortSchema = t.Union([
-  t.Literal(relevanceSort),
-  t.Literal(newestSort),
-]);
 
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({

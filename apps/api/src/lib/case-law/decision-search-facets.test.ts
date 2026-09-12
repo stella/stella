@@ -8,7 +8,7 @@ import {
   COURT_TIER_LABELS,
   courtTierLabel,
   type CourtTierLabel,
-} from "@/api/lib/case-law/court-weights";
+} from "@/api/lib/case-law/court-tiers";
 import {
   groupCourtsByTier,
   labelSourceBuckets,
@@ -164,4 +164,26 @@ test("an apex court survives a jurisdiction full of busier lower courts", () => 
   expect(
     grouped.find((tier) => tier.tierLabel === "regional")?.courts,
   ).toHaveLength(LIMITS.caseLawFacetLimit);
+});
+
+/**
+ * The registry column takes any integer and the ingestion role can write it,
+ * so a rank outside the pinned scale reaches this lookup. Clamping a stray `5`
+ * upward would present an unranked court as a constitutional one, which is the
+ * loudest way to be wrong; it groups with the courts nobody ranked instead.
+ */
+test.each([0, -1, 5, 99, 2.5, Number.NaN])(
+  "the rank %p is outside the scale and groups under `other`",
+  (tier) => {
+    expect(courtTierLabel(tier)).toBe("other");
+  },
+);
+
+test("the ranks inside the scale keep their own tiers", () => {
+  expect([1, 2, 3, 4].map((tier) => courtTierLabel(tier))).toEqual([
+    "other",
+    "regional",
+    "supreme",
+    "constitutional",
+  ]);
 });

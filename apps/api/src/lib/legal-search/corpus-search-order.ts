@@ -1,22 +1,17 @@
 import { panic } from "better-result";
 
+import {
+  DEFAULT_SEARCH_SORT,
+  SEARCH_SORTS,
+  type SearchSort,
+} from "@stll/api-contract/search";
+
 /**
- * The orders a search may be read in: one list, read by the request schema,
- * the handler, the scan and the cursor codec.
- *
- * A page boundary only means something inside the order that produced it — a
- * boundary in a relevance ranking bounds nothing in a date ranking — so the
- * order travels in the cursor and a cursor from one order is refused by the
- * other, exactly as a cursor from another expansion dictionary is.
- *
- * `relevance` is first because Elysia coerces an absent optional `UnionEnum`
- * to its first member, so slot 0 has to be the default the handler applies.
+ * Re-exported so the search paths keep reading one module for the order, while
+ * the vocabulary itself lives in the contract the saved query and the web
+ * share.
  */
-export const SEARCH_SORTS = ["relevance", "newest"] as const;
-
-export type SearchSort = (typeof SEARCH_SORTS)[number];
-
-export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
+export { DEFAULT_SEARCH_SORT, SEARCH_SORTS, type SearchSort };
 
 /**
  * An order together with what the engine needs to express it. The newest
