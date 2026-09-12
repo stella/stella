@@ -102,6 +102,7 @@ export const SignInPanel = ({
   const [socialLoading, setSocialLoading] = useState<
     "google" | "microsoft" | null
   >(null);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const lastMethod = authClient.getLastUsedLoginMethod();
   const {
     showEmailOtp,
@@ -160,6 +161,40 @@ export const SignInPanel = ({
       });
     }
     setSocialLoading(null);
+  };
+
+  const handleSsoSignIn = async (email: string) => {
+    const parseResult = v.safeParse(formSchema, { email });
+    if (!parseResult.success) {
+      return;
+    }
+
+    setSsoLoading(true);
+    const errorCallbackURL = new URL("/auth/error", window.location.origin);
+    if (redirectTo) {
+      errorCallbackURL.searchParams.set("redirectTo", redirectTo);
+    }
+    const { error } = await authClient.signIn.sso({
+      email: parseResult.output.email,
+      callbackURL: getOrganizationCallbackUrl(redirectTo),
+      errorCallbackURL: errorCallbackURL.toString(),
+    });
+
+    if (!error) {
+      return;
+    }
+
+    analytics.captureError(toAuthClientError(error));
+    if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+      stellaToast.add({
+        title: userErrorFromThrown(
+          toAuthClientError(error),
+          t("errors.actionFailed"),
+        ),
+        type: "error",
+      });
+    }
+    setSsoLoading(false);
   };
 
   const form = useForm(
@@ -260,7 +295,10 @@ export const SignInPanel = ({
       {showLocalPassword && !showBootstrap && (
         <PasswordSignInForm
           hasSocialProviders={showSocialProviders}
+          onSsoSignIn={handleSsoSignIn}
           redirectTo={redirectTo}
+          showSso={!showEmailOtp}
+          ssoLoading={ssoLoading}
         />
       )}
 
@@ -299,16 +337,33 @@ export const SignInPanel = ({
               email: s.values.email,
             })}
           >
-            {({ isSubmitting, canSubmit, email }) => (
-              <Button
-                className="w-full"
-                disabled={!canSubmit || email.trim().length === 0}
-                loading={isSubmitting}
-                type="submit"
-              >
-                {t("auth.continueWithEmail")}
-              </Button>
-            )}
+            {({ isSubmitting, canSubmit, email }) => {
+              const disabled = !canSubmit || email.trim().length === 0;
+              return (
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="w-full"
+                    disabled={disabled || ssoLoading}
+                    loading={isSubmitting}
+                    type="submit"
+                  >
+                    {t("auth.continueWithEmail")}
+                  </Button>
+                  <Button
+                    className="w-full"
+                    disabled={disabled || isSubmitting}
+                    loading={ssoLoading}
+                    onClick={() => {
+                      detached(handleSsoSignIn(email), "SignInPanel.sso");
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("auth.continueWithSso")}
+                  </Button>
+                </div>
+              );
+            }}
           </form.Subscribe>
         </Form>
       )}
@@ -323,10 +378,16 @@ export const SignInPanel = ({
 
 const PasswordSignInForm = ({
   hasSocialProviders,
+  onSsoSignIn,
   redirectTo,
+  showSso,
+  ssoLoading,
 }: {
   hasSocialProviders: boolean;
+  onSsoSignIn: (email: string) => Promise<void>;
   redirectTo: string;
+  showSso: boolean;
+  ssoLoading: boolean;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -428,18 +489,35 @@ const PasswordSignInForm = ({
         })}
       >
         {({ isSubmitting, canSubmit, email, password }) => (
-          <Button
-            className="w-full"
-            disabled={
-              !canSubmit ||
-              email.trim().length === 0 ||
-              password.trim().length === 0
-            }
-            loading={isSubmitting}
-            type="submit"
-          >
-            {t("auth.signInWithPassword")}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="w-full"
+              disabled={
+                !canSubmit ||
+                email.trim().length === 0 ||
+                password.trim().length === 0 ||
+                ssoLoading
+              }
+              loading={isSubmitting}
+              type="submit"
+            >
+              {t("auth.signInWithPassword")}
+            </Button>
+            {showSso && (
+              <Button
+                className="w-full"
+                disabled={email.trim().length === 0 || isSubmitting}
+                loading={ssoLoading}
+                onClick={() => {
+                  detached(onSsoSignIn(email), "PasswordSignInForm.sso");
+                }}
+                type="button"
+                variant="outline"
+              >
+                {t("auth.continueWithSso")}
+              </Button>
+            )}
+          </div>
         )}
       </form.Subscribe>
     </Form>

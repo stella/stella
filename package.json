@@ -173,6 +173,7 @@
     "@better-auth/api-key": "1.7.1",
     "@better-auth/core": "1.7.1",
     "@better-auth/oauth-provider": "1.7.1",
+    "@better-auth/sso": "1.7.1",
     "@libpdf/core": "0.4.2",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.81.0",

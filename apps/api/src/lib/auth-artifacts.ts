@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
@@ -149,6 +149,57 @@ export const revokeOrganizationMemberAuthArtifacts = async (
         eq(apikey.enabled, true),
       ),
     );
+};
+
+type RevokeOrganizationNonSsoSessionsOptions = {
+  organizationId: SafeId<"organization">;
+  providerId: string;
+};
+
+type RevokeUserSessionOptions = {
+  sessionId: string;
+  userId: string;
+};
+
+/** End one authenticated user's session without affecting sibling sessions. */
+export const revokeUserSession = async (
+  tx: AuthArtifactTransaction,
+  { sessionId, userId }: RevokeUserSessionOptions,
+): Promise<void> => {
+  await tx
+    .delete(sessionTable)
+    .where(
+      and(eq(sessionTable.id, sessionId), eq(sessionTable.userId, userId)),
+    );
+};
+
+/** End browser sessions that cannot satisfy a newly required SSO policy. */
+export const revokeOrganizationNonSsoSessions = async (
+  tx: AuthArtifactTransaction,
+  { organizationId, providerId }: RevokeOrganizationNonSsoSessionsOptions,
+): Promise<void> => {
+  await tx
+    .delete(sessionTable)
+    .where(
+      and(
+        eq(sessionTable.activeOrganizationId, organizationId),
+        or(
+          ne(sessionTable.authenticationMethod, "sso"),
+          isNull(sessionTable.ssoProviderId),
+          ne(sessionTable.ssoProviderId, providerId),
+        ),
+      ),
+    );
+};
+
+/** End sessions bound to a provider before that provider is removed. */
+export const revokeSsoProviderSessions = async (
+  tx: AuthArtifactTransaction,
+  providerId: string,
+): Promise<void> => {
+  await tx
+    .delete(sessionTable)
+    .where(eq(sessionTable.ssoProviderId, providerId));
 };
 
 type RevokeOAuthClientAuthArtifactsOptions = {
