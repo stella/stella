@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Aktenzeichen",
       "citedBy": "Zitiert von",
-      "headnote": "Leitsatz"
+      "headnote": "Leitsatz",
+      "summary": "Leitsatz / Fundstelle"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Zitat mit Fundstelle",
       "textOnly": "Nur Text"
     },
+    "courtTiers": {
+      "constitutional": "Verfassungsgerichte",
+      "other": "Übrige Gerichte",
+      "regional": "Ober- und Landesgerichte",
+      "supreme": "Oberste Gerichte"
+    },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
+    "filters": {
+      "remove": "Filter {filter} entfernen"
+    },
     "languages": {
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
       "matchedIn": "Treffer auf {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Rubrum"
     },
+    "refineWithinResults": "In den Ergebnissen suchen",
     "research": {
       "addQuestion": "Frage hinzufügen",
       "addQuestionHint": "Die Frage wird jeder Entscheidung der Tabelle gestellt; Antworten entstehen, wenn Sie die Spalte ausführen.",
@@ -709,6 +720,10 @@
       "countries": "Länder",
       "courts": "Gerichte",
       "years": "Jahre"
+    },
+    "sort": {
+      "newest": "Neueste",
+      "relevance": "Beste Treffer"
     },
     "viewer": {
       "abstract": "Zusammenfassung",

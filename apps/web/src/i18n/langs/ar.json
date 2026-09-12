@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "رقم القضية",
       "citedBy": "مُستشهد به",
-      "headnote": "خلاصة الحكم"
+      "headnote": "خلاصة الحكم",
+      "summary": "المبدأ القانوني / الموضع المطابق"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "اقتباس مع الإحالة",
       "textOnly": "النص فقط"
     },
+    "courtTiers": {
+      "constitutional": "المحاكم الدستورية",
+      "other": "المحاكم الأخرى",
+      "regional": "محاكم الاستئناف والمحاكم الإقليمية",
+      "supreme": "المحاكم العليا"
+    },
     "decisionNotFound": "لم يُعثر على القرار",
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
+    "filters": {
+      "remove": "إزالة عامل التصفية {filter}"
+    },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
       "matchedIn": "تطابق باللغة {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "الديباجة"
     },
+    "refineWithinResults": "ابحث داخل النتائج",
     "research": {
       "addQuestion": "إضافة سؤال",
       "addQuestionHint": "يُطرح السؤال على كل حكم في الجدول؛ وتُنتَج الإجابات عند تشغيل العمود.",
@@ -709,6 +720,10 @@
       "countries": "الدول",
       "courts": "المحاكم",
       "years": "السنوات"
+    },
+    "sort": {
+      "newest": "الأحدث",
+      "relevance": "الأكثر صلة"
     },
     "viewer": {
       "abstract": "الملخّص",

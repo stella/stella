@@ -22,15 +22,16 @@ import { cn } from "@stll/ui/utils";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import {
-  DECISION_COLUMN_LABEL_KEYS,
   DECISION_GROUP_BY_OPTIONS,
   decisionGroupKey,
   decisionTableSchema,
 } from "@/features/case-law/decision-columns";
-import type {
-  DecisionColumnId,
-  DecisionGroupBy,
-} from "@/features/case-law/decision-columns";
+import type { DecisionGroupBy } from "@/features/case-law/decision-columns";
+import {
+  DECISION_COLUMN_LABEL_KEYS,
+  decisionIdentityLineFields,
+} from "@/features/case-law/decision-columns.logic";
+import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
 import type {
   ResearchAnswer,
   ResearchColumn,
@@ -120,6 +121,7 @@ export const ResearchTableView = ({
       date: t(DECISION_COLUMN_LABEL_KEYS.date),
       type: t(DECISION_COLUMN_LABEL_KEYS.type),
       headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
+      summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
       citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
       language: t(DECISION_COLUMN_LABEL_KEYS.language),
     },
@@ -265,6 +267,11 @@ const buildColumns = ({
   ...DataTableColumn<ResearchRow<Decision>>[],
 ] => {
   const decisionColumns: DataTableColumn<ResearchRow<Decision>>[] = [];
+  const context = {
+    identityLineFields: decisionIdentityLineFields([...visibleColumns]),
+    // A saved research table is not a live query, so nothing is marked.
+    queryTokens: [],
+  };
   for (const column of decisionTableSchema.columns) {
     if (!isDecisionColumnId(column.id)) {
       continue;
@@ -280,7 +287,7 @@ const buildColumns = ({
         column.emphasis === "metadata" && "text-muted-foreground",
       ),
       headClassName: "px-4 py-2 text-start",
-      render: (row) => column.render(row.decision),
+      render: (row) => column.render(row.decision, context),
     });
   }
   const questionColumns: DataTableColumn<ResearchRow<Decision>>[] =

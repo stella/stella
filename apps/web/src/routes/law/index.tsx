@@ -482,8 +482,15 @@ function LawHome() {
               : formatDecisionDate(decision.decisionDate, format);
           return (
             <Fragment key={decision.id}>
-              {decisionLinkElement(
-                createCaseLawDecisionRouteParams({
+              {decisionLinkElement({
+                children: (
+                  <LandingItemText
+                    meta={date === null ? court : `${court} · ${date}`}
+                    title={decision.caseNumber}
+                  />
+                ),
+                className: LANDING_ROW_CLASS,
+                params: createCaseLawDecisionRouteParams({
                   caseNumber: decision.caseNumber,
                   country: decision.country,
                   court: decision.court,
@@ -492,12 +499,7 @@ function LawHome() {
                   languageAlternates: decision.languageAlternates,
                   slug: decision.slug,
                 }),
-                LANDING_ROW_CLASS,
-                <LandingItemText
-                  meta={date === null ? court : `${court} · ${date}`}
-                  title={decision.caseNumber}
-                />,
-              )}
+              })}
             </Fragment>
           );
         })}

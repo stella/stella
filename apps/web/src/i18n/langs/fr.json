@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Numéro d'affaire",
       "citedBy": "Citée par",
-      "headnote": "Sommaire"
+      "headnote": "Sommaire",
+      "summary": "Sommaire / passage trouvé"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Citation avec référence",
       "textOnly": "Texte seul"
     },
+    "courtTiers": {
+      "constitutional": "Juridictions constitutionnelles",
+      "other": "Autres juridictions",
+      "regional": "Cours d'appel et tribunaux régionaux",
+      "supreme": "Juridictions suprêmes"
+    },
     "decisionNotFound": "Décision introuvable",
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
+    "filters": {
+      "remove": "Retirer le filtre {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# langue} other {# langues}}",
       "matchedIn": "Correspondance en {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "En-tête"
     },
+    "refineWithinResults": "Rechercher dans les résultats",
     "research": {
       "addQuestion": "Ajouter une question",
       "addQuestionHint": "La question est posée à chaque décision du tableau ; les réponses sont produites lorsque vous exécutez la colonne.",
@@ -709,6 +720,10 @@
       "countries": "Pays",
       "courts": "Juridictions",
       "years": "Années"
+    },
+    "sort": {
+      "newest": "Les plus récentes",
+      "relevance": "Les plus pertinentes"
     },
     "viewer": {
       "abstract": "Résumé",

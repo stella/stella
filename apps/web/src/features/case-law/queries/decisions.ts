@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 
+import type { DecisionSortOrder } from "@/features/case-law/case-law-index-search.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -21,6 +22,8 @@ export type DecisionListFilters = {
   decisionType?: string;
   language?: string;
   search?: string;
+  /** How a search orders its hits; absent while there is nothing to rank. */
+  sort?: DecisionSortOrder;
   sourceId?: string;
 };
 
@@ -52,6 +55,7 @@ const caseLawDecisionKeys = {
       decisionType: key.decisionType,
       language: key.language,
       search: key.search,
+      sort: key.sort,
       sourceId: key.sourceId,
     },
   ],
@@ -71,11 +75,18 @@ type DecisionBySlugKey = {
 
 type FacetBucket = { value: string; count: number };
 
-export type SearchFacets = {
-  court: FacetBucket[];
-  country: FacetBucket[];
-  language: FacetBucket[];
-} | null;
+/**
+ * The facets of one result set, as the search endpoint reports them on the
+ * first page. Null on a cursor page: counting again per page would cost a
+ * second pass over the same hits for an answer the rail already has.
+ */
+export type SearchFacets = NonNullable<
+  Awaited<
+    ReturnType<
+      NonNullable<ReturnType<typeof decisionsInfiniteOptions>["queryFn"]>
+    >
+  >["facets"]
+>;
 
 export type CaseLawBrowseFacets = {
   country: FacetBucket[];
@@ -177,6 +188,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
             ...(listFilters.sourceId !== undefined && {
               sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
             }),
+            ...(listFilters.sort !== undefined && { sort: listFilters.sort }),
           },
           { fetch: { signal } },
         );
@@ -202,6 +214,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            anchorId: h.anchorId,
             citationCount: h.citationCount,
             createdAt:
               parseDeterministicDate(h.createdAt) ??
@@ -242,7 +255,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
 
       const data = unwrapPublicLawEden(response, "listPublicCaseLawDecisions");
 
-      const facets: SearchFacets = null;
+      const facets = null;
       const { items, ...page } = data;
       return {
         ...page,

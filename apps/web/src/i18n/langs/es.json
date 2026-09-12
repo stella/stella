@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Número de expediente",
       "citedBy": "Citada por",
-      "headnote": "Sumario"
+      "headnote": "Sumario",
+      "summary": "Sumario / coincidencia"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cita en bloque con referencia",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Cita textual con referencia",
       "textOnly": "Solo texto"
     },
+    "courtTiers": {
+      "constitutional": "Tribunales constitucionales",
+      "other": "Otros tribunales",
+      "regional": "Audiencias y tribunales regionales",
+      "supreme": "Tribunales supremos"
+    },
     "decisionNotFound": "Resolución no encontrada",
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
+    "filters": {
+      "remove": "Quitar el filtro {filter}"
+    },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
       "matchedIn": "Coincidencia en {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Encabezamiento"
     },
+    "refineWithinResults": "Buscar en los resultados",
     "research": {
       "addQuestion": "Añadir pregunta",
       "addQuestionHint": "La pregunta se plantea a cada resolución de la tabla; las respuestas se generan al ejecutar la columna.",
@@ -709,6 +720,10 @@
       "countries": "Países",
       "courts": "Tribunales",
       "years": "Años"
+    },
+    "sort": {
+      "newest": "Más recientes",
+      "relevance": "Más relevantes"
     },
     "viewer": {
       "abstract": "Resumen",

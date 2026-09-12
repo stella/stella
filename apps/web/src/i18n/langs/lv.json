@@ -617,7 +617,8 @@
     "columns": {
       "caseNumber": "Lietas numurs",
       "citedBy": "Citēts",
-      "headnote": "Kopsavilkums"
+      "headnote": "Kopsavilkums",
+      "summary": "Tiesību atziņa / atbilsme"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
@@ -626,8 +627,17 @@
       "quoteWithCitation": "Citāts ar atsauci",
       "textOnly": "Tikai teksts"
     },
+    "courtTiers": {
+      "constitutional": "Konstitucionālās tiesas",
+      "other": "Citas tiesas",
+      "regional": "Apgabaltiesas",
+      "supreme": "Augstākās tiesas"
+    },
     "decisionNotFound": "Lēmums nav atrasts",
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
+    "filters": {
+      "remove": "Noņemt filtru {filter}"
+    },
     "languages": {
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
       "matchedIn": "Atbilstība valodā: {language}"
@@ -649,6 +659,7 @@
     "reader": {
       "headMatter": "Ievaddaļa"
     },
+    "refineWithinResults": "Meklēt rezultātos",
     "research": {
       "addQuestion": "Pievienot jautājumu",
       "addQuestionHint": "Jautājums tiek uzdots katram tabulas nolēmumam; atbildes tiek izveidotas, palaižot kolonnu.",
@@ -709,6 +720,10 @@
       "countries": "Valstis",
       "courts": "Tiesas",
       "years": "Gadi"
+    },
+    "sort": {
+      "newest": "Jaunākie",
+      "relevance": "Atbilstošākie"
     },
     "viewer": {
       "abstract": "Kopsavilkums",
