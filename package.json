@@ -171,7 +171,7 @@
   "packageManager": "bun@1.4.2",
   "catalog": {
     "@ag-ui/core": "0.1.1-canary.beta.0",
-    "@base-ui/react": "1.7.0",
+    "@base-ui/react": "1.8.0",
     "@better-auth/api-key": "1.7.3",
     "@better-auth/core": "1.7.3",
     "@better-auth/oauth-provider": "1.7.3",
