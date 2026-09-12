@@ -51,7 +51,6 @@ import {
 } from "@/features/case-law/components/decision-cells";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import {
-  caseLawCorpusStatusOptions,
   decisionFacetsOptions,
   latestDecisionsOptions,
 } from "@/features/case-law/queries/decisions";
@@ -181,7 +180,6 @@ export const Route = createFileRoute("/law/")({
     const [latest] = await Promise.all([
       ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
       ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
-      ensureRouteQueryData(queryClient, caseLawCorpusStatusOptions(scope)),
       statuteCountry === null
         ? Promise.resolve(null)
         : ensureRouteQueryData(queryClient, legislationShelfOptions(scope)),

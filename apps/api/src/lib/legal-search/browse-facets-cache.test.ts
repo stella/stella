@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
-import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
+import {
+  createBrowseFacetsCache,
+  createTtlResultCache,
+} from "@/api/lib/legal-search/browse-facets-cache";
 import type {
   LegalBrowseFacets,
   LegalBrowseFacetsQuery,
@@ -172,4 +175,45 @@ test("expires an entry once its window closes", async () => {
   await browseFacets({ excludedSourceIds: [], limit: 20 });
 
   expect(calls).toBe(2);
+});
+
+/**
+ * A load that fails cheaply is better retried at once, which is the default
+ * above. A load that fails slowly is not: retrying it per request keeps one
+ * call in flight for as long as the dependency stays degraded, so its caller
+ * asks for a hold instead.
+ */
+const failingCacheOf = (failureTtlMs: number) => {
+  let calls = 0;
+  const read = createTtlResultCache({
+    load: async (query: string) => {
+      calls += 1;
+      return Result.err(
+        new LegalBrowseFacetsError({ message: `${query} down` }),
+      );
+    },
+    key: (query: string) => query,
+    ttlMs: 60_000,
+    failureTtlMs,
+    maxEntries: 3,
+  });
+  return { calls: () => calls, read };
+};
+
+test("holds a failure for the window its caller asked for", async () => {
+  const { calls, read } = failingCacheOf(60_000);
+
+  await read("engine");
+  await read("engine");
+
+  expect(calls()).toBe(1);
+});
+
+test("retries once the failure window closes", async () => {
+  const { calls, read } = failingCacheOf(0);
+
+  await read("engine");
+  await read("engine");
+
+  expect(calls()).toBe(2);
 });
