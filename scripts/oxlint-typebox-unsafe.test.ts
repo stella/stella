@@ -49,14 +49,12 @@ const reportedLine = (diagnostic: unknown): number | null => {
   return typeof line === "number" ? line : null;
 };
 
-const lint = async ({
+const lintSources = async ({
   approvedAdapters,
-  source,
-  sourceName,
+  sources,
 }: {
   approvedAdapters: readonly ApprovedAdapter[];
-  source: string;
-  sourceName: string;
+  sources: readonly { source: string; sourceName: string }[];
 }): Promise<number[]> => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-oxlint-typebox-unsafe-"),
@@ -74,8 +72,12 @@ const lint = async ({
       },
     })};\n`,
   );
-  const sourcePath = path.join(directory, sourceName);
-  await Bun.write(sourcePath, source);
+  const sourcePaths: string[] = [];
+  for (const { source, sourceName } of sources) {
+    const sourcePath = path.join(directory, sourceName);
+    sourcePaths.push(sourcePath);
+    await Bun.write(sourcePath, source);
+  }
 
   const spawned = Bun.spawn(
     [
@@ -86,16 +88,19 @@ const lint = async ({
       configPath,
       "-f",
       "json",
-      sourcePath,
+      ...sourcePaths,
     ],
     { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
   );
-  const [stdout, stderr] = await Promise.all([
+  const [stdout, stderr, exitCode] = await Promise.all([
     new Response(spawned.stdout).text(),
     new Response(spawned.stderr).text(),
     spawned.exited,
   ]);
   const output = `stdout:\n${stdout}\nstderr:\n${stderr}`;
+  if (exitCode !== 0 && exitCode !== 1) {
+    return panic(`oxlint exited with status ${exitCode}:\n${output}`);
+  }
   const report = Result.try((): unknown => JSON.parse(stdout));
   if (Result.isError(report)) {
     return panic(`oxlint did not produce valid JSON:\n${output}`);
@@ -108,13 +113,31 @@ const lint = async ({
   }
   return diagnostics
     .map(reportedLine)
-    .filter((line): line is number => line !== null);
+    .filter((line): line is number => line !== null)
+    .sort((left, right) => left - right);
 };
 
-const approvedAdapter = (binding: string): ApprovedAdapter => ({
+const lint = async ({
+  approvedAdapters,
+  source,
+  sourceName,
+}: {
+  approvedAdapters: readonly ApprovedAdapter[];
+  source: string;
+  sourceName: string;
+}): Promise<number[]> =>
+  await lintSources({
+    approvedAdapters,
+    sources: [{ source, sourceName }],
+  });
+
+const approvedAdapter = (
+  binding: string,
+  reason = "Fixture-approved adapter boundary.",
+): ApprovedAdapter => ({
   binding,
   path: "approved.ts",
-  reason: "Fixture-approved adapter boundary.",
+  reason,
 });
 
 describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
@@ -217,7 +240,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
         source,
         sourceName: "approved.ts",
       }),
-    ).toEqual([2]);
+    ).toEqual([1, 2]);
   });
 
   test("keeps unreviewed bindings and unmatched approvals rejected", async () => {
@@ -237,7 +260,7 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
         source,
         sourceName: "approved.ts",
       }),
-    ).toEqual([3]);
+    ).toEqual([1, 3]);
     expect(
       await lint({
         approvedAdapters: [approvedAdapter("reviewed")],
@@ -255,6 +278,155 @@ describe.serial("no-unreviewed-typebox-unsafe approved adapters", () => {
         source:
           'import { Type } from "typebox";\nfunction outer() { const reviewed = () => Type.Unsafe(runtimeSchema); return reviewed; }',
       }),
+    ).toEqual([1, 2]);
+  });
+
+  test("rejects approvals after adapter changes", async () => {
+    const cases = [
+      [
+        "a renamed binding",
+        [
+          'import { Type } from "@sinclair/typebox";',
+          "export const renamed = () => Type.Unsafe(runtimeSchema);",
+          "",
+        ].join("\n"),
+        [1, 2],
+      ],
+      ["a removed binding", 'import { Type } from "@sinclair/typebox";\n', [1]],
+      [
+        "a TypeBox builder replacing Unsafe",
+        [
+          'import { Type } from "@sinclair/typebox";',
+          "export const reviewed = () => Type.String();",
+          "",
+        ].join("\n"),
+        [1],
+      ],
+      [
+        "a source file with no TypeBox usage",
+        "export const reviewed = () => undefined;\n",
+        [1],
+      ],
+    ] as const;
+
+    for (const [, source, expectedLines] of cases) {
+      expect(
+        await lint({
+          approvedAdapters: [approvedAdapter("reviewed")],
+          source,
+          sourceName: "approved.ts",
+        }),
+      ).toEqual([...expectedLines]);
+    }
+  });
+
+  test("rejects duplicate approvals instead of choosing one", async () => {
+    const source = [
+      'import { Type } from "@sinclair/typebox";',
+      "export const reviewed = () => Type.Unsafe(runtimeSchema);",
+      "",
+    ].join("\n");
+
+    expect(
+      await lint({
+        approvedAdapters: [
+          approvedAdapter("reviewed"),
+          approvedAdapter("reviewed"),
+        ],
+        source,
+        sourceName: "approved.ts",
+      }),
+    ).toEqual([1, 2]);
+  });
+
+  test("rejects an empty adapter reason in configuration", async () => {
+    const invalidConfiguration = await Result.tryPromise({
+      try: async () =>
+        await lint({
+          approvedAdapters: [approvedAdapter("reviewed", "")],
+          source: 'import { Type } from "@sinclair/typebox";\n',
+          sourceName: "approved.ts",
+        }),
+      catch: (cause) => cause,
+    });
+
+    if (!Result.isError(invalidConfiguration)) {
+      panic("an empty adapter reason unexpectedly passed validation");
+    }
+    if (!(invalidConfiguration.error instanceof Error)) {
+      panic("an empty adapter reason produced a non-Error failure");
+    }
+    expect(invalidConfiguration.error.message).toContain(
+      "Options validation failed",
+    );
+  });
+
+  test("does not let a whitespace-only adapter reason grant an exemption", async () => {
+    const source = [
+      'import { Type } from "@sinclair/typebox";',
+      "export const reviewed = () => Type.Unsafe(runtimeSchema);",
+      "",
+    ].join("\n");
+
+    expect(
+      await lint({
+        approvedAdapters: [approvedAdapter("reviewed", " \t ")],
+        source,
+        sourceName: "approved.ts",
+      }),
     ).toEqual([2]);
+  });
+
+  test("continues to reject an extra direct Unsafe call for an approved binding", async () => {
+    const source = [
+      'import { Type } from "@sinclair/typebox";',
+      "export const reviewed = () => [",
+      "  Type.Unsafe(firstRuntimeSchema),",
+      "  Type.Unsafe(secondRuntimeSchema),",
+      "];",
+      "",
+    ].join("\n");
+
+    expect(
+      await lint({
+        approvedAdapters: [approvedAdapter("reviewed")],
+        source,
+        sourceName: "approved.ts",
+      }),
+    ).toEqual([4]);
+  });
+
+  test("does not apply approvals from an unrelated path", async () => {
+    expect(
+      await lint({
+        approvedAdapters: [approvedAdapter("reviewed")],
+        source: "export const unrelated = undefined;\n",
+        sourceName: "other.ts",
+      }),
+    ).toEqual([]);
+  });
+
+  test("resets applicable approval consumption between files", async () => {
+    const source = [
+      'import { Type } from "@sinclair/typebox";',
+      "export const reviewed = () => Type.Unsafe(runtimeSchema);",
+      "",
+    ].join("\n");
+
+    expect(
+      await lintSources({
+        approvedAdapters: [
+          approvedAdapter("reviewed"),
+          {
+            ...approvedAdapter("reviewed"),
+            path: "other.ts",
+          },
+        ],
+        sources: [
+          { source, sourceName: "approved.ts" },
+          { source, sourceName: "other.ts" },
+        ],
+      }),
+    ).toEqual([]);
   });
 });

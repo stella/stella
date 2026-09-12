@@ -204,6 +204,12 @@ const invalidatesAllWorkspaceTypecheck = (file: string): boolean =>
 const invalidatesRootScriptLint = (file: string): boolean =>
   ROOT_SCRIPT_LINT_INPUTS.some((input) => matchesTurboInput(file, input));
 
+const isTypeScriptPath = (file: string): boolean =>
+  file.endsWith(".ts") ||
+  file.endsWith(".tsx") ||
+  file.endsWith(".mts") ||
+  file.endsWith(".cts");
+
 const rootChecksForPath = (file: string): readonly RootCheck[] => {
   const rootChecks: RootCheck[] = [];
   if (
@@ -275,6 +281,15 @@ export const planCheck = ({
     for (const rootCheck of rootChecksForPath(changedPath)) {
       rootCheckSet.add(rootCheck);
     }
+  }
+  if (
+    changedPaths.some(
+      (changedPath) =>
+        isTypeScriptPath(changedPath) &&
+        !presentChangedPaths.includes(changedPath),
+    )
+  ) {
+    rootCheckSet.add(ROOT_CHECKS.pluginRegistry);
   }
   const rootChecks = ROOT_CHECK_ORDER.filter((rootCheck) =>
     rootCheckSet.has(rootCheck),

@@ -179,13 +179,13 @@ describe("affected code-check planning", () => {
     expect(oxc?.at(-1)).toBe("scripts/guard.ts");
   });
 
-  test("typechecks dependants without trying to lint a deleted source", () => {
+  test("checks configured adapter paths without trying to lint a deleted source", () => {
     expect(plan(["packages/ui/src/removed.ts"], ["packages/ui"], [])).toEqual({
       type: "scoped",
       lint: { type: "targets", targets: ["packages/ui"] },
       typecheck: { type: "targets", targets: ["packages/ui"] },
       rootLintPaths: [],
-      rootChecks: ["env", "assets", "repo-typecheck"],
+      rootChecks: ["env", "assets", "plugin-registry", "repo-typecheck"],
     });
   });
 

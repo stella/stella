@@ -243,9 +243,52 @@ const receiverMethodName = (calleeObject: unknown): string | null => {
   return memberPropertyName(callee);
 };
 
+// Patterns are parameters only when they bind a runtime value. In particular,
+// `{}` and `[]` satisfy the parser's parameter shape while discarding the
+// rejection reason entirely.
+const bindsRuntimeParameter = (pattern: unknown): boolean => {
+  if (!isAstNode(pattern)) {
+    return false;
+  }
+  if (isIdentifier(pattern)) {
+    return pattern.name !== "this";
+  }
+  if (pattern.type === "AssignmentPattern") {
+    return bindsRuntimeParameter(pattern.left);
+  }
+  if (pattern.type === "RestElement") {
+    return bindsRuntimeParameter(pattern.argument);
+  }
+  if (pattern.type === "Property") {
+    return bindsRuntimeParameter(pattern.value);
+  }
+  if (pattern.type === "ObjectPattern") {
+    return (
+      Array.isArray(pattern.properties) &&
+      pattern.properties.some((property) => bindsRuntimeParameter(property))
+    );
+  }
+  if (pattern.type === "ArrayPattern") {
+    return (
+      Array.isArray(pattern.elements) &&
+      pattern.elements.some((element) => bindsRuntimeParameter(element))
+    );
+  }
+  return false;
+};
+
 const hasRuntimeParameter = (handler: AstNode): boolean => {
   const params = Array.isArray(handler.params) ? handler.params : [];
-  return params.some((parameter) => !isIdentifier(parameter, "this"));
+  for (const parameter of params) {
+    // TypeScript's `this` parameter receives no runtime argument.
+    if (isIdentifier(parameter, "this")) {
+      continue;
+    }
+    // Promise rejection callbacks receive one runtime argument, so a later
+    // parameter cannot establish that the rejection reason was bound.
+    return bindsRuntimeParameter(parameter);
+  }
+  return false;
 };
 
 type ScopeIdentifier = Parameters<SourceCode["getScope"]>[0] & {

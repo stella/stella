@@ -191,6 +191,68 @@ const ownerVariable = (context: Context, expression: unknown) => {
     : null;
 };
 
+// A call argument may assemble an options value locally before crossing the
+// contract boundary. Only traverse syntax that preserves that value; do not
+// climb through computations or callback bodies that merely happen to occur
+// somewhere below a call.
+const isArgumentValue = (node: unknown): boolean => {
+  let current = node;
+  while (isAstNode(current) && isAstNode(current.parent)) {
+    const parent = current.parent;
+    if (parent.type === "CallExpression") {
+      return (
+        Array.isArray(parent.arguments) && parent.arguments.includes(current)
+      );
+    }
+    if (
+      (parent.type === "TSAsExpression" ||
+        parent.type === "TSTypeAssertion" ||
+        parent.type === "TSSatisfiesExpression" ||
+        parent.type === "TSNonNullExpression" ||
+        parent.type === "ChainExpression" ||
+        parent.type === "ParenthesizedExpression") &&
+      parent.expression === current
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      (parent.type === "Property" && parent.value === current) ||
+      (parent.type === "SpreadElement" && parent.argument === current) ||
+      (parent.type === "JSXExpressionContainer" &&
+        parent.expression === current) ||
+      (parent.type === "JSXAttribute" && parent.value === current) ||
+      (parent.type === "JSXSpreadAttribute" && parent.argument === current)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      (parent.type === "ObjectExpression" &&
+        Array.isArray(parent.properties) &&
+        parent.properties.includes(current)) ||
+      (parent.type === "ArrayExpression" &&
+        Array.isArray(parent.elements) &&
+        parent.elements.includes(current)) ||
+      (parent.type === "JSXOpeningElement" &&
+        Array.isArray(parent.attributes) &&
+        parent.attributes.includes(current)) ||
+      (parent.type === "JSXElement" &&
+        (parent.openingElement === current ||
+          (Array.isArray(parent.children) &&
+            parent.children.includes(current)))) ||
+      (parent.type === "JSXFragment" &&
+        Array.isArray(parent.children) &&
+        parent.children.includes(current))
+    ) {
+      current = parent;
+      continue;
+    }
+    return false;
+  }
+  return false;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-known-value-widening" },
   rules: {
@@ -230,15 +292,7 @@ export default eslintCompatPlugin({
             owner?.references.filter((reference) => reference.isRead()) ?? [];
           // A call argument crosses a contract boundary. Do not guess that
           // contract from a validator-looking function name.
-          if (
-            reads.some(
-              ({ identifier }) =>
-                identifier.parent.type === "CallExpression" &&
-                identifier.parent.arguments.some(
-                  (argument) => argument === identifier,
-                ),
-            )
-          ) {
+          if (reads.some(({ identifier }) => isArgumentValue(identifier))) {
             return;
           }
           if (

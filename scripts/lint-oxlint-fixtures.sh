@@ -39,6 +39,7 @@ fi
 bun test ./scripts/oxlint-safe-fixers.test.ts
 bun test ./scripts/oxlint-typebox-unsafe.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
+bun test ./scripts/check-oxlint-plugin-registry.test.ts
 bun test ./.oxlint-plugins/__tests__/no-literal-decision-court.test.ts
 bun test ./.oxlint-plugins/__tests__/no-raw-decision-text-fields.test.ts
 

@@ -64,7 +64,8 @@ const configuredApprovedAdapters = (options: unknown): ApprovedAdapter[] => {
     if (
       typeof binding === "string" &&
       typeof path === "string" &&
-      typeof reason === "string"
+      typeof reason === "string" &&
+      reason.trim().length > 0
     ) {
       adapters.push({ binding, path, reason });
     }
@@ -167,6 +168,10 @@ export default eslintCompatPlugin({
         messages: {
           unreviewedTypeboxUnsafe:
             "Type.Unsafe manually pairs a static type with a runtime schema. Prefer TypeBox builders, or add an exact reviewed adapter binding with its reason to approvedAdapters.",
+          staleApprovedAdapter:
+            "Approved Type.Unsafe adapter '{{binding}}' for '{{path}}' no longer owns a top-level Type.Unsafe call. Remove or update the approvedAdapters entry.",
+          duplicateApprovedAdapter:
+            "Approved Type.Unsafe adapter '{{binding}}' for '{{path}}' is configured more than once. Keep one entry that owns the reviewed call.",
         },
         schema: [
           {
@@ -179,7 +184,7 @@ export default eslintCompatPlugin({
                   properties: {
                     binding: { type: "string" },
                     path: { type: "string" },
-                    reason: { type: "string" },
+                    reason: { type: "string", minLength: 1 },
                   },
                   required: ["binding", "path", "reason"],
                   additionalProperties: false,
@@ -341,44 +346,83 @@ export default eslintCompatPlugin({
               );
         };
 
-        let approvedAdapters: ApprovedAdapter[] = [];
+        let applicableApprovedAdapters: ApprovedAdapter[] = [];
         let filename = "";
-        let unsafeCallsByAdapter = new WeakMap<object, number>();
+        let consumedApprovedAdapters = new Set<ApprovedAdapter>();
 
         return {
           before() {
-            approvedAdapters = configuredApprovedAdapters(
-              context.options.at(0),
-            );
             filename = filenameForContext(context);
-            unsafeCallsByAdapter = new WeakMap();
+            applicableApprovedAdapters = configuredApprovedAdapters(
+              context.options.at(0),
+            ).filter(
+              (adapter) =>
+                filename === adapter.path ||
+                filename.endsWith(`/${adapter.path}`),
+            );
+            consumedApprovedAdapters = new Set();
           },
           CallExpression(node) {
             if (resolveBinding(node.callee) !== "typeboxUnsafe") {
               return;
             }
             const binding = adapterBinding(node);
-            const occurrence =
-              binding === null || !binding.ownsUnsafeCall
-                ? null
-                : (unsafeCallsByAdapter.get(binding.node) ?? 0) + 1;
-            if (binding !== null && occurrence !== null) {
-              unsafeCallsByAdapter.set(binding.node, occurrence);
-            }
+            const matchingAdapters =
+              binding === null ||
+              !binding.ownsUnsafeCall ||
+              !isTopLevelBinding(binding.node)
+                ? []
+                : applicableApprovedAdapters.filter(
+                    (adapter) => adapter.binding === binding.name,
+                  );
+            const matchingAdapter = matchingAdapters.at(0);
             if (
-              binding !== null &&
-              occurrence === 1 &&
-              isTopLevelBinding(binding.node) &&
-              approvedAdapters.some(
-                (adapter) =>
-                  adapter.binding === binding.name &&
-                  (filename === adapter.path ||
-                    filename.endsWith(`/${adapter.path}`)),
-              )
+              matchingAdapters.length === 1 &&
+              matchingAdapter !== undefined &&
+              !consumedApprovedAdapters.has(matchingAdapter)
             ) {
+              consumedApprovedAdapters.add(matchingAdapter);
               return;
             }
             context.report({ node, messageId: "unreviewedTypeboxUnsafe" });
+          },
+          "Program:exit"(node) {
+            const approvalsByBinding = new Map<
+              string,
+              [ApprovedAdapter, ...ApprovedAdapter[]]
+            >();
+            for (const adapter of applicableApprovedAdapters) {
+              const approvals = approvalsByBinding.get(adapter.binding);
+              if (approvals === undefined) {
+                approvalsByBinding.set(adapter.binding, [adapter]);
+                continue;
+              }
+              approvals.push(adapter);
+            }
+            for (const approvals of approvalsByBinding.values()) {
+              const [approval, ...duplicates] = approvals;
+              if (duplicates.length > 0) {
+                for (const duplicate of duplicates) {
+                  context.report({
+                    node,
+                    messageId: "duplicateApprovedAdapter",
+                    data: duplicate,
+                  });
+                }
+                continue;
+              }
+              if (consumedApprovedAdapters.has(approval)) {
+                continue;
+              }
+              context.report({
+                node,
+                messageId: "staleApprovedAdapter",
+                data: approval,
+              });
+            }
+            // This per-file rule cannot observe an approval whose configured
+            // path is deleted or omitted from the lint invocation. A separate
+            // config-wide path census must own that repository-level check.
           },
         };
       },

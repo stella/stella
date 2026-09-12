@@ -15,7 +15,10 @@ const lint = async (source: string) => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-oxlint-guards-"));
   try {
     const config = path.join(directory, "oxlint.config.ts");
-    const input = path.join(directory, "input.ts");
+    const input = path.join(
+      directory,
+      `input.${source.includes("<Component") ? "tsx" : "ts"}`,
+    );
     await Bun.write(
       config,
       `export default ${JSON.stringify({
@@ -85,6 +88,29 @@ describe("local type evidence", () => {
   );
 });
 
+describe("call argument boundaries", () => {
+  test.each([
+    'const payload: unknown = { id: "known" }; consume({ payload });',
+    'const payload: unknown = { id: "known" }; consume([{ payload }]);',
+    'const payload: unknown = { id: "known" }; consume(({ payload } as { payload: unknown })!);',
+    'const payload: unknown = { id: "known" }; consume(<Component payload={payload} />);',
+    'const payload: unknown = { id: "known" }; consume(<Component>{payload}</Component>);',
+  ])(
+    "treats nested argument values as contract boundaries: %s",
+    async (source) => {
+      expect(await lint(source)).toEqual([]);
+    },
+  );
+
+  test.each([
+    'const payload: unknown = { id: "known" }; consume({ payload: payload ?? fallback });',
+    'const payload: unknown = { id: "known" }; consume({ onClose: () => payload });',
+    'const payload: unknown = { id: "known" }; consume(<Component onClose={() => payload} />);',
+  ])("does not treat nested computation as an argument: %s", async (source) => {
+    expect(await lint(source)).toEqual([wideningCode]);
+  });
+});
+
 describe("rejection ownership", () => {
   test.each([
     "work().catch(() => recover());",
@@ -112,4 +138,30 @@ describe("rejection ownership", () => {
       expect(await lint(source)).toEqual([]);
     },
   );
+});
+
+describe("rejection parameter bindings", () => {
+  test.each([
+    "work().catch(({}) => recover());",
+    "work().catch(([]) => recover());",
+    "work().catch(({ detail: {} }) => recover());",
+    "work().catch(([{}]) => recover());",
+    "work().catch(({} = fallback) => recover());",
+    "work().catch(({}, second) => recover(second));",
+    "work().catch(([,], second) => recover(second));",
+  ])("rejects patterns that bind no rejection reason: %s", async (source) => {
+    expect(await lint(source)).toEqual([rejectionCode]);
+  });
+
+  test.each([
+    "work().catch(({ message }) => recover(message));",
+    "work().catch(([reason]) => recover(reason));",
+    "work().catch(({ detail: { reason } = fallback }) => recover(reason));",
+    "work().catch((reason = fallback) => recover(reason));",
+    "work().catch((...reasons) => recover(reasons));",
+    "work().catch(([...reasons]) => recover(reasons));",
+    "type Context = {}; function handle(this: Context, reason) { recover(reason); } work().catch(handle);",
+  ])("accepts patterns that bind a rejection reason: %s", async (source) => {
+    expect(await lint(source)).toEqual([]);
+  });
 });
