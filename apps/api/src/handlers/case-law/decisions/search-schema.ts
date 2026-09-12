@@ -23,6 +23,14 @@ import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
+// Spelled out per literal so Eden infers a tuple union rather than `never`
+// from a mapped array; the schema test holds these literals to `SEARCH_SORTS`.
+const [relevanceSort, newestSort] = SEARCH_SORTS;
+export const searchSortSchema = t.Union([
+  t.Literal(relevanceSort),
+  t.Literal(newestSort),
+]);
+
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
     minLength: 1,
@@ -39,7 +47,7 @@ export const searchDecisionsBodySchema = t.Object({
   language: t.Optional(t.String({ maxLength: 8 })),
   // A literal union, not `UnionEnum`: Elysia coerces an absent optional
   // `UnionEnum` to its first member, and the handler owns the default.
-  sort: t.Optional(t.Union(SEARCH_SORTS.map((sort) => t.Literal(sort)))),
+  sort: t.Optional(searchSortSchema),
 });
 
 const nullableStringSchema = t.Union([t.String(), t.Null()]);

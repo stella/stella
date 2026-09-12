@@ -10,12 +10,17 @@ import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type {
+  searchSortSchema} from "@/api/handlers/case-law/decisions/search-schema";
 import {
   searchDecisionsBodySchema,
-  searchDecisionsSuccessResponseSchema,
+  searchDecisionsSuccessResponseSchema
 } from "@/api/handlers/case-law/decisions/search-schema";
 import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-weights";
-import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
+import {
+  SEARCH_SORTS,
+  type SearchSort,
+} from "@/api/lib/legal-search/corpus-search-order";
 
 type SearchDecisionsSuccess = Extract<
   Awaited<ReturnType<typeof searchDecisionsHandler>>,
@@ -77,6 +82,10 @@ const firstPageFacets = {
 const validBody = { query: "promlčení", country: "CZE" };
 
 describe("case-law search request schema", () => {
+  test("names every declared sort, spelled out so Eden keeps the union", () => {
+    expectTypeOf<Static<typeof searchSortSchema>>().toEqualTypeOf<SearchSort>();
+  });
+
   test("accepts every declared sort and no sort at all", () => {
     expect(Value.Check(searchDecisionsBodySchema, validBody)).toBe(true);
     for (const sort of SEARCH_SORTS) {
