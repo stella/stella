@@ -380,6 +380,11 @@ test("highlights the first registry result and copies it with Enter from the sea
     )
     .toEqual([{ command: "registry_copy", args: { text: "Registry result" } }]);
   await expect(searchBox(page)).toBeFocused();
+  // ArrowUp lands on the highlighted card; ArrowDown returns to the field.
+  await searchBox(page).press("ArrowUp");
+  await expect(result.locator("[data-registry-card]")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(searchBox(page)).toBeFocused();
 });
 
 test("retains the explicitly requested query across browser sign-in and native focus return", async ({

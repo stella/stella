@@ -132,6 +132,7 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
+  shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
 import type {
   ClipboardPointerPosition,
@@ -2097,6 +2098,9 @@ const ClipboardApp = () => {
           event.preventDefault();
           copyItem(item);
         }
+      } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
+        event.preventDefault();
+        selectIndex(activeIndex);
       } else if (
         shouldLeaveClipboardSearch({
           ...inputKey,
@@ -2170,6 +2174,11 @@ const ClipboardApp = () => {
       direction: railDirection,
       key: event.key,
     });
+    if (keyAction === "focusSearch") {
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      return;
+    }
     if (keyAction) {
       event.preventDefault();
       navigate(keyAction);

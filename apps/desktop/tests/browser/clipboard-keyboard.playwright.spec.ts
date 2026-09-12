@@ -354,13 +354,16 @@ for (const {
       );
       await page.keyboard.press(nextCardKey);
       await expect(cards.nth(1)).toBeFocused();
+      // Vertical arrows move between the rail and the field, never the scope.
       await page.keyboard.press("ArrowDown");
+      await expect(search).toBeFocused();
+      await expect(groupsRail).toBeVisible();
+      await page.keyboard.press("ArrowUp");
       await expect(cards.nth(1)).toBeFocused();
       await expect(groupsRail).toBeVisible();
       await search.focus();
       await page.keyboard.press("ArrowDown");
       await expect(search).toBeFocused();
-      await expect(groupsRail).toBeVisible();
       await switcher.focus();
       await page.keyboard.press("ArrowDown");
       await expect(switcher).toBeFocused();

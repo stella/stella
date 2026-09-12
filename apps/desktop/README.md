@@ -79,7 +79,8 @@ Clipboard keyboard model:
 
 - Type anywhere to search; the search field takes the keystroke.
 - ← / → move the highlighted result, also from the search field at its text edges;
-  the footer controls are reached with Tab.
+  ↓ from a card focuses the field and ↑ from the field returns to the highlighted card.
+  The footer controls are reached with Tab.
 - The scope switcher beside the field (Tab reaches it) picks all clips, external
   registries, or saved groups: ↑ / ↓ while it is focused, or a click to step through.
 - Enter copies the highlighted result; Esc closes an open overlay, then the window.

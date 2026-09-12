@@ -384,6 +384,16 @@ export const RegistrySearch = ({
         copy(activeResult);
         return;
       }
+      if (event.key === "ArrowUp") {
+        // The rail sits above the field: hand focus to the highlighted card.
+        event.preventDefault();
+        rail.current
+          ?.querySelector<HTMLElement>(
+            `[data-registry-result="${CSS.escape(activeResult.id)}"] [data-registry-card]`,
+          )
+          ?.focus();
+        return;
+      }
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
         return;
       }
@@ -510,6 +520,11 @@ export const RegistrySearch = ({
                     !(event.target instanceof HTMLButtonElement) ||
                     !Object.hasOwn(event.target.dataset, "registryCard")
                   ) {
+                    return;
+                  }
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    searchInput.current?.focus();
                     return;
                   }
                   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {

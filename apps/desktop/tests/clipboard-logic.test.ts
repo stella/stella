@@ -25,6 +25,7 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
+  shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
 
@@ -327,13 +328,37 @@ test("source apps receive a stable tint from the bounded palette", () => {
 });
 
 describe("keyboard indexes", () => {
-  test("timeline arrows navigate horizontally and leave vertical arrows alone", () => {
+  test("timeline arrows navigate horizontally and Arrow Down focuses search", () => {
     const ltr = (key: string) =>
       clipboardTimelineKeyAction({ direction: "ltr", key });
     expect(ltr("ArrowLeft")).toBe("previous");
     expect(ltr("ArrowRight")).toBe("next");
-    expect(ltr("ArrowDown")).toBeNull();
+    expect(ltr("ArrowDown")).toBe("focusSearch");
     expect(ltr("ArrowUp")).toBeNull();
+  });
+
+  test("ArrowUp in search returns focus to the timeline", () => {
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: {},
+        isComposing: false,
+        key: "ArrowUp",
+      }),
+    ).toBe(true);
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: {},
+        isComposing: true,
+        key: "ArrowUp",
+      }),
+    ).toBe(false);
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: { clipboardNameInput: "" },
+        isComposing: false,
+        key: "ArrowUp",
+      }),
+    ).toBe(false);
   });
 
   test("timeline arrows follow the rail's direction under RTL", () => {
@@ -341,7 +366,7 @@ describe("keyboard indexes", () => {
       clipboardTimelineKeyAction({ direction: "rtl", key });
     expect(rtl("ArrowLeft")).toBe("next");
     expect(rtl("ArrowRight")).toBe("previous");
-    expect(rtl("ArrowDown")).toBeNull();
+    expect(rtl("ArrowDown")).toBe("focusSearch");
     expect(rtl("ArrowUp")).toBeNull();
   });
 

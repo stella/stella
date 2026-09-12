@@ -116,6 +116,18 @@ export const shouldCopyFromClipboardInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "Enter" && !isComposing;
 
+/**
+ * ArrowUp in the search field hands focus back to the highlighted card (the
+ * rail sits above the search bar). Composition keeps ArrowUp for the IME's
+ * candidate list, and a clip name editor keeps its caret.
+ */
+export const shouldReturnToTimelineFromInput = ({
+  dataset,
+  isComposing,
+  key,
+}: ClipboardInputKey) =>
+  !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
+
 type ClipboardSearchArrowKey = ClipboardInputKey &
   ClipboardModifiers & {
     direction: "ltr" | "rtl";
@@ -262,6 +274,9 @@ export const clipboardTimelineKeyAction = ({
   direction,
   key,
 }: ClipboardDirectionalKey) => {
+  if (key === "ArrowDown") {
+    return "focusSearch";
+  }
   const forward = direction === "rtl" ? "ArrowLeft" : "ArrowRight";
   if (key === forward) {
     return "next";
