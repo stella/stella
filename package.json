@@ -160,7 +160,7 @@
     "ip-address": "10.7.0",
     "lucide-react": "1.41.0",
     "nanoid": "3.3.18",
-    "postcss": "8.5.26",
+    "postcss": "8.5.28",
     "prosemirror-model": "1.25.11",
     "prosemirror-transform": "1.12.0",
     "prosemirror-view": "1.42.3",
