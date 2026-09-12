@@ -74,7 +74,6 @@ export const envWebClientSchema = {
   VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
   VITE_FEATURE_TIME_BILLING: featureFlagSchema,
   VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
-  VITE_FEATURE_AI_MEMORY: featureFlagSchema,
   VITE_FEATURE_LEGAL_LISTS: featureFlagSchema,
   VITE_FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   VITE_FEATURE_INBOX: featureFlagSchema,

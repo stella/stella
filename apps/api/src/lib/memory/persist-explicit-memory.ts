@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -6,6 +5,9 @@ import { aiMemories } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+
+const MEMORY_DEDUP_LOCK_MAX_ATTEMPTS = 3;
 
 type ExplicitMemoryInsert = Pick<
   typeof aiMemories.$inferInsert,
@@ -41,18 +43,20 @@ export type PersistExplicitMemoryResult = {
   type: "created" | "existing" | "reactivated";
 };
 
-/**
- * Insert an explicit user/tool memory under the database's exact-dedup
- * constraint. Active duplicates are idempotent. An explicit duplicate of an
- * inactive row reactivates it; background extraction deliberately does not use
- * this helper, so dismissed suggestions remain tombstones.
- */
-export const persistExplicitMemory = async ({
-  metadataOnConflict,
-  recordAuditEvent,
-  tx,
-  values,
-}: PersistExplicitMemoryOptions): Promise<PersistExplicitMemoryResult> => {
+type ExplicitMemoryConflictRow = Pick<
+  typeof aiMemories.$inferSelect,
+  "id" | "language" | "pinned" | "status"
+>;
+
+type LockExplicitMemoryResult =
+  | { type: "inserted"; id: SafeId<"aiMemory"> }
+  | { type: "existing"; memory: ExplicitMemoryConflictRow }
+  | { type: "missing" };
+
+const insertOrLockExplicitMemory = async (
+  tx: Transaction,
+  values: ExplicitMemoryInsert,
+): Promise<LockExplicitMemoryResult> => {
   const [inserted] = await tx
     .insert(aiMemories)
     .values(values)
@@ -60,21 +64,8 @@ export const persistExplicitMemory = async ({
       target: [aiMemories.organizationId, aiMemories.dedupKey],
     })
     .returning({ id: aiMemories.id });
-
   if (inserted) {
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
-      resourceId: inserted.id,
-      workspaceId: values.workspaceId ?? null,
-      changes: {
-        created: {
-          old: null,
-          new: { scope: values.scope, kind: values.kind },
-        },
-      },
-    });
-    return { id: inserted.id, type: "created" };
+    return { type: "inserted", id: inserted.id };
   }
 
   const [existing] = await tx
@@ -93,9 +84,57 @@ export const persistExplicitMemory = async ({
     )
     .limit(1)
     .for("update");
-  if (!existing) {
-    panic("Memory dedup conflict row disappeared");
+  return existing
+    ? { type: "existing", memory: existing }
+    : { type: "missing" };
+};
+
+/**
+ * Insert an explicit user/tool memory under the database's exact-dedup
+ * constraint. Active duplicates are idempotent. An explicit duplicate of an
+ * inactive row reactivates it; background extraction deliberately does not use
+ * this helper, so dismissed suggestions remain tombstones.
+ */
+export const persistExplicitMemory = async ({
+  metadataOnConflict,
+  recordAuditEvent,
+  tx,
+  values,
+}: PersistExplicitMemoryOptions): Promise<PersistExplicitMemoryResult> => {
+  let locked = await insertOrLockExplicitMemory(tx, values);
+  for (
+    let attempt = 1;
+    attempt < MEMORY_DEDUP_LOCK_MAX_ATTEMPTS && locked.type === "missing";
+    attempt++
+  ) {
+    // oxlint-disable-next-line no-await-in-loop -- SAFETY: three sequential attempts at most; each retry depends on the preceding conflict row having disappeared before it could be locked
+    locked = await insertOrLockExplicitMemory(tx, values);
   }
+
+  if (locked.type === "missing") {
+    // oxlint-disable-next-line no-throw-outside-boundary/no-throw-outside-boundary -- expected contention crosses this Promise boundary as a tagged retryable failure; safeDb preserves it as the transaction cause
+    throw new ConcurrentModificationError({
+      message: "Memory changed repeatedly while saving; retry the request",
+    });
+  }
+
+  if (locked.type === "inserted") {
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
+      resourceId: locked.id,
+      workspaceId: values.workspaceId ?? null,
+      changes: {
+        created: {
+          old: null,
+          new: { scope: values.scope, kind: values.kind },
+        },
+      },
+    });
+    return { id: locked.id, type: "created" };
+  }
+
+  const existing = locked.memory;
   const nextLanguage =
     metadataOnConflict?.language !== undefined &&
     metadataOnConflict.language !== existing.language

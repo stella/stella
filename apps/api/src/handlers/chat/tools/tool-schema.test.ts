@@ -119,7 +119,6 @@ const getChatTools = (
   const { registryDispatch = BUSINESS_REGISTRY_DISPATCH, ...rest } = props;
   return getChatToolsWithPin({
     ...rest,
-    memoryEnabled: props.memoryEnabled ?? true,
     pinServerValidatedWorkspaceId: () => true,
     registryDispatch,
   });
@@ -768,43 +767,6 @@ describe("chat tool schemas", () => {
     // as `suggest_changes`.
     expect(tools).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(tools).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
-  });
-
-  test("keeps historical remember calls schema-valid while memory is disabled", () => {
-    const baseArgs = {
-      orgAIConfig: null,
-      memberRole: "owner" as const,
-      organizationId,
-      requestWorkspaceId: workspaceId,
-      thirdPartyBoundary: { type: "raw" as const },
-      refRegistry: createChatRefRegistry(),
-      toolDefectMemo: createChatToolDefectMemo(),
-      safeDb: unusedSafeDb,
-      scopedDb: unusedScopedDb,
-      threadId,
-      workspaceId,
-      userId,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [workspaceId],
-      }),
-      hasActiveDocxEditClient: false,
-      hasActiveDocxFileClient: false,
-      docxSuggestionSurface: "template-studio" as const,
-      webSearchEnabled: false,
-      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
-      recordAuditEvent: noopAuditRecorder,
-      resolveMemorySourceWorkspaceIds: () => [],
-      memoryEnabled: false,
-    };
-
-    expect(getChatTools(baseArgs)).not.toHaveProperty(REMEMBER_TOOL_NAME);
-    expect(
-      getChatTools({
-        ...baseArgs,
-        includeRememberToolForValidation: true,
-      }),
-    ).toHaveProperty(REMEMBER_TOOL_NAME);
   });
 
   test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {

@@ -1042,7 +1042,6 @@ const prepareValidatedIncomingMessage = async ({
       editApplyMode,
       docxEditRepresentation,
       includeAllDocxEditToolsForValidation: true,
-      includeRememberToolForValidation: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
       webSearchProviders,
       externalTools: externalToolsForValidation,
