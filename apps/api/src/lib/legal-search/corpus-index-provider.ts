@@ -31,6 +31,10 @@ import {
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
+import {
+  DEFAULT_SEARCH_SORT,
+  RELEVANCE_ORDER,
+} from "@/api/lib/legal-search/corpus-search-order";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
@@ -217,7 +221,12 @@ const searchResult = async (
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
   // dictionary fails the read rather than paging a different result set.
-  if (isStaleCorpusSearchCursor(parsedCursor, resolved.dictionary)) {
+  if (
+    isStaleCorpusSearchCursor(parsedCursor, {
+      dictionary: resolved.dictionary,
+      sort: DEFAULT_SEARCH_SORT,
+    })
+  ) {
     return Result.err(
       new InvalidLegalSearchCursorError({
         message:
@@ -236,6 +245,9 @@ const searchResult = async (
     indexId,
     query: resolved.query,
     limit,
+    // The shared provider ranks best-first only; the public search handler
+    // owns the reader-chosen orders.
+    order: RELEVANCE_ORDER,
     parsedCursor,
     snippetFields: ["text"],
     extractId: (hit) => {

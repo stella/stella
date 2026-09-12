@@ -6,6 +6,11 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
+import {
+  type CorpusSearchOrder,
+  corpusEngineSortBy,
+  type SearchSort,
+} from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -42,6 +47,12 @@ export type SearchCursor = {
   score: number;
   id: string;
   /**
+   * Order the scan behind this cursor ran in. The boundary below is a
+   * position in that order and means nothing in another one, so a
+   * continuation that changed the order is refused rather than resumed.
+   */
+  sort: SearchSort;
+  /**
    * Rank the scan behind this cursor began at. A scan that proved its own
    * stop bound leaves the window where it is, and the continuation replays it
    * from the same rank: replaying is what keeps a document ranked by its best
@@ -63,6 +74,12 @@ type CorpusIndexSearchPageInput<TContext> = {
   query: string;
   limit: number;
   parsedCursor: SearchCursor | null;
+  /**
+   * Order the engine returns candidates in, and with it the meaning of the
+   * position score below. Required rather than defaulted: the cursor carries
+   * the order, so a caller that did not choose one cannot page correctly.
+   */
+  order: CorpusSearchOrder;
   /**
    * Fields the engine highlights. Requested for the passages the page emits
    * and never for the scan: highlighting is per-hit work, and a scan reaches
@@ -282,9 +299,12 @@ export const isAfterSearchCursor = (
 };
 
 /**
- * Lexical score of the hit at `globalIndex` in the engine's `_score` order.
- * The engine reports the order but not the scores, so the rank stands in for
- * them, decaying by a factor of e per round of candidates:
+ * Position score of the hit at `globalIndex` in whichever order the engine was
+ * asked for. Under `_score` it stands in for the lexical score, which the
+ * engine reports the order of but not the values of; under a date sort it
+ * stands in for the date the same way, and the blend is off, so the only
+ * property either use needs is that it strictly decreases with rank. It
+ * decays by a factor of e per round of candidates:
  *
  *   lexical(i) = exp(-i / corpusIndexSearchCandidateLimit)
  *
@@ -319,6 +339,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
   indexId,
   query,
   limit,
+  order,
   parsedCursor,
   snippetFields,
   extractId,
@@ -387,8 +408,8 @@ export const readCorpusIndexSearchPage = async <TContext>({
     }
     rounds += 1;
 
-    // Sort by BM25 explicitly: without it the engine returns hits in
-    // document-id order and the rank-based lexical score below would be
+    // Name the order explicitly: without it the engine returns hits in
+    // document-id order and the rank-based position score below would be
     // meaningless.
     const roundStartedAt = performance.now();
     const result = await getCorpusIndexClient(cluster).search({
@@ -396,7 +417,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
       query,
       maxHits,
       startOffset,
-      sortBy: "_score",
+      sortBy: corpusEngineSortBy(order),
     });
     indexMs += performance.now() - roundStartedAt;
     if (result.isErr()) {
@@ -493,7 +514,12 @@ export const readCorpusIndexSearchPage = async <TContext>({
       return null;
     }
     if (hasMoreInWindow || (!roundCapHit && windowCanContinue)) {
-      return { score: lastEmitted.score, id: lastEmitted.id, windowStart };
+      return {
+        score: lastEmitted.score,
+        id: lastEmitted.id,
+        sort: order.type,
+        windowStart,
+      };
     }
     if (!roundCapHit || startOffset >= totalHits) {
       return null;
@@ -510,6 +536,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
       // price of moving the window at all, and the reason the blend bound is
       // proven within a window rather than across the cap.
       id: lastScannedId ?? lastEmitted.id,
+      sort: order.type,
       windowStart: startOffset,
     };
   };

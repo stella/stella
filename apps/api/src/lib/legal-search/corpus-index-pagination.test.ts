@@ -9,6 +9,10 @@ import {
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  type CorpusSearchOrder,
+  RELEVANCE_ORDER,
+} from "@/api/lib/legal-search/corpus-search-order";
+import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,
   stableBlendUpperBound,
@@ -110,12 +114,17 @@ afterEach(() => {
 const scanRequestCount = (): number =>
   requestBodies.filter((body) => body["snippet_fields"] === undefined).length;
 
-const readPage = async (limit = 10, parsedCursor: SearchCursor | null = null) =>
+const readPage = async (
+  limit = 10,
+  parsedCursor: SearchCursor | null = null,
+  order: CorpusSearchOrder = RELEVANCE_ORDER,
+) =>
   await readCorpusIndexSearchPage({
     cluster: "q09",
     indexId: "case_law_v5_cs_sk",
     query: "text:promlčení",
     limit,
+    order,
     parsedCursor,
     snippetFields: ["text"],
     extractId: (hit: CorpusIndexHit) =>
@@ -283,6 +292,7 @@ describe("a page settles within one scan round", () => {
       indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
       limit,
+      order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
       extractId: (hit: CorpusIndexHit) =>
@@ -402,6 +412,7 @@ describe("the scan is bounded by engine round trips", () => {
       indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
       limit,
+      order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
       extractId: (hit: CorpusIndexHit) =>
@@ -522,6 +533,7 @@ describe("a passage flood does not strand the reader", () => {
       indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
       limit,
+      order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
       extractId: (hit: CorpusIndexHit) =>
@@ -653,6 +665,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
       indexId: "case_law_v5_eu",
       query: "text:google",
       limit,
+      order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
       extractId: (hit: CorpusIndexHit) =>
@@ -1008,5 +1021,51 @@ describe("an engine refusal reaches the caller as a mapped status", () => {
       throw new Error("the read did not fail with a HandlerError");
     }
     expect(failure.status).toBe(503);
+  });
+});
+
+/**
+ * A cursor bounds a position in the order that produced it, so it has to say
+ * which order that was: applying a date-ordered boundary to a relevance scan
+ * would skip and repeat decisions behind an ordinary-looking page. These hold
+ * the scan to naming its own order on every cursor it issues, and to resuming
+ * a date-ordered window where it left off.
+ */
+describe("a page boundary carries the order it was cut from", () => {
+  beforeEach(() => {
+    engineHits = Array.from({ length: 8 }, (_, index) => ({
+      document_id: `doc-${String(index)}`,
+    }));
+  });
+
+  test.each([
+    ["relevance", RELEVANCE_ORDER],
+    ["newest", { type: "newest", timestampField: "decision_date_ts" }],
+  ] as const)("a %s page names its own order", async (sort, order) => {
+    const page = await readPage(3, null, order);
+
+    expect(page.nextCursor?.sort).toBe(sort);
+  });
+
+  test("a date-ordered scan resumes after its own cursor", async () => {
+    const newest = {
+      type: "newest",
+      timestampField: "decision_date_ts",
+    } as const;
+
+    const first = await readPage(3, null, newest);
+    const second = await readPage(3, first.nextCursor, newest);
+
+    expect(first.pageRanked.map((hit) => hit.id)).toEqual([
+      "doc-0",
+      "doc-1",
+      "doc-2",
+    ]);
+    expect(second.pageRanked.map((hit) => hit.id)).toEqual([
+      "doc-3",
+      "doc-4",
+      "doc-5",
+    ]);
+    expect(second.nextCursor?.sort).toBe("newest");
   });
 });

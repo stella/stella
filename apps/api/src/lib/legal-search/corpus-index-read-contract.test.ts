@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import {
   caseLawCorpusQueryFields,
   corpusIndexReadContract,
+  CorpusIndexReadContractError,
+  requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 
@@ -232,3 +234,21 @@ test("a query with budget to spare reaches the classification field", () => {
   expect(clause).toContain("headnote_stem:");
   expect(clause).toContain('keywords:"smlouva"');
 });
+
+// The index unit is a passage, so every decision count a search reports is a
+// cardinality over the document id, and an aggregation reads a fast field. A
+// generation that does not mark it fast could only report passage counts, so
+// the assertion is what keeps such a deployment from serving plausible wrong
+// numbers instead of failing.
+test("the decision-count field is the document id, proven aggregatable", () => {
+  expect(requireCaseLawDecisionCountField("case_law_v7")).toBe("document_id");
+});
+
+test.each(["case_law_v5", "case_law_v6"])(
+  "%s cannot count decisions and says so",
+  (generation) => {
+    expect(() => requireCaseLawDecisionCountField(generation)).toThrow(
+      CorpusIndexReadContractError,
+    );
+  },
+);

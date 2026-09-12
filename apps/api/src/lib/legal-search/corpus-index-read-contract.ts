@@ -1,7 +1,8 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  corpusIndexFastFields,
   corpusIndexPublisherFields,
   corpusIndexStemFields,
   requireCorpusIndexManifest,
@@ -13,6 +14,18 @@ import {
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
+
+/**
+ * The serving case-law generation cannot answer a case-law read: its index
+ * mapping does not support what the read contract requires. A configuration
+ * failure, not a request one — the deployment is pointed at a generation
+ * built before the contract — so it names the generation and the field.
+ */
+export class CorpusIndexReadContractError extends TaggedError(
+  "CorpusIndexReadContractError",
+)<{
+  message: string;
+}> {}
 
 export type CaseLawIndexReadContract = {
   family: "case_law";
@@ -72,6 +85,34 @@ const publisherQueryFields = (
       publisher satisfies never;
       return panic(`Unhandled publisher fields: ${String(publisher)}`);
   }
+};
+
+/**
+ * The field a case-law search counts distinct decisions by, proven
+ * aggregatable.
+ *
+ * The index unit is a passage, so every number that describes decisions — a
+ * facet bucket, a result total — is a cardinality over the document id, and an
+ * aggregation reads a columnar store, which only a fast field has. A
+ * generation that does not mark it fast can therefore report passage counts or
+ * nothing, and the first is worse: a filter rail of plausible, wrong numbers
+ * next to every court.
+ *
+ * So this is an assertion, not a capability check. A search asks once, before
+ * any engine work, and a deployment pointed at such a generation fails every
+ * case-law corpus search loudly instead of serving one.
+ */
+export const requireCaseLawDecisionCountField = (
+  generation: string,
+): string => {
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  const field = manifest.projection.documentIdField;
+  if (corpusIndexFastFields(manifest).has(field)) {
+    return field;
+  }
+  throw new CorpusIndexReadContractError({
+    message: `Generation ${manifest.generation} does not mark ${field} fast, so a search cannot count decisions`,
+  });
 };
 
 export type LegislationIndexReadContract = {

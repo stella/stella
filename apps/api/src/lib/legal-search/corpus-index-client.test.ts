@@ -10,11 +10,16 @@ import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
+import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexConfigFromManifest,
   CORPUS_INDEX_MANIFESTS,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  type CorpusSearchOrder,
+  RELEVANCE_ORDER,
+} from "@/api/lib/legal-search/corpus-search-order";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -494,7 +499,7 @@ test("search rejects a malformed object response", async () => {
   }
 });
 
-test("search pagination always requests BM25 relevance order", async () => {
+const readSortedPage = async (order: CorpusSearchOrder) => {
   responseBody = {
     num_hits: 1,
     hits: [{ document_id: "doc-1" }],
@@ -506,6 +511,7 @@ test("search pagination always requests BM25 relevance order", async () => {
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     limit: 10,
+    order,
     parsedCursor: null,
     snippetFields: ["text"],
     extractId: (hit) =>
@@ -522,12 +528,36 @@ test("search pagination always requests BM25 relevance order", async () => {
       })),
     }),
   });
+};
 
-  expect(requests.length).toBeGreaterThan(0);
-  for (const request of requests) {
-    const body: Record<string, unknown> = JSON.parse(request.body);
-    expect(body["sort_by"]).toBe("_score");
-  }
+/**
+ * Every engine call a scan makes names its order. Without one the engine
+ * answers in document-id order, which is not a ranking at all, and the
+ * rank-based position score the cursor is built from would be meaningless.
+ */
+const requestedSortOrders = (): unknown[] =>
+  requests.map(
+    (request) =>
+      (JSON.parse(request.body) as Record<string, unknown>)["sort_by"],
+  );
+
+test("a relevance scan requests BM25 order on every call", async () => {
+  await readSortedPage(RELEVANCE_ORDER);
+
+  expect(requestedSortOrders().length).toBeGreaterThan(0);
+  expect(new Set(requestedSortOrders())).toEqual(new Set(["_score"]));
+});
+
+test("a newest scan requests the timestamp field descending", async () => {
+  await readSortedPage({
+    type: "newest",
+    timestampField: DECISION_TIMESTAMP_FIELD,
+  });
+
+  // The highlight round addresses named passages and stays on relevance, so
+  // the scan's own order is what this asserts.
+  expect(requestedSortOrders()).toContain(`-${DECISION_TIMESTAMP_FIELD}`);
+  expect(requestedSortOrders()).not.toContain("-_score");
 });
 
 test("ingest fails when the engine accepts fewer documents than sent", async () => {

@@ -39,6 +39,10 @@ import {
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
+import {
+  DEFAULT_SEARCH_SORT,
+  RELEVANCE_ORDER,
+} from "@/api/lib/legal-search/corpus-search-order";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
@@ -392,6 +396,9 @@ const corpusIndexSearch = async (
     indexId,
     query,
     limit,
+    // The legislation corpus is read best-first and nothing else; a date
+    // order over it would need a timestamp field its generation does not map.
+    order: RELEVANCE_ORDER,
     parsedCursor,
     snippetFields: ["text"],
     extractId: (hit) => {
@@ -485,7 +492,10 @@ export const searchLegislationHandler = async (
     body.cursor !== undefined &&
     (parsedCursor === null ||
       !isUuid(parsedCursor.id) ||
-      isStaleCorpusSearchCursor(parsedCursor, NO_EXPANSION_DICTIONARY_IDENTITY))
+      isStaleCorpusSearchCursor(parsedCursor, {
+        dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+        sort: DEFAULT_SEARCH_SORT,
+      }))
   ) {
     return status(400, { message: "Invalid cursor" });
   }
