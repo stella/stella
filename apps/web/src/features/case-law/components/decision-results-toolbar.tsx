@@ -4,6 +4,8 @@ import { useState } from "react";
 import { SearchIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { SEARCH_SORTS } from "@stll/api-contract/search";
+import type { SearchSort } from "@stll/api-contract/search";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
@@ -15,15 +17,13 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { DECISION_SORT_ORDERS } from "@/features/case-law/case-law-index-search.logic";
-import type { DecisionSortOrder } from "@/features/case-law/case-law-index-search.logic";
 import { DecisionColumnChooser } from "@/features/case-law/components/decision-table";
 import type { TranslationKey } from "@/i18n/types";
 
 const SORT_LABEL_KEYS = {
   relevance: "caseLaw.sort.relevance",
   newest: "caseLaw.sort.newest",
-} as const satisfies Record<DecisionSortOrder, TranslationKey>;
+} as const satisfies Record<SearchSort, TranslationKey>;
 
 type DecisionResultsToolbarProps = {
   /**
@@ -35,9 +35,9 @@ type DecisionResultsToolbarProps = {
   onHiddenColumnIdsChange: (hiddenColumnIds: string[]) => void;
   /** Adds the entry to the query as one more thing every hit must say. */
   onRefine: (entry: string) => void;
-  onSortChange: (sort: DecisionSortOrder) => void;
+  onSortChange: (sort: SearchSort) => void;
   /** Null while browsing, where the list is newest-first by definition. */
-  sort: DecisionSortOrder | null;
+  sort: SearchSort | null;
   /** What the list is: a count, or what the query matched. */
   summary: ReactNode;
 };
@@ -73,9 +73,7 @@ export const DecisionResultsToolbar = ({
             </span>
             <Select
               onValueChange={(value: string | null) => {
-                const next = DECISION_SORT_ORDERS.find(
-                  (order) => order === value,
-                );
+                const next = SEARCH_SORTS.find((order) => order === value);
                 if (next !== undefined) {
                   onSortChange(next);
                 }
@@ -90,7 +88,7 @@ export const DecisionResultsToolbar = ({
                 <SelectValue>{t(SORT_LABEL_KEYS[sort])}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
-                {DECISION_SORT_ORDERS.map((order) => (
+                {SEARCH_SORTS.map((order) => (
                   <SelectItem key={order} value={order}>
                     {t(SORT_LABEL_KEYS[order])}
                   </SelectItem>

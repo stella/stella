@@ -302,6 +302,10 @@ export const savedQueryToDecisionFilters = (
       ...(savedQuery.sourceId !== undefined && {
         sourceId: savedQuery.sourceId,
       }),
+      // The order is part of what was saved, not a display preference: a
+      // bounded search answers with a different first working set under a
+      // different order, so a table saved under newest has to re-run that way.
+      ...(savedQuery.sort !== undefined && { sort: savedQuery.sort }),
     },
   };
 };
@@ -323,4 +327,5 @@ export const decisionFiltersToSavedQuery = (
   ...(filters.sourceId !== undefined && {
     sourceId: toSafeId<"caseLawSource">(filters.sourceId),
   }),
+  ...(filters.sort !== undefined && { sort: filters.sort }),
 });

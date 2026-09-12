@@ -22,8 +22,10 @@ import {
   exactDecisionMatches,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
+  type SearchSort,
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
@@ -33,16 +35,12 @@ import {
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   createCaseLawIndexPath,
-  DECISION_SORT_ORDERS,
   decisionSortOrder,
   hasActiveCaseLawFilter,
   validDecisionYear,
   withPendingQuery,
 } from "@/features/case-law/case-law-index-search.logic";
-import type {
-  CaseLawFilterKey,
-  DecisionSortOrder,
-} from "@/features/case-law/case-law-index-search.logic";
+import type { CaseLawFilterKey } from "@/features/case-law/case-law-index-search.logic";
 import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
@@ -124,7 +122,7 @@ const searchSchema = v.object({
   q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
-  sort: v.fallback(v.optional(v.picklist(DECISION_SORT_ORDERS)), undefined),
+  sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
   source: optionalBrowseStringSchema(128),
   type: optionalBrowseStringSchema(128),
   year: optionalBrowseStringSchema(4),
@@ -520,7 +518,7 @@ function PublicCaseLawIndex() {
   // which ranks by relevance whatever the URL asks for. Offering a choice the
   // answer ignores would also mark the date column as sorted when it is not.
   const sortable = intent.type === "text";
-  const sort: DecisionSortOrder | null = sortable
+  const sort: SearchSort | null = sortable
     ? decisionSortOrder(search.sort)
     : null;
   const order = intent.type === "empty" ? "newest" : (sort ?? "relevance");

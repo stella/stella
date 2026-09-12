@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { SEARCH_SORTS } from "@stll/api-contract/search";
+
 import {
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   createCaseLawIndexPath,
-  DECISION_SORT_ORDERS,
   decisionSortOrder,
   decisionSortParam,
   hasActiveCaseLawFilter,
@@ -36,12 +37,12 @@ describe("the sort the URL carries", () => {
   });
 
   test("every sort survives a round trip through the URL", () => {
-    for (const sort of DECISION_SORT_ORDERS) {
+    for (const sort of SEARCH_SORTS) {
       const path = createCaseLawIndexPath({ country: "cz", q: "x", sort });
       const carried = new URL(path, "https://example.test").searchParams.get(
         "sort",
       );
-      const parsed = DECISION_SORT_ORDERS.find((order) => order === carried);
+      const parsed = SEARCH_SORTS.find((order) => order === carried);
       expect(decisionSortOrder(parsed)).toBe(sort);
     }
   });

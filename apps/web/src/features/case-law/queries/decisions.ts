@@ -2,9 +2,11 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
-import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import {
+  SEARCH_TOTAL_NOT_COUNTED,
+  type SearchSort,
+} from "@stll/api-contract/search";
 
-import type { DecisionSortOrder } from "@/features/case-law/case-law-index-search.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -23,7 +25,7 @@ export type DecisionListFilters = {
   language?: string;
   search?: string;
   /** How a search orders its hits; absent while there is nothing to rank. */
-  sort?: DecisionSortOrder;
+  sort?: SearchSort;
   sourceId?: string;
 };
 
