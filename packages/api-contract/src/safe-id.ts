@@ -64,6 +64,7 @@ export type SafeIdType =
   | "entityDeletionEffectChunk"
   | "effectLease"
   | "documentProcessingRun"
+  | "documentReferenceCounter"
   | "documentReviewFinding"
   | "documentReviewParty"
   | "documentReviewReferencePassage"

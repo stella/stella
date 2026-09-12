@@ -22,6 +22,7 @@ import {
   contactRelationships,
   contacts,
   documentCounters,
+  documentReferenceCounters,
   bilingualTranslationRuns,
   docxSuggestions,
   entities,
@@ -211,6 +212,8 @@ export const createTestIds = () => ({
   anonymizationBlacklistEntryB: id<"anonymizationBlacklistEntry">(),
   matterCounterA: id<"matterCounter">(),
   matterCounterB: id<"matterCounter">(),
+  documentReferenceCounterA: id<"documentReferenceCounter">(),
+  documentReferenceCounterB: id<"documentReferenceCounter">(),
 });
 
 export type TestIds = ReturnType<typeof createTestIds>;
@@ -263,6 +266,7 @@ export const orgScopedTables = [
   organizationSettings,
   anonymizationBlacklistEntries,
   matterCounters,
+  documentReferenceCounters,
   contactRelationships,
   templateVersions,
   clauseVariants,
@@ -772,6 +776,21 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.matterCounterB,
       organizationId: ids.orgB,
       scopeKey: "default",
+      lastValue: 0,
+    },
+  ]);
+
+  await db.insert(documentReferenceCounters).values([
+    {
+      id: ids.documentReferenceCounterA,
+      organizationId: ids.orgA,
+      reference: "REF-A1",
+      lastValue: 0,
+    },
+    {
+      id: ids.documentReferenceCounterB,
+      organizationId: ids.orgB,
+      reference: "REF-B1",
       lastValue: 0,
     },
   ]);

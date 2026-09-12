@@ -11,14 +11,12 @@
  * the hidden property is offered as a new document first.
  */
 import type { DocumentReferenceMatch } from "@stll/api-contract";
+import { documentReferenceBase, refiledStamp } from "@stll/api-contract";
 
 import type { ReferenceUploadAction } from "@/lib/files/document-reference";
 import { defaultReferenceUploadAction } from "@/lib/files/document-reference";
 import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
 import { extensionMatches, getExtension } from "@/lib/files/file-extension";
-
-/** A reference such as `2026/001/015.v3` with the version suffix removed. */
-const VERSION_SUFFIX_RE = /\.v\d+$/u;
 
 /** What the person dropping the file chose to do with it. */
 export const VERSION_OR_NEW_FILE_CHOICE = {
@@ -41,6 +39,12 @@ type ReferencedDocument = {
   matterName: string;
   /** The reference without its version suffix (`2026/001/015`). */
   documentReference: string;
+  /**
+   * The reference the document carries now, set only when it is no longer the
+   * one printed on the dropped file: moving a document to another matter, or
+   * re-referencing its matter, leaves the printed stamp behind.
+   */
+  refiledReference: string | null;
   /** Version the dropped file was taken from. */
   versionNumber: number;
   /** Version number the upload would become. */
@@ -121,15 +125,20 @@ export const resolveVersionOrNewFileDecision = ({
 
 const toReferencedDocument = (
   match: DocumentReferenceMatch,
-): ReferencedDocument => ({
-  entityId: match.entityId,
-  workspaceId: match.workspaceId,
-  documentName: match.entityName,
-  matterName: match.workspaceName,
-  documentReference: match.stamp.replace(VERSION_SUFFIX_RE, ""),
-  versionNumber: match.versionNumber,
-  nextVersionNumber: match.currentVersionNumber + 1,
-});
+): ReferencedDocument => {
+  const refiled = refiledStamp(match);
+
+  return {
+    entityId: match.entityId,
+    workspaceId: match.workspaceId,
+    documentName: match.entityName,
+    matterName: match.workspaceName,
+    documentReference: documentReferenceBase(match.stamp),
+    refiledReference: refiled === null ? null : documentReferenceBase(refiled),
+    versionNumber: match.versionNumber,
+    nextVersionNumber: match.currentVersionNumber + 1,
+  };
+};
 
 const toSupersededBase = (
   match: DocumentReferenceMatch,

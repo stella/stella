@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { entityVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ReadWorkspaceHandlerProps = {
@@ -27,6 +29,21 @@ export const readWorkspaceHandler = async ({
         id: { eq: workspaceId },
         organizationId: { eq: organizationId },
       },
+      // How many live versions already carry a frozen stamp. Changing the
+      // matter's reference cannot rewrite them, so the client warns with this
+      // number before the edit. Correlated rather than a second statement:
+      // this is one of the hottest reads in the app and it has a per-request
+      // query budget. `entity_versions_workspace_id_idx` bounds the scan to
+      // one matter's versions.
+      extras: {
+        stampedVersionCount: (table) => sql<number>`(
+          SELECT count(*)::int
+          FROM ${entityVersions}
+          WHERE ${entityVersions.workspaceId} = ${table.id}
+            AND ${entityVersions.stamp} IS NOT NULL
+            AND ${entityVersions.deletedAt} IS NULL
+        )`,
+      },
       with: {
         client: {
           columns: {
@@ -44,11 +61,12 @@ export const readWorkspaceHandler = async ({
     return status(404);
   }
 
-  // The matter row and its client card, nothing else. This response used to
-  // carry the whole server `LIMITS` table (~7 KiB) on one of the hottest reads
-  // in the app, so every new server-side bound inflated every matter load.
-  // The two bounds the client actually reads are static product constants it
-  // imports from `@stll/api-contract`. Anything genuinely per-org or
-  // plan-dependent belongs here as a named subset, never a spread of a table.
+  // The matter row, its client card, and the stamped-version count; nothing
+  // else. This response used to carry the whole server `LIMITS` table (~7 KiB)
+  // on one of the hottest reads in the app, so every new server-side bound
+  // inflated every matter load. The two bounds the client actually reads are
+  // static product constants it imports from `@stll/api-contract`. Anything
+  // genuinely per-org or plan-dependent belongs here as a named subset, never
+  // a spread of a table.
   return result;
 };

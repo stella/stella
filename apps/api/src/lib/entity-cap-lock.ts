@@ -19,8 +19,9 @@ import type { SafeId } from "@/api/lib/branded-types";
  *      below).
  *   2. Parent-entity `FOR UPDATE`, only when the insert is scoped to
  *      a folder parent (`checkEntityCreateParentForInsert`).
- *   3. The `document_counters` row for the target workspace, via
- *      `allocateEntityStamp`'s `INSERT ... ON CONFLICT DO UPDATE`.
+ *   3. The `document_reference_counters` row for the target
+ *      workspace's reference, then the `document_counters` row for the
+ *      target workspace, both inside `allocateEntityStamps`.
  *
  * Same-workspace callers lock a single row (step 1 is a list of
  * one). Cross-workspace callers (`copy-to-workspace` with

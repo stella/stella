@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 
 import { rootDb } from "@/api/db/root";
@@ -51,6 +52,15 @@ type BuiltSearchDocument = Omit<
 type IndexedSearchDocument = {
   entityId: SafeId<"entity">;
 };
+
+/**
+ * Newest versions read per projection. The same rows answer the
+ * latest-version probe and supply the stamps, so the read stays one query;
+ * the cap is what keeps it bounded when an entity's history is pathological.
+ * Documents carry a handful of versions in practice, so the only cost is
+ * that the very oldest references of such an entity stop being searchable.
+ */
+const STAMP_SCAN_VERSION_LIMIT = 500;
 
 const linkMetadataSearchText = (metadata: LinkMetadata | null): string => {
   if (!metadata) {
@@ -178,16 +188,18 @@ const buildSearchDocument = async (
   const workspace = entity.workspace ?? panic("Entity has no workspace");
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
-  const latestVersion = await database.query.entityVersions.findFirst({
+  const versions = await database.query.entityVersions.findMany({
     where: {
       entityId: { eq: entityId },
       workspaceId: { eq: entity.workspaceId },
     },
-    columns: { id: true },
+    columns: { deletedAt: true, id: true, stamp: true },
     // Include tombstones: a deleted newer version must keep legacy,
     // provenance-free text from being attributed to a promoted old version.
     orderBy: { versionNumber: "desc", id: "desc" },
+    limit: STAMP_SCAN_VERSION_LIMIT,
   });
+  const latestVersion = versions.at(0);
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -214,6 +226,26 @@ const buildSearchDocument = async (
   const linkText = linkMetadataSearchText(entity.metadata);
   if (linkText) {
     fieldTexts.push(linkText);
+  }
+
+  // Every reference the document still carries, not only the current one: a
+  // move between matters or a matter re-reference leaves older versions
+  // stamped with what was printed on them, and a reader searching that
+  // reference has to find the document it names. Tombstoned versions are
+  // excluded, so a deleted version's reference stops resolving here the same
+  // way it stops resolving everywhere else.
+  const stampTexts = new Set<string>();
+  for (const { deletedAt, stamp } of versions) {
+    if (deletedAt || !stamp) {
+      continue;
+    }
+    // PostgreSQL's parser reads a whole stamp as one `file` token, so the
+    // version-less form a reader normally types has to be its own token.
+    stampTexts.add(stamp);
+    stampTexts.add(documentReferenceBase(stamp));
+  }
+  if (stampTexts.size > 0) {
+    fieldTexts.push([...stampTexts].join(" "));
   }
 
   // Append decrypted file content when available.

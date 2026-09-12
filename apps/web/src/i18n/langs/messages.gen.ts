@@ -4664,9 +4664,9 @@ type Messages = {
     "slugRequired": "Slug is required";
   };
   "verify": {
+    "history": "{history, select, refiled {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>.} superseded {This reference points to version {version, number}; the current version is {currentVersion, number}.} other {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>. This reference points to version {version, number}; the current version is {currentVersion, number}.}}";
     "notFound": "No document with this reference is available in your organization.";
     "opened": "Opened via reference <bdi>{reference}</bdi>.";
-    "superseded": "This reference points to version {version, number}; the current version is {currentVersion, number}.";
   };
   "webSearch": {
     "settings": {
@@ -4846,6 +4846,7 @@ type Messages = {
         "referenceElsewhere": "This file is version {version, number} of <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) in <bdi>{matterName}</bdi>.";
         "referenceHere": "This file is version {version, number} of <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).";
         "referenceLineRemoved": "The reference line was removed from this file, so it is treated as a new document unless you choose otherwise.";
+        "referenceRefiled": "The document is now filed as <bdi>{reference}</bdi>.";
         "referenceSuperseded": "It was based on version {basedOn, number}; the current version is {current, number}.";
         "replaceOption": "Upload as new version";
         "title": "Upload new version or create new file?";
@@ -5325,8 +5326,12 @@ type Messages = {
       "untitledColumn": "Column name, e.g. Effective date";
     };
     "reference": "Reference number";
+    "referenceChangeConfirmDescription": "{count, plural, one {# document version carries} other {# document versions carry}} the reference <bdi>{oldReference}</bdi>. Printed copies keep it and still open from their verification code. New versions will be numbered under <bdi>{newReference}</bdi>.";
+    "referenceChangeConfirmTitle": "Change the matter reference?";
     "referenceConventionHint": "Preferred format: {example}";
     "referenceFormatWarning": "Doesn't match the preferred format.";
+    "referenceNumberingContinuesDescription": "Document numbering continues from {sequence, number}.";
+    "referenceNumberingContinuesTitle": "Reference <bdi>{reference}</bdi> was used before";
     "referenceNumberingEmptyHint": "Set a reference number to start numbering the documents in this matter.";
     "referenceNumberingHint": "Documents in this matter are numbered <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi>, and so on; each version adds <bdi>.v1</bdi>, <bdi>.v2</bdi>.";
     "referencePlaceholder": "e.g. 2024/001";

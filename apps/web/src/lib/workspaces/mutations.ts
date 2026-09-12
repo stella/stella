@@ -163,9 +163,7 @@ export const useUpdateWorkspace = () => {
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .post(workspaceUpdateBody(update));
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {
       const { workspaceId } = variables;
