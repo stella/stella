@@ -45,6 +45,16 @@ const filterCall: fc.Arbitrary<FilterCall> = fc
 
 const chain = fc.array(filterCall, { maxLength: 4 });
 
+// Keep every general chain shape while making this number spelling an
+// inescapable part of each marker-form round trip.
+const withNegativeZero = (filters: readonly FilterCall[]) => [
+  ...filters,
+  {
+    args: [{ kind: "keyword", name: "adapt", value: -0 }],
+    name: "text",
+  } as const satisfies FilterCall,
+];
+
 const path = fc
   .array(fc.constantFrom("tenant", "name", "fee_2", "sub-total", "díl"), {
     minLength: 1,
@@ -67,12 +77,14 @@ describe("rendering a marker the scanner reads back", () => {
     fc.assert(
       fc.property(path, chain, (fieldPath, filters) => {
         fc.pre(writable(filters));
-        const text = renderValueMarker(fieldPath, filters);
-        expect(classifyMarker(text.slice(2, -2), "output")).toEqual({
-          kind: "placeholder",
-          expr: fieldPath,
-          filters,
-        });
+        for (const renderedFilters of [filters, withNegativeZero(filters)]) {
+          const text = renderValueMarker(fieldPath, renderedFilters);
+          expect(classifyMarker(text.slice(2, -2), "output")).toEqual({
+            kind: "placeholder",
+            expr: fieldPath,
+            filters: renderedFilters,
+          });
+        }
       }),
       propertyConfig(),
     );
@@ -82,14 +94,16 @@ describe("rendering a marker the scanner reads back", () => {
     fc.assert(
       fc.property(path, chain, (fieldPath, filters) => {
         fc.pre(writable(filters));
-        const text = `before ${renderValueMarker(fieldPath, filters)} after`;
-        const scanned = scanMarkers(text);
-        expect(scanned).toHaveLength(1);
-        expect(scanned[0]?.meta).toEqual({
-          kind: "placeholder",
-          expr: fieldPath,
-          filters,
-        });
+        for (const renderedFilters of [filters, withNegativeZero(filters)]) {
+          const text = `before ${renderValueMarker(fieldPath, renderedFilters)} after`;
+          const scanned = scanMarkers(text);
+          expect(scanned).toHaveLength(1);
+          expect(scanned[0]?.meta).toEqual({
+            kind: "placeholder",
+            expr: fieldPath,
+            filters: renderedFilters,
+          });
+        }
       }),
       propertyConfig(),
     );
@@ -105,21 +119,23 @@ describe("rendering a marker the scanner reads back", () => {
         fc.constantFrom(...prefixes),
         (alias, arrayPath, filters, prefix) => {
           fc.pre(writable(filters, "statement"));
-          const text = renderForOpener({
-            alias,
-            path: arrayPath,
-            filters,
-            prefix,
-          });
-          const scanned = scanMarkers(text);
-          expect(scanned).toHaveLength(1);
-          expect(scanned[0]?.prefix).toBe(prefix);
-          expect(scanned[0]?.meta).toEqual({
-            kind: "for",
-            alias,
-            path: arrayPath,
-            filters,
-          });
+          for (const renderedFilters of [filters, withNegativeZero(filters)]) {
+            const text = renderForOpener({
+              alias,
+              path: arrayPath,
+              filters: renderedFilters,
+              prefix,
+            });
+            const scanned = scanMarkers(text);
+            expect(scanned).toHaveLength(1);
+            expect(scanned[0]?.prefix).toBe(prefix);
+            expect(scanned[0]?.meta).toEqual({
+              kind: "for",
+              alias,
+              path: arrayPath,
+              filters: renderedFilters,
+            });
+          }
         },
       ),
       propertyConfig(),
