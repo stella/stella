@@ -26,6 +26,11 @@ const SORT_LABEL_KEYS = {
 } as const satisfies Record<DecisionSortOrder, TranslationKey>;
 
 type DecisionResultsToolbarProps = {
+  /**
+   * What the reader can do with the whole result set, drawn last. A node
+   * rather than props, so the toolbar owes nothing to the research slice.
+   */
+  actions?: ReactNode;
   hiddenColumnIds: readonly string[];
   onHiddenColumnIdsChange: (hiddenColumnIds: string[]) => void;
   /** Adds the entry to the query as one more thing every hit must say. */
@@ -43,6 +48,7 @@ type DecisionResultsToolbarProps = {
  * viewport drops nothing.
  */
 export const DecisionResultsToolbar = ({
+  actions,
   hiddenColumnIds,
   onHiddenColumnIdsChange,
   onRefine,
@@ -98,6 +104,7 @@ export const DecisionResultsToolbar = ({
           hiddenColumnIds={hiddenColumnIds}
           onHiddenColumnIdsChange={onHiddenColumnIdsChange}
         />
+        {actions}
       </div>
     </div>
   );

@@ -483,10 +483,11 @@ function PublicCaseLawIndex() {
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">{t("common.caseLaw")}</h1>
-        <ResearchTableActions filters={filters} />
-      </div>
+      {/*
+        The breadcrumb already names the screen, so the heading is for the
+        document outline and for a screen reader, not for the eye.
+      */}
+      <h1 className="sr-only">{t("common.caseLaw")}</h1>
 
       <CaseLawSearch
         country={countryParam}
@@ -511,6 +512,7 @@ function PublicCaseLawIndex() {
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <DecisionResultsToolbar
+            actions={<ResearchTableActions filters={filters} />}
             hiddenColumnIds={hiddenColumnIds}
             onHiddenColumnIdsChange={(next) =>
               setHiddenDecisionColumnIds(countryParam, next)

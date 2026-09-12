@@ -23,8 +23,12 @@ type ResearchTableActionsProps = {
 
 /**
  * The signed-in reader's way into research tables from the public search:
- * open the list, or save the current search as a new table and land in it.
+ * save the current search as a new table and land in it, or open the list.
  * Anonymous readers see nothing; the public page stays as it is for them.
+ *
+ * The leading separator belongs here rather than to the toolbar around it:
+ * the whole group disappears for an anonymous reader, and a toolbar that drew
+ * the rule itself would leave it hanging after the column chooser.
  */
 export const ResearchTableActions = ({
   filters,
@@ -71,16 +75,11 @@ export const ResearchTableActions = ({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Button
-        render={<Link to="/law/cases/research" />}
-        size="sm"
-        variant="ghost"
-      >
-        {t("caseLaw.research.title")}
-      </Button>
+    <>
+      <span className="bg-border mx-1 h-4 w-px" />
       {search.length > 0 && (
         <Button
+          className="h-7 min-h-0 text-xs"
           disabled={create.isPending}
           onClick={() => {
             detached(
@@ -94,6 +93,14 @@ export const ResearchTableActions = ({
           {t("caseLaw.research.save")}
         </Button>
       )}
-    </div>
+      <Button
+        className="text-muted-foreground h-7 min-h-0 text-xs"
+        render={<Link to="/law/cases/research" />}
+        size="sm"
+        variant="ghost"
+      >
+        {t("caseLaw.research.title")}
+      </Button>
+    </>
   );
 };
