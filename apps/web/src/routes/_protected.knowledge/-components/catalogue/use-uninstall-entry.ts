@@ -84,7 +84,7 @@ export const useUninstallEntry = (
         "use-uninstall-entry.invalidate",
       );
       stellaToast.add({
-        title: t("common.remove"),
+        title: t("common.removalComplete"),
         type: "success",
       });
     },

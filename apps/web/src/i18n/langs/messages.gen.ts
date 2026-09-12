@@ -1469,6 +1469,7 @@ type Messages = {
     "refresh": "Refresh";
     "regenerate": "Regenerate";
     "reload": "Reload";
+    "removalComplete": "Removal complete";
     "remove": "Remove";
     "removeMember": "Remove member";
     "rename": "Rename";
