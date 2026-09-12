@@ -1,8 +1,9 @@
 import { panic } from "better-result";
-import { CheckIcon, ClockIcon } from "lucide-react";
+import { CheckIcon, ClockIcon, ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { GuideTourPreview } from "@/features/guides/guide-tour-preview";
 import {
@@ -12,6 +13,9 @@ import {
   type GuideTourStatus,
 } from "@/features/guides/guide-types";
 import type { OnboardingProgress } from "@/features/guides/use-onboarding-progress";
+import { useFormatter } from "@/i18n/formatting-context";
+import { COMMUNITY_FORUM_URL } from "@/lib/consts";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 type GuideChecklistProps = {
   tours: readonly GuideTour[];
@@ -20,6 +24,40 @@ type GuideChecklistProps = {
   onStart: (tour: GuideTour) => void;
 };
 
+export const GuideChecklistSkeleton = ({
+  tourCount,
+}: {
+  tourCount: number;
+}) => (
+  <div aria-busy="true" className="flex flex-col gap-4">
+    <div aria-hidden="true" className="flex flex-col gap-2">
+      <Skeleton className="h-5 w-20" />
+      <Skeleton className="h-1.5 w-full rounded-full" />
+    </div>
+    <div aria-hidden="true" className="flex flex-col gap-2">
+      {Array.from({ length: tourCount }, (_, index) => (
+        <div
+          className="border-border flex gap-3 rounded-lg border p-3"
+          key={`guide-checklist-skeleton-${index}`}
+        >
+          <div className="flex shrink-0 flex-col items-center gap-1.5">
+            <Skeleton className="h-16 w-20 rounded-md" />
+            <Skeleton className="h-3 w-12" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-3 w-full" />
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-8 w-14" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 export const GuideChecklist = ({
   tours,
   progress,
@@ -27,16 +65,45 @@ export const GuideChecklist = ({
   onStart,
 }: GuideChecklistProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const { resolvedCount, totalCount } = progress;
   const fraction = totalCount > 0 ? resolvedCount / totalCount : 0;
+
+  if (tours.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-3" role="status">
+        <p className="text-muted-foreground text-sm">
+          {t("guides.unavailable")}
+        </p>
+        <p className="text-muted-foreground text-sm">
+          {t("guides.community.body")}
+        </p>
+        <Button
+          render={
+            <a
+              aria-label={t("guides.community.linkLabel")}
+              href={sanitizeHref(COMMUNITY_FORUM_URL)}
+              rel="noreferrer noopener"
+              target="_blank"
+            />
+          }
+          size="sm"
+          variant="secondary"
+        >
+          {t("guides.community.linkLabel")}
+          <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-sm">
           {t("guides.checklist.progress", {
-            completed: String(resolvedCount),
-            total: String(totalCount),
+            completed: format.number(resolvedCount),
+            total: format.number(totalCount),
           })}
         </p>
         <div
@@ -44,7 +111,7 @@ export const GuideChecklist = ({
           className="bg-border h-1.5 w-full overflow-hidden rounded-full"
         >
           <div
-            className="bg-foreground h-full rounded-full transition-[width]"
+            className="bg-foreground h-full rounded-full"
             style={{ width: `${Math.round(fraction * 100)}%` }}
           />
         </div>
@@ -109,6 +176,7 @@ const GuideTourCard = ({
   onSkip,
 }: GuideTourCardProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   const cta = (() => {
     switch (status) {
@@ -160,7 +228,7 @@ const GuideTourCard = ({
         <GuideTourPreview tourId={tour.id} />
         <span className="text-muted-foreground flex items-center gap-1 text-xs">
           <ClockIcon className="size-3" />
-          {t("guides.minutes", { count: String(tour.estMinutes) })}
+          {t("guides.minutes", { count: format.number(tour.estMinutes) })}
         </span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">

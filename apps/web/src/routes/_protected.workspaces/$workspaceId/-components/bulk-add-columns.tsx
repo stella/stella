@@ -54,6 +54,8 @@ import {
   buildDocTypeGate,
   resolveDocumentTypeClassifier,
 } from "@/components/workspaces/table/group-columns";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -230,6 +232,7 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
             title={t("workspaces.properties.newColumn")}
             type="button"
             variant="ghost"
+            {...guideAnchor(GUIDE_ANCHORS.tabularReviewAddColumn)}
           />
         }
       >
@@ -751,16 +754,20 @@ const DraftCard = ({
         />
       )}
 
-      <TypeChipsRow
-        chipDefs={chipDefs}
-        contentType={draft.contentType}
-        manualChip={manualChip}
-        onContentTypeChange={(next) =>
-          onChange({ contentType: next, tool: "ai-model" })
-        }
-        showSeparator
-        typeChanged={false}
-      />
+      <div
+        {...guideAnchor(GUIDE_ANCHORS.tabularReviewAnswerType, draft.id === 0)}
+      >
+        <TypeChipsRow
+          chipDefs={chipDefs}
+          contentType={draft.contentType}
+          manualChip={manualChip}
+          onContentTypeChange={(next) =>
+            onChange({ contentType: next, tool: "ai-model" })
+          }
+          showSeparator
+          typeChanged={false}
+        />
+      </div>
     </div>
   );
 };

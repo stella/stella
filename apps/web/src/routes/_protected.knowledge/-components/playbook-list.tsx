@@ -11,6 +11,8 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import type {
@@ -65,7 +67,11 @@ export const PlaybookList = ({
             </p>
           </div>
           {canCreate && (
-            <Button className="h-11 shrink-0" onClick={onNewPlaybook}>
+            <Button
+              className="h-11 shrink-0"
+              onClick={onNewPlaybook}
+              {...guideAnchor(GUIDE_ANCHORS.playbooksCreate)}
+            >
               <PlusIcon />
               {t("knowledge.playbooks.createPlaybook")}
             </Button>
