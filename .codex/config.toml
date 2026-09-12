@@ -1,6 +1,7 @@
 [mcp_servers.stella-docs]
-args = ["run", ".claude/mcp/stella-docs.ts"]
-command = "bun"
+# Codex launches MCP servers with the active thread cwd, which may be apps/*.
+args = ["-c", "repo=$(git rev-parse --show-toplevel) || exit 1; cd \"$repo\" || exit 1; exec bun run .claude/mcp/stella-docs.ts"]
+command = "sh"
 
 [shell_environment_policy]
 inherit = "core"
