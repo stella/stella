@@ -811,6 +811,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_LATEST_TAG",
   "STELLA_TEST_OMIT_ASSET",
   "TURBO_SCM_BASE",
+  "WXT_STELLA_ORIGINS",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([

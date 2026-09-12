@@ -1,0 +1,57 @@
+{
+  "accessOff": {
+    "message": "Piekļuve vietnēm ir izslēgta. Piešķiriet to vienreiz, lai stella varētu izmantot vietnes, kurās esat pieteicies."
+  },
+  "accessReady": {
+    "message": "Gatavs. stella var izmantot atsevišķu cilni, kamēr jūsu pieteikšanās paliek aktīva."
+  },
+  "accessUpdateFailed": {
+    "message": "Chrome neizdevās mainīt piekļuvi vietnēm."
+  },
+  "adoptTab": {
+    "message": "Izmantot šo cilni ar stella"
+  },
+  "adoptUnsupported": {
+    "message": "Ar stella var izmantot tikai publiskas HTTPS lapas."
+  },
+  "adoptedTab": {
+    "message": "stella tagad var lasīt $ORIGIN$ šajā cilnē. Jautājiet par to tērzēšanā.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Pārbauda piekļuvi vietnēm…"
+  },
+  "connectTab": {
+    "message": "Savienot pašreizējo stella cilni"
+  },
+  "controllerReady": {
+    "message": "Savienots ar $ORIGIN$. Katra darbība joprojām jāapstiprina stellā.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "disconnectTab": {
+    "message": "Atvienot cilni"
+  },
+  "extensionDescription": {
+    "message": "Pēc atļaujas saņemšanas ļauj stellai vadīt atsevišķu Chrome cilni."
+  },
+  "extensionName": {
+    "message": "stella pārlūks"
+  },
+  "grantAccess": {
+    "message": "Atļaut visas vietnes"
+  },
+  "revokeAccess": {
+    "message": "Noņemt piekļuvi vietnēm"
+  },
+  "unsupportedTab": {
+    "message": "Atveriet stella lietotnes cilni un mēģiniet vēlreiz."
+  }
+}

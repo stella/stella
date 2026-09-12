@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_TURN_INTENT,
   resourceRef,
   RESOURCE_TYPE,
@@ -1039,6 +1040,12 @@ const prepareValidatedIncomingMessage = async ({
       // Validation must admit persisted calls from either surface; the file
       // overlay's operation set is the superset.
       docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
+      // Validation admits persisted browser calls from any client; the
+      // streaming set below registers the tool only when this request's
+      // client reports a live extension.
+      browserClient: {
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      },
       editApplyMode,
       docxEditRepresentation,
       includeAllDocxEditToolsForValidation: true,
@@ -1912,6 +1919,7 @@ export const createSendMessage = (
             body.activeTemplate !== undefined,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
+          browserClient: body.browserClient,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,

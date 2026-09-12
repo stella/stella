@@ -1,5 +1,6 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import type { BrowserClientCapability } from "./browser-control";
 import type { SafeId } from "./safe-id";
 
 /**
@@ -137,6 +138,7 @@ type ChatSendRequestBase = {
     fileName: string;
     templateId: SafeId<"template">;
   };
+  browserClient?: BrowserClientCapability;
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";

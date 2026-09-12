@@ -225,6 +225,10 @@ export const DOC_SOURCES = {
     ],
     url: "https://streamdown.dev/llms.txt",
   },
+  WXT: {
+    dependencies: ["wxt"],
+    url: "https://wxt.dev/llms.txt",
+  },
 } as const satisfies Record<string, DocSource>;
 
 const NO_LLMS_TXT_EXPLANATION =
@@ -275,6 +279,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@stricli/core",
   "@t3-oss/env-core",
   "@tailwindcss/vite",
+  "@types/chrome",
   "@types/hast",
   "@types/node",
   "@types/nodemailer",
@@ -342,6 +347,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "use-debounce",
   "use-intl",
   "uuid",
+  "web-ext",
   "yjs",
 ]
   .map(noLlmsTxt)
