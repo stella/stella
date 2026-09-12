@@ -85,7 +85,7 @@ export const facetSectionView = ({
  * order here is the rail's order, so the order the facets happen to arrive in
  * cannot reshuffle the sections between two searches.
  */
-export const COURT_TIER_ORDER = [
+const COURT_TIER_ORDER = [
   "constitutional",
   "supreme",
   "regional",

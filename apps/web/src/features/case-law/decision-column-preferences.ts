@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { DEFAULT_HIDDEN_DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readStoredJson } from "@/lib/stored-json";
 
@@ -34,7 +35,7 @@ const EMPTY: Preferences = {};
  * throw even on a storage that exists (a locked-down profile revokes it), so
  * the access is a `Result` and the reader falls back to the defaults.
  */
-export const readDecisionColumnPreferences = (
+const readDecisionColumnPreferences = (
   storage: Storage,
 ): Result<Preferences, ClientOperationError> =>
   Result.try({
@@ -51,7 +52,7 @@ export const readDecisionColumnPreferences = (
  * Persistence is best effort: a reader whose storage is full or blocked still
  * gets the choice for this visit, from the state the hook keeps.
  */
-export const writeDecisionColumnPreferences = (
+const writeDecisionColumnPreferences = (
   storage: Storage,
   preferences: Preferences,
 ): Result<void, ClientOperationError> =>
@@ -69,6 +70,7 @@ export const writeDecisionColumnPreferences = (
 
 /** The columns this browser hides in a jurisdiction, and how to change them. */
 export const useDecisionColumnPreferences = (country: string) => {
+  const analytics = useAnalytics();
   const storage = useLocalStorage();
   // Null until storage has been read, which is after hydration: the server and
   // the first client render both see the defaults, so the markup agrees.
@@ -84,8 +86,15 @@ export const useDecisionColumnPreferences = (country: string) => {
     setHiddenColumnIds: (hiddenColumnIds: readonly string[]) => {
       const next = { ...preferences, [country]: [...hiddenColumnIds] };
       setPreferences(next);
-      if (storage !== null) {
-        writeDecisionColumnPreferences(storage, next);
+      if (storage === null) {
+        return;
+      }
+      // Best effort for the reader, never silent for us: the choice is already
+      // in state, so a storage that refuses the write costs the next visit and
+      // nothing else — but the refusal is reported rather than dropped.
+      const written = writeDecisionColumnPreferences(storage, next);
+      if (Result.isError(written)) {
+        analytics.captureError(written.error);
       }
     },
   };

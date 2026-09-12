@@ -34,10 +34,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
 /** What the URL selects, one value per facet. */
-export type DecisionFacetSelection = Record<
-  CaseLawFilterKey,
-  string | undefined
->;
+type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
 
 type DecisionFacetRailProps = {
   facets: DecisionRailFacets;

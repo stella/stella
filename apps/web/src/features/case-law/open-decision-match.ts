@@ -26,8 +26,6 @@ import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 /** What a case-law URL says about the corpus slice the reader is looking at. */
 export type CaseLawSearchScope = CaseLawIndexSearch;
 
-export { validDecisionYear } from "@/features/case-law/case-law-index-search.logic";
-
 /**
  * The corpus country the pill names. A URL without a country is scoped by
  * `beforeLoad` before public search calls this helper.

@@ -68,8 +68,7 @@ export const DECISION_COLUMN_WIDTHS = {
   language: "fit",
 } as const satisfies Record<DecisionColumnId, "fit" | "prose">;
 
-export type DecisionColumnWidth =
-  (typeof DECISION_COLUMN_WIDTHS)[DecisionColumnId];
+type DecisionColumnWidth = (typeof DECISION_COLUMN_WIDTHS)[DecisionColumnId];
 
 /**
  * The classes that carry out that decision, as an explicit map rather than a
@@ -82,7 +81,7 @@ export type DecisionColumnWidth =
  * turn it back off: without that the clamp has nothing to clamp and the row
  * grows to the width of the whole headnote.
  */
-export const DECISION_COLUMN_WIDTH_CLASS_NAMES = {
+const DECISION_COLUMN_WIDTH_CLASS_NAMES = {
   fit: { head: "w-px", cell: "whitespace-nowrap" },
   prose: {
     head: "w-full",
