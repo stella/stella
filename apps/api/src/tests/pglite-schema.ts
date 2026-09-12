@@ -32,7 +32,7 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
 );
 const AI_MEMORY_ACTIVE_USER_GUARD_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20260904100000_ai_memory_active_user_guard",
+  "20260912130200_ai_memory_active_user_guard",
   "migration.sql",
 );
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
