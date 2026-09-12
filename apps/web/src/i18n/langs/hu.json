@@ -4310,6 +4310,7 @@
     "configureFields": "Mezők beállítása",
     "confirmDelete": "A sablon véglegesen törlődik.",
     "copyCompanySpecification": "Cégadatok másolása",
+    "copyRegistryResult": "Nyilvántartási eredmény másolása",
     "createDocument": "Dokumentum létrehozása",
     "createDocumentAnyway": "Létrehozás így is",
     "createFromStyles": "Kezdés dokumentumstílusokkal",

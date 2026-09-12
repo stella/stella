@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Pridať šablónu špecifikácie spoločnosti",
+    "registryAddRegistryFormat": "Pridať šablónu výsledku z registra",
     "registrySearchHint": "Začnite písať a prehľadajte tento register.",
     "registrySelect": "Vybrať register",
     "registryErrorDisconnect": "Účet registra sa nepodarilo odpojiť.",

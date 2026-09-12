@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Vorlage für Unternehmensangaben hinzufügen",
+    "registryAddRegistryFormat": "Vorlage für Registerergebnis hinzufügen",
     "registrySearchHint": "Tippen Sie, um dieses Register zu durchsuchen.",
     "registrySelect": "Register auswählen",
     "registryErrorDisconnect": "Das Registerkonto konnte nicht getrennt werden.",

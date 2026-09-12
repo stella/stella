@@ -29,6 +29,7 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import {
+  isRegistryReseedableFormat,
   REGISTRY_DEFAULT_FORMAT,
   REGISTRY_FIELD_EXAMPLES,
   REGISTRY_RETURN_FIELDS,
@@ -401,7 +402,7 @@ const CompanyLookupConfig = ({
     const firstTemplate = first?.template.trim() ?? "";
     const isUntouched =
       firstTemplate === "" ||
-      firstTemplate === REGISTRY_DEFAULT_FORMAT[registry];
+      isRegistryReseedableFormat(registry, firstTemplate);
     if (first === undefined || !isUntouched) {
       setLookup({ registry: next });
       return;

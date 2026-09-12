@@ -4310,6 +4310,7 @@
     "configureFields": "Seadista väljad",
     "confirmDelete": "See kustutab malli jäädavalt.",
     "copyCompanySpecification": "Kopeeri ettevõtte andmed",
+    "copyRegistryResult": "Kopeeri registritulemus",
     "createDocument": "Loo dokument",
     "createDocumentAnyway": "Loo ikkagi",
     "createFromStyles": "Alusta dokumendi laadidega",

@@ -4310,6 +4310,7 @@
     "configureFields": "Felder konfigurieren",
     "confirmDelete": "Die Vorlage wird dauerhaft gelöscht.",
     "copyCompanySpecification": "Gesellschaftsangaben kopieren",
+    "copyRegistryResult": "Registerergebnis kopieren",
     "createDocument": "Dokument erstellen",
     "createDocumentAnyway": "Trotzdem erstellen",
     "createFromStyles": "Mit Dokumentformatvorlagen beginnen",

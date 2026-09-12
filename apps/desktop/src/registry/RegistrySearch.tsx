@@ -102,6 +102,10 @@ export const RegistrySearch = ({
   const connectionError = t("registryErrorState");
   const searchError = t("registryErrorSearch");
   const connected = connection?.status === "connected";
+  const formatType =
+    connection?.status === "connected"
+      ? connection.registries.find(({ id }) => id === registryId)?.formatType
+      : undefined;
   const trimmedQuery = query.trim();
   const scope = JSON.stringify([
     source,
@@ -606,7 +610,11 @@ export const RegistrySearch = ({
                       onClick={() => openCompanyFormat(card)}
                     >
                       <PlusIcon aria-hidden="true" />
-                      {t("registryAddCompanyFormat")}
+                      {t(
+                        formatType === "registry-reference"
+                          ? "registryAddRegistryFormat"
+                          : "registryAddCompanyFormat",
+                      )}
                     </MenuItem>
                   </MenuPopup>
                 </Menu>

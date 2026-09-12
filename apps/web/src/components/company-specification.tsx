@@ -7,6 +7,11 @@ import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
+  parseRegistryFormatMarkdown,
+  stripRegistryFormatMarkdown,
+} from "@stll/business-registries/default-formats";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
@@ -150,7 +155,9 @@ const CompanySpecificationEditor = ({
     if (data === undefined) {
       return;
     }
-    const copied = await copyToClipboard(data.rendered);
+    const copied = await copyToClipboard(
+      stripRegistryFormatMarkdown(data.rendered),
+    );
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
       stellaToast.error(t("errors.actionFailed"));
@@ -229,7 +236,17 @@ const CompanySpecificationEditor = ({
         ) : null}
         {data ? (
           <p className="text-sm leading-6 whitespace-pre-wrap" dir="auto">
-            {data.rendered}
+            {parseRegistryFormatMarkdown(data.rendered).map(
+              ({ text: runText, style, start }) => {
+                if (style === "bold") {
+                  return <strong key={start}>{runText}</strong>;
+                }
+                if (style === "italic") {
+                  return <em key={start}>{runText}</em>;
+                }
+                return <span key={start}>{runText}</span>;
+              },
+            )}
           </p>
         ) : null}
         <div className="mt-1 flex items-center justify-end gap-1">
@@ -269,7 +286,12 @@ const CompanySpecificationEditor = ({
         type="button"
       >
         <CopyIcon />
-        {t("templates.copyCompanySpecification")}
+        {t(
+          BUSINESS_REGISTRY_FORMAT_CAPABILITIES[registry].type ===
+            "company-specification"
+            ? "templates.copyCompanySpecification"
+            : "templates.copyRegistryResult",
+        )}
       </Button>
     </section>
   );

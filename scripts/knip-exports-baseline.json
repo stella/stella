@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 767,
+    "count": 764,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -25,7 +25,6 @@
       "apps/api/src/handlers/case-law/decisions/facets.ts": 1,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
-      "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": 2,
       "apps/api/src/handlers/case-law/document-ast.ts": 24,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-throttle.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
@@ -143,7 +142,6 @@
       "apps/api/src/lib/case-law/document-ast.ts": 21,
       "apps/api/src/lib/case-law/language-alternates.ts": 1,
       "apps/api/src/lib/case-law/maintenance-lane.ts": 4,
-      "apps/api/src/lib/case-law/non-redistributable-sources.ts": 1,
       "apps/api/src/lib/case-law/research-answers.ts": 4,
       "apps/api/src/lib/case-law/research-saved-query.ts": 1,
       "apps/api/src/lib/chat/chat-tool-types.ts": 1,

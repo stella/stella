@@ -202,6 +202,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Add a company specification template",
+    "registryAddRegistryFormat": "Add a registry result template",
     "registrySearchHint": "Type to search this registry.",
     "registrySelect": "Select registry",
     "registryErrorDisconnect": "Registry account could not be disconnected.",

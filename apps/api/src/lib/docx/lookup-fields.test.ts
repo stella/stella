@@ -108,21 +108,136 @@ describe("isPlausibleLookupValue", () => {
 });
 
 describe("renderLookupHit", () => {
-  test("renders name + text address", () => {
+  test("renders a registry-specific identification reference", () => {
     expect(renderLookupHit(KRS_HIT)).toBe(
-      "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań",
+      "**Żabka Polska sp. z o.o.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, KRS: 0000123456",
     );
   });
 
-  test("falls back to the city, then to the name alone", () => {
+  test("omits missing registry particulars without dangling labels", () => {
     expect(
       renderLookupHit({
         ...KRS_HIT,
         address: { ...KRS_ADDRESS, textAddress: null },
       }),
-    ).toBe("Żabka Polska sp. z o.o., Poznań");
+    ).toBe("**Żabka Polska sp. z o.o.**, adres: Poznań, KRS: 0000123456");
     expect(renderLookupHit({ ...KRS_HIT, address: null })).toBe(
-      "Żabka Polska sp. z o.o.",
+      "**Żabka Polska sp. z o.o.**, KRS: 0000123456",
+    );
+  });
+
+  test("renders Companies House particulars in UK contract style", () => {
+    const hit = {
+      registry: "companies-house",
+      id: "01003142",
+      name: "ROLLS-ROYCE PLC",
+      legalForm: "plc",
+      address: {
+        line1: "Kings Place, 90 York Way",
+        line2: null,
+        postalCode: "N1 9FX",
+        city: "London",
+        region: null,
+        country: "United Kingdom",
+        textAddress: "Kings Place, 90 York Way, London, United Kingdom, N1 9FX",
+      },
+      registryUrl:
+        "https://find-and-update.company-information.service.gov.uk/company/01003142",
+      details: {
+        registry: "companies-house",
+        company: {
+          companyNumber: "01003142",
+          name: "ROLLS-ROYCE PLC",
+          status: { type: "active" },
+          statusDetail: null,
+          type: "plc",
+          subtype: null,
+          jurisdiction: "england-wales",
+          dateOfCreation: "1971-02-23",
+          dateOfCessation: null,
+          registeredOfficeAddress: null,
+          serviceAddress: null,
+          sicCodes: [],
+          accounts: null,
+          confirmationStatement: null,
+          hasCharges: null,
+          hasInsolvencyHistory: null,
+          hasBeenLiquidated: null,
+          previousNames: [],
+          registryUrl:
+            "https://find-and-update.company-information.service.gov.uk/company/01003142",
+        },
+      },
+    } satisfies BusinessRegistryHit;
+
+    expect(renderLookupOutput(null, hit)).toBe(
+      "**ROLLS-ROYCE PLC**, a public limited company registered in England and Wales under company number 01003142, whose registered office is at Kings Place, 90 York Way, London, United Kingdom, N1 9FX",
+    );
+  });
+
+  test("keeps a French legal entity's SIREN distinct from a branch SIRET", () => {
+    const headOffice = {
+      siret: "55208131700018",
+      isHeadOffice: true,
+      address: {
+        textAddress: "22 avenue de Wagram, 75008 Paris",
+        street: "22 avenue de Wagram",
+        postalCode: "75008",
+        city: "Paris",
+        country: "France",
+      },
+      activityCode: null,
+      status: { type: "open" },
+      createdAt: null,
+      closedAt: null,
+    } as const;
+    const branch = {
+      ...headOffice,
+      siret: "55208131701234",
+      isHeadOffice: false,
+      address: {
+        ...headOffice.address,
+        textAddress: "1 rue de Lyon, 69000 Lyon",
+        street: "1 rue de Lyon",
+        postalCode: "69000",
+        city: "Lyon",
+      },
+    } as const;
+    const hit = {
+      registry: "recherche-entreprises",
+      id: branch.siret,
+      name: "EXEMPLE SA",
+      legalForm: "5599",
+      address: {
+        line1: branch.address.street,
+        line2: null,
+        postalCode: branch.address.postalCode,
+        city: branch.address.city,
+        region: null,
+        country: branch.address.country,
+        textAddress: branch.address.textAddress,
+      },
+      registryUrl: "https://example.invalid/fr/552081317",
+      details: {
+        registry: "recherche-entreprises",
+        company: {
+          siren: "552081317",
+          name: "EXEMPLE SA",
+          legalFormCode: "5599",
+          shortName: null,
+          headOffice,
+          matchedEstablishment: branch,
+          status: { type: "active" },
+          registeredAt: null,
+          ceasedAt: null,
+          directors: [],
+          registryUrl: "https://example.invalid/fr/552081317",
+        },
+      },
+    } satisfies BusinessRegistryHit;
+
+    expect(renderLookupOutput(null, hit)).toBe(
+      "**EXEMPLE SA**, SIREN 552081317, siège social : 22 avenue de Wagram, 75008 Paris, SIRET 55208131701234",
     );
   });
 });
@@ -306,10 +421,45 @@ describe("renderLookupOutput", () => {
     ).toBe("**Żabka Polska sp. z o.o.**, seat in *Poznań*");
   });
 
-  test("falls back to the deterministic name + seat without a template", () => {
+  test("uses the KRS registered seat instead of the postal-address city", () => {
+    const hit = {
+      ...KRS_HIT,
+      details: {
+        registry: "krs",
+        entity: {
+          krsNumber: KRS_HIT.id,
+          register: "RejP",
+          name: KRS_HIT.name,
+          legalForm: KRS_HIT.legalForm,
+          identifiers: { nip: null, regon: null },
+          shareCapital: null,
+          address: null,
+          registeredSeat: {
+            country: "POLSKA",
+            voivodeship: "MAZOWIECKIE",
+            county: "WARSZAWA",
+            commune: "WARSZAWA",
+            locality: "Warszawa",
+          },
+          email: null,
+          website: null,
+          status: { type: "active" },
+          registeredAt: null,
+          lastEntryAt: null,
+          registryUrl: KRS_HIT.registryUrl,
+        },
+      },
+    } satisfies BusinessRegistryHit;
+
+    expect(renderLookupOutput("seat in [seat]", hit)).toBe("seat in Warszawa");
+  });
+
+  test("uses the built-in format for null and the generic fallback for blank custom formats", () => {
     const fallback =
       "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań";
-    expect(renderLookupOutput(null, KRS_HIT)).toBe(fallback);
+    expect(renderLookupOutput(null, KRS_HIT)).toBe(
+      "**Żabka Polska sp. z o.o.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, KRS: 0000123456",
+    );
     expect(renderLookupOutput("  ", KRS_HIT)).toBe(fallback);
     // A template of only unknown tokens renders empty → same fallback.
     expect(renderLookupOutput("[no such token]", KRS_HIT)).toBe(fallback);

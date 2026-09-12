@@ -11,8 +11,16 @@ import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
 const REGISTRIES = [
-  { id: "ares", name: "Czech commercial registry" },
-  { id: "companies-house", name: "Companies House" },
+  {
+    id: "ares",
+    name: "Czech commercial registry",
+    formatType: "company-specification",
+  },
+  {
+    id: "companies-house",
+    name: "Companies House",
+    formatType: "company-specification",
+  },
 ] as const satisfies DesktopRegistryConfig["registries"];
 const SEARCH_RESPONSE = {
   defaultFormatId: "11111111-1111-4111-8111-111111111111",
@@ -725,7 +733,12 @@ test("applies saved formatting and copies only the selected registry output", as
 test("opens the selected company's specification formats from the format menu", async ({
   page,
 }) => {
-  await openClipboard(page);
+  await openClipboard(page, {
+    status: "connected",
+    accountLabel: "https://api.example.test",
+    defaultRegistryId: "ares",
+    registries: [{ id: "ares", name: "Czech commercial registry" }],
+  });
   await activateRegistry(page);
   await page.getByRole("button", { name: "Format", exact: true }).click();
   await page
@@ -740,6 +753,38 @@ test("opens the selected company's specification formats from the format menu", 
     .toContainEqual({
       command: "registry_open_company_format",
       args: { id: "company-1", registry: "ares" },
+    });
+});
+
+test("labels non-company directory templates as registry results", async ({
+  page,
+}) => {
+  await openClipboard(page, {
+    status: "connected",
+    accountLabel: "https://api.example.test",
+    defaultRegistryId: "denue",
+    registries: [
+      {
+        id: "denue",
+        name: "Mexico · INEGI DENUE",
+        formatType: "registry-reference",
+      },
+    ],
+  });
+  await activateRegistry(page);
+  await page.getByRole("button", { name: "Format", exact: true }).click();
+  await page
+    .getByRole("menuitem", {
+      name: "Add a registry result template",
+      exact: true,
+    })
+    .click();
+
+  await expect
+    .poll(async () => await readInvocations(page))
+    .toContainEqual({
+      command: "registry_open_company_format",
+      args: { id: "company-1", registry: "denue" },
     });
 });
 

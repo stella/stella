@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Añadir una plantilla de datos de empresa",
+    "registryAddRegistryFormat": "Añadir una plantilla de resultado del registro",
     "registrySearchHint": "Escribe para buscar en este registro.",
     "registrySelect": "Seleccionar registro",
     "registryErrorDisconnect": "No se pudo desconectar la cuenta del registro.",

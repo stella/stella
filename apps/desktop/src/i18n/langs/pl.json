@@ -200,6 +200,7 @@
     "registryEmpty": "No registry results.",
     "registryFormat": "Format",
     "registryAddCompanyFormat": "Dodaj szablon danych spółki",
+    "registryAddRegistryFormat": "Dodaj szablon wyniku z rejestru",
     "registrySearchHint": "Zacznij pisać, aby przeszukać ten rejestr.",
     "registrySelect": "Wybierz rejestr",
     "registryErrorDisconnect": "Nie udało się odłączyć konta rejestru.",

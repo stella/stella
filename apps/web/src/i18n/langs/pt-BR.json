@@ -4310,6 +4310,7 @@
     "configureFields": "Configurar campos",
     "confirmDelete": "Isso excluirá permanentemente o modelo.",
     "copyCompanySpecification": "Copiar a identificação da empresa",
+    "copyRegistryResult": "Copiar resultado do registro",
     "createDocument": "Criar documento",
     "createDocumentAnyway": "Criar mesmo assim",
     "createFromStyles": "Começar com estilos do documento",
