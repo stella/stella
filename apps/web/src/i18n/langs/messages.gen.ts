@@ -1469,9 +1469,9 @@ type Messages = {
     "refresh": "Refresh";
     "regenerate": "Regenerate";
     "reload": "Reload";
+    "removalComplete": "Removal complete";
     "remove": "Remove";
     "removeMember": "Remove member";
-    "removed": "Removed";
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
