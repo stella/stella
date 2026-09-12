@@ -179,9 +179,10 @@ import { toSafeId } from "@/lib/safe-id";
 
 type ActiveFile = {
   docxEditSnapshot?:
-    | (Pick<FolioAIEditSnapshot, "blocks"> & {
+    | {
+        blocks: ReturnType<typeof withBlockTextHashes>;
         canApplyEdits?: boolean | undefined;
-      })
+      }
     | undefined;
   entityId: string;
   editable?: boolean | undefined;
