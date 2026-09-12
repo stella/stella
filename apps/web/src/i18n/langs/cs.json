@@ -5323,15 +5323,14 @@
       "untitledColumn": "Název sloupce, např. Datum účinnosti"
     },
     "reference": "Referenční číslo",
-    "referenceChangeConfirmDescription": "{count, plural, one {# verze dokumentu nese} few {# verze dokumentů nesou} other {# verzí dokumentů nese}} referenční číslo <bdi>{oldReference}</bdi>. Vytištěné kopie si ho ponechají a stále se otevřou podle svého ověřovacího kódu. Nové verze se budou číslovat pod <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# verze dokumentu nese} few {# verze dokumentů nesou} other {# verzí dokumentů nese}} referenční číslo <bdi>{oldReference}</bdi>. Vytištěné kopie si ho ponechají a stále se otevřou podle svého ověřovacího kódu. Nové verze se budou číslovat pod <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> zůstává vyhrazeno tomuto spisu a nelze ho přidělit jinému.",
     "referenceChangeConfirmTitle": "Změnit referenční číslo spisu?",
     "referenceConventionHint": "Preferovaný formát: {example}",
     "referenceFormatWarning": "Neodpovídá preferovanému formátu.",
-    "referenceNumberingContinuesDescription": "Číslování dokumentů pokračuje od {sequence, number}.",
-    "referenceNumberingContinuesTitle": "Referenční číslo <bdi>{reference}</bdi> už bylo použito",
     "referenceNumberingEmptyHint": "Zadejte referenční číslo a dokumenty v tomto spisu se začnou číslovat.",
     "referenceNumberingHint": "Dokumenty v tomto spisu se číslují <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> a tak dále; každá verze přidává <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "např. 2024/001",
+    "referenceRetired": "Pod číslem {reference} jsou dokumenty vedeny v jiném spisu, proto ho nelze použít znovu.",
     "referenceTaken": "Toto referenční číslo je již použito",
     "sections": {
       "parties": "Strany"

@@ -5323,15 +5323,14 @@
       "untitledColumn": "Nazwa kolumny, np. Data wejścia w życie"
     },
     "reference": "Numer referencyjny",
-    "referenceChangeConfirmDescription": "{count, plural, one {# wersja dokumentu ma} few {# wersje dokumentów mają} many {# wersji dokumentów ma} other {# wersji dokumentów ma}} numer referencyjny <bdi>{oldReference}</bdi>. Wydrukowane kopie go zachowują i nadal otwierają się na podstawie swojego kodu weryfikacyjnego. Nowe wersje będą numerowane pod <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# wersja dokumentu ma} few {# wersje dokumentów mają} many {# wersji dokumentów ma} other {# wersji dokumentów ma}} numer referencyjny <bdi>{oldReference}</bdi>. Wydrukowane kopie go zachowują i nadal otwierają się na podstawie swojego kodu weryfikacyjnego. Nowe wersje będą numerowane pod <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> pozostaje zarezerwowany dla tej sprawy i nie może zostać przypisany do innej.",
     "referenceChangeConfirmTitle": "Zmienić numer referencyjny sprawy?",
     "referenceConventionHint": "Preferowany format: {example}",
     "referenceFormatWarning": "Nie pasuje do preferowanego formatu.",
-    "referenceNumberingContinuesDescription": "Numerowanie dokumentów jest kontynuowane od {sequence, number}.",
-    "referenceNumberingContinuesTitle": "Numer referencyjny <bdi>{reference}</bdi> był już używany",
     "referenceNumberingEmptyHint": "Podaj numer referencyjny, aby rozpocząć numerowanie dokumentów w tej sprawie.",
     "referenceNumberingHint": "Dokumenty w tej sprawie są numerowane <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> i tak dalej; każda wersja dodaje <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "np. 2024/001",
+    "referenceRetired": "Pod numerem {reference} zarejestrowano dokumenty w innej sprawie, więc nie można go użyć ponownie.",
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {
       "parties": "Strony"

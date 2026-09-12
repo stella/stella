@@ -5323,15 +5323,14 @@
       "untitledColumn": "Stulpelio pavadinimas, pvz., įsigaliojimo data"
     },
     "reference": "Nuorodos numeris",
-    "referenceChangeConfirmDescription": "{count, plural, one {# dokumento versija turi} few {# dokumentų versijos turi} many {# dokumentų versijos turi} other {# dokumentų versijų turi}} nuorodos numerį <bdi>{oldReference}</bdi>. Atspausdinti egzemplioriai jį išsaugo ir toliau atidaromi pagal savo patvirtinimo kodą. Naujos versijos bus numeruojamos pagal <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# dokumento versija turi} few {# dokumentų versijos turi} many {# dokumentų versijos turi} other {# dokumentų versijų turi}} nuorodos numerį <bdi>{oldReference}</bdi>. Atspausdinti egzemplioriai jį išsaugo ir toliau atidaromi pagal savo patvirtinimo kodą. Naujos versijos bus numeruojamos pagal <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> lieka rezervuotas šiai bylai ir negali būti suteiktas kitai.",
     "referenceChangeConfirmTitle": "Keisti bylos nuorodos numerį?",
     "referenceConventionHint": "Pageidaujamas formatas: {example}",
     "referenceFormatWarning": "Neatitinka pageidaujamo formato.",
-    "referenceNumberingContinuesDescription": "Dokumentų numeracija tęsiama nuo {sequence, number}.",
-    "referenceNumberingContinuesTitle": "Nuorodos numeris <bdi>{reference}</bdi> jau buvo naudotas",
     "referenceNumberingEmptyHint": "Nurodykite nuorodos numerį, kad šios bylos dokumentai būtų numeruojami.",
     "referenceNumberingHint": "Šios bylos dokumentai numeruojami <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> ir taip toliau; kiekviena versija prideda <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "pvz. 2024/001",
+    "referenceRetired": "Numeriu {reference} dokumentai registruoti kitoje byloje, todėl jo pakartotinai naudoti negalima.",
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {
       "parties": "Šalys"

@@ -145,6 +145,8 @@ export {
   VERIFICATION_CODE_ALPHABET,
   VERIFICATION_CODE_LENGTH,
   VERIFICATION_CODE_PATTERN,
+  MATTER_REFERENCE_RETIRED_CODE,
+  isDocumentReferenceQuery,
 } from "./document-reference";
 export type { DocumentReferenceMatch } from "./document-reference";
 export {

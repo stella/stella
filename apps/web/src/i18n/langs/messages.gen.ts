@@ -5326,15 +5326,14 @@ type Messages = {
       "untitledColumn": "Column name, e.g. Effective date";
     };
     "reference": "Reference number";
-    "referenceChangeConfirmDescription": "{count, plural, one {# document version carries} other {# document versions carry}} the reference <bdi>{oldReference}</bdi>. Printed copies keep it and still open from their verification code. New versions will be numbered under <bdi>{newReference}</bdi>.";
+    "referenceChangeConfirmDescription": "{count, plural, one {# document version carries} other {# document versions carry}} the reference <bdi>{oldReference}</bdi>. Printed copies keep it and still open from their verification code. New versions will be numbered under <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> stays reserved for this matter and cannot be given to another one.";
     "referenceChangeConfirmTitle": "Change the matter reference?";
     "referenceConventionHint": "Preferred format: {example}";
     "referenceFormatWarning": "Doesn't match the preferred format.";
-    "referenceNumberingContinuesDescription": "Document numbering continues from {sequence, number}.";
-    "referenceNumberingContinuesTitle": "Reference <bdi>{reference}</bdi> was used before";
     "referenceNumberingEmptyHint": "Set a reference number to start numbering the documents in this matter.";
     "referenceNumberingHint": "Documents in this matter are numbered <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi>, and so on; each version adds <bdi>.v1</bdi>, <bdi>.v2</bdi>.";
     "referencePlaceholder": "e.g. 2024/001";
+    "referenceRetired": "Documents were filed under {reference} in another matter, so it cannot be reused.";
     "referenceTaken": "This reference number is already in use";
     "sections": {
       "parties": "Parties";

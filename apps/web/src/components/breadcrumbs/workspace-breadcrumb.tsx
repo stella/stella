@@ -21,10 +21,10 @@ import {
 } from "@/components/workspaces/matter-color-picker";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
+import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
 import { useConfigStore } from "@/stores/config-store";
 
 const breadcrumbInputClassName =
@@ -44,6 +44,7 @@ export const WorkspaceBreadcrumb = ({
   const { data: workspace } = useQuery(workspaceOptions(workspaceId));
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
+  const referenceConflictMessage = useReferenceConflictMessage();
 
   const nameRename = useInlineRename({
     initial: workspace?.name ?? "",
@@ -65,8 +66,9 @@ export const WorkspaceBreadcrumb = ({
         },
         {
           onError: (error) => {
-            if (APIError.is(error) && error.status === 409) {
-              setError(t("workspaces.referenceTaken"));
+            const conflict = referenceConflictMessage(error, value);
+            if (conflict !== null) {
+              setError(conflict);
               refInputEl?.focus();
               return;
             }

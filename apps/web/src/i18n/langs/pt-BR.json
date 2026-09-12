@@ -5323,15 +5323,14 @@
       "untitledColumn": "Nome da coluna, ex.: Data de vigência"
     },
     "reference": "Número de referência",
-    "referenceChangeConfirmDescription": "{count, plural, one {# versão de documento tem} other {# versões de documentos têm}} a referência <bdi>{oldReference}</bdi>. As cópias impressas a mantêm e continuam abrindo pelo código de verificação. As novas versões serão numeradas em <bdi>{newReference}</bdi>.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# versão de documento tem} other {# versões de documentos têm}} a referência <bdi>{oldReference}</bdi>. As cópias impressas a mantêm e continuam abrindo pelo código de verificação. As novas versões serão numeradas em <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> permanece reservada para este caso e não pode ser atribuída a outro.",
     "referenceChangeConfirmTitle": "Alterar a referência do caso?",
     "referenceConventionHint": "Formato preferido: {example}",
     "referenceFormatWarning": "Não corresponde ao formato preferido.",
-    "referenceNumberingContinuesDescription": "A numeração de documentos continua a partir de {sequence, number}.",
-    "referenceNumberingContinuesTitle": "A referência <bdi>{reference}</bdi> já foi usada antes",
     "referenceNumberingEmptyHint": "Informe um número de referência para começar a numerar os documentos deste caso.",
     "referenceNumberingHint": "Os documentos deste caso são numerados <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> e assim por diante; cada versão acrescenta <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "por exemplo 2024/001",
+    "referenceRetired": "Já há documentos registrados com {reference} em outro caso, portanto ela não pode ser reutilizada.",
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
       "parties": "Partes"

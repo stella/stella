@@ -5323,15 +5323,14 @@
       "untitledColumn": "Veeru nimi, nt jõustumiskuupäev"
     },
     "reference": "Viitenumber",
-    "referenceChangeConfirmDescription": "{count, plural, one {# dokumendiversioon kannab} other {# dokumendiversiooni kannab}} viitenumbrit <bdi>{oldReference}</bdi>. Väljatrükitud koopiad säilitavad selle ja avanevad endiselt oma kontrollkoodi kaudu. Uued versioonid nummerdatakse viitenumbri <bdi>{newReference}</bdi> alla.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# dokumendiversioon kannab} other {# dokumendiversiooni kannab}} viitenumbrit <bdi>{oldReference}</bdi>. Väljatrükitud koopiad säilitavad selle ja avanevad endiselt oma kontrollkoodi kaudu. Uued versioonid nummerdatakse viitenumbri <bdi>{newReference}</bdi> alla. <bdi>{oldReference}</bdi> jääb sellele toimikule reserveerituks ja seda ei saa anda teisele.",
     "referenceChangeConfirmTitle": "Kas muuta toimiku viitenumbrit?",
     "referenceConventionHint": "Eelistatud vorming: {example}",
     "referenceFormatWarning": "Ei vasta eelistatud vormingule.",
-    "referenceNumberingContinuesDescription": "Dokumentide nummerdamine jätkub numbrist {sequence, number}.",
-    "referenceNumberingContinuesTitle": "Viitenumber <bdi>{reference}</bdi> on varem kasutusel olnud",
     "referenceNumberingEmptyHint": "Määrake viitenumber, et selle toimiku dokumente nummerdama hakata.",
     "referenceNumberingHint": "Selle toimiku dokumendid nummerdatakse <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> ja nii edasi; iga versioon lisab <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "nt 2024/001",
+    "referenceRetired": "Numbri {reference} all on dokumente teises toimikus, seega ei saa seda uuesti kasutada.",
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {
       "parties": "Osapooled"
