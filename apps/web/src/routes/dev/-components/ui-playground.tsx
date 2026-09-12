@@ -71,6 +71,7 @@ import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
 } from "@stll/ui/destructive-action-confirmation";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
   DialogClose,
@@ -796,6 +797,13 @@ export function UiPlayground() {
               </PlaygroundSection>
 
               <PlaygroundSection
+                description="Full typed-confirm dialog wrapper with title, description, and confirm action. Distinct from the DestructiveActionConfirmation field shown under Dialogs."
+                title="DestructiveConfirmDialog"
+              >
+                <DestructiveConfirmDialogPlayground />
+              </PlaygroundSection>
+
+              <PlaygroundSection
                 description="Production BYOK setup dialog as shown when AI requires an organization key."
                 title="BYOK dialog"
               >
@@ -1330,6 +1338,80 @@ export function UiPlayground() {
         </Tabs>
       </div>
     </main>
+  );
+}
+
+const MATTER_CONFIRMATION = "Supply agreement review";
+const CONTACT_CONFIRMATION = "Anna Novak";
+
+function DestructiveConfirmDialogPlayground() {
+  const t = useTranslations();
+  const [matterOpen, setMatterOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
+
+  const handleMatterConfirm = () => {
+    stellaToast.success(
+      t("workspaces.deletedItem", { name: MATTER_CONFIRMATION }),
+    );
+  };
+
+  const handleContactConfirm = async () => {
+    setContactLoading(true);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 900);
+    });
+    setContactLoading(false);
+    stellaToast.success(
+      t("workspaces.deletedItem", { name: CONTACT_CONFIRMATION }),
+    );
+  };
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          onClick={() => setMatterOpen(true)}
+          variant="destructive-outline"
+        >
+          {t("workspaces.deleteWorkspace")}
+        </Button>
+        <Button
+          onClick={() => setContactOpen(true)}
+          variant="destructive-outline"
+        >
+          {t("contacts.deleteContact")}
+        </Button>
+      </div>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmation={MATTER_CONFIRMATION}
+        confirmLabel={t("common.delete")}
+        description={t("workspaces.deleteWorkspaceConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        onConfirm={handleMatterConfirm}
+        onOpenChange={setMatterOpen}
+        open={matterOpen}
+        title={t("workspaces.deleteWorkspace")}
+      />
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmation={CONTACT_CONFIRMATION}
+        confirmLabel={t("common.delete")}
+        description={t("contacts.deleteContactConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        loading={contactLoading}
+        onConfirm={handleContactConfirm}
+        onOpenChange={(open) => {
+          setContactOpen(open);
+          if (!open) {
+            setContactLoading(false);
+          }
+        }}
+        open={contactOpen}
+        title={t("contacts.deleteContact")}
+      />
+    </>
   );
 }
 
