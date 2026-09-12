@@ -56,19 +56,11 @@ for app in apps/api apps/web; do
   fi
 done
 
-failures=()
+source "$script_dir/verify-step.sh"
 
-run_step() {
-  local name="$1"
-  shift
-  echo
-  echo "=== $name ==="
-  if "$@"; then
-    echo "--- $name: ok"
-  else
-    echo "--- $name: FAILED"
-    failures+=("$name")
-  fi
+run_ai_skill_checks() {
+  bash scripts/check-ai-skill-sync.sh . "$base_ref" || return $?
+  bun .ai/shared/scripts/validate-skills.ts .agents/skills
 }
 
 run_format() {
@@ -85,7 +77,7 @@ run_format() {
 run_rust_format() {
   if ! command -v cargo >/dev/null 2>&1; then
     echo "cargo not installed; skipping (CI still checks Rust formatting)"
-    return 0
+    return 77
   fi
   cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 }
@@ -262,7 +254,8 @@ run_test() {
 }
 
 run_step "AI skill sync wrapper self-test" bash scripts/check-ai-skill-sync.test.sh
-run_step "AI skill sync" bash scripts/check-ai-skill-sync.sh .
+run_step "Verification status self-test" bash scripts/verify-step.test.sh
+run_step "AI instructions" run_ai_skill_checks
 run_step "Workspace hygiene" bun run lint:ws
 run_step "Package scaffolder self-test" bun test scripts/new-package.test.ts
 run_step "Dependabot group guard" bun test scripts/dependabot-grouping.test.ts
@@ -344,10 +337,4 @@ run_step "Published package list self-test" bun test \
 run_step "Published package lists" bun run check:published-package-lists
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
 
-echo
-if (( ${#failures[@]} > 0 )); then
-  echo "verify: ${#failures[@]} check(s) failed:"
-  printf ' - %s\n' "${failures[@]}"
-  exit 1
-fi
-echo "verify: all checks passed"
+finish_verification

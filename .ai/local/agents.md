@@ -65,10 +65,12 @@ Database deployments use committed migrations via
 `bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.
 
 `bun run verify` runs the local package checks from `ci-checks` in
-`.github/workflows/ci.yml`; use it before pushing instead of hand-picking
-individual checks. Passing does not certify `ci-result`: release-image
-builds and smokes, service-backed checks, and separate build/e2e jobs run
-in CI. Confirm `ci-result` succeeds on the current PR head before merging.
+`.github/workflows/ci.yml`; use it before pushing code changes instead of
+hand-picking individual checks. For changes confined to documentation or skill
+instructions, run the owning generators and validators, formatting verification,
+and `git diff --check`; retain applicable pre-push gates. Passing does not certify
+`ci-result`: release-image builds and smokes, service-backed checks, and separate
+build/e2e jobs run in CI. Confirm `ci-result` succeeds on the current PR head before merging.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
 ## Merging
@@ -79,7 +81,8 @@ threads, and migration ordering against the live base in one invocation, then
 arms "merge when ready" pinned to that head. Main has a merge queue: GitHub
 builds main plus the pull request, runs CI on that commit, and merges only if
 it passes, so nothing needs a rebase to land and nothing lands past a red
-check. Run the bar as soon as the PR is ready; it is idempotent. Raw
+check. Run the bar once the PR is ready and the user has explicitly authorized
+merging in the conversation; do not ask again for existing authorization. Raw
 `gh pr merge` asserts nothing and reads an empty check list as green.
 
 ## Documentation Access

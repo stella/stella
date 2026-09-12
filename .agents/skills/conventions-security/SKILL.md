@@ -1,6 +1,6 @@
 ---
 name: conventions-security
-description: 'Apply when writing code that touches auth, data access, file handling, or external APIs. Stella handles privileged legal data (attorney-client privilege, litigation holds, personal data).'
+description: "Apply when writing code that touches auth, data access, file handling, or external APIs. Stella handles privileged legal data (attorney-client privilege, litigation holds, personal data)."
 ---
 
 # Security Conventions
@@ -97,12 +97,14 @@ values starting with formula characters execute in Excel/LibreOffice.
 
 ### Multi-entry-point validation
 
-When business logic is reachable from multiple entry points (HTTP
-routes, MCP tools, chat tools, cron jobs), validation must live in
-the business logic function itself or in a shared schema, not only
-in the HTTP route schema. The MCP/chat path will bypass Elysia
-`t.Object` schemas. Prefer Valibot `v.parse()` at the handler
-boundary so constraints are enforced regardless of caller.
+Validate untrusted inputs at each entry boundary using the owning shared schema.
+Generated MCP capabilities already validate the live endpoint's body, params,
+and query schemas in `apps/api/src/mcp/capability-tools.ts`; do not repeat that
+parsing inside the handler. Native MCP tools, chat tools, cron jobs, and other
+callers that bypass this gateway must enforce the same input contract before
+calling the operation. Keep business invariants and related-resource
+authorization in the owning operation: an ID's valid shape does not establish
+its ownership.
 
 ### Filename sanitization
 
