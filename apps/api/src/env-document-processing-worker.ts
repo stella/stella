@@ -26,7 +26,7 @@ const invariantViolation = documentProcessingEnvInvariantViolation({
   contentEncryptionKey:
     envDocumentProcessingWorkerSpecific.CONTENT_ENCRYPTION_KEY,
   nodeEnv: process.env.NODE_ENV,
-  redisUrl: envDocumentProcessingWorkerSpecific.REDIS_URL,
+  redisUrl: envBase.REDIS_URL,
 });
 if (invariantViolation !== null) {
   panic(invariantViolation);

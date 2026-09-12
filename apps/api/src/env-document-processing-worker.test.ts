@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, statSync } from "node:fs";
 import nodePath from "node:path";
+
+import {
+  apiSourceRoot,
+  collectApiModuleGraph,
+} from "@/api/tests/api-module-graph";
 
 const baseEnv = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -15,63 +19,10 @@ const workerEnvModuleUrl = new URL(
   import.meta.url,
 ).href;
 const repoRoot = new URL("../../..", import.meta.url).pathname;
-const apiSourceRoot = nodePath.resolve(repoRoot, "apps/api/src");
 const workerEntrypoint = nodePath.resolve(
   apiSourceRoot,
   "scripts/document-processing-worker.ts",
 );
-
-const resolveApiModule = (
-  importPath: string,
-  importer: string,
-): string | null => {
-  let basePath: string;
-  if (importPath.startsWith("@/api/")) {
-    basePath = nodePath.resolve(
-      apiSourceRoot,
-      importPath.slice("@/api/".length),
-    );
-  } else if (importPath.startsWith(".")) {
-    basePath = nodePath.resolve(nodePath.dirname(importer), importPath);
-  } else {
-    return null;
-  }
-
-  const candidates = [
-    basePath,
-    `${basePath}.ts`,
-    `${basePath}.tsx`,
-    nodePath.resolve(basePath, "index.ts"),
-    nodePath.resolve(basePath, "index.tsx"),
-  ];
-  return (
-    candidates.find(
-      (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
-    ) ?? null
-  );
-};
-
-const collectApiModuleGraph = async (
-  entrypoint: string,
-  visited = new Set<string>(),
-): Promise<Set<string>> => {
-  if (visited.has(entrypoint)) {
-    return visited;
-  }
-  visited.add(entrypoint);
-  const source = await Bun.file(entrypoint).text();
-  const loader = entrypoint.endsWith(".tsx") ? "tsx" : "ts";
-  const imports = new Bun.Transpiler({ loader }).scan(source).imports;
-  const dependencies = imports
-    .map(({ path }) => resolveApiModule(path, entrypoint))
-    .filter((path): path is string => path !== null);
-  await Promise.all(
-    dependencies.map(
-      async (dependency) => await collectApiModuleGraph(dependency, visited),
-    ),
-  );
-  return visited;
-};
 
 const validateWorkerEnv = (env: Record<string, string | undefined> = baseEnv) =>
   Bun.spawnSync({
@@ -89,6 +40,16 @@ const validateWorkerEnv = (env: Record<string, string | undefined> = baseEnv) =>
 describe("document-processing worker environment", () => {
   test("boots without API auth, frontend, email, or Gotenberg settings", () => {
     expect(validateWorkerEnv().exitCode).toBe(0);
+  });
+
+  test("refuses to boot without a Redis endpoint", () => {
+    const withoutRedis = Object.fromEntries(
+      Object.entries(baseEnv).filter(([key]) => key !== "REDIS_URL"),
+    );
+    const result = validateWorkerEnv(withoutRedis);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("REDIS_URL is required");
   });
 
   test("accepts Railway private-network Redis in production", () => {

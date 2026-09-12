@@ -1,8 +1,8 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
 import { type RedisOptions, RedisClient, sleep } from "bun";
 
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { envBase } from "@/api/env-base";
 import { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -29,6 +29,19 @@ export {
  * `Number.MAX_SAFE_INTEGER` is rejected with `ERR_OUT_OF_RANGE`.
  */
 const RECONNECT_ATTEMPT_LIMIT = 4_294_967_295;
+
+/**
+ * REDIS_URL is optional in the base environment because an entrypoint that
+ * boots with it alone (a migration, a one-off script) may never open a
+ * connection. Reaching this without one means a process that does open
+ * connections started without a Redis endpoint, so there is nothing to fall
+ * back to.
+ */
+const configuredRedisUrl = (): string =>
+  envBase.REDIS_URL ??
+  panic(
+    "REDIS_URL is not configured, and this process is opening a Redis client.",
+  );
 
 /**
  * The connection options a caller may tune. `maxRetries` is not among them:
@@ -81,10 +94,7 @@ class ConfiguredRedisClient
   override onconnect: () => void = () => undefined;
   readonly url: string;
 
-  constructor(
-    url = envDocumentProcessingWorker.REDIS_URL,
-    overrides?: RedisClientOverrides,
-  ) {
+  constructor(url: string, overrides?: RedisClientOverrides) {
     super(url, redisClientOptions(url, overrides));
     this.url = url;
     // Register one owned dispatcher on each of Bun's native `onconnect` /
@@ -149,7 +159,7 @@ class ConfiguredRedisClient
 export const createRedisClient = (
   overrides?: RedisClientOverrides,
 ): ConfiguredRedisClient =>
-  new ConfiguredRedisClient(envDocumentProcessingWorker.REDIS_URL, overrides);
+  new ConfiguredRedisClient(configuredRedisUrl(), overrides);
 
 // On a Railway cold start the API container can win the race against its
 // own Redis/Valkey service, so the very first connection attempt hits

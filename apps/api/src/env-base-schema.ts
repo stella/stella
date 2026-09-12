@@ -24,6 +24,7 @@ import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mo
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   isLoopbackHostname,
+  isRailwayPrivateHostname,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
 
@@ -219,6 +220,23 @@ export const envBaseServerSchema = {
   // against, so a continuation page is either ranked against that same
   // dictionary or refused as a stale cursor.
   QUERY_EXPANSION_MODE: v.optional(v.picklist(QUERY_EXPANSION_MODES), "off"),
+  /**
+   * Optional here because an entrypoint that boots with the base environment
+   * alone (a migration, a one-off script) may never open a connection. The
+   * API server and the document-processing worker always do, and
+   * `documentProcessingEnvInvariantViolation` requires it of them.
+   */
+  REDIS_URL: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * Whether a `rediss://` connection verifies the server's certificate chain.
+   * On by default. Set to false only where the endpoint presents a
+   * certificate no trust anchor can validate — a self-signed certificate
+   * bound to a private address, say — and the network itself is the boundary.
+   */
+  REDIS_TLS_REJECT_UNAUTHORIZED: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "true",
+  ),
   isDev: v.boolean(),
 };
 
@@ -283,6 +301,7 @@ type EnvBaseInvariantInput = {
   DATABASE_URL: string;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
+  REDIS_URL?: string | undefined;
   S3_ACCESS_KEY_ID?: string | undefined;
   S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
   S3_ENDPOINT: string;
@@ -329,6 +348,29 @@ const databaseTransportInvariantViolation = ({
   }
   if (!isDev && hasPublicLawDatabaseUrl) {
     return "Public-law database URLs are only supported in local development.";
+  }
+  return null;
+};
+
+const isSecureRedisUrl = (value: string) => {
+  const url = new URL(value);
+  return (
+    isTlsOrLoopbackUrl(value, {
+      plaintextProtocol: "redis:",
+      tlsProtocol: "rediss:",
+    }) ||
+    (url.protocol === "redis:" && isRailwayPrivateHostname(url.hostname))
+  );
+};
+
+// The transport rule lives with the key: every process that configures
+// REDIS_URL gets it, not only the ones whose entrypoint requires the key.
+const redisTransportInvariantViolation = ({
+  REDIS_URL,
+  isDev,
+}: EnvBaseInvariantInput): string | null => {
+  if (REDIS_URL !== undefined && !isDev && !isSecureRedisUrl(REDIS_URL)) {
+    return "REDIS_URL must use rediss:// unless it targets loopback or Railway private networking.";
   }
   return null;
 };
@@ -448,6 +490,7 @@ export const envBaseInvariantViolation = (
 ): string | null =>
   rollbackInputInvariantViolation(input) ??
   databaseTransportInvariantViolation(input) ??
+  redisTransportInvariantViolation(input) ??
   corpusEndpointInvariantViolation(input) ??
   publicLawTopologyInvariantViolation(input) ??
   storageAndIndexInvariantViolation(input);
