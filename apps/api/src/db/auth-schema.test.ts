@@ -526,6 +526,11 @@ describe("auth schema", () => {
         indexes: {
           account: [
             {
+              fields: ["providerId", "accountId"],
+              predicate: null,
+              unique: true,
+            },
+            {
               fields: ["providerId"],
               predicate: `"account"."provider_id" = 'credential'`,
               unique: true,

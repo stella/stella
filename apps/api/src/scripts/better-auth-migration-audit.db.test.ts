@@ -477,6 +477,45 @@ test("post phases require resource links, final constraints, and the exact basel
       ).toBe("passed");
 
       await transaction.execute(
+        sql`DROP INDEX account_provider_account_id_uidx`,
+      );
+      const missingProviderKey = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
+      });
+      expect(
+        checkStatus(
+          missingProviderKey,
+          BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
+        ),
+      ).toBe("failed");
+      await transaction.execute(
+        sql`CREATE UNIQUE INDEX account_provider_account_id_uidx ON account (provider_id, account_id) WHERE issuer IS NOT NULL`,
+      );
+      const partialProviderKey = await runBetterAuthMigrationAudit({
+        baseline: preMigration.value.baseline,
+        database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
+        mode: BETTER_AUTH_AUDIT_MODES.POST_MIGRATION,
+        trustedIdentityMap: null,
+      });
+      expect(
+        checkStatus(
+          partialProviderKey,
+          BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
+        ),
+      ).toBe("failed");
+      await transaction.execute(
+        sql`DROP INDEX account_provider_account_id_uidx`,
+      );
+      await transaction.execute(
+        sql`CREATE UNIQUE INDEX account_provider_account_id_uidx ON account (provider_id, account_id)`,
+      );
+
+      await transaction.execute(
         sql`ALTER TABLE account ALTER COLUMN issuer SET NOT NULL`,
       );
       const requiredIssuer = await runBetterAuthMigrationAudit({

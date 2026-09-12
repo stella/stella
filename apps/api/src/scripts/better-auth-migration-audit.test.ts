@@ -73,6 +73,19 @@ describe("Better Auth migration audit command", () => {
   test("requires an identity map before migration and only a baseline after it", () => {
     expect(
       parseBetterAuthAuditArgs([
+        BETTER_AUTH_AUDIT_MODES.HEALTH,
+        "--oauth-base-url",
+        "https://api.stll.app/",
+      ]),
+    ).toMatchObject({
+      status: "ok",
+      value: {
+        mode: BETTER_AUTH_AUDIT_MODES.HEALTH,
+        oauthBaseUrl: "https://api.stll.app",
+      },
+    });
+    expect(
+      parseBetterAuthAuditArgs([
         BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         "--baseline",
         "/private/baseline.json",
@@ -105,6 +118,26 @@ describe("Better Auth migration audit command", () => {
       ["unknown", "--baseline", "/private/baseline.json"],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--output", "x"],
       [BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION, "--baseline", ""],
+      [BETTER_AUTH_AUDIT_MODES.HEALTH],
+      [
+        BETTER_AUTH_AUDIT_MODES.HEALTH,
+        "--baseline",
+        "/private/baseline.json",
+        "--oauth-base-url",
+        "https://api.stll.app",
+      ],
+      [
+        BETTER_AUTH_AUDIT_MODES.HEALTH,
+        "--oauth-base-url",
+        "https://api.stll.app",
+        "--identity-map",
+        "/private/identity-map.json",
+      ],
+      [
+        BETTER_AUTH_AUDIT_MODES.HEALTH,
+        "--oauth-base-url",
+        "http://api.stll.app",
+      ],
       [
         BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
         "--baseline",

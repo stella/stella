@@ -1,5 +1,5 @@
 /**
- * Read-only, redacted invariants for the Better Auth 1.6 -> 1.7 migration.
+ * Read-only, redacted Better Auth health and migration invariants.
  *
  * The audit deliberately keeps database rows and counts out of its report.
  * Counts live only in a private baseline file passed between rehearsal phases;
@@ -14,9 +14,14 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { authSchema } from "@/api/db/auth-schema";
+import {
+  assertBetterAuthOAuthPolicyCensus,
+  BetterAuthOAuthPolicyCensusError,
+} from "@/api/lib/db/better-auth-oauth-policy-census";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BETTER_AUTH_AUDIT_MODES = {
+  HEALTH: "health",
   POST_BACKFILL: "post-backfill",
   POST_MIGRATION: "post-migration",
   PRE_MIGRATION: "pre-migration",
@@ -24,6 +29,11 @@ export const BETTER_AUTH_AUDIT_MODES = {
 
 export type BetterAuthAuditMode =
   (typeof BETTER_AUTH_AUDIT_MODES)[keyof typeof BETTER_AUTH_AUDIT_MODES];
+
+export type BetterAuthMigrationAuditMode = Exclude<
+  BetterAuthAuditMode,
+  typeof BETTER_AUTH_AUDIT_MODES.HEALTH
+>;
 
 const AUTH_PROVIDER_IDS = {
   CREDENTIAL: "credential",
@@ -602,6 +612,8 @@ const POST_MIGRATION_COLUMNS = {
 } as const;
 
 export const BETTER_AUTH_AUDIT_CHECKS = {
+  ACCOUNT_KEY_COMPLETE: "account-key-complete",
+  ACCOUNT_KEY_UNIQUE: "account-key-unique",
   ACCOUNT_IDENTITY_COMPLETE: "account-identity-complete",
   ACCOUNT_IDENTITY_MAPPING_COMPLETE: "account-identity-mapping-complete",
   ACCOUNT_IDENTITY_PROJECTED_UNIQUE: "account-identity-projected-unique",
@@ -625,6 +637,7 @@ export const BETTER_AUTH_AUDIT_CHECKS = {
   OAUTH_POLICY_MATCHES_TRUSTED_PROJECTION:
     "oauth-policy-matches-trusted-projection",
   OAUTH_POLICY_PROJECTED_VALID: "oauth-policy-projected-valid",
+  OAUTH_POLICY_CURRENT: "oauth-policy-current",
   POST_BACKFILL_SCHEMA_COMPLETE: "post-backfill-schema-complete",
   POST_MIGRATION_CONSTRAINTS: "post-migration-constraints",
 } as const;
@@ -685,7 +698,7 @@ const CHECKS_BY_MODE = {
     BETTER_AUTH_AUDIT_CHECKS.AUTH_ROWS_PRESERVED,
   ],
 } as const satisfies Record<
-  BetterAuthAuditMode,
+  BetterAuthMigrationAuditMode,
   readonly BetterAuthAuditCheckName[]
 >;
 
@@ -1758,6 +1771,27 @@ const finalAccountConstraintsStatement = sql`
   SELECT
     EXISTS (
       SELECT 1
+        FROM pg_index index_record
+        JOIN pg_class table_record ON table_record.oid = index_record.indrelid
+        JOIN pg_namespace namespace ON namespace.oid = table_record.relnamespace
+       WHERE namespace.nspname = 'public'
+         AND table_record.relname = 'account'
+         AND index_record.indisunique
+         AND index_record.indisvalid
+         AND index_record.indisready
+         AND index_record.indpred IS NULL
+         AND index_record.indexprs IS NULL
+         AND (
+           SELECT array_agg(attribute.attname ORDER BY key_position.ordinality)
+             FROM unnest(index_record.indkey) WITH ORDINALITY key_position(attnum, ordinality)
+             JOIN pg_attribute attribute
+               ON attribute.attrelid = table_record.oid
+              AND attribute.attnum = key_position.attnum
+         ) = ARRAY['provider_id', 'account_id']::name[]
+    )
+    AND
+    EXISTS (
+      SELECT 1
         FROM information_schema.columns
        WHERE table_schema = 'public'
          AND table_name = 'account'
@@ -2201,11 +2235,145 @@ const evaluateBooleanChecks = async (
   return await evaluateBooleanChecks(database, statements, checks, index + 1);
 };
 
+type RunBetterAuthHealthAuditOptions = {
+  database: BetterAuthAuditDatabase;
+  expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
+};
+
+/** Current invariants, without frozen row counts or historical issuer mappings. */
+export const runBetterAuthHealthAudit = async ({
+  database,
+  expectedOAuthResources,
+}: RunBetterAuthHealthAuditOptions): Promise<
+  Result<BetterAuthAuditReport, BetterAuthAuditError>
+> => {
+  const mode = BETTER_AUTH_AUDIT_MODES.HEALTH;
+  const checks: BetterAuthAuditCheck[] = [];
+  const tables = await tableInventory(database);
+  if (Result.isError(tables)) {
+    return tables;
+  }
+  const columns = await columnInventory(database);
+  if (Result.isError(columns)) {
+    return columns;
+  }
+  // Derive the live inventory from the runtime schema so a new auth column
+  // cannot be omitted by a hand-maintained health-check projection.
+  const schemaComplete = Object.values(authSchema).every((table) => {
+    const tableName = getTableName(table);
+    return (
+      tables.value.has(tableName) &&
+      columnNames(table).every((column) =>
+        columns.value.has(`${tableName}.${column}`),
+      )
+    );
+  });
+  checks.push(
+    check(BETTER_AUTH_AUDIT_CHECKS.CURRENT_SCHEMA_COMPLETE, schemaComplete),
+  );
+  if (!schemaComplete) {
+    return Result.ok(report(mode, checks));
+  }
+
+  // This explicit operational scan is bounded by the command's read-only
+  // transaction timeouts. It returns booleans, never auth rows or tokens.
+  const statements = [
+    [
+      BETTER_AUTH_AUDIT_CHECKS.AUTH_ACCESS_BOUNDARIES,
+      accessBoundariesStatement(true),
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_REACHABLE,
+      noForeignKeyOrphansStatement(AUTH_TABLE_POLICIES),
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.AUTH_FOREIGN_KEYS_VALIDATED,
+      foreignKeysValidatedStatement(AUTH_TABLE_POLICIES),
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_PROVIDERS_CLASSIFIED,
+      providersClassifiedStatement,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.CREDENTIAL_ACCOUNT_OWNERSHIP,
+      credentialOwnershipStatement,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_KEY_COMPLETE,
+      sql`
+      SELECT NOT EXISTS (
+        SELECT 1 FROM account
+        WHERE provider_id IS NULL OR provider_id = ''
+           OR account_id IS NULL OR account_id = ''
+      ) AS "passed"
+    `,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_KEY_UNIQUE,
+      sql`
+      SELECT NOT EXISTS (
+        SELECT 1 FROM account
+        GROUP BY provider_id, account_id HAVING count(*) > 1
+      ) AS "passed"
+    `,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.FINAL_ACCOUNT_CONSTRAINTS,
+      finalAccountConstraintsStatement,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENT_RESOURCE_LINKS,
+      oauthClientResourceLinksStatement,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.OAUTH_CLIENTS_CLASSIFIED,
+      oauthClientsClassifiedStatement,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.OAUTH_RESOURCE_REFERENCES,
+      oauthResourceReferencesStatement,
+    ],
+    [
+      BETTER_AUTH_AUDIT_CHECKS.POST_MIGRATION_CONSTRAINTS,
+      postMigrationConstraintsStatement,
+    ],
+  ] as const satisfies readonly NamedAuditStatement[];
+  const evaluated = await evaluateBooleanChecks(database, statements, checks);
+  if (Result.isError(evaluated)) {
+    return evaluated;
+  }
+  const oauthPolicy = await Result.tryPromise({
+    try: async () =>
+      await assertBetterAuthOAuthPolicyCensus(database, expectedOAuthResources),
+    catch: (cause) => cause,
+  });
+  if (
+    Result.isError(oauthPolicy) &&
+    (!(oauthPolicy.error instanceof BetterAuthOAuthPolicyCensusError) ||
+      oauthPolicy.error.failedChecks.length === 0)
+  ) {
+    return Result.err(
+      new BetterAuthAuditError({
+        cause: oauthPolicy.error,
+        code: "database-query-failed",
+        message: "Better Auth health policy query failed",
+      }),
+    );
+  }
+  checks.push(
+    check(
+      BETTER_AUTH_AUDIT_CHECKS.OAUTH_POLICY_CURRENT,
+      Result.isOk(oauthPolicy),
+    ),
+  );
+  return Result.ok(report(mode, checks));
+};
+
 type RunBetterAuthMigrationAuditOptions = {
   baseline: BetterAuthAuditBaseline | null;
   database: BetterAuthAuditDatabase;
   expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
-  mode: BetterAuthAuditMode;
+  mode: BetterAuthMigrationAuditMode;
   trustedIdentityMap: BetterAuthTrustedIdentityMap | null;
 };
 

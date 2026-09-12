@@ -9,6 +9,7 @@ import nodePath from "node:path";
 // file in the runtime image, which has no tsconfig to resolve paths.
 import { resolveDatabaseUrl } from "../db-url";
 import { assertMigrationHistory } from "../lib/db/migration-history";
+import { formatBetterAuthScriptFailure } from "../scripts/better-auth-script-failure";
 import {
   CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
@@ -141,8 +142,16 @@ try {
   // eslint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
   console.info("[migrate] migrations applied");
 } catch (error) {
-  // eslint-disable-next-line no-console -- migrate CLI entrypoint; surface the failure to the deploy log
-  console.error("[migrate] failed:", error);
+  // Unique-key errors include offending account identities in their detail.
+  // Keep SQLSTATE diagnostics, never raw queries, parameters, or row values.
+  process.stderr.write(
+    formatBetterAuthScriptFailure({
+      cause: error,
+      code: "database-migration-failed",
+      message:
+        "Database migration failed; inspect migration state before retrying",
+    }),
+  );
   process.exitCode = 1;
 } finally {
   if (laneHeld) {
