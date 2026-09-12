@@ -28,6 +28,7 @@ import {
   type SearchSort,
   type SearchTotal,
 } from "@stll/api-contract/search";
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -35,12 +36,16 @@ import {
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   createCaseLawIndexPath,
+  decisionDateRange,
   decisionSortOrder,
   hasActiveCaseLawFilter,
-  validDecisionYear,
+  validDecisionDate,
   withPendingQuery,
 } from "@/features/case-law/case-law-index-search.logic";
-import type { CaseLawFilterKey } from "@/features/case-law/case-law-index-search.logic";
+import type {
+  CaseLawFilterKey,
+  DecisionDateRange,
+} from "@/features/case-law/case-law-index-search.logic";
 import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
@@ -112,16 +117,36 @@ const optionalBrowseStringSchema = (maxLength: number) =>
     ),
   );
 
+/**
+ * A calendar date, dropped rather than refused when it is not one: a public
+ * URL may be typed or crawled, and a bad date is a page without that bound,
+ * not an error screen.
+ */
+const optionalDateSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.transform((value) => validDecisionDate(value)),
+    ),
+  ),
+  undefined,
+);
+
 const searchSchema = v.object({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
+  from: optionalDateSchema,
   lang: optionalBrowseStringSchema(16),
   q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
   source: optionalBrowseStringSchema(128),
+  to: optionalDateSchema,
   type: optionalBrowseStringSchema(128),
+  // Accepted, never written: links made before the range existed still work,
+  // and `decisionDateRange` resolves them to that year's whole span.
   year: optionalBrowseStringSchema(4),
 });
 
@@ -133,7 +158,6 @@ const FILTER_KIND_LABEL_KEYS = {
   lang: "common.language",
   source: "common.source",
   type: "common.type",
-  year: "workspaces.views.calendar.year",
 } as const satisfies Record<CaseLawFilterKey, TranslationKey>;
 
 /**
@@ -155,8 +179,6 @@ const withFilter = (
       return { ...previous, source: value };
     case "type":
       return { ...previous, type: value };
-    case "year":
-      return { ...previous, year: value };
     default:
       key satisfies never;
       return panic(`Unhandled case-law filter: ${String(key)}`);
@@ -185,7 +207,6 @@ const chipValue = (
       );
     case "court":
     case "type":
-    case "year":
       return value;
     default:
       key satisfies never;
@@ -193,12 +214,23 @@ const chipValue = (
   }
 };
 
-const createCaseLawIndexDescription = ({
-  country,
-  court,
-  year,
-}: CaseLawIndexSearch): string => {
-  const scope = [court, caseLawCountryScope(country), validDecisionYear(year)]
+const formatIsoDate = (
+  value: string,
+  format: ReturnType<typeof useFormatter>,
+): string =>
+  format.dateTime(
+    Temporal.PlainDate.from(value).toZonedDateTime("UTC").epochMilliseconds,
+    { dateStyle: "medium", timeZone: "UTC" },
+  );
+
+const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
+  const range = decisionDateRange(search);
+  const scope = [
+    search.court,
+    caseLawCountryScope(search.country),
+    range.from,
+    range.to,
+  ]
     .filter(Boolean)
     .join(", ");
   if (scope) {
@@ -349,13 +381,26 @@ function PublicCaseLawIndex() {
   const queryClient = useQueryClient();
   const uiLocale = useLocale();
   const search = Route.useSearch({
-    select: ({ country, court, lang, q, sort, source, type, year }) => ({
+    select: ({
       country,
       court,
+      from,
       lang,
       q,
       sort,
       source,
+      to,
+      type,
+      year,
+    }) => ({
+      country,
+      court,
+      from,
+      lang,
+      q,
+      sort,
+      source,
+      to,
       type,
       year,
     }),
@@ -459,6 +504,20 @@ function PublicCaseLawIndex() {
     );
   };
 
+  // Only `from`/`to` are written; a `year` the reader arrived with is dropped
+  // the moment they touch the range, so the two can never disagree.
+  const setDateRange = (range: DecisionDateRange) => {
+    detached(
+      searchNavigation((previous) => ({
+        ...previous,
+        from: validDecisionDate(range.from),
+        to: validDecisionDate(range.to),
+        year: undefined,
+      })),
+      "cases.date-range-navigate",
+    );
+  };
+
   const setQuery = (next: string | undefined) => {
     setQueryInput(next ?? "");
     setRequestedQuery((next ?? "").trim());
@@ -469,7 +528,35 @@ function PublicCaseLawIndex() {
   };
 
   const refineTerms = refineTermsOfQuery(search.q);
+  const dateRange = decisionDateRange(search);
   const chips: DecisionFilterChip[] = [];
+  // The same three shapes, and the same strings, the workspace view's own
+  // date chip uses; built here rather than in a helper taking `t`, because
+  // handing the translator through a parameter widens its key union at the
+  // boundary and the instantiation cost lands on every build.
+  const dateFrom =
+    dateRange.from === undefined ? null : formatIsoDate(dateRange.from, format);
+  const dateTo =
+    dateRange.to === undefined ? null : formatIsoDate(dateRange.to, format);
+  let dateRangeLabel: string | null = null;
+  if (dateFrom !== null && dateTo !== null) {
+    dateRangeLabel = t("workspaces.filters.date.customRange", {
+      from: dateFrom,
+      to: dateTo,
+    });
+  } else if (dateFrom !== null) {
+    dateRangeLabel = t("workspaces.filters.date.from", { date: dateFrom });
+  } else if (dateTo !== null) {
+    dateRangeLabel = t("workspaces.filters.date.to", { date: dateTo });
+  }
+  if (dateRangeLabel !== null) {
+    chips.push({
+      id: "filter:date",
+      kind: t("common.date"),
+      onRemove: () => setDateRange({}),
+      value: dateRangeLabel,
+    });
+  }
   for (const key of CASE_LAW_FILTER_KEYS) {
     const value = search[key];
     if (value === undefined) {
@@ -539,14 +626,15 @@ function PublicCaseLawIndex() {
 
       <div className="flex min-w-0 flex-1 items-start gap-6">
         <DecisionFacetRail
+          dateRange={dateRange}
           facets={facets}
+          onDateRangeChange={setDateRange}
           onSelect={selectFacet}
           selection={{
             court: search.court,
             lang: search.lang,
             source: search.source,
             type: search.type,
-            year: validDecisionYear(search.year),
           }}
         />
 

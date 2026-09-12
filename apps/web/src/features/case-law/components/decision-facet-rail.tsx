@@ -17,7 +17,15 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import type { CaseLawFilterKey } from "@/features/case-law/case-law-index-search.logic";
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import type {
+  CaseLawFilterKey,
+  DecisionDateRange,
+} from "@/features/case-law/case-law-index-search.logic";
+import {
+  dateRangeYear,
+  yearDateRange,
+} from "@/features/case-law/case-law-index-search.logic";
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
@@ -37,7 +45,10 @@ import type { TranslationKey } from "@/i18n/types";
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
 
 type DecisionFacetRailProps = {
+  /** The decision-date span the URL asks for; either end may be open. */
+  dateRange: DecisionDateRange;
   facets: DecisionRailFacets;
+  onDateRangeChange: (range: DecisionDateRange) => void;
   onSelect: (key: CaseLawFilterKey, value: string | undefined) => void;
   selection: DecisionFacetSelection;
 };
@@ -52,7 +63,9 @@ type DecisionFacetRailProps = {
  * draw the same sections from the same facets.
  */
 export const DecisionFacetRail = ({
+  dateRange,
   facets,
+  onDateRangeChange,
   onSelect,
   selection,
 }: DecisionFacetRailProps) => {
@@ -69,7 +82,9 @@ export const DecisionFacetRail = ({
         className="sticky top-0 hidden max-h-[calc(100dvh-4rem)] w-60 shrink-0 self-start overflow-y-auto pe-2 lg:block"
       >
         <FacetSections
+          dateRange={dateRange}
           facets={facets}
+          onDateRangeChange={onDateRangeChange}
           onSelect={onSelect}
           selection={selection}
         />
@@ -87,7 +102,9 @@ export const DecisionFacetRail = ({
           </SheetTitle>
           <SheetPanel>
             <FacetSections
+              dateRange={dateRange}
               facets={facets}
+              onDateRangeChange={onDateRangeChange}
               onSelect={onSelect}
               selection={selection}
             />
@@ -129,7 +146,9 @@ export const DecisionFacetRailSkeleton = () => {
 };
 
 const FacetSections = ({
+  dateRange,
   facets,
+  onDateRangeChange,
   onSelect,
   selection,
 }: DecisionFacetRailProps) => {
@@ -153,13 +172,10 @@ const FacetSections = ({
           </div>
         </section>
       )}
-      <FacetSection
+      <YearSection
         buckets={facets.year}
-        filterKey="year"
-        heading={t("workspaces.views.calendar.year")}
-        limit={YEAR_SECTION_LIMIT}
-        onSelect={onSelect}
-        selectedValue={selection.year}
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
       />
       <FacetSection
         buckets={facets.decisionType}
@@ -191,6 +207,95 @@ const FacetSections = ({
     </div>
   );
 };
+
+/**
+ * A year is the span a reader asks for most, so the list stays — but it is a
+ * quick pick for the range below it rather than a filter of its own. The radio
+ * shows selected exactly while the range is that year whole, so narrowing
+ * either end visibly stops being "2024" and becomes the dates it now is.
+ */
+const YearSection = ({
+  buckets,
+  dateRange,
+  onDateRangeChange,
+}: {
+  buckets: readonly FacetSourceBucket[];
+  dateRange: DecisionDateRange;
+  onDateRangeChange: (range: DecisionDateRange) => void;
+}) => {
+  const t = useTranslations();
+  const [expanded, setExpanded] = useState(false);
+  const selectedYear = dateRangeYear(dateRange);
+  const { hiddenCount, items } = facetSectionView({
+    buckets,
+    expanded,
+    limit: YEAR_SECTION_LIMIT,
+    selectedValue: selectedYear,
+  });
+
+  return (
+    <section>
+      <SectionHeading>{t("workspaces.views.calendar.year")}</SectionHeading>
+      {items.length > 0 && (
+        <FacetOptions
+          groupLabel={t("workspaces.views.calendar.year")}
+          items={items}
+          name="year"
+          onSelect={(value) =>
+            onDateRangeChange(value === undefined ? {} : yearDateRange(value))
+          }
+          selectedValue={selectedYear}
+        />
+      )}
+      {hiddenCount > 0 && (
+        <ShowAllButton onClick={() => setExpanded(true)}>
+          {t("common.showAll")}
+        </ShowAllButton>
+      )}
+      <div className="mt-2 flex flex-col gap-1.5">
+        <DateBound
+          label={t("search.dateFrom")}
+          onChange={(from) => onDateRangeChange({ ...dateRange, from })}
+          value={dateRange.from ?? null}
+          {...(dateRange.to === undefined ? {} : { maxDate: dateRange.to })}
+        />
+        <DateBound
+          label={t("search.dateTo")}
+          onChange={(to) => onDateRangeChange({ ...dateRange, to })}
+          value={dateRange.to ?? null}
+          {...(dateRange.from === undefined ? {} : { minDate: dateRange.from })}
+        />
+      </div>
+    </section>
+  );
+};
+
+/** One end of the range: the app's own calendar, labelled as this end. */
+const DateBound = ({
+  label,
+  maxDate,
+  minDate,
+  onChange,
+  value,
+}: {
+  label: string;
+  maxDate?: string;
+  minDate?: string;
+  onChange: (value: string | undefined) => void;
+  value: string | null;
+}) => (
+  <label className="flex flex-col gap-1">
+    <span className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+      {label}
+    </span>
+    <DatePickerPopover
+      onChange={(next) => onChange(next ?? undefined)}
+      value={value}
+      {...(maxDate === undefined ? {} : { maxDate })}
+      {...(minDate === undefined ? {} : { minDate })}
+    />
+  </label>
+);
 
 const SectionHeading = ({ children }: { children: ReactNode }) => (
   <h3 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">

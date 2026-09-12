@@ -10,8 +10,8 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 
 import {
+  decisionDateRange,
   decisionSortOrder,
-  validDecisionYear,
 } from "@/features/case-law/case-law-index-search.logic";
 import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
@@ -73,10 +73,12 @@ const searchTextOfIntent = (
 export const createDecisionFiltersFromSearch = ({
   country,
   court,
+  from,
   lang,
   q,
   sort,
   source,
+  to,
   type,
   year,
 }: CaseLawSearchScope): DecisionListFilters => {
@@ -84,7 +86,7 @@ export const createDecisionFiltersFromSearch = ({
   if (scope === undefined) {
     return panic("Case-law search requires a country.");
   }
-  const normalizedYear = validDecisionYear(year);
+  const range = decisionDateRange({ from, to, year });
   const search = searchTextOfIntent(
     readDecisionIntent(q, { jurisdiction: scope }),
   );
@@ -92,12 +94,8 @@ export const createDecisionFiltersFromSearch = ({
   return {
     country: scope,
     ...(court ? { court } : {}),
-    ...(normalizedYear
-      ? {
-          dateFrom: `${normalizedYear}-01-01`,
-          dateTo: `${normalizedYear}-12-31`,
-        }
-      : {}),
+    ...(range.from === undefined ? {} : { dateFrom: range.from }),
+    ...(range.to === undefined ? {} : { dateTo: range.to }),
     ...(type ? { decisionType: type } : {}),
     ...(source ? { sourceId: source } : {}),
     ...(lang ? { language: lang } : {}),
