@@ -36,23 +36,17 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
-import { PublicLawCountryMenu } from "@/components/public-law-country-menu";
 import {
-  PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import {
   decisionLinkElement,
   formatDecisionDate,
 } from "@/features/case-law/components/decision-cells";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
-import {
-  decisionFacetsOptions,
-  latestDecisionsOptions,
-} from "@/features/case-law/queries/decisions";
+import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { formatValidityDate } from "@/features/statutes/statute-format";
@@ -178,7 +172,6 @@ export const Route = createFileRoute("/law/")({
     const statuteCountry = statuteCountryOf(scope);
     const [latest] = await Promise.all([
       ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
-      ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
       statuteCountry === null
         ? Promise.resolve(null)
         : ensureRouteQueryData(queryClient, legislationShelfOptions(scope)),
@@ -310,7 +303,6 @@ function LawHome() {
       ? "all"
       : requestedScope;
 
-  const { data: facets } = useSuspenseQuery(decisionFacetsOptions(scope));
   const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
   const { data: shelf } = useQuery({
     ...legislationShelfOptions(scope),
@@ -404,24 +396,8 @@ function LawHome() {
 
   return (
     <LandingLayout
-      footer={
-        <CaseLawBrowseLinks countryParam={countryParam} facets={facets} />
-      }
       hero={
         <>
-          <PublicLawCountryMenu
-            countries={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
-              label: caseLawCountryName(format, code),
-              value: toCaseLawCountryParam(code),
-            }))}
-            country={countryParam}
-            onCountryChange={(next) => {
-              detached(
-                routeNavigate({ replace: true, search: { country: next } }),
-                "law-home.switch-country",
-              );
-            }}
-          />
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
           <LawEntryBox
             askPrompt={(entry) =>

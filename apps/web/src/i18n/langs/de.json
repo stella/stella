@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (Rechtsprechung, {country})",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Rechtsprechung durchsuchen",
-      "countries": "Länder",
-      "courts": "Gerichte",
-      "years": "Jahre"
-    },
     "sort": {
       "newest": "Neueste",
       "relevance": "Beste Treffer"

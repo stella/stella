@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (jurisprudence, {country})",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Parcourir la jurisprudence",
-      "countries": "Pays",
-      "courts": "Juridictions",
-      "years": "Années"
-    },
     "sort": {
       "newest": "Les plus récentes",
       "relevance": "Les plus pertinentes"

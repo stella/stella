@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Sirvi kohtupraktikat",
-      "countries": "Riigid",
-      "courts": "Kohtud",
-      "years": "Aastad"
-    },
     "sort": {
       "newest": "Uusimad",
       "relevance": "Asjakohaseimad"

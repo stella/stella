@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (judikatūra, {country})",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Pārlūkot judikatūru",
-      "countries": "Valstis",
-      "courts": "Tiesas",
-      "years": "Gadi"
-    },
     "sort": {
       "newest": "Jaunākie",
       "relevance": "Atbilstošākie"

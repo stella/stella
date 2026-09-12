@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
-    "seo": {
-      "browse": "Przeglądaj orzecznictwo",
-      "countries": "Kraje",
-      "courts": "Sądy",
-      "years": "Lata"
-    },
     "sort": {
       "newest": "Najnowsze",
       "relevance": "Najtrafniejsze"

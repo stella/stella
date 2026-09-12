@@ -29,7 +29,6 @@ import {
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { PublicLawCountryMenu } from "@/components/public-law-country-menu";
 import {
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
@@ -44,15 +43,10 @@ import type {
   DecisionSortOrder,
 } from "@/features/case-law/case-law-index-search.logic";
 import {
-  PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
-import {
-  CaseLawSearch,
-  caseLawCountryName,
-} from "@/features/case-law/components/case-law-search";
+import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
 import {
   DecisionFacetRail,
   DecisionFacetRailSkeleton,
@@ -494,26 +488,6 @@ function PublicCaseLawIndex() {
         <ResearchTableActions filters={filters} />
       </div>
 
-      <PublicLawCountryMenu
-        countries={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
-          label: caseLawCountryName(format, code),
-          value: toCaseLawCountryParam(code),
-        }))}
-        country={countryParam}
-        onCountryChange={(country) => {
-          // A court, a year or a source belongs to one corpus; carrying it
-          // into another would filter by a value that corpus never uses.
-          detached(
-            searchNavigation((previous) => ({
-              ...previous,
-              ...clearedCaseLawFilters(),
-              country,
-            })),
-            "cases.switch-country",
-          );
-        }}
-      />
-
       <CaseLawSearch
         country={countryParam}
         maxLength={MAX_QUERY_LENGTH}
@@ -598,8 +572,6 @@ function PublicCaseLawIndex() {
           )}
         </div>
       </div>
-
-      <CaseLawBrowseLinks countryParam={countryParam} facets={browseFacets} />
     </main>
   );
 }

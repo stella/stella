@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (case law of {country})",
     "searchLabel": "Search case law",
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
-    },
     "sort": {
       "newest": "Newest",
       "relevance": "Most relevant"

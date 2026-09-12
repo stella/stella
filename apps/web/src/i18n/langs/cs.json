@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (judikatura, {country})",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Procházet judikaturu",
-      "countries": "Země",
-      "courts": "Soudy",
-      "years": "Roky"
-    },
     "sort": {
       "newest": "Nejnovější",
       "relevance": "Nejrelevantnější"

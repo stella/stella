@@ -299,8 +299,9 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point; the results screen is reached through the
-  // browse links, since an unfiltered request redirects to the home.
+  // The home is the entry point. The results screen is not listed: an
+  // unfiltered request redirects to the home, and every decision has its own
+  // entry in the per-country sitemaps.
   const entries = (["/law"] as const).map((path) =>
     createPublicLawCanonicalUrl(path),
   );

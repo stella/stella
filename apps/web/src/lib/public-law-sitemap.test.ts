@@ -641,12 +641,7 @@ describe("public law sitemap", () => {
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {
-    const [source, browseSource] = await Promise.all([
-      readSource("apps/web/src/routes/law/cases/index.tsx"),
-      readSource(
-        "apps/web/src/features/case-law/components/case-law-browse-links.tsx",
-      ),
-    ]);
+    const source = await readSource("apps/web/src/routes/law/cases/index.tsx");
 
     expect(source).toContain("loader:");
     expect(source).toContain("ensureRouteInfiniteQueryData");
@@ -654,16 +649,23 @@ describe("public law sitemap", () => {
       "ensureRouteQueryData(queryClient, decisionFacetsOptions(scope))",
     );
     expect(source).not.toContain("decisionFacetsOptions()");
-    expect(source).toContain("PUBLIC_CASE_LAW_COUNTRIES");
     expect(source).toContain("decisionsInfiniteOptions(");
     expect(source).toContain("validateSearch: searchSchema");
-    expect(source).toContain("CaseLawBrowseLinks");
-    // The crawlable facet links moved to the shared component both the home
-    // and the results screen render.
-    expect(browseSource).toContain('to="/law/cases"');
-    expect(browseSource).toContain("isPublicCaseLawCountry");
-    expect(browseSource).toContain("{ country: countryParam, court: value }");
-    expect(browseSource).toContain("{ country: countryParam, year: value }");
+  });
+
+  test("the jurisdiction switch is shell chrome, offering every launch-ready country", async () => {
+    const [shell, control] = await Promise.all([
+      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource(
+        "apps/web/src/features/case-law/components/top-bar-country.tsx",
+      ),
+    ]);
+
+    // One instance, rendered by the shell: a page publishing its own would
+    // publish one per live route match.
+    expect(shell).toContain("<TopBarCountry />");
+    expect(control).toContain("PUBLIC_CASE_LAW_COUNTRIES");
+    expect(control).toContain("countryScopedLawRoute");
   });
 
   test("public law home preloads its shelves for SSR", async () => {
@@ -673,7 +675,6 @@ describe("public law sitemap", () => {
     expect(source).toContain("latestDecisionsOptions(scope)");
     expect(source).toContain("legislationShelfOptions(scope)");
     expect(source).toContain("createLegalCollectionJsonLd");
-    expect(source).toContain("CaseLawBrowseLinks");
   });
 
   test("public law SSR modules do not statically import auth", async () => {

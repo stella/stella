@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "تصفّح الاجتهاد القضائي",
-      "countries": "الدول",
-      "courts": "المحاكم",
-      "years": "السنوات"
-    },
     "sort": {
       "newest": "الأحدث",
       "relevance": "الأكثر صلة"

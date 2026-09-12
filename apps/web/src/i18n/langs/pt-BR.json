@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (jurisprudência de {country})",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Explorar jurisprudência",
-      "countries": "Países",
-      "courts": "Tribunais",
-      "years": "Anos"
-    },
     "sort": {
       "newest": "Mais recentes",
       "relevance": "Mais relevantes"

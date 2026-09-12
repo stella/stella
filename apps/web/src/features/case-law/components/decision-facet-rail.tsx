@@ -65,7 +65,11 @@ export const DecisionFacetRail = ({
     <>
       <aside
         aria-label={t("common.filter")}
-        className="sticky top-0 hidden w-60 shrink-0 self-start overflow-y-auto pe-2 lg:block"
+        // Bounded inside the sticky context, so the rail scrolls on its own
+        // instead of stranding its lower sections below the fold: the page's
+        // scrollport is the results `main` under the 3rem top bar, and the
+        // extra rem is the gap the rail keeps above `main`'s bottom padding.
+        className="sticky top-0 hidden max-h-[calc(100dvh-4rem)] w-60 shrink-0 self-start overflow-y-auto pe-2 lg:block"
       >
         <FacetSections
           facets={facets}

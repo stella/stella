@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
-    "seo": {
-      "browse": "Prehliadať judikatúru",
-      "countries": "Krajiny",
-      "courts": "Súdy",
-      "years": "Roky"
-    },
     "sort": {
       "newest": "Najnovšie",
       "relevance": "Najrelevantnejšie"

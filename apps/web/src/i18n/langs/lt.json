@@ -715,12 +715,6 @@
     "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
-    "seo": {
-      "browse": "Naršyti teismų praktiką",
-      "countries": "Šalys",
-      "courts": "Teismai",
-      "years": "Metai"
-    },
     "sort": {
       "newest": "Naujausi",
       "relevance": "Tinkamiausi"
