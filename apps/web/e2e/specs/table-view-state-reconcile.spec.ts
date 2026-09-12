@@ -21,6 +21,11 @@ const readContentModes = async (page: Page) =>
         ).state.contentMode;
   });
 
+const namedView = (label: string) => {
+  const id = randomUUID();
+  return { id, name: `${label} ${id.slice(0, 8)}` };
+};
+
 test.describe("per-view table state", () => {
   let workspace: TestWorkspace | null = null;
 
@@ -48,21 +53,25 @@ test.describe("per-view table state", () => {
       throw new Error("Test workspace was not created");
     }
 
-    const secondViewId = randomUUID();
-    const secondViewName = `Second ${secondViewId.slice(0, 8)}`;
-    await apiPut(request, `/views/${testWorkspace.id}`, {
-      id: secondViewId,
-      name: secondViewName,
-      layout: {
-        type: "table",
-        version: 1,
-        columnOrder: [],
-        columnPinning: [testWorkspace.filePropertyId],
-        filters: [],
-        sorts: [],
-        hiddenProperties: [],
-      },
-    });
+    // Both views are created here rather than reusing the matter's own: the
+    // first auto-created view is the overview, which has no table toolbar.
+    const firstView = namedView("First");
+    const secondView = namedView("Second");
+    for (const { id, name } of [firstView, secondView]) {
+      await apiPut(request, `/views/${testWorkspace.id}`, {
+        id,
+        name,
+        layout: {
+          type: "table",
+          version: 1,
+          columnOrder: [],
+          columnPinning: [testWorkspace.filePropertyId],
+          filters: [],
+          sorts: [],
+          hiddenProperties: [],
+        },
+      });
+    }
 
     const { cookies } = await request.storageState();
     await page.context().addCookies(cookies);
@@ -77,15 +86,18 @@ test.describe("per-view table state", () => {
       )
       .toBe(200);
 
-    const viewUrl = `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`;
+    const viewUrl = `/workspaces/${testWorkspace.id}/${firstView.id}`;
     await page.goto(viewUrl, { waitUntil: "domcontentloaded" });
 
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+    const firstTab = page.getByRole("tab", {
+      exact: true,
+      name: firstView.name,
+    });
     const secondTab = page.getByRole("tab", {
       exact: true,
-      name: secondViewName,
+      name: secondView.name,
     });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(firstTab).toBeVisible({ timeout: 30_000 });
     await expect(secondTab).toBeVisible();
 
     // Content mode is persisted alongside column widths and is one click to
@@ -105,19 +117,22 @@ test.describe("per-view table state", () => {
         message: "both views' content mode reached storage",
       })
       .toEqual({
-        [testWorkspace.viewId]: "fit-content",
-        [secondViewId]: "fit-content",
+        [firstView.id]: "fit-content",
+        [secondView.id]: "fit-content",
       });
 
-    await apiDelete(request, `/views/${testWorkspace.id}/view/${secondViewId}`);
+    await apiDelete(
+      request,
+      `/views/${testWorkspace.id}/view/${secondView.id}`,
+    );
 
     await page.goto(viewUrl, { waitUntil: "domcontentloaded" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(firstTab).toBeVisible({ timeout: 30_000 });
     await expect(secondTab).toBeHidden();
     await expect
       .poll(async () => (await readContentModes(page))?.[testWorkspace.id], {
         message: "the deleted view's state is gone and the other's kept",
       })
-      .toEqual({ [testWorkspace.viewId]: "fit-content" });
+      .toEqual({ [firstView.id]: "fit-content" });
   });
 });
