@@ -1126,7 +1126,7 @@
     "@libpdf/core": "0.4.2",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.82.0",
-    "@silurus/ooxml": "0.84.1",
+    "@silurus/ooxml": "0.86.1",
     "@stll/anonymize": "3.0.0",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.0",
@@ -2502,7 +2502,7 @@
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
 
-    "@silurus/ooxml": ["@silurus/ooxml@0.84.1", "", {}, "sha512-GlWQ6Du7X91aHttPbMtxEw4ixZJ4wOVJ5ThMPq4VDe32VThpT6Tqdv2nSp484OJ8blGRF1Y6oGT6qzhI0h2oOw=="],
+    "@silurus/ooxml": ["@silurus/ooxml@0.86.1", "", {}, "sha512-Ah8o9RtKyPytAGP8a+7VJhde8tHNCLA7pi1CRv1jkLOd1eLrRLXxjnoEWOkpce/9zPeS9IBWRzNye7vS/KN4Sw=="],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.34.52", "", {}, "sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw=="],
 
