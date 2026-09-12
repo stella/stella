@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.6.0
+
+### Minor Changes
+
+- [#3274](https://github.com/stella/stella/pull/3274) [`ce1c268`](https://github.com/stella/stella/commit/ce1c268624ab650084f6216931995ee3ea4c9b7d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export registry-specific built-in company formats and distinguish legal company specifications from registry references.
+
 ## 0.5.0
 
 ### Minor Changes
