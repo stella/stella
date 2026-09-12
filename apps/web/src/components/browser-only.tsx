@@ -7,6 +7,7 @@ type BrowserOnlyProps = {
   fallback?: ReactNode;
 };
 
+/** Streams a fallback during SSR, then reveals children in the browser. */
 export const BrowserOnly = ({
   children,
   fallback = null,
@@ -16,6 +17,7 @@ export const BrowserOnly = ({
   </Suspense>
 );
 
+/** Suspends before browser-dependent children are evaluated. */
 const BrowserContent = ({ children }: Pick<BrowserOnlyProps, "children">) => {
   use(browser());
   return children;

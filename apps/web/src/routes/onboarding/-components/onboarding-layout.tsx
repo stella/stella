@@ -131,6 +131,7 @@ export const OnboardingLayout = ({
   );
 };
 
+/** Focuses the newly rendered step without moving the current viewport. */
 const focusStep = (fragment: FragmentInstance | null) => {
   fragment?.focus({ preventScroll: true });
 };
