@@ -554,10 +554,11 @@ test("a newest scan requests the timestamp field descending", async () => {
     timestampField: DECISION_TIMESTAMP_FIELD,
   });
 
-  // The highlight round addresses named passages and stays on relevance, so
-  // the scan's own order is what this asserts.
-  expect(requestedSortOrders()).toContain(`-${DECISION_TIMESTAMP_FIELD}`);
-  expect(requestedSortOrders()).not.toContain("-_score");
+  // The bare field name IS the descending form on this engine; a `-` prefix
+  // reverses it. The highlight round addresses named passages and stays on
+  // relevance, so the scan's own order is what this asserts.
+  expect(requestedSortOrders()).toContain(DECISION_TIMESTAMP_FIELD);
+  expect(requestedSortOrders()).not.toContain(`-${DECISION_TIMESTAMP_FIELD}`);
 });
 
 test("ingest fails when the engine accepts fewer documents than sent", async () => {

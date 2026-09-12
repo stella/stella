@@ -84,7 +84,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
-import { withCaseLawNewestEra } from "@/api/lib/legal-search/case-law-newest-era";
+import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
@@ -764,7 +764,7 @@ const resolveCorpusIndexQuery = async ({
     }
     const expand = expanderByQuery.get(resolved.query);
     return (facet) =>
-      withCaseLawNewestEra(
+      withCaseLawDatedDecisions(
         buildCorpusIndexQuery({
           body: bodyWithoutFacetFilter(body, facet),
           jurisdictionClause,
@@ -1566,10 +1566,10 @@ export const searchCorpusIndexDecisions = async (
   // The facets and the total describe the whole result set, so they are read
   // beside the scan rather than after it: nothing in the page depends on them,
   // and a reader waits through the slower of the two instead of the sum.
-  // What the requested order can actually rank. The page, the total and every
+  // The decisions the requested order can rank. The page, the total and every
   // facet read the same narrowed query, so the counts describe the decisions
   // the pages reach.
-  const scopedQuery = withCaseLawNewestEra(resolved.query, sort);
+  const scopedQuery = withCaseLawDatedDecisions(resolved.query, sort);
 
   const [searchPage, facetsAndTotal] = await Promise.all([
     readCorpusIndexSearchPage({

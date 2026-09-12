@@ -9,10 +9,9 @@ import type { SearchSort } from "@/api/lib/legal-search/corpus-search-order";
  * the source never dated cannot be ranked by date at all, so it is left out
  * of the page, the total and every facet alike rather than piled at one end.
  *
- * The corpus-index branch draws the same line one step tighter — its
- * descending sort misorders a negative epoch, so it floors at 1970 (see
- * `case-law-newest-era.ts`). Postgres orders every date correctly, so this
- * side keeps the decisions that one cannot rank.
+ * The corpus-index branch draws the same line as a bounded range over the
+ * decision's own date (`case-law-dated-decisions.ts`), because its projection
+ * writes a sentinel date where this column simply holds NULL.
  */
 export const decisionDatedFilterSql = (sort: SearchSort): SQL => {
   switch (sort) {
