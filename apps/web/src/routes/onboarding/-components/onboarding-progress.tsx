@@ -22,18 +22,18 @@ export const OnboardingProgress = ({
   ];
 
   return (
-    <div className="mb-10 flex items-center gap-4">
+    <div className="mb-10 flex items-start gap-4">
       {Array.from({ length: totalSteps }, (_, i) => (
-        <div className="flex flex-col gap-1.5" key={i}>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5" key={i}>
           <div
             className={cn(
-              "h-1.5 w-12 rounded-full transition-colors duration-300",
+              "h-1.5 w-12 max-w-full rounded-full transition-colors duration-300",
               i <= currentStep ? "bg-foreground" : "bg-border",
             )}
           />
           <span
             className={cn(
-              "text-[11px] transition-colors duration-300",
+              "text-[11px] wrap-anywhere transition-colors duration-300",
               i <= currentStep
                 ? "text-muted-foreground"
                 : "text-foreground-disabled",
