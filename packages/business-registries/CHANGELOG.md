@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.5.0
+
+### Minor Changes
+
+- [#3161](https://github.com/stella/stella/pull/3161) [`7cd31dd`](https://github.com/stella/stella/commit/7cd31dde35b8fea728de5c4d65bfd41945ba6552) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export shared ARES company-format tokens and support instrumental court names in registry output.
+
 ## 0.4.1
 
 ### Patch Changes
