@@ -11,8 +11,6 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 readonly repo_root
 readonly constraints_migration="20260825220000_better_auth_17_constraints"
 readonly constraints_sql="$repo_root/apps/api/drizzle/$constraints_migration/migration.sql"
-readonly account_key_migration="20260912100000_better_auth_173_account_key"
-readonly account_key_sql="$repo_root/apps/api/drizzle/$account_key_migration/migration.sql"
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required" >&2
@@ -25,30 +23,25 @@ fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   constraints_hash="$(sha256sum "$constraints_sql" | awk '{ print $1 }')"
-  account_key_hash="$(sha256sum "$account_key_sql" | awk '{ print $1 }')"
 elif command -v shasum >/dev/null 2>&1; then
   constraints_hash="$(shasum -a 256 "$constraints_sql" | awk '{ print $1 }')"
-  account_key_hash="$(shasum -a 256 "$account_key_sql" | awk '{ print $1 }')"
 else
   echo "sha256sum or shasum is required" >&2
   exit 1
 fi
 readonly constraints_hash
-readonly account_key_hash
 
 recorded_constraints="$(
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At \
     -v constraints_migration="$constraints_migration" \
-    -v constraints_hash="$constraints_hash" \
-    -v account_key_migration="$account_key_migration" \
-    -v account_key_hash="$account_key_hash" <<'SQL'
+    -v constraints_hash="$constraints_hash" <<'SQL'
 SELECT count(*) FROM drizzle.__drizzle_migrations
-WHERE (name = :'constraints_migration' AND hash = :'constraints_hash')
-   OR (name = :'account_key_migration' AND hash = :'account_key_hash');
+WHERE name = :'constraints_migration'
+  AND hash = :'constraints_hash';
 SQL
 )"
-if [[ "$recorded_constraints" -ne 2 ]]; then
-  echo "Expected matching Better Auth constraints and account-key migration receipts" >&2
+if [[ "$recorded_constraints" -ne 1 ]]; then
+  echo "Expected exactly one matching Better Auth constraints migration receipt" >&2
   exit 1
 fi
 
@@ -59,11 +52,9 @@ recorded_before="$(
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -v constraints_migration="$constraints_migration" \
-  -v constraints_hash="$constraints_hash" \
-  -v account_key_migration="$account_key_migration" \
-  -v account_key_hash="$account_key_hash" <<'SQL' >/dev/null
+  -v constraints_hash="$constraints_hash" <<'SQL' >/dev/null
 BEGIN;
-DROP INDEX IF EXISTS "account_issuer_account_id_uidx";
+DROP INDEX "account_issuer_account_id_uidx";
 ALTER TABLE "account"
   ALTER COLUMN "issuer" DROP NOT NULL;
 INSERT INTO "user" ("id", "name", "email")
@@ -76,8 +67,8 @@ VALUES (
   'constraint-retry-user', NULL, now()
 );
 DELETE FROM drizzle.__drizzle_migrations
-WHERE (name = :'constraints_migration' AND hash = :'constraints_hash')
-   OR (name = :'account_key_migration' AND hash = :'account_key_hash');
+WHERE name = :'constraints_migration'
+  AND hash = :'constraints_hash';
 COMMIT;
 SQL
 
@@ -92,7 +83,7 @@ if (
   exit 1
 fi
 
-if ! grep -Fq 'P0001' "$failure_log"; then
+if ! grep -Fq 'account_issuer_not_null_check' "$failure_log"; then
   echo "Constraints migration failed for an unrelated reason" >&2
   tail -40 "$failure_log" >&2
   exit 1
@@ -124,9 +115,7 @@ SQL
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -v constraints_migration="$constraints_migration" \
-  -v constraints_hash="$constraints_hash" \
-  -v account_key_migration="$account_key_migration" \
-  -v account_key_hash="$account_key_hash" <<'SQL' >/dev/null
+  -v constraints_hash="$constraints_hash" <<'SQL' >/dev/null
 BEGIN;
 ALTER TABLE "account"
   ALTER COLUMN "issuer" DROP NOT NULL;
@@ -134,8 +123,8 @@ ALTER TABLE "account"
   ADD CONSTRAINT "account_issuer_not_null_check"
   CHECK ("issuer" IS NOT NULL) NOT VALID;
 DELETE FROM drizzle.__drizzle_migrations
-WHERE (name = :'constraints_migration' AND hash = :'constraints_hash')
-   OR (name = :'account_key_migration' AND hash = :'account_key_hash');
+WHERE name = :'constraints_migration'
+  AND hash = :'constraints_hash';
 COMMIT;
 SQL
 
@@ -143,8 +132,8 @@ recorded_interrupted="$(
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc \
     'SELECT count(*) FROM drizzle.__drizzle_migrations'
 )"
-if [[ "$recorded_interrupted" -ne $((recorded_before - 2)) ]]; then
-  echo "Interrupted rehearsal did not remove exactly two migration receipts" >&2
+if [[ "$recorded_interrupted" -ne $((recorded_before - 1)) ]]; then
+  echo "Interrupted rehearsal did not remove exactly one migration receipt" >&2
   exit 1
 fi
 
@@ -157,7 +146,7 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
 SELECT
   (SELECT count(*) = ${recorded_before}
    FROM drizzle.__drizzle_migrations)
-  AND NOT (SELECT attnotnull
+  AND (SELECT attnotnull
        FROM pg_attribute
        WHERE attrelid = 'public.account'::regclass
          AND attname = 'issuer')
@@ -167,162 +156,12 @@ SELECT
     WHERE conrelid = 'public.account'::regclass
       AND conname = 'account_issuer_not_null_check'
   )
-  AND to_regclass('public.account_issuer_account_id_uidx') IS NULL;
+  AND (SELECT indisvalid AND indisready
+       FROM pg_index
+       WHERE indexrelid = 'public.account_issuer_account_id_uidx'::regclass);
 " | grep -qx t || {
   echo "Retried Better Auth constraints migration did not converge" >&2
   exit 1
 }
 
-echo "Better Auth account migrations converged after interrupted receipts"
-
-# Rewind only the account-key migration to the pre-cutover shape. Two rows that
-# differ only by issuer are valid under the historical index, but must stop the
-# new migration before it drops that index or relaxes issuer.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -v account_key_migration="$account_key_migration" \
-  -v account_key_hash="$account_key_hash" <<'SQL' >/dev/null
-BEGIN;
-DROP INDEX IF EXISTS "account_provider_account_id_uidx";
-ALTER TABLE "account" ALTER COLUMN "issuer" SET NOT NULL;
-CREATE UNIQUE INDEX "account_issuer_account_id_uidx"
-  ON "account" ("issuer", "account_id");
-INSERT INTO "user" ("id", "name", "email")
-VALUES
-  ('account-key-duplicate-user-a', 'Account Key Duplicate A', 'account-key-duplicate-a@example.invalid'),
-  ('account-key-duplicate-user-b', 'Account Key Duplicate B', 'account-key-duplicate-b@example.invalid');
-INSERT INTO "account" (
-  "id", "account_id", "provider_id", "user_id", "issuer", "updated_at"
-)
-VALUES
-  ('account-key-duplicate-a', 'account-key-duplicate', 'google',
-   'account-key-duplicate-user-a', 'issuer-a', now()),
-  ('account-key-duplicate-b', 'account-key-duplicate', 'google',
-   'account-key-duplicate-user-b', 'issuer-b', now());
-DELETE FROM drizzle.__drizzle_migrations
-WHERE name = :'account_key_migration' AND hash = :'account_key_hash';
-COMMIT;
-SQL
-
-duplicate_failure_log="$(mktemp)"
-readonly duplicate_failure_log
-trap 'rm -f "$failure_log" "$duplicate_failure_log"' EXIT
-if (
-  cd "$repo_root/apps/api"
-  bun run src/db/migrate.ts
-) >"$duplicate_failure_log" 2>&1; then
-  echo "Account-key migration accepted duplicate provider/account rows" >&2
-  exit 1
-fi
-
-if ! grep -Fq '23505' "$duplicate_failure_log"; then
-  echo "Account-key migration failed for an unrelated reason" >&2
-  tail -40 "$duplicate_failure_log" >&2
-  exit 1
-fi
-
-if grep -Fq 'account-key-duplicate' "$duplicate_failure_log"; then
-  echo "Account-key migration leaked a fixture identity into its failure log" >&2
-  exit 1
-fi
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
-SELECT
-  (SELECT count(*) = 2 FROM \"account\"
-   WHERE \"account_id\" = 'account-key-duplicate')
-  AND (SELECT attnotnull
-       FROM pg_attribute
-       WHERE attrelid = 'public.account'::regclass
-         AND attname = 'issuer')
-  AND to_regclass('public.account_issuer_account_id_uidx') IS NOT NULL
-  AND to_regclass('public.account_provider_account_id_uidx') IS NOT NULL
-  AND NOT (SELECT indisvalid
-           FROM pg_index
-           WHERE indexrelid = 'public.account_provider_account_id_uidx'::regclass)
-  AND NOT EXISTS (
-    SELECT 1 FROM drizzle.__drizzle_migrations
-    WHERE name = '${account_key_migration}' AND hash = '${account_key_hash}'
-  );
-" | grep -qx t || {
-  echo "Duplicate account-key rehearsal changed rows or committed the cutover" >&2
-  exit 1
-}
-
-# Remove the conflicting rows, leaving the failed concurrent build behind.
-# The next migration run must repair that invalid index and finish the cutover.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
-DELETE FROM "account"
-WHERE "id" IN ('account-key-duplicate-a', 'account-key-duplicate-b');
-DELETE FROM "user"
-WHERE "id" IN ('account-key-duplicate-user-a', 'account-key-duplicate-user-b');
-SQL
-
-(
-  cd "$repo_root/apps/api"
-  bun run src/db/migrate.ts
-)
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
-SELECT
-  (SELECT indisvalid AND indisready AND indisunique
-   FROM pg_index
-   WHERE indexrelid = 'public.account_provider_account_id_uidx'::regclass)
-  AND to_regclass('public.account_issuer_account_id_uidx') IS NULL
-  AND NOT (SELECT attnotnull
-       FROM pg_attribute
-       WHERE attrelid = 'public.account'::regclass
-         AND attname = 'issuer')
-  AND EXISTS (
-    SELECT 1 FROM drizzle.__drizzle_migrations
-    WHERE name = '${account_key_migration}' AND hash = '${account_key_hash}'
-  );
-" | grep -qx t || {
-  echo "Retried account-key migration did not repair the interrupted index build" >&2
-  exit 1
-}
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
-INSERT INTO "user" ("id", "name", "email")
-VALUES
-  ('account-key-null-user', 'Account Key Null', 'account-key-null@example.invalid'),
-  ('account-key-provider-user', 'Account Key Provider', 'account-key-provider@example.invalid');
-INSERT INTO "account" (
-  "id", "account_id", "provider_id", "user_id", "issuer", "updated_at"
-)
-VALUES
-  ('account-key-null', 'account-key-null', 'google',
-   'account-key-null-user', NULL, now()),
-  ('account-key-provider', 'account-key-null', 'github',
-   'account-key-provider-user', NULL, now());
-SQL
-
-duplicate_insert_log="$(mktemp)"
-readonly duplicate_insert_log
-trap 'rm -f "$failure_log" "$duplicate_failure_log" "$duplicate_insert_log"' EXIT
-if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 >"$duplicate_insert_log" 2>&1 <<'SQL'
-INSERT INTO "account" (
-  "id", "account_id", "provider_id", "user_id", "issuer", "updated_at"
-)
-VALUES (
-  'account-key-duplicate-after-cutover', 'account-key-null', 'google',
-  'account-key-null-user', NULL, now()
-);
-SQL
-then
-  echo "Account-key index accepted a duplicate provider/account pair" >&2
-  exit 1
-fi
-
-if ! grep -Fq 'account_provider_account_id_uidx' "$duplicate_insert_log"; then
-  echo "Duplicate account-key insert failed for an unrelated reason" >&2
-  cat "$duplicate_insert_log" >&2
-  exit 1
-fi
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
-DELETE FROM "account"
-WHERE "id" IN ('account-key-null', 'account-key-provider');
-DELETE FROM "user"
-WHERE "id" IN ('account-key-null-user', 'account-key-provider-user');
-SQL
-
-echo "Better Auth account-key cutover preserves issuer on failure and converges on retry"
+echo "Better Auth constraints migration converged after an interrupted receipt"

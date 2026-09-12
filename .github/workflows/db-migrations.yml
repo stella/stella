@@ -7,7 +7,6 @@ on:
       - "apps/api/src/db/**"
       - "apps/api/src/server.ts"
       - "apps/api/src/lib/db/**"
-      - "apps/api/src/scripts/better-auth-*"
       - "apps/api/drizzle/**"
       - "apps/api/drizzle.config.ts"
       - "scripts/check-migration-safety.ts"
@@ -195,7 +194,6 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           EMAIL_PROVIDER: smtp
           FRONTEND_URL: "http://127.0.0.1:3000"
-          PUBLIC_URL: "https://migration-smoke.example.invalid"
           GOTENBERG_PASSWORD: gotenberg
           GOTENBERG_URL: "http://127.0.0.1:3000"
           GOTENBERG_USERNAME: gotenberg
@@ -224,11 +222,6 @@ jobs:
           for _ in {1..60}; do
             if curl -fsS http://127.0.0.1:3001/live >/dev/null \
               && grep -q '"message":"scheduler.started"' "$log_file"; then
-              bun build --target bun \
-                --outfile "$RUNNER_TEMP/better-auth-migration-audit.js" \
-                src/scripts/better-auth-migration-audit.ts
-              bun "$RUNNER_TEMP/better-auth-migration-audit.js" health \
-                --oauth-base-url "$PUBLIC_URL"
               exit 0
             fi
             if ! kill -0 "$api_pid" >/dev/null 2>&1; then

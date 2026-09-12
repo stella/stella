@@ -67,10 +67,10 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "account_provider_account_id_uidx" ON public."account" USING btree ("provider_id", "account_id")',
-    definitionBody: "ON public.account USING btree (provider_id, account_id)",
+      'CREATE UNIQUE INDEX CONCURRENTLY "account_issuer_account_id_uidx" ON public."account" USING btree ("issuer", "account_id")',
+    definitionBody: "ON public.account USING btree (issuer, account_id)",
     isUnique: true,
-    name: "account_provider_account_id_uidx",
+    name: "account_issuer_account_id_uidx",
     tableName: "account",
   },
   {
@@ -205,9 +205,6 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
     final.name,
     staged.name,
   ]),
-  // A historical migration used IF NOT EXISTS with online repair. Better Auth
-  // 1.7.3 retires this index, so it remains validated but is no longer repaired.
-  "account_issuer_account_id_uidx",
 ]);
 
 type OnlineIndexReplacement = {
@@ -216,10 +213,6 @@ type OnlineIndexReplacement = {
 };
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
-  {
-    legacyName: "account_issuer_account_id_uidx",
-    replacementNames: ["account_provider_account_id_uidx"],
-  },
   {
     legacyName: "case_law_decisions_source_case_lang_idx",
     replacementNames: [

@@ -1,19 +1,16 @@
 /**
  * Usage:
  *   bun src/scripts/better-auth-migration-audit.ts pre-migration --baseline <path> --identity-map <path> --oauth-base-url <https-origin>
- *   bun src/scripts/better-auth-migration-audit.ts pre-account-key --baseline <path> --oauth-base-url <https-origin>
  *   bun src/scripts/better-auth-migration-audit.ts <post-mode> --baseline <path> --oauth-base-url <https-origin>
- *   bun src/scripts/better-auth-migration-audit.ts health --oauth-base-url <https-origin>
  *
  * The baseline belongs on the rehearsal task's private tmpfs. It contains
  * auth-table counts and primary-key digests, and must never be uploaded as an
  * artifact. The command itself emits only redacted named check results.
  */
 
-import { panic, Result, TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { SQL } from "bun";
 import { sql } from "drizzle-orm";
-import type { SQL as DrizzleSQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { constants } from "node:fs";
 import { open, writeFile } from "node:fs/promises";
@@ -30,16 +27,11 @@ import {
   parseBetterAuthAuditBaseline,
   parseBetterAuthTrustedIdentityMap,
   renderBetterAuthAuditReport,
-  runBetterAuthAccountKeyAudit,
-  runBetterAuthHealthAudit,
   runBetterAuthMigrationAudit,
 } from "@/api/scripts/better-auth-migration-audit.logic";
 import type {
   BetterAuthAuditBaseline,
-  BetterAuthAuditReport,
   BetterAuthAuditMode,
-  BetterAuthAccountKeyAuditMode,
-  BetterAuthMigrationAuditMode,
   BetterAuthTrustedIdentityMap,
 } from "@/api/scripts/better-auth-migration-audit.logic";
 import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
@@ -51,7 +43,6 @@ const EXIT_CODE = {
 } as const;
 
 const TRANSACTION_TIMEOUT = "60s";
-const CONNECTION_TIMEOUT_SECONDS = 30;
 const LOCK_TIMEOUT = "2s";
 const MAX_TRUSTED_IDENTITY_MAP_BYTES = 16 * 1024 * 1024;
 
@@ -69,10 +60,6 @@ export class BetterAuthAuditCommandError extends TaggedError(
 
 type BetterAuthAuditCommandArgs =
   | {
-      mode: typeof BETTER_AUTH_AUDIT_MODES.HEALTH;
-      oauthBaseUrl: string;
-    }
-  | {
       baselinePath: string;
       identityMapPath: string;
       mode: typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION;
@@ -80,29 +67,11 @@ type BetterAuthAuditCommandArgs =
     }
   | {
       baselinePath: string;
-      mode: typeof BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY;
+      mode: Exclude<
+        BetterAuthAuditMode,
+        typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
+      >;
       oauthBaseUrl: string;
-    }
-  | {
-      baselinePath: string;
-      mode:
-        | Exclude<
-            BetterAuthMigrationAuditMode,
-            typeof BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION
-          >
-        | typeof BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY;
-      oauthBaseUrl: string;
-    };
-
-type BetterAuthAuditCommandRunResult =
-  | {
-      report: BetterAuthAuditReport;
-      type: typeof BETTER_AUTH_AUDIT_MODES.HEALTH;
-    }
-  | {
-      baseline: BetterAuthAuditBaseline;
-      report: BetterAuthAuditReport;
-      type: BetterAuthMigrationAuditMode | BetterAuthAccountKeyAuditMode;
     };
 
 const isAuditMode = (value: string): value is BetterAuthAuditMode =>
@@ -112,83 +81,59 @@ export const parseBetterAuthAuditArgs = (
   args: readonly string[],
 ): Result<BetterAuthAuditCommandArgs, BetterAuthAuditCommandError> => {
   const mode = args.at(0);
+  const baselineFlag = args.at(1);
+  const baselinePath = args.at(2);
+  const oauthBaseUrlFlag = args.at(
+    mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ? 5 : 3,
+  );
+  const oauthBaseUrl = args.at(
+    mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ? 6 : 4,
+  );
   const invalidArguments = () =>
     Result.err(
       new BetterAuthAuditCommandError({
         code: "invalid-arguments",
         message:
-          "Usage: better-auth-migration-audit health --oauth-base-url <https-url> | pre-migration --baseline <private-path> --identity-map <private-path> --oauth-base-url <https-url> | pre-account-key --baseline <private-path> --oauth-base-url <https-url> | <post-backfill|post-migration|post-account-key> --baseline <private-path> --oauth-base-url <https-url>",
+          "Usage: better-auth-migration-audit pre-migration --baseline <private-path> --identity-map <private-path> --oauth-base-url <https-url> | <post-backfill|post-migration> --baseline <private-path> --oauth-base-url <https-url>",
       }),
     );
-  if (mode === undefined || !isAuditMode(mode)) {
+  if (
+    mode === undefined ||
+    !isAuditMode(mode) ||
+    baselineFlag !== "--baseline" ||
+    baselinePath === undefined ||
+    baselinePath.length === 0 ||
+    oauthBaseUrlFlag !== "--oauth-base-url" ||
+    oauthBaseUrl === undefined
+  ) {
     return invalidArguments();
   }
-  switch (mode) {
-    case BETTER_AUTH_AUDIT_MODES.HEALTH: {
-      const oauthBaseUrl = args.at(2);
-      const normalizedOAuthBaseUrl =
-        oauthBaseUrl === undefined
-          ? null
-          : normalizeBetterAuthOAuthBaseUrl(oauthBaseUrl);
-      return args.at(1) === "--oauth-base-url" &&
-        normalizedOAuthBaseUrl !== null &&
-        args.length === 3
-        ? Result.ok({ mode, oauthBaseUrl: normalizedOAuthBaseUrl })
-        : invalidArguments();
-    }
-    case BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION: {
-      const baselinePath = args.at(2);
-      const identityMapPath = args.at(4);
-      const oauthBaseUrl = args.at(6);
-      const normalizedOAuthBaseUrl =
-        oauthBaseUrl === undefined
-          ? null
-          : normalizeBetterAuthOAuthBaseUrl(oauthBaseUrl);
-      return args.at(1) === "--baseline" &&
-        baselinePath !== undefined &&
-        baselinePath.length > 0 &&
-        args.at(3) === "--identity-map" &&
-        identityMapPath !== undefined &&
-        identityMapPath.length > 0 &&
-        args.at(5) === "--oauth-base-url" &&
-        normalizedOAuthBaseUrl !== null &&
-        args.length === 7
-        ? Result.ok({
-            baselinePath,
-            identityMapPath,
-            mode,
-            oauthBaseUrl: normalizedOAuthBaseUrl,
-          })
-        : invalidArguments();
-    }
-    case BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY:
-    case BETTER_AUTH_AUDIT_MODES.POST_BACKFILL:
-    case BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY:
-    case BETTER_AUTH_AUDIT_MODES.POST_MIGRATION: {
-      const baselinePath = args.at(2);
-      const oauthBaseUrl = args.at(4);
-      const normalizedOAuthBaseUrl =
-        oauthBaseUrl === undefined
-          ? null
-          : normalizeBetterAuthOAuthBaseUrl(oauthBaseUrl);
-      return args.at(1) === "--baseline" &&
-        baselinePath !== undefined &&
-        baselinePath.length > 0 &&
-        args.at(3) === "--oauth-base-url" &&
-        normalizedOAuthBaseUrl !== null &&
-        args.length === 5
-        ? Result.ok({
-            baselinePath,
-            mode,
-            oauthBaseUrl: normalizedOAuthBaseUrl,
-          })
-        : invalidArguments();
-    }
-    default: {
-      mode satisfies never;
-      return panic("Unhandled Better Auth audit mode");
-    }
+  const normalizedOAuthBaseUrl = normalizeBetterAuthOAuthBaseUrl(oauthBaseUrl);
+  if (normalizedOAuthBaseUrl === null) {
+    return invalidArguments();
   }
+  if (mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
+    const identityMapFlag = args.at(3);
+    const identityMapPath = args.at(4);
+    return identityMapFlag === "--identity-map" &&
+      identityMapPath !== undefined &&
+      identityMapPath.length > 0 &&
+      args.length === 7
+      ? Result.ok({
+          baselinePath,
+          identityMapPath,
+          mode,
+          oauthBaseUrl: normalizedOAuthBaseUrl,
+        })
+      : invalidArguments();
+  }
+  return args.length === 5
+    ? Result.ok({
+        baselinePath,
+        mode,
+        oauthBaseUrl: normalizedOAuthBaseUrl,
+      })
+    : invalidArguments();
 };
 
 const isNodeErrorCode = (value: unknown, code: string): boolean =>
@@ -333,38 +278,22 @@ const run = async (
 
   let baseline: BetterAuthAuditBaseline | null = null;
   let trustedIdentityMap: BetterAuthTrustedIdentityMap | null = null;
-  const commandMode = parsed.value.mode;
-  switch (commandMode) {
-    case BETTER_AUTH_AUDIT_MODES.HEALTH:
-      break;
-    case BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION: {
-      const loadedIdentityMap = await readBetterAuthTrustedIdentityMap(
-        parsed.value.identityMapPath,
-      );
-      if (Result.isError(loadedIdentityMap)) {
-        return loadedIdentityMap;
-      }
-      trustedIdentityMap = loadedIdentityMap.value;
-      break;
+  if (parsed.value.mode !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION) {
+    const loadedBaseline = await readBetterAuthAuditBaseline(
+      parsed.value.baselinePath,
+    );
+    if (loadedBaseline.status === "error") {
+      return loadedBaseline;
     }
-    case BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY:
-      break;
-    case BETTER_AUTH_AUDIT_MODES.POST_BACKFILL:
-    case BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY:
-    case BETTER_AUTH_AUDIT_MODES.POST_MIGRATION: {
-      const loadedBaseline = await readBetterAuthAuditBaseline(
-        parsed.value.baselinePath,
-      );
-      if (loadedBaseline.status === "error") {
-        return loadedBaseline;
-      }
-      baseline = loadedBaseline.value;
-      break;
+    baseline = loadedBaseline.value;
+  } else {
+    const loadedIdentityMap = await readBetterAuthTrustedIdentityMap(
+      parsed.value.identityMapPath,
+    );
+    if (Result.isError(loadedIdentityMap)) {
+      return loadedIdentityMap;
     }
-    default: {
-      commandMode satisfies never;
-      return panic("Unhandled Better Auth audit mode");
-    }
+    trustedIdentityMap = loadedIdentityMap.value;
   }
 
   const databaseUrl = resolveDatabaseUrl();
@@ -380,16 +309,9 @@ const run = async (
   const expectedOAuthResources = buildBetterAuthOAuthResources(
     parsed.value.oauthBaseUrl,
   );
-  const client = new SQL({
-    url: databaseUrl,
-    max: 1,
-    connectionTimeout: CONNECTION_TIMEOUT_SECONDS,
-  });
+  const client = new SQL({ url: databaseUrl, max: 1 });
   const database = drizzle({ client });
-  const executed = await Result.tryPromise<
-    Result<BetterAuthAuditCommandRunResult, BetterAuthAuditError>,
-    BetterAuthAuditError
-  >({
+  const executed = await Result.tryPromise({
     try: async () =>
       await database.transaction(async (transaction) => {
         await transaction.execute(
@@ -404,58 +326,15 @@ const run = async (
         await transaction.execute(
           sql`SELECT set_config('idle_in_transaction_session_timeout', ${TRANSACTION_TIMEOUT}, true)`,
         );
-        const auditDatabase = {
-          execute: async (statement: DrizzleSQL) =>
-            await transaction.execute(statement),
-        };
-        switch (commandMode) {
-          case BETTER_AUTH_AUDIT_MODES.HEALTH:
-            return Result.map(
-              await runBetterAuthHealthAudit({
-                database: auditDatabase,
-                expectedOAuthResources,
-              }),
-              (report) =>
-                ({
-                  report,
-                  type: BETTER_AUTH_AUDIT_MODES.HEALTH,
-                }) as const,
-            );
-          case BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION:
-          case BETTER_AUTH_AUDIT_MODES.POST_BACKFILL:
-          case BETTER_AUTH_AUDIT_MODES.POST_MIGRATION: {
-            const audited = await runBetterAuthMigrationAudit({
-              baseline,
-              database: auditDatabase,
-              expectedOAuthResources,
-              mode: commandMode,
-              trustedIdentityMap,
-            });
-            return audited.map(({ baseline: auditBaseline, report }) => ({
-              baseline: auditBaseline,
-              report,
-              type: commandMode,
-            }));
-          }
-          case BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY:
-          case BETTER_AUTH_AUDIT_MODES.POST_ACCOUNT_KEY: {
-            const audited = await runBetterAuthAccountKeyAudit({
-              baseline,
-              database: auditDatabase,
-              expectedOAuthResources,
-              mode: commandMode,
-            });
-            return audited.map(({ baseline: auditBaseline, report }) => ({
-              baseline: auditBaseline,
-              report,
-              type: commandMode,
-            }));
-          }
-          default: {
-            commandMode satisfies never;
-            return panic("Unhandled Better Auth audit mode");
-          }
-        }
+        return await runBetterAuthMigrationAudit({
+          baseline,
+          database: {
+            execute: async (statement) => await transaction.execute(statement),
+          },
+          expectedOAuthResources,
+          mode: parsed.value.mode,
+          trustedIdentityMap,
+        });
       }),
     catch: (cause) =>
       new BetterAuthAuditError({
@@ -472,35 +351,23 @@ const run = async (
     return executed.value;
   }
 
-  const auditResult = executed.value.value;
+  const { report, baseline: nextBaseline } = executed.value.value;
   if (
-    (parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION ||
-      parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY) &&
-    auditResult.report.status === "passed"
+    parsed.value.mode === BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION &&
+    report.status === "passed"
   ) {
-    if (
-      auditResult.type !== BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION &&
-      auditResult.type !== BETTER_AUTH_AUDIT_MODES.PRE_ACCOUNT_KEY
-    ) {
-      return Result.err(
-        new BetterAuthAuditCommandError({
-          code: "baseline-write-failed",
-          message: "Better Auth audit baseline was not produced",
-        }),
-      );
-    }
     const persisted = await persistBetterAuthAuditBaseline(
       parsed.value.baselinePath,
-      auditResult.baseline,
+      nextBaseline,
     );
     if (Result.isError(persisted)) {
       return persisted;
     }
   }
 
-  process.stdout.write(renderBetterAuthAuditReport(auditResult.report));
+  process.stdout.write(renderBetterAuthAuditReport(report));
   return Result.ok(
-    auditResult.report.status === "passed"
+    report.status === "passed"
       ? EXIT_CODE.SUCCESS
       : EXIT_CODE.INVARIANT_FAILURE,
   );

@@ -10,16 +10,13 @@ import { betterAuth } from "better-auth";
  * runtime's resolution of stored rows. Every replayed sign-in must resolve to
  * the account's existing user without creating a user or account row, and
  * every sampled session must resolve to its stored user. Output is counts
- * only. Every database write is contained in a transaction that always rolls
- * back, including successful replays and runtime failures.
+ * only.
  */
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
 import { Result, TaggedError } from "better-result";
 import { SQL } from "bun";
-import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
-import type { BunSQLDatabase } from "drizzle-orm/bun-sql/postgres/driver";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
@@ -109,30 +106,27 @@ const queryFailed = (cause: unknown) =>
     message: "Sign-in replay could not read the stored rows",
   });
 
-const readRows = async (database: Pick<BunSQLDatabase, "execute">) => {
+const readRows = async (client: SQL) => {
   const queried = await Result.tryPromise({
     try: async () => ({
-      microsoft: await database.execute(sql`
+      microsoft: await client`
         SELECT a.account_id AS "accountId", a.id_token AS "idToken",
                a.user_id AS "userId", u.email AS "email"
           FROM account a JOIN "user" u ON u.id = a.user_id
          WHERE a.provider_id = 'microsoft'
          ORDER BY a.id
          LIMIT ${MAX_SIGN_IN_ROWS + 1}
-      `),
-      sessions: await database.execute(sql`
+      `,
+      sessions: await client`
         SELECT token, user_id AS "userId"
           FROM session
          WHERE expires_at > now()
          ORDER BY expires_at DESC
          LIMIT ${MAX_SESSION_ROWS}
-      `),
-      userCount: await database.execute(
-        sql`SELECT count(*)::text AS "count" FROM "user"`,
-      ),
-      accountCount: await database.execute(
-        sql`SELECT count(*)::text AS "count" FROM account`,
-      ),
+      `,
+      userCount: await client`SELECT count(*)::text AS "count" FROM "user"`,
+      accountCount: await client`SELECT count(*)::text AS "count" FROM account`,
+      sessionCount: await client`SELECT count(*)::text AS "count" FROM session`,
     }),
     catch: queryFailed,
   });
@@ -169,17 +163,21 @@ const readRows = async (database: Pick<BunSQLDatabase, "execute">) => {
   }
   const userCount = queried.value.userCount.at(0);
   const accountCount = queried.value.accountCount.at(0);
+  const sessionCount = queried.value.sessionCount.at(0);
   if (
     !isRecord(userCount) ||
     typeof userCount["count"] !== "string" ||
     !isRecord(accountCount) ||
-    typeof accountCount["count"] !== "string"
+    typeof accountCount["count"] !== "string" ||
+    !isRecord(sessionCount) ||
+    typeof sessionCount["count"] !== "string"
   ) {
     return Result.err(queryFailed(undefined));
   }
   return Result.ok({
     accountCount: accountCount["count"],
     microsoft,
+    sessionCount: sessionCount["count"],
     sessions,
     userCount: userCount["count"],
   });
@@ -229,99 +227,10 @@ const run = async (
     max: 1,
     url: databaseUrl,
   });
-  try {
-    return await replayBetterAuthSignIns({
-      client,
-      clientId,
-      tenantId,
-      oauthBaseUrl,
-      sessionSample,
-    });
-  } finally {
-    await client.end();
-  }
-};
-
-type ReplayOptions = {
-  client: SQL;
-  clientId: string;
-  tenantId: string;
-  oauthBaseUrl: string;
-  sessionSample: number;
-};
-
-class SignInReplayRollback extends TaggedError("SignInReplayRollback")<{
-  message: string;
-  result: Result<ReplaySummary, BetterAuthSignInReplayError>;
-}> {}
-
-export const replayBetterAuthSignIns = async ({
-  client,
-  ...options
-}: ReplayOptions) => {
-  const database = drizzle({ client });
-  const transaction = await Result.tryPromise({
-    try: async () =>
-      database.transaction(
-        async (transactionDatabase) => {
-          await transactionDatabase.execute(
-            sql`SET LOCAL statement_timeout = '60s'`,
-          );
-          await transactionDatabase.execute(sql`SET LOCAL lock_timeout = '2s'`);
-          await transactionDatabase.execute(
-            sql`SET LOCAL idle_in_transaction_session_timeout = '60s'`,
-          );
-          const result = await replayWithinTransaction({
-            database: transactionDatabase,
-            ...options,
-          });
-          // Throwing is the driver's rollback protocol; no path can commit a replay.
-          throw new SignInReplayRollback({
-            message: "Sign-in replay rolled back",
-            result,
-          });
-        },
-        { isolationLevel: "repeatable read" },
-      ),
-    catch: (cause) =>
-      SignInReplayRollback.is(cause)
-        ? cause
-        : new BetterAuthSignInReplayError({
-            cause,
-            code: "replay-failed",
-            message: "Sign-in replay transaction failed",
-          }),
-  });
-  if (
-    Result.isError(transaction) &&
-    SignInReplayRollback.is(transaction.error)
-  ) {
-    return transaction.error.result;
-  }
-  return Result.err(
-    new BetterAuthSignInReplayError({
-      cause: Result.isError(transaction) ? transaction.error : undefined,
-      code: "replay-failed",
-      message: "Sign-in replay did not confirm transaction rollback",
-    }),
-  );
-};
-
-type ReplayWithinTransactionOptions = Omit<ReplayOptions, "client"> & {
-  database: BunSQLDatabase;
-};
-
-const replayWithinTransaction = async ({
-  database,
-  clientId,
-  tenantId,
-  oauthBaseUrl,
-  sessionSample,
-}: ReplayWithinTransactionOptions): Promise<
-  Result<ReplaySummary, BetterAuthSignInReplayError>
-> => {
-  const rows = await readRows(database);
+  const replayStartedAt = new Date();
+  const rows = await readRows(client);
   if (Result.isError(rows)) {
+    await client.end();
     return Result.err(rows.error);
   }
 
@@ -332,10 +241,9 @@ const replayWithinTransaction = async ({
     kid: SIGNING_KEY_ID,
     use: "sig",
   };
+  const database = drizzle({ client });
   const auth = betterAuth({
     baseURL: oauthBaseUrl,
-    // The CLI reports redacted outcomes; adapter errors may contain auth rows.
-    logger: { disabled: true },
     // A throwaway secret: nothing signed here outlives the replay.
     secret: Bun.randomUUIDv7() + Bun.randomUUIDv7(),
     database: drizzleAdapter(database, AUTH_DATABASE_ADAPTER_OPTIONS),
@@ -522,7 +430,27 @@ const replayWithinTransaction = async ({
     await resolveNext();
   }
 
-  const after = await readRows(database);
+  // Every replayed sign-in mints a session row; remove them so the database
+  // ends exactly as it started, and prove it by count.
+  const replayedUserIds = rows.value.microsoft.map(({ userId }) => userId);
+  const cleaned = await Result.tryPromise({
+    try: async () =>
+      replayedUserIds.length === 0
+        ? undefined
+        : await client`
+            DELETE FROM session
+             WHERE created_at >= ${replayStartedAt.toISOString()}::timestamptz
+               AND user_id IN ${client(replayedUserIds)}
+          `,
+    catch: (cause) =>
+      new BetterAuthSignInReplayError({
+        cause,
+        code: "database-query-failed",
+        message: "Sign-in replay could not remove its session rows",
+      }),
+  });
+  const after = Result.isError(cleaned) ? cleaned : await readRows(client);
+  await client.end();
   if (Result.isError(replayed)) {
     return Result.err(replayed.error);
   }
@@ -531,7 +459,8 @@ const replayWithinTransaction = async ({
   }
   if (
     after.value.userCount !== rows.value.userCount ||
-    after.value.accountCount !== rows.value.accountCount
+    after.value.accountCount !== rows.value.accountCount ||
+    after.value.sessionCount !== rows.value.sessionCount
   ) {
     outcomes.created += 1;
   }
