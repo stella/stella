@@ -87,6 +87,36 @@ export const REGISTRY_DEFAULT_FORMAT = {
   vies: BUSINESS_REGISTRY_FORMAT_CAPABILITIES.vies.defaultFormat,
 } satisfies Record<LookupRegistry, string>;
 
+const PREVIOUS_KRS_DEFAULT_FORMAT =
+  "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]";
+
+/**
+ * Formats that still represent an untouched built-in row when switching a
+ * registry. The KRS entry covers persisted manifests from before the
+ * registry-specific defaults; remove it after a migration rewrites those rows.
+ */
+const REGISTRY_RESEEDABLE_FORMATS = {
+  ares: [REGISTRY_DEFAULT_FORMAT.ares],
+  brreg: [REGISTRY_DEFAULT_FORMAT.brreg],
+  "companies-house": [REGISTRY_DEFAULT_FORMAT["companies-house"]],
+  denue: [REGISTRY_DEFAULT_FORMAT.denue],
+  edgar: [REGISTRY_DEFAULT_FORMAT.edgar],
+  gcis: [REGISTRY_DEFAULT_FORMAT.gcis],
+  krs: [REGISTRY_DEFAULT_FORMAT.krs, PREVIOUS_KRS_DEFAULT_FORMAT],
+  orsr: [REGISTRY_DEFAULT_FORMAT.orsr],
+  prh: [REGISTRY_DEFAULT_FORMAT.prh],
+  "recherche-entreprises": [REGISTRY_DEFAULT_FORMAT["recherche-entreprises"]],
+  vies: [REGISTRY_DEFAULT_FORMAT.vies],
+} as const satisfies Record<LookupRegistry, readonly string[]>;
+
+export const isRegistryReseedableFormat = (
+  registry: LookupRegistry,
+  format: string,
+): boolean =>
+  REGISTRY_RESEEDABLE_FORMATS[registry].some(
+    (candidate) => candidate === format,
+  );
+
 /** Curated token examples shown in Template Studio tooltips. */
 export const REGISTRY_FIELD_EXAMPLES: Partial<
   Record<LookupRegistry, Record<string, string>>

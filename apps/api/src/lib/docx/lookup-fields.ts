@@ -33,6 +33,7 @@ import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
 import {
   BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
+  parseRegistryFormatMarkdown,
   type RegistryFormatSlug,
 } from "@stll/business-registries/default-formats";
 import { validateEstablishmentId } from "@stll/business-registries/denue";
@@ -475,6 +476,7 @@ const lookupTemplateTokens = (
     }
     case "krs": {
       const { entity } = details;
+      tokens["seat"] = entity.registeredSeat?.locality ?? null;
       tokens["registry number"] = entity.krsNumber;
       tokens["NIP"] = entity.identifiers.nip;
       tokens["REGON"] = entity.identifiers.regon;
@@ -598,38 +600,21 @@ export const renderLookupOutput = (
 
 // ── Inline markdown in the rendered output ───────────────
 
-/** `**bold**` / `*italic*` spans in the author's format template. Spans do
- *  not nest and cannot contain asterisks, and an italic `*` never pairs
- *  against a `**` delimiter (lookarounds); anything unmatched (a stray `*`,
- *  empty `****`, an asterisk inside a substituted value) stays literal. */
-const LOOKUP_MARKDOWN_RE =
-  /\*\*(?<bold>[^*]+)\*\*|(?<!\*)\*(?<italic>[^*]+)\*(?!\*)/gu;
-
 /**
  * Parse a rendered lookup output into formatted runs: `**bold**` and
  * `*italic*` spans become correspondingly formatted runs, everything else
  * stays a plain run. Unmatched asterisks are left literal.
  */
-export const parseLookupMarkdown = (text: string): RichRun[] => {
-  const runs: RichRun[] = [];
-  let cursor = 0;
-  for (const match of text.matchAll(LOOKUP_MARKDOWN_RE)) {
-    if (match.index > cursor) {
-      runs.push({ text: text.slice(cursor, match.index) });
+export const parseLookupMarkdown = (text: string): RichRun[] =>
+  parseRegistryFormatMarkdown(text).map(({ text: runText, style }) => {
+    if (style === "bold") {
+      return { text: runText, bold: true };
     }
-    const [, bold, italic] = match;
-    if (bold !== undefined) {
-      runs.push({ text: bold, bold: true });
-    } else if (italic !== undefined) {
-      runs.push({ text: italic, italic: true });
+    if (style === "italic") {
+      return { text: runText, italic: true };
     }
-    cursor = match.index + match[0].length;
-  }
-  if (cursor < text.length) {
-    runs.push({ text: text.slice(cursor) });
-  }
-  return runs;
-};
+    return { text: runText };
+  });
 
 /** Plain text of a rendered lookup output with the `**` / `*` formatting
  *  markers removed — the live-preview path renders plain text only. */

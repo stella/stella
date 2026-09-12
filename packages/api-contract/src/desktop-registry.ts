@@ -4,7 +4,8 @@ export type DesktopRegistryConfig = {
   registries: {
     id: BusinessRegistrySlug;
     name: string;
-    formatType: "company-specification" | "registry-reference";
+    /** Absent only when a newer desktop is connected to an older API. */
+    formatType?: "company-specification" | "registry-reference";
   }[];
   defaultRegistryId: BusinessRegistrySlug | null;
 };

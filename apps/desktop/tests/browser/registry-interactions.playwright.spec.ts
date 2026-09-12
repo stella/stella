@@ -733,7 +733,12 @@ test("applies saved formatting and copies only the selected registry output", as
 test("opens the selected company's specification formats from the format menu", async ({
   page,
 }) => {
-  await openClipboard(page);
+  await openClipboard(page, {
+    status: "connected",
+    accountLabel: "https://api.example.test",
+    defaultRegistryId: "ares",
+    registries: [{ id: "ares", name: "Czech commercial registry" }],
+  });
   await activateRegistry(page);
   await page.getByRole("button", { name: "Format", exact: true }).click();
   await page

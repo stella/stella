@@ -611,9 +611,9 @@ export const RegistrySearch = ({
                     >
                       <PlusIcon aria-hidden="true" />
                       {t(
-                        formatType === "company-specification"
-                          ? "registryAddCompanyFormat"
-                          : "registryAddRegistryFormat",
+                        formatType === "registry-reference"
+                          ? "registryAddRegistryFormat"
+                          : "registryAddCompanyFormat",
                       )}
                     </MenuItem>
                   </MenuPopup>

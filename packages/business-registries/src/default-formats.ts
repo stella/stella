@@ -40,6 +40,49 @@ export const REGISTRY_FORMAT_SLUGS: readonly [
 
 export type RegistryFormatSlug = (typeof REGISTRY_FORMAT_SLUGS)[number];
 
+export type RegistryFormatRun = {
+  text: string;
+  style: "plain" | "bold" | "italic";
+  start: number;
+};
+
+const REGISTRY_FORMAT_MARKDOWN_RE =
+  /\*\*(?<bold>[^*]+)\*\*|(?<!\*)\*(?<italic>[^*]+)\*(?!\*)/gu;
+
+/** Parse the bold and italic markers supported by registry format templates. */
+export const parseRegistryFormatMarkdown = (
+  text: string,
+): RegistryFormatRun[] => {
+  const runs: RegistryFormatRun[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(REGISTRY_FORMAT_MARKDOWN_RE)) {
+    if (match.index > cursor) {
+      runs.push({
+        text: text.slice(cursor, match.index),
+        style: "plain",
+        start: cursor,
+      });
+    }
+    const [, bold, italic] = match;
+    if (bold !== undefined) {
+      runs.push({ text: bold, style: "bold", start: match.index });
+    } else if (italic !== undefined) {
+      runs.push({ text: italic, style: "italic", start: match.index });
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) {
+    runs.push({ text: text.slice(cursor), style: "plain", start: cursor });
+  }
+  return runs;
+};
+
+/** Remove supported format markers for plain-text clipboard output. */
+export const stripRegistryFormatMarkdown = (text: string): string =>
+  parseRegistryFormatMarkdown(text)
+    .map(({ text: runText }) => runText)
+    .join("");
+
 /**
  * Built-in output semantics for each registry. A company specification is
  * offered only when the upstream record contains the jurisdiction's core

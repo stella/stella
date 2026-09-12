@@ -421,6 +421,39 @@ describe("renderLookupOutput", () => {
     ).toBe("**Żabka Polska sp. z o.o.**, seat in *Poznań*");
   });
 
+  test("uses the KRS registered seat instead of the postal-address city", () => {
+    const hit = {
+      ...KRS_HIT,
+      details: {
+        registry: "krs",
+        entity: {
+          krsNumber: KRS_HIT.id,
+          register: "RejP",
+          name: KRS_HIT.name,
+          legalForm: KRS_HIT.legalForm,
+          identifiers: { nip: null, regon: null },
+          shareCapital: null,
+          address: null,
+          registeredSeat: {
+            country: "POLSKA",
+            voivodeship: "MAZOWIECKIE",
+            county: "WARSZAWA",
+            commune: "WARSZAWA",
+            locality: "Warszawa",
+          },
+          email: null,
+          website: null,
+          status: { type: "active" },
+          registeredAt: null,
+          lastEntryAt: null,
+          registryUrl: KRS_HIT.registryUrl,
+        },
+      },
+    } satisfies BusinessRegistryHit;
+
+    expect(renderLookupOutput("seat in [seat]", hit)).toBe("seat in Warszawa");
+  });
+
   test("uses the built-in format for null and the generic fallback for blank custom formats", () => {
     const fallback =
       "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań";
