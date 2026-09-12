@@ -263,10 +263,10 @@ const stripBlockComments = (
 };
 
 const countAsCasts = (content: string): number => {
-  let total = 0;
   let inModuleStmt = false;
   let inBlockComment = false;
   let literalState = NO_OPEN_TEMPLATE;
+  const codeLines: string[] = [];
 
   for (const raw of content.split("\n")) {
     const { code: lineCode, state } = stripLine(raw, literalState);
@@ -290,16 +290,17 @@ const countAsCasts = (content: string): number => {
       }
       continue;
     }
-    const scanned = code
-      .replace(AS_UNKNOWN_AS, () => AS_UNKNOWN_PLACEHOLDER)
-      .replace(
-        MAPPED_TYPE_KEY_REMAP,
-        (_match, mappedPrefix: string) =>
-          `${mappedPrefix}${MAPPED_TYPE_REMAP_PLACEHOLDER}`,
-      );
-    total += (scanned.match(AS_CAST) ?? []).length;
+    codeLines.push(code);
   }
-  return total;
+  const scanned = codeLines
+    .join("\n")
+    .replace(AS_UNKNOWN_AS, () => AS_UNKNOWN_PLACEHOLDER)
+    .replace(
+      MAPPED_TYPE_KEY_REMAP,
+      (_match, mappedPrefix: string) =>
+        `${mappedPrefix}${MAPPED_TYPE_REMAP_PLACEHOLDER}`,
+    );
+  return (scanned.match(AS_CAST) ?? []).length;
 };
 
 const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
@@ -2572,6 +2573,11 @@ const AS_CAST_FIXTURE_LINES = [
   "second line: also as filler",
   "end` as Widget;",
   `type Remapped<T> = { [K in keyof T as \`get\${K & string}\`]: T[K] };`,
+  "type MultilineRemapped<T> = {",
+  "  [",
+  "    K in keyof T as K extends string ? K : never",
+  "  ]: T[K];",
+  "};",
 ];
 const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // Expected as-casts: `a`(1), `c` collapsed(1), `d`(1), `real`'s two casts(2),
@@ -2580,8 +2586,8 @@ const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // `wide as narrow` / `other as thing` continuation lines), `as const`, the
 // pure-comment line, all three string-literal false positives (double/single/
 // template quoted), the escaped-quote string, the "as" text inside the
-// multi-line template body, and the "//" inside the url string are all
-// excluded.
+// multi-line template body, both single- and multi-line mapped-type remaps,
+// and the "//" inside the url string are all excluded.
 const EXPECTED_AS_CASTS = 7;
 
 const SUPER_LINEAR_REGEX_FIXTURE_LINES = [

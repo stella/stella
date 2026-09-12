@@ -2122,6 +2122,10 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "true"
         run: bun --filter @stll/web test:e2e:collab -- --project chromium
 
+      - name: Show API errors after a Vite canary failure
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        run: tail -200 /tmp/api.log
+
       # These imports load only through cold lazy routes; a mid-test optimizer
       # restart would make the apparent canary result nondeterministic.
       - name: Guard against mid-test Vite re-optimize
