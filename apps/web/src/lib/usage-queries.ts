@@ -16,7 +16,20 @@ export const usageEntitlementKeys = {
   ],
 };
 
+type UsageOverviewKey = {
+  organizationId: string;
+};
+
+export const usageOverviewKeys = {
+  all: ["usage", "overview"] as const,
+  byOrganization: ({ organizationId }: UsageOverviewKey) => [
+    ...usageOverviewKeys.all,
+    organizationId,
+  ],
+};
+
 type UsageEntitlementOptionsInput = QueryOptionsInput<UsageEntitlementKey>;
+type UsageOverviewOptionsInput = QueryOptionsInput<UsageOverviewKey>;
 
 /** The org's usage entitlement state; `{ entitlement: null }` when absent. */
 export type UsageEntitlementResponse = NonNullable<
@@ -28,6 +41,10 @@ export type UsageEntitlement = Exclude<
   { entitlement: null }
 >;
 
+export type UsageOverviewResponse = NonNullable<
+  Awaited<ReturnType<typeof api.usage.overview.get>>["data"]
+>;
+
 const fetchUsageEntitlement = async ({
   signal,
 }: {
@@ -36,6 +53,15 @@ const fetchUsageEntitlement = async ({
   const response = await api.usage.entitlement.get({
     fetch: { signal },
   });
+  return unwrapEden(response);
+};
+
+const fetchUsageOverview = async ({
+  signal,
+}: {
+  signal: AbortSignal;
+}): Promise<UsageOverviewResponse> => {
+  const response = await api.usage.overview.get({ fetch: { signal } });
   return unwrapEden(response);
 };
 
@@ -91,4 +117,12 @@ export const usageLaneOptions = ({ organizationId }: UsageLaneOptionsInput) =>
     queryKey: usageLaneKeys.byOrganization({ organizationId }),
     queryFn: fetchUsageLane,
     staleTime: USAGE_LANE_STALE_TIME_MS,
+  });
+
+export const usageOverviewOptions = ({
+  organizationId,
+}: UsageOverviewOptionsInput) =>
+  queryOptions({
+    queryKey: usageOverviewKeys.byOrganization({ organizationId }),
+    queryFn: fetchUsageOverview,
   });

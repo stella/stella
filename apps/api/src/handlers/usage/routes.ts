@@ -7,6 +7,7 @@ import getEntitlement from "@/api/handlers/usage/get-entitlement";
 import getLane from "@/api/handlers/usage/get-lane";
 import listPolicies from "@/api/handlers/usage/list-policies";
 import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
+import getOverview from "@/api/handlers/usage/overview/get";
 import unassignSeat from "@/api/handlers/usage/unassign-seat";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
@@ -27,6 +28,9 @@ export const usageRoute = new Elysia({ prefix: "/usage" })
   })
   .get("/lane", getLane.handler, {
     permissions: getLane.config.permissions,
+  })
+  .get("/overview", getOverview.handler, {
+    permissions: getOverview.config.permissions,
   })
   .get("/policies", listPolicies.handler, {
     permissions: listPolicies.config.permissions,

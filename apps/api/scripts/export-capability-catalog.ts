@@ -381,8 +381,9 @@ const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
  *    read_case_law_decision, search_legislation, and the public case-law
  *    routes); legislation and case-law capabilities (corpus analysis,
  *    matter-links into corpus decisions, ingestion admin) are corpus-backed.
- *  - FEATURE_USAGE gates only `get_usage` (tool disposition; inherited
- *    mechanically, no capability-disposition entries), so `usage` needs no row.
+ *  - FEATURE_USAGE gates `get_usage` (tool disposition; inherited
+ *    mechanically) and the usage admin overview capability, so `usage` maps
+ *    the capability-disposition entry to the same deployment gate.
  * Web-only flags (FEATURE_CHAT, FEATURE_CONTACTS, FEATURE_TODOS, ...) gate UI
  * routes, not any API surface (their REST routes mount unconditionally), so
  * they are deliberately NOT applied here: invoke stays exactly as gated as the
@@ -406,6 +407,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
+  usage: "FEATURE_USAGE",
 };
 
 type CapabilityMcp =
