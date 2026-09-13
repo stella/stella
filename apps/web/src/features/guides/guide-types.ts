@@ -1,3 +1,8 @@
+import type {
+  GuideProgressStatus,
+  GuideProgressTourId,
+} from "@stll/api-contract";
+
 import type { GuideAnchorId } from "@/features/guides/guide-anchors";
 import type { TranslationKey } from "@/i18n/types";
 import type { FileRouteTypes } from "@/routeTree.gen";
@@ -53,6 +58,15 @@ export type GuideStep = {
   interaction?: GuideInteraction;
 };
 
+// `kebab-case` wire id to the camelCase registry key, so the mapped checks
+// below name every contract member and nothing else.
+type CamelCase<S extends string> = S extends `${infer Head}-${infer Tail}`
+  ? `${Head}${Capitalize<CamelCase<Tail>>}`
+  : S;
+
+// Both maps satisfy a type mapped over the contract union: a tour id the API
+// does not accept, or a contract id with no registry entry, fails typecheck
+// here instead of at the first progress write.
 export const GUIDE_TOUR_IDS = {
   chat: "chat",
   chatPower: "chat-power",
@@ -60,7 +74,7 @@ export const GUIDE_TOUR_IDS = {
   playbooks: "playbooks",
   workflows: "workflows",
   tabularReview: "tabular-review",
-} as const;
+} as const satisfies { [K in GuideProgressTourId as CamelCase<K>]: K };
 
 export type GuideTourId = (typeof GUIDE_TOUR_IDS)[keyof typeof GUIDE_TOUR_IDS];
 
@@ -76,7 +90,7 @@ export const GUIDE_TOUR_STATUSES = {
   notStarted: "not-started",
   completed: "completed",
   skipped: "skipped",
-} as const;
+} as const satisfies { [K in GuideProgressStatus as CamelCase<K>]: K };
 
 export type GuideTourStatus =
   (typeof GUIDE_TOUR_STATUSES)[keyof typeof GUIDE_TOUR_STATUSES];

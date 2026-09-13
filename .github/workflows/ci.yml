@@ -2158,7 +2158,7 @@ jobs:
         if: always() && steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-blob-network-baseline
+          name: network-baseline-blob
           path: apps/web/e2e/test-results/blob-report/
           retention-days: 7
 
@@ -2216,7 +2216,7 @@ jobs:
       - name: Fail on route network baseline regression
         if: steps.network-baseline.outcome == 'failure'
         run: |
-          echo "Route network baseline regressed; see the playwright-blob-network-baseline artifact."
+          echo "Route network baseline regressed; see the network-baseline-blob artifact."
           exit 1
 
   stack-redaction-browsers:

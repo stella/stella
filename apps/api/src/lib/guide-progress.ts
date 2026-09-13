@@ -1,24 +1,12 @@
 import { sql } from "drizzle-orm";
 
+import type {
+  GuideProgressStatus,
+  GuideProgressTourId,
+} from "@stll/api-contract";
+
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
-
-export const GUIDE_PROGRESS_TOUR_IDS = [
-  "chat",
-  "documents",
-  "playbooks",
-  "workflows",
-  "tabular-review",
-] as const;
-
-export const GUIDE_PROGRESS_STATUSES = [
-  "not-started",
-  "completed",
-  "skipped",
-] as const;
-
-type GuideProgressTourId = (typeof GUIDE_PROGRESS_TOUR_IDS)[number];
-type GuideProgressStatus = (typeof GUIDE_PROGRESS_STATUSES)[number];
 
 type UpdatedGuideProgressRow = {
   guideProgress: string;

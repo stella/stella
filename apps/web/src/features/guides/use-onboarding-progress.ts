@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { GUIDE_PROGRESS_STATUSES } from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -30,11 +31,7 @@ import { readStoredJson } from "@/lib/stored-json";
 // next `setTourStatus` persists whatever was read.
 const storedBlobSchema = v.record(v.string(), v.unknown());
 
-const guideTourStatusSchema = v.picklist([
-  GUIDE_TOUR_STATUSES.notStarted,
-  GUIDE_TOUR_STATUSES.completed,
-  GUIDE_TOUR_STATUSES.skipped,
-]);
+const guideTourStatusSchema = v.picklist(GUIDE_PROGRESS_STATUSES);
 
 type StoredGuideProgress = Partial<Record<GuideTourId, GuideTourStatus>>;
 
