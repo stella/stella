@@ -1427,6 +1427,11 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
       allowsDerivedAi: v.boolean(),
     }),
     sourceUrl: v.nullable(v.string()),
+    // Where this decision's data is freely available. An agent quoting the
+    // decision has to be able to attribute it, and some courts make the
+    // attribution a condition of reuse, so the tool states the page rather
+    // than leaving the caller to derive one from `source.adapterKey`.
+    sourceAttributionUrl: v.nullable(v.string()),
     text: v.nullable(v.string()),
     charCount: v.nullable(v.number()),
     truncated: v.boolean(),

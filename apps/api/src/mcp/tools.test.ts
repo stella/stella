@@ -364,6 +364,7 @@ const createReadDecisionResult = () => ({
     name: "Nejvyšší soud",
   },
   sourceUrl: "https://example.test/decision",
+  sourceAttributionUrl: "https://example.test/decision",
 });
 
 const createSelectBuilder = (rows: unknown[]) => {
@@ -1703,6 +1704,7 @@ describe("OpenAI-compatible MCP tools", () => {
           name: "Nejvyšší soud",
         },
         sourceUrl: "https://example.test/decision",
+        sourceAttributionUrl: "https://example.test/decision",
         text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
         charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal.".length,
         truncated: false,
@@ -1820,6 +1822,7 @@ describe("OpenAI-compatible MCP tools", () => {
           name: "Nejvyšší soud",
         },
         sourceUrl: "https://example.test/decision",
+        sourceAttributionUrl: "https://example.test/decision",
         text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
         charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal.".length,
         truncated: false,
