@@ -644,7 +644,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "1.2.10",
+      "version": "1.2.11",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -717,7 +717,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "jszip": "catalog:",
         "slimdom": "^4.3.5",

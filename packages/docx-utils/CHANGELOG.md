@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.1.2
+
+### Patch Changes
+
+- [#3163](https://github.com/stella/stella/pull/3163) [`50a59c1`](https://github.com/stella/stella/commit/50a59c17a22fb018fd93c7608dd3055181d1da2c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect and remove attached Word template relationships from DOCX packages.
+
 ## 0.1.1
 
 ### Patch Changes
