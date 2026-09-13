@@ -784,12 +784,14 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     {
       id: ids.documentReferenceCounterA,
       organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
       reference: "REF-A1",
       lastValue: 0,
     },
     {
       id: ids.documentReferenceCounterB,
       organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
       reference: "REF-B1",
       lastValue: 0,
     },
