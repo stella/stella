@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.11
+
+### Patch Changes
+
+- [#3287](https://github.com/stella/stella/pull/3287) [`3fe20da`](https://github.com/stella/stella/commit/3fe20daae02ae1670694623d86b7ecd9f45cb95d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove retired Mistral model choices and update provider role defaults to models verified by the canary.
+
 ## 0.1.10
 
 ### Patch Changes
