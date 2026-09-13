@@ -24,6 +24,9 @@ ALTER TABLE "case_law_research_columns"
 -- for the table parent, and nothing selects on `table_id` now that the column
 -- is being nulled. The organization's own path, `clrc_org_position_idx`,
 -- serves every remaining read.
+-- The columns table holds at most a few hundred rows per organisation and the
+-- index is tiny, so the momentary ACCESS EXCLUSIVE lock is not a concern.
+-- squawk-ignore require-concurrent-index-deletion
 DROP INDEX IF EXISTS "clrc_table_position_idx";
 --> statement-breakpoint
 
