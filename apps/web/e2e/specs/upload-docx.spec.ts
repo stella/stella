@@ -191,7 +191,7 @@ test.describe("DOCX upload + inspector", () => {
     }
   });
 
-  test("browser edit save creates a persisted DOCX version with the typed text", async ({
+  test("leaving browser edit creates a persisted DOCX version with the typed text", async ({
     page,
     request,
   }) => {
@@ -247,11 +247,9 @@ test.describe("DOCX upload + inspector", () => {
       { waitUntil: "domcontentloaded" },
     );
 
-    const saveButton = page.getByRole("button", {
-      exact: true,
-      name: "Save",
-    });
-    await expect(saveButton).toBeEnabled({ timeout: 45_000 });
+    await expect(
+      page.locator('[aria-label="Document content"][contenteditable="true"]'),
+    ).toBeVisible({ timeout: 45_000 });
 
     const firstParagraphText = page.locator(".layout-run-text", {
       hasText: "Stella E2E test document.",
@@ -271,7 +269,7 @@ test.describe("DOCX upload + inspector", () => {
         response.url().endsWith("/finalize"),
       { timeout: 45_000 },
     );
-    await saveButton.click();
+    await page.locator(`a[href="/workspaces/${testWorkspace.id}"]`).click();
     expect((await finalizeResponse).ok()).toBe(true);
 
     await expect

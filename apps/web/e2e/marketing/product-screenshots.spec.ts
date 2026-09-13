@@ -104,7 +104,7 @@ const captures = [
       `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
       `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
     readyText: "Supplier_Agreement.docx",
-    readySelector: '.ProseMirror[contenteditable="true"]',
+    readySelector: '[aria-label="Document content"][contenteditable="true"]',
     // `?editing=true` is a request, not a state: without this the shot can
     // land on the read-only viewer while the editor is still unlocking. The
     // editable ProseMirror surface exists only after the request succeeds.
