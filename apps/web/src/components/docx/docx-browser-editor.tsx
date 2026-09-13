@@ -1719,7 +1719,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       flushPendingChanges,
       leave: async () => {
         if (isCollaborativeEditing) {
-          await handleCancel();
+          // Collaboration owns its snapshot lifecycle. Cancelling it from a
+          // route blocker races the room cleanup against its final flush.
           return true;
         }
         if (state.status === "editing") {
