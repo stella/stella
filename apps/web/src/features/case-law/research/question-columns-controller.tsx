@@ -57,6 +57,13 @@ import { detached } from "@/lib/detached";
  */
 
 type QuestionColumnsInput = {
+  /**
+   * Whether this surface asks questions at all. A surface that may hold no
+   * rows — a matter with nothing linked — passes what it already knows, so the
+   * organization's columns are never read speculatively on a route that will
+   * not draw them.
+   */
+  enabled: boolean;
   /** Every decision on the page, in the order it is drawn. */
   pageDecisionIds: readonly string[];
   /** The rows the reader picked; empty means the whole page. */
@@ -103,6 +110,7 @@ export type QuestionColumnsController = {
 };
 
 export const useQuestionColumns = ({
+  enabled,
   onShowSource,
   pageDecisionIds,
   selectedDecisionIds,
@@ -123,7 +131,7 @@ export const useQuestionColumns = ({
     ...questionColumnsOptions({
       activeOrganizationId: activeOrganizationId ?? "",
     }),
-    enabled: activeOrganizationId !== null,
+    enabled: enabled && activeOrganizationId !== null,
   });
   // Sorted, so the same page asks the same cache question whatever order the
   // rows arrived in.
@@ -133,7 +141,7 @@ export const useQuestionColumns = ({
       activeOrganizationId: activeOrganizationId ?? "",
       decisionIds,
     }),
-    enabled: activeOrganizationId !== null && decisionIds.length > 0,
+    enabled: enabled && activeOrganizationId !== null && decisionIds.length > 0,
   });
 
   const asked = columns ?? NO_QUESTION_COLUMNS;

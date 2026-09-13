@@ -25,6 +25,7 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
@@ -49,9 +50,20 @@ export const MatterCaseLawPanel = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { data: links = NO_LINKS, isLoading } = useQuery(
-    matterLinksOptions({ workspaceId }),
-  );
+  // The matter's links are their own read: the overview payload is the
+  // workspace slice's entity summary, and folding a three-table case-law join
+  // into it would make every matter pay for decisions it has none of. So one
+  // bounded request, off the route's critical path — not in the loader, and
+  // held until after paint so the overview finishes its round first.
+  const hasMounted = useHasMounted();
+  const { data: links = NO_LINKS, isLoading: isLoadingLinks } = useQuery({
+    ...matterLinksOptions({ workspaceId }),
+    enabled: hasMounted,
+  });
+  // A disabled query reports no loading, so without the gate the empty state
+  // would flash in the window between paint and the first response.
+  const isLoading = !hasMounted || isLoadingLinks;
+  const hasLinks = links.length > 0;
   // Linked decisions come from every jurisdiction the matter touched, so the
   // arrangement is the one the reader keeps for mixed listings rather than a
   // per-country one.
@@ -68,6 +80,9 @@ export const MatterCaseLawPanel = ({
   );
 
   const questions = useQuestionColumns({
+    // The organization's questions are only worth reading once the matter has
+    // a decision to ask them of; a matter with nothing linked asks nothing.
+    enabled: hasLinks,
     onShowSource: (decision, anchorId) => {
       detached(
         openDecisionAtPassage(navigate, decision, anchorId),
@@ -129,12 +144,14 @@ export const MatterCaseLawPanel = ({
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium">{t("common.caseLaw")}</h2>
-        <div className="flex items-center gap-1">
-          <QuestionColumnControls controller={questions} />
-        </div>
+        {hasLinks && (
+          <div className="flex items-center gap-1">
+            <QuestionColumnControls controller={questions} />
+          </div>
+        )}
       </div>
 
-      {!isLoading && links.length === 0 ? (
+      {!isLoading && !hasLinks ? (
         <p className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
           {t("caseLaw.matterLinks.empty")}
           <Button
