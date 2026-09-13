@@ -72,6 +72,8 @@ type ResearchTableViewProps = {
     column: ResearchColumn,
     action: ResearchColumnAction,
   ) => void;
+  /** Asks one failed cell again, from the cell itself. */
+  onRetryAnswer: (column: ResearchColumn, decisionId: string) => void;
   onSetDisposition: (
     decision: Decision,
     disposition: CaseLawResearchDisposition | null,
@@ -98,6 +100,7 @@ export const ResearchTableView = ({
   groupBy,
   isLoading,
   onColumnAction,
+  onRetryAnswer,
   onSetDisposition,
   onSetYesNoFilter,
   onShowSource,
@@ -122,6 +125,7 @@ export const ResearchTableView = ({
       citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
       language: t(DECISION_COLUMN_LABEL_KEYS.language),
     },
+    onRetryAnswer,
     onShowSource,
     renderActions: (row) => (
       <RowActions onSetDisposition={onSetDisposition} row={row} />
@@ -237,6 +241,7 @@ type BuildColumnsOptions = {
   answerColumns: readonly ResearchColumn[];
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
   labels: ColumnLabels;
+  onRetryAnswer: (column: ResearchColumn, decisionId: string) => void;
   onShowSource: (decision: Decision, anchorId: string) => void;
   renderActions: (row: ResearchRow<Decision>) => React.ReactNode;
   renderAnswerHeader: (column: ResearchColumn) => React.ReactNode;
@@ -255,6 +260,7 @@ const buildColumns = ({
   answerColumns,
   answersByKey,
   labels,
+  onRetryAnswer,
   onShowSource,
   renderActions,
   renderAnswerHeader,
@@ -297,6 +303,8 @@ const buildColumns = ({
       render: (row) => (
         <ResearchAnswerCell
           answer={answersByKey.get(answerKey(column.id, row.decision.id))}
+          answerType={column.answerType}
+          onRetry={() => onRetryAnswer(column, row.decision.id)}
           onShowSource={(anchorId) => onShowSource(row.decision, anchorId)}
         />
       ),

@@ -690,9 +690,6 @@
       "addColumn": "Přidat sloupec",
       "addQuestion": "Přidat otázku",
       "addQuestionHint": "Otázka se položí každému rozhodnutí v tabulce; odpovědi vzniknou, když sloupec spustíte.",
-      "answerType": "Druh odpovědi",
-      "answerTypeText": "Krátký text",
-      "answerTypeYesNo": "Ano / ne",
       "answering": "{count, plural, one {Odpovídám na # buňku…} few {Odpovídám na # buňky…} many {Odpovídám na # buňky…} other {Odpovídám na # buněk…}}",
       "answers": {
         "confidence": "Jistota {percent} %",

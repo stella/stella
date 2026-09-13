@@ -690,9 +690,6 @@
       "addColumn": "Pridėti stulpelį",
       "addQuestion": "Pridėti klausimą",
       "addQuestionHint": "Klausimas užduodamas kiekvienam lentelės sprendimui; atsakymai sukuriami paleidus stulpelį.",
-      "answerType": "Atsakymo rūšis",
-      "answerTypeText": "Trumpas tekstas",
-      "answerTypeYesNo": "Taip / ne",
       "answering": "{count, plural, one {Atsakoma į # langelį…} few {Atsakoma į # langelius…} many {Atsakoma į # langelio…} other {Atsakoma į # langelių…}}",
       "answers": {
         "confidence": "{percent} % patikimumas",

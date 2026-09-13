@@ -12,9 +12,16 @@ import type {
 } from "@tanstack/react-table";
 import {
   ArrowDownIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
   Columns3Icon,
+  EyeOffIcon,
   MoreHorizontalIcon,
-  PlayIcon,
+  PencilLineIcon,
+  PinIcon,
+  PinOffIcon,
+  RefreshCwIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -22,6 +29,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DataTable } from "@stll/ui/data-table";
 import type { DataTableColumn } from "@stll/ui/data-table";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -54,6 +62,7 @@ import {
 } from "@/features/case-law/decision-columns.logic";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
 import { queryHighlightTokens } from "@/features/case-law/headnote-highlight.logic";
+import { answerTypeMeta } from "@/features/case-law/research/answer-type";
 import {
   answerKey,
   NO_QUESTION_COLUMNS,
@@ -87,6 +96,8 @@ export type DecisionQuestionSurface = {
     column: QuestionColumn,
     action: QuestionColumnAction,
   ) => void;
+  /** Asks one failed cell again, from the cell itself. */
+  onRetryAnswer: (column: QuestionColumn, decisionId: string) => void;
   onShowSource: (decision: Decision, anchorId: string) => void;
   /** True while a run is being queued, so every run control settles together. */
   isRunning: boolean;
@@ -110,6 +121,12 @@ type DecisionTableProps = {
   /** Columns this screen adds to the shared model; empty on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
   isLoading: boolean;
+  /**
+   * The rows on screen answer the previous search while a new one is in
+   * flight. They stay readable and fade, rather than being replaced by a
+   * skeleton the reader has already read past.
+   */
+  isRefreshing?: boolean | undefined;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   onSelectedIdsChange: (decisionIds: string[]) => void;
@@ -153,6 +170,7 @@ export const DecisionTable = ({
   decisions,
   extraColumns = NO_EXTRA_COLUMNS,
   isLoading,
+  isRefreshing = false,
   layout,
   onLayoutChange,
   onSelectedIdsChange,
@@ -337,6 +355,8 @@ export const DecisionTable = ({
             answer={questions.answersByKey.get(
               answerKey(questionColumn.id, decision.id),
             )}
+            answerType={questionColumn.answerType}
+            onRetry={() => questions.onRetryAnswer(questionColumn, decision.id)}
             onShowSource={(anchorId) =>
               questions.onShowSource(decision, anchorId)
             }
@@ -405,13 +425,20 @@ export const DecisionTable = ({
   }
 
   return (
-    <div className="border-border/45 bg-background/60 overflow-hidden rounded-md border">
+    <div
+      aria-busy={isRefreshing}
+      className="border-border/45 bg-background/60 overflow-hidden rounded-md border"
+    >
       <div className="overflow-x-auto">
         <DataTable
           columns={[first, ...rest]}
           emptyLabel={t("common.noResults")}
           getRowProps={(decision) => ({
-            className: cn(rowSelection[decision.id] === true && "bg-muted/40"),
+            className: cn(
+              "transition-opacity duration-200",
+              rowSelection[decision.id] === true && "bg-muted/40",
+              isRefreshing && "opacity-56",
+            ),
           })}
           isLoading={isLoading}
           loadingLabel={t("common.loading")}
@@ -578,7 +605,14 @@ const ColumnArrangeMenu = ({
   );
 };
 
-/** The question, and what the reader can do to the column that asks it. */
+/**
+ * The question, and what the reader can do to the column that asks it.
+ *
+ * The whole header is the trigger and the menu carries the same actions in the
+ * same order as the matter table's AI column header — edit, arrange, run
+ * again, delete — because from the reader's side it is the same extraction
+ * engine asking the question.
+ */
 const QuestionColumnHeader = ({
   arrangement,
   column,
@@ -593,73 +627,72 @@ const QuestionColumnHeader = ({
   onAction: (column: QuestionColumn, action: QuestionColumnAction) => void;
 }) => {
   const t = useTranslations();
+  const index = arrangement.order.indexOf(columnId);
+  const pinned = arrangement.isPinned(columnId);
+  const AnswerTypeIcon = answerTypeMeta(column.answerType).icon;
 
   return (
-    <div className="group/header flex items-start gap-1">
-      <span
-        className="text-foreground line-clamp-2 font-medium"
-        title={column.question}
+    <Menu>
+      <MenuTrigger
+        render={
+          <button
+            className="hover:bg-accent flex w-full items-start gap-1.5 rounded-sm px-1 py-0.5 text-start"
+            title={column.question}
+            type="button"
+          />
+        }
       >
-        {column.question}
-      </span>
-      <Button
-        aria-label={t("caseLaw.research.runColumn")}
-        className="shrink-0"
-        disabled={isRunning}
-        onClick={() => onAction(column, "run")}
-        size="icon-sm"
-        title={t("caseLaw.research.runColumn")}
-        variant="ghost"
-      >
-        <PlayIcon aria-hidden="true" className="size-3.5" />
-      </Button>
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button
-              aria-label={t("common.actions")}
-              className="shrink-0"
-              size="icon-sm"
-              variant="ghost"
-            />
-          }
+        <AnswerTypeIcon
+          aria-hidden="true"
+          className="text-muted-foreground mt-0.5 size-3.5 shrink-0"
+        />
+        <span className="text-foreground line-clamp-2 font-medium">
+          {column.question}
+        </span>
+      </MenuTrigger>
+      <MenuPopup align="start" className="min-w-56">
+        <MenuItem onClick={() => onAction(column, "edit")}>
+          <PencilLineIcon />
+          {t("caseLaw.research.editQuestion")}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem
+          disabled={index <= 0}
+          onClick={() => arrangement.onMove(columnId, "earlier")}
         >
-          <MoreHorizontalIcon aria-hidden="true" className="size-4" />
-        </MenuTrigger>
-        <MenuPopup align="end">
-          <MenuItem onClick={() => onAction(column, "edit")}>
-            {t("caseLaw.research.editQuestion")}
-          </MenuItem>
-          <MenuItem
-            disabled={arrangement.order.indexOf(columnId) <= 0}
-            onClick={() => arrangement.onMove(columnId, "earlier")}
-          >
-            {t("caseLaw.columns.moveEarlier")}
-          </MenuItem>
-          <MenuItem
-            onClick={() => arrangement.onMove(columnId, "later")}
-            disabled={
-              arrangement.order.indexOf(columnId) >=
-              arrangement.order.length - 1
-            }
-          >
-            {t("caseLaw.columns.moveLater")}
-          </MenuItem>
-          <MenuItem onClick={() => arrangement.onTogglePin(columnId)}>
-            {arrangement.isPinned(columnId)
-              ? t("common.unpin")
-              : t("caseLaw.columns.pin")}
-          </MenuItem>
-          <MenuItem onClick={() => arrangement.onHide(columnId)}>
-            {t("caseLaw.columns.hide")}
-          </MenuItem>
-          <MenuSeparator />
-          <MenuItem onClick={() => onAction(column, "delete")}>
-            {t("caseLaw.research.deleteColumn")}
-          </MenuItem>
-        </MenuPopup>
-      </Menu>
-    </div>
+          <DirectionalIcon icon={ArrowLeftIcon} />
+          {t("caseLaw.columns.moveEarlier")}
+        </MenuItem>
+        <MenuItem
+          disabled={index === -1 || index >= arrangement.order.length - 1}
+          onClick={() => arrangement.onMove(columnId, "later")}
+        >
+          <DirectionalIcon icon={ArrowRightIcon} />
+          {t("caseLaw.columns.moveLater")}
+        </MenuItem>
+        <MenuItem onClick={() => arrangement.onTogglePin(columnId)}>
+          {pinned ? <PinOffIcon /> : <PinIcon />}
+          {pinned ? t("common.unpin") : t("caseLaw.columns.pin")}
+        </MenuItem>
+        <MenuItem onClick={() => arrangement.onHide(columnId)}>
+          <EyeOffIcon />
+          {t("caseLaw.columns.hide")}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem disabled={isRunning} onClick={() => onAction(column, "run")}>
+          <RefreshCwIcon />
+          {t("caseLaw.research.runColumn")}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem
+          onClick={() => onAction(column, "delete")}
+          variant="destructive"
+        >
+          <Trash2Icon />
+          {t("caseLaw.research.deleteColumn")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 };
 

@@ -690,9 +690,6 @@
       "addColumn": "Pievienot kolonnu",
       "addQuestion": "Pievienot jautājumu",
       "addQuestionHint": "Jautājums tiek uzdots katram tabulas nolēmumam; atbildes tiek izveidotas, palaižot kolonnu.",
-      "answerType": "Atbildes veids",
-      "answerTypeText": "Īss teksts",
-      "answerTypeYesNo": "Jā / nē",
       "answering": "{count, plural, zero {Atbild uz # šūnām…} one {Atbild uz # šūnu…} other {Atbild uz # šūnām…}}",
       "answers": {
         "confidence": "{percent} % pārliecība",

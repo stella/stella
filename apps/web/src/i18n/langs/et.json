@@ -690,9 +690,6 @@
       "addColumn": "Lisa veerg",
       "addQuestion": "Lisa küsimus",
       "addQuestionHint": "Küsimus esitatakse tabeli igale lahendile; vastused luuakse veeru käivitamisel.",
-      "answerType": "Vastuse liik",
-      "answerTypeText": "Lühike tekst",
-      "answerTypeYesNo": "Jah / ei",
       "answering": "{count, plural, one {Vastan # lahtrile…} other {Vastan # lahtrile…}}",
       "answers": {
         "confidence": "{percent}% kindlus",

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   answerKey,
   questionColumnSurface,
+  questionEditDiscardsAnswers,
   questionRunSet,
 } from "./question-columns.logic";
 import type { QuestionAnswer, QuestionColumn } from "./question-columns.logic";
@@ -192,5 +193,52 @@ describe("who is shown question columns", () => {
     expect(
       questionColumnSurface({ columns, hasActiveOrganization: false }),
     ).toEqual({ type: "hidden" });
+  });
+});
+
+describe("when saving a question throws its answers away", () => {
+  const stored = {
+    question: "Was the termination valid?",
+    answerType: "yes_no",
+  } as const;
+
+  test("adding a question has nothing to discard", () => {
+    expect(
+      questionEditDiscardsAnswers({ draft: { ...stored }, stored: undefined }),
+    ).toBe(false);
+  });
+
+  test("saving an unchanged question keeps them", () => {
+    expect(questionEditDiscardsAnswers({ draft: { ...stored }, stored })).toBe(
+      false,
+    );
+  });
+
+  // The server trims before it compares, so whitespace alone is not a change.
+  test("whitespace around the same wording is not a change", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: { ...stored, question: `  ${stored.question}\n` },
+        stored,
+      }),
+    ).toBe(false);
+  });
+
+  test("rewording discards them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: { ...stored, question: "Was the notice period observed?" },
+        stored,
+      }),
+    ).toBe(true);
+  });
+
+  test("a different kind of answer discards them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: { ...stored, answerType: "text" },
+        stored,
+      }),
+    ).toBe(true);
   });
 });

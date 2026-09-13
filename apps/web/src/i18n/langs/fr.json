@@ -690,9 +690,6 @@
       "addColumn": "Ajouter une colonne",
       "addQuestion": "Ajouter une question",
       "addQuestionHint": "La question est posée à chaque décision du tableau ; les réponses sont produites lorsque vous exécutez la colonne.",
-      "answerType": "Nature de la réponse",
-      "answerTypeText": "Texte court",
-      "answerTypeYesNo": "Oui / non",
       "answering": "{count, plural, one {Réponse en cours pour # cellule…} other {Réponse en cours pour # cellules…}}",
       "answers": {
         "confidence": "{percent} % de confiance",

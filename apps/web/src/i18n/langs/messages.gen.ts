@@ -693,9 +693,6 @@ type Messages = {
       "addColumn": "Add column";
       "addQuestion": "Add question";
       "addQuestionHint": "The question is asked of every decision in the table; answers are produced when you run the column.";
-      "answerType": "Kind of answer";
-      "answerTypeText": "Short text";
-      "answerTypeYesNo": "Yes / no";
       "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}";
       "answers": {
         "confidence": "{percent}% confidence";

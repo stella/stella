@@ -690,9 +690,6 @@
       "addColumn": "Añadir columna",
       "addQuestion": "Añadir pregunta",
       "addQuestionHint": "La pregunta se plantea a cada resolución de la tabla; las respuestas se generan al ejecutar la columna.",
-      "answerType": "Clase de respuesta",
-      "answerTypeText": "Texto breve",
-      "answerTypeYesNo": "Sí / no",
       "answering": "{count, plural, one {Respondiendo # celda…} other {Respondiendo # celdas…}}",
       "answers": {
         "confidence": "{percent} % de confianza",

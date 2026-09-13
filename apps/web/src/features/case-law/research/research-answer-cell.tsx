@@ -1,7 +1,11 @@
 import { panic } from "better-result";
+import { RefreshCwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { CaseLawResearchYesNoValue } from "@stll/api-contract";
+import type {
+  CaseLawResearchAnswerType,
+  CaseLawResearchYesNoValue,
+} from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -25,16 +29,24 @@ const YES_NO_TONE = {
 type ResearchAnswerCellProps = {
   /** Absent when the cell was never queued. */
   answer: QuestionAnswer | undefined;
+  /** What the column asks for, so a pending cell shimmers in that shape. */
+  answerType: CaseLawResearchAnswerType;
+  /** Asks this one cell again, discarding whatever it holds. */
+  onRetry: () => void;
   onShowSource: (anchorId: string) => void;
 };
 
 /**
- * One cell of a question column. Every state has a face: a cell that was never
- * queued reads as such, a pending one shimmers, a refusal says why. Nothing is
- * ever an unexplained blank.
+ * One cell of a question column, drawn the way the matter table draws an
+ * extracted cell: the answer's own shape shimmering while the model works, the
+ * value once it lands, and a failure that says so and offers the retry. A cell
+ * that was never queued reads as such and a refusal says why; nothing is ever
+ * an unexplained blank.
  */
 export const ResearchAnswerCell = ({
   answer,
+  answerType,
+  onRetry,
   onShowSource,
 }: ResearchAnswerCellProps) => {
   const t = useTranslations();
@@ -50,10 +62,14 @@ export const ResearchAnswerCell = ({
   switch (answer.state) {
     case "pending":
       return (
-        <Skeleton
+        <span
+          aria-busy="true"
           aria-label={t("caseLaw.research.answers.pending")}
-          className="h-4 w-16"
-        />
+          className="flex min-w-0 flex-col gap-1"
+          role="status"
+        >
+          <PendingAnswerSkeleton answerType={answerType} />
+        </span>
       );
     case "not_allowed":
       return (
@@ -63,8 +79,20 @@ export const ResearchAnswerCell = ({
       );
     case "failed":
       return (
-        <span className="text-muted-foreground text-xs">
-          {t("caseLaw.research.answers.failed")}
+        <span className="flex min-w-0 items-start gap-1">
+          <span className="text-destructive line-clamp-2 text-sm italic">
+            {t("caseLaw.research.answers.failed")}
+          </span>
+          <Button
+            aria-label={t("common.retry")}
+            className="text-foreground-ghost hover:text-foreground shrink-0"
+            onClick={onRetry}
+            size="icon-xs"
+            title={t("common.retry")}
+            variant="ghost"
+          >
+            <RefreshCwIcon aria-hidden="true" className="size-3.5" />
+          </Button>
         </span>
       );
     case "answered": {
@@ -114,5 +142,31 @@ export const ResearchAnswerCell = ({
       answer.state satisfies never;
       return panic(`Unhandled state: ${String(answer.state)}`);
     }
+  }
+};
+
+/**
+ * The shape the answer will take, shimmering: a chip for a yes/no, two lines
+ * for a sentence. The same shapes the matter table's pending cells draw, so a
+ * column still being answered reads the same on both tables.
+ */
+const PendingAnswerSkeleton = ({
+  answerType,
+}: {
+  answerType: CaseLawResearchAnswerType;
+}) => {
+  switch (answerType) {
+    case "yes_no":
+      return <Skeleton className="h-4 w-16 rounded-full" />;
+    case "text":
+      return (
+        <>
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-3/4" />
+        </>
+      );
+    default:
+      answerType satisfies never;
+      return panic(`Unhandled answer type: ${String(answerType)}`);
   }
 };

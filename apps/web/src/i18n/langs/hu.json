@@ -690,9 +690,6 @@
       "addColumn": "Oszlop hozzáadása",
       "addQuestion": "Kérdés hozzáadása",
       "addQuestionHint": "A kérdést a táblázat minden határozatára feltesszük; a válaszok az oszlop futtatásakor készülnek.",
-      "answerType": "A válasz jellege",
-      "answerTypeText": "Rövid szöveg",
-      "answerTypeYesNo": "Igen / nem",
       "answering": "{count, plural, one {# cella megválaszolása…} other {# cella megválaszolása…}}",
       "answers": {
         "confidence": "{percent}% megbízhatóság",

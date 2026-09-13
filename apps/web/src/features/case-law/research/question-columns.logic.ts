@@ -14,12 +14,14 @@ import type {
  * rows picked out of it), minus every cell that already holds an answer.
  */
 
-/** One question asked of every decision the organization looks at. */
-export type QuestionColumn = {
-  id: string;
+/** What the question dialog holds: the wording, and what the answer is. */
+export type QuestionDraft = {
   question: string;
   answerType: CaseLawResearchAnswerType;
 };
+
+/** One question asked of every decision the organization looks at. */
+export type QuestionColumn = QuestionDraft & { id: string };
 
 /** One cell, as the answer lookup reports it. */
 export type QuestionAnswer = {
@@ -117,6 +119,26 @@ export const questionRunSet = ({
 
   return { columnIds: chosen.map((column) => column.id), decisionIds, cells };
 };
+
+/**
+ * Whether saving this edit throws the column's answers away.
+ *
+ * The server trims the wording and drops every answer the column holds the
+ * moment the wording or the answer type differs from what is stored, so the
+ * dialog warns exactly when that happens: neither on a no-op save nor, in the
+ * other direction, silently. Adding a column has nothing to discard.
+ */
+export const questionEditDiscardsAnswers = ({
+  draft,
+  stored,
+}: {
+  draft: QuestionDraft;
+  /** Absent while a column is being added. */
+  stored: QuestionDraft | undefined;
+}): boolean =>
+  stored !== undefined &&
+  (stored.question.trim() !== draft.question.trim() ||
+    stored.answerType !== draft.answerType);
 
 /**
  * How much of the question surface a reader gets.

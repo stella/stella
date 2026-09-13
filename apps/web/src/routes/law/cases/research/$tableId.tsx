@@ -76,8 +76,8 @@ import type {
   ResearchTableDetail,
   SavedQueryDecisionFilters,
 } from "@/features/case-law/research/queries";
+import type { QuestionDraft } from "@/features/case-law/research/question-columns.logic";
 import { ResearchQuestionDialog } from "@/features/case-law/research/research-question-dialog";
-import type { ResearchQuestionDraft } from "@/features/case-law/research/research-question-dialog";
 import {
   answerGroupBy,
   answerKey,
@@ -188,8 +188,14 @@ const isResearchGroupBy = (
   isDecisionGroupBy(value) ||
   columns.some((column) => answerGroupBy(column.id) === value);
 
-/** Every question of the table, or one of them answered again from scratch. */
-type RunScope = { scope: "table" } | { scope: "column"; columnId: string };
+/**
+ * Every question of the table, one of them answered again from scratch, or a
+ * single failed cell retried from the cell itself.
+ */
+type RunScope =
+  | { scope: "table" }
+  | { scope: "column"; columnId: string }
+  | { scope: "cell"; columnId: string; decisionId: string };
 
 /** Which question column a dialog edits, or that it adds one. */
 type QuestionDialogState =
@@ -327,7 +333,7 @@ function ResearchTablePage() {
       draft,
     }: {
       column: ResearchColumn | null;
-      draft: ResearchQuestionDraft;
+      draft: QuestionDraft;
     }) =>
       column === null
         ? await createQuestionColumn(draft)
@@ -398,13 +404,16 @@ function ResearchTablePage() {
   const run = useMutation({
     mutationFn: async (scope: RunScope) =>
       await runAnswers({
-        ...(scope.scope === "column" && {
+        ...(scope.scope !== "table" && {
           columnIds: [scope.columnId],
           force: true,
         }),
-        decisionIds: mergedRows
-          .filter((row) => row.disposition !== "excluded")
-          .map((row) => row.decision.id),
+        decisionIds:
+          scope.scope === "cell"
+            ? [scope.decisionId]
+            : mergedRows
+                .filter((row) => row.disposition !== "excluded")
+                .map((row) => row.decision.id),
       }),
     onSuccess: async ({ queued }) => {
       if (queued === 0) {
@@ -603,6 +612,9 @@ function ResearchTablePage() {
         groupBy={effectiveGroupBy}
         isLoading={decisionsQuery.isLoading}
         onColumnAction={onColumnAction}
+        onRetryAnswer={(column, decisionId) => {
+          run.mutate({ scope: "cell", columnId: column.id, decisionId });
+        }}
         onSetDisposition={(decision, disposition) => {
           detached(
             setDisposition.mutateAsync({ decision, disposition }),
