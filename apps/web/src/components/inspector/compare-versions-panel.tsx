@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -297,7 +297,7 @@ export const CompareVersionsPanel = ({
         return;
       default:
         result satisfies never;
-        return;
+        return panic("Unhandled document comparison result");
     }
   };
 
@@ -524,15 +524,15 @@ const VersionSelect = ({
       </SelectTrigger>
       <SelectPopup>
         {versions.map((version) => {
-          const label = versionLabel(version);
+          const versionOptionLabel = versionLabel(version);
           return (
             <SelectItem
               disabled={version.id === disabledId}
               key={version.id}
-              label={label}
+              label={versionOptionLabel}
               value={version.id}
             >
-              {label}
+              {versionOptionLabel}
             </SelectItem>
           );
         })}
@@ -624,6 +624,12 @@ const CompareResultView = ({
   const format = useFormatter();
   const { result } = outcome;
   const changeCounts = countCompareChanges(result.changes);
+  let outcomeDescription = t("fileDetail.compareRedlineOpened");
+  if (outcome.type === "previewed") {
+    outcomeDescription = t("fileDetail.comparePreviewDescription");
+  } else if (outcome.redlineStatus === "unavailable") {
+    outcomeDescription = t("fileDetail.compareRedlineUnavailable");
+  }
   const unsupportedCounts = new Map<
     CompareCreatedResult["unsupported"][number]["reason"],
     number
@@ -660,11 +666,7 @@ const CompareResultView = ({
           : t("fileDetail.compareCreated")}
       </h2>
       <p className="text-muted-foreground mt-1 text-xs text-pretty">
-        {outcome.type === "previewed"
-          ? t("fileDetail.comparePreviewDescription")
-          : outcome.redlineStatus === "unavailable"
-            ? t("fileDetail.compareRedlineUnavailable")
-            : t("fileDetail.compareRedlineOpened")}
+        {outcomeDescription}
       </p>
 
       {result.verification.status === "unverified" && (
