@@ -22,6 +22,7 @@ export type StatuteListItem = {
   country: string;
   documentType: string | null;
   effectiveDate: string | null;
+  eli: string;
   id: string;
   slug: string | null;
   status: string;
@@ -65,6 +66,7 @@ export const StatuteListRow = ({ statute }: { statute: StatuteListItem }) => {
       to={createStatuteRouteParams({
         country: statute.country,
         documentId: statute.id,
+        eli: statute.eli,
         slug: statute.slug,
       })}
     />

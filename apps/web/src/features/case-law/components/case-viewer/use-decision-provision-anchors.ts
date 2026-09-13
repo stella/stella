@@ -183,7 +183,13 @@ export const useDecisionProvisionAnchors = (
       sentenceText: row.sentenceText,
       spanStart: row.spanStart,
       target: {
-        document: { country: document.country, id: document.id },
+        document: {
+          country: document.country,
+          eli: document.eli,
+          id: document.id,
+          slug: document.slug,
+          versionValidFrom: document.versionValidFrom,
+        },
         preview: preview?.documentId === document.id ? preview : null,
         payload: {
           anchorId: provisionHeadingAnchor(row.anchor),

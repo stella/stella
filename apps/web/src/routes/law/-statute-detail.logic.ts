@@ -24,8 +24,7 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import {
   createStatutePath,
   createStatuteRouteParams,
-  isStatuteDocumentId,
-  normalizeStatuteStoredSlug,
+  extractStatuteDocumentIdFromRouteParam,
   normalizeStatuteVersionSegment,
   type StatuteRouteParams,
   toStatuteCountrySegment,
@@ -136,6 +135,7 @@ const canonicalStatuteParams = ({
   return createStatuteRouteParams({
     country: statute.country,
     documentId: statute.id,
+    eli: statute.eli,
     slug: statute.slug,
     version:
       latest === undefined || latest.id === statute.id
@@ -277,32 +277,26 @@ export const loadPublicStatuteRoute = async ({
       ),
     );
 
-  if (isStatuteDocumentId(params.slug)) {
+  // The id form addresses one consolidation of a Work the corpus holds no
+  // slug for. It names that text directly, so a date cannot narrow it; once
+  // the backfill mints a slug, the canonical address below moves the reader on.
+  const routeDocumentId = extractStatuteDocumentIdFromRouteParam(params.slug);
+  if (routeDocumentId !== null) {
     const addressed = await ensureRouteQueryData(
       queryClient,
-      publicStatuteOptions(params.slug),
+      publicStatuteOptions(routeDocumentId),
     );
 
     if (addressed === null) {
       return statuteNotFound();
     }
 
-    // A day asked for on a legacy address still means "the text that applied
-    // then", which is a question about the Work rather than about the one
-    // document the id names. Resolving it through the readable segment is
-    // what sends the reader to that consolidation's own address.
-    const slug = normalizeStatuteStoredSlug(addressed.slug);
-    const statute =
-      requestedDate === undefined || slug === null
-        ? addressed
-        : await readBySlug(slug, requestedDate);
-
     return await settleStatuteRoute({
       hash,
       params,
       queryClient,
       search,
-      statute,
+      statute: addressed,
       work: addressed,
     });
   }

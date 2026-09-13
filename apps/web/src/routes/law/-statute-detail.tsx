@@ -108,8 +108,9 @@ export const PublicStatuteViewer = ({
         createStatuteRouteParams({
           country: next.country,
           documentId: next.id,
+          eli: next.eli,
           slug: next.slug,
-          version: next.versionValidTo === null ? null : next.versionValidFrom,
+          version: next.versionValidFrom,
         }),
         undefined,
       );
@@ -125,12 +126,13 @@ export const PublicStatuteViewer = ({
         createStatuteRouteParams({
           country: header.country,
           documentId: work.id,
+          eli: work.eli,
           slug: work.slug,
         }),
         value === null || value === "" ? undefined : value,
       );
     },
-    [goTo, header.country, work.id, work.slug],
+    [goTo, header.country, work.eli, work.id, work.slug],
   );
 
   const [jumpValue, setJumpValue] = useState(requestedJump ?? "");

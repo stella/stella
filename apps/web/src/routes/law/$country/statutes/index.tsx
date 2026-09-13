@@ -148,6 +148,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
                   createStatuteRouteParams({
                     country: statute.country,
                     documentId: statute.id,
+                    eli: statute.eli,
                     slug: statute.slug,
                   }),
                 ),
@@ -295,6 +296,7 @@ function PublicStatutesIndex() {
         const params = createStatuteRouteParams({
           country: only.country,
           documentId: only.id,
+          eli: only.eli,
           slug: only.slug,
         });
         await navigate({

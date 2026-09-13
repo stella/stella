@@ -493,6 +493,7 @@ function LawHome() {
               params={createStatuteRouteParams({
                 country: statuteCountry,
                 documentId: item.id,
+                eli: item.eli,
                 slug: item.slug,
               })}
               to="/law/$country/statutes/$slug"

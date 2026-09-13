@@ -1,3 +1,9 @@
+import {
+  decodeCaseLawDecisionIdFromRoute,
+  encodeCaseLawDecisionIdForRoute,
+  isCaseLawDecisionId,
+} from "@/lib/case-law-route";
+
 /**
  * Jurisdiction the statutes browser opens on when the current route carries
  * none (the shell's statutes link is reachable from country-less pages).
@@ -19,9 +25,6 @@ export const isStatuteCountry = (value: string): value is StatuteCountry =>
   Object.hasOwn(STATUTE_COUNTRIES, value);
 
 const COUNTRY_SEGMENT_PATTERN = /^[a-z]{2,3}$/u;
-
-const UUID_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 
 // The API's persisted slug shape (see the column CHECK
 // `legislation_documents_slug_shape` and apps/api/.../legislation/slug.ts).
@@ -47,12 +50,33 @@ export const createStatuteIndexPath = (
   `/law/${toStatuteCountrySegment(country)}/statutes`;
 
 /**
- * Whether a `$slug` route param is the legacy document-id form. A minted slug
- * opens with the act number, so no slug can wear the 8-4-4-4-12 hex shape and
- * the two forms cannot be confused for one another.
+ * The `--` form: a readable prefix, then the document id compacted, for a
+ * document the corpus holds no slug for yet (its ELI carries no citation, or
+ * the backfill has not reached it). Nothing else addresses a statute by id;
+ * there is no id-only route.
+ *
+ * The uuid codec is case-law-route's own, not a second copy: both public-law
+ * readers hand out these segments and they have to decode identically. The
+ * names still read "case law" because that module minted the encoding first;
+ * a package of its own is the follow-up the duplicate-export-name ratchet
+ * points at.
  */
-export const isStatuteDocumentId = (value: string): boolean =>
-  UUID_REGEX.test(value.trim());
+const ID_ROUTE_PARAM_SEPARATOR = "--";
+
+/** The document id an id-form `$slug` param carries, null for a plain slug. */
+export const extractStatuteDocumentIdFromRouteParam = (
+  param: string,
+): string | null => {
+  const separator = param.lastIndexOf(ID_ROUTE_PARAM_SEPARATOR);
+  if (separator === -1) {
+    return null;
+  }
+
+  const decoded = decodeCaseLawDecisionIdFromRoute(
+    param.slice(separator + ID_ROUTE_PARAM_SEPARATOR.length),
+  );
+  return isCaseLawDecisionId(decoded) ? decoded : null;
+};
 
 /**
  * The stored slug, or null when the corpus holds none for this document (its
@@ -82,7 +106,7 @@ export const normalizeStatuteVersionSegment = (
 
 export type StatuteRouteParams = {
   country: string;
-  /** The stored slug, or the document id when the corpus holds no slug. */
+  /** A stored slug, or the `<prefix>--<compact-id>` form when there is none. */
   slug: string;
   /** Absent on the canonical address of the latest consolidation. */
   version?: string;
@@ -91,6 +115,8 @@ export type StatuteRouteParams = {
 type CreateStatuteRouteParamsOptions = {
   country: string | null;
   documentId: string;
+  /** The Work identifier, for the readable half of the id-form fallback. */
+  eli?: string | null | undefined;
   slug?: string | null | undefined;
   /**
    * The consolidation opening to address, when the page is not the latest
@@ -100,53 +126,109 @@ type CreateStatuteRouteParamsOptions = {
 };
 
 /**
- * The route params a statute's public address is built from. A document with
- * a stored slug canonicalises to it; without one the id form is canonical,
- * which is what keeps a document the backfill has not reached linkable.
+ * The readable half of the id form. Cosmetic: only the compacted id after the
+ * last `--` is resolved, so this may be anything stable — the act number the
+ * ELI ends in, or `statute` when the caller has no identifier at all.
+ */
+const idRouteParamPrefix = (eli: string | null | undefined): string => {
+  const tail = /\/([a-z0-9]{1,32})\/(\d{4})\/(\d{1,6})$/u.exec(
+    eli?.trim().toLowerCase() ?? "",
+  );
+  const collection = tail?.at(1);
+  const year = tail?.at(2);
+  const number = tail?.at(3);
+
+  return collection === undefined || year === undefined || number === undefined
+    ? "statute"
+    : `${number}-${year}-${collection}`;
+};
+
+/**
+ * The route params a statute's public address is built from.
+ *
+ * A document with a stored slug is addressed by it, and a superseded
+ * consolidation hangs a `/v/` opening off it. A document the backfill has not
+ * reached carries no slug, so it is addressed by the id form instead; that
+ * form already names one consolidation, so it takes no `/v/` segment.
  */
 export const createStatuteRouteParams = ({
   country,
   documentId,
+  eli,
   slug,
   version,
 }: CreateStatuteRouteParamsOptions): StatuteRouteParams => {
   const storedSlug = normalizeStatuteStoredSlug(slug);
-  const base = {
-    country: toStatuteCountrySegment(country),
-    slug: storedSlug ?? documentId,
-  };
-  const versionSegment = normalizeStatuteVersionSegment(version);
+  const countrySegment = toStatuteCountrySegment(country);
 
-  // The id form addresses one consolidation directly, so a `/v/` segment on
-  // it would name the same thing twice.
-  if (versionSegment === null || storedSlug === null) {
-    return base;
+  if (storedSlug === null) {
+    return {
+      country: countrySegment,
+      slug: `${idRouteParamPrefix(eli)}${ID_ROUTE_PARAM_SEPARATOR}${encodeCaseLawDecisionIdForRoute(documentId)}`,
+    };
   }
 
-  return { ...base, version: versionSegment };
+  const versionSegment = normalizeStatuteVersionSegment(version);
+
+  return versionSegment === null
+    ? { country: countrySegment, slug: storedSlug }
+    : { country: countrySegment, slug: storedSlug, version: versionSegment };
 };
 
 /**
- * The address of one particular consolidation, for a caller that knows which
- * document it is and nothing about where that document sits in its Work's
- * history — the citation links inside a reader, which point at the wording
- * that applied, not at today's.
- *
- * Deliberately the id form: the readable segment names a Work's latest text,
- * so linking a dated citation through it would silently retarget it. The
- * reader's loader resolves the id and replaces it with the consolidation's
- * own readable address.
+ * One consolidation, as the props a `Link` needs. The `/v/` opening is always
+ * named when the row has one: a citation means the wording that applied, and
+ * the bare slug names whatever is latest. When the row turns out to be the
+ * latest, the loader canonicalises the address; when it is not, this is the
+ * only spelling that reaches the right text.
  */
-export const createStatuteDocumentRouteParams = ({
-  country,
-  documentId,
-}: {
+export type StatuteLinkTarget =
+  | {
+      params: { country: string; slug: string };
+      to: "/law/$country/statutes/$slug";
+    }
+  | {
+      params: { country: string; slug: string; version: string };
+      to: "/law/$country/statutes/$slug/v/$version";
+    };
+
+type CreateStatuteLinkTargetOptions = {
   country: string | null;
   documentId: string;
-}): StatuteRouteParams => ({
-  country: toStatuteCountrySegment(country),
-  slug: documentId,
-});
+  eli?: string | null | undefined;
+  slug?: string | null | undefined;
+  versionValidFrom?: string | null | undefined;
+};
+
+export const createStatuteLinkTarget = ({
+  country,
+  documentId,
+  eli,
+  slug,
+  versionValidFrom,
+}: CreateStatuteLinkTargetOptions): StatuteLinkTarget => {
+  const params = createStatuteRouteParams({
+    country,
+    documentId,
+    eli,
+    slug,
+    version: versionValidFrom,
+  });
+
+  return params.version === undefined
+    ? {
+        params: { country: params.country, slug: params.slug },
+        to: "/law/$country/statutes/$slug",
+      }
+    : {
+        params: {
+          country: params.country,
+          slug: params.slug,
+          version: params.version,
+        },
+        to: "/law/$country/statutes/$slug/v/$version",
+      };
+};
 
 export const createStatutePath = ({
   country,

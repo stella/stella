@@ -17,6 +17,7 @@ import { loadPublicStatuteRoute } from "@/routes/law/-statute-detail.logic";
 
 const SLUG = "89-2012-sb-obcansky-zakonik";
 const COUNTRY_SEGMENT = "cze";
+const JUMP = "§ 2079";
 
 const CURRENT_ID = toSafeId<"legislationDocument">(
   "00000000-0000-4000-8000-000000000001",
@@ -108,6 +109,18 @@ const seedWork = (queryClient: QueryClient): void => {
   );
 };
 
+const seedDay = (
+  queryClient: QueryClient,
+  asOf: string,
+  seed: StatuteSeed,
+): void => {
+  queryClient.setQueryData(
+    statuteBySlugOptions({ asOf, country: COUNTRY_SEGMENT, slug: SLUG })
+      .queryKey,
+    statute(seed),
+  );
+};
+
 const load = async (
   queryClient: QueryClient,
   {
@@ -141,24 +154,20 @@ const canonicalRedirect = async (loading: Promise<unknown>): Promise<unknown> =>
   );
 
 describe("the address a statute consolidation is canonical at", () => {
-  test("an older open-ended consolidation canonicalises to its own /v/ path", async () => {
+  test("an older open-ended consolidation stays at its own /v/ path", async () => {
     const queryClient = new QueryClient();
     seedWork(queryClient);
+    seedDay(queryClient, "2020-01-01", OPEN_OLDER);
 
     // Both consolidations are open-ended, so reading "latest" off this row
-    // would put two texts on the bare slug path.
-    expect(
-      await canonicalRedirect(load(queryClient, { slug: OPEN_OLDER_ID })),
-    ).toMatchObject({
-      options: {
-        params: {
-          country: COUNTRY_SEGMENT,
-          slug: SLUG,
-          version: "2020-01-01",
-        },
-        to: "/law/$country/statutes/$slug/v/$version",
-      },
+    // would send this one to the bare slug path, where the reader would be
+    // shown the 2024 text instead.
+    const { statute: resolved } = await load(queryClient, {
+      slug: SLUG,
+      version: "2020-01-01",
     });
+
+    expect(resolved?.id).toBe(OPEN_OLDER_ID);
   });
 
   test("the Work's latest consolidation renders at the bare slug path", async () => {
@@ -173,70 +182,49 @@ describe("the address a statute consolidation is canonical at", () => {
     expect(versions).toHaveLength(2);
   });
 
-  test("a legacy id with ?asOf resolves the day across the Work", async () => {
+  test("a /v/ opening that names the latest text moves to the bare slug", async () => {
     const queryClient = new QueryClient();
     seedWork(queryClient);
-    queryClient.setQueryData(
-      statuteBySlugOptions({
-        asOf: "2021-01-01",
-        country: COUNTRY_SEGMENT,
-        slug: SLUG,
-      }).queryKey,
-      statute(OPEN_OLDER),
-    );
+    seedDay(queryClient, "2024-01-01", CURRENT);
 
-    // The id names the current text; the day names an earlier one, and the
-    // canonical address is that earlier consolidation's, not this id's.
+    expect(
+      await canonicalRedirect(
+        load(queryClient, { slug: SLUG, version: "2024-01-01" }),
+      ),
+    ).toMatchObject({
+      options: {
+        params: { country: COUNTRY_SEGMENT, slug: SLUG },
+        to: "/law/$country/statutes/$slug",
+      },
+    });
+  });
+
+  test("a day resolves to that consolidation's own address", async () => {
+    const queryClient = new QueryClient();
+    seedWork(queryClient);
+    seedDay(queryClient, "2021-01-01", OPEN_OLDER);
+
+    // The day is a lookup, not an address: it names the 2020 text, and the
+    // reader is sent to that text's URL with the lookup dropped. The anchor
+    // and the jump say where in the text to open, so they travel on.
     expect(
       await canonicalRedirect(
         load(queryClient, {
-          search: { asOf: "2021-01-01" },
-          slug: CURRENT_ID,
+          hash: "#sec-2079",
+          search: { asOf: "2021-01-01", jump: JUMP },
+          slug: SLUG,
         }),
       ),
     ).toMatchObject({
       options: {
+        hash: "sec-2079",
         params: {
           country: COUNTRY_SEGMENT,
           slug: SLUG,
           version: "2020-01-01",
         },
-        search: {},
+        search: { jump: JUMP },
         to: "/law/$country/statutes/$slug/v/$version",
-      },
-    });
-  });
-
-  test("the provision anchor survives the canonical redirect", async () => {
-    const queryClient = new QueryClient();
-    seedWork(queryClient);
-
-    expect(
-      await canonicalRedirect(
-        load(queryClient, { hash: "#sec-2079", slug: CURRENT_ID }),
-      ),
-    ).toMatchObject({
-      options: {
-        hash: "sec-2079",
-        params: { country: COUNTRY_SEGMENT, slug: SLUG },
-        to: "/law/$country/statutes/$slug",
-      },
-    });
-  });
-
-  test("a jump query survives the canonical redirect", async () => {
-    const queryClient = new QueryClient();
-    seedWork(queryClient);
-
-    expect(
-      await canonicalRedirect(
-        load(queryClient, { search: { jump: "§ 2079" }, slug: CURRENT_ID }),
-      ),
-    ).toMatchObject({
-      options: {
-        params: { country: COUNTRY_SEGMENT, slug: SLUG },
-        search: { jump: "§ 2079" },
-        to: "/law/$country/statutes/$slug",
       },
     });
   });

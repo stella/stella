@@ -1,17 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  createStatuteDocumentRouteParams,
   createStatuteIndexPath,
+  createStatuteLinkTarget,
   createStatutePath,
   createStatuteRouteParams,
-  isStatuteDocumentId,
+  extractStatuteDocumentIdFromRouteParam,
   normalizeStatuteStoredSlug,
   normalizeStatuteVersionSegment,
   toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
-const DOCUMENT_ID = "01a019c1-953f-7000-8330-23bbc846adbe";
+const DOCUMENT_ID = "019dd47d-f507-7c84-b827-980af11b8980";
+const COMPACT_DOCUMENT_ID = "AZ3UffUHfIS4J5gK8RuJgA";
+const ELI = "/eli/cz/sb/2012/89";
 
 describe("public statute addresses", () => {
   test("the readable segment is the address of the latest consolidation", () => {
@@ -43,35 +45,83 @@ describe("public statute addresses", () => {
     );
   });
 
-  test("a document the corpus holds no slug for keeps the id address", () => {
+  test("a document the corpus holds no slug for takes the id form", () => {
     const params = createStatuteRouteParams({
       country: "cze",
       documentId: DOCUMENT_ID,
+      eli: ELI,
       slug: null,
-      // An id already names one consolidation, so a version segment on it
-      // would address the same text twice.
+      // The id form already names one consolidation, so a version segment on
+      // it would address the same text twice.
       version: "2021-01-01",
     });
 
-    expect(params).toEqual({ country: "cze", slug: DOCUMENT_ID });
-    expect(createStatutePath(params)).toBe(`/law/cze/statutes/${DOCUMENT_ID}`);
+    expect(params).toEqual({
+      country: "cze",
+      slug: `89-2012-sb--${COMPACT_DOCUMENT_ID}`,
+    });
+    expect(createStatutePath(params)).toBe(
+      `/law/cze/statutes/89-2012-sb--${COMPACT_DOCUMENT_ID}`,
+    );
   });
 
-  test("a dated citation addresses its own consolidation by id", () => {
-    // The readable segment names the latest text, so a citation that means a
-    // superseded wording must not be routed through it.
+  test("the id form falls back to a fixed prefix without an identifier", () => {
     expect(
-      createStatuteDocumentRouteParams({
+      createStatuteRouteParams({
+        country: "cze",
+        documentId: DOCUMENT_ID,
+        slug: null,
+      }).slug,
+    ).toBe(`statute--${COMPACT_DOCUMENT_ID}`);
+  });
+
+  test("reads the document id back out of the id form only", () => {
+    expect(
+      extractStatuteDocumentIdFromRouteParam(
+        `89-2012-sb--${COMPACT_DOCUMENT_ID}`,
+      ),
+    ).toBe(DOCUMENT_ID);
+    // A plain slug carries no id, and a bare uuid is not an address at all.
+    expect(
+      extractStatuteDocumentIdFromRouteParam("89-2012-sb-obcansky-zakonik"),
+    ).toBeNull();
+    expect(extractStatuteDocumentIdFromRouteParam(DOCUMENT_ID)).toBeNull();
+    expect(
+      extractStatuteDocumentIdFromRouteParam("89-2012-sb--nope"),
+    ).toBeNull();
+  });
+
+  test("a citation link names the consolidation it means", () => {
+    // A dated citation must not route through the bare slug, which names
+    // whatever consolidation is latest.
+    expect(
+      createStatuteLinkTarget({
         country: "CZE",
         documentId: DOCUMENT_ID,
+        eli: ELI,
+        slug: "89-2012-sb-obcansky-zakonik",
+        versionValidFrom: "2021-01-01",
       }),
-    ).toEqual({ country: "cze", slug: DOCUMENT_ID });
-  });
-
-  test("tells the id form from a minted slug", () => {
-    expect(isStatuteDocumentId(DOCUMENT_ID)).toBe(true);
-    expect(isStatuteDocumentId("89-2012-sb-obcansky-zakonik")).toBe(false);
-    expect(isStatuteDocumentId("40-1964-zz")).toBe(false);
+    ).toEqual({
+      params: {
+        country: "cze",
+        slug: "89-2012-sb-obcansky-zakonik",
+        version: "2021-01-01",
+      },
+      to: "/law/$country/statutes/$slug/v/$version",
+    });
+    expect(
+      createStatuteLinkTarget({
+        country: "CZE",
+        documentId: DOCUMENT_ID,
+        eli: ELI,
+        slug: "89-2012-sb-obcansky-zakonik",
+        versionValidFrom: null,
+      }),
+    ).toEqual({
+      params: { country: "cze", slug: "89-2012-sb-obcansky-zakonik" },
+      to: "/law/$country/statutes/$slug",
+    });
   });
 
   test("refuses a stored value the API could not have minted", () => {

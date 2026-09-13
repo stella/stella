@@ -98,6 +98,7 @@ export const openStatuteMatch = async ({
   const params = createStatuteRouteParams({
     country: only.country,
     documentId: only.id,
+    eli: only.eli,
     slug: only.slug,
   });
 

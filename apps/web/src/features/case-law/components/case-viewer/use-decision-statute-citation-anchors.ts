@@ -51,7 +51,13 @@ export const useDecisionStatuteCitationAnchors = (
       return [];
     }
     const target: CitedStatuteTarget = {
-      document: { country: statute.country, id: statute.id },
+      document: {
+        country: statute.country,
+        eli: statute.eli,
+        id: statute.id,
+        slug: statute.slug,
+        versionValidFrom: statute.versionValidFrom,
+      },
       statuteTitle: statute.title,
     };
     return [{ ...reference, target }];
