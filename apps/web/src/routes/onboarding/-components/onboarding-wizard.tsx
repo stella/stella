@@ -53,8 +53,9 @@ import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-lay
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
+import type { DownloadTarget } from "@/routes/onboarding/-components/steps/download-step";
 import {
-  DesktopSetupPanel,
+  DownloadSetupPreview,
   DownloadStep,
 } from "@/routes/onboarding/-components/steps/download-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
@@ -112,6 +113,8 @@ export const OnboardingWizard = () => {
   const [catalogueRemovedSlugs, setCatalogueRemovedSlugs] = useState<
     readonly string[]
   >([]);
+  const [downloadTarget, setDownloadTarget] =
+    useState<DownloadTarget>("desktop");
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
@@ -543,7 +546,7 @@ export const OnboardingWizard = () => {
       );
     }
   } else if (step === "download") {
-    preview = <DesktopSetupPanel />;
+    preview = <DownloadSetupPreview target={downloadTarget} />;
   }
 
   const renderStep = () => {
@@ -715,6 +718,8 @@ export const OnboardingWizard = () => {
         totalSteps={TOTAL_STEPS}
       >
         <DownloadStep
+          onSelect={setDownloadTarget}
+          selected={downloadTarget}
           onNext={() => {
             detached(
               navigate({ to: "/chat", replace: true }),

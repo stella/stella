@@ -1,5 +1,6 @@
 import type * as React from "react";
 
+import { panic } from "better-result";
 import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -19,18 +20,40 @@ const ASSISTANT_DOCS_URL =
   "https://stll.app/docs/get-started/connect-ai-assistant/";
 const CLI_DOCS_URL = "https://stll.app/docs/get-started/cli/";
 
+/**
+ * Single source of truth for the card order: drives the rendered card
+ * list, the footer button's next-card lookup, and the last-card check,
+ * so reordering cards can never desync the walkthrough flow.
+ */
+const DOWNLOAD_TARGETS = ["desktop", "assistant"] as const;
+
+export type DownloadTarget = (typeof DOWNLOAD_TARGETS)[number];
+
 type DownloadStepProps = {
   onNext: () => void;
   onSkip: () => void;
+  /** Which target is highlighted and shown in the right-hand preview panel. */
+  selected: DownloadTarget;
+  onSelect: (target: DownloadTarget) => void;
 };
 
 /**
- * Last wizard step. The desktop app is the one thing worth setting up
- * here, so it gets the download panel; assistants and the CLI are only
- * announced, with the walkthrough left to the docs.
+ * Last wizard step. The desktop app is the one thing set up here; the
+ * assistant card only announces the plugin and hands the walkthrough to
+ * the docs.
  */
-export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
+export const DownloadStep = ({
+  onNext,
+  onSkip,
+  selected,
+  onSelect,
+}: DownloadStepProps) => {
   const t = useTranslations();
+  // Footer walkthrough: while a next card exists the primary button
+  // advances the highlight; on the last card it lands the user in the app.
+  const nextTarget = DOWNLOAD_TARGETS.at(
+    DOWNLOAD_TARGETS.indexOf(selected) + 1,
+  );
 
   return (
     <>
@@ -42,77 +65,131 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
       </p>
 
       <div className="mt-8 flex flex-col gap-3">
-        <InfoCard>
-          <div className="flex items-start gap-3">
-            <MonitorIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <h2 className="text-foreground text-sm font-medium">
-                {t("settings.account.desktop")}
-              </h2>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {t("settings.account.desktopAppDescription")}
-              </p>
-            </div>
-          </div>
-        </InfoCard>
-
-        <InfoCard>
-          <div className="flex items-center gap-2">
-            <AssistantBadge name="Claude">
-              <AIProviderIcon className="size-5" provider="anthropic" />
-            </AssistantBadge>
-            <AssistantBadge name="ChatGPT">
-              <AIProviderIcon className="size-5" provider="openai" />
-            </AssistantBadge>
-          </div>
-          <h2 className="text-foreground mt-4 text-sm font-medium">
-            {t("onboarding.mcpCardTitle")}
-          </h2>
-          <p className="text-muted-foreground mt-1 text-sm text-pretty">
-            {t("onboarding.mcpCardDescription")}
-          </p>
-          <DocsLink className="mt-3" href={ASSISTANT_DOCS_URL}>
-            {t("onboarding.assistantDocsLink")}
-          </DocsLink>
-        </InfoCard>
+        <TargetCard
+          description={t("settings.account.desktopAppDescription")}
+          icon={<MonitorIcon className="text-muted-foreground size-4" />}
+          onSelect={() => onSelect("desktop")}
+          selected={selected === "desktop"}
+          title={t("settings.account.desktop")}
+        />
+        <TargetCard
+          description={t("onboarding.mcpCardDescription")}
+          icon={<AssistantIconPair />}
+          onSelect={() => onSelect("assistant")}
+          selected={selected === "assistant"}
+          title={t("onboarding.mcpCardTitle")}
+        />
       </div>
 
-      <DocsLink
-        className="text-muted-foreground mt-4 text-xs"
-        href={CLI_DOCS_URL}
-        icon={TerminalIcon}
-      >
-        {t("onboarding.cliDocsLink")}
-      </DocsLink>
-
       {/* Below md the wizard hides the whole preview column, which is the
-          only other place the download buttons render; without this inline
-          fallback the step would be action-less on phones. */}
+          only other place the download buttons and docs links render;
+          without this inline fallback the step would be action-less on
+          phones. */}
       <div className="mt-4 md:hidden">
-        <DesktopSetupPanel />
+        <DownloadSetupPreview target={selected} />
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button onClick={onSkip} type="button" variant="ghost">
           {t("onboarding.skipStep")}
         </Button>
-        <Button onClick={onNext} type="button">
-          {t("onboarding.getStarted")}
+        <Button
+          type="button"
+          onClick={() => {
+            if (nextTarget) {
+              onSelect(nextTarget);
+              return;
+            }
+            onNext();
+          }}
+        >
+          {nextTarget ? t("common.next") : t("onboarding.getStarted")}
         </Button>
       </div>
     </>
   );
 };
 
-const InfoCard = ({ children }: React.PropsWithChildren) => (
-  <div className="border-border rounded-lg border p-4">{children}</div>
+type DownloadSetupPreviewProps = {
+  target: DownloadTarget;
+};
+
+/**
+ * Right-panel content for the highlighted target, following the wizard's
+ * per-step preview mechanism (globe for jurisdictions, stack for the
+ * catalogue).
+ */
+export const DownloadSetupPreview = ({ target }: DownloadSetupPreviewProps) => {
+  switch (target) {
+    case "desktop":
+      return <DesktopSetupPanel />;
+    case "assistant":
+      return <AssistantPanel />;
+    default:
+      target satisfies never;
+      return panic(`Unknown download target: ${String(target)}`);
+  }
+};
+
+type TargetCardProps = {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  selected: boolean;
+  onSelect: () => void;
+};
+
+const TargetCard = ({
+  title,
+  description,
+  icon,
+  selected,
+  onSelect,
+}: TargetCardProps) => (
+  <button
+    aria-pressed={selected}
+    onClick={onSelect}
+    type="button"
+    className={cn(
+      "rounded-lg border p-4 text-start transition-colors",
+      selected
+        ? "border-foreground bg-accent/60 ring-foreground/20 ring-1"
+        : "border-border hover:bg-muted/40",
+    )}
+  >
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex shrink-0 items-center">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-foreground text-sm font-medium">{title}</h2>
+        <p className="text-muted-foreground mt-1 text-sm">{description}</p>
+      </div>
+    </div>
+  </button>
+);
+
+/** Compact Claude and ChatGPT marks for the assistant card's icon slot. */
+const AssistantIconPair = () => (
+  <span className="flex items-center -space-x-1">
+    <AIProviderIcon className="size-4" provider="anthropic" />
+    <AIProviderIcon className="size-4" provider="openai" />
+  </span>
+);
+
+const SetupPanel = ({
+  title,
+  children,
+}: React.PropsWithChildren<{ title: string }>) => (
+  <div className="bg-background border-border/40 flex max-h-full w-full max-w-[480px] flex-col gap-4 overflow-y-auto rounded-2xl border p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.06)]">
+    <h3 className="text-foreground text-sm font-medium">{title}</h3>
+    {children}
+  </div>
 );
 
 const AssistantBadge = ({
   name,
   children,
 }: React.PropsWithChildren<{ name: string }>) => (
-  <span className="bg-muted/60 text-foreground inline-flex items-center gap-2 rounded-full py-1.5 ps-2 pe-3 text-sm font-medium">
+  <span className="bg-muted/60 text-foreground flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium">
     {children}
     {name}
   </span>
@@ -144,12 +221,37 @@ const DocsLink = ({
   </a>
 );
 
-/**
- * Right-panel desktop setup for the download step, following the wizard's
- * per-step preview mechanism (globe for jurisdictions, stack for the
- * catalogue).
- */
-export const DesktopSetupPanel = () => {
+const AssistantPanel = () => {
+  const t = useTranslations();
+
+  return (
+    <SetupPanel title={t("onboarding.mcpCardTitle")}>
+      <div className="flex gap-3">
+        <AssistantBadge name="Claude">
+          <AIProviderIcon className="size-6" provider="anthropic" />
+        </AssistantBadge>
+        <AssistantBadge name="ChatGPT">
+          <AIProviderIcon className="size-6" provider="openai" />
+        </AssistantBadge>
+      </div>
+      <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
+        {t("onboarding.mcpCardDescription")}
+      </p>
+      <DocsLink href={ASSISTANT_DOCS_URL}>
+        {t("onboarding.assistantDocsLink")}
+      </DocsLink>
+      <DocsLink
+        className="text-muted-foreground text-xs"
+        href={CLI_DOCS_URL}
+        icon={TerminalIcon}
+      >
+        {t("onboarding.cliDocsLink")}
+      </DocsLink>
+    </SetupPanel>
+  );
+};
+
+const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
   // Downloading here starts the watch, so launching the app is the whole
@@ -159,10 +261,7 @@ export const DesktopSetupPanel = () => {
   const copyShortcut = platform === "mac" ? "⌘ C" : "Ctrl + C";
 
   return (
-    <div className="bg-background border-border/40 flex max-h-full w-full max-w-[480px] flex-col gap-4 overflow-y-auto rounded-2xl border p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.06)]">
-      <h3 className="text-foreground text-sm font-medium">
-        {t("settings.account.desktop")}
-      </h3>
+    <SetupPanel title={t("settings.account.desktop")}>
       <ClipboardWorkflowPreview
         copyShortcut={copyShortcut}
         shortcut={shortcut}
@@ -184,6 +283,6 @@ export const DesktopSetupPanel = () => {
         }}
         state={state}
       />
-    </div>
+    </SetupPanel>
   );
 };
