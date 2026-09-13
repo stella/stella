@@ -2358,10 +2358,15 @@ jobs:
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
 
+      # Own output dir, not uploaded: the blob reporter clears its directory
+      # per invocation, so sharing it would drop the canary blob, and a collab
+      # blob (testDir e2e/collab) breaks the merged specs report. Its failures
+      # are read from this job's log.
       - name: Run lockless collaboration browser suite
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
           E2E_EXPECT_DEV_ROUTES: "true"
+          E2E_OUTPUT_DIR: test-results-collab
         run: bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure
