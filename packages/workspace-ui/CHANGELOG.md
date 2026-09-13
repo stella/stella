@@ -1,5 +1,11 @@
 # @stll/workspace-ui
 
+## 0.10.4
+
+### Patch Changes
+
+- [#3307](https://github.com/stella/stella/pull/3307) [`a51b7f1`](https://github.com/stella/stella/commit/a51b7f1cdc8d52ec774ce5c96279f9391a204f0b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align matter view controls with the bottom-edge active indicator.
+
 ## 0.10.3
 
 ### Patch Changes
