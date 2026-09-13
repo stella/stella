@@ -180,7 +180,7 @@ export type ResearchAnswerOutput = {
 };
 
 /** Keyed by column id, like the extractor's batch is keyed by property id. */
-export type ResearchAnswersOutput = Record<string, ResearchAnswerOutput>;
+type ResearchAnswersOutput = Record<string, ResearchAnswerOutput>;
 
 /**
  * The batch a decision's pending questions are asked as: one entry per column,
