@@ -712,7 +712,7 @@ const QuestionColumnsBody = ({
     );
 
   const save = useMutation({
-    mutationFn: async (inputs: readonly QuestionColumnInput[]) => 
+    mutationFn: async (inputs: readonly QuestionColumnInput[]) =>
       // The requests name disjoint columns, so they go together rather than
       // one round trip after another; they settle, so whatever committed is
       // read back before the failure is reported.
@@ -728,8 +728,7 @@ const QuestionColumnsBody = ({
             queryKey: questionColumnKeys.all,
           });
         },
-      })
-    ,
+      }),
   });
   const canSubmit = validDrafts.length > 0 && !save.isPending;
 
