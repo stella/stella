@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
+import { createStatuteSlug } from "@/api/handlers/legislation/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -427,6 +428,7 @@ export const processLegislationDocument = async (
   const values = {
     sourceId: input.sourceId,
     eli: input.eli,
+    slug: createStatuteSlug({ eli: input.eli, title: input.title }),
     title: input.title,
     country: input.country,
     language: input.language,

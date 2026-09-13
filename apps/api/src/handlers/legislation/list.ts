@@ -272,6 +272,7 @@ export const listStatutesHandler = async (
         .select({
           id: legislationDocuments.id,
           eli: legislationDocuments.eli,
+          slug: legislationDocuments.slug,
           title: legislationDocuments.title,
           titleSortKey,
           validFromKey: sql<string>`${validFromKey}::text`.as("valid_from_key"),

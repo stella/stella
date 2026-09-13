@@ -34,6 +34,7 @@ type LegislationShelfQuery = Static<typeof legislationShelfQuerySchema>;
 export type LegislationShelfItem = {
   id: string;
   eli: string;
+  slug: string | null;
   title: string;
   country: string;
   language: string;
@@ -72,6 +73,7 @@ const validFromKey = versionSortKey(legislationDocuments.versionValidFrom);
 const shelfColumns = {
   id: legislationDocuments.id,
   eli: legislationDocuments.eli,
+  slug: legislationDocuments.slug,
   title: legislationDocuments.title,
   country: legislationDocuments.country,
   language: legislationDocuments.language,

@@ -1,0 +1,134 @@
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
+
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import {
+  isStatuteSlug,
+  STATUTE_SLUG_MAX_LENGTH,
+} from "@/api/handlers/legislation/slug";
+import { workKeyConditions } from "@/api/handlers/legislation/work-key";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  inForceOn,
+  versionSortKey,
+} from "@/api/lib/legal-search/legislation-validity-window";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+
+export const readStatuteBySlugParamsSchema = t.Object({
+  slug: t.String({ minLength: 1, maxLength: STATUTE_SLUG_MAX_LENGTH }),
+});
+
+export const readStatuteBySlugQuerySchema = t.Object({
+  country: t.String({ minLength: 2, maxLength: 3 }),
+  /** Absent means "the latest consolidation the corpus holds". */
+  asOf: t.Optional(t.String({ format: "date" })),
+});
+
+type ReadStatuteBySlugQuery = Static<typeof readStatuteBySlugQuerySchema>;
+
+type ReadStatuteBySlugOptions = {
+  legislationDb: LegislationReadDb;
+  params: Static<typeof readStatuteBySlugParamsSchema>;
+  query: ReadStatuteBySlugQuery;
+};
+
+/**
+ * The public reader's address for a statute: a jurisdiction and the readable
+ * segment its Work is known by, optionally read at a date.
+ *
+ * Resolution is two steps, because the slug addresses the Work while the
+ * date picks the Expression. The first step finds any row carrying the
+ * segment and takes its Work key; the second applies the same window rule
+ * `by-eli` does over the whole Work, so both entry points cannot disagree
+ * about which consolidation a date names.
+ *
+ * Without a date the latest consolidation answers, not the one in force
+ * today: a repealed act still has a public page, and its last text is what
+ * that page shows.
+ */
+export const readStatuteBySlugHandler = async ({
+  legislationDb,
+  params: { slug },
+  query,
+}: ReadStatuteBySlugOptions) => {
+  // A segment outside the minted shape matches no row by construction, so it
+  // is answered before it costs a query.
+  if (!isStatuteSlug(slug)) {
+    return status(404, { message: "Legislation document not found" });
+  }
+
+  const country = query.country.toUpperCase();
+  const asOf = query.asOf;
+
+  const resolved = await legislationDb(async (tx) => {
+    // The segment is not unique by itself: a Work's consolidations all carry
+    // it. Ordering makes the pick deterministic, so two identically named
+    // Works in one jurisdiction always resolve to the same one rather than
+    // to whatever the planner returned first.
+    const [work] = await tx
+      .select({
+        sourceId: legislationDocuments.sourceId,
+        eli: legislationDocuments.eli,
+        language: legislationDocuments.language,
+      })
+      .from(legislationDocuments)
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
+      .where(
+        and(
+          eq(legislationDocuments.country, country),
+          eq(legislationDocuments.slug, slug),
+          redistributableLegislationSource,
+        ),
+      )
+      .orderBy(asc(legislationDocuments.eli), asc(legislationDocuments.id))
+      .limit(1);
+
+    if (work === undefined) {
+      return { type: "unknown-work" } as const;
+    }
+
+    const conditions = workKeyConditions(work);
+    if (asOf !== undefined) {
+      conditions.push(
+        inForceOn(
+          legislationDocuments.versionValidFrom,
+          legislationDocuments.versionValidTo,
+          sql`${asOf}::date`,
+        ),
+      );
+    }
+
+    const [expression] = await tx
+      .select({ id: legislationDocuments.id })
+      .from(legislationDocuments)
+      .where(and(...conditions))
+      .orderBy(
+        desc(versionSortKey(legislationDocuments.versionValidFrom)),
+        desc(legislationDocuments.id),
+      )
+      .limit(1);
+
+    return expression === undefined
+      ? ({ type: "uncovered-date" } as const)
+      : ({ type: "expression", id: expression.id } as const);
+  });
+
+  if (resolved.type === "unknown-work") {
+    return status(404, { message: "Legislation document not found" });
+  }
+
+  // Separating "no such act" from "no window covers that date" is the whole
+  // answer for a reader who asked for a date the corpus does not cover.
+  if (resolved.type === "uncovered-date") {
+    return status(404, {
+      message: "No version of this legislation was in force on the given date",
+    });
+  }
+
+  return await readPublicLegislationHandler(resolved.id, legislationDb);
+};

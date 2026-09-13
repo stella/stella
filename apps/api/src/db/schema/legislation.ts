@@ -41,6 +41,13 @@ import type {
 const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
+/**
+ * The shape a public statute slug may take. The column CHECK below, the
+ * slug generator and the by-slug route param all read this one declaration,
+ * so nothing can persist a segment the resolver would refuse.
+ */
+export const STATUTE_SLUG_SQL_PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$";
+
 /** Bounded prefix that owns stable public-list ordering. */
 export const LEGISLATION_TITLE_SORT_KEY_CHARS = 52;
 
@@ -102,6 +109,14 @@ export const legislationDocuments = p.pgTable(
     // Official titles can enumerate every amended act and have no bounded
     // maximum in the publisher's domain.
     title: p.text().notNull(),
+    /**
+     * The readable segment the public statute URL is addressed by, derived
+     * from the citation and the short title (`89-2012-sb-obcansky-zakonik`).
+     * Every Expression of a Work carries the same value, so a Work owns one
+     * segment and its consolidations hang off it. Null for a document whose
+     * ELI carries no citation tail; those stay reachable by id.
+     */
+    slug: p.varchar({ length: 256 }),
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     documentType: p.varchar("document_type", { length: 128 }),
@@ -164,6 +179,13 @@ export const legislationDocuments = p.pgTable(
       .on(t.sourceId, t.eli, t.language)
       .where(isNull(t.versionValidFrom)),
     p.index("legislation_documents_eli_idx").on(t.eli),
+    // The public reader addresses a Work by (country, slug). Not unique: a
+    // Work's consolidations all carry the segment, and a title repaired
+    // between consolidations leaves the Work answering to both of its slugs.
+    p
+      .index("legislation_documents_country_slug_idx")
+      .on(t.country, t.slug)
+      .where(isNotNull(t.slug)),
     // The point-in-time read seeks a Work by its identifier and takes the
     // latest window that opened on or before the requested date, so the
     // access path has to carry the language and the opening as well.
@@ -222,6 +244,12 @@ export const legislationDocuments = p.pgTable(
     p.check(
       "legislation_documents_status_values",
       sql`${t.status} IN (${sql.join(LEGISLATION_DOCUMENT_STATUS_SQL_VALUES, sql.raw(","))})`,
+    ),
+    // The column is a public URL segment: whatever writes it, only the shape
+    // the resolver and the route param accept may land here.
+    p.check(
+      "legislation_documents_slug_shape",
+      sql`${t.slug} IS NULL OR ${t.slug} ~ ${sql.raw(`'${STATUTE_SLUG_SQL_PATTERN}'`)}`,
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
