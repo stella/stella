@@ -113,10 +113,19 @@ export const deleteTestWorkspace = async (
   workspaceId: string,
 ): Promise<void> => {
   const path = `/workspaces/${workspaceId}`;
+  const outcome: { failure: Error | null } = { failure: null };
   await expect
     .poll(
       async () => {
-        const result = await apiDeleteStatus(request, path);
+        const attempt = await Result.tryPromise(() =>
+          apiDeleteStatus(request, path),
+        );
+        // expect.poll retries thrown errors too; return before surfacing failures.
+        if (Result.isError(attempt)) {
+          outcome.failure = attempt.error;
+          return true;
+        }
+        const result = attempt.value;
         if (
           result.status === 404 ||
           (result.status >= 200 && result.status < 300)
@@ -131,11 +140,15 @@ export const deleteTestWorkspace = async (
         ) {
           return false;
         }
-        throw new Error(
+        outcome.failure = new Error(
           `DELETE ${path} -> ${String(result.status)}: ${result.body}`,
         );
+        return true;
       },
       { timeout: 30_000, intervals: [250, 500, 1000, 2000] },
     )
     .toBe(true);
+  if (outcome.failure !== null) {
+    throw outcome.failure;
+  }
 };
