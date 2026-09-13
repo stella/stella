@@ -219,6 +219,7 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
 });
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
+  executeMock.mockResolvedValueOnce([{ entityId: entityRow.id }]);
   executeMock.mockResolvedValueOnce([]);
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
