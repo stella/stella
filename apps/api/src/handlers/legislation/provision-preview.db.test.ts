@@ -138,17 +138,15 @@ afterAll(async () => {
   await client?.close();
 });
 
-type PreviewQuery = { citedAnchor?: string };
-
 const readPreview = async (
   documentId: SafeId<"legislationDocument">,
   anchor: string,
-  query: PreviewQuery = {},
+  citedAnchor?: string,
 ) =>
   await readProvisionPreviewHandler({
     documentId,
     anchor,
-    query,
+    citedAnchor,
     legislationDb,
   });
 
@@ -187,17 +185,17 @@ describe("reading one provision preview", () => {
   });
 
   test("a cited paragraph keeps its letters and their points", async () => {
-    const preview = await readPreview(civilCode, "par_898", {
-      citedAnchor: "par_898-odst_2",
-    });
+    const preview = await readPreview(civilCode, "par_898", "par_898-odst_2");
 
     expect(blockIds(preview)).toEqual(["b-2", "b-3", "b-4", "b-5", "b-6"]);
   });
 
   test("a cited letter keeps its points and stops at the next letter", async () => {
-    const preview = await readPreview(civilCode, "par_898", {
-      citedAnchor: "par_898-odst_2-pism_d",
-    });
+    const preview = await readPreview(
+      civilCode,
+      "par_898",
+      "par_898-odst_2-pism_d",
+    );
 
     expect(blockIds(preview)).toEqual(["b-4", "b-5", "b-6"]);
   });

@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -15,28 +17,40 @@ import {
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
 const PREVIEW_READ_STEP = "provisionPreview.corpusAst";
 
-export const provisionPreviewParamsSchema = t.Object({
-  documentId: tSafeId("legislationDocument"),
-  anchor: t.String({ minLength: 1, maxLength: 256 }),
-});
+/**
+ * How long a provision preview may be reused. A consolidation's wording is
+ * fixed once published: an amendment is a new consolidation with its own id,
+ * so an answer addressed by document id and anchor changes only when the
+ * corpus is reparsed. The freshness trade is against a reparse, never against
+ * a change in the law, and an unauthenticated read carries no session, so the
+ * answer is shareable.
+ */
+const PROVISION_PREVIEW_CACHE_CONTROL =
+  "public, max-age=3600, stale-while-revalidate=86400";
 
-export const provisionPreviewQuerySchema = t.Object({
-  /**
-   * The subdivision the citation named (`par_1729-odst_1`), when it named
-   * one. The preview then shows that block instead of the whole provision.
-   */
-  citedAnchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-});
-
-type ProvisionPreviewQuery = Static<typeof provisionPreviewQuerySchema>;
+const config = {
+  mcp: { type: "internal", reason: "public_indexing" },
+  params: t.Object({
+    documentId: tSafeId("legislationDocument"),
+    anchor: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  query: t.Object({
+    /**
+     * The subdivision the citation named (`par_1729-odst_1`), when it named
+     * one. The preview then shows that block instead of the whole provision.
+     */
+    citedAnchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
+  }),
+} satisfies PublicHandlerConfig;
 
 type ReadProvisionPreviewOptions = {
   documentId: SafeId<"legislationDocument">;
   anchor: string;
-  query: ProvisionPreviewQuery;
+  citedAnchor: string | undefined;
   legislationDb: LegislationReadDb;
 };
 
@@ -51,7 +65,7 @@ type ReadProvisionPreviewOptions = {
 export const readProvisionPreviewHandler = async ({
   documentId,
   anchor,
-  query,
+  citedAnchor,
   legislationDb,
 }: ReadProvisionPreviewOptions) => {
   const [version] = await legislationDb(
@@ -82,7 +96,7 @@ export const readProvisionPreviewHandler = async ({
     version,
     blocks,
     anchor,
-    citedAnchor: query.citedAnchor,
+    citedAnchor,
   });
 
   if (preview.blocks.length === 0) {
@@ -91,3 +105,26 @@ export const readProvisionPreviewHandler = async ({
 
   return preview;
 };
+
+const readProvisionPreview = createSafePublicHandler(
+  config,
+  async function* ({ params: { documentId, anchor }, query, set }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readProvisionPreviewHandler({
+            documentId,
+            anchor,
+            citedAnchor: query.citedAnchor,
+            legislationDb: legislationPublicReadDb,
+          }),
+      ),
+    );
+
+    set.headers["cache-control"] = PROVISION_PREVIEW_CACHE_CONTROL;
+
+    return Result.ok(response);
+  },
+);
+
+export default readProvisionPreview;

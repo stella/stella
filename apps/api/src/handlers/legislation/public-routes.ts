@@ -16,11 +16,7 @@ import {
   provisionHistoryQuerySchema,
   readProvisionHistoryHandler,
 } from "@/api/handlers/legislation/provision-history";
-import {
-  provisionPreviewParamsSchema,
-  provisionPreviewQuerySchema,
-  readProvisionPreviewHandler,
-} from "@/api/handlers/legislation/provision-preview";
+import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
 import {
   legislationShelfQuerySchema,
   readLegislationShelfHandler,
@@ -33,17 +29,6 @@ import {
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-
-/**
- * How long a provision preview may be reused. A consolidation's wording is
- * fixed once published: an amendment is a new consolidation with its own id,
- * so an answer addressed by document id and anchor changes only when the
- * corpus is reparsed. The freshness trade is against a reparse, never against
- * a change in the law, and an unauthenticated read carries no session, so the
- * answer is shareable.
- */
-const PROVISION_PREVIEW_CACHE_CONTROL =
-  "public, max-age=3600, stale-while-revalidate=86400";
 
 const listStatutes = createSafePublicHandler(
   {
@@ -155,31 +140,6 @@ const readProvisionHistory = createSafePublicHandler(
           }),
       ),
     );
-
-    return Result.ok(response);
-  },
-);
-
-const readProvisionPreview = createSafePublicHandler(
-  {
-    mcp: { type: "internal", reason: "public_indexing" },
-    params: provisionPreviewParamsSchema,
-    query: provisionPreviewQuerySchema,
-  },
-  async function* ({ params: { documentId, anchor }, query, set }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readProvisionPreviewHandler({
-            documentId,
-            anchor,
-            query,
-            legislationDb: legislationPublicReadDb,
-          }),
-      ),
-    );
-
-    set.headers["cache-control"] = PROVISION_PREVIEW_CACHE_CONTROL;
 
     return Result.ok(response);
   },

@@ -2,10 +2,8 @@ import { panic, Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import { caseLawResearchColumns } from "@/api/db/schema";
-import {
-  createResearchColumnBodySchema,
-  toResearchColumnResponse,
-} from "@/api/handlers/case-law/research/schema";
+import { toResearchColumnResponse } from "@/api/handlers/case-law/research/column-access";
+import { createResearchColumnBodySchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

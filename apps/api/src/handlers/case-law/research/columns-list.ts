@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
-import { readOrganizationResearchColumns } from "@/api/handlers/case-law/research/column-access";
-import { toResearchColumnResponse } from "@/api/handlers/case-law/research/schema";
+import {
+  readOrganizationResearchColumns,
+  toResearchColumnResponse,
+} from "@/api/handlers/case-law/research/column-access";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
