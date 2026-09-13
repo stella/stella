@@ -16,7 +16,7 @@ const config = {
   description:
     "Set the order of the organization's question columns. The list must " +
     "name every column the organization keeps, exactly once.",
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawResearch: ["update"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: reorderResearchColumnsBodySchema,
 } satisfies HandlerConfig;

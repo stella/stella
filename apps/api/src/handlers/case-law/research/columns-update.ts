@@ -26,7 +26,7 @@ const config = {
     "Reword or retype one of the organization's questions. A changed " +
     "question, answer type or option list invalidates every answer the " +
     "column holds; the cells empty until the next run.",
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawResearch: ["update"] },
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
   body: updateResearchColumnBodySchema,

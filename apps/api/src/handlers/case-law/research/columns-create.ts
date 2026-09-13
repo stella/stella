@@ -19,7 +19,7 @@ const config = {
     "Answers are produced later, by an explicit run; the column starts " +
     "empty. Refused once the organization holds its maximum number of " +
     "columns.",
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawResearch: ["create"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: createResearchColumnBodySchema,
 } satisfies HandlerConfig;

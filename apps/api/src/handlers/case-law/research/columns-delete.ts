@@ -11,7 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description:
     "Remove one of the organization's question columns, with every answer it holds.",
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawResearch: ["delete"] },
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
 } satisfies HandlerConfig;

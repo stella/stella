@@ -37,6 +37,11 @@ export const statements = {
   auditLog: ["read"],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: ["create", "update"],
+  // The organization's case-law question columns and the AI runs that fill
+  // them. Organization-scoped like `agentSkill`: one set serves every member,
+  // so authoring and running it is a grant of its own rather than a matter
+  // permission.
+  caseLawResearch: ["create", "update", "delete", "run"],
 } as const;
 
 type PermissionMap = {
@@ -79,6 +84,7 @@ const externalStellaGrants = {
   auditLog: [],
   agentSkill: [],
   firmMemory: [],
+  caseLawResearch: [],
 } satisfies StellaPermissionMap;
 
 const internStellaGrants = {
@@ -112,6 +118,11 @@ const memberStellaGrants = {
   auditLog: [],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: [],
+  // Staff author and run research columns in full, as they do agent skills:
+  // the matrix reserves management-only treatment for firm administration
+  // (rates, firm memory, the audit log) and for approval actions, not for
+  // deleting a peer's work.
+  caseLawResearch: ["create", "update", "delete", "run"],
 } satisfies StellaPermissionMap;
 
 const managementStellaGrants = {

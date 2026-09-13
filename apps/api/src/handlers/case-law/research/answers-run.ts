@@ -25,7 +25,7 @@ const config = {
     "already hold an answer are kept unless `force` is set; cells another " +
     "run is still working on are skipped. Answering continues after the " +
     "response; poll the answers.",
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawResearch: ["run"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: runResearchAnswersBodySchema,
 } satisfies HandlerConfig;

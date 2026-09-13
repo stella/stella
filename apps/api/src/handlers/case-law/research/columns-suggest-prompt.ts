@@ -18,10 +18,9 @@ const config = {
     "through the public gate and only their published headnotes ground the " +
     "wording. Returns one single-line question of at most 280 characters " +
     "and stores nothing. Consumes AI usage.",
-  // The grant a matter's column suggestion carries, for the same reason: one
-  // capability, one AI spend, and a reader who may not author a column has no
-  // draft to write.
-  permissions: { property: ["create"] },
+  // The grant the column itself carries: one capability, one AI spend, and a
+  // reader who may not author a column has no draft to write.
+  permissions: { caseLawResearch: ["create"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: suggestResearchColumnPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
