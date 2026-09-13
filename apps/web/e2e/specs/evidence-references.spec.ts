@@ -3,9 +3,6 @@ import JSZip from "jszip";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
-import csMessages from "../../src/i18n/langs/cs.json" with { type: "json" };
-import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 import {
   apiDownloadFileField,
   apiGet,
@@ -23,7 +20,31 @@ const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
 
-const messages = { ar: arMessages, cs: csMessages, en: enMessages } as const;
+const readEvidenceMessages = async (locale: string) => {
+  const catalog: unknown = JSON.parse(
+    await readFile(
+      path.resolve(import.meta.dirname, `../../src/i18n/langs/${locale}.json`),
+      "utf8",
+    ),
+  );
+  if (
+    typeof catalog !== "object" ||
+    catalog === null ||
+    !("folio" in catalog) ||
+    typeof catalog.folio !== "object" ||
+    catalog.folio === null ||
+    !("finishEditing" in catalog.folio) ||
+    typeof catalog.folio.finishEditing !== "string" ||
+    !("evidenceReferences" in catalog.folio) ||
+    typeof catalog.folio.evidenceReferences !== "string"
+  ) {
+    throw new Error(`Missing evidence test labels for ${locale}`);
+  }
+  return {
+    finishEditing: catalog.folio.finishEditing,
+    evidenceReferences: catalog.folio.evidenceReferences,
+  };
+};
 
 type EntityFileField = {
   id: string;
@@ -139,6 +160,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       page,
       request,
     }) => {
+      const messages = await readEvidenceMessages(locale);
       const testWorkspace = workspace;
       if (testWorkspace === null) {
         throw new Error("Test workspace was not created");
@@ -224,7 +246,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await page.goto(documentUrl, { waitUntil: "domcontentloaded" });
 
       const finishEditingButton = page.getByRole("button", {
-        name: messages[locale].folio.finishEditing,
+        name: messages.finishEditing,
       });
       await expect(finishEditingButton).toBeEnabled({ timeout: 45_000 });
       await expect(
@@ -240,11 +262,11 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
 
       const evidenceButton = page.getByRole("button", {
-        name: messages[locale].folio.evidenceReferences,
+        name: messages.evidenceReferences,
       });
       await evidenceButton.click();
       const evidenceDialog = page.getByRole("dialog", {
-        name: messages[locale].folio.evidenceReferences,
+        name: messages.evidenceReferences,
       });
       await expect(evidenceDialog).toBeVisible();
       await evidenceDialog
@@ -291,17 +313,17 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
       await expect(
         page.getByRole("button", {
-          name: messages[locale].folio.finishEditing,
+          name: messages.finishEditing,
         }),
       ).toBeEnabled({ timeout: 45_000 });
 
       await page
         .getByRole("button", {
-          name: messages[locale].folio.evidenceReferences,
+          name: messages.evidenceReferences,
         })
         .click();
       const reloadedDialog = page.getByRole("dialog", {
-        name: messages[locale].folio.evidenceReferences,
+        name: messages.evidenceReferences,
       });
       const sourceRequest = page.waitForResponse(
         (response) =>
@@ -325,12 +347,12 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .press("Control+End");
       await page
         .getByRole("button", {
-          name: messages[locale].folio.evidenceReferences,
+          name: messages.evidenceReferences,
         })
         .click();
       await page
         .getByRole("dialog", {
-          name: messages[locale].folio.evidenceReferences,
+          name: messages.evidenceReferences,
         })
         .getByRole("button", {
           name: "evidence-second-source.docx",
@@ -349,7 +371,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         { timeout: 45_000 },
       );
       await page
-        .getByRole("button", { name: messages[locale].folio.finishEditing })
+        .getByRole("button", { name: messages.finishEditing })
         .click();
       expect((await secondFinalizeResponse).ok()).toBe(true);
       await expect(finishEditingButton).toBeHidden();
