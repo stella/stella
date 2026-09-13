@@ -65,11 +65,13 @@ describe("buildBudgetEdgeSchema", () => {
       );
 
       if (result.budget.basis === "placeholder") {
-        expect(result.measured.bytes).toBeLessThanOrEqual(
+        const probeCeiling = Math.min(
+          result.budget.maxSchemaBytes,
           PLACEHOLDER_PROBE_CAP_BYTES,
         );
+        expect(result.measured.bytes).toBeLessThanOrEqual(probeCeiling);
         expect(result.measured.bytes).toBeGreaterThan(
-          PLACEHOLDER_PROBE_CAP_BYTES * PLACEHOLDER_PROBE_TOLERANCE,
+          probeCeiling * PLACEHOLDER_PROBE_TOLERANCE,
         );
         return;
       }

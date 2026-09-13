@@ -47,16 +47,20 @@ export const STRUCTURED_OUTPUT_BUDGETS = {
     maxUnionParameters: 1000,
     basis: "documented",
   },
+  // A 5,395-byte workflow-batch schema with four properties failed against
+  // Nova Micro through Bedrock Converse with `Model produced invalid sequence
+  // as part of ToolUse`. Until a larger workflow shape is demonstrated to
+  // work, admit one property: the smallest useful production batch.
+  bedrock: {
+    maxSchemaBytes: 1347,
+    maxUnionParameters: 1,
+    basis: "placeholder",
+  },
   // Placeholders. No schema-size or union limit is published for these
   // providers, so these values only stop a runaway schema rather than
   // encoding a known ceiling; tighten one from a measurement, not a guess.
   // OpenRouter's applies only to an id whose upstream is unknown:
   // `resolveStructuredOutputBudget` reads the upstream off the id first.
-  bedrock: {
-    maxSchemaBytes: 100_000,
-    maxUnionParameters: 1000,
-    basis: "placeholder",
-  },
   google: {
     maxSchemaBytes: 100_000,
     maxUnionParameters: 1000,

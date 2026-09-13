@@ -336,24 +336,6 @@ export const MODEL_RATES = {
     inputPerMTok: 15_000,
     outputPerMTok: 60_000,
   },
-  // models.dev: mistral:magistral-medium-latest
-  "magistral-medium-latest": {
-    kind: "flat",
-    inputPerMTok: 200_000,
-    outputPerMTok: 500_000,
-  },
-  // models.dev: mistral:magistral-small
-  "magistral-small": {
-    kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 150_000,
-  },
-  // models.dev: mistral:pixtral-large-latest
-  "pixtral-large-latest": {
-    kind: "flat",
-    inputPerMTok: 200_000,
-    outputPerMTok: 600_000,
-  },
   // models.dev: google:gemini-2.5-flash
   "gemini-2.5-flash": {
     kind: "flat",
