@@ -4661,9 +4661,9 @@
     "slugRequired": "Slug on kohustuslik"
   },
   "verify": {
+    "history": "{history, select, refiled {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>.} superseded {See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.} other {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>. See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.}}",
     "notFound": "Teie organisatsioonis ei ole selle viitenumbriga dokumenti.",
-    "opened": "Avatud viitenumbri <bdi>{reference}</bdi> alusel.",
-    "superseded": "See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}."
+    "opened": "Avatud viitenumbri <bdi>{reference}</bdi> alusel."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "See fail on dokumendi <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) versioon {version, number} toimikus <bdi>{matterName}</bdi>.",
         "referenceHere": "See fail on dokumendi <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) versioon {version, number}.",
         "referenceLineRemoved": "Viitenumbri rida on sellest failist eemaldatud, seega käsitleme seda uue dokumendina, kui sa ei vali teisiti.",
+        "referenceRefiled": "Dokument on nüüd viitenumbriga <bdi>{reference}</bdi>.",
         "referenceSuperseded": "See põhineb versioonil {basedOn, number}; praegune on versioon {current, number}.",
         "replaceOption": "Laadi üles uue versioonina",
         "title": "Laadida üles uus versioon või luua uus fail?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Veeru nimi, nt jõustumiskuupäev"
     },
     "reference": "Viitenumber",
+    "referenceChangeConfirmDescription": "{count, plural, one {# dokumendiversioon kannab} other {# dokumendiversiooni kannab}} viitenumbrit <bdi>{oldReference}</bdi>. Väljatrükitud koopiad säilitavad selle ja avanevad endiselt oma kontrollkoodi kaudu. Uued versioonid nummerdatakse viitenumbri <bdi>{newReference}</bdi> alla. <bdi>{oldReference}</bdi> jääb sellele toimikule reserveerituks ja seda ei saa anda teisele.",
+    "referenceChangeConfirmTitle": "Kas muuta toimiku viitenumbrit?",
     "referenceConventionHint": "Eelistatud vorming: {example}",
     "referenceFormatWarning": "Ei vasta eelistatud vormingule.",
     "referenceNumberingEmptyHint": "Määrake viitenumber, et selle toimiku dokumente nummerdama hakata.",
     "referenceNumberingHint": "Selle toimiku dokumendid nummerdatakse <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> ja nii edasi; iga versioon lisab <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "nt 2024/001",
+    "referenceRetired": "Numbri {reference} all on dokumente teises toimikus, seega ei saa seda uuesti kasutada.",
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {
       "parties": "Osapooled"

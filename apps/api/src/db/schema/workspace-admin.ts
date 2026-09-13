@@ -101,6 +101,60 @@ export const documentCounters = p.pgTable(
   ],
 );
 
+/**
+ * Every matter reference documents have been numbered under, with the matter
+ * that owns it and how far its numbering has run.
+ *
+ * A printed stamp `{reference}/{seq}.v{n}` names a matter for as long as the
+ * file exists, so a reference that has numbered anything belongs to its matter
+ * for good: the matter update refuses to hand it to a different matter, and
+ * `workspaceId` is what that refusal reads. A null owner is a deleted matter,
+ * which retires the reference rather than freeing it.
+ *
+ * `lastValue` is the high-water mark the reference has reached. Allocation
+ * floors the matter's own counter at it, so a sequence number cannot repeat
+ * under one reference even if some future path writes a reference the refusal
+ * did not see.
+ */
+export const documentReferenceCounters = p.pgTable(
+  "document_reference_counters",
+  {
+    id: pUuid<"documentReferenceCounter">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    reference: p.varchar("reference", { length: 64 }).notNull(),
+    /**
+     * The matter that first numbered documents under this reference. Nullable
+     * and `SET NULL` on delete: the row outlives the matter so the reference
+     * stays retired rather than becoming available again.
+     */
+    workspaceId: safeWorkspaceId("workspace_id"),
+    lastValue: p.integer("last_value").notNull().default(0),
+  },
+  (table) => [
+    // Named explicitly: the inferred constraint name exceeds PostgreSQL's
+    // 63-byte identifier limit and would be silently truncated.
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "document_reference_counters_org_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "document_reference_counters_workspace_fk",
+      })
+      .onDelete("set null"),
+    p
+      .uniqueIndex("document_reference_counters_org_ref_uidx")
+      .on(table.organizationId, table.reference),
+    p.index("document_reference_counters_workspace_idx").on(table.workspaceId),
+    ...orgPolicies(),
+  ],
+);
+
 export const organizationSettings = p.pgTable(
   "organization_settings",
   {

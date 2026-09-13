@@ -9,6 +9,7 @@ import {
   encodePaginationCursor,
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
+  iterateCursorPages,
   parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 
@@ -225,4 +226,17 @@ describe("cursor pagination — properties", () => {
       propertyConfig(),
     );
   });
+});
+
+test("cursor iteration stops fetching when its consumer stops", async () => {
+  const requested: (string | null)[] = [];
+  const pages = iterateCursorPages(async (cursor) => {
+    requested.push(cursor);
+    return { items: ["first"], limit: 1, nextCursor: "next" };
+  });
+
+  expect((await pages.next()).value).toEqual(["first"]);
+  await pages.return(undefined);
+
+  expect(requested).toEqual([null]);
 });

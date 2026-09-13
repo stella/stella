@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { isDocumentReferenceQuery } from "@stll/api-contract";
 import {
   applyArabicFolds,
   foldToAscii,
@@ -710,6 +711,14 @@ export const buildSearchTsQuery = (query: string) => {
   const plainQueries = variants.flatMap((variant) =>
     buildPlainSearchTsQueryParts(variant, {}),
   );
+  // A whole document reference names one document, so it is answered exactly.
+  // The fallbacks below widen recall lexeme by lexeme, and PostgreSQL parses a
+  // reference into a single `file` token: `2026/001/015` would otherwise come
+  // back with everything merely carrying a `2026`. A partly typed reference is
+  // not one yet and keeps the fallbacks.
+  if (isDocumentReferenceQuery(query.trim())) {
+    return sql`(${sql.join(plainQueries, sql` || `)})`;
+  }
   const prefixQueries = [
     ...new Set(
       variants.flatMap((variant) => {

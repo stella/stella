@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
+import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 
 import { rootDb } from "@/api/db/root";
@@ -14,6 +16,8 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
+import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
@@ -44,6 +48,7 @@ type BuiltSearchDocument = Omit<
   extractedContentSource: ExtractedContentSource | null;
   searchableText: string;
   semanticUpdatedAtToken: TimestampCasToken;
+  versionSetToken: string;
   sourceVersionId: SafeId<"entityVersion">;
   title: string;
 };
@@ -51,6 +56,21 @@ type BuiltSearchDocument = Omit<
 type IndexedSearchDocument = {
   entityId: SafeId<"entity">;
 };
+
+// Compare the complete projection inputs, including tombstones. Entity
+// timestamps do not change when a non-current version is deleted.
+const versionSetToken = (entityId: SQL, workspaceId: SQL) => sql<string>`(
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_array(v.id, v.stamp, v.deleted_at IS NOT NULL)
+    ORDER BY v.version_number DESC, v.id DESC
+  ), '[]'::jsonb)::text
+  FROM (
+    SELECT id, stamp, deleted_at, version_number
+    FROM entity_versions
+    WHERE entity_id = ${entityId} AND workspace_id = ${workspaceId}
+    ORDER BY version_number DESC, id DESC
+  ) v
+)`;
 
 const linkMetadataSearchText = (metadata: LinkMetadata | null): string => {
   if (!metadata) {
@@ -111,12 +131,16 @@ const buildSearchDocument = async (
   // rejects). Reading the tokens in a separate query is safe: the upsert
   // re-checks version and tokens under FOR UPDATE, so a concurrent update
   // makes the CAS miss and the follow-up index event re-runs the build.
-  // Both tokens are read BEFORE the projection they fence, so extraction
+  // All tokens are read BEFORE the projection they fence, so extraction
   // landing in between can only make the fence miss, never let stale text
   // through. `extracted_content.entity_id` is the primary key, so the
   // correlated read is scalar by construction.
   const [tokenRow] = await database
     .select({
+      versionSetToken: versionSetToken(
+        sql`${entities.id}`,
+        sql`${entities.workspaceId}`,
+      ),
       semanticUpdatedAtToken: sql<TimestampCasToken>`
         COALESCE(${entities.updatedAt}, ${entities.createdAt})::text
       `,
@@ -178,16 +202,27 @@ const buildSearchDocument = async (
   const workspace = entity.workspace ?? panic("Entity has no workspace");
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
-  const latestVersion = await database.query.entityVersions.findFirst({
-    where: {
-      entityId: { eq: entityId },
-      workspaceId: { eq: entity.workspaceId },
-    },
-    columns: { id: true },
-    // Include tombstones: a deleted newer version must keep legacy,
-    // provenance-free text from being attributed to a promoted old version.
-    orderBy: { versionNumber: "desc", id: "desc" },
+  // Page through every version: truncation would hide old printed references.
+  const versionPages = iterateCursorPages(async (cursor) => {
+    const rows = await database.query.entityVersions.findMany({
+      where: {
+        entityId: { eq: entityId },
+        workspaceId: { eq: entity.workspaceId },
+        versionNumber: cursor === null ? undefined : { lt: Number(cursor) },
+      },
+      // Include tombstones: a deleted newer version must prevent legacy text
+      // from being attributed to a promoted older version.
+      columns: { deletedAt: true, id: true, stamp: true, versionNumber: true },
+      orderBy: { versionNumber: "desc" },
+      limit: LIMITS.versionsPageSizeDefault + 1,
+    });
+    return createCursorPage({
+      rows,
+      limit: LIMITS.versionsPageSizeDefault,
+      cursorForItem: (row) => String(row.versionNumber),
+    });
   });
+  let latestVersionId: SafeId<"entityVersion"> | undefined;
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -216,6 +251,28 @@ const buildSearchDocument = async (
     fieldTexts.push(linkText);
   }
 
+  // Every reference the document still carries, not only the current one: a
+  // move between matters or a matter re-reference leaves older versions
+  // stamped with what was printed on them, and a reader searching that
+  // reference has to find the document it names. Tombstoned versions are
+  // excluded, so a deleted version's reference stops resolving here the same
+  // way it stops resolving everywhere else.
+  const stampTexts = new Set<string>();
+  for await (const versions of versionPages) {
+    latestVersionId ??= versions.at(0)?.id;
+    for (const { deletedAt, stamp } of versions) {
+      if (deletedAt || !stamp) {
+        continue;
+      }
+      // PostgreSQL parses a whole stamp as one token, so index its base too.
+      stampTexts.add(stamp);
+      stampTexts.add(documentReferenceBase(stamp));
+    }
+  }
+  if (stampTexts.size > 0) {
+    fieldTexts.push([...stampTexts].join(" "));
+  }
+
   // Append decrypted file content when available.
   // Store the PG regconfig name (not ISO code) so the
   // FTS provider can use it directly.
@@ -224,7 +281,7 @@ const buildSearchDocument = async (
   const extractedContentRow = entity.extractedContent;
   const currentExtractedContent = selectCurrentExtractedContent({
     extracted: extractedContentRow,
-    allowLegacy: latestVersion?.id === version.id,
+    allowLegacy: latestVersionId === version.id,
     currentVersionCreatedAt: version.createdAt,
     currentVersionId: version.id,
     fields: version.fields,
@@ -269,6 +326,7 @@ const buildSearchDocument = async (
     language,
     sourceVersionId: version.id,
     semanticUpdatedAtToken: tokenRow.semanticUpdatedAtToken,
+    versionSetToken: tokenRow.versionSetToken,
     updatedAt: entity.updatedAt ?? entity.createdAt,
   };
 };
@@ -310,6 +368,21 @@ export const upsertSearchDocument = async (
   const hasObservedSource = observedSource !== null;
 
   await database.transaction(async (tx) => {
+    // Version writers serialize on this entity. Take the lock in a separate
+    // statement so the following CAS sees commits made while we waited.
+    const locked = await tx.execute<IndexedSearchDocument>(sql`
+      SELECT e.id AS "entityId"
+      FROM entities e
+      INNER JOIN workspaces w ON w.id = e.workspace_id
+      WHERE e.id = ${doc.entityId}
+        AND e.workspace_id = ${doc.workspaceId}
+        AND w.organization_id = ${doc.organizationId}
+      FOR UPDATE OF e
+    `);
+    if (!locked.at(0)) {
+      return;
+    }
+
     // oxlint-disable-next-line require-search-scope/require-search-scope -- atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
       INSERT INTO search_documents (
@@ -339,6 +412,7 @@ export const upsertSearchDocument = async (
         AND w.organization_id = ${doc.organizationId}
         AND e.workspace_id = ${doc.workspaceId}
         AND e.current_version_id = ${doc.sourceVersionId}
+        AND ${versionSetToken(sql`e.id`, sql`e.workspace_id`)} = ${doc.versionSetToken}
         AND COALESCE(e.updated_at, e.created_at)
           IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamptz
         AND (

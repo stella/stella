@@ -4661,9 +4661,9 @@
     "slugRequired": "Le slug est requis"
   },
   "verify": {
+    "history": "{history, select, refiled {Imprimé sous la référence <bdi>{reference}</bdi> ; désormais classé sous la référence <bdi>{currentReference}</bdi> dans le dossier <bdi>{matterName}</bdi>.} superseded {Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}.} other {Imprimé sous la référence <bdi>{reference}</bdi> ; désormais classé sous la référence <bdi>{currentReference}</bdi> dans le dossier <bdi>{matterName}</bdi>. Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}.}}",
     "notFound": "Aucun document portant cette référence n’est disponible dans votre organisation.",
-    "opened": "Ouvert via la référence <bdi>{reference}</bdi>.",
-    "superseded": "Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}."
+    "opened": "Ouvert via la référence <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Ce fichier est la version {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) dans le dossier <bdi>{matterName}</bdi>.",
         "referenceHere": "Ce fichier est la version {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "La ligne de référence a été supprimée de ce fichier ; il est donc traité comme un nouveau document, sauf si vous en décidez autrement.",
+        "referenceRefiled": "Le document est désormais classé sous la référence <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Il part de la version {basedOn, number} ; la version actuelle est la {current, number}.",
         "replaceOption": "Téléverser comme nouvelle version",
         "title": "Téléverser une nouvelle version ou créer un nouveau fichier ?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Nom de colonne, p. ex. Date d'effet"
     },
     "reference": "Numéro de référence",
+    "referenceChangeConfirmDescription": "{count, plural, one {# version de document porte} other {# versions de documents portent}} la référence <bdi>{oldReference}</bdi>. Les copies imprimées la conservent et restent accessibles avec leur code de vérification. Les nouvelles versions seront numérotées sous <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> reste réservée à ce dossier et ne peut pas être attribuée à un autre.",
+    "referenceChangeConfirmTitle": "Modifier la référence du dossier ?",
     "referenceConventionHint": "Format préféré : {example}",
     "referenceFormatWarning": "Ne correspond pas au format préféré.",
     "referenceNumberingEmptyHint": "Renseignez un numéro de référence pour numéroter les documents de ce dossier.",
     "referenceNumberingHint": "Les documents de ce dossier sont numérotés <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi>, et ainsi de suite ; chaque version ajoute <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "ex. 2024/001",
+    "referenceRetired": "Des documents sont enregistrés sous {reference} dans un autre dossier ; elle ne peut donc pas être réutilisée.",
     "referenceTaken": "Ce numéro de référence est déjà utilisé",
     "sections": {
       "parties": "Parties"

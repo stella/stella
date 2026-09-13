@@ -4661,9 +4661,9 @@
     "slugRequired": "Slug jest wymagany"
   },
   "verify": {
+    "history": "{history, select, refiled {Wydrukowano pod numerem <bdi>{reference}</bdi>; obecnie dokument jest prowadzony pod numerem <bdi>{currentReference}</bdi> w sprawie <bdi>{matterName}</bdi>.} superseded {Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}.} other {Wydrukowano pod numerem <bdi>{reference}</bdi>; obecnie dokument jest prowadzony pod numerem <bdi>{currentReference}</bdi> w sprawie <bdi>{matterName}</bdi>. Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}.}}",
     "notFound": "W Twojej organizacji nie ma dokumentu o tym numerze referencyjnym.",
-    "opened": "Otwarto na podstawie numeru referencyjnego <bdi>{reference}</bdi>.",
-    "superseded": "Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}."
+    "opened": "Otwarto na podstawie numeru referencyjnego <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Ten plik to wersja {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) w sprawie <bdi>{matterName}</bdi>.",
         "referenceHere": "Ten plik to wersja {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "Z tego pliku usunięto wiersz z numerem referencyjnym, więc traktujemy go jako nowy dokument, chyba że wybierzesz inaczej.",
+        "referenceRefiled": "Dokument jest obecnie prowadzony pod numerem <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Powstał na podstawie wersji {basedOn, number}; aktualna jest wersja {current, number}.",
         "replaceOption": "Prześlij jako nową wersję",
         "title": "Przesłać nową wersję czy utworzyć nowy plik?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Nazwa kolumny, np. Data wejścia w życie"
     },
     "reference": "Numer referencyjny",
+    "referenceChangeConfirmDescription": "{count, plural, one {# wersja dokumentu ma} few {# wersje dokumentów mają} many {# wersji dokumentów ma} other {# wersji dokumentów ma}} numer referencyjny <bdi>{oldReference}</bdi>. Wydrukowane kopie go zachowują i nadal otwierają się na podstawie swojego kodu weryfikacyjnego. Nowe wersje będą numerowane pod <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> pozostaje zarezerwowany dla tej sprawy i nie może zostać przypisany do innej.",
+    "referenceChangeConfirmTitle": "Zmienić numer referencyjny sprawy?",
     "referenceConventionHint": "Preferowany format: {example}",
     "referenceFormatWarning": "Nie pasuje do preferowanego formatu.",
     "referenceNumberingEmptyHint": "Podaj numer referencyjny, aby rozpocząć numerowanie dokumentów w tej sprawie.",
     "referenceNumberingHint": "Dokumenty w tej sprawie są numerowane <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> i tak dalej; każda wersja dodaje <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "np. 2024/001",
+    "referenceRetired": "Pod numerem {reference} zarejestrowano dokumenty w innej sprawie, więc nie można go użyć ponownie.",
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {
       "parties": "Strony"

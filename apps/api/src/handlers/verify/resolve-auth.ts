@@ -9,8 +9,10 @@ import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-ref
  *
  * Scoped to the caller's organization to prevent cross-org information
  * disclosure. The frontend calls this after the user logs in via the
- * `/verify/:code` route, and shows which document and matter the code names
- * plus whether the file in hand is still the current version.
+ * `/verify/:code` route, and shows which document and matter the code names,
+ * whether the file in hand is still the current version, and the reference the
+ * document carries now (a move or a re-referenced matter leaves the printed
+ * one behind).
  */
 export const resolveVerificationCodeAuth = async (
   code: string,

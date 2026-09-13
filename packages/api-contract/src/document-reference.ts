@@ -44,4 +44,63 @@ export type DocumentReferenceMatch = {
   versionNumber: number;
   /** Highest non-deleted version number the document currently has. */
   currentVersionNumber: number;
+  /**
+   * The reference frozen onto the document's current version, or null when
+   * that version carries none. It differs from {@link stamp} once the document
+   * has been refiled.
+   */
+  currentStamp: string | null;
 };
+
+/** A reference such as `2026/001/015.v3` with its version suffix removed. */
+const STAMP_VERSION_SUFFIX_RE = /\.v\d+$/u;
+
+/** The document-identifying part of a stamp, without the version it names. */
+export const documentReferenceBase = (stamp: string): string =>
+  stamp.replace(STAMP_VERSION_SUFFIX_RE, "");
+
+/**
+ * The stamp the document carries now, when that is no longer the one printed
+ * on the file in hand; null while the two agree.
+ *
+ * Moving a document to another matter, or editing a matter's reference, leaves
+ * every stamp already frozen onto a version untouched and files the next one
+ * under the new reference. A higher version suffix is ordinary supersession
+ * and is reported as such, so only the reference itself is compared here.
+ */
+export const refiledStamp = ({
+  stamp,
+  currentStamp,
+}: Pick<DocumentReferenceMatch, "stamp" | "currentStamp">): string | null =>
+  currentStamp !== null &&
+  documentReferenceBase(currentStamp) !== documentReferenceBase(stamp)
+    ? currentStamp
+    : null;
+
+/**
+ * A matter reference that documents were once numbered under belongs to that
+ * matter for good: printed stamps keep naming it, so no other matter may take
+ * it over. The matter update returns this code with status 409 when a request
+ * tries; a live matter already holding the reference is a plain 409.
+ */
+export const MATTER_REFERENCE_RETIRED_CODE = "matter_reference_retired";
+
+/**
+ * The same grammar {@link documentReferenceBase} strips from, read forwards:
+ * one whitespace-free token whose last segment is the zero-padded document
+ * sequence, optionally followed by the version suffix. The matter reference
+ * in front of it is free-form and may itself contain slashes (`AB/12/001`).
+ *
+ * The padding is three places, so a matter past its 999th document produces a
+ * longer sequence that reads as an ordinary query rather than a reference.
+ * That costs precision, never recall: such a query keeps the fuzzy fallbacks.
+ */
+const DOCUMENT_REFERENCE_QUERY_RE = /^\S+\/\d{3}(?:\.v\d+)?$/u;
+
+/**
+ * Whether a search string is a whole document reference. A reference names
+ * one document, so a query shaped like one is answered exactly; anything else
+ * stays a text search, where widening recall is the right trade.
+ */
+export const isDocumentReferenceQuery = (query: string): boolean =>
+  DOCUMENT_REFERENCE_QUERY_RE.test(query);

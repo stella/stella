@@ -28,6 +28,10 @@ import {
   broadcastWorkspaceResourceUpdated,
 } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const paramsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -306,6 +310,12 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         );
 
+      // The projection carries every reference the document's live versions
+      // hold, so tombstoning any of them changes it, not only the current one
+      // whose promotion is handled above. Marked inside this transaction so
+      // the repair shares the tombstone's fate.
+      await enqueueEntitySearchRepairs(tx, [params.entityId]);
+
       // Withdraw desktop sessions in the same transaction so none can resume
       // from the tombstoned version. Durable collaboration rooms were rejected
       // above because they have no participant-owned close transition.
@@ -372,6 +382,8 @@ export const deleteEntityVersionHandler = async function* ({
       }),
     );
   }
+
+  flushEntitySearchRepairs([params.entityId]).catch(captureError);
 
   const promotedVersionId = txOutcome.promotedVersionId;
   if (promotedVersionId !== null) {
