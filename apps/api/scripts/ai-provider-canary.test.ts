@@ -19,7 +19,10 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
+  canaryToolProbeIterationLimit,
+  canaryToolProbeModelOptions,
   CanaryCredentialRejectedError,
+  CanaryProviderUnavailableError,
   CanaryProviderRunError,
   CATALOG_SWEEP_BUDGET_MS,
   canaryCapabilityProbeTimeout,
@@ -216,6 +219,28 @@ describe("AI provider catalog canary coverage", () => {
     expect(probed).toEqual(ids.slice(0, 1));
     expect(failures).toBe(ids.length - 1);
   });
+
+  test("does not call a credential-specific entitlement denial a broken catalog model", async () => {
+    const rejectionMessages = [
+      "Model access is denied due to IAM user or service role permissions.",
+      "This model is not available in your subscription tier.",
+    ];
+
+    for (const message of rejectionMessages) {
+      const failures = await runCatalogCanaryProbes(
+        {
+          apiKey: "test-key",
+          provider: "bedrock",
+          probeModel: async () => {
+            throw new HandlerError({ message, status: 502 });
+          },
+          runProbe: runProbeWithoutBackoff,
+        },
+        0,
+      );
+      expect(failures).toBe(0);
+    }
+  });
 });
 
 describe("AI provider canary overload backoff", () => {
@@ -344,6 +369,29 @@ describe("AI provider canary tool contract", () => {
       },
       required: ["count", "value"],
     });
+  });
+
+  test("forces the deterministic Anthropic round trip through the declared tool", () => {
+    // SAFETY: this fixture exercises only the provider/model-options branch;
+    // the adapter is never invoked.
+    const model = {
+      adapter: createProbeFinishAdapter("stop"),
+      keySource: "instance",
+      modelId: "claude-opus-5",
+      modelOptions: { temperature: 0 },
+      provider: "anthropic",
+    } as ResolvedTanStackTextModel;
+
+    expect(
+      canaryToolProbeModelOptions({
+        model,
+        requiredToolName: "canary_round_trip",
+      }),
+    ).toMatchObject({
+      tool_choice: { name: "canary_round_trip", type: "tool" },
+    });
+    expect(canaryToolProbeIterationLimit("canary_round_trip")).toBe(1);
+    expect(canaryToolProbeIterationLimit(undefined)).toBe(2);
   });
 });
 
@@ -991,6 +1039,39 @@ describe("AI provider canary credential rejection", () => {
       "role-fast:model",
       "role-chat:model",
       "prompt-caching",
+    ]);
+  });
+
+  test("stops after a provider remains rate-limited through its retries", async () => {
+    const invoked: string[] = [];
+    const probeRuns = ["role-fast:model", "role-chat:model"].map((label) => ({
+      label,
+      run: async () => {
+        invoked.push(label);
+        throw new ProviderStatusError(429);
+      },
+      timeoutMs: 1000,
+    }));
+
+    const failure = await runCanaryProbeSequence({
+      probeRuns,
+      provider: "mistral",
+      runProbe: runProbeWithoutBackoff,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(CanaryProviderUnavailableError);
+    expect(failure).toHaveProperty(
+      "message",
+      "mistral: provider unavailable after retries (role-fast:model, HTTP 429); " +
+        "restore the canary credential quota",
+    );
+    expect(invoked).toEqual([
+      "role-fast:model",
+      "role-fast:model",
+      "role-fast:model",
     ]);
   });
 });

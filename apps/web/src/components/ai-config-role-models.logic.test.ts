@@ -25,10 +25,10 @@ import type { RoleModelSelections } from "@/components/ai-config-role-models.log
 describe("BYOK provider and model configuration", () => {
   test("creates role defaults from the first configured provider", () => {
     expect(createDefaultRoleModels(["anthropic", "openai"])).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-opus-5" },
+      chat: { provider: "anthropic", modelId: "claude-opus-4-8" },
       fast: { provider: "anthropic", modelId: "claude-opus-5" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-4-8" },
     });
   });
 
@@ -56,7 +56,7 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "mistral", modelId: "mistral-small-latest" },
       reasoning: {
         provider: "mistral",
-        modelId: "magistral-medium-latest",
+        modelId: "mistral-medium-latest",
       },
       pdf: { provider: "openai", modelId: "gpt-5.4" },
     });
@@ -186,10 +186,10 @@ describe("BYOK provider and model configuration", () => {
         roleModels,
       }),
     ).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-opus-5" },
+      chat: { provider: "anthropic", modelId: "claude-opus-4-8" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-4-8" },
     });
   });
 
@@ -274,7 +274,7 @@ describe("BYOK provider and model configuration", () => {
       chat: { provider: "anthropic", modelId: "claude-opus-4-5" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-4-8" },
     });
   });
 
@@ -393,7 +393,7 @@ describe("BYOK provider and model configuration", () => {
     ]);
     expect(rows.at(0)?.selection).toEqual({
       provider: "anthropic",
-      modelId: "claude-opus-5",
+      modelId: "claude-opus-4-8",
     });
     expect(rows.at(1)?.value).toBe("openai::gpt-5.4-nano");
     expect(rows.at(0)?.modelOptions).toContainEqual({
