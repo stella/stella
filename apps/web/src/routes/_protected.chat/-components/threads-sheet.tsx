@@ -12,17 +12,13 @@ import {
   useMatch,
   useNavigate,
 } from "@tanstack/react-router";
-import { MessageSquareIcon, SearchIcon, TrashIcon } from "lucide-react";
+import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
+import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
 import {
   Sheet,
   SheetHeader,
@@ -174,9 +170,6 @@ export const ThreadsSheet = ({
         <SheetPanel>
           <div className="flex flex-col gap-4">
             <InputGroup className="bg-background sticky top-0 z-10">
-              <InputGroupAddon>
-                <SearchIcon />
-              </InputGroupAddon>
               <InputGroupInput
                 aria-label={commonT("search")}
                 onChange={(event) => setSearch(event.target.value)}

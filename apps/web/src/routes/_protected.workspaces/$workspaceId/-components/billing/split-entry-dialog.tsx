@@ -4,7 +4,7 @@ import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { Dialog, DialogFooter, DialogPopup } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
@@ -181,16 +181,16 @@ export const SplitEntryDialog = ({
               })}
             </span>
           </div>
-
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => onOpenChange(false)} variant="outline">
-              {t("common.cancel")}
-            </Button>
-            <Button disabled={totalPercentage !== 100} onClick={handleSubmit}>
-              {t("billing.split.splitEntry")}
-            </Button>
-          </div>
         </div>
+
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} variant="outline">
+            {t("common.cancel")}
+          </Button>
+          <Button disabled={totalPercentage !== 100} onClick={handleSubmit}>
+            {t("billing.split.splitEntry")}
+          </Button>
+        </DialogFooter>
       </DialogPopup>
     </Dialog>
   );
