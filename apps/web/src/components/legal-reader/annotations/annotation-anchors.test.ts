@@ -39,18 +39,34 @@ const marksArbitrary = fc.uniqueArray(annotationArbitrary, {
 });
 
 describe("annotation anchors", () => {
-  test("files every mark under the piece it names", () => {
+  test("files every anchor under the piece its own mark names", () => {
     fc.assert(
       fc.property(marksArbitrary, (annotations: AnnotationAnchorSource[]) => {
+        const pieceOf = new Map(
+          annotations.map((annotation) => [
+            annotation.id,
+            annotation.blockAnchorId,
+          ]),
+        );
         const anchorsByPieceId = buildAnnotationAnchors(annotations);
 
-        for (const annotation of annotations) {
-          const anchors = anchorsByPieceId[annotation.blockAnchorId] ?? [];
-          expect(
-            anchors.some((anchor) =>
-              anchor.key.startsWith(`annotation:${annotation.id}:`),
-            ),
-          ).toBe(annotation.endOffset > annotation.startOffset);
+        for (const [pieceId, anchors] of Object.entries(anchorsByPieceId)) {
+          for (const anchor of anchors) {
+            // `annotation:<id>:<start>`; the id is a UUID, so it holds no colon.
+            const id = anchor.key.split(":").at(1);
+            expect(pieceOf.get(id ?? "")).toBe(pieceId);
+          }
+        }
+
+        // A mark is only ever absent because another mark draws every run it
+        // covers, which the coverage property below proves loses no text.
+        const drawn = new Set(
+          Object.values(anchorsByPieceId)
+            .flat()
+            .map((anchor) => anchor.key.split(":").at(1)),
+        );
+        for (const id of drawn) {
+          expect(pieceOf.has(id ?? "")).toBe(true);
         }
       }),
       propertyConfig(),

@@ -96,14 +96,22 @@ export type AnnotationSegment = {
  * they see and the one a click on those words activates. The id breaks the
  * remaining tie so the same marks always produce the same reading.
  */
+/** Ids are keys, not words: any total order does, as long as it is the same
+ * one everywhere. */
+const compareIds = (left: string, right: string): number => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
 const drawsRun = (
   left: AnnotationAnchorSource,
   right: AnnotationAnchorSource,
 ): number =>
   right.startOffset - left.startOffset ||
   left.endOffset - right.endOffset ||
-  // eslint-disable-next-line require-cached-collator/require-cached-collator -- a UUID is a key, not words: the tie-break only has to be the same everywhere, never locale-aware
-  left.id.localeCompare(right.id);
+  compareIds(left.id, right.id);
 
 /**
  * The marks of one piece as runs that do not overlap. The renderer walks
