@@ -26,7 +26,10 @@ export type ProvisionViewPayload = {
   statuteTitle: string;
   /** ISO date the consolidation entered into force, or null when unknown. */
   versionValidFrom: string | null;
-  /** Consolidations of the work; a history needs more than one. */
+  /**
+   * Consolidations of the work as the opener knew them, and one when it
+   * never read the list. The view reads it and counts from there.
+   */
   versionCount: number;
 };
 

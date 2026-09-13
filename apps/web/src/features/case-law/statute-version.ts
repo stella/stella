@@ -33,3 +33,19 @@ export const pickVersionAt = <TVersion extends StatuteVersionWindow>(
   date: string,
 ): TVersion | null =>
   versions.find((version) => versionCoversDate(version, date)) ?? null;
+
+/**
+ * Whether a work's other consolidations have to be read: some reference
+ * states a version the resolved consolidation does not cover. A reference to
+ * wording that consolidation still carries is answered by it alone, which is
+ * why the versions read is not started for it.
+ */
+export const referencesOutsideVersion = (
+  version: StatuteVersionWindow,
+  references: readonly { versionValidFrom: string | null }[],
+): boolean =>
+  references.some(
+    (reference) =>
+      reference.versionValidFrom !== null &&
+      !versionCoversDate(version, reference.versionValidFrom),
+  );
