@@ -44,7 +44,7 @@ export type FolioCollaborationRoom = {
   getDocumentMutationRevision: () => number;
   getLocalMutationRevision: () => number;
   roomId: string;
-  seedDocumentBuffer: ArrayBuffer | null;
+  seedDocumentBuffer: ArrayBuffer;
 };
 
 export type FolioCollaborationFlush = {
@@ -97,7 +97,7 @@ const joinResponseSchema = v.object({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   roomId: v.string(),
   roomName: v.string(),
-  seedDownloadUrl: v.nullable(v.string()),
+  seedDownloadUrl: v.string(),
   shouldSeed: v.boolean(),
   token: v.string(),
   tokenExpiresAt: v.string(),
@@ -315,15 +315,9 @@ export const useFolioCollaborationRoom = ({
         let token = data.token;
         let tokenExpiresAtMs = new Date(data.tokenExpiresAt).getTime();
         let synchronizedStatus: "readOnly" | "synced" = "synced";
-        const seedDocumentBuffer = await (async () => {
-          if (!data.shouldSeed) {
-            return null;
-          }
-          if (data.seedDownloadUrl === null) {
-            panic("Collaborative editing seed file is unavailable.");
-          }
-          return await fetchSeedDocumentBuffer(data.seedDownloadUrl);
-        })();
+        const seedDocumentBuffer = await fetchSeedDocumentBuffer(
+          data.seedDownloadUrl,
+        );
         if (isDisposed()) {
           return;
         }
@@ -449,7 +443,7 @@ export const useFolioCollaborationRoom = ({
                   getLocalMutationRevision:
                     currentRoom.getLocalMutationRevision,
                   roomId: currentRoom.roomId,
-                  seedDocumentBuffer: null,
+                  seedDocumentBuffer: currentRoom.seedDocumentBuffer,
                 };
                 setConnectedState("reconnecting");
                 detached(

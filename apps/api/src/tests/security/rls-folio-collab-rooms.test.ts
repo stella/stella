@@ -34,6 +34,7 @@ beforeAll(async () => {
   await testDb.insert(folioCollabRooms).values([
     {
       baseVersionId: ids.entityVersionA1,
+      sourceVersionId: ids.entityVersionA1,
       docxCheckpointFileId: createSafeId<"userFile">(),
       entityId: ids.entityA1,
       fileName: "workspace-a.docx",
@@ -44,6 +45,7 @@ beforeAll(async () => {
     },
     {
       baseVersionId: ids.entityVersionB1,
+      sourceVersionId: ids.entityVersionB1,
       docxCheckpointFileId: createSafeId<"userFile">(),
       entityId: ids.entityB1,
       fileName: "workspace-b.docx",

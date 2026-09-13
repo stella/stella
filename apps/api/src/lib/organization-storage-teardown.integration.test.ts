@@ -363,6 +363,7 @@ beforeAll(async () => {
     entityId: secondDocument.entityId,
     propertyId: secondDocument.propertyId,
     baseVersionId: secondDocument.entityVersionId,
+    sourceVersionId: secondDocument.entityVersionId,
     fileName: "engagement-letter.docx",
     yjsSnapshotFileId: collabSnapshotFileId,
     docxCheckpointFileId: collabDocxFileId,

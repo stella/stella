@@ -51,7 +51,7 @@ type JoinFolioCollabRoomResponse = {
   generation: number;
   roomId: SafeId<"folioCollabRoom">;
   roomName: string;
-  seedDownloadUrl: string | null;
+  seedDownloadUrl: string;
   shouldSeed: boolean;
   token: string;
   tokenExpiresAt: string;
@@ -281,6 +281,7 @@ export const joinFolioCollabRoomHandler = async function* ({
       const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,
+          sourceVersionId: folioCollabRooms.sourceVersionId,
           fileName: folioCollabRooms.fileName,
           generation: folioCollabRooms.generation,
           id: folioCollabRooms.id,
@@ -319,6 +320,7 @@ export const joinFolioCollabRoomHandler = async function* ({
           .insert(folioCollabRooms)
           .values({
             baseVersionId: currentTarget.baseVersionId,
+            sourceVersionId: currentTarget.baseVersionId,
             docxCheckpointFileId: createSafeId<"userFile">(),
             entityId,
             fileName: currentTarget.fileContent.fileName,
@@ -329,6 +331,7 @@ export const joinFolioCollabRoomHandler = async function* ({
           })
           .returning({
             baseVersionId: folioCollabRooms.baseVersionId,
+            sourceVersionId: folioCollabRooms.sourceVersionId,
             fileName: folioCollabRooms.fileName,
             generation: folioCollabRooms.generation,
             id: folioCollabRooms.id,
@@ -345,6 +348,7 @@ export const joinFolioCollabRoomHandler = async function* ({
               old: null,
               new: {
                 baseVersionId: currentTarget.baseVersionId,
+                sourceVersionId: currentTarget.baseVersionId,
                 entityId,
                 fileName: currentTarget.fileContent.fileName,
                 propertyId,
@@ -367,8 +371,21 @@ export const joinFolioCollabRoomHandler = async function* ({
 
       let shouldSeed = false;
       let generation = room.generation;
-      let seedFileContent: Awaited<ReturnType<typeof readVersionDocxTarget>> =
-        null;
+      // Yjs paragraph tokens stay bound to the original DOCX across publications.
+      const seedFileContent = await readVersionDocxTarget({
+        entityVersionId: room.sourceVersionId,
+        propertyId,
+        tx,
+        workspaceId,
+      });
+      if (!seedFileContent) {
+        return {
+          error: {
+            message: "Collaborative room source file is no longer available.",
+            status: 409,
+          },
+        } as const;
+      }
 
       if (room.seedState !== "seeded") {
         const seedClaimDecision = decideFolioCollabSeedClaim({
@@ -380,21 +397,6 @@ export const joinFolioCollabRoomHandler = async function* ({
           return {
             error: {
               message: "Collaborative editing room is still preparing.",
-              status: 409,
-            },
-          } as const;
-        }
-
-        seedFileContent = await readVersionDocxTarget({
-          entityVersionId: room.baseVersionId,
-          propertyId,
-          tx,
-          workspaceId,
-        });
-        if (!seedFileContent) {
-          return {
-            error: {
-              message: "Collaborative room source file is no longer available.",
               status: 409,
             },
           } as const;
@@ -474,14 +476,11 @@ export const joinFolioCollabRoomHandler = async function* ({
     );
   }
 
-  const seedDownloadUrl =
-    joined.seedFileContent === null
-      ? null
-      : await presignDocxFieldDownload({
-          fileContent: joined.seedFileContent,
-          organizationId,
-          workspaceId,
-        });
+  const seedDownloadUrl = await presignDocxFieldDownload({
+    fileContent: joined.seedFileContent,
+    organizationId,
+    workspaceId,
+  });
 
   return Result.ok({
     baseVersionId: joined.baseVersionId,
