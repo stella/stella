@@ -297,7 +297,7 @@ export const CompareVersionsPanel = ({
         return;
       default:
         result satisfies never;
-        return panic("Unhandled document comparison result");
+        panic("Unhandled document comparison result");
     }
   };
 
