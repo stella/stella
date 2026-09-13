@@ -25,6 +25,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
+import { toDocumentReference } from "@/api/lib/document-reference";
+import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -378,4 +380,79 @@ describe("matter read", () => {
 
     expect(read).toMatchObject({ stampedVersionCount: 1 });
   });
+});
+
+
+test("later issuance reserves its prefix while moved history keeps its original owner", async () => {
+  const reference = "LATER-ISSUANCE/2026";
+  const source = await createMatter(reference);
+  const target = await createMatter("MOVED-HISTORY/2026");
+  const sourceEntity = createSafeId<"entity">();
+  const targetEntity = createSafeId<"entity">();
+  const versions = [2, 3].map((versionNumber) => ({
+    versionNumber,
+    stamp: toDocumentReference({
+      matterReference: reference,
+      docSequence: 7,
+      versionNumber,
+    }),
+  }));
+  const { scopedDb } = scopeFor([source, target]);
+  await scopedDb(async (tx) => {
+    await tx.insert(entities).values([
+      {
+        id: sourceEntity,
+        workspaceId: source,
+        kind: "document",
+        docSequence: 7,
+      },
+      {
+        id: targetEntity,
+        workspaceId: target,
+        kind: "document",
+        docSequence: 1,
+      },
+    ]);
+    await insertEntityVersions({
+      tx,
+      stampOrigin: "issued",
+      values: versions.map((version) => ({
+        ...version,
+        workspaceId: source,
+        entityId: sourceEntity,
+      })),
+    });
+    await insertEntityVersions({
+      tx,
+      stampOrigin: "copied",
+      values: versions.map((version) => ({
+        ...version,
+        workspaceId: target,
+        entityId: targetEntity,
+      })),
+    });
+  });
+
+  const [ledger] = await testDb
+    .select({
+      workspaceId: documentReferenceCounters.workspaceId,
+      lastValue: documentReferenceCounters.lastValue,
+    })
+    .from(documentReferenceCounters)
+    .where(
+      and(
+        eq(documentReferenceCounters.organizationId, ids.orgA),
+        eq(documentReferenceCounters.reference, reference),
+      ),
+    );
+  expect(ledger).toEqual({ workspaceId: source, lastValue: 7 });
+  expect((await allocate(source, 1)).at(0)?.docSequence).toBe(8);
+  const copied = await testDb
+    .select({ stamp: entityVersions.stamp })
+    .from(entityVersions)
+    .where(eq(entityVersions.entityId, targetEntity))
+    .orderBy(entityVersions.versionNumber);
+  expect(copied.map(({ stamp }) => stamp)).toEqual(
+    versions.map(({ stamp }) => stamp),
+  );
 });

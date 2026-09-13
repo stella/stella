@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
+
 import { documentReferenceBase } from "@stll/api-contract";
+import { compareCodeUnit } from "@stll/collation";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -187,7 +189,9 @@ export const recordEntityStamps = async ({
   tx,
   stamps,
 }: RecordEntityStampsOptions): Promise<void> => {
-  if (stamps.length === 0) return;
+  if (stamps.length === 0) {
+    return;
+  }
   const workspaceIds = [
     ...new Set(stamps.map(({ workspaceId }) => workspaceId)),
   ];
@@ -210,15 +214,17 @@ export const recordEntityStamps = async ({
   >();
   for (const { workspaceId, stamp } of stamps) {
     const organizationId = organizations.get(workspaceId);
-    if (!organizationId) panic("Document stamp recorded for a missing workspace");
+    if (!organizationId) {
+      panic("Document stamp recorded for a missing workspace");
+    }
     const base = documentReferenceBase(stamp);
-    const sequence = /\/(\d+)$/.exec(base)?.[1];
+    const sequence = /\/(\d+)$/u.exec(base)?.[1];
     const reference = sequence ? base.slice(0, -(sequence.length + 1)) : null;
     const lastValue = sequence ? Number(sequence) : NaN;
     if (!reference || !Number.isSafeInteger(lastValue)) {
       panic("Document stamp has an invalid reference format");
     }
-    const key = `${organizationId}:${reference}`;
+    const key = JSON.stringify([organizationId, reference]);
     const existing = ledgerValues.get(key);
     if (existing && existing.workspaceId !== workspaceId) {
       panic("Document stamp reference belongs to another workspace");
@@ -229,7 +235,7 @@ export const recordEntityStamps = async ({
         organizationId,
         reference,
         workspaceId,
-        lastValue: Math.max(existing?.lastValue ?? 0, lastValue),
+        lastValue,
       });
     }
   }
@@ -237,17 +243,15 @@ export const recordEntityStamps = async ({
     .insert(documentReferenceCounters)
     .values(
       [...ledgerValues.values()].toSorted((a, b) =>
-        `${a.organizationId}:${a.reference}` <
-        `${b.organizationId}:${b.reference}`
-          ? -1
-          : `${a.organizationId}:${a.reference}` ===
-              `${b.organizationId}:${b.reference}`
-            ? 0
-            : 1,
+        compareCodeUnit(a.organizationId, b.organizationId) ||
+        compareCodeUnit(a.reference, b.reference),
       ),
     )
     .onConflictDoUpdate({
-      target: [documentReferenceCounters.organizationId, documentReferenceCounters.reference],
+      target: [
+        documentReferenceCounters.organizationId,
+        documentReferenceCounters.reference,
+      ],
       set: {
         lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, excluded.last_value)`,
       },
