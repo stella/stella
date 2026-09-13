@@ -220,6 +220,10 @@ mod tests {
       api_base_url: std::env::var("STELLA_DESKTOP_SMOKE_API_URL")
         .expect("set the hosted API origin for the native transport smoke"),
       web_origin: "https://my.stll.app".into(),
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: "user_fixture".into(),
+        organization_id: "org_fixture".into(),
+      },
       account: crate::types::LinkedAccountSnapshot {
         email: "desktop-smoke@example.test".into(),
         name: None,
@@ -266,6 +270,10 @@ mod tests {
     let saved = LinkedAccount {
       api_base_url: format!("http://{address}"),
       web_origin: "http://localhost:3000".into(),
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: "user_fixture".into(),
+        organization_id: "org_fixture".into(),
+      },
       account: crate::types::LinkedAccountSnapshot {
         email: "desktop@example.test".into(),
         name: None,

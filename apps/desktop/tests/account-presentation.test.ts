@@ -14,6 +14,7 @@ describe("desktop account presentation", () => {
     expect(
       accountPresentation({
         status: "connected",
+        identity: { userId: "user_fixture", organizationId: "org_fixture" },
         account: LINKED_ACCOUNT,
         expiresAt: "2026-09-19T20:00:00Z",
       }),

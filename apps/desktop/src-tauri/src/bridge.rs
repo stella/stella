@@ -802,7 +802,7 @@ mod tests {
         post(move || async move {
           (
             status,
-            Json(serde_json::json!({"registries":[], "defaultRegistryId":null, "account": {"email":"desktop@example.test", "name":"Desktop Account", "verifiedAt":chrono::Utc::now().to_rfc3339()}})),
+            Json(serde_json::json!({"registries":[], "defaultRegistryId":null, "identity":{"userId":"user_fixture","organizationId":"org_fixture"}, "account": {"email":"desktop@example.test", "name":"Desktop Account", "verifiedAt":chrono::Utc::now().to_rfc3339()}})),
           )
         }),
       );

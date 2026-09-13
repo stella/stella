@@ -102,6 +102,10 @@ type DesktopRegistryGrant = {
   key: string;
 };
 
+type FreshLinkedAccount = NonNullable<
+  Awaited<ReturnType<typeof getFreshLinkedAccount>>
+>;
+
 export const desktopAccountLinkRequest = (
   apiBaseUrl: string,
   grant: DesktopRegistryGrant,
@@ -116,9 +120,13 @@ type CompleteDesktopAccountLinkOptions = {
   grant: DesktopRegistryGrant;
   postLink: (
     body: ReturnType<typeof desktopAccountLinkRequest>,
-  ) => Promise<void>;
+  ) => Promise<Result<void, AccountLinkPostError>>;
   revoke: (key: string) => Promise<Result<void, unknown>>;
 };
+
+export type AccountLinkPostError =
+  | { type: "ambiguous"; cause: unknown }
+  | { type: "rejected"; cause: unknown };
 
 export const completeDesktopAccountLink = async ({
   apiBaseUrl,
@@ -126,26 +134,24 @@ export const completeDesktopAccountLink = async ({
   postLink,
   revoke,
 }: CompleteDesktopAccountLinkOptions) => {
-  const linked = await Result.tryPromise({
-    try: async () => {
-      await postLink(desktopAccountLinkRequest(apiBaseUrl, grant));
-    },
-    catch: (cause) => cause,
-  });
+  const linked = await postLink(desktopAccountLinkRequest(apiBaseUrl, grant));
   if (linked.isOk()) {
     return Result.ok(grant.account.email);
+  }
+  if (linked.error.type === "ambiguous") {
+    return Result.err(linked.error.cause);
   }
   const cleaned = await revoke(grant.key);
   if (cleaned.isErr()) {
     return Result.err(
       new AggregateError(
-        [linked.error, cleaned.error],
+        [linked.error.cause, cleaned.error],
         "Desktop account link failed and credential cleanup failed",
-        { cause: linked.error },
+        { cause: linked.error.cause },
       ),
     );
   }
-  return Result.err(linked.error);
+  return Result.err(linked.error.cause);
 };
 
 export const isDesktopAccountLink = (hash: string) =>
@@ -185,6 +191,13 @@ const isDesktopAccountSnapshot = (
     value.status === "connected" &&
     "expiresAt" in value &&
     typeof value.expiresAt === "string" &&
+    "identity" in value &&
+    typeof value.identity === "object" &&
+    value.identity !== null &&
+    "userId" in value.identity &&
+    typeof value.identity.userId === "string" &&
+    "organizationId" in value.identity &&
+    typeof value.identity.organizationId === "string" &&
     "account" in value &&
     typeof value.account === "object" &&
     value.account !== null &&
@@ -564,7 +577,48 @@ const postBridgeCommand = async ({ path, body }: BridgeCommand) => {
     });
   }
 
-  throw new DesktopBridgeUnavailableError();
+  throw new FetchBoundaryError({
+    message: "Desktop bridge rejected the command",
+    status: response.status,
+    statusText: response.statusText,
+    url,
+  });
+};
+
+const postAccountLinkOnce = async (
+  body: ReturnType<typeof desktopAccountLinkRequest>,
+) => {
+  const result = await Result.tryPromise({
+    try: async () => {
+      await postBridgeCommand({ path: "/v1/link-account", body });
+    },
+    catch: (cause) => cause,
+  });
+  return result.mapError((cause) =>
+    cause instanceof FetchBoundaryError && typeof cause.status === "number"
+      ? ({ type: "rejected", cause } satisfies AccountLinkPostError)
+      : ({ type: "ambiguous", cause } satisfies AccountLinkPostError),
+  );
+};
+
+export const retryAmbiguousAccountLink = async (
+  body: ReturnType<typeof desktopAccountLinkRequest>,
+  postOnce: (
+    request: ReturnType<typeof desktopAccountLinkRequest>,
+  ) => Promise<Result<void, AccountLinkPostError>>,
+) => {
+  const first = await postOnce(body);
+  if (first.isOk() || first.error.type === "rejected") {
+    return first;
+  }
+  const retry = await postOnce(body);
+  if (retry.isOk()) {
+    return retry;
+  }
+  return Result.err({
+    type: "ambiguous",
+    cause: retry.error.cause,
+  } satisfies AccountLinkPostError);
 };
 
 const readDesktopAccount = async (apiBaseUrl: string) => {
@@ -612,7 +666,7 @@ const readDesktopAccount = async (apiBaseUrl: string) => {
 
 type ResolveDesktopAccountLinkOptions = {
   apiBaseUrl: string;
-  browserAccount: LinkedAccountSnapshot;
+  browserAccount: FreshLinkedAccount;
   desktopAccount: DesktopAccountSnapshot;
   mintGrant: () => Promise<DesktopRegistryGrant>;
   postLink: CompleteDesktopAccountLinkOptions["postLink"];
@@ -629,7 +683,11 @@ export const resolveDesktopAccountLink = async ({
 }: ResolveDesktopAccountLinkOptions) => {
   switch (desktopAccount.status) {
     case "connected":
-      if (desktopAccount.account.email !== browserAccount.email) {
+      if (
+        desktopAccount.identity.userId !== browserAccount.identity.userId ||
+        desktopAccount.identity.organizationId !==
+          browserAccount.identity.organizationId
+      ) {
         return Result.err(
           new DesktopAccountConflictError({
             message: "desktop_account_conflict",
@@ -703,9 +761,8 @@ export const linkDesktopAccount = async ({
       unwrapEden(
         await api["desktop-registry"].grant.post({}),
       ) satisfies DesktopRegistryGrant,
-    postLink: async (body) => {
-      await postBridgeCommand({ path: "/v1/link-account", body });
-    },
+    postLink: async (body) =>
+      await retryAmbiguousAccountLink(body, postAccountLinkOnce),
     revoke: async (key) => {
       const response = await fetchWithTimeout(
         `${apiBaseUrl}/v1/desktop-registry/request`,

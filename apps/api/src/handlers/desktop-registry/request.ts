@@ -6,7 +6,10 @@ import type {
   DesktopRegistryConfig,
   DesktopRegistrySearchResponse,
 } from "@stll/api-contract/desktop-registry";
-import type { LinkedAccountSnapshot } from "@stll/api-contract/desktop-rpc";
+import type {
+  DesktopAccountIdentity,
+  LinkedAccountSnapshot,
+} from "@stll/api-contract/desktop-rpc";
 import { Temporal } from "@stll/time";
 
 import {
@@ -51,7 +54,10 @@ const config = {
 // A dedicated bearer boundary, not an unauthenticated registry proxy. The
 // ordinary session middleware intentionally does not recognize these keys.
 type RegistryReply =
-  | (DesktopRegistryConfig & { account: LinkedAccountSnapshot })
+  | (DesktopRegistryConfig & {
+      account: LinkedAccountSnapshot;
+      identity: DesktopAccountIdentity;
+    })
   | DesktopRegistrySearchResponse
   | { text: string }
   | { revoked: boolean };
@@ -123,6 +129,10 @@ export default createSafePublicHandler(
         );
         return Result.ok({
           ...registryConfig,
+          identity: {
+            userId: context.userId,
+            organizationId: context.organizationId,
+          },
           account: {
             ...account,
             verifiedAt: Temporal.Now.instant().toString(),

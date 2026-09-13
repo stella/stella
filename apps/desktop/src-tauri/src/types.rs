@@ -171,11 +171,20 @@ pub struct DesktopAccountCredential {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DesktopAccountIdentity {
+  pub user_id: String,
+  pub organization_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum DesktopAccountSnapshot {
   Disconnected,
   Connected {
     account: LinkedAccountSnapshot,
+    identity: DesktopAccountIdentity,
     #[serde(rename = "expiresAt")]
     expires_at: String,
   },

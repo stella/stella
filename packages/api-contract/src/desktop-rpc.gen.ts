@@ -14,7 +14,9 @@ capabilities: string[], notificationPreferences: DesktopNotificationPreferences,
 
 export type DesktopAccountCredential = { key: string, expiresAt: string, };
 
-export type DesktopAccountSnapshot = { "status": "disconnected" } | { "status": "connected", account: LinkedAccountSnapshot, expiresAt: string, };
+export type DesktopAccountIdentity = { userId: string, organizationId: string, };
+
+export type DesktopAccountSnapshot = { "status": "disconnected" } | { "status": "connected", account: LinkedAccountSnapshot, identity: DesktopAccountIdentity, expiresAt: string, };
 
 export type DesktopEditFileType = "docx" | "xlsx" | "pptx";
 

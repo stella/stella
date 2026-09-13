@@ -7,8 +7,8 @@ use tauri::{Emitter, State, WebviewWindow};
 use tokio::sync::Mutex;
 
 use crate::types::{
-  DesktopAccountCredential, DesktopAccountSnapshot, LinkAccountRequest,
-  LinkedAccountSnapshot, is_valid_linked_account,
+  DesktopAccountCredential, DesktopAccountIdentity, DesktopAccountSnapshot,
+  LinkAccountRequest, LinkedAccountSnapshot, is_valid_linked_account,
 };
 
 pub const CHANGED_EVENT: &str = "desktop-account-changed";
@@ -26,6 +26,7 @@ pub struct LinkedAccount {
   pub api_base_url: String,
   pub web_origin: String,
   pub account: LinkedAccountSnapshot,
+  pub identity: DesktopAccountIdentity,
   pub credential: DesktopAccountCredential,
 }
 
@@ -75,6 +76,7 @@ impl LinkedAccount {
   pub(crate) fn snapshot(self) -> DesktopAccountSnapshot {
     DesktopAccountSnapshot::Connected {
       account: self.account,
+      identity: self.identity,
       expires_at: self.credential.expires_at,
     }
   }
@@ -109,10 +111,23 @@ impl PendingLinkedAccount {
     if !is_valid_linked_account(&account) {
       return Err("Invalid registry account".into());
     }
+    let identity: DesktopAccountIdentity = config
+      .get("identity")
+      .cloned()
+      .ok_or_else(|| "Invalid registry identity".to_string())
+      .and_then(|identity| {
+        serde_json::from_value(identity)
+          .map_err(|_| "Invalid registry identity".to_string())
+      })?;
+    if identity.user_id.trim().is_empty() || identity.organization_id.trim().is_empty()
+    {
+      return Err("Invalid registry identity".into());
+    }
     Ok(LinkedAccount {
       api_base_url: self.api_base_url,
       web_origin: self.web_origin,
       account,
+      identity,
       credential: self.credential,
     })
   }
@@ -320,6 +335,10 @@ mod tests {
     LinkedAccount {
       api_base_url: "https://api.stll.app".into(),
       web_origin: "https://my.stll.app".into(),
+      identity: DesktopAccountIdentity {
+        user_id: "user_fixture".into(),
+        organization_id: "org_fixture".into(),
+      },
       account: LinkedAccountSnapshot {
         email: "desktop@example.test".into(),
         name: None,
@@ -418,6 +437,7 @@ mod tests {
   fn authenticated_config_is_the_only_saved_profile_source() {
     let account = pending("stella_dr_fixture")
       .with_server_account(&serde_json::json!({
+        "identity": {"userId": "user_server", "organizationId": "org_server"},
         "account": {
           "email": "server@example.test",
           "name": "Server Profile",
@@ -426,12 +446,39 @@ mod tests {
       }))
       .unwrap();
     assert_eq!(account.account.email, "server@example.test");
+    assert_eq!(account.identity.user_id, "user_server");
+    assert_eq!(account.identity.organization_id, "org_server");
 
     for config in [
       serde_json::json!({}),
       serde_json::json!({"account": null}),
       serde_json::json!({"account": {"email":"invalid"}}),
     ] {
+      assert!(
+        pending("stella_dr_fixture")
+          .with_server_account(&config)
+          .is_err()
+      );
+    }
+  }
+
+  #[test]
+  fn a_profile_without_complete_server_identity_cannot_be_linked() {
+    for identity in [
+      serde_json::Value::Null,
+      serde_json::json!({"userId":"user_server"}),
+      serde_json::json!({"organizationId":"org_server"}),
+      serde_json::json!({"userId":"", "organizationId":"org_server"}),
+      serde_json::json!({"userId":"user_server", "organizationId":"  "}),
+    ] {
+      let config = serde_json::json!({
+        "account": {
+          "email":"server@example.test",
+          "name":null,
+          "verifiedAt":"2026-09-12T20:00:00Z"
+        },
+        "identity": identity
+      });
       assert!(
         pending("stella_dr_fixture")
           .with_server_account(&config)
