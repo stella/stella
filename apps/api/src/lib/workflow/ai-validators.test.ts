@@ -93,37 +93,23 @@ describe("validateAIOutput — absent answers", () => {
   });
 
   test("an absent text/int answer maps to no field content to persist", () => {
+    expect(fieldContentFromValidated({ type: "text", value: null })).toBeNull();
     expect(
-      fieldContentFromValidated({
-        type: "text",
-        value: null,
-        justification,
-      }),
-    ).toBeNull();
-    expect(
-      fieldContentFromValidated({
-        type: "int",
-        value: null,
-        currency: null,
-        justification,
-      }),
+      fieldContentFromValidated({ type: "int", value: null, currency: null }),
     ).toBeNull();
   });
 
   test("a present text/int answer still maps to field content", () => {
-    expect(
-      fieldContentFromValidated({
-        type: "text",
-        value: "Cash",
-        justification,
-      }),
-    ).toEqual({ version: 1, type: "text", value: "Cash" });
+    expect(fieldContentFromValidated({ type: "text", value: "Cash" })).toEqual({
+      version: 1,
+      type: "text",
+      value: "Cash",
+    });
     expect(
       fieldContentFromValidated({
         type: "int",
         value: 1500,
         currency: "USD",
-        justification,
       }),
     ).toEqual({ version: 1, type: "int", value: 1500, currency: "USD" });
   });

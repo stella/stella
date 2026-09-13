@@ -127,7 +127,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
     const runColumns: ResearchRunColumn[] = queued.columns.map((column) => ({
       columnId: column.id,
       question: column.question,
-      answerType: column.answerType,
+      content: column.content,
     }));
     detached(
       runResearchAnswers(

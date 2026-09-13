@@ -2,6 +2,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import {
+  CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX,
   CASE_LAW_RESEARCH_DISPOSITIONS,
   CASE_LAW_RESEARCH_QUERY_VERSION,
   CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
@@ -13,6 +14,7 @@ import type {
   caseLawResearchAnswers,
   caseLawResearchTables,
 } from "@/api/db/schema";
+import { parseStoredAnswerContent } from "@/api/lib/case-law/research-answers";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -97,9 +99,22 @@ const researchQuestionSchema = t.String({
 // Not `t.UnionEnum` on the optional path: an absent optional UnionEnum coerces
 // to its first member, which would silently retype every column on a rename.
 const researchAnswerTypeSchema = t.Union([
-  t.Literal("yes_no"),
   t.Literal("text"),
+  t.Literal("single-select"),
+  t.Literal("multi-select"),
+  t.Literal("date"),
+  t.Literal("int"),
 ]);
+
+/** The same option shape a property's select carries. */
+const researchColumnOptionSchema = t.Object({
+  color: t.String({ minLength: 1, maxLength: 64 }),
+  value: t.String({ minLength: 1, maxLength: 1000 }),
+});
+
+const researchColumnOptionsSchema = t.Array(researchColumnOptionSchema, {
+  maxItems: CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX,
+});
 
 // Both directions of the mirror: a member added to either side fails here.
 type MirroredAnswerType = Static<typeof researchAnswerTypeSchema>;
@@ -113,14 +128,19 @@ export const createResearchColumnBodySchema = t.Object(
   {
     question: researchQuestionSchema,
     answerType: researchAnswerTypeSchema,
+    /** Select kinds only; the handler refuses them on any other kind. */
+    options: t.Optional(researchColumnOptionsSchema),
   },
   { additionalProperties: false },
 );
 
+// A kind change carries its whole content: `options` without `answerType` has
+// no kind to belong to, and the handler refuses it rather than dropping it.
 export const updateResearchColumnBodySchema = t.Object(
   {
     question: t.Optional(researchQuestionSchema),
     answerType: t.Optional(researchAnswerTypeSchema),
+    options: t.Optional(researchColumnOptionsSchema),
   },
   { additionalProperties: false },
 );
@@ -173,7 +193,10 @@ export const toResearchAnswerResponse = (
   columnId: row.columnId,
   decisionId: row.decisionId,
   state: row.state,
-  answer: row.answer,
+  // JSONB written by this deployment, read back through the field-content
+  // schema: a cell that drifted renders as the union's error arm rather than
+  // reaching the client as an unknown shape.
+  answer: row.answer === null ? null : parseStoredAnswerContent(row.answer),
   run: row.run,
   failureReason: row.failureReason,
   updatedAt: row.updatedAt.toISOString(),

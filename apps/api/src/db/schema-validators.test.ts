@@ -2,10 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
 import { PROPERTY_CONTENT_TYPES } from "@stll/api-contract";
+import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import {
   fieldContentSchema,
   propertyContentTypeSchema,
+  type AiExtractablePropertyContent,
+  type PropertyContent,
   type PropertyContentType,
 } from "@/api/db/schema-validators";
 
@@ -93,7 +96,27 @@ const contractTypeMatchesSchema: AssertEqual<
   (typeof PROPERTY_CONTENT_TYPES)[number]
 > = true;
 
+// The AI-extractable union is now its own schema rather than a type-level
+// `Exclude`, so bind the two: a member added to `propertyContentSchema` that
+// belongs in the extractable subset, or dropped from it, fails here.
+const extractableMatchesExclusion: AssertEqual<
+  AiExtractablePropertyContent,
+  Exclude<PropertyContent, { type: "file" | "money" | "person" }>
+> = true;
+
+// A case-law question column is a property asked of a decision, so the kinds a
+// question may take are exactly the kinds the extractor can produce.
+const answerTypesMatchExtractable: AssertEqual<
+  AiExtractablePropertyContent["type"],
+  CaseLawResearchAnswerType
+> = true;
+
 describe("property content types", () => {
+  test("the extractable subset is the property union minus the hand-entered kinds", () => {
+    expect(extractableMatchesExclusion).toBe(true);
+    expect(answerTypesMatchExtractable).toBe(true);
+  });
+
   test("the wire schema accepts exactly the contract's list", () => {
     expect(contractTypeMatchesSchema).toBe(true);
     expect(

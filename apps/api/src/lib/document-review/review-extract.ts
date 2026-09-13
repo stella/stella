@@ -163,7 +163,10 @@ export const collectReviewCitations = (
           }
         }
         break;
+      // A document review cites the file under review; a decision passage is
+      // cited by the case-law research runner, which never writes here.
       case "playbook-verdict":
+      case "decision-passage":
         break;
       default:
         block satisfies never;

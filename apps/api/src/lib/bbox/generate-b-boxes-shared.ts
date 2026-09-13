@@ -74,8 +74,12 @@ export const extractJustificationContent = (
       continue;
     }
     // Playbook verdict rationales carry no document citations or page numbers,
-    // so they never produce bounding boxes.
-    if (block.kind === "playbook-verdict") {
+    // and a cited decision passage is anchored in the public reader rather than
+    // on a page of an uploaded file, so neither produces bounding boxes.
+    if (
+      block.kind === "playbook-verdict" ||
+      block.kind === "decision-passage"
+    ) {
       continue;
     }
     for (const statement of block.statements) {

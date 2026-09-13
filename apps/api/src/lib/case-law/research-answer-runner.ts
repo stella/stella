@@ -1,10 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
-import type {
-  CaseLawResearchAnswerRun,
-  CaseLawResearchAnswerValue,
-} from "@stll/api-contract";
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
@@ -13,6 +9,7 @@ import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
+import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -27,13 +24,15 @@ import type {
   ResearchAnswerCell,
 } from "@/api/lib/case-law/research-answer-queue";
 import {
+  buildAnswerJustification,
+  buildResearchAnswersSchema,
   buildResearchUserMessage,
   parseResearchAnswers,
   RESEARCH_SYSTEM_PROMPT,
-  researchAnswersOutputSchema,
   selectPassagesWithinBudget,
 } from "@/api/lib/case-law/research-answers";
 import type {
+  CaseLawResearchAnswerRun,
   ResearchAnswerFailureReason,
   ResearchPassage,
   ResearchQuestion,
@@ -299,7 +298,7 @@ const answerDecision = async (
           questions,
           retrieved: text.retrieved,
         }),
-        outputSchema: researchAnswersOutputSchema,
+        outputSchema: buildResearchAnswersSchema(questions),
         abortSignal: AbortSignal.timeout(ANSWER_TIMEOUT_MS),
       });
       return { modelId, output };
@@ -353,18 +352,14 @@ const answerDecision = async (
       completedAt,
       retrieved: text.retrieved,
       rationale: entry.outcome.rationale,
-      passages: entry.outcome.anchorIds.map((anchorId) => ({
-        anchorId,
-        excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(0, 300),
-      })),
+      justification: buildAnswerJustification(
+        entry.outcome.anchorIds,
+        excerptByAnchor,
+      ),
     };
     outcomes.push({
       columnId,
-      outcome: {
-        state: "answered",
-        answer: entry.outcome.answer,
-        run,
-      },
+      outcome: { state: "answered", answer: entry.outcome.answer, run },
     });
   }
   await writeOutcomes(safeDb, input, decisionId, outcomes);
@@ -573,7 +568,7 @@ const retrievePassages = async (
 type AnswerOutcome =
   | {
       state: "answered";
-      answer: CaseLawResearchAnswerValue;
+      answer: FieldContent;
       run: CaseLawResearchAnswerRun;
     }
   | { state: "not_allowed" }
@@ -646,7 +641,10 @@ const writeOutcomes = async (
                   and(
                     eq(caseLawResearchColumns.id, columnId),
                     eq(caseLawResearchColumns.question, asked.question),
-                    eq(caseLawResearchColumns.answerType, asked.answerType),
+                    // The whole content, not just its kind: an option removed
+                    // from a select drops the column's answers too, and this
+                    // write must not land one under the new list.
+                    sql`${caseLawResearchColumns.content} = ${JSON.stringify(asked.content)}::text::jsonb`,
                   ),
                 ),
             ),

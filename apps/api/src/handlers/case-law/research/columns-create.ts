@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { caseLawResearchColumns } from "@/api/db/schema";
 import { toResearchColumnResponse } from "@/api/handlers/case-law/research/column-access";
+import { buildResearchColumnContent } from "@/api/handlers/case-law/research/column-content";
 import { createResearchColumnBodySchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,6 +33,10 @@ const createResearchColumn = createSafeRootHandler(
         new HandlerError({ status: 400, message: "A question is required" }),
       );
     }
+    const content = yield* buildResearchColumnContent({
+      answerType: body.answerType,
+      options: body.options,
+    });
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
@@ -66,7 +71,7 @@ const createResearchColumn = createSafeRootHandler(
             createdBy: user.id,
             position: (aggregate?.maxPosition ?? 0) + 1,
             question,
-            answerType: body.answerType,
+            content,
             tool: defaultResearchColumnTool(),
           })
           .returning();
@@ -75,7 +80,7 @@ const createResearchColumn = createSafeRootHandler(
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_COLUMN,
           resourceId: column.id,
-          metadata: { answerType: column.answerType },
+          metadata: { answerType: column.content.type },
         });
         return { status: "ok" as const, column };
       }),

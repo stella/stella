@@ -29,7 +29,7 @@ export const toResearchColumnResponse = (row: ResearchColumnRow) => ({
   createdBy: row.createdBy,
   position: row.position,
   question: row.question,
-  answerType: row.answerType,
+  content: row.content,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });

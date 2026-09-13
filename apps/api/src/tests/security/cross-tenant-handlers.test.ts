@@ -697,7 +697,15 @@ beforeAll(async () => {
     createdBy: ids.userB1,
     position: 1,
     question: "Does the decision allow termination?",
-    answerType: "yes_no",
+    content: {
+      version: 1,
+      type: "single-select",
+      options: [
+        { color: "green", value: "yes" },
+        { color: "red", value: "no" },
+      ],
+      fallback: null,
+    },
     tool: { version: 1, role: "fast" },
   });
   await testDb.insert(caseLawResearchAnswers).values({
@@ -705,7 +713,7 @@ beforeAll(async () => {
     organizationId: ids.orgB,
     decisionId: ids.caseLawDecisionB,
     state: "answered",
-    answer: { type: "yes_no", value: "yes" },
+    answer: { version: 1, type: "single-select", value: "yes" },
   });
   await testDb.insert(signals).values([
     {

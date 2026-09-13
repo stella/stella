@@ -1,25 +1,39 @@
-import { panic } from "better-result";
+import { Value } from "@sinclair/typebox/value";
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  CASE_LAW_RESEARCH_ANSWER_TYPES,
-  CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
-  CASE_LAW_RESEARCH_YES_NO_VALUES,
-} from "@stll/api-contract";
+import { CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH } from "@stll/api-contract";
+import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+
+import type { JustificationContent } from "@/api/db/schema";
+import { fieldContentSchema } from "@/api/db/schema-validators";
 import type {
-  CaseLawResearchAnswerPassage,
-  CaseLawResearchAnswerType,
-  CaseLawResearchAnswerValue,
-  CaseLawResearchColumnTool,
-} from "@stll/api-contract";
-
+  AiExtractablePropertyContent,
+  FieldContent,
+} from "@/api/db/schema-validators";
+import { captureError } from "@/api/lib/analytics/capture";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  answerSchemaForContent,
+  answerShapeHint,
+} from "@/api/lib/workflow/ai-answer-schema";
+import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
+import {
+  fieldContentFromValidated,
+  validateAnswerForContent,
+} from "@/api/lib/workflow/ai-validators";
 
-/** The model configuration new columns are created with. */
-export const caseLawResearchColumnToolSchema = v.strictObject({
-  version: v.literal(1),
-  role: v.literal("fast"),
-});
+/**
+ * What a question column asks for, and what a cell holds.
+ *
+ * A question column is a matter property asked of a decision: it carries the
+ * same content the property does (kind, select options, fallback), its answer
+ * is the same `FieldContent` a workspace field holds, and its provenance is the
+ * same justification shape — so one cell renderer and one output registry serve
+ * both surfaces.
+ */
+export type CaseLawResearchColumnContent = AiExtractablePropertyContent;
 
 export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
@@ -34,6 +48,13 @@ export const RESEARCH_ANSWER_FAILURE_REASONS = [
   "model_error",
   "missing_answer",
   "wrong_type",
+  /**
+   * The decision does not state the value, and the column's kind has no way to
+   * say so: a select answers null and a date answers null, but text and int
+   * have no "answered: absent" content, so the cell reports why it is empty
+   * instead of holding a fabricated one.
+   */
+  "not_stated",
   /** The run itself failed before it could classify the cell. */
   "run_error",
 ] as const;
@@ -44,10 +65,26 @@ export type ResearchAnswerFailureReason =
 export type ResearchQuestion = {
   columnId: string;
   question: string;
-  answerType: CaseLawResearchAnswerType;
+  content: CaseLawResearchColumnContent;
 };
 
-export type ResearchPassage = CaseLawResearchAnswerPassage;
+/** One anchored passage of a decision, as sent to the model. */
+export type ResearchPassage = {
+  anchorId: string;
+  excerpt: string;
+};
+
+/** How an answer was produced; kept beside it so a cell can be audited. */
+export type CaseLawResearchAnswerRun = {
+  version: 1;
+  model: string;
+  completedAt: string;
+  /** True when the decision was too long to send whole and passages were retrieved. */
+  retrieved: boolean;
+  rationale: string;
+  /** The cited passages, in the citation shape a workspace justification uses. */
+  justification: JustificationContent;
+};
 
 type SelectPassagesOptions = {
   /** Total characters of excerpt the selection may hold. */
@@ -88,9 +125,9 @@ export const selectPassagesWithinBudget = (
 };
 
 export const RESEARCH_SYSTEM_PROMPT = `You answer a lawyer's questions about one court decision, from its text alone.
-Answer every question listed, by its column id. A yes/no question takes "yes", "no" or "unclear" when the text does not settle it; never guess.
-A text question takes a short answer in the language of the question.
-Cite the passage anchors (the bracketed ids in the text) you relied on, and give a one-sentence rationale.
+Return an object whose keys are exactly the column ids listed, each with the answer, a one-sentence rationale, and the passage anchors you relied on.
+Each column's schema states the shape its answer takes; when the text does not state a value, answer null for that column rather than guessing.
+Cite the passage anchors (the bracketed ids in the text) the answer rests on.
 Do not use knowledge outside the text.`;
 
 type BuildResearchUserMessageOptions = {
@@ -129,35 +166,64 @@ export const buildResearchUserMessage = ({
   const asked = questions
     .map(
       (question) =>
-        `- ${question.columnId} (${question.answerType === "yes_no" ? "yes/no" : "text"}): ${question.question}`,
+        `- ${question.columnId} (${answerShapeHint(question.content)}): ${question.question}`,
     )
     .join("\n");
   return `${header}\n\n${text}\n\nQuestions:\n${asked}`;
 };
 
-/** What the model returns for a batch of questions on one decision. */
-export const researchAnswersOutputSchema = v.strictObject({
-  answers: v.array(
-    v.strictObject({
-      columnId: v.string(),
-      yesNo: v.optional(v.picklist(CASE_LAW_RESEARCH_YES_NO_VALUES)),
-      text: v.optional(v.string()),
-      rationale: v.string(),
-      anchorIds: v.array(v.string()),
-    }),
-  ),
-});
+/** What the model returns for one question. */
+export type ResearchAnswerOutput = {
+  answer: Answer;
+  rationale: string;
+  anchorIds: string[];
+};
 
-export type ResearchAnswersOutput = v.InferOutput<
-  typeof researchAnswersOutputSchema
->;
+/** Keyed by column id, like the extractor's batch is keyed by property id. */
+export type ResearchAnswersOutput = Record<string, ResearchAnswerOutput>;
+
+/**
+ * The batch a decision's pending questions are asked as: one entry per column,
+ * its answer schema taken from the shared per-kind registry.
+ *
+ * A select column with no options is dropped rather than asked against an empty
+ * list; the create/update boundary rejects one, so this is the same guard the
+ * extractor applies to a property.
+ */
+export const buildResearchAnswersSchema = (
+  questions: readonly ResearchQuestion[],
+) => {
+  const shape: Record<string, v.GenericSchema<ResearchAnswerOutput>> = {};
+  for (const question of questions) {
+    const answer = answerSchemaForContent(question.content);
+    if (answer === null) {
+      continue;
+    }
+    shape[question.columnId] = v.strictObject({
+      answer,
+      rationale: v.pipe(
+        v.string(),
+        v.description(
+          "One sentence saying how the cited text answers the question.",
+        ),
+      ),
+      anchorIds: v.pipe(
+        v.array(v.string()),
+        v.description(
+          "The bracketed passage anchors the answer rests on, verbatim.",
+        ),
+      ),
+    });
+  }
+  return v.strictObject(shape);
+};
 
 export type ParsedResearchAnswer = {
   columnId: string;
   outcome:
     | {
         state: "answered";
-        answer: CaseLawResearchAnswerValue;
+        answer: FieldContent;
         rationale: string;
         anchorIds: string[];
       }
@@ -165,7 +231,7 @@ export type ParsedResearchAnswer = {
         state: "failed";
         failureReason: Extract<
           ResearchAnswerFailureReason,
-          "missing_answer" | "wrong_type"
+          "missing_answer" | "wrong_type" | "not_stated"
         >;
       };
 };
@@ -177,50 +243,60 @@ type ParseResearchAnswersOptions = {
   knownAnchorIds: ReadonlySet<string>;
 };
 
+/** Whitespace is not an answer; treat a blank string as "not stated". */
+const normalizeAnswer = (answer: Answer): Answer => {
+  if (typeof answer !== "string") {
+    return answer;
+  }
+  const trimmed = answer.trim();
+  return trimmed.length === 0 ? null : trimmed;
+};
+
 /**
  * One outcome per question, whatever the model returned: a question the model
- * skipped or answered in the wrong shape fails by name instead of vanishing.
- * The first answer for a column wins; anchors are kept only when they were in
- * the prompt, and in prompt order.
+ * skipped, answered in the wrong shape, or could not answer from the text fails
+ * by name instead of vanishing. Anchors are kept only when they were in the
+ * prompt, and in prompt order.
  */
 export const parseResearchAnswers = ({
   knownAnchorIds,
   output,
   questions,
 }: ParseResearchAnswersOptions): ParsedResearchAnswer[] => {
-  const firstByColumn = new Map<
-    string,
-    ResearchAnswersOutput["answers"][number]
-  >();
-  for (const answer of output.answers) {
-    if (!firstByColumn.has(answer.columnId)) {
-      firstByColumn.set(answer.columnId, answer);
-    }
-  }
   const anchorOrder = [...knownAnchorIds];
 
-  return questions.map((question) => {
-    const answer = firstByColumn.get(question.columnId);
-    if (answer === undefined) {
+  return questions.map(({ columnId, content }) => {
+    const entry = output[columnId];
+    if (entry === undefined) {
       return {
-        columnId: question.columnId,
+        columnId,
         outcome: { state: "failed", failureReason: "missing_answer" },
       };
     }
-    const value = answerValueFor(question.answerType, answer);
-    if (value === null) {
+    const validated = validateAnswerForContent({
+      answer: normalizeAnswer(entry.answer),
+      content,
+    });
+    if (Result.isError(validated)) {
       return {
-        columnId: question.columnId,
+        columnId,
         outcome: { state: "failed", failureReason: "wrong_type" },
       };
     }
-    const cited = new Set(answer.anchorIds);
+    const answer = fieldContentFromValidated(validated.value);
+    if (answer === null) {
+      return {
+        columnId,
+        outcome: { state: "failed", failureReason: "not_stated" },
+      };
+    }
+    const cited = new Set(entry.anchorIds);
     return {
-      columnId: question.columnId,
+      columnId,
       outcome: {
         state: "answered",
-        answer: value,
-        rationale: answer.rationale
+        answer,
+        rationale: entry.rationale
           .trim()
           .slice(0, LIMITS.caseLawResearchAnswerRationaleChars),
         anchorIds: anchorOrder.filter((anchorId) => cited.has(anchorId)),
@@ -229,24 +305,47 @@ export const parseResearchAnswers = ({
   });
 };
 
-const answerValueFor = (
-  answerType: CaseLawResearchAnswerType,
-  answer: ResearchAnswersOutput["answers"][number],
-): CaseLawResearchAnswerValue | null => {
-  switch (answerType) {
-    case "yes_no":
-      return answer.yesNo === undefined
-        ? null
-        : { type: "yes_no", value: answer.yesNo };
-    case "text": {
-      const text = answer.text?.trim() ?? "";
-      return text.length === 0 ? null : { type: "text", value: text };
-    }
-    default: {
-      answerType satisfies never;
-      return panic(`Unhandled answer type: ${String(answerType)}`);
-    }
+/** Longest excerpt one citation carries into the run record. */
+const CITED_EXCERPT_CHARS = 300;
+
+/**
+ * The cited passages as justification blocks. One block per anchor, in the
+ * order the anchors were sent, so the card renders them the way the reader
+ * scrolls them.
+ */
+export const buildAnswerJustification = (
+  anchorIds: readonly string[],
+  excerptByAnchor: ReadonlyMap<string, string>,
+): JustificationContent => ({
+  version: 1,
+  blocks: anchorIds.map((anchorId) => ({
+    kind: "decision-passage",
+    anchorId,
+    excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(
+      0,
+      CITED_EXCERPT_CHARS,
+    ),
+  })),
+});
+
+/**
+ * A stored cell's answer, validated as field content on the way out.
+ *
+ * The column is JSONB written by this deployment, so a value that is not field
+ * content means a writer drifted from the schema: it is reported and rendered
+ * as the union's own error arm, never handed to the client as an unknown shape.
+ */
+export const parseStoredAnswerContent = (value: unknown): FieldContent => {
+  if (Value.Check(fieldContentSchema, value)) {
+    return value;
   }
+  captureError(
+    new DatabaseError({
+      message: "Stored research answer is not field content",
+    }),
+    { source: "case-law-research-answers" },
+  );
+  return { version: 1, type: "error" };
 };
 
 /** A question as the route accepts it; the handler re-parses. */
@@ -256,8 +355,3 @@ export const researchQuestionSchema = v.pipe(
   v.minLength(1),
   v.maxLength(CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH),
 );
-
-export const isResearchAnswerType = (
-  value: string,
-): value is CaseLawResearchAnswerType =>
-  CASE_LAW_RESEARCH_ANSWER_TYPES.some((type) => type === value);

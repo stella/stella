@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
 
@@ -77,7 +77,15 @@ beforeAll(
         organizationId: ids.orgA,
         position: 1,
         question: "Did the court uphold the lease?",
-        answerType: "yes_no",
+        content: {
+          version: 1,
+          type: "single-select",
+          options: [
+            { color: "green", value: "yes" },
+            { color: "red", value: "no" },
+          ],
+          fallback: null,
+        },
         tool: { version: 1, role: "fast" },
       },
       {
@@ -86,7 +94,7 @@ beforeAll(
         organizationId: ids.orgB,
         position: 1,
         question: "Outcome?",
-        answerType: "text",
+        content: { version: 1, type: "text" },
         tool: { version: 1, role: "fast" },
       },
     ]);
@@ -96,14 +104,14 @@ beforeAll(
         organizationId: ids.orgA,
         decisionId: ids.caseLawDecisionA,
         state: "answered",
-        answer: { type: "yes_no", value: "yes" },
+        answer: { version: 1, type: "single-select", value: "yes" },
         run: {
           version: 1,
           model: "test-model",
           completedAt: "2026-09-01T00:00:00.000Z",
           retrieved: false,
           rationale: "The court dismissed the appeal.",
-          passages: [],
+          justification: { version: 1, blocks: [] },
         },
       },
       {
@@ -231,7 +239,7 @@ describe("case-law research tables RLS", () => {
         organizationId: ids.orgA,
         decisionId: ids.caseLawDecisionB,
         state: "pending",
-        answer: { type: "yes_no", value: "no" },
+        answer: { version: 1, type: "single-select", value: "no" },
       }),
     ).then(
       () => null,
@@ -253,5 +261,28 @@ describe("case-law research tables RLS", () => {
       (error: unknown) => error,
     );
     expect(duplicate).toBeInstanceOf(Error);
+  });
+
+  test("a cell cannot hold a value that is not field content", async () => {
+    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    // Raw SQL on purpose: the typed insert cannot express the pre-property
+    // shape, and the guard under test is the database's, not TypeScript's.
+    const legacyShape: unknown = await scopedA((tx) =>
+      tx.execute(sql`
+        INSERT INTO case_law_research_answers
+          (column_id, organization_id, decision_id, state, answer)
+        VALUES (
+          ${orgAColumnId}::uuid,
+          ${ids.orgA},
+          ${ids.caseLawDecisionB}::uuid,
+          'answered',
+          '{"type":"yes_no","value":"yes"}'::jsonb
+        )
+      `),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(legacyShape).toBeInstanceOf(Error);
   });
 });

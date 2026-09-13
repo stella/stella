@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { PropertyContentType } from "./entity-find";
 import type { SafeId } from "./safe-id";
 import type { SearchSort } from "./search";
 
@@ -48,11 +49,45 @@ export type CaseLawResearchSavedQuery = {
   sort?: SearchSort;
 };
 
-/** What a question column expects for an answer. */
-export const CASE_LAW_RESEARCH_ANSWER_TYPES = ["yes_no", "text"] as const;
+/**
+ * What a question column expects for an answer: the property content types a
+ * model can produce a value for.
+ *
+ * Derived from `PROPERTY_CONTENT_TYPES`, not a second list: a question column
+ * is a matter property asked of a decision instead of an entity, so the two
+ * cannot answer "which kinds are there?" differently. The three exclusions are
+ * the kinds a person enters by hand — a file is uploaded, a money amount needs
+ * a currency the model cannot choose, and a person resolves to a member — and
+ * they are exactly the kinds the workspace extractor never schedules.
+ *
+ * There is no boolean kind in the property model, so a yes/no question is a
+ * single-select over two options; the text not settling the question is the
+ * null value every single-select already has.
+ */
+type HandEnteredType = "file" | "money" | "person";
 
-export type CaseLawResearchAnswerType =
-  (typeof CASE_LAW_RESEARCH_ANSWER_TYPES)[number];
+export type CaseLawResearchAnswerType = Exclude<
+  PropertyContentType,
+  HandEnteredType
+>;
+
+type CompleteAnswerTypes<T extends readonly CaseLawResearchAnswerType[]> =
+  Exclude<CaseLawResearchAnswerType, T[number]> extends never ? T : never;
+
+const answerTypes = [
+  "text",
+  "single-select",
+  "multi-select",
+  "date",
+  "int",
+] as const;
+
+/** Every answer kind, in the order a column picker offers them. */
+export const CASE_LAW_RESEARCH_ANSWER_TYPES =
+  answerTypes satisfies CompleteAnswerTypes<typeof answerTypes>;
+
+/** Select options a question column may carry; a column picker's practical cap. */
+export const CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX = 20;
 
 /** A question's wording; longer text is a prompt, not a column header. */
 export const CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH = 500;
@@ -115,40 +150,8 @@ export const answerNeedsRun = ({
   }
 };
 
-/** A yes/no question may honestly be undecidable from the text. */
-export const CASE_LAW_RESEARCH_YES_NO_VALUES = [
-  "yes",
-  "no",
-  "unclear",
-] as const;
-
-export type CaseLawResearchYesNoValue =
-  (typeof CASE_LAW_RESEARCH_YES_NO_VALUES)[number];
-
-/** The answer itself, typed by the question it answers. */
-export type CaseLawResearchAnswerValue =
-  | { type: "yes_no"; value: CaseLawResearchYesNoValue }
-  | { type: "text"; value: string };
-
 /** The model configuration a column's answers are produced with. */
 export type CaseLawResearchColumnTool = {
   version: 1;
   role: "fast";
-};
-
-/** One passage the model leaned on, addressable in the reader by its anchor. */
-export type CaseLawResearchAnswerPassage = {
-  anchorId: string;
-  excerpt: string;
-};
-
-/** How an answer was produced; kept beside it so a cell can be audited. */
-export type CaseLawResearchAnswerRun = {
-  version: 1;
-  model: string;
-  completedAt: string;
-  /** True when the decision was too long to send whole and passages were retrieved. */
-  retrieved: boolean;
-  rationale: string;
-  passages: CaseLawResearchAnswerPassage[];
 };

@@ -122,51 +122,53 @@ export const propertyContentTypeSchema = t.Union([
 
 export type PropertyContentType = Static<typeof propertyContentTypeSchema>;
 
-export const propertyContentSchema = t.Union([
-  t.Object({
-    version: v1,
-    type: fileType,
-  }),
-  t.Object({
-    version: v1,
-    type: textType,
-  }),
-  t.Object({
-    version: v1,
-    type: t.Union([singleSelectType, multiSelectType]),
+const filePropertyContentSchema = t.Object({
+  version: v1,
+  type: fileType,
+});
 
-    options: t.Array(
-      t.Object({
-        color: optionColor,
-        value: t.String({ minLength: 1, maxLength: 1000 }),
-      }),
-    ),
-    fallback: t.Nullable(t.String({ minLength: 1, maxLength: 1000 })),
-  }),
-  t.Object({
-    version: v1,
-    type: dateType,
-  }),
-  t.Object({
-    version: v1,
-    type: intType,
-  }),
-  // Money is not an int with a currency label: it is stored in minor units, so
-  // the two cannot share a column without a 100x bug waiting in every sum. The
-  // property's currency is the default new values take; null means each value
-  // carries its own.
-  t.Object({
-    version: v1,
-    type: moneyType,
-    currency: t.Nullable(currencyCode),
-  }),
-  t.Object({
-    version: v1,
-    type: personType,
-  }),
-]);
+const textPropertyContentSchema = t.Object({
+  version: v1,
+  type: textType,
+});
 
-export type PropertyContent = Static<typeof propertyContentSchema>;
+const selectPropertyContentSchema = t.Object({
+  version: v1,
+  type: t.Union([singleSelectType, multiSelectType]),
+
+  options: t.Array(
+    t.Object({
+      color: optionColor,
+      value: t.String({ minLength: 1, maxLength: 1000 }),
+    }),
+  ),
+  fallback: t.Nullable(t.String({ minLength: 1, maxLength: 1000 })),
+});
+
+const datePropertyContentSchema = t.Object({
+  version: v1,
+  type: dateType,
+});
+
+const intPropertyContentSchema = t.Object({
+  version: v1,
+  type: intType,
+});
+
+// Money is not an int with a currency label: it is stored in minor units, so
+// the two cannot share a column without a 100x bug waiting in every sum. The
+// property's currency is the default new values take; null means each value
+// carries its own.
+const moneyPropertyContentSchema = t.Object({
+  version: v1,
+  type: moneyType,
+  currency: t.Nullable(currencyCode),
+});
+
+const personPropertyContentSchema = t.Object({
+  version: v1,
+  type: personType,
+});
 
 /**
  * Property content an AI tool can produce a value for. A file is uploaded, a
@@ -174,11 +176,32 @@ export type PropertyContent = Static<typeof propertyContentSchema>;
  * has to resolve to a workspace member; all three are entered by hand, so the
  * execution plan never schedules them and the prompt/validator switches below
  * have no branch for them.
+ *
+ * The same subset a case-law question column offers, which is why it is a
+ * schema rather than a type-level `Exclude`: both boundaries parse against it.
  */
-export type AiExtractablePropertyContent = Exclude<
-  PropertyContent,
-  { type: "file" | "money" | "person" }
+export const aiExtractablePropertyContentSchema = t.Union([
+  textPropertyContentSchema,
+  selectPropertyContentSchema,
+  datePropertyContentSchema,
+  intPropertyContentSchema,
+]);
+
+export type AiExtractablePropertyContent = Static<
+  typeof aiExtractablePropertyContentSchema
 >;
+
+export const propertyContentSchema = t.Union([
+  filePropertyContentSchema,
+  textPropertyContentSchema,
+  selectPropertyContentSchema,
+  datePropertyContentSchema,
+  intPropertyContentSchema,
+  moneyPropertyContentSchema,
+  personPropertyContentSchema,
+]);
+
+export type PropertyContent = Static<typeof propertyContentSchema>;
 
 export const isAiExtractablePropertyContent = (
   content: PropertyContent,
