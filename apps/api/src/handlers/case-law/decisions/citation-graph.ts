@@ -17,6 +17,14 @@ import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  CITATION_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
+import type {
+  CitationDirection,
+  CitationTreatment,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -30,11 +38,16 @@ import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 
 /**
- * One side of the citation graph, seen from a decision: the decisions it
- * relies on (`outgoing`) or the decisions that rely on it (`incoming`).
+ * The stored polarity as the display reads it. Null (never classified) and
+ * `unknown` (classified, no answer) are both the absence of a reading, so
+ * both answer `unclassified` rather than posing as a neutral one.
  */
-export const CITATION_DIRECTIONS = ["incoming", "outgoing"] as const;
-export type CitationDirection = (typeof CITATION_DIRECTIONS)[number];
+export const treatmentOf = (polarity: string | null): CitationTreatment => {
+  if (polarity === null || !includes(POLARITIES, polarity)) {
+    return "unclassified";
+  }
+  return polarity === POLARITY.UNKNOWN ? "unclassified" : polarity;
+};
 
 export const listDecisionCitationsQuerySchema = t.Object({
   direction: t.Union(CITATION_DIRECTIONS.map((value) => t.Literal(value))),
@@ -44,30 +57,6 @@ export const listDecisionCitationsQuerySchema = t.Object({
 type ListDecisionCitationsQuery = Static<
   typeof listDecisionCitationsQuerySchema
 >;
-
-/**
- * How the citing text treats the cited decision, as the display reads it.
- *
- * `unclassified` folds a row the classifier never reached (`null`) together
- * with one it reached and could not answer (`unknown`): neither is a reading
- * of the text, so neither may pose as one. The classifiable polarities pass
- * through by name.
- */
-export const CITATION_TREATMENTS = [
-  POLARITY.NEGATIVE,
-  POLARITY.NEUTRAL,
-  POLARITY.POSITIVE,
-  POLARITY.SUPPORTIVE,
-  "unclassified",
-] as const;
-export type CitationTreatment = (typeof CITATION_TREATMENTS)[number];
-
-export const treatmentOf = (polarity: string | null): CitationTreatment => {
-  if (polarity === null || !includes(POLARITIES, polarity)) {
-    return "unclassified";
-  }
-  return polarity === POLARITY.UNKNOWN ? "unclassified" : polarity;
-};
 
 /** The decision at the far end of a citation, enough to address its page. */
 type RelatedDecision = {
@@ -84,6 +73,12 @@ type RelatedDecision = {
   ecli: string | null;
   language: string;
   slug: string | null;
+  /**
+   * The materialized `ln(1 + weighted citations)` score. Search ranks by it
+   * too, so a reader weighing "who cites this" sees the same weight the
+   * result list gave those courts.
+   */
+  citationAuthority: number;
 };
 
 export type DecisionCitationRow = {
@@ -135,8 +130,8 @@ type ScannedRow = {
  */
 const createScannedPage = (
   rows: readonly ScannedRow[],
+  limit: number,
 ): Page<DecisionCitationRow> => {
-  const limit = LIMITS.caseLawDecisionCitationPageSize;
   const scanned = rows.slice(0, limit);
   const items: DecisionCitationRow[] = [];
   for (const row of scanned) {
@@ -224,16 +219,24 @@ type ListDecisionCitationsOptions = {
    */
   subject: RedistributableDecisionSubject;
   query: ListDecisionCitationsQuery;
+  /**
+   * Rows to scan for this page. Capped at the shared page size, which is what
+   * the reader surface asks for and what the indexes are sized against; an
+   * agent asking for fewer pays for fewer.
+   */
+  limit?: number;
 };
 
 export const listDecisionCitationsHandler = async ({
   subject: { id: decisionId, tx },
   query,
+  limit = LIMITS.caseLawDecisionCitationPageSize,
 }: ListDecisionCitationsOptions) => {
   const cursorId = decodeCitationCursor(query.cursor);
   if (cursorId === null) {
     return status(400, { message: "Invalid cursor" });
   }
+  const pageSize = Math.min(limit, LIMITS.caseLawDecisionCitationPageSize);
   const spec = DIRECTION_SPECS[query.direction];
 
   const candidates = tx
@@ -253,7 +256,7 @@ export const listDecisionCitationsHandler = async ({
       ),
     )
     .orderBy(asc(caseLawCitations.id))
-    .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
+    .limit(pageSize + 1)
     .as("citation_graph_candidates");
   const rows = await tx
     .select({
@@ -275,15 +278,16 @@ export const listDecisionCitationsHandler = async ({
         ecli: relatedDecision.ecli,
         language: relatedDecision.language,
         slug: relatedDecision.slug,
+        citationAuthority: relatedDecision.citationAuthority,
       },
     })
     .from(candidates)
     .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
-    .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
+    .limit(pageSize + 1);
 
-  return createScannedPage(rows);
+  return createScannedPage(rows, pageSize);
 };
 
 export type CitationTreatmentCounts = Record<CitationTreatment, number>;
@@ -452,7 +456,7 @@ export type LeadingCitationRow = {
   sectionIndex: number | null;
   treatment: CitationTreatment;
   /** Resolved by construction: only a held decision can lead. */
-  decision: RelatedDecision & { citationAuthority: number };
+  decision: RelatedDecision;
 };
 
 type ListLeadingCitationsOptions = {

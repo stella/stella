@@ -86,6 +86,7 @@ requires (request it at `stella auth login --scopes`).
 | capability   | `stella capability describe`               | read                        |                                       |
 | capability   | `stella capability invoke`                 | read                        |                                       |
 | capability   | `stella capability list`                   | read                        | paginated                             |
+| case-law     | `stella case-law citations`                | read                        | paginated                             |
 | case-law     | `stella case-law read`                     | read                        | paginated; windowed text              |
 | case-law     | `stella case-law search`                   | search                      | paginated                             |
 | clause       | `stella clause delete`                     | knowledge_write             | destructive (needs `--yes` off a TTY) |
@@ -148,12 +149,15 @@ are omitted here.
   - optional: --validate-only
 - `stella capability list`
   - optional: --domain, --access (all|read|write)
+- `stella case-law citations`
+  - `--decision-id` — Case-law decision ID (string)
+  - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it. (enum: cites, cited_by)
 - `stella case-law read`
   - `--decision-id` — Case-law decision ID (string)
 - `stella case-law search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country code (string)
-  - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to
+  - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`

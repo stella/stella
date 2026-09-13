@@ -135,6 +135,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "read",
       windowedText: true,
     },
+    read_case_law_citations: {
+      command: ["case-law", "citations"],
+      scope: "read",
+      itemsKey: "citations",
+    },
 
     prepare_feedback: { command: ["feedback", "prepare"], scope: "feedback" },
 
