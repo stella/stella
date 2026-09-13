@@ -143,6 +143,7 @@ export default createSafeHandler(
           versionNumber: nextVersionNumber,
           workspaceReference: workspace?.reference ?? null,
         });
+
         await insertEntityVersion(tx, {
           createdBy: userId,
           entityId: params.entityId,
