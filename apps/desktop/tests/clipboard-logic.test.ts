@@ -10,7 +10,6 @@ import {
   adjacentClipboardScope,
   clipboardControlsKeyAction,
   clipboardScopeKeyAction,
-  clipboardSearchScope,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -390,7 +389,7 @@ describe("keyboard indexes", () => {
     expect(clipboardScopeKeyAction("ArrowUp")).toBe("previous");
     expect(clipboardScopeKeyAction("ArrowLeft")).toBeNull();
 
-    const all = ["clips", "registry", "groups"] as const;
+    const all = ["clips", "registry"] as const;
     expect(
       adjacentClipboardScope({
         action: "next",
@@ -402,7 +401,7 @@ describe("keyboard indexes", () => {
       adjacentClipboardScope({
         action: "next",
         available: all,
-        current: "groups",
+        current: "registry",
       }),
     ).toBeNull();
     expect(
@@ -415,20 +414,10 @@ describe("keyboard indexes", () => {
     expect(
       adjacentClipboardScope({
         action: "previous",
-        available: ["clips", "registry"],
+        available: all,
         current: "registry",
       }),
     ).toBe("clips");
-
-    expect(clipboardSearchScope({ activeGroupId: null, source: "clips" })).toBe(
-      "clips",
-    );
-    expect(clipboardSearchScope({ activeGroupId: "g", source: "clips" })).toBe(
-      "groups",
-    );
-    expect(
-      clipboardSearchScope({ activeGroupId: "g", source: "registry" }),
-    ).toBe("registry");
   });
 
   test("timeline navigation has no target beyond either edge", () => {

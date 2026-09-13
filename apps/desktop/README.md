@@ -81,8 +81,9 @@ Clipboard keyboard model:
 - ← / → move the highlighted result, also from the search field at its text edges;
   ↓ from a card focuses the field and ↑ from the field returns to the highlighted card.
   The footer controls are reached with Tab.
-- The scope switcher beside the field (Tab reaches it) picks all clips, external
-  registries, or saved groups: ↑ / ↓ while it is focused, or a click to step through.
+- The source switcher beside the field (Tab reaches it) moves between clipboard
+  history and external registries: ↑ / ↓ while focused, or click to toggle.
+  Saved groups remain filters in the group rail.
 - Enter copies the highlighted result; Esc closes an open overlay, then the window.
 
 Runtime bridge configuration:

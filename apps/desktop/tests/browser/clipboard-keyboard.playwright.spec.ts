@@ -379,7 +379,7 @@ for (const {
       await expect(search).toBeFocused();
     });
 
-    test("vertical arrows switch the scope only on the focused switcher", async ({
+    test("the switcher changes only the search source and preserves the group filter", async ({
       page,
     }) => {
       const cards = await openClipboard(page, language);
@@ -399,6 +399,12 @@ for (const {
       await page.keyboard.press("ArrowUp");
       await expect(cards.nth(1)).toBeFocused();
       await expect(groupsRail).toBeVisible();
+      await page.locator('[data-clipboard-group-id="work"]').click();
+      await expect(switcher).toHaveAttribute("data-clipboard-scope", "clips");
+      await expect(pressedGroup).toHaveAttribute(
+        "data-clipboard-group-id",
+        "work",
+      );
       await search.focus();
       await page.keyboard.press("ArrowDown");
       await expect(search).toBeFocused();
@@ -407,21 +413,15 @@ for (const {
       await expect(switcher).toBeFocused();
       await expect(groupsRail).toBeHidden();
       await page.keyboard.press("ArrowDown");
-      await expect(groupsRail).toBeVisible();
-      await expect(pressedGroup).not.toHaveAttribute(
-        "data-clipboard-group-id",
-        "__no_group__",
-      );
-      await page.keyboard.press("ArrowDown");
-      await expect(groupsRail).toBeVisible();
-      await page.keyboard.press("ArrowUp");
       await expect(groupsRail).toBeHidden();
       await page.keyboard.press("ArrowUp");
       await expect(groupsRail).toBeVisible();
       await expect(pressedGroup).toHaveAttribute(
         "data-clipboard-group-id",
-        "__no_group__",
+        "work",
       );
+      await page.keyboard.press("ArrowUp");
+      await expect(groupsRail).toBeVisible();
       await expect(switcher).toBeFocused();
       await expect(
         page.locator('[data-clipboard-id="clip-2"]'),

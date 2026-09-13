@@ -198,22 +198,8 @@ export const clipboardControlsKeyAction = ({
   }
 };
 
-export const CLIPBOARD_SEARCH_SCOPES = ["clips", "registry", "groups"] as const;
+export const CLIPBOARD_SEARCH_SCOPES = ["clips", "registry"] as const;
 export type ClipboardSearchScope = (typeof CLIPBOARD_SEARCH_SCOPES)[number];
-
-/** The scope the current source and group selection amount to. */
-export const clipboardSearchScope = ({
-  activeGroupId,
-  source,
-}: {
-  activeGroupId: string | null;
-  source: "clips" | "registry";
-}): ClipboardSearchScope => {
-  if (source === "registry") {
-    return "registry";
-  }
-  return activeGroupId === null ? "clips" : "groups";
-};
 
 /**
  * Vertical arrows step through the search scopes from wherever focus is; the
