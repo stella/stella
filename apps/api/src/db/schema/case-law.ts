@@ -19,7 +19,6 @@ import type {
   CaseLawAnnotationStyle,
   CaseLawAnnotationVisibility,
 } from "@stll/api-contract/case-law-annotations";
-import type { SearchSort } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -54,7 +53,6 @@ import type {
   Polarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
-import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -1717,142 +1715,8 @@ export const caseLawMatterLinks = p.pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Case Law — Research tables (organization-scoped)
+// Case Law — Research questions and answers (organization-scoped)
 // ---------------------------------------------------------------------------
-
-/**
- * The search a retiring research table re-runs for its rows. Local to this
- * module rather than in the api contract: nothing outside these two table
- * declarations reads it, and it goes with them in the drop migration.
- */
-type CaseLawResearchSavedQuery = {
-  version: 1;
-  query: string;
-  country?: string;
-  court?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  decisionType?: string;
-  language?: string;
-  sourceId?: SafeId<"caseLawSource">;
-  sort?: SearchSort;
-};
-
-/**
- * A saved case-law search a member keeps working on. Rows are the public
- * corpus, re-run from `savedQuery` and adjusted by the dispositions below;
- * the table itself stores no decision content. Visible to the whole
- * organization; the owner is recorded for attribution and caps.
- */
-export const caseLawResearchTables = p.pgTable(
-  "case_law_research_tables",
-  {
-    id: pUuid<"caseLawResearchTable">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    ownerUserId: p.text("owner_user_id").notNull(),
-    name: p.varchar({ length: 256 }).notNull(),
-    savedQuery: jsonb("saved_query")
-      .$type<CaseLawResearchSavedQuery>()
-      .notNull(),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at")
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-  },
-  (t) => [
-    p
-      .foreignKey({
-        name: "case_law_research_tables_organization_id_organization_id_fk",
-        columns: [t.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
-        name: "case_law_research_tables_owner_user_id_user_id_fk",
-        columns: [t.ownerUserId],
-        foreignColumns: [user.id],
-      })
-      .onDelete("cascade"),
-    // Composite tenant key for the dispositions table, so a child row can
-    // never name a table from another organization even on root write paths.
-    p.unique("case_law_research_tables_id_org_unq").on(t.id, t.organizationId),
-    p
-      .index("case_law_research_tables_org_updated_id_idx")
-      .on(t.organizationId, t.updatedAt, t.id),
-    p.check(
-      "case_law_research_tables_saved_query_version_check",
-      sql`(jsonb_typeof(${t.savedQuery}) = 'object' AND ${t.savedQuery}->'version' = '1'::jsonb) IS TRUE`,
-    ),
-    ...orgPolicies(),
-  ],
-);
-
-/**
- * How one decision deviates from what a retiring table's saved query returns.
- * Local for the same reason as `CaseLawResearchSavedQuery` above: it goes with
- * the table in the drop migration.
- */
-const CASE_LAW_RESEARCH_DISPOSITIONS = ["pinned", "excluded"] as const;
-
-const CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES =
-  CASE_LAW_RESEARCH_DISPOSITIONS.map((disposition) =>
-    sql.raw(`'${disposition}'`),
-  );
-
-/**
- * One decision the table treats differently from its saved query: pinned
- * into the rows whether or not the query still returns it, or excluded from
- * them. `decisionId` carries no foreign key, like the annotations: the corpus
- * may live in a separate public-law database, so the id is validated through
- * the public read gate on write and a decision that has since gone simply
- * yields no row facts.
- */
-export const caseLawResearchTableDecisions = p.pgTable(
-  "case_law_research_table_decisions",
-  {
-    tableId: safeUuid<"caseLawResearchTable">("table_id").notNull(),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
-    disposition: p.text({ enum: CASE_LAW_RESEARCH_DISPOSITIONS }).notNull(),
-    /** Order among pinned rows; excluded rows carry 0. */
-    position: p.integer().notNull().default(0),
-    addedBy: p.text("added_by"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-  },
-  (t) => [
-    p.primaryKey({
-      columns: [t.tableId, t.decisionId],
-      name: "case_law_research_table_decisions_pk",
-    }),
-    p
-      .foreignKey({
-        name: "clrtd_table_org_fk",
-        columns: [t.tableId, t.organizationId],
-        foreignColumns: [
-          caseLawResearchTables.id,
-          caseLawResearchTables.organizationId,
-        ],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
-        name: "clrtd_added_by_fk",
-        columns: [t.addedBy],
-        foreignColumns: [user.id],
-      })
-      .onDelete("set null"),
-    p
-      .index("clrtd_table_disposition_position_idx")
-      .on(t.tableId, t.disposition, t.position),
-    p.check(
-      "case_law_research_table_decisions_disposition_check",
-      sql`${t.disposition} IN (${sql.join(CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES, sql`, `)})`,
-    ),
-    ...orgPolicies(),
-  ],
-);
 
 const CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES =
   CASE_LAW_RESEARCH_ANSWER_TYPES.map((type) => sql.raw(`'${type}'`));
@@ -1870,16 +1734,12 @@ const CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES =
  * apart from a re-run.
  *
  * The organization is the column's only parent: that is what makes an answer
- * reusable on every search that surfaces the decision. `tableId` is detached —
- * every row holds NULL and no foreign key reaches the retiring research
- * tables, so deleting one can no longer cascade a question the whole
- * organization asks. The column itself goes with the table retirement.
+ * reusable on every search that surfaces the decision.
  */
 export const caseLawResearchColumns = p.pgTable(
   "case_law_research_columns",
   {
     id: pUuid<"caseLawResearchColumn">().primaryKey(),
-    tableId: safeUuid<"caseLawResearchTable">("table_id"),
     organizationId: safeOrganizationId("organization_id").notNull(),
     /** Who asked the question; every member of the organization sees it. */
     createdBy: p.text("created_by"),
