@@ -271,7 +271,6 @@ test("an ordinary query still matches loosely", async () => {
   expect(await matchesReferenceExactly(partialReference)).toBe(false);
 });
 
-
 test("a delayed projection cannot restore a tombstoned historical reference", async () => {
   const database = projectionDatabase();
   await upsertSearchDocument(entityId, {

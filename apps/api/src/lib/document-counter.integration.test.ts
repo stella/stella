@@ -351,6 +351,20 @@ describe("matter read", () => {
         versionNumber: 3,
         stamp: null,
       },
+      {
+        id: createSafeId<"entityVersion">(),
+        workspaceId: matter,
+        entityId,
+        versionNumber: 4,
+        stamp: "STAMPED-COUNT/2026/001/001.v4",
+      },
+      {
+        id: createSafeId<"entityVersion">(),
+        workspaceId: matter,
+        entityId,
+        versionNumber: 5,
+        stamp: "PREVIOUS-REFERENCE/001.v5",
+      },
     ]);
 
     // A stamped version in a sibling matter must not be counted: the subquery
@@ -381,7 +395,6 @@ describe("matter read", () => {
     expect(read).toMatchObject({ stampedVersionCount: 1 });
   });
 });
-
 
 test("later issuance reserves its prefix while moved history keeps its original owner", async () => {
   const reference = "LATER-ISSUANCE/2026";
