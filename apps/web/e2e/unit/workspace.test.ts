@@ -86,11 +86,10 @@ describe("deleteTestWorkspace", () => {
     });
     const apiRequest = await playwrightRequest.newContext();
     const originalDelete = apiRequest.delete.bind(apiRequest);
-    apiRequest.delete = async (url, options) =>
-      await originalDelete(
-        new URL(new URL(url).pathname, server.url).href,
-        options,
-      );
+    apiRequest.delete = async (url, options) => {
+      const localUrl = new URL(new URL(url).pathname, server.url);
+      return await originalDelete(localUrl.href, options);
+    };
 
     try {
       await deleteTestWorkspace(apiRequest, workspaceId);
@@ -114,11 +113,10 @@ describe("deleteTestWorkspace", () => {
     });
     const apiRequest = await playwrightRequest.newContext();
     const originalDelete = apiRequest.delete.bind(apiRequest);
-    apiRequest.delete = async (url, options) =>
-      await originalDelete(
-        new URL(new URL(url).pathname, server.url).href,
-        options,
-      );
+    apiRequest.delete = async (url, options) => {
+      const localUrl = new URL(new URL(url).pathname, server.url);
+      return await originalDelete(localUrl.href, options);
+    };
 
     try {
       await deleteTestWorkspace(apiRequest, workspaceId);
@@ -145,11 +143,10 @@ describe("deleteTestWorkspace", () => {
       });
       const apiRequest = await playwrightRequest.newContext();
       const originalDelete = apiRequest.delete.bind(apiRequest);
-      apiRequest.delete = async (url, options) =>
-        await originalDelete(
-          new URL(new URL(url).pathname, server.url).href,
-          options,
-        );
+      apiRequest.delete = async (url, options) => {
+        const localUrl = new URL(new URL(url).pathname, server.url);
+        return await originalDelete(localUrl.href, options);
+      };
 
       try {
         const result = await Result.tryPromise(

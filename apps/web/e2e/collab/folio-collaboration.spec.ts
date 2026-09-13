@@ -255,10 +255,7 @@ test.describe("lockless DOCX collaboration", () => {
       });
 
       const secondToken = ` SECOND${String(Date.now())}`;
-      await rejoinedPage
-        .locator(".layout-run-text")
-        .first()
-        .click();
+      await rejoinedPage.locator(".layout-run-text").first().click();
       await rejoinedPage.keyboard.insertText(secondToken);
       await expect
         .poll(async () => await readDocumentText(page))

@@ -1675,7 +1675,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const editorBuffer = resolveAndPreserveDocxEditorBuffer({
     collaborationSeedBuffer: collaborationSession?.seedDocumentBuffer ?? null,
     fieldId,
-    isCollaborativeEditing,
     lastEditingBufferRef,
     preservedLoadedBufferRef,
     previewBuffer: previewFile?.buffer,
@@ -1984,7 +1983,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 type ResolveAndPreserveDocxEditorBufferOptions = {
   collaborationSeedBuffer: ArrayBuffer | null;
   fieldId: string;
-  isCollaborativeEditing: boolean;
   lastEditingBufferRef: RefObject<ArrayBuffer | null>;
   preservedLoadedBufferRef: RefObject<{
     buffer: ArrayBuffer;
@@ -1997,7 +1995,6 @@ type ResolveAndPreserveDocxEditorBufferOptions = {
 const resolveAndPreserveDocxEditorBuffer = ({
   collaborationSeedBuffer,
   fieldId,
-  isCollaborativeEditing,
   lastEditingBufferRef,
   preservedLoadedBufferRef,
   previewBuffer,
@@ -2010,14 +2007,13 @@ const resolveAndPreserveDocxEditorBuffer = ({
       : null;
   const editorBuffer = selectDocxBrowserEditorBuffer({
     collaborationSeedBuffer,
-    isCollaborativeEditing,
     lastEditingBuffer: lastEditingBufferRef.current,
     preservedLoadedBuffer,
     previewBuffer,
     state,
   });
   if (
-    (state.status === "editing" || isCollaborativeEditing) &&
+    (state.status === "editing" || collaborationSeedBuffer !== null) &&
     editorBuffer !== undefined
   ) {
     lastEditingBufferRef.current = editorBuffer;
