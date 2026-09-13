@@ -21,6 +21,7 @@ import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -39,7 +40,11 @@ export const UploadDocumentDialog = ({
   // The picked matter, or the one the caller opened the dialog for, resolved
   // from the same list the picker offers so both paths show the same name.
   const [picked, setPicked] = useState<MatterOption | null>(null);
-  const { data: matters, isPending } = useQuery({
+  const {
+    data: matters,
+    isPending,
+    refetch,
+  } = useQuery({
     ...workspacesNavigationOptions(activeOrganizationId),
     select: (data) =>
       data.workspaces.map((matter) => ({
@@ -95,9 +100,24 @@ export const UploadDocumentDialog = ({
           {workspaceId !== undefined &&
             !isPending &&
             selectedMatter === null && (
-              <p className="text-destructive text-sm">
-                {t("errors.actionFailed")}
-              </p>
+              // The caller named a matter the navigation list does not carry —
+              // a failed read, or a list that arrived without it. Reading it
+              // again is the whole recovery, so offer that rather than leaving
+              // the reader an upload they cannot start.
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-destructive">
+                  {t("errors.actionFailed")}
+                </span>
+                <Button
+                  onClick={() =>
+                    detached(refetch(), "upload-document.retry-matters")
+                  }
+                  size="xs"
+                  variant="ghost"
+                >
+                  {t("common.retry")}
+                </Button>
+              </div>
             )}
           {selectedMatter && (
             <QuerySuspenseBoundary
