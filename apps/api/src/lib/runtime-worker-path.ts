@@ -15,6 +15,7 @@ export const RUNTIME_WORKER_FILES = {
   officeEvidence: "office-evidence-worker.js",
   ocrLocal: "ocr-local-worker.js",
   ocrSearchablePdf: "ocr-searchable-pdf-worker.js",
+  pdfAnonymization: "pdf-anonymization-worker.js",
   pdf: "pdf-worker.js",
 } as const;
 

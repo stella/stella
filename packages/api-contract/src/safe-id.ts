@@ -70,6 +70,7 @@ export type SafeIdType =
   | "documentReviewRun"
   | "documentTranslationRun"
   | "documentTranslationUnit"
+  | "pdfAnonymizationRun"
   | "documentType"
   | "entity"
   | "entityVersionAiSummary"
