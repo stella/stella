@@ -20,8 +20,9 @@ import {
   Navigate,
   createFileRoute,
   stripSearchParams,
+  useBlocker,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -50,6 +51,7 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import {
@@ -623,7 +625,33 @@ function RouteComponentInner({
     resetPdfViewerState();
   });
 
-  const [, setDocxUnlocked] = useState(false);
+  const [docxUnlocked, setDocxUnlocked] = useState(false);
+  const docxActionsRef = useRef<DocxBrowserEditorActions | null>(null);
+  const isLeavingDocxRef = useRef(false);
+  const leaveDocxBeforeNavigation = useLatestCallback(async () => {
+    if (!docxUnlocked) {
+      return false;
+    }
+
+    const actions = docxActionsRef.current;
+    if (!actions) {
+      return true;
+    }
+
+    isLeavingDocxRef.current = true;
+    const leaveResult = await Result.tryPromise(actions.leave);
+    isLeavingDocxRef.current = false;
+    if (Result.isError(leaveResult)) {
+      getAnalytics().captureError(leaveResult.error);
+      return true;
+    }
+    return !leaveResult.value;
+  });
+  useBlocker({
+    disabled: !docxUnlocked,
+    enableBeforeUnload: docxUnlocked,
+    shouldBlockFn: leaveDocxBeforeNavigation,
+  });
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
   const setIsPDFPageOrganizerOpen = (open: boolean) => {
@@ -801,7 +829,7 @@ function RouteComponentInner({
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
   return (
-    <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden border-t">
+    <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden">
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
@@ -910,6 +938,7 @@ function RouteComponentInner({
                       fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
                     >
                       <DocxBrowserEditor
+                        actionsRef={docxActionsRef}
                         actionBarControls={
                           <PdfViewerControls
                             currentPage={pageNumber}
@@ -939,6 +968,9 @@ function RouteComponentInner({
                         }}
                         onClose={() => {
                           setDocxUnlocked(false);
+                          if (isLeavingDocxRef.current) {
+                            return;
+                          }
                           detached(
                             navigate({
                               search: (prev) => ({
@@ -952,6 +984,9 @@ function RouteComponentInner({
                         onSaved={(savedFieldId) => {
                           setDocxUnlocked(false);
                           setActiveFieldId(savedFieldId);
+                          if (isLeavingDocxRef.current) {
+                            return;
+                          }
                           detached(
                             navigate({
                               replace: true,

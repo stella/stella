@@ -10,7 +10,12 @@ import {
  * DocxBrowserEditor — wrapper that manages the edit session lifecycle
  * and renders the Folio DocxEditor.
  */
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  RefObject,
+} from "react";
 
 import {
   keepPreviousData,
@@ -20,7 +25,6 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
-  CheckIcon,
   EyeIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
@@ -115,6 +119,7 @@ import {
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
+  shouldRequestEditFromMouseDown,
   shouldReuseCollaborationPublication,
 } from "./docx-browser-editor.logic";
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
@@ -206,7 +211,8 @@ type DocxBrowserEditorContentProps = DocxBrowserEditorProps & {
 
 export type DocxBrowserEditorActions = {
   cancel: () => Promise<void>;
-  finalize: () => void;
+  finalize: () => Promise<boolean>;
+  leave: () => Promise<boolean>;
   /**
    * Force-checkpoint any pending in-flight edits to the server,
    * bypassing the debounce. Call this before navigating away from
@@ -670,8 +676,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     compatibilityState.targetKey === editTargetKey
       ? compatibilityState.value
       : null;
-  const [autosaveStatus, setAutosaveStatus] =
-    useState<AutosaveStatus>("synced");
+  const [, setAutosaveStatus] = useState<AutosaveStatus>("synced");
   // Controlled `DocxEditor` comment state, round-tripped back through
   // `onCommentsChange`. Feeds the file-chat overlay's folio-agents comment
   // tools (read/add/reply/resolve) via `FileViewerWithAI`, and lets those
@@ -1503,7 +1508,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     if (isCollaborativeEditing) {
       clearQueuedChangeCheckpoint();
       await handlePublishCollaborationVersion();
-      return;
+      return true;
     }
 
     // Save the final version before finalizing
@@ -1516,7 +1521,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         title: t("folio.saveEditorUnavailableTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
 
     const hasPendingEditorChanges = ref.hasPendingChanges();
@@ -1528,7 +1533,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       })
     ) {
       await cancelActiveSession();
-      return;
+      return true;
     }
 
     const buffer = await ref.save({ selective: true });
@@ -1538,7 +1543,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         title: t("folio.saveSerializeFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
 
     setAutosaveStatus("syncing");
@@ -1550,7 +1555,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         title: t("folio.saveCheckpointFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
     setAutosaveStatus("synced");
     if (previewFile !== null) {
@@ -1570,7 +1575,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     }
     finalizedBufferRef.current = buffer;
     hasSessionChangesRef.current = false;
-    await finalizeActiveSession();
+    return await finalizeActiveSession();
   }, [
     cancelActiveSession,
     clearQueuedChangeCheckpoint,
@@ -1647,13 +1652,26 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     handleUnlock();
   }, [handleUnlock, isUnlocked]);
 
-  const handleToggleLock = useCallback(() => {
-    if (!isUnlocked) {
-      handleUnlock();
-      return;
-    }
-    detached(handleFinalize(), "docx-browser-editor.finalize");
-  }, [handleFinalize, handleUnlock, isUnlocked]);
+  const handleReadonlySurfaceMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+      const isToolbarTarget =
+        target instanceof Element &&
+        target.closest('[role="toolbar"]') !== null;
+      if (
+        !shouldRequestEditFromMouseDown({
+          canUnlock,
+          isEditing: isUnlocked,
+          isToolbarTarget,
+        })
+      ) {
+        return;
+      }
+
+      handleLockedEditAttempt();
+    },
+    [canUnlock, handleLockedEditAttempt, isUnlocked],
+  );
 
   // Registers this render's action handles into the parent-provided ref
   // and/or keyed map. Wrapped in useCallback (stable unless actionsKey /
@@ -1692,12 +1710,23 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     registerActions,
     () => ({
       cancel: handleCancel,
-      finalize: () => {
+      finalize: async () => {
         if (isCollaborativeEditing || state.status === "editing") {
-          detached(handleFinalize(), "docx-browser-editor.finalize");
+          return await handleFinalize();
         }
+        return true;
       },
       flushPendingChanges,
+      leave: async () => {
+        if (isCollaborativeEditing) {
+          await handleCancel();
+          return true;
+        }
+        if (state.status === "editing") {
+          return await handleFinalize();
+        }
+        return true;
+      },
       print: () => {
         editorRef.current?.print();
       },
@@ -1778,27 +1807,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
                 <XIcon />
                 <span>{t("common.close")}</span>
               </Button>
-            </>
-          )}
-          {showActionBar && isUnlocked && !isCollaborativeEditing && (
-            <>
-              <Button
-                aria-label={t("common.save")}
-                className="px-2"
-                disabled={
-                  state.status === "opening" ||
-                  state.status === "saving" ||
-                  collaborationState.status === "connecting"
-                }
-                onClick={handleToggleLock}
-                size="sm"
-                tooltip={t("common.save")}
-                variant="ghost"
-              >
-                <CheckIcon />
-                <span>{t("common.save")}</span>
-              </Button>
-              <AutosaveIndicator status={autosaveStatus} />
             </>
           )}
         </>
@@ -1953,9 +1961,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         // dialog and the doc becomes unselectable; fall through to the
         // typing-based onReadonlyEditAttempt path instead, which only
         // fires on real edit attempts (not text-selection clicks).
-        onMouseDownCapture={
-          isUnlocked || !canUnlock ? undefined : handleLockedEditAttempt
-        }
+        onMouseDownCapture={handleReadonlySurfaceMouseDown}
       >
         <FileViewerWithAI
           key={`ai-${previewIdentity}`}
@@ -2177,32 +2183,6 @@ const useDocxBrowserCollaboration = ({
     isCollaborativeEditing: collaborationSession !== null,
     requestCollaboration,
   };
-};
-
-const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {
-  const t = useTranslations();
-  const isSynced = status === "synced";
-  const isSyncing = status === "syncing";
-
-  return (
-    <span
-      aria-label={isSynced ? t("folio.synced") : t("folio.syncing")}
-      className="text-foreground-ghost inline-flex h-8 w-8 items-center justify-center"
-      role="status"
-    >
-      {(() => {
-        if (isSynced) {
-          return <CheckCircle2Icon className="size-3.5" />;
-        }
-        if (isSyncing) {
-          return (
-            <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />
-          );
-        }
-        return <RefreshCwIcon className="size-3.5 opacity-45" />;
-      })()}
-    </span>
-  );
 };
 
 const CollaborationStatusIndicator = ({

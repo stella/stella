@@ -786,7 +786,10 @@ export const FileTabPanel = ({
           )}
           disabled={isCollaboratingNativeDocx && !isCollaborationPublishable}
           onClick={() => {
-            docxActionsRef.current.get(tab.id)?.finalize();
+            const finalize = docxActionsRef.current.get(tab.id)?.finalize();
+            if (finalize) {
+              detached(finalize, "file-tab-panel.finalize-docx");
+            }
           }}
           size="xs"
         >

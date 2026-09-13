@@ -156,6 +156,20 @@ export const shouldPromptReadonlyUnlock = ({
   isEditing,
 }: ShouldPromptReadonlyUnlockOptions) => canUnlock && !isEditing;
 
+type ShouldRequestEditFromMouseDownOptions = {
+  canUnlock: boolean;
+  isEditing: boolean;
+  isToolbarTarget: boolean;
+};
+
+/** Toolbar commands act on the readonly document without opening an edit session. */
+export const shouldRequestEditFromMouseDown = ({
+  canUnlock,
+  isEditing,
+  isToolbarTarget,
+}: ShouldRequestEditFromMouseDownOptions) =>
+  canUnlock && !isEditing && !isToolbarTarget;
+
 type ShouldBlockDocxEditOptions = {
   canSafelyEdit: boolean | undefined;
 };

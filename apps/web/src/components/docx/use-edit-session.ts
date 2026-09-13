@@ -349,7 +349,7 @@ export const useEditSession = ({
   const finalize = async () => {
     const session = sessionRef.current;
     if (!session) {
-      return;
+      return true;
     }
 
     debouncedCheckpoint.cancel();
@@ -372,7 +372,7 @@ export const useEditSession = ({
         reason: getEditSessionErrorReason(response.error),
         source: "finalize",
       });
-      return;
+      return false;
     }
 
     const finalizedFieldId =
@@ -419,6 +419,7 @@ export const useEditSession = ({
 
     setState({ status: "idle" });
     onFinalized?.(response.data);
+    return true;
   };
 
   const cancel = async () => {

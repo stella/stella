@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
-import { FileCheckIcon, PlusIcon } from "lucide-react";
+import { Link2Icon, PlusIcon } from "lucide-react";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
@@ -66,14 +66,13 @@ export const EvidenceReferencesButton = ({
 
   return (
     <Button
-      className="min-h-11"
+      aria-label={label}
       onClick={onClick}
-      size="sm"
+      size="icon"
       variant="ghost"
       tooltip={label}
     >
-      <FileCheckIcon />
-      <span>{label}</span>
+      <Link2Icon />
     </Button>
   );
 };

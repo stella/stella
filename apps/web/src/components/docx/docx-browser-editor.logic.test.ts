@@ -8,6 +8,7 @@ import {
   shouldBlockDocxEdit,
   shouldFinalizeEditSession,
   shouldPromptReadonlyUnlock,
+  shouldRequestEditFromMouseDown,
   shouldReuseCollaborationPublication,
   shouldUseDocxBrowserEditor,
 } from "./docx-browser-editor.logic";
@@ -167,6 +168,23 @@ describe("DOCX readonly unlock prompt", () => {
     expect(
       shouldPromptReadonlyUnlock({ canUnlock: true, isEditing: true }),
     ).toBe(false);
+  });
+
+  test("toolbar commands never unlock a readonly document", () => {
+    expect(
+      shouldRequestEditFromMouseDown({
+        canUnlock: true,
+        isEditing: false,
+        isToolbarTarget: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRequestEditFromMouseDown({
+        canUnlock: true,
+        isEditing: false,
+        isToolbarTarget: false,
+      }),
+    ).toBe(true);
   });
 });
 
