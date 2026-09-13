@@ -97,7 +97,10 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { workspaceOptions } from "@/lib/workspaces/queries";
+import {
+  workspaceOptions,
+  workspacesNavigationOptions,
+} from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 
@@ -344,10 +347,12 @@ function ProtectedComponent() {
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const { data: activeWorkspace } = useChromeQuery({
-    ...workspaceOptions(activeWorkspaceId ?? ""),
-    enabled: activeWorkspaceId !== undefined,
-  });
+  const { data: workspaceNavigation } = useChromeQuery(
+    workspacesNavigationOptions(inspectorBroadcastOrganizationId),
+  );
+  const activeWorkspace = workspaceNavigation?.workspaces.find(
+    ({ id }) => id === activeWorkspaceId,
+  );
   const activeMatterColor = activeWorkspaceId
     ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
     : null;
