@@ -1,0 +1,36 @@
+{/*
+  Starlight override. The landing stores the theme under `theme` and marks
+  dark mode with a `dark` class; Starlight's stylesheet keys off
+  `data-theme`. Keep one source of truth (the class, toggled by the
+  landing's ThemeToggle) and mirror it onto `data-theme`, so a reader
+  switching between the marketing pages and the docs keeps their theme.
+  Inlined to avoid a flash of the wrong theme.
+*/}
+<script is:inline>
+  (() => {
+    const root = document.documentElement;
+    const mirror = () => {
+      root.dataset.theme = root.classList.contains("dark") ? "dark" : "light";
+    };
+    const apply = () => {
+      const stored = localStorage.getItem("theme");
+      const dark = stored
+        ? stored === "dark"
+        : window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", dark);
+      mirror();
+    };
+    apply();
+    new MutationObserver(mirror).observe(root, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", () => {
+        if (!localStorage.getItem("theme")) {
+          apply();
+        }
+      });
+  })();
+</script>

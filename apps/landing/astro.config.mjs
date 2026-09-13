@@ -67,8 +67,13 @@ export default defineConfig({
     starlight({
       title: "stella docs",
       disable404Route: true,
+      customCss: ["./src/styles/docs.css"],
       components: {
         Head: "./src/components/docs-head.astro",
+        Header: "./src/components/docs/Header.astro",
+        MobileMenuFooter: "./src/components/docs/MobileMenuFooter.astro",
+        ThemeProvider: "./src/components/docs/ThemeProvider.astro",
+        ThemeSelect: "./src/components/docs/ThemeSelect.astro",
       },
       social: [
         {

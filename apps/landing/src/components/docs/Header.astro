@@ -1,0 +1,169 @@
+---
+// Starlight override: the docs header mirrors SiteHeader (wordmark, GitHub,
+// theme toggle, "Start free") with Starlight's search in the middle. The grid
+// below is Starlight's own so the title column stays aligned with the sidebar.
+import Search from "@astrojs/starlight/components/Search.astro";
+import { GitHubLogoIcon } from "@stll/ui/brand-icons";
+
+import { defaultLocale, isLocale } from "../../i18n/config";
+import { getTranslations, localizePath } from "../../i18n/utils";
+import ThemeSelect from "./ThemeSelect.astro";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+
+const appUrl = "https://my.stll.app";
+const githubUrl = "https://github.com/stella/stella";
+---
+
+<div class="header">
+  <div class="title-wrapper sl-flex">
+    <a href={localizePath("/", locale)} class="wordmark sl-flex">
+      <img
+        src={locale === "ar"
+          ? "/images/stella-logo-ar.svg"
+          : "/images/stella-logo.svg"}
+        alt="stella"
+        class="logo"
+      />
+    </a>
+    <span class="divider" aria-hidden="true"></span>
+    <a href="/docs/" class="docs-label">{t("footer.documentation")}</a>
+  </div>
+  <div class="sl-flex print:hidden">
+    <Search />
+  </div>
+  <div class="sl-hidden md:sl-flex print:hidden end-group">
+    <a
+      href={githubUrl}
+      class="icon-link sl-flex"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={t("nav.github")}
+    >
+      <GitHubLogoIcon />
+    </a>
+    <ThemeSelect />
+    <a href={appUrl} class="cta">{t("common.startFree")}</a>
+  </div>
+</div>
+
+<style>
+  .header {
+    display: flex;
+    gap: var(--sl-nav-gap);
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+  }
+
+  .title-wrapper {
+    align-items: center;
+    gap: 0.75rem;
+    overflow: clip;
+    padding: 0.25rem;
+    margin: -0.25rem;
+    min-width: 0;
+  }
+  .wordmark {
+    align-items: center;
+    min-height: 2.75rem;
+    flex-shrink: 0;
+  }
+  .logo {
+    height: 1.5rem;
+    width: auto;
+  }
+  :global(.dark) .logo {
+    filter: invert(1);
+  }
+  .divider {
+    width: 1px;
+    height: 1rem;
+    background: var(--border);
+  }
+  .docs-label {
+    color: var(--muted-foreground);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .docs-label:hover {
+    color: var(--foreground);
+  }
+
+  .end-group {
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .icon-link :global(svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .icon-link {
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    color: var(--muted-foreground);
+    transition: opacity 150ms;
+  }
+  .icon-link:hover {
+    opacity: 0.7;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding-inline: 1rem;
+    border-radius: 0.625rem;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: opacity 150ms;
+  }
+  .cta:hover {
+    opacity: 0.9;
+  }
+
+  @media (min-width: 50rem) {
+    :global(:root[data-has-sidebar]) {
+      --__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
+    }
+    :global(:root:not([data-has-toc])) {
+      --__toc-width: 0rem;
+    }
+    .header {
+      --__sidebar-width: max(
+        0rem,
+        var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x)
+      );
+      --__main-column-fr: calc(
+        (
+            100% + var(--__sidebar-pad, 0rem) -
+              var(--__toc-width, var(--sl-sidebar-width)) -
+              (2 * var(--__toc-width, var(--sl-nav-pad-x))) -
+              var(--sl-content-inline-start, 0rem) - var(--sl-content-width)
+          ) /
+          2
+      );
+      display: grid;
+      grid-template-columns:
+        minmax(
+          calc(
+            var(--__sidebar-width) +
+              max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))
+          ),
+          auto
+        )
+        1fr
+        auto;
+      align-content: center;
+    }
+  }
+</style>
