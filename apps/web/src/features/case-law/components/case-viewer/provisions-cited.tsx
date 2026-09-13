@@ -20,6 +20,7 @@ import {
 } from "@/features/case-law/queries/provisions";
 import {
   pickVersionAt,
+  referencesOutsideVersion,
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
@@ -207,21 +208,12 @@ const WorkReferences = ({
     enabled: isLinked && group.workEli !== null && asOf !== null,
   });
 
-  // A reference to wording the current consolidation still carries is
-  // answered by the document already resolved; only a citation reaching
-  // further back needs the work's other versions.
-  const needsVersions =
-    statute !== undefined &&
-    statute !== null &&
-    group.rows.some(
-      (row) =>
-        row.versionValidFrom !== null &&
-        !versionCoversDate(statute, row.versionValidFrom),
-    );
-
   const { data: versions } = useQuery({
     ...statuteVersionsOptions(statute?.id ?? ""),
-    enabled: needsVersions,
+    enabled:
+      statute !== undefined &&
+      statute !== null &&
+      referencesOutsideVersion(statute, group.rows),
   });
 
   /**

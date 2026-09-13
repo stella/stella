@@ -55,6 +55,10 @@ export const ProvisionInspectorView = ({
     statuteVersionsOptions(payload.documentId),
   );
   const availableVersions = optionalArray(versions);
+  // The opener's seed stands only until the list arrives: an opener with no
+  // reason to read the work's versions carries one.
+  const versionCount =
+    versions === undefined ? payload.versionCount : availableVersions.length;
   const selectedVersion = availableVersions.find(
     (version) => version.id === payload.documentId,
   );
@@ -150,7 +154,7 @@ export const ProvisionInspectorView = ({
             />
           </ProvisionSection>
 
-          {payload.versionCount > 1 && (
+          {versionCount > 1 && (
             <ProvisionSection title={t("common.history")}>
               <ProvisionHistory
                 anchorId={payload.anchorId}

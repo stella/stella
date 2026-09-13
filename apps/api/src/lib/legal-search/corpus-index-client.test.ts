@@ -402,6 +402,42 @@ test("search sends the documented sort_by parameter", async () => {
   expect(body).not.toHaveProperty("sort_by_field");
 });
 
+test("search asks the engine for a compact response body", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+
+  const result = await getCorpusIndexClient("q09").search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 300,
+  });
+
+  expect(result.isOk()).toBe(true);
+  const body: Record<string, unknown> = JSON.parse(
+    requests.at(0)?.body ?? "{}",
+  );
+  // The engine defaults to `pretty_json`, which indents every field of every
+  // hit. A scan round returns a few hundred whole documents, so the default
+  // costs the reader bytes no parser needs.
+  expect(body["format"]).toBe("json");
+});
+
+test("aggregation asks the engine for a compact response body", async () => {
+  responseBody = { aggregations: {} };
+
+  const result = await getCorpusIndexClient("q09").aggregate({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    aggs: { court: { terms: { field: "court" } } },
+  });
+
+  expect(result.isOk()).toBe(true);
+  const body: Record<string, unknown> = JSON.parse(
+    requests.at(0)?.body ?? "{}",
+  );
+  expect(body["format"]).toBe("json");
+  expect(body["max_hits"]).toBe(0);
+});
+
 test("search accepts a response without snippets", async () => {
   // A count-only search (`maxHits: 0`, no snippet fields) is answered
   // without a `snippets` key.

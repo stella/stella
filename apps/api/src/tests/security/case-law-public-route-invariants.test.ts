@@ -161,18 +161,21 @@ describe("public case-law route boundary", () => {
   test("public read database transactions are read-only at runtime", async () => {
     const source = await readPublicReadDbSource();
 
-    expect(source).toContain("SET TRANSACTION READ ONLY");
+    expect(source).toContain('["transaction_read_only", "on"]');
+    expect(source).toContain(
+      "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
+    );
   });
 
   test("external role validation is bounded and retries after failure", async () => {
     const source = await readPublicReadDbSource();
+    const guards = source.slice(
+      source.indexOf("const PUBLIC_LAW_READ_GUARDS"),
+      source.indexOf("const localSettings"),
+    );
     const readConfiguration = source.slice(
       source.indexOf("const configureReadTransaction"),
-      source.indexOf("const configureExternalReadTransaction"),
-    );
-    const externalConfiguration = source.slice(
-      source.indexOf("const configureExternalReadTransaction"),
-      source.indexOf("const startRoleValidation"),
+      source.indexOf("const publicLawReadGuards"),
     );
     const validation = source.slice(
       source.indexOf("const startRoleValidation"),
@@ -183,21 +186,15 @@ describe("public case-law route boundary", () => {
       "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
     expect(validation).toContain(".transaction(async (tx) =>");
+    expect(guards).toContain('["statement_timeout", "30s"]');
+    expect(guards).toContain('["lock_timeout", "1s"]');
+    expect(guards).toContain('["idle_in_transaction_session_timeout", "30s"]');
     expect(readConfiguration).toContain(
-      "await tx.execute(sql`SET LOCAL statement_timeout = '30s'`)",
+      "await tx.execute(localSettings(guards))",
     );
-    expect(externalConfiguration).toContain(
-      "await configureReadTransaction(tx, isolation)",
+    expect(validation.indexOf("configureReadTransaction(")).toBeLessThan(
+      validation.indexOf("validateExternalPublicLawDatabase(tx)"),
     );
-    expect(externalConfiguration).toContain(
-      "await tx.execute(sql`SET LOCAL lock_timeout = '1s'`)",
-    );
-    expect(externalConfiguration).toContain(
-      "await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`)",
-    );
-    expect(
-      validation.indexOf("configureExternalReadTransaction(tx)"),
-    ).toBeLessThan(validation.indexOf("validateExternalPublicLawDatabase(tx)"));
     expect(validation).toContain(
       'external.roleValidation = { status: "idle" }',
     );

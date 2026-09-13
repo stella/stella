@@ -153,7 +153,11 @@ export const readProvisionHistoryHandler = async ({
 
   const { origin, versions } = resolved;
   const originText = extractProvisionText(
-    await readVersionBlocks(origin, HISTORY_READ_STEP),
+    await readVersionBlocks({
+      row: origin,
+      legislationDb,
+      step: HISTORY_READ_STEP,
+    }),
     anchor,
   );
 
@@ -166,7 +170,11 @@ export const readProvisionHistoryHandler = async ({
       version.id === origin.id
         ? originText
         : extractProvisionText(
-            await readVersionBlocks(version, HISTORY_READ_STEP),
+            await readVersionBlocks({
+              row: version,
+              legislationDb,
+              step: HISTORY_READ_STEP,
+            }),
             anchor,
           ),
     ),

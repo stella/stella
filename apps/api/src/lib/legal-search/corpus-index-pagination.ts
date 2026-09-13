@@ -411,6 +411,13 @@ export const readCorpusIndexSearchPage = async <TContext>({
     // Name the order explicitly: without it the engine returns hits in
     // document-id order and the rank-based position score below would be
     // meaningless.
+    //
+    // The round reads four things off a hit (its document, its passage clause,
+    // its anchor, its rank) and receives the whole stored document, passage
+    // text included. That is the engine's contract, not an oversight: its
+    // search endpoint has no per-hit field projection, so the only lever over
+    // a round's width is how many hits it asks for. Hence the scan/highlight
+    // split below, which at least keeps the highlighting off these hits.
     const roundStartedAt = performance.now();
     const result = await getCorpusIndexClient(cluster).search({
       indexId,

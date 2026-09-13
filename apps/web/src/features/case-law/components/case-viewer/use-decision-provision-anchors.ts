@@ -12,6 +12,7 @@ import {
 } from "@/features/case-law/queries/provisions";
 import {
   pickVersionAt,
+  referencesOutsideVersion,
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
@@ -29,6 +30,13 @@ export type DecisionProvisionAnchor =
   ProvisionAnchorSource<CitedProvisionTarget>;
 
 type WorkKey = { asOf: string; eli: string; jurisdiction: string };
+
+/**
+ * A work to resolve, carrying the references that named it. The array is the
+ * one the grouping accumulates into, so references seen after the work was
+ * collected are in it too.
+ */
+type LinkedWork<TRow> = WorkKey & { rows: TRow[] };
 
 const workKeyOf = ({
   eli,
@@ -60,23 +68,35 @@ export const useDecisionProvisionAnchors = (
     ),
   );
 
-  const works: WorkKey[] = [];
+  const works: LinkedWork<(typeof rows)[number]>[] = [];
   const seen = new Set<string>();
+  const rowsByWork = new Map<string, (typeof rows)[number][]>();
   const decisionAsOf = decisionDateToIso(decisionDate);
   for (const row of rows) {
     if (row.workEli === null) {
       continue;
     }
+    const key = workKeyOf({ eli: row.workEli, jurisdiction: row.jurisdiction });
+    let workRows = rowsByWork.get(key);
+    if (workRows === undefined) {
+      workRows = [];
+      rowsByWork.set(key, workRows);
+    }
+    workRows.push(row);
     const asOf = row.versionValidFrom ?? decisionAsOf;
     if (asOf === null) {
       continue;
     }
-    const key = workKeyOf({ eli: row.workEli, jurisdiction: row.jurisdiction });
     if (seen.has(key) || works.length >= LINKED_WORKS_LIMIT) {
       continue;
     }
     seen.add(key);
-    works.push({ asOf, eli: row.workEli, jurisdiction: row.jurisdiction });
+    works.push({
+      asOf,
+      eli: row.workEli,
+      jurisdiction: row.jurisdiction,
+      rows: workRows,
+    });
   }
 
   const statutes = useQueries({
@@ -99,25 +119,33 @@ export const useDecisionProvisionAnchors = (
     }
   }
 
-  // The inspector also needs the count when the current consolidation covers
-  // the cited date, so every linked work reads its version list once.
-  const versionedWorks = works.filter((work) =>
-    statuteByWork.has(workKeyOf(work)),
-  );
+  // Only a work some reference reaches past reads its version list; the
+  // consolidation already resolved answers every reference it covers.
+  const versionedWorks: { key: string; statuteId: string }[] = [];
+  for (const work of works) {
+    const key = workKeyOf(work);
+    const statute = statuteByWork.get(key);
+    if (
+      statute === undefined ||
+      !referencesOutsideVersion(statute, work.rows)
+    ) {
+      continue;
+    }
+    versionedWorks.push({ key, statuteId: statute.id });
+  }
   const versions = useQueries({
-    queries: versionedWorks.map((work) => {
-      const statute = statuteByWork.get(workKeyOf(work));
-      return statuteVersionsOptions(statute?.id ?? "");
-    }),
+    queries: versionedWorks.map(({ statuteId }) =>
+      statuteVersionsOptions(statuteId),
+    ),
   });
   const versionsByWork = new Map<
     string,
     NonNullable<(typeof versions)[number]["data"]>
   >();
-  for (const [index, work] of versionedWorks.entries()) {
+  for (const [index, { key }] of versionedWorks.entries()) {
     const list = versions[index]?.data;
     if (list !== undefined) {
-      versionsByWork.set(workKeyOf(work), list);
+      versionsByWork.set(key, list);
     }
   }
 
@@ -142,6 +170,8 @@ export const useDecisionProvisionAnchors = (
     if (document === null) {
       continue;
     }
+    // A seed only: one when this reader never had reason to read the list.
+    // The provision view reads it itself and counts from there.
     const versionCount = versionsByWork.get(key)?.length ?? 1;
     // The card quotes the consolidation the link opens, so a preview read
     // from another one is dropped rather than shown beside the wrong link.

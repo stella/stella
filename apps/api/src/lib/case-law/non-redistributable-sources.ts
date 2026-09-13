@@ -1,7 +1,8 @@
 import { Result, TaggedError } from "better-result";
-import { not } from "drizzle-orm";
+import { not, sql } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -16,6 +17,15 @@ export class NonRedistributableSourcesError extends TaggedError(
   message: string;
   cause?: unknown;
 }> {}
+
+const sourceRegistryError = (cause: unknown) =>
+  new NonRedistributableSourcesError({
+    message:
+      cause instanceof Error
+        ? cause.message
+        : "reading non-redistributable case-law sources failed",
+    cause,
+  });
 
 /**
  * The sources a public surface may not count or serve, read from the same
@@ -47,12 +57,47 @@ export const readNonRedistributableCaseLawSourceIds = async () =>
   await Result.tryPromise({
     try: async () =>
       await caseLawPublicReadDb(readNonRedistributableCaseLawSourceIdsQuery),
-    catch: (cause) =>
-      new NonRedistributableSourcesError({
-        message:
-          cause instanceof Error
-            ? cause.message
-            : "reading non-redistributable case-law sources failed",
-        cause,
-      }),
+    catch: (cause) => sourceRegistryError(cause),
+  });
+
+export type CaseLawSourceRegistry = {
+  /** The ids a public surface may not count or serve. */
+  excludedSourceIds: SafeId<"caseLawSource">[];
+  /** Display names, for the buckets an aggregation comes back with. */
+  nameById: Map<string, string>;
+};
+
+/**
+ * The registry an aggregating surface needs, in one read.
+ *
+ * A facet read wants both halves: the ineligible ids it must exclude before
+ * counting, and the names it will label whatever buckets come back with. The
+ * table holds one row per court feed, so reading it whole once costs less than
+ * reading the ids now and the names of the buckets later, on the far side of
+ * the aggregation.
+ */
+const readCaseLawSourceRegistryQuery = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawNonRedistributableSources,
+  async (tx: CaseLawPublicReadTransaction): Promise<CaseLawSourceRegistry> => {
+    const rows = await tx
+      .select({
+        id: caseLawSources.id,
+        name: caseLawSources.name,
+        redistributable: sql<boolean>`${redistributableCaseLawSource}`,
+      })
+      .from(caseLawSources);
+
+    return {
+      excludedSourceIds: rows
+        .filter(({ redistributable }) => !redistributable)
+        .map(({ id }) => id),
+      nameById: new Map(rows.map(({ id, name }) => [String(id), name])),
+    };
+  },
+);
+
+export const readCaseLawSourceRegistry = async () =>
+  await Result.tryPromise({
+    try: async () => await caseLawPublicReadDb(readCaseLawSourceRegistryQuery),
+    catch: (cause) => sourceRegistryError(cause),
   });

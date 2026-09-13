@@ -27,6 +27,22 @@ export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
 const SEARCH_TIMEOUT_MS = 30_000;
 
 /**
+ * How the engine serializes a search response body. Its own default is
+ * `pretty_json`, so every hit arrives indented: a newline, the nesting indent,
+ * and a space after each colon, for every field of every hit. A scan round
+ * reaching a few hundred passages pays that on all of them, and the parsed
+ * value is identical either way.
+ *
+ * The search endpoint has no way to return fewer fields per hit. Quickwit
+ * 0.9's `SearchRequestQueryString` declares `deny_unknown_fields` and its whole
+ * surface is query / aggs / search_field / snippet_fields / start_timestamp /
+ * end_timestamp / max_hits / start_offset / format / sort_by / count_all /
+ * allow_failed_splits. A hit is therefore the full stored document, and the
+ * body format is the only width this client controls.
+ */
+const SEARCH_RESPONSE_FORMAT = "json";
+
+/**
  * The engine's own commit timeout for `commit=wait_for`: how long it
  * will hold the response open waiting for the split to be published.
  *
@@ -775,6 +791,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
         const body: Record<string, unknown> = {
           query,
           max_hits: maxHits,
+          format: SEARCH_RESPONSE_FORMAT,
         };
         if (startOffset !== undefined) {
           body["start_offset"] = startOffset;
@@ -846,7 +863,12 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             headers: { "content-type": "application/json" },
             // Aggregations only: hits are the expensive part of the
             // response and the caller wants counts, not documents.
-            body: JSON.stringify({ query, max_hits: 0, aggs }),
+            body: JSON.stringify({
+              query,
+              max_hits: 0,
+              aggs,
+              format: SEARCH_RESPONSE_FORMAT,
+            }),
           },
           timeoutMs: AGGREGATION_TIMEOUT_MS,
         });
