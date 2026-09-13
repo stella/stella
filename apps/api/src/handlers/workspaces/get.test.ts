@@ -34,6 +34,9 @@ const workspaceRow = {
     displayName: "Acme s.r.o.",
     color: null,
   },
+  // Counted by a correlated subquery the handler declares as a query extra;
+  // the real aggregate is covered in document-counter.integration.test.ts.
+  stampedVersionCount: 2,
 } satisfies ReadWorkspaceSuccess;
 
 // The mock stands in for the database by applying the handler's own `where`,
@@ -73,7 +76,7 @@ describe("readWorkspaceHandler", () => {
   // constants the client now imports from `@stll/api-contract`. Pinning the
   // key set makes the next bulk table bolted onto the response fail here
   // rather than silently in the route's payload budget.
-  test("returns the matter row and its client card, and nothing else", async () => {
+  test("returns the matter row, its client card, and the stamped count", async () => {
     const result = await readWorkspace(workspaceRow);
 
     expect(Object.keys(result).sort()).toEqual(

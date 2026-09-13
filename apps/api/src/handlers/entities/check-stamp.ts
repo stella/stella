@@ -76,9 +76,13 @@ const config = {
     "embedded verification code identifies the version; the printed " +
     "reference string alone never resolves. The answer is match with the " +
     "entity id and name, its matter id and name, " +
-    "the reference, the version number the reference was frozen onto, and " +
+    "the reference, the version number the reference was frozen onto, " +
     "the document's current version number (higher than that one when the " +
-    "uploaded file is superseded), or match null. Nothing is stored: this is " +
+    "uploaded file is superseded), and currentStamp, the reference the " +
+    "document's current version carries (null when it carries none; it " +
+    "differs from the printed one once the document was moved to another " +
+    "matter or its matter re-referenced), or match null. " +
+    "Nothing is stored: this is " +
     "what distinguishes adding a new version of an existing document from " +
     "uploading a new one.",
   permissions: { workspace: ["read"] },

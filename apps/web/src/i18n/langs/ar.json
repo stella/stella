@@ -4661,9 +4661,9 @@
     "slugRequired": "المعرّف مطلوب"
   },
   "verify": {
+    "history": "{history, select, refiled {طُبع بالمرجع <bdi>{reference}</bdi>؛ وهو محفوظ الآن بالمرجع <bdi>{currentReference}</bdi> في الملف القانوني <bdi>{matterName}</bdi>.} superseded {يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}.} other {طُبع بالمرجع <bdi>{reference}</bdi>؛ وهو محفوظ الآن بالمرجع <bdi>{currentReference}</bdi> في الملف القانوني <bdi>{matterName}</bdi>. يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}.}}",
     "notFound": "لا يوجد مستند بهذا المرجع متاح في مؤسستك.",
-    "opened": "فُتح عبر المرجع <bdi>{reference}</bdi>.",
-    "superseded": "يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}."
+    "opened": "فُتح عبر المرجع <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "هذا الملف هو الإصدار {version, number} من <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) في الملف القانوني <bdi>{matterName}</bdi>.",
         "referenceHere": "هذا الملف هو الإصدار {version, number} من <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "أُزيل سطر المرجع من هذا الملف، لذا يُعامَل كمستند جديد ما لم تختر غير ذلك.",
+        "referenceRefiled": "المستند محفوظ الآن بالمرجع <bdi>{reference}</bdi>.",
         "referenceSuperseded": "يستند إلى الإصدار {basedOn, number}؛ والإصدار الحالي هو {current, number}.",
         "replaceOption": "رفع كإصدار جديد",
         "title": "رفع إصدار جديد أم إنشاء ملف جديد؟",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "اسم العمود، مثل تاريخ السريان"
     },
     "reference": "الرقم المرجعي",
+    "referenceChangeConfirmDescription": "{count, plural, zero {لا توجد إصدارات مستندات تحمل} one {إصدار مستند واحد يحمل} two {إصداران من المستندات يحملان} few {# إصدارات مستندات تحمل} many {# إصدارًا من المستندات تحمل} other {# إصدار مستند يحمل}} الرقم المرجعي <bdi>{oldReference}</bdi>. تحتفظ النسخ المطبوعة به ولا تزال تُفتح عبر رمز التحقق الخاص بها. أما الإصدارات الجديدة فسترقَّم ضمن <bdi>{newReference}</bdi>. ويبقى <bdi>{oldReference}</bdi> محجوزًا لهذا الملف القانوني ولا يمكن منحه لملف آخر.",
+    "referenceChangeConfirmTitle": "هل تريد تغيير الرقم المرجعي للملف القانوني؟",
     "referenceConventionHint": "التنسيق المفضل: {example}",
     "referenceFormatWarning": "لا يطابق التنسيق المفضل.",
     "referenceNumberingEmptyHint": "أدخل رقمًا مرجعيًا لبدء ترقيم مستندات هذا الملف القانوني.",
     "referenceNumberingHint": "تُرقَّم مستندات هذا الملف القانوني هكذا: <bdi>{firstDocument}</bdi>، <bdi>{secondDocument}</bdi>، وهكذا؛ ويضيف كل إصدار <bdi>.v1</bdi> و<bdi>.v2</bdi>.",
     "referencePlaceholder": "مثال: 2024/001",
+    "referenceRetired": "توجد مستندات مسجَّلة تحت {reference} في ملف قانوني آخر، لذا لا يمكن إعادة استخدامه.",
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {
       "parties": "الأطراف"

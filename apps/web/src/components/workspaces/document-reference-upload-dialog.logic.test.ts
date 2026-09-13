@@ -23,6 +23,7 @@ const referencedFile = (name: string): ReferencedFile => ({
     stamp: "2026/001/015.v3",
     versionNumber: 3,
     currentVersionNumber: 3,
+    currentStamp: "2026/001/015.v3",
   },
 });
 

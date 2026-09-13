@@ -4661,9 +4661,9 @@
     "slugRequired": "A slug kötelező"
   },
   "verify": {
+    "history": "{history, select, refiled {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben.} superseded {Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.} other {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben. Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.}}",
     "notFound": "A szervezetében nincs ilyen hivatkozási számú dokumentum.",
-    "opened": "Megnyitva a(z) <bdi>{reference}</bdi> hivatkozási szám alapján.",
-    "superseded": "Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}."
+    "opened": "Megnyitva a(z) <bdi>{reference}</bdi> hivatkozási szám alapján."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Ez a fájl a(z) <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. verziója a(z) <bdi>{matterName}</bdi> ügyben.",
         "referenceHere": "Ez a fájl a(z) <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. verziója.",
         "referenceLineRemoved": "A hivatkozási számot tartalmazó sort eltávolították ebből a fájlból, ezért új dokumentumként kezeljük, hacsak nem választ mást.",
+        "referenceRefiled": "A dokumentum most a(z) <bdi>{reference}</bdi> szám alatt szerepel.",
         "referenceSuperseded": "A(z) {basedOn, number}. verzión alapul; a jelenlegi a(z) {current, number}. verzió.",
         "replaceOption": "Feltöltés új verzióként",
         "title": "Új verzió feltöltése vagy új fájl létrehozása?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Oszlop neve, pl. Hatálybalépés dátuma"
     },
     "reference": "Hivatkozási szám",
+    "referenceChangeConfirmDescription": "{count, plural, one {# dokumentumverzió} other {# dokumentumverzió}} viseli a(z) <bdi>{oldReference}</bdi> hivatkozási számot. A kinyomtatott példányok megtartják, és továbbra is megnyithatók az ellenőrző kódjukkal. Az új verziók a(z) <bdi>{newReference}</bdi> szám alatt kapnak számozást. A(z) <bdi>{oldReference}</bdi> fenntartva marad ennek az ügynek, és nem adható másiknak.",
+    "referenceChangeConfirmTitle": "Módosítja az ügy hivatkozási számát?",
     "referenceConventionHint": "Előnyben részesített formátum: {example}",
     "referenceFormatWarning": "Nem egyezik az előnyben részesített formátummal.",
     "referenceNumberingEmptyHint": "Adjon meg hivatkozási számot, hogy az ügy dokumentumai számozást kapjanak.",
     "referenceNumberingHint": "Az ügy dokumentumai a következő számozást kapják: <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> és így tovább; minden verzió <bdi>.v1</bdi>, <bdi>.v2</bdi> végződést kap.",
     "referencePlaceholder": "pl. 2024/001",
+    "referenceRetired": "A(z) {reference} szám alatt egy másik ügyben már vannak dokumentumok, ezért nem használható újra.",
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {
       "parties": "Felek"

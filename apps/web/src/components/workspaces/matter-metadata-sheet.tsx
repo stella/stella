@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -27,13 +28,14 @@ import { cn } from "@stll/ui/utils";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { LeadSection } from "@/components/workspaces/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
+import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
+import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   useDeleteWorkspace,
@@ -41,6 +43,7 @@ import {
   useUpdateWorkspace,
 } from "@/lib/workspaces/mutations";
 import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
+import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
 
 type MatterMetadataPanelProps = {
   workspaceId: string;
@@ -48,6 +51,10 @@ type MatterMetadataPanelProps = {
 };
 
 type DuplicateMode = "metadata" | "content";
+
+type ReferenceConfirmation =
+  | { status: "closed" }
+  | { status: "confirming"; newReference: string };
 
 export const MatterMetadataPanel = ({
   workspaceId,
@@ -66,6 +73,8 @@ export const MatterMetadataPanel = ({
   const [referenceValue, setReferenceValue] = useState("");
   const [referenceDirty, setReferenceDirty] = useState(false);
   const [referenceError, setReferenceError] = useState("");
+  const [referenceConfirmation, setReferenceConfirmation] =
+    useState<ReferenceConfirmation>({ status: "closed" });
   const seededWorkspaceIdRef = useRef<string | null>(null);
 
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
@@ -75,6 +84,7 @@ export const MatterMetadataPanel = ({
   const canCreateWorkspace = usePermissions({ workspace: ["create"] });
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
+  const referenceConflictMessage = useReferenceConflictMessage();
 
   useExternalSyncEffect(() => {
     if (!workspace) {
@@ -137,23 +147,13 @@ export const MatterMetadataPanel = ({
     );
   };
 
-  const handleSaveReference = () => {
-    if (!workspace) {
-      return;
-    }
-    const trimmed = referenceValue.trim();
-    if (!trimmed || trimmed === workspace.reference) {
-      setReferenceValue(workspace.reference);
-      setReferenceDirty(false);
-      return;
-    }
-
+  const saveReference = (reference: string) => {
     setReferenceError("");
 
     updateWorkspace.mutate(
       {
         workspaceId,
-        update: { type: "reference", value: trimmed },
+        update: { type: "reference", value: reference },
       },
       {
         onSuccess: () => {
@@ -166,8 +166,9 @@ export const MatterMetadataPanel = ({
           );
         },
         onError: (error) => {
-          if (APIError.is(error) && error.status === 409) {
-            setReferenceError(t("workspaces.referenceTaken"));
+          const conflict = referenceConflictMessage(error, reference);
+          if (conflict !== null) {
+            setReferenceError(conflict);
             return;
           }
 
@@ -177,6 +178,56 @@ export const MatterMetadataPanel = ({
         },
       },
     );
+  };
+
+  const revertReference = () => {
+    if (!workspace) {
+      return;
+    }
+    setReferenceValue(workspace.reference);
+    setReferenceDirty(false);
+    setReferenceError("");
+  };
+
+  const handleSaveReference = () => {
+    if (!workspace) {
+      return;
+    }
+
+    const edit = resolveReferenceEdit({
+      currentReference: workspace.reference,
+      nextReference: referenceValue,
+      stampedVersionCount: workspace.stampedVersionCount,
+    });
+
+    switch (edit.type) {
+      case "discard":
+        revertReference();
+        return;
+      case "confirm":
+        setReferenceError("");
+        setReferenceConfirmation({
+          status: "confirming",
+          newReference: edit.reference,
+        });
+        return;
+      case "save":
+        saveReference(edit.reference);
+        return;
+      default:
+        edit satisfies never;
+        panic(`Unhandled reference edit: ${String(edit)}`);
+    }
+  };
+
+  const cancelReferenceChange = () => {
+    setReferenceConfirmation({ status: "closed" });
+    revertReference();
+  };
+
+  const confirmReferenceChange = (newReference: string) => {
+    setReferenceConfirmation({ status: "closed" });
+    saveReference(newReference);
   };
 
   const handleDeleteWorkspace = async () => {
@@ -327,6 +378,11 @@ export const MatterMetadataPanel = ({
           >
             <Input
               className="w-36 shrink-0 rounded-md shadow-none"
+              // Held closed until the save settles: the mutation only resolves
+              // after the matter refetch, so the field cannot blur again while
+              // `workspace.reference` is still the pre-save value and re-open
+              // the confirmation for an edit already on its way.
+              disabled={updateWorkspace.isPending}
               onBlur={handleSaveReference}
               onChange={(e) => {
                 setReferenceDirty(true);
@@ -456,6 +512,17 @@ export const MatterMetadataPanel = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+      {referenceConfirmation.status === "confirming" && (
+        <ReferenceChangeConfirmation
+          newReference={referenceConfirmation.newReference}
+          oldReference={workspace.reference}
+          onCancel={cancelReferenceChange}
+          onConfirm={() =>
+            confirmReferenceChange(referenceConfirmation.newReference)
+          }
+          stampedVersionCount={workspace.stampedVersionCount}
+        />
+      )}
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmLabel={t("common.delete")}

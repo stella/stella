@@ -24,6 +24,7 @@ const buildReference = (
     stamp: "2026/001/015.v3",
     versionNumber: 3,
     currentVersionNumber: 3,
+    currentStamp: "2026/001/015.v3",
     ...overrides,
   },
   evidence,
@@ -46,6 +47,7 @@ describe("deciding what a dropped file is offered as", () => {
         documentName: "Engagement letter.docx",
         matterName: "Novak v. Horak",
         documentReference: "2026/001/015",
+        refiledReference: null,
         versionNumber: 3,
         nextVersionNumber: 4,
       },
@@ -64,6 +66,7 @@ describe("deciding what a dropped file is offered as", () => {
         stamp: "2026/004/002.v1",
         versionNumber: 1,
         currentVersionNumber: 1,
+        currentStamp: "2026/004/002.v1",
       }),
       droppedOnEntityId: DROPPED_ON,
       entityFileName: "Engagement letter.docx",
@@ -78,6 +81,7 @@ describe("deciding what a dropped file is offered as", () => {
         documentName: "Share purchase agreement.docx",
         matterName: "Kovac acquisition",
         documentReference: "2026/004/002",
+        refiledReference: null,
         versionNumber: 1,
         nextVersionNumber: 2,
       },
@@ -103,6 +107,61 @@ describe("deciding what a dropped file is offered as", () => {
       currentVersionNumber: 5,
     });
     expect(decision.document.nextVersionNumber).toBe(6);
+  });
+
+  // Moving a document to another matter, or re-referencing its matter, leaves
+  // the printed stamp behind: the file names a reference the document no
+  // longer carries, and only the dialog can say where it went.
+  test("a file printed before the document was refiled names the reference it carries now", () => {
+    const decision = resolveVersionOrNewFileDecision({
+      reference: buildReference({
+        stamp: "2026/001/015.v3",
+        versionNumber: 3,
+        currentVersionNumber: 4,
+        currentStamp: "2026/007/003.v4",
+      }),
+      droppedOnEntityId: DROPPED_ON,
+      entityFileName: "Engagement letter.docx",
+      droppedFileName: "Engagement letter.docx",
+    });
+
+    if (decision.type === "extension") {
+      throw new Error("expected a reference decision");
+    }
+    expect(decision.document.documentReference).toBe("2026/001/015");
+    expect(decision.document.refiledReference).toBe("2026/007/003");
+  });
+
+  test("a newer version under the same reference is not a refiling", () => {
+    const decision = resolveVersionOrNewFileDecision({
+      reference: buildReference({
+        versionNumber: 3,
+        currentVersionNumber: 5,
+        currentStamp: "2026/001/015.v5",
+      }),
+      droppedOnEntityId: DROPPED_ON,
+      entityFileName: "Engagement letter.docx",
+      droppedFileName: "Engagement letter.docx",
+    });
+
+    if (decision.type === "extension") {
+      throw new Error("expected a reference decision");
+    }
+    expect(decision.document.refiledReference).toBeNull();
+  });
+
+  test("a document whose current version carries no reference reports none", () => {
+    const decision = resolveVersionOrNewFileDecision({
+      reference: buildReference({ currentStamp: null }),
+      droppedOnEntityId: DROPPED_ON,
+      entityFileName: "Engagement letter.docx",
+      droppedFileName: "Engagement letter.docx",
+    });
+
+    if (decision.type === "extension") {
+      throw new Error("expected a reference decision");
+    }
+    expect(decision.document.refiledReference).toBeNull();
   });
 
   test("a file taken from the current version reports no supersession", () => {

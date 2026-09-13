@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { documentReferenceBase, refiledStamp } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -218,6 +219,9 @@ const ReferencedFileRow = ({
   // to the row by name.
   const selectId = useId();
   const bdi = (chunks: ReactNode) => <BidiText>{chunks}</BidiText>;
+  const refiled = refiledStamp(match);
+  const refiledReference =
+    refiled === null ? null : documentReferenceBase(refiled);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3">
@@ -235,6 +239,14 @@ const ReferencedFileRow = ({
           version: match.versionNumber,
         })}
       </span>
+      {refiledReference !== null && (
+        <span className="text-muted-foreground text-xs">
+          {t.rich("workspaces.files.versionOrNewFile.referenceRefiled", {
+            bdi,
+            reference: refiledReference,
+          })}
+        </span>
+      )}
       {match.versionNumber < match.currentVersionNumber && (
         <span className="text-muted-foreground text-xs">
           {t("workspaces.files.versionOrNewFile.referenceSuperseded", {

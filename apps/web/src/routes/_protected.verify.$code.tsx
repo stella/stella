@@ -1,7 +1,10 @@
+import type { ReactNode } from "react";
+
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { isVerificationCode } from "@stll/api-contract";
+import { isVerificationCode, refiledStamp } from "@stll/api-contract";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Loader, LoaderState } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
@@ -33,6 +36,8 @@ type ReferenceLookup =
       fileFieldId: string | null;
       /** The reference frozen onto the version the code names. */
       stamp: string;
+      /** The reference the document's current version carries, if any. */
+      currentStamp: string | null;
       versionNumber: number;
       workspaceId: string;
       workspaceName: string;
@@ -83,6 +88,7 @@ export const Route = createFileRoute("/_protected/verify/$code")({
       entityId: match.entityId,
       fileFieldId: fileTab?.id ?? null,
       stamp: match.stamp,
+      currentStamp: match.currentStamp,
       versionNumber: match.versionNumber,
       workspaceId: match.workspaceId,
       workspaceName: match.workspaceName,
@@ -115,6 +121,24 @@ type ReferenceOpenerProps = {
 };
 
 /**
+ * Which sentences the toast owes the reader. The file in hand can be out of
+ * date, filed under a reference the document no longer carries, or both; the
+ * message renders them as one text so every language can order them itself.
+ */
+const referenceHistory = ({
+  isSuperseded,
+  refiledReference,
+}: {
+  isSuperseded: boolean;
+  refiledReference: string | null;
+}): "both" | "refiled" | "superseded" => {
+  if (refiledReference === null) {
+    return "superseded";
+  }
+  return isSuperseded ? "both" : "refiled";
+};
+
+/**
  * A resolved code goes straight to the document; the reference it was opened
  * by is reported in a toast rather than a page, so nothing stands between the
  * reader and what they came to check.
@@ -123,6 +147,7 @@ const ReferenceOpener = ({ match }: ReferenceOpenerProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const isSuperseded = match.versionNumber < match.currentVersionNumber;
+  const refiledReference = refiledStamp(match);
   const documentRoute = getEntityDocumentRoute({
     entityId: match.entityId,
     fileFieldId: match.fileFieldId,
@@ -152,16 +177,19 @@ const ReferenceOpener = ({ match }: ReferenceOpenerProps) => {
   };
 
   useMountEffect(() => {
-    const title = t.rich("verify.opened", {
-      bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
-      reference: match.stamp,
-    });
+    const bdi = (chunks: ReactNode) => <BidiText>{chunks}</BidiText>;
+    const title = t.rich("verify.opened", { bdi, reference: match.stamp });
 
-    if (isSuperseded) {
+    if (isSuperseded || refiledReference !== null) {
       stellaToast.add({
         title,
-        description: t("verify.superseded", {
+        description: t.rich("verify.history", {
+          bdi,
+          currentReference: refiledReference ?? "",
           currentVersion: match.currentVersionNumber,
+          history: referenceHistory({ isSuperseded, refiledReference }),
+          matterName: match.workspaceName,
+          reference: match.stamp,
           version: match.versionNumber,
         }),
         // Long enough to read a two-line notice and reach the action.

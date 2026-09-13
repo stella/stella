@@ -4661,9 +4661,9 @@
     "slugRequired": "Slug ir obligāts"
   },
   "verify": {
+    "history": "{history, select, refiled {Izdrukāts ar atsauces numuru <bdi>{reference}</bdi>; tagad dokuments ir reģistrēts ar numuru <bdi>{currentReference}</bdi> lietā <bdi>{matterName}</bdi>.} superseded {Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}.} other {Izdrukāts ar atsauces numuru <bdi>{reference}</bdi>; tagad dokuments ir reģistrēts ar numuru <bdi>{currentReference}</bdi> lietā <bdi>{matterName}</bdi>. Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}.}}",
     "notFound": "Jūsu organizācijā nav pieejams neviens dokuments ar šo atsauces numuru.",
-    "opened": "Atvērts pēc atsauces numura <bdi>{reference}</bdi>.",
-    "superseded": "Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}."
+    "opened": "Atvērts pēc atsauces numura <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Šis fails ir dokumenta <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. versija lietā <bdi>{matterName}</bdi>.",
         "referenceHere": "Šis fails ir dokumenta <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. versija.",
         "referenceLineRemoved": "No šī faila ir noņemta atsauces numura rinda, tāpēc tas tiek uzskatīts par jaunu dokumentu, ja vien neizvēlaties citādi.",
+        "referenceRefiled": "Dokuments tagad ir reģistrēts ar numuru <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Tas balstās uz {basedOn, number}. versiju; pašreizējā ir {current, number}. versija.",
         "replaceOption": "Augšupielādēt kā jaunu versiju",
         "title": "Augšupielādēt jaunu versiju vai izveidot jaunu failu?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Kolonnas nosaukums, piem., spēkā stāšanās datums"
     },
     "reference": "Atsauces numurs",
+    "referenceChangeConfirmDescription": "{count, plural, zero {# dokumentu versiju} one {# dokumenta versija} other {# dokumentu versijas}} satur atsauces numuru <bdi>{oldReference}</bdi>. Izdrukātie eksemplāri to saglabā un joprojām atveras pēc sava pārbaudes koda. Jaunās versijas tiks numurētas ar <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> paliek rezervēts šai lietai, un to nevar piešķirt citai.",
+    "referenceChangeConfirmTitle": "Mainīt lietas atsauces numuru?",
     "referenceConventionHint": "Vēlamais formāts: {example}",
     "referenceFormatWarning": "Neatbilst vēlamajam formātam.",
     "referenceNumberingEmptyHint": "Norādiet atsauces numuru, lai sāktu numurēt šīs lietas dokumentus.",
     "referenceNumberingHint": "Šīs lietas dokumenti tiek numurēti <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> un tā tālāk; katra versija pievieno <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "piem. 2024/001",
+    "referenceRetired": "Ar numuru {reference} dokumenti ir reģistrēti citā lietā, tāpēc to nevar izmantot atkārtoti.",
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
       "parties": "Puses"

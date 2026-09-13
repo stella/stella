@@ -192,7 +192,11 @@ export const importInfoSoudAgendaItems = async ({
       createdBy: actorUserId,
     }));
 
-    await insertEntityVersions(tx, versions);
+    await insertEntityVersions({
+      tx,
+      values: versions,
+      stampOrigin: "issued",
+    });
     const currentVersionCases = versions.map(
       (version) => sql`when ${version.entityId} then ${version.id}`,
     );

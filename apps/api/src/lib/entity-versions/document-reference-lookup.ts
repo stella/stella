@@ -14,7 +14,8 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, isNull, max } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { DocumentReferenceMatch } from "@stll/api-contract";
 
@@ -27,6 +28,12 @@ type LookupOptions = {
   organizationId: SafeId<"organization">;
 };
 
+/**
+ * The version the document shows now, joined beside the matched one so the
+ * reference it was refiled under costs no extra round trip.
+ */
+const currentVersions = alias(entityVersions, "current_version");
+
 /** The columns the lookup projects, before the current-version read. */
 const MATCH_COLUMNS = {
   entityId: entities.id,
@@ -35,6 +42,8 @@ const MATCH_COLUMNS = {
   workspaceName: workspaces.name,
   stamp: entityVersions.stamp,
   versionNumber: entityVersions.versionNumber,
+  currentStamp: currentVersions.stamp,
+  currentVersionNumber: currentVersions.versionNumber,
 };
 
 /** What {@link completeMatch} reads off a matched row, structurally, so the
@@ -46,31 +55,15 @@ type MatchedVersion = {
   workspaceName: string;
   stamp: string | null;
   versionNumber: number;
+  currentStamp: string | null;
+  currentVersionNumber: number | null;
 };
 
-/**
- * Second and last query of a lookup: the document's current version number.
- * One aggregate over the entity's versions, never a read per version.
- */
-const completeMatch = async (
-  tx: Transaction,
-  row: MatchedVersion,
-): Promise<DocumentReferenceMatch | null> => {
+const completeMatch = (row: MatchedVersion): DocumentReferenceMatch | null => {
   // A version carrying no reference cannot be what a reference resolved to.
   if (!row.stamp) {
     return null;
   }
-
-  const rows = await tx
-    .select({ current: max(entityVersions.versionNumber) })
-    .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.entityId, row.entityId),
-        eq(entityVersions.workspaceId, row.workspaceId),
-        isNull(entityVersions.deletedAt),
-      ),
-    );
 
   return {
     entityId: row.entityId,
@@ -79,11 +72,10 @@ const completeMatch = async (
     workspaceName: row.workspaceName,
     stamp: row.stamp,
     versionNumber: row.versionNumber,
-    // The matched row is itself non-deleted and belongs to this aggregate's
-    // set, so a maximum exists.
+    currentStamp: row.currentStamp,
     currentVersionNumber:
-      rows.at(0)?.current ??
-      panic("Document reference matched a version its entity has none of"),
+      row.currentVersionNumber ??
+      panic("Document reference matched an entity without a current version"),
   };
 };
 
@@ -110,6 +102,10 @@ export const lookupByVerificationCode = async ({
         eq(workspaces.organizationId, organizationId),
       ),
     )
+    .leftJoin(
+      currentVersions,
+      eq(entities.currentVersionId, currentVersions.id),
+    )
     .where(
       and(
         eq(entityVersions.verificationCode, verificationCode),
@@ -119,5 +115,5 @@ export const lookupByVerificationCode = async ({
     .limit(1);
 
   const row = rows.at(0);
-  return row ? await completeMatch(tx, row) : null;
+  return row ? completeMatch(row) : null;
 };

@@ -4661,9 +4661,9 @@
     "slugRequired": "El slug es obligatorio"
   },
   "verify": {
+    "history": "{history, select, refiled {Impreso con la referencia <bdi>{reference}</bdi>; ahora se archiva con la referencia <bdi>{currentReference}</bdi> en el asunto <bdi>{matterName}</bdi>.} superseded {Esta referencia apunta a la versión {version, number}; la versión actual es la {currentVersion, number}.} other {Impreso con la referencia <bdi>{reference}</bdi>; ahora se archiva con la referencia <bdi>{currentReference}</bdi> en el asunto <bdi>{matterName}</bdi>. Esta referencia apunta a la versión {version, number}; la versión actual es la {currentVersion, number}.}}",
     "notFound": "No hay ningún documento con esta referencia disponible en su organización.",
-    "opened": "Abierto mediante la referencia <bdi>{reference}</bdi>.",
-    "superseded": "Esta referencia apunta a la versión {version, number}; la versión actual es la {currentVersion, number}."
+    "opened": "Abierto mediante la referencia <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Este archivo es la versión {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) en el asunto <bdi>{matterName}</bdi>.",
         "referenceHere": "Este archivo es la versión {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "Se ha quitado la línea de la referencia de este archivo, así que se trata como un documento nuevo salvo que elijas otra cosa.",
+        "referenceRefiled": "El documento ahora se archiva con la referencia <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Parte de la versión {basedOn, number}; la versión actual es la {current, number}.",
         "replaceOption": "Subir como nueva versión",
         "title": "¿Subir nueva versión o crear archivo nuevo?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Nombre de columna, p. ej. Fecha de vigencia"
     },
     "reference": "Número de referencia",
+    "referenceChangeConfirmDescription": "{count, plural, one {# versión de documento lleva} other {# versiones de documentos llevan}} la referencia <bdi>{oldReference}</bdi>. Las copias impresas la conservan y se siguen abriendo con su código de verificación. Las versiones nuevas se numerarán con <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> queda reservada para este asunto y no puede asignarse a otro.",
+    "referenceChangeConfirmTitle": "¿Cambiar la referencia del asunto?",
     "referenceConventionHint": "Formato preferido: {example}",
     "referenceFormatWarning": "No coincide con el formato preferido.",
     "referenceNumberingEmptyHint": "Añada un número de referencia para empezar a numerar los documentos de este asunto.",
     "referenceNumberingHint": "Los documentos de este asunto se numeran <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi>, y así sucesivamente; cada versión añade <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "p. ej. 2024/001",
+    "referenceRetired": "Ya hay documentos registrados con {reference} en otro asunto, por lo que no se puede reutilizar.",
     "referenceTaken": "Este número de referencia ya está en uso",
     "sections": {
       "parties": "Partes"

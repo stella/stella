@@ -4661,9 +4661,9 @@
     "slugRequired": "Slug je povinný"
   },
   "verify": {
+    "history": "{history, select, refiled {Vytlačené pod číslom <bdi>{reference}</bdi>; teraz je dokument vedený pod číslom <bdi>{currentReference}</bdi> v spise <bdi>{matterName}</bdi>.} superseded {Toto referenčné číslo odkazuje na verziu {version, number}; aktuálna verzia je {currentVersion, number}.} other {Vytlačené pod číslom <bdi>{reference}</bdi>; teraz je dokument vedený pod číslom <bdi>{currentReference}</bdi> v spise <bdi>{matterName}</bdi>. Toto referenčné číslo odkazuje na verziu {version, number}; aktuálna verzia je {currentVersion, number}.}}",
     "notFound": "Vo vašej organizácii nie je k dispozícii žiadny dokument s týmto referenčným číslom.",
-    "opened": "Otvorené podľa referenčného čísla <bdi>{reference}</bdi>.",
-    "superseded": "Toto referenčné číslo odkazuje na verziu {version, number}; aktuálna verzia je {currentVersion, number}."
+    "opened": "Otvorené podľa referenčného čísla <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Tento súbor je verzia {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) v spise <bdi>{matterName}</bdi>.",
         "referenceHere": "Tento súbor je verzia {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "Z tohto súboru bol odstránený riadok s referenčným číslom, preto s ním zaobchádzame ako s novým dokumentom, ak nezvolíte inak.",
+        "referenceRefiled": "Dokument je teraz vedený pod číslom <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Vychádza z verzie {basedOn, number}; aktuálna je verzia {current, number}.",
         "replaceOption": "Nahrať ako novú verziu",
         "title": "Nahrať novú verziu alebo vytvoriť nový súbor?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Názov stĺpca, napr. Dátum účinnosti"
     },
     "reference": "Referenčné číslo",
+    "referenceChangeConfirmDescription": "{count, plural, one {# verzia dokumentu nesie} few {# verzie dokumentov nesú} other {# verzií dokumentov nesie}} referenčné číslo <bdi>{oldReference}</bdi>. Vytlačené kópie si ho ponechajú a stále sa otvoria podľa svojho overovacieho kódu. Nové verzie sa budú číslovať pod <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> zostáva vyhradené tomuto spisu a nemožno ho prideliť inému.",
+    "referenceChangeConfirmTitle": "Zmeniť referenčné číslo spisu?",
     "referenceConventionHint": "Preferovaný formát: {example}",
     "referenceFormatWarning": "Nezhoduje sa s preferovaným formátom.",
     "referenceNumberingEmptyHint": "Zadajte referenčné číslo a dokumenty v tomto spise sa začnú číslovať.",
     "referenceNumberingHint": "Dokumenty v tomto spise sa číslujú <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> a tak ďalej; každá verzia pridáva <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "napr. 2024/001",
+    "referenceRetired": "Pod číslom {reference} sú dokumenty vedené v inom spise, preto ho nemožno použiť znova.",
     "referenceTaken": "Toto referenčné číslo sa už používa",
     "sections": {
       "parties": "Strany"

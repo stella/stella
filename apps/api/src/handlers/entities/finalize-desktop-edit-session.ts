@@ -454,7 +454,6 @@ export const finalizeDesktopEditSessionHandler = async ({
           workspace?.reference ??
           panic("Workspace not found for finalized desktop edit session"),
       });
-
       // The file Word opened came from clean stored bytes, so the checkpoint
       // normally carries nothing. It carries a reference when the editor pasted
       // a stamped download over it, and that must not become this version's

@@ -370,7 +370,6 @@ export const writeFileVersion = async ({
     versionNumber,
     workspaceReference: workspace?.reference ?? null,
   });
-
   await insertEntityVersion(tx, {
     collaborationContributorUserIds:
       versionMetadata?.collaborationContributorUserIds,

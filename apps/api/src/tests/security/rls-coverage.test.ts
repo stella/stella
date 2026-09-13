@@ -99,6 +99,14 @@ describe("policy coverage", () => {
     // org loops can't express either shape; the dedicated test below
     // asserts its real policy boundaries.
     "ai_memories",
+    // The reference ledger is an organization-wide registry of matter
+    // references that have numbered documents; its nullable workspace_id
+    // names the owning matter, it is not what admits the row. The matter
+    // update reads it precisely to refuse a reference owned by a DIFFERENT
+    // matter, and a null owner (deleted matter) must still refuse, so
+    // workspace policies would hide exactly the rows the check exists to
+    // find. Organization is the real boundary and the org policies pin it.
+    "document_reference_counters",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const INSERT_ONLY = new Set([
@@ -323,6 +331,10 @@ describe("policy coverage", () => {
     [
       "usage_events",
       "metering ledger whose workspace_id is nullable attribution surviving matter deletion; the pair needs ON DELETE SET NULL (workspace_id), which drizzle cannot declare",
+    ],
+    [
+      "document_reference_counters",
+      "reference registry whose workspace_id is the nullable owning matter, retained as NULL after matter deletion so the reference stays retired; the pair needs ON DELETE SET NULL (workspace_id), which drizzle cannot declare",
     ],
   ]);
 

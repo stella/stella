@@ -6,6 +6,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { toDocumentReference } from "@/api/lib/document-reference";
 import { upsertSearchDocument as upsertSearchDocumentWithDependencies } from "@/api/lib/search/index-entity";
 import type { IndexEntityDependencies } from "@/api/lib/search/index-entity";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -32,7 +33,7 @@ const extractedAtToken =
   "2026-04-30 08:01:00.000982" as TimestampCasToken;
 // The token select chain: rootDb.select({...}).from(...).where(...).limit(1)
 const selectLimitMock = mock(async (_limit: number) => [
-  { semanticUpdatedAtToken, extractedAtToken },
+  { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
 ]);
 const selectMock = mock((_fields: unknown) => ({
   from: (_table: unknown) => ({
@@ -99,8 +100,19 @@ const entityRow = {
   workspaceId: toSafeId<"workspace">("ws_1"),
 };
 const findFirstMock = mock(async () => entityRow);
-let latestVersionId = entityRow.currentVersion.id;
-const latestVersionFindFirstMock = mock(async () => ({ id: latestVersionId }));
+type VersionRow = {
+  deletedAt: Date | null;
+  id: SafeId<"entityVersion">;
+  stamp: string | null;
+};
+/** Newest first, the order the production query asks for. */
+const currentVersionOnly = (): VersionRow[] => [
+  { deletedAt: null, id: entityRow.currentVersion.id, stamp: null },
+];
+let versionRows = currentVersionOnly();
+const versionsFindManyMock = mock(
+  async (): Promise<VersionRow[]> => versionRows,
+);
 const transactionMock = mock(
   async (
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
@@ -110,7 +122,7 @@ const transactionMock = mock(
 const database = asTestRaw<NonNullable<IndexEntityDependencies["database"]>>({
   query: {
     entities: { findFirst: findFirstMock },
-    entityVersions: { findFirst: latestVersionFindFirstMock },
+    entityVersions: { findMany: versionsFindManyMock },
   },
   select: selectMock,
   transaction: transactionMock,
@@ -130,12 +142,12 @@ beforeEach(() => {
   selectMock.mockClear();
   selectLimitMock.mockClear();
   selectLimitMock.mockResolvedValue([
-    { semanticUpdatedAtToken, extractedAtToken },
+    { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
   ]);
   findFirstMock.mockClear();
   findFirstMock.mockResolvedValue(entityRow);
-  latestVersionId = entityRow.currentVersion.id;
-  latestVersionFindFirstMock.mockClear();
+  versionRows = currentVersionOnly();
+  versionsFindManyMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
   transactionMock.mockClear();
 });
@@ -147,7 +159,11 @@ afterEach(() => {
 test("persists an entity's semantic updated timestamp when indexing", async () => {
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -178,7 +194,11 @@ test("persists an entity's semantic updated timestamp when indexing", async () =
 test("rejects an out-of-order projection against the authoritative entity", async () => {
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -203,6 +223,7 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
 });
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
+  executeMock.mockResolvedValueOnce([{ entityId: entityRow.id }]);
   executeMock.mockResolvedValueOnce([]);
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
@@ -221,7 +242,7 @@ test("propagates workspace activity failures from the projection transaction", a
 
   expect(rejection).toBe(activityFailure);
   expect(transactionMock).toHaveBeenCalledTimes(1);
-  expect(executeMock).toHaveBeenCalledTimes(4);
+  expect(executeMock).toHaveBeenCalledTimes(5);
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {
@@ -295,7 +316,11 @@ test("excludes stale extracted text and fences its observed provenance", async (
   });
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -386,7 +411,11 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
   expect(
     stringParamsOfExecutedQueries().some((param) => param.includes(legacyText)),
   ).toBe(true);
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -402,7 +431,14 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
 test("excludes legacy extracted text after a deleted-version rollback", async () => {
   const withdrawnText = "withdrawn-extracted-marker";
   const withdrawn = await encryptedFor(withdrawnText);
-  latestVersionId = toSafeId<"entityVersion">("withdrawn_version");
+  versionRows = [
+    {
+      deletedAt: new Date("2026-04-30T09:00:00.000Z"),
+      id: toSafeId<"entityVersion">("withdrawn_version"),
+      stamp: null,
+    },
+    ...currentVersionOnly(),
+  ];
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
@@ -429,9 +465,105 @@ test("excludes legacy extracted text after a deleted-version rollback", async ()
       param.includes(withdrawnText),
     ),
   ).toBe(false);
-  expect(latestVersionFindFirstMock).toHaveBeenCalledWith(
+  expect(versionsFindManyMock).toHaveBeenCalledWith(
     expect.objectContaining({
       orderBy: { versionNumber: "desc", id: "desc" },
     }),
+  );
+});
+
+// A document keeps the reference printed on each of its versions, so moving
+// it between matters (or re-referencing a matter) leaves one document under
+// several references over its life. Searching any of them has to find it,
+// which means the projection carries all of them, not only the current one.
+const MATTER_REFERENCE = "2026/001";
+const LATER_MATTER_REFERENCE = "2027/004";
+// Derived from the minting helper, so a change to the stamp format breaks
+// this fixture instead of silently leaving the projection behind.
+const firstStamp = toDocumentReference({
+  matterReference: MATTER_REFERENCE,
+  docSequence: 15,
+  versionNumber: 1,
+});
+const movedStamp = toDocumentReference({
+  matterReference: LATER_MATTER_REFERENCE,
+  docSequence: 2,
+  versionNumber: 2,
+});
+const movedStampV3 = toDocumentReference({
+  matterReference: LATER_MATTER_REFERENCE,
+  docSequence: 2,
+  versionNumber: 3,
+});
+
+const stampedVersion = (stamp: string, suffix: number): VersionRow => ({
+  deletedAt: null,
+  id: toSafeId<"entityVersion">(`v_stamped_${String(suffix)}`),
+  stamp,
+});
+
+/**
+ * The one `searchable_text` the projection binds. Deduplicated because the
+ * insert binds it twice: the stored column, and the tsvector it builds.
+ */
+const projectedSearchableTextContaining = (marker: string): string => {
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .sql.includes("INSERT INTO search_documents"),
+  )?.[0];
+  if (!query) {
+    return "";
+  }
+  const matching = new Set(
+    new PgDialect()
+      .sqlToQuery(query)
+      .params.filter((param): param is string => typeof param === "string")
+      .filter((param) => param.includes(marker)),
+  );
+  expect([...matching]).toHaveLength(1);
+  return [...matching].at(0) ?? "";
+};
+
+const occurrencesOf = (text: string, token: string): number =>
+  text.split(/\s+/u).filter((part) => part === token).length;
+
+test("indexes every reference the document's live versions carry", async () => {
+  versionRows = [
+    stampedVersion(movedStampV3, 3),
+    stampedVersion(movedStamp, 2),
+    stampedVersion(firstStamp, 1),
+  ];
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  const text = projectedSearchableTextContaining(firstStamp);
+  for (const stamp of [firstStamp, movedStamp, movedStampV3]) {
+    expect(occurrencesOf(text, stamp)).toBe(1);
+  }
+  // PostgreSQL's parser reads a whole stamp as one token, so the version-less
+  // form a reader normally types has to be emitted on its own.
+  expect(occurrencesOf(text, `${MATTER_REFERENCE}/015`)).toBe(1);
+  // Two versions share the moved reference; it is still emitted once.
+  expect(occurrencesOf(text, `${LATER_MATTER_REFERENCE}/002`)).toBe(1);
+});
+
+test("drops the reference of a version that was deleted", async () => {
+  versionRows = [
+    { ...stampedVersion(movedStamp, 2), deletedAt: new Date() },
+    stampedVersion(firstStamp, 1),
+  ];
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  const text = projectedSearchableTextContaining(firstStamp);
+  expect(text).not.toContain(LATER_MATTER_REFERENCE);
+});
+
+test("bounds the versions one projection reads", async () => {
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  expect(versionsFindManyMock).toHaveBeenCalledWith(
+    expect.objectContaining({ limit: expect.any(Number) }),
   );
 });

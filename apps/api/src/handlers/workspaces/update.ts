@@ -3,10 +3,17 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  contacts,
+  documentReferenceCounters,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -95,6 +102,63 @@ const validateLeadIsMember = async (
     };
   }
   return null;
+};
+
+type RetiredReferenceCheckOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  reference: string;
+};
+
+type RetiredReferenceFailure = {
+  ok: false;
+  status: 409;
+  code: typeof MATTER_REFERENCE_RETIRED_CODE;
+  message: string;
+};
+
+/**
+ * Refuse a reference another matter has already numbered documents under.
+ *
+ * Those stamps are printed inside files that cannot be reissued, so the
+ * reference names that matter permanently. A null owner is a deleted matter:
+ * the ledger row outlives it precisely so the reference stays retired instead
+ * of looking free. The matter that owns the reference may always return to it.
+ */
+const checkReferenceNotRetired = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  reference,
+}: RetiredReferenceCheckOptions): Promise<RetiredReferenceFailure | null> => {
+  const ledgerRows = await tx
+    .select({
+      lastValue: documentReferenceCounters.lastValue,
+      workspaceId: documentReferenceCounters.workspaceId,
+    })
+    .from(documentReferenceCounters)
+    .where(
+      and(
+        eq(documentReferenceCounters.organizationId, organizationId),
+        eq(documentReferenceCounters.reference, reference),
+      ),
+    )
+    .limit(1);
+
+  const ledger = ledgerRows.at(0);
+  if (!ledger || ledger.lastValue === 0 || ledger.workspaceId === workspaceId) {
+    return null;
+  }
+
+  return {
+    ok: false,
+    status: 409,
+    code: MATTER_REFERENCE_RETIRED_CODE,
+    message:
+      "Documents have already been numbered under this reference, so it " +
+      "belongs to the matter that numbered them and cannot be reused.",
+  };
 };
 
 export type UpdateWorkspaceHandlerProps = {
@@ -228,6 +292,23 @@ export const updateWorkspaceHandler = async function* ({
       return leadCheck;
     }
 
+    // Before the write, so a reference that is both retired and currently held
+    // answers with the specific refusal rather than the unique-violation 409.
+    if (
+      body.reference !== undefined &&
+      body.reference !== workspace.reference
+    ) {
+      const retired = await checkReferenceNotRetired({
+        tx,
+        organizationId,
+        workspaceId,
+        reference: body.reference,
+      });
+      if (retired) {
+        return retired;
+      }
+    }
+
     await tx
       .update(workspaces)
       .set({
@@ -331,11 +412,15 @@ export const updateWorkspaceHandler = async function* ({
     return yield* Result.err(txResult.error);
   }
 
-  if (!txResult.value.ok) {
+  const failure = txResult.value;
+  if (!failure.ok) {
     return yield* Result.err(
       new HandlerError({
-        status: txResult.value.status,
-        message: txResult.value.message,
+        status: failure.status,
+        message: failure.message,
+        // Only the retired-reference refusal carries a code; the status is its
+        // discriminator, so a branch without one cannot reach this spread.
+        ...(failure.status === 409 ? { code: failure.code } : {}),
       }),
     );
   }

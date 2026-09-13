@@ -4661,9 +4661,9 @@
     "slugRequired": "O slug é obrigatório"
   },
   "verify": {
+    "history": "{history, select, refiled {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>.} superseded {Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.} other {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>. Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.}}",
     "notFound": "Nenhum documento com esta referência está disponível na sua organização.",
-    "opened": "Aberto pela referência <bdi>{reference}</bdi>.",
-    "superseded": "Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}."
+    "opened": "Aberto pela referência <bdi>{reference}</bdi>."
   },
   "webSearch": {
     "settings": {
@@ -4843,6 +4843,7 @@
         "referenceElsewhere": "Este arquivo é a versão {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) no caso <bdi>{matterName}</bdi>.",
         "referenceHere": "Este arquivo é a versão {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
         "referenceLineRemoved": "A linha da referência foi removida deste arquivo, por isso ele é tratado como um documento novo, a menos que você escolha outra opção.",
+        "referenceRefiled": "O documento agora está arquivado com a referência <bdi>{reference}</bdi>.",
         "referenceSuperseded": "Ele parte da versão {basedOn, number}; a versão atual é a {current, number}.",
         "replaceOption": "Enviar como nova versão",
         "title": "Enviar nova versão ou criar novo arquivo?",
@@ -5322,11 +5323,14 @@
       "untitledColumn": "Nome da coluna, ex.: Data de vigência"
     },
     "reference": "Número de referência",
+    "referenceChangeConfirmDescription": "{count, plural, one {# versão de documento tem} other {# versões de documentos têm}} a referência <bdi>{oldReference}</bdi>. As cópias impressas a mantêm e continuam abrindo pelo código de verificação. As novas versões serão numeradas em <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> permanece reservada para este caso e não pode ser atribuída a outro.",
+    "referenceChangeConfirmTitle": "Alterar a referência do caso?",
     "referenceConventionHint": "Formato preferido: {example}",
     "referenceFormatWarning": "Não corresponde ao formato preferido.",
     "referenceNumberingEmptyHint": "Informe um número de referência para começar a numerar os documentos deste caso.",
     "referenceNumberingHint": "Os documentos deste caso são numerados <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> e assim por diante; cada versão acrescenta <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "por exemplo 2024/001",
+    "referenceRetired": "Já há documentos registrados com {reference} em outro caso, portanto ela não pode ser reutilizada.",
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
       "parties": "Partes"
