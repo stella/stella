@@ -13,6 +13,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
+import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
@@ -171,7 +172,9 @@ export const CaseNumberCell = ({
           className="text-foreground font-medium hover:underline"
           params={routeParams}
         >
-          <BidiText>{caseNumber}</BidiText>
+          <BidiText>
+            <HighlightedText columnId="caseNumber" text={caseNumber} />
+          </BidiText>
         </DecisionLink>
         {multilingual && displayLanguage !== null && (
           <DecisionLanguageMenu
@@ -259,13 +262,18 @@ export const SummaryCell = ({
           decisionClampClassName(context.contentMode),
         )}
       >
+        {/* Two highlighters over one string: the search's words, already
+            split into segments, and the reader's find inside the runs the
+            search did not claim. */}
         {headnoteSegments.map((segment) =>
           segment.match ? (
             <mark className={MARK_CLASS_NAME} key={segment.start}>
               {segment.text}
             </mark>
           ) : (
-            <Fragment key={segment.start}>{segment.text}</Fragment>
+            <Fragment key={segment.start}>
+              <HighlightedText columnId="summary" text={segment.text} />
+            </Fragment>
           ),
         )}
       </BidiText>
@@ -447,7 +455,9 @@ const DecisionLanguageMenu = ({
 };
 
 export const CountryPill = ({ country }: { country: string }) => (
-  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">{country}</span>
+  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+    <HighlightedText columnId="country" text={country} />
+  </span>
 );
 
 export const formatDecisionDate = (
@@ -496,7 +506,7 @@ export const HeadnoteCell = ({
             decisionClampClassName(contentMode),
           )}
         >
-          {decision.headnote.text}
+          <HighlightedText columnId="headnote" text={decision.headnote.text} />
         </BidiText>
       );
     }

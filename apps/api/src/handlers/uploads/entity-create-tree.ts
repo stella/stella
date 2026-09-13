@@ -10,10 +10,6 @@ import {
   type PendingUploadPurposeData,
   workspaces,
 } from "@/api/db/schema";
-import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -521,8 +517,10 @@ const createPendingRows = async ({
   return Result.ok(createdFiles);
 };
 
+// The purpose is fixed at entity_create, so the grant that purpose spends is
+// the static gate; nothing is left for the handler to authorize.
 const config = {
-  permissions: uploadRoutePermission,
+  permissions: { entity: ["create"] },
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: bodySchema,
 } satisfies HandlerConfig;
@@ -534,18 +532,9 @@ const entityCreateTree = createSafeHandler(
     session,
     workspaceId,
     user,
-    memberRole,
     body,
     recordAuditEvent,
   }) {
-    const authorization = authorizeUploadPurpose({
-      memberRole,
-      purpose: "entity_create",
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
-
     const normalizedTree = normalizeTree(body);
     if (Result.isError(normalizedTree)) {
       return Result.err(normalizedTree.error);

@@ -250,34 +250,34 @@ type SuggestPromptVars = {
   instruction: string;
 };
 
+/** One drafted or refined extraction prompt for a matter's column. */
+export const suggestPropertyPrompt = async ({
+  workspaceId,
+  name,
+  contentType,
+  options,
+  currentPrompt,
+  instruction,
+}: SuggestPromptVars) =>
+  unwrapEden(
+    await api
+      .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      ["suggest-prompt"].post({
+        name,
+        contentType,
+        instruction,
+        ...(options && options.length > 0
+          ? { options: options.map((o) => ({ value: o.value })) }
+          : {}),
+        ...(currentPrompt && currentPrompt.length > 0 ? { currentPrompt } : {}),
+      }),
+  );
+
 export const useSuggestPrompt = () => {
   const analytics = useAnalytics();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      name,
-      contentType,
-      options,
-      currentPrompt,
-      instruction,
-    }: SuggestPromptVars) => {
-      const response = await api
-        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["suggest-prompt"].post({
-          name,
-          contentType,
-          instruction,
-          ...(options && options.length > 0
-            ? { options: options.map((o) => ({ value: o.value })) }
-            : {}),
-          ...(currentPrompt && currentPrompt.length > 0
-            ? { currentPrompt }
-            : {}),
-        });
-
-      return unwrapEden(response);
-    },
+    mutationFn: suggestPropertyPrompt,
     onError: (error) => {
       analytics.captureError(error);
     },

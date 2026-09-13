@@ -247,7 +247,10 @@ export const resolveExportCitations = (
         }
         break;
       }
+      // A decision passage cites the public corpus, not a file of the export;
+      // the chat export carries file citations only.
       case "playbook-verdict":
+      case "decision-passage":
         break;
       default:
         // Exhaustiveness: a new block kind must be handled explicitly.

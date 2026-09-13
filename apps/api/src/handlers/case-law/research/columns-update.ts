@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ import {
   readNamedResearchColumns,
   toResearchColumnResponse,
 } from "@/api/handlers/case-law/research/column-access";
+import { buildResearchColumnContent } from "@/api/handlers/case-law/research/column-content";
 import {
   researchColumnParamsSchema,
   updateResearchColumnBodySchema,
@@ -16,14 +18,15 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description:
     "Reword or retype one of the organization's questions. A changed " +
-    "question or answer type invalidates every answer the column holds; the " +
-    "cells empty until the next run.",
-  permissions: { workspace: ["read"] },
+    "question, answer type or option list invalidates every answer the " +
+    "column holds; the cells empty until the next run.",
+  permissions: { caseLawResearch: ["update"] },
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
   body: updateResearchColumnBodySchema,
@@ -44,11 +47,27 @@ const updateResearchColumn = createSafeRootHandler(
         new HandlerError({ status: 400, message: "A question is required" }),
       );
     }
+    if (body.answerType === undefined && body.options !== undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Options belong to an answer type; send both",
+        }),
+      );
+    }
     if (question === undefined && body.answerType === undefined) {
       return Result.err(
         new HandlerError({ status: 400, message: "Nothing to update" }),
       );
     }
+    const { answerType } = body;
+    const nextContent: CaseLawResearchColumnContent | null =
+      answerType === undefined
+        ? null
+        : yield* buildResearchColumnContent({
+            answerType,
+            options: body.options,
+          });
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
@@ -63,16 +82,16 @@ const updateResearchColumn = createSafeRootHandler(
           return null;
         }
         const nextQuestion = question ?? current.question;
-        const nextAnswerType = body.answerType ?? current.answerType;
+        const content = nextContent ?? current.content;
         const changed =
           nextQuestion !== current.question ||
-          nextAnswerType !== current.answerType;
+          !Value.Equal(content, current.content);
         if (!changed) {
           return current;
         }
         const [row] = await tx
           .update(caseLawResearchColumns)
-          .set({ question: nextQuestion, answerType: nextAnswerType })
+          .set({ question: nextQuestion, content })
           .where(
             and(
               eq(caseLawResearchColumns.id, columnId),

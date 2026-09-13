@@ -9,6 +9,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "provider_secret" },
+  access: "read",
 } satisfies HandlerConfig;
 
 // Read the current user's connection state for the active org. Never returns

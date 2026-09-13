@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type { WorkspaceTableAdapter } from "@/lib/workspaces/table-adapter";
+import type {
+  WorkspaceEntityAdapterKeys,
+  WorkspaceTableAdapter,
+} from "@/lib/workspaces/table-adapter";
 import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
 
 describe("workspaceTableAdapter", () => {
@@ -11,7 +14,10 @@ describe("workspaceTableAdapter", () => {
     useSectionPage: true,
     sectionCounts: true,
     detail: true,
-  } as const satisfies Record<keyof WorkspaceTableAdapter, true>;
+  } as const satisfies Record<
+    keyof WorkspaceTableAdapter<WorkspaceEntityAdapterKeys>,
+    true
+  >;
 
   test("the table reads rows through exactly these entry points", () => {
     expect(Object.keys(workspaceTableAdapter).toSorted()).toEqual(

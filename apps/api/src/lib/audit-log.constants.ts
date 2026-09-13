@@ -22,7 +22,6 @@ export const AUDIT_RESOURCE_TYPE = {
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
   CASE_LAW_RESEARCH_COLUMN: "case_law_research_column",
-  CASE_LAW_RESEARCH_TABLE: "case_law_research_table",
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",

@@ -44,6 +44,7 @@ describe("what a stored arrangement means", () => {
       hidden: ["country"],
       order: ["summary", "caseNumber"],
       pinned: ["summary"],
+      sizing: { summary: 420 },
       contentMode: "fit-content" as const,
       facetRail: "open" as const,
     };

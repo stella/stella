@@ -1,42 +1,22 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 
-import type {
-  CaseLawResearchAnswerType,
-  CaseLawResearchDisposition,
-  CaseLawResearchSavedQuery,
-} from "@stll/api-contract";
 import {
-  publicCaseLawCountry,
-  PUBLIC_CASE_LAW_COUNTRIES,
-} from "@stll/api-contract/case-law-launch-readiness";
-
-import type { DecisionListFilters } from "@/features/case-law/queries/decisions";
-import { researchRunBatches } from "@/features/case-law/research/question-columns.logic";
+  questionSuggestionBody,
+  researchRunBatches,
+} from "@/features/case-law/research/question-columns.logic";
+import type { QuestionColumnInput } from "@/features/case-law/research/question-columns.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
-const RESEARCH_TABLES_PAGE_SIZE = 50;
-
-type ResearchTablesListKey = { activeOrganizationId: string };
-type ResearchTableKey = { activeOrganizationId: string; tableId: string };
-
-/** Keyed by organization: a member sees a different set in each firm. */
-export const researchTableKeys = {
-  all: ["case-law", "research-tables"],
-  list: ({ activeOrganizationId }: ResearchTablesListKey) => [
-    ...researchTableKeys.all,
-    "list",
-    { activeOrganizationId },
-  ],
-  detail: ({ activeOrganizationId, tableId }: ResearchTableKey) => [
-    ...researchTableKeys.all,
-    "detail",
-    { activeOrganizationId, tableId },
-  ],
-};
+/**
+ * The organization's question columns and their answers.
+ *
+ * A question column belongs to the organization, not to a search: an answer is
+ * keyed by column and decision, so one answer serves every search that
+ * surfaces that decision.
+ */
 
 /** How often the cells are re-read while any of them is still pending. */
 const ANSWERS_POLL_INTERVAL_MS = 2500;
@@ -51,146 +31,6 @@ const chunk = <T>(items: readonly T[], size: number): T[][] => {
   }
   return chunks;
 };
-
-export const researchTablesInfiniteOptions = (key: ResearchTablesListKey) =>
-  infiniteQueryOptions({
-    queryKey: researchTableKeys.list(key),
-    queryFn: async ({ pageParam, signal }) => {
-      const response = await api.case.research.get({
-        query: {
-          limit: RESEARCH_TABLES_PAGE_SIZE,
-          ...(pageParam !== null && { cursor: pageParam }),
-        },
-        fetch: { signal },
-      });
-      return unwrapEden(response);
-    },
-    initialPageParam: nullableStringCursorSeed(),
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
-
-export const researchTableOptions = (key: ResearchTableKey) =>
-  queryOptions({
-    queryKey: researchTableKeys.detail(key),
-    queryFn: async ({ signal }) => {
-      const response = await api.case
-        .research({ tableId: toSafeId<"caseLawResearchTable">(key.tableId) })
-        .get({ fetch: { signal } });
-      return unwrapEden(response);
-    },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
-
-const researchTableApi = (tableId: string) =>
-  api.case.research({ tableId: toSafeId<"caseLawResearchTable">(tableId) });
-
-export const renameResearchTable = async (tableId: string, name: string) =>
-  unwrapEden(await researchTableApi(tableId).patch({ name }));
-
-export const deleteResearchTable = async (tableId: string) =>
-  unwrapEden(await researchTableApi(tableId).delete());
-
-type SetResearchTableDecisionInput = {
-  tableId: string;
-  decisionId: string;
-  /** Null clears the pin or exclusion, leaving the saved query to decide. */
-  disposition: CaseLawResearchDisposition | null;
-};
-
-export const setResearchTableDecision = async ({
-  decisionId: rawDecisionId,
-  disposition,
-  tableId,
-}: SetResearchTableDecisionInput) => {
-  const table = researchTableApi(tableId);
-  const decisionId = toSafeId<"caseLawDecision">(rawDecisionId);
-  return disposition === null
-    ? unwrapEden(await table.decisions({ decisionId }).delete())
-    : unwrapEden(await table.decisions.put({ decisionId, disposition }));
-};
-
-export type ResearchTableDetail = Awaited<
-  ReturnType<NonNullable<ReturnType<typeof researchTableOptions>["queryFn"]>>
->;
-
-export type ResearchColumn = ResearchTableDetail["columns"][number];
-
-export type ResearchTableSummary = Awaited<
-  ReturnType<
-    NonNullable<ReturnType<typeof researchTablesInfiniteOptions>["queryFn"]>
-  >
->["items"][number];
-
-export type SavedQueryDecisionFilters =
-  | { status: "available"; filters: DecisionListFilters }
-  | { status: "unavailable" };
-
-/** The saved query as the decision list/search query expects its filters. */
-export const savedQueryToDecisionFilters = (
-  savedQuery: CaseLawResearchSavedQuery,
-): SavedQueryDecisionFilters => {
-  const country =
-    savedQuery.country === undefined
-      ? (PUBLIC_CASE_LAW_COUNTRIES.at(0) ?? null)
-      : publicCaseLawCountry(savedQuery.country);
-  if (country === null) {
-    return { status: "unavailable" };
-  }
-
-  return {
-    status: "available",
-    filters: {
-      country,
-      search: savedQuery.query,
-      ...(savedQuery.court !== undefined && { court: savedQuery.court }),
-      ...(savedQuery.dateFrom !== undefined && {
-        dateFrom: savedQuery.dateFrom,
-      }),
-      ...(savedQuery.dateTo !== undefined && { dateTo: savedQuery.dateTo }),
-      ...(savedQuery.decisionType !== undefined && {
-        decisionType: savedQuery.decisionType,
-      }),
-      ...(savedQuery.language !== undefined && {
-        language: savedQuery.language,
-      }),
-      ...(savedQuery.sourceId !== undefined && {
-        sourceId: savedQuery.sourceId,
-      }),
-      // The order is part of what was saved, not a display preference: a
-      // bounded search answers with a different first working set under a
-      // different order, so a table saved under newest has to re-run that way.
-      ...(savedQuery.sort !== undefined && { sort: savedQuery.sort }),
-    },
-  };
-};
-
-/** The current search, as the saved query a new research table stores. */
-export const decisionFiltersToSavedQuery = (
-  filters: DecisionListFilters & { search: string },
-): CaseLawResearchSavedQuery => ({
-  version: 1,
-  query: filters.search,
-  country: filters.country,
-  ...(filters.court !== undefined && { court: filters.court }),
-  ...(filters.dateFrom !== undefined && { dateFrom: filters.dateFrom }),
-  ...(filters.dateTo !== undefined && { dateTo: filters.dateTo }),
-  ...(filters.decisionType !== undefined && {
-    decisionType: filters.decisionType,
-  }),
-  ...(filters.language !== undefined && { language: filters.language }),
-  ...(filters.sourceId !== undefined && {
-    sourceId: toSafeId<"caseLawSource">(filters.sourceId),
-  }),
-  ...(filters.sort !== undefined && { sort: filters.sort }),
-});
-
-// -- Organization question columns and their answers --
-//
-// A question column belongs to the organization, not to a table or a search:
-// an answer is keyed by column and decision, so one answer serves every search
-// that surfaces that decision. The table-scoped calls above belong to the
-// retiring research tables and go with them.
 
 type QuestionColumnsKey = { activeOrganizationId: string };
 
@@ -266,13 +106,21 @@ export const questionAnswersOptions = (key: QuestionAnswersKey) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-type QuestionColumnInput = {
-  question: string;
-  answerType: CaseLawResearchAnswerType;
-};
+/**
+ * The flat body the endpoint takes. The kind and its options travel as
+ * separate fields there, the way a property's do, so the content shape is
+ * unpacked once here rather than at each call site.
+ */
+const toColumnBody = ({ content, question }: QuestionColumnInput) => ({
+  question,
+  answerType: content.type,
+  ...(content.type === "single-select" || content.type === "multi-select"
+    ? { options: content.options }
+    : {}),
+});
 
 export const createQuestionColumn = async (input: QuestionColumnInput) =>
-  unwrapEden(await api.case.research.columns.post(input));
+  unwrapEden(await api.case.research.columns.post(toColumnBody(input)));
 
 export const updateQuestionColumn = async ({
   columnId,
@@ -281,8 +129,27 @@ export const updateQuestionColumn = async ({
   unwrapEden(
     await api.case.research
       .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
-      .patch(input),
+      .patch(toColumnBody(input)),
   );
+
+/**
+ * One drafted or refined question wording. The search the column is being
+ * added to travels with it, so the suggestion targets those decisions; the
+ * server reads them itself from the ids the body names.
+ */
+export const suggestQuestionPrompt = async (
+  input: Parameters<typeof questionSuggestionBody>[0],
+) => {
+  const { decisionIds, ...body } = questionSuggestionBody(input);
+  return unwrapEden(
+    await api.case.research.columns["suggest-prompt"].post({
+      ...body,
+      decisionIds: decisionIds.map((decisionId) =>
+        toSafeId<"caseLawDecision">(decisionId),
+      ),
+    }),
+  );
+};
 
 export const deleteQuestionColumn = async (columnId: string) =>
   unwrapEden(

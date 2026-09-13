@@ -6,23 +6,31 @@ import {
 } from "../../../scripts/lib/enumerate-safe-handlers";
 
 /**
- * A handler that mutates (`access: "write"`) or spends AI budget
- * (`requiresUsage.actionType === "chat"`) must be gated by more than the
- * baseline `workspace:["read"]` grant every member (down to the lowest-
- * privileged "external" role) already holds. `workspace:["read"]` alone is
- * the shape of a pure read; pairing it with a mutating or AI-consuming
- * capability lets a member with no resource-level grant reach a write or
- * spend AI quota anyway.
+ * A handler that is not an affirmed pure read, or that spends AI budget under
+ * ANY meter, must be gated by more than the baseline `workspace:["read"]`
+ * grant every member (down to the lowest-privileged "external" role) already
+ * holds. `workspace:["read"]` alone is the shape of a pure read; pairing it
+ * with a mutating or AI-consuming capability lets a member with no
+ * resource-level grant reach a write or spend AI quota anyway.
  *
- * Escape hatch: a handler config may carry a `// permissions-exempt: <reason>`
- * comment when a reviewed exception is legitimate. This census reads it from
- * the file's source, not the config object (comments do not survive to
- * runtime).
+ * The read side is an AFFIRMATION, not an inference, and it is the same
+ * affirmation the capability exporter demands: `access: "read"` is the only
+ * way out of this census, so a mutating handler cannot escape by declaring
+ * nothing. That is what makes the census total over the handler graph. The
+ * hole it closes was precise: the exporter's affirmation guard runs only on
+ * exported capabilities, so every `mcp: { type: "internal" }` handler could
+ * mutate organization data or meter AI on the baseline grant unobserved.
+ *
+ * The one escape route is `// permissions-exempt: <reason>` in the handler
+ * file: a REVIEWED exception (e.g. a write that reaches nothing but the
+ * caller's own row). This census reads it from the file's source, not the
+ * config object (comments do not survive to runtime).
  */
 
 const EXEMPT_COMMENT_RE = /\/\/\s*permissions-exempt:/u;
 
-const isNonWorkspaceReadOnly = (permissions: unknown): boolean => {
+/** A grant that reaches past `workspace:["read"]`, the grant everyone holds. */
+const carriesExplicitPermission = (permissions: unknown): boolean => {
   if (!isRecord(permissions)) {
     return false;
   }
@@ -37,12 +45,58 @@ const isNonWorkspaceReadOnly = (permissions: unknown): boolean => {
   });
 };
 
-const requiresUsageIsChat = (requiresUsage: unknown): boolean =>
-  isRecord(requiresUsage) && requiresUsage["actionType"] === "chat";
+/**
+ * Whether a config must name a resource grant: anything that did not affirm
+ * itself a pure read, plus every AI-metered handler regardless of meter (an
+ * affirmed read that spends `case_law` or `chat` budget still spends it).
+ */
+const requiresExplicitPermission = (config: Record<string, unknown>): boolean =>
+  config["access"] !== "read" || isRecord(config["requiresUsage"]);
+
+describe("the census rule", () => {
+  test("a metered handler is covered whatever its meter, and however it reads", () => {
+    for (const actionType of ["chat", "case_law", "document_processing"]) {
+      expect(
+        requiresExplicitPermission({
+          access: "read",
+          requiresUsage: { actionType },
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("only an affirmed, unmetered read leaves the census", () => {
+    expect(requiresExplicitPermission({ access: "read" })).toBe(false);
+    expect(requiresExplicitPermission({ access: "write" })).toBe(true);
+    // Declaring nothing is a write by inference, exactly as the capability
+    // exporter reads it; silence must not be an exit.
+    expect(requiresExplicitPermission({})).toBe(true);
+  });
+
+  test("the baseline grant is not an explicit permission; any resource grant is", () => {
+    expect(carriesExplicitPermission({ workspace: ["read"] })).toBe(false);
+    expect(carriesExplicitPermission({ workspace: [] })).toBe(false);
+    expect(carriesExplicitPermission({ caseLawResearch: [] })).toBe(false);
+    expect(carriesExplicitPermission({ workspace: ["read", "update"] })).toBe(
+      true,
+    );
+    expect(carriesExplicitPermission({ caseLawResearch: ["run"] })).toBe(true);
+  });
+
+  test("an AI-metered handler on the baseline grant is an offender", () => {
+    const permissions = { workspace: ["read"] };
+    const config = { permissions, requiresUsage: { actionType: "chat" } };
+
+    expect(
+      requiresExplicitPermission(config) &&
+        !carriesExplicitPermission(permissions),
+    ).toBe(true);
+  });
+});
 
 describe("write/AI-consuming handlers carry a grant beyond workspace:read", () => {
   test(
-    "every access:write or chat-metered handler has a non-workspace-read-only permission, or an exemption comment",
+    "no handler writes or meters AI on the baseline grant",
     async () => {
       const { endpoints, files, importErrors } = await discoverSafeHandlers();
 
@@ -61,32 +115,19 @@ describe("write/AI-consuming handlers carry a grant beyond workspace:read", () =
         if (permissions === undefined) {
           continue;
         }
-
-        const isWrite = config["access"] === "write";
-        const isChatMetered = requiresUsageIsChat(config["requiresUsage"]);
-        if (!isWrite && !isChatMetered) {
+        if (!requiresExplicitPermission(config)) {
           continue;
         }
-
-        if (isNonWorkspaceReadOnly(permissions)) {
+        if (carriesExplicitPermission(permissions)) {
           continue;
         }
-
-        const source = sourceByFile.get(file) ?? "";
-        if (EXEMPT_COMMENT_RE.test(source)) {
+        if (EXEMPT_COMMENT_RE.test(sourceByFile.get(file) ?? "")) {
           continue;
         }
-
-        const requiresUsage = config["requiresUsage"];
-        const actionType = isRecord(requiresUsage)
-          ? String(requiresUsage["actionType"])
-          : "none";
-        offenders.push(
-          `${id} (access=${String(config["access"])}, requiresUsage.actionType=${actionType})`,
-        );
+        offenders.push(id);
       }
 
-      expect(offenders).toEqual([]);
+      expect(offenders.toSorted()).toEqual([]);
     },
     { timeout: 30_000 },
   );

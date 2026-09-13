@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { iterateJustificationCitations } from "@/lib/citations";
+import {
+  citationFileFieldId,
+  iterateJustificationCitations,
+} from "@/lib/citations";
 import type { JustificationContent } from "@/lib/types";
 
 describe("iterateJustificationCitations — docx-folio status threading", () => {
@@ -174,5 +177,74 @@ describe("iterateJustificationCitations — empty input", () => {
       ],
     };
     expect([...iterateJustificationCitations(content)]).toEqual([]);
+  });
+});
+
+describe("iterateJustificationCitations — decision passages", () => {
+  test("a cited passage of a decision is a citation with no file behind it", () => {
+    const content: JustificationContent = {
+      version: 1,
+      blocks: [
+        { kind: "decision-passage", anchorId: "p-12", excerpt: "the holding" },
+      ],
+    };
+
+    const citations = [...iterateJustificationCitations(content)];
+
+    expect(citations).toEqual([
+      { kind: "decision-passage", anchorId: "p-12", excerpt: "the holding" },
+    ]);
+    expect(citations.map(citationFileFieldId)).toEqual([null]);
+  });
+
+  // The corpus is public: a decision passage must never be filtered against,
+  // or attributed to, a workspace file the way a page or a block is.
+  test("only a document citation names a file field", () => {
+    const content: JustificationContent = {
+      version: 1,
+      blocks: [
+        {
+          kind: "pdf-bates",
+          fileFieldId: "field-1",
+          statements: [
+            { text: "as filed", citations: [{ bates: "B1", pageNumber: 3 }] },
+          ],
+        },
+        { kind: "decision-passage", anchorId: "p-1", excerpt: "as held" },
+      ],
+    };
+
+    expect(
+      [...iterateJustificationCitations(content)].map(citationFileFieldId),
+    ).toEqual(["field-1", null]);
+  });
+
+  test("blocks of every kind are walked in document order", () => {
+    const content: JustificationContent = {
+      version: 1,
+      blocks: [
+        { kind: "playbook-verdict", rationale: "graded" },
+        { kind: "decision-passage", anchorId: "p-1", excerpt: "first" },
+        {
+          kind: "docx-folio",
+          fileFieldId: "field-1",
+          statements: [
+            {
+              text: "quoted",
+              citations: [
+                { citationStatus: "verified", blockId: "b1", text: "clause" },
+              ],
+            },
+          ],
+        },
+        { kind: "decision-passage", anchorId: "p-2", excerpt: "second" },
+      ],
+    };
+
+    expect(
+      [...iterateJustificationCitations(content)].map(
+        (citation) => citation.kind,
+      ),
+    ).toEqual(["decision-passage", "docx-folio", "decision-passage"]);
   });
 });

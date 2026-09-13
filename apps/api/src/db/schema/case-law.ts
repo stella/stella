@@ -3,14 +3,8 @@ import { eq } from "drizzle-orm";
 import {
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
-  CASE_LAW_RESEARCH_DISPOSITIONS,
 } from "@stll/api-contract";
-import type {
-  CaseLawResearchAnswerRun,
-  CaseLawResearchAnswerValue,
-  CaseLawResearchColumnTool,
-  CaseLawResearchSavedQuery,
-} from "@stll/api-contract";
+import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import {
   CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
   CASE_LAW_ANNOTATION_COLORS,
@@ -60,6 +54,10 @@ import type {
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import type {
+  CaseLawResearchAnswerRun,
+  CaseLawResearchColumnContent,
+} from "@/api/lib/case-law/research-answers";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
@@ -96,6 +94,7 @@ import type {
   DecisionSection,
   DocumentAst,
   EmptyAst,
+  FieldContent,
   PersistedDecisionAnalysis,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -1716,117 +1715,8 @@ export const caseLawMatterLinks = p.pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Case Law — Research tables (organization-scoped)
+// Case Law — Research questions and answers (organization-scoped)
 // ---------------------------------------------------------------------------
-
-/**
- * A saved case-law search a member keeps working on. Rows are the public
- * corpus, re-run from `savedQuery` and adjusted by the dispositions below;
- * the table itself stores no decision content. Visible to the whole
- * organization; the owner is recorded for attribution and caps.
- */
-export const caseLawResearchTables = p.pgTable(
-  "case_law_research_tables",
-  {
-    id: pUuid<"caseLawResearchTable">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    ownerUserId: p.text("owner_user_id").notNull(),
-    name: p.varchar({ length: 256 }).notNull(),
-    savedQuery: jsonb("saved_query")
-      .$type<CaseLawResearchSavedQuery>()
-      .notNull(),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at")
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-  },
-  (t) => [
-    p
-      .foreignKey({
-        name: "case_law_research_tables_organization_id_organization_id_fk",
-        columns: [t.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
-        name: "case_law_research_tables_owner_user_id_user_id_fk",
-        columns: [t.ownerUserId],
-        foreignColumns: [user.id],
-      })
-      .onDelete("cascade"),
-    // Composite tenant key for the dispositions table, so a child row can
-    // never name a table from another organization even on root write paths.
-    p.unique("case_law_research_tables_id_org_unq").on(t.id, t.organizationId),
-    p
-      .index("case_law_research_tables_org_updated_id_idx")
-      .on(t.organizationId, t.updatedAt, t.id),
-    p.check(
-      "case_law_research_tables_saved_query_version_check",
-      sql`(jsonb_typeof(${t.savedQuery}) = 'object' AND ${t.savedQuery}->'version' = '1'::jsonb) IS TRUE`,
-    ),
-    ...orgPolicies(),
-  ],
-);
-
-const CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES =
-  CASE_LAW_RESEARCH_DISPOSITIONS.map((disposition) =>
-    sql.raw(`'${disposition}'`),
-  );
-
-/**
- * One decision the table treats differently from its saved query: pinned
- * into the rows whether or not the query still returns it, or excluded from
- * them. `decisionId` carries no foreign key, like the annotations: the corpus
- * may live in a separate public-law database, so the id is validated through
- * the public read gate on write and a decision that has since gone simply
- * yields no row facts.
- */
-export const caseLawResearchTableDecisions = p.pgTable(
-  "case_law_research_table_decisions",
-  {
-    tableId: safeUuid<"caseLawResearchTable">("table_id").notNull(),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
-    disposition: p.text({ enum: CASE_LAW_RESEARCH_DISPOSITIONS }).notNull(),
-    /** Order among pinned rows; excluded rows carry 0. */
-    position: p.integer().notNull().default(0),
-    addedBy: p.text("added_by"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-  },
-  (t) => [
-    p.primaryKey({
-      columns: [t.tableId, t.decisionId],
-      name: "case_law_research_table_decisions_pk",
-    }),
-    p
-      .foreignKey({
-        name: "clrtd_table_org_fk",
-        columns: [t.tableId, t.organizationId],
-        foreignColumns: [
-          caseLawResearchTables.id,
-          caseLawResearchTables.organizationId,
-        ],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
-        name: "clrtd_added_by_fk",
-        columns: [t.addedBy],
-        foreignColumns: [user.id],
-      })
-      .onDelete("set null"),
-    p
-      .index("clrtd_table_disposition_position_idx")
-      .on(t.tableId, t.disposition, t.position),
-    p.check(
-      "case_law_research_table_decisions_disposition_check",
-      sql`${t.disposition} IN (${sql.join(CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES, sql`, `)})`,
-    ),
-    ...orgPolicies(),
-  ],
-);
 
 const CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES =
   CASE_LAW_RESEARCH_ANSWER_TYPES.map((type) => sql.raw(`'${type}'`));
@@ -1835,30 +1725,27 @@ const CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES =
   CASE_LAW_RESEARCH_ANSWER_STATES.map((state) => sql.raw(`'${state}'`));
 
 /**
- * One question the organization asks of every decision it looks at. The answer
- * type fixes what a cell may hold; `tool` is the model configuration the
- * answers were produced with, so a later change can be told apart from a
- * re-run.
+ * One question the organization asks of every decision it looks at.
+ *
+ * `content` is a matter property's content: the same kinds, the same select
+ * options and fallback, validated by the same schema, so a cell renders through
+ * the property model rather than a parallel one. `tool` is the model
+ * configuration the answers were produced with, so a later change can be told
+ * apart from a re-run.
  *
  * The organization is the column's only parent: that is what makes an answer
- * reusable on every search that surfaces the decision. `tableId` is detached —
- * every row holds NULL and no foreign key reaches the retiring research
- * tables, so deleting one can no longer cascade a question the whole
- * organization asks. The column itself goes with the table retirement.
+ * reusable on every search that surfaces the decision.
  */
 export const caseLawResearchColumns = p.pgTable(
   "case_law_research_columns",
   {
     id: pUuid<"caseLawResearchColumn">().primaryKey(),
-    tableId: safeUuid<"caseLawResearchTable">("table_id"),
     organizationId: safeOrganizationId("organization_id").notNull(),
     /** Who asked the question; every member of the organization sees it. */
     createdBy: p.text("created_by"),
     position: p.integer().notNull(),
     question: p.varchar({ length: 512 }).notNull(),
-    answerType: p
-      .text("answer_type", { enum: CASE_LAW_RESEARCH_ANSWER_TYPES })
-      .notNull(),
+    content: jsonb().$type<CaseLawResearchColumnContent>().notNull(),
     tool: jsonb().$type<CaseLawResearchColumnTool>().notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
@@ -1879,9 +1766,11 @@ export const caseLawResearchColumns = p.pgTable(
     // Access path for the only list there is now: the organization's columns
     // in their display order.
     p.index("clrc_org_position_idx").on(t.organizationId, t.position, t.id),
+    // The content's kind is the column's answer type, so the check is on the
+    // document rather than on a second column that could disagree with it.
     p.check(
-      "case_law_research_columns_answer_type_check",
-      sql`${t.answerType} IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)})`,
+      "case_law_research_columns_content_check",
+      sql`(jsonb_typeof(${t.content}) = 'object' AND ${t.content}->'version' = '1'::jsonb AND ${t.content}->>'type' IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)})) IS TRUE`,
     ),
     ...orgPolicies(),
   ],
@@ -1907,9 +1796,8 @@ export const caseLawResearchAnswers = p.pgTable(
      * overwrite the answer the run that reclaimed its cells produced.
      */
     claimId: safeUuid<"caseLawResearchAnswerClaim">("claim_id"),
-    answer: jsonb().$type<CaseLawResearchAnswerValue>(),
-    /** Written by nothing and read by nothing; dropped with the research-table retirement migration. */
-    confidence: p.doublePrecision(),
+    /** The same content a workspace field holds, in the column's kind. */
+    answer: jsonb().$type<FieldContent>(),
     run: jsonb().$type<CaseLawResearchAnswerRun>(),
     /** A short reason class for `failed`; never the provider's message. */
     failureReason: p.varchar("failure_reason", { length: 64 }),
@@ -1936,9 +1824,14 @@ export const caseLawResearchAnswers = p.pgTable(
       "case_law_research_answers_state_check",
       sql`${t.state} IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES, sql`, `)})`,
     ),
+    // Field content of an answerable kind. The exact shape is validated on read
+    // against `fieldContentSchema`; this keeps a row that is not field content
+    // at all out of the table. `IS TRUE` closes the three-valued gap: a
+    // document without a `type` key makes the membership test unknown, and a
+    // CHECK that evaluates to unknown is satisfied.
     p.check(
-      "case_law_research_answers_confidence_check",
-      sql`${t.confidence} IS NULL OR (${t.confidence} >= 0 AND ${t.confidence} <= 1)`,
+      "case_law_research_answers_answer_content_check",
+      sql`(${t.answer} IS NULL OR (jsonb_typeof(${t.answer}) = 'object' AND ${t.answer}->'version' = '1'::jsonb AND ${t.answer}->>'type' IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)}))) IS TRUE`,
     ),
     // An answered cell carries its answer; every other state carries none.
     p.check(

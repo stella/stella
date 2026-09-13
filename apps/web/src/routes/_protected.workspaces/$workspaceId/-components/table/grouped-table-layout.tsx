@@ -43,11 +43,34 @@ import {
   resolveDocumentTypeClassifier,
   selectGroupColumns,
 } from "@/components/workspaces/table/group-columns";
+import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
+import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
 import type {
   TableColumnDef,
   TableTreeNode,
 } from "@/components/workspaces/table/types";
+import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
+import {
+  WorkspaceGridCell,
+  WorkspaceGridHead,
+  WorkspaceGridRow,
+} from "@/components/workspaces/table/workspace-grid";
+import { getOrderedColumns } from "@/components/workspaces/table/workspace-grid-order";
+import { RowEndFillerCell } from "@/components/workspaces/table/workspace-table/end-fillers";
+import { HeaderEndFillerCell } from "@/components/workspaces/table/workspace-table/header-cells";
+import {
+  TABLE_ROW_ESTIMATE_PX,
+  type WorkspaceGridStyle,
+} from "@/components/workspaces/table/workspace-table/internals";
+import {
+  addPropertyColId,
+  getEndFillerGridColumn,
+  getScrollableAncestor,
+  getWorkspaceGridTemplateColumns,
+  tableEndFillerCellStyle,
+} from "@/components/workspaces/table/workspace-table/internals-helpers";
+import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -63,40 +86,18 @@ import {
   resolveWorkspaceKanbanGrouping,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
+import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import {
   getGroupSkeletonLayout,
   GROUP_SKELETON_ROW_KEYS,
   GROUP_TABLE_PAGE_SIZE,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
-import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
-import {
-  DEFAULT_TABLE_COLUMN_MIN_SIZE,
-  useTableColumns,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
-import {
-  WorkspaceGridCell,
-  WorkspaceGridHead,
-  WorkspaceGridRow,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
-import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
-import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
-import { RowEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
-import { HeaderEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells";
-import {
-  TABLE_ROW_ESTIMATE_PX,
-  type WorkspaceGridStyle,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
-import {
-  addPropertyColId,
-  getEndFillerGridColumn,
-  getScrollableAncestor,
-  getWorkspaceGridTemplateColumns,
-  tableEndFillerCellStyle,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
+import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
+import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
-import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
-import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
+import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
+import { useViewTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-table-state";
 
 // Grouped views eager-load only the first few sections' rows upfront; every
 // later section rides its IntersectionObserver scroll-gate (400px lookahead)
@@ -156,12 +157,18 @@ export const GroupedTableLayout = ({
 }: GroupedTableLayoutProps) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const tableState = useTableState({ workspaceId, view });
+  const columnLayout = useViewColumnLayout({ workspaceId, view });
+  const tableState = useViewTableState({ workspaceId, view, columnLayout });
   const columns = useTableColumns({ properties, view });
   // Deferred alongside the group keys (each section defers its own), so the
   // marks describe the rows on screen, not a term still being fetched.
   const find = useDeferredValue(
-    useTableFind({ properties, view, workspaceId }),
+    useEntityTableFind({
+      hasNameColumn: includesListItems(view.layout.filters),
+      hiddenProperties: view.layout.hiddenProperties,
+      properties,
+      view: { workspaceId, viewId: view.id },
+    }),
   );
   // One shared scroller for the whole grouped view: every group's table flows
   // inside it (no nested scroll boxes), so the sticky group headers stack
@@ -411,7 +418,7 @@ const NO_ROWS: TableTreeNode[] = [];
 // column sizes so they line up with the group tables above.
 const useGroupGridGeometry = (
   columns: TableColumnDef[],
-  tableState: ReturnType<typeof useTableState>,
+  tableState: ReturnType<typeof useViewTableState>,
 ) => {
   const table = useTable({
     features: workspaceTableFeatures,
@@ -452,7 +459,7 @@ const useGroupGridGeometry = (
 
 type GroupedAddRowProps = {
   columns: TableColumnDef[];
-  tableState: ReturnType<typeof useTableState>;
+  tableState: ReturnType<typeof useViewTableState>;
   workspaceId: string;
 };
 
@@ -480,7 +487,7 @@ const GroupedAddRow = ({
 
 type GroupSkeletonProps = {
   columns: TableColumnDef[];
-  tableState: ReturnType<typeof useTableState>;
+  tableState: ReturnType<typeof useViewTableState>;
   totalRows: number | undefined;
 };
 
@@ -586,7 +593,7 @@ type GroupSectionProps = {
   // column selection when grouped by the "Document Type" classifier. Empty for
   // other groupings (every section then renders the full column set).
   gateLabelsByColumnId: Map<string, Set<string>>;
-  tableState: ReturnType<typeof useTableState>;
+  tableState: ReturnType<typeof useViewTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
 };
@@ -721,6 +728,12 @@ const GroupSection = ({
     state: tableState.state,
     ...tableState.listeners,
   });
+  const rowHost = useEntityRowHost({
+    workspaceId,
+    table,
+    viewId: view.id,
+    addRow: false,
+  });
 
   // While the up-front counts load, or a populated group is still offscreen /
   // fetching its first page, show skeleton rows instead of an empty body.
@@ -781,11 +794,9 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
-              showAddRow={false}
+              rowHost={rowHost}
               stickyColumnHeader={false}
               table={table}
-              viewId={view.id}
-              workspaceId={workspaceId}
             />
           </GroupScopeProvider>
         )}

@@ -7,7 +7,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { integration: ["delete"] },
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

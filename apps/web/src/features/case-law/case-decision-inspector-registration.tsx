@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import { ScaleIcon } from "lucide-react";
+import { FileTextIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/utils";
 
@@ -24,7 +24,7 @@ const LazyCaseDecisionInspectorView = lazy(async () => {
 const CaseDecisionRailIcon = ({
   active,
 }: InspectorRailIconProps<CaseDecisionViewPayload>) => (
-  <ScaleIcon className={cn("size-3.5", !active && "opacity-70")} />
+  <FileTextIcon className={cn("size-3.5", !active && "opacity-70")} />
 );
 
 const CaseDecisionView = (

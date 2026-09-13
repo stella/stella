@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { roles } from "./index";
+import { BETTER_AUTH_ORGANIZATION_STATEMENTS } from "@stll/auth-model";
+
+import type { PermissionInput } from "./index";
+import { roles, statements } from "./index";
+
+const ROLE_NAMES = ["owner", "admin", "member", "intern", "external"] as const;
+
+/** The product resources, without the Better Auth organization statements. */
+const stellaStatements = Object.entries(statements).filter(
+  ([resource]) => !(resource in BETTER_AUTH_ORGANIZATION_STATEMENTS),
+);
 
 describe("organization management permissions", () => {
   test("owner can perform Better Auth organization invite and member actions", () => {
@@ -170,14 +180,88 @@ describe("role grant boundaries", () => {
   });
 
   test("every role can read its workspace", () => {
-    for (const role of [
-      "owner",
-      "admin",
-      "member",
-      "intern",
-      "external",
-    ] as const) {
+    for (const role of ROLE_NAMES) {
       expect(roles[role].authorize({ workspace: ["read"] }).success).toBe(true);
+    }
+  });
+
+  // The matrix is total by construction on the resource axis (every grant map
+  // is `satisfies StellaPermissionMap`, so a new resource must appear in each
+  // one), but nothing at compile time covers the ACTION axis: adding an action
+  // to `statements` and forgetting it in every grant map leaves it held by no
+  // role, so the handler that declares it answers 403 to everyone forever.
+  // Management holds every product action today; that is the totality anchor.
+  test("owner and admin hold every declared product action", () => {
+    const declared = stellaStatements.flatMap(([resource, actions]) =>
+      actions.map((action) => `${resource}:${action}`),
+    );
+
+    for (const role of ["owner", "admin"] as const) {
+      const held = new Set(
+        Object.entries(roles[role].statements).flatMap(([resource, actions]) =>
+          actions.map((action) => `${resource}:${action}`),
+        ),
+      );
+
+      expect(declared.filter((action) => !held.has(action))).toEqual([]);
+    }
+  });
+
+  test("staff author and run case-law research; intern and external cannot", () => {
+    const researchActions = ["create", "update", "delete", "run"] as const;
+    for (const role of ["owner", "admin", "member"] as const) {
+      for (const action of researchActions) {
+        expect(
+          roles[role].authorize({ caseLawResearch: [action] }).success,
+        ).toBe(true);
+      }
+    }
+    // Question columns are organization data and every run spends AI budget,
+    // so the roles that hold no authoring grant elsewhere hold none here.
+    for (const role of ["intern", "external"] as const) {
+      for (const action of researchActions) {
+        expect(
+          roles[role].authorize({ caseLawResearch: [action] }).success,
+        ).toBe(false);
+      }
+    }
+  });
+
+  test("everyone but an external collaborator keeps their own work", () => {
+    // Annotations, stored searches and account links are the caller's own
+    // work, so they follow the time entry / expense / chat line rather than
+    // the authoring line: staff and interns hold them, external
+    // collaborators hold no write grant at all.
+    const ownWorkGrants: { permissions: PermissionInput; resource: string }[] =
+      [
+        {
+          permissions: {
+            caseLawAnnotation: ["create", "update", "delete"],
+          },
+          resource: "caseLawAnnotation",
+        },
+        {
+          permissions: { savedSearch: ["create", "update", "delete"] },
+          resource: "savedSearch",
+        },
+        {
+          permissions: { integration: ["create", "update", "delete"] },
+          resource: "integration",
+        },
+      ];
+
+    for (const { permissions, resource } of ownWorkGrants) {
+      for (const role of ["owner", "admin", "member", "intern"] as const) {
+        expect({
+          resource,
+          role,
+          granted: roles[role].authorize(permissions).success,
+        }).toEqual({ resource, role, granted: true });
+      }
+      expect({
+        resource,
+        granted: roles.external.authorize(permissions).success,
+      }).toEqual({ resource, granted: false });
     }
   });
 

@@ -213,117 +213,335 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
 /** Create a simple text inline helper. */
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
-// ── RTF inline parser ─────────────────────────────────────
+// ── RTF reader ────────────────────────────────────────────
 
-const RTF_CONTROL_WORDS = new Set([
-  "keepn",
-  "ltrpar",
-  "nowidctlpar",
-  "pard",
-  "qc",
-  "qj",
-  "ql",
-  "qr",
-  "tqc",
-  "tqdec",
-  "tqr",
-  "widctlpar",
+/**
+ * Destinations whose group carries no document text.
+ *
+ * RTF 1.9 ignores an unknown `{\*\...}` destination whole, and these named
+ * ones hold a picture's payload, the font and colour tables, the
+ * revision-save-id table or the document properties. Read as text instead,
+ * a picture group puts its own control words and hundreds of hex digits
+ * into the decision: Pl.ÚS-st. 27/09 prints a horizontal rule between the
+ * majority opinion and the dissent, and the `\shppict`/`\nonshppict` pair
+ * behind it surfaced in the reader immediately before "1. Odlišné
+ * stanovisko".
+ *
+ * A picture becomes nothing. An `image` block needs an https asset in a
+ * store, which this export does not publish, and a `data:` URI is rejected
+ * because the AST is read, indexed and prompted with whole.
+ */
+const RTF_SKIPPED_DESTINATIONS = new Set([
+  "colortbl",
+  "datastore",
+  "fonttbl",
+  "info",
+  "latentstyles",
+  "listoverridetable",
+  "listtable",
+  "nonshppict",
+  "object",
+  "objdata",
+  "pgptbl",
+  "pict",
+  "rsidtbl",
+  "shp",
+  "shppict",
+  "stylesheet",
+  "themedata",
+  "xmlnstbl",
 ]);
 
-const RTF_NUMERIC_CONTROL_WORDS = new Set([
-  "cb",
-  "cf",
-  "f",
-  "fi",
-  "fs",
-  "highlight",
-  "lang",
-  "li",
-  "outlinelevel",
-  "ri",
-  "sa",
-  "sb",
-  "sl",
-  "slmult",
-  "tx",
+/** Control words that end the current paragraph. */
+const RTF_BREAK_WORDS = new Set(["line", "page", "par", "sect"]);
+
+/** Control words that stand for one character of text. */
+const RTF_SYMBOL_TEXT = new Map([
+  ["bullet", "•"],
+  ["emdash", "—"],
+  ["emspace", " "],
+  ["endash", "–"],
+  ["enspace", " "],
+  ["ldblquote", "“"],
+  ["lquote", "‘"],
+  ["qmspace", " "],
+  ["rdblquote", "”"],
+  ["rquote", "’"],
+  ["tab", "\t"],
 ]);
 
-const RTF_CONTROL_WORD_RE = /\\(?<word>[a-z]+)(?<numericValue>-?\d*)\s?/giu;
+/** A run of text sharing one font weight. */
+type RtfRun = { text: string; bold: boolean };
 
-const stripIgnoredRtfControlWord = (
-  match: string,
-  word: string,
-  numericValue: string,
-) => {
-  const normalizedWord = word.toLowerCase();
-  if (RTF_CONTROL_WORDS.has(normalizedWord)) {
-    return "";
+/** Formatting a group inherits from its parent and restores on close. */
+type RtfGroupState = { bold: boolean; unicodeSkip: number };
+
+/**
+ * A control word with its optional numeric argument and the single space
+ * that delimits it, or a control symbol. Sticky: the reader matches at the
+ * backslash it stands on rather than searching forward for one.
+ */
+const RTF_CONTROL_RE =
+  /\\(?:(?<word>[a-zA-Z]+)(?<value>-?\d+)?[ ]?|(?<symbol>[^a-zA-Z]))/uy;
+
+/** The destination name at `index`, where one starts there. */
+const RTF_WORD_RE = /^[a-zA-Z]+/u;
+
+/**
+ * The destination a group introduces: whether it is ignorable (`{\*`) and
+ * the control word that names it.
+ *
+ * Scanned rather than matched: the literal for this — an optional `\*`
+ * between two runs of whitespace — is super-linear under scslre, and the
+ * ratchet is at 0. The cursor only advances.
+ */
+const rtfGroupHead = (
+  rtf: string,
+  open: number,
+): { ignorable: boolean; word: string | undefined } | undefined => {
+  let index = open + 1;
+  while (index < rtf.length && WHITESPACE_RE.test(rtf.charAt(index))) {
+    index += 1;
   }
-
-  if (numericValue && RTF_NUMERIC_CONTROL_WORDS.has(normalizedWord)) {
-    return "";
+  if (rtf.charAt(index) !== "\\") {
+    return undefined;
   }
+  index += 1;
+  const ignorable = rtf.charAt(index) === "*";
+  if (ignorable) {
+    index += 1;
+    while (index < rtf.length && WHITESPACE_RE.test(rtf.charAt(index))) {
+      index += 1;
+    }
+    if (rtf.charAt(index) !== "\\") {
+      return { ignorable, word: undefined };
+    }
+    index += 1;
+  }
+  return {
+    ignorable,
+    word: RTF_WORD_RE.exec(rtf.slice(index, index + 32))?.[0]?.toLowerCase(),
+  };
+};
 
-  return match;
+const WHITESPACE_RE = /\s/u;
+
+/** Index just past the group opening at `start`, or undefined when it never closes. */
+const rtfGroupEnd = (rtf: string, start: number): number | undefined => {
+  let depth = 0;
+  for (let i = start; i < rtf.length; i++) {
+    const char = rtf.charAt(i);
+    if (char === "\\") {
+      i += 1;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return i + 1;
+      }
+    }
+  }
+  return undefined;
 };
 
 /**
- * Strip RTF control words that are not semantically useful
- * for our purposes (font tables, Unicode escapes, etc.).
+ * Index just past a group to skip whole, or undefined when the group's text
+ * belongs in the document.
+ *
+ * An unbalanced group is not skipped: its closing brace is missing, so
+ * where it ends is a guess and dropping to the end of the source would drop
+ * the rest of the decision with it. What leaks instead is markup, which
+ * `validateAndLog`'s MARKUP_RESIDUE reports.
  */
-const stripRtfControls = (text: string): string =>
-  text
-    // Remove \uN Unicode escapes followed by a replacement char
-    .replace(/\\u-?\d+\s?\??/gu, "")
-    // Remove \' hex escapes (e.g., \'e9 for é) — these are
-    // already decoded in the hidden field value
-    .replace(/\\'[0-9a-fA-F]{2}/gu, "")
-    // Remove font/color/style control words we don't handle.
-    .replace(RTF_CONTROL_WORD_RE, stripIgnoredRtfControlWord)
-    // Remove \{ and \} escaped braces
-    .replace(/\\[{}]/gu, "")
-    // Remove remaining curly braces (RTF grouping)
-    .replace(/[{}]/gu, "")
-    // Collapse multiple spaces
-    .replace(/ {2,}/gu, " ");
+const skippedGroupEnd = (rtf: string, open: number): number | undefined => {
+  const head = rtfGroupHead(rtf, open);
+  if (!head) {
+    return undefined;
+  }
+  if (
+    !head.ignorable &&
+    !(head.word !== undefined && RTF_SKIPPED_DESTINATIONS.has(head.word))
+  ) {
+    return undefined;
+  }
+  return rtfGroupEnd(rtf, open);
+};
 
 /**
- * Parse RTF bold markers (`\b` / `\b0`) into Inline nodes.
- *
- * `\b` turns bold on; `\b0` turns it off. Any text between
- * these markers is wrapped in an InlineBold node.
+ * Skip the characters `\uN` prints for readers that cannot show it: `\ucN`
+ * states how many, and each is a `\'hh` byte or one plain character.
  */
-const parseRtfInlines = (rtf: string): Inline[] => {
-  const cleaned = stripRtfControls(rtf);
-  const inlines: Inline[] = [];
+const skipUnicodeFallback = (
+  rtf: string,
+  start: number,
+  count: number,
+): number => {
+  let index = start;
+  for (let skipped = 0; skipped < count && index < rtf.length; skipped++) {
+    index += rtf.startsWith("\\'", index) ? 4 : 1;
+  }
+  return index;
+};
 
-  // Split on \b and \b0 markers, keeping the delimiters
-  const parts = cleaned.split(/(?<marker>\\b0?\s?)/u);
-  let bold = false;
+/**
+ * Read RTF into paragraphs of formatted runs.
+ *
+ * Group-aware by construction: formatting is pushed and popped with the
+ * braces, and a destination holding no text is skipped as one group rather
+ * than filtered control word by control word. A filter only removes what it
+ * was told to look for, so every unlisted control word — and every byte of
+ * the payload one introduces — reached the text.
+ */
+const readRtfRuns = (rtf: string): RtfRun[][] => {
+  const paragraphs: RtfRun[][] = [];
+  const stack: RtfGroupState[] = [];
+  const state: RtfGroupState = { bold: false, unicodeSkip: 1 };
+  let runs: RtfRun[] = [];
 
-  for (const part of parts) {
-    if (/^\\b0\s?$/u.test(part)) {
-      bold = false;
-      continue;
-    }
-    if (/^\\b\s?$/u.test(part)) {
-      bold = true;
-      continue;
-    }
-
-    const text = part.trim();
+  const emit = (text: string): void => {
     if (!text) {
-      continue;
+      return;
+    }
+    const last = runs.at(-1);
+    if (last && last.bold === state.bold) {
+      last.text += text;
+      return;
+    }
+    runs.push({ text, bold: state.bold });
+  };
+
+  const breakParagraph = (): void => {
+    paragraphs.push(runs);
+    runs = [];
+  };
+
+  /** Apply the control at `index`; returns the index just past it. */
+  const applyControl = (index: number): number => {
+    RTF_CONTROL_RE.lastIndex = index;
+    const match = RTF_CONTROL_RE.exec(rtf);
+    if (!match) {
+      emit("\\");
+      return index + 1;
+    }
+    const next = RTF_CONTROL_RE.lastIndex;
+
+    const symbol = match.groups?.["symbol"];
+    if (symbol !== undefined) {
+      if (symbol === "\\" || symbol === "{" || symbol === "}") {
+        emit(symbol);
+        return next;
+      }
+      if (symbol === "~") {
+        emit(" ");
+        return next;
+      }
+      if (symbol === "_") {
+        emit("-");
+        return next;
+      }
+      if (symbol === "\n" || symbol === "\r") {
+        breakParagraph();
+        return next;
+      }
+      // `\'hh` is a code-page byte the hidden field already serves decoded;
+      // `\-` is an optional hyphen, which prints nothing.
+      return symbol === "'" ? next + 2 : next;
     }
 
-    const textNode: Inline = { type: "text", text };
-    if (bold) {
-      inlines.push({ type: "bold", children: [textNode] });
-    } else {
-      inlines.push(textNode);
+    const word = match.groups?.["word"]?.toLowerCase();
+    if (word === undefined) {
+      return next;
     }
+    const argument = match.groups?.["value"];
+    const value =
+      argument === undefined ? undefined : Number.parseInt(argument, 10);
+
+    if (RTF_BREAK_WORDS.has(word)) {
+      breakParagraph();
+      return next;
+    }
+    const symbolText = RTF_SYMBOL_TEXT.get(word);
+    if (symbolText !== undefined) {
+      emit(symbolText);
+      return next;
+    }
+    if (word === "b") {
+      state.bold = value !== 0;
+      return next;
+    }
+    if (word === "uc") {
+      state.unicodeSkip = value === undefined || value < 0 ? 1 : value;
+      return next;
+    }
+    if (word === "bin") {
+      return value === undefined || value < 0 ? next : next + value;
+    }
+    if (word === "u" && value !== undefined) {
+      emit(String.fromCodePoint(value < 0 ? value + 0x01_00_00 : value));
+      return skipUnicodeFallback(rtf, next, state.unicodeSkip);
+    }
+    return next;
+  };
+
+  let index = 0;
+  while (index < rtf.length) {
+    const char = rtf.charAt(index);
+    if (char === "{") {
+      const skipTo = skippedGroupEnd(rtf, index);
+      if (skipTo !== undefined) {
+        index = skipTo;
+        continue;
+      }
+      stack.push({ ...state });
+      index += 1;
+      continue;
+    }
+    if (char === "}") {
+      const popped = stack.pop();
+      if (popped) {
+        state.bold = popped.bold;
+        state.unicodeSkip = popped.unicodeSkip;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === "\\") {
+      index = applyControl(index);
+      continue;
+    }
+    emit(char);
+    index += 1;
   }
 
+  breakParagraph();
+  return paragraphs;
+};
+
+/** Formatted runs as inline nodes, with the paragraph's outer padding trimmed. */
+const runsToInlines = (runs: readonly RtfRun[]): Inline[] => {
+  const trimmed = runs.map((run) => ({ ...run }));
+  const first = trimmed.at(0);
+  if (first) {
+    first.text = first.text.trimStart();
+  }
+  const last = trimmed.at(-1);
+  if (last) {
+    last.text = last.text.trimEnd();
+  }
+
+  const inlines: Inline[] = [];
+  for (const run of trimmed) {
+    if (!run.text) {
+      continue;
+    }
+    const text: Inline = { type: "text", text: run.text };
+    inlines.push(run.bold ? { type: "bold", children: [text] } : text);
+  }
   return inlines;
 };
 
@@ -335,27 +553,15 @@ type ParsedLine = {
 };
 
 /**
- * Primary extraction: parse the `docContentHidden` RTF field.
+ * Primary extraction: read the `docContentHidden` RTF field.
  *
- * Splits on `\par` (paragraph breaks). Double `\par\par` acts
- * as a section/paragraph break; single `\par` is a line break
- * within a paragraph.
+ * One line per RTF paragraph (`\par` and its siblings); an empty one
+ * carries nothing and is dropped.
  */
 const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
-  // Split on \par (paragraph breaks). Lookahead prevents
-  // matching \pard (paragraph defaults). Uses [a-zA-Z]
-  // instead of \w because RTF control words are alpha-only;
-  // digits after \par are content (e.g., \par1. Soud...).
-  const segments = rtfContent.split(/\\par(?![a-zA-Z])\s*/iu);
-
   const lines: ParsedLine[] = [];
-  for (const segment of segments) {
-    const trimmed = segment.trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    const inlines = parseRtfInlines(trimmed);
+  for (const runs of readRtfRuns(rtfContent)) {
+    const inlines = runsToInlines(runs);
     const plainText = inlinesToPlainText(inlines).trim();
     if (plainText) {
       lines.push({ inlines, plainText });

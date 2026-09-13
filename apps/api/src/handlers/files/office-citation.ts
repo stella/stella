@@ -10,6 +10,7 @@ import { findOfficeEvidenceBlock } from "@/api/lib/files/office-evidence";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "upload_mechanics" },
+  access: "read",
   params: workspaceParams({
     blockId: t.String({
       maxLength: 64,

@@ -19,7 +19,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawAnnotation: ["create"] },
   mcp: { type: "internal", reason: "reader_annotations" },
   params: decisionParamsSchema,
   body: createAnnotationBodySchema,

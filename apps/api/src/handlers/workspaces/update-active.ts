@@ -8,8 +8,13 @@ import { detached } from "@/api/lib/detached";
 import { prewarmScopedDownloadSigning } from "@/api/lib/s3-presign";
 
 const config = {
+  // permissions-exempt: the write touches only the caller's own last-active
+  // workspace pointer on their member row — navigation state no colleague
+  // sees. Every role that may open a matter may move its own pointer, so
+  // workspace:read is the grant, not a floor under a missing one.
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "write",
 } satisfies HandlerConfig;
 
 const updateActiveWorkspace = createSafeHandler(

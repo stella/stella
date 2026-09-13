@@ -14,9 +14,9 @@ import {
   CheckCircle2Icon,
   ChevronDownIcon,
   ChevronUpIcon,
+  CircleAlertIcon,
   CircleDashedIcon,
   PenIcon,
-  ScaleIcon,
   SplitIcon,
   XCircleIcon,
 } from "lucide-react";
@@ -226,7 +226,7 @@ export function InterpNote({ note }: { note: string | undefined }) {
   }
   return (
     <div className="text-warning-foreground bg-warning/10 border-warning/32 flex items-start gap-1.5 rounded-md border px-2.5 py-2 text-[11.5px] leading-relaxed">
-      <ScaleIcon
+      <CircleAlertIcon
         aria-hidden="true"
         className="text-warning mt-0.5 size-3.5 shrink-0"
       />

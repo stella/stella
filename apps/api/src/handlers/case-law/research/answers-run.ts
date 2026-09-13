@@ -25,9 +25,18 @@ const config = {
     "already hold an answer are kept unless `force` is set; cells another " +
     "run is still working on are skipped. Answering continues after the " +
     "response; poll the answers.",
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawResearch: ["run"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: runResearchAnswersBodySchema,
+  // The detached runner meters every model call under `case_law` at the
+  // standard tier for the `fast` role (`research-answer-runner.ts`). Pricing
+  // the pre-flight the same way refuses a run the organization cannot pay
+  // for before any cell is claimed, instead of after the cells are pending.
+  requiresUsage: {
+    actionType: "case_law",
+    serviceTier: "standard",
+    modelRole: "fast",
+  },
 } satisfies HandlerConfig;
 
 const runResearchAnswersHandler = createSafeRootHandler(
@@ -43,7 +52,10 @@ const runResearchAnswersHandler = createSafeRootHandler(
     user,
   }) {
     // AI availability is a property of the deployment; decided before any
-    // cell is marked pending, so a missing key never leaves cells stuck.
+    // cell is marked pending, so a missing key never leaves cells stuck. The
+    // usage pre-flight answers a different question (may this organization
+    // spend) and rejects only an unreadable stored config, so the role's
+    // provider and model support is still decided here.
     const available = requireTanStackAIAvailableForRole({
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
@@ -127,7 +139,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
     const runColumns: ResearchRunColumn[] = queued.columns.map((column) => ({
       columnId: column.id,
       question: column.question,
-      answerType: column.answerType,
+      content: column.content,
     }));
     detached(
       runResearchAnswers(

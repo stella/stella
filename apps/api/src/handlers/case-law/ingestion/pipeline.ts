@@ -100,7 +100,11 @@ import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import {
+  AST_MARKUP_RESIDUE,
+  storedDecisionSignal,
+} from "@/api/lib/legal-search/parsers/validate-ast";
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
@@ -1398,6 +1402,30 @@ const processDecisionAttempt = async ({
       } else {
         logger.warn(signal.event, subject);
       }
+    }
+
+    // Same reasoning for markup that survived into the text: a parser
+    // reports its own blocks through `validateAndLog`, so this covers the
+    // decisions no parser produced — the source's payload stored verbatim
+    // as the document. Skipped where a stored document is being preserved,
+    // which stores no text of its own.
+    const storedResidue =
+      preserveStoredDocument ||
+      pendingMirrorPayload !== null ||
+      astBlocks > 0 ||
+      !result.fulltext
+        ? undefined
+        : markupResidueIn(result.fulltext);
+    if (storedResidue) {
+      logger.error(AST_MARKUP_RESIDUE, {
+        sourceId,
+        caseNumber: result.caseNumber,
+        language: result.language,
+        url: result.sourceUrl ?? result.documentUrl ?? "",
+        residueRule: storedResidue.rule,
+        residueAnchorId: "fulltext",
+        residueExcerpt: storedResidue.excerpt,
+      });
     }
 
     // The publisher's own statement of the case's procedural history, where

@@ -30,6 +30,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import type { ResearchAnswerClaim } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
+import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -101,13 +102,30 @@ const statusOf = (result: unknown): number | null =>
     ? result.code
     : null;
 
+/** The yes/no column the product used to have, as the property model spells it. */
+const YES_NO_OPTIONS = [
+  { color: "green", value: "yes" },
+  { color: "red", value: "no" },
+];
+
+const YES_NO_CONTENT = {
+  version: 1,
+  type: "single-select",
+  options: YES_NO_OPTIONS,
+  fallback: null,
+} satisfies CaseLawResearchColumnContent;
+
 const addColumn = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
   question: string,
 ): Promise<SafeId<"caseLawResearchColumn">> => {
   const created = await call(createResearchColumn, organizationId, userId, {
-    body: { question, answerType: "yes_no" },
+    body: {
+      question,
+      answerType: "single-select",
+      options: YES_NO_OPTIONS,
+    },
   });
   if (
     typeof created !== "object" ||
@@ -200,7 +218,7 @@ describe("the column cap counts per organization", () => {
         createdBy: ids.userA1,
         position: index + 1,
         question: `Question ${index}`,
-        answerType: "yes_no" as const,
+        content: YES_NO_CONTENT,
         tool: { version: 1 as const, role: "fast" as const },
       })),
     );
@@ -244,7 +262,7 @@ describe("an organization holding more columns than it may add", () => {
         createdBy: ids.userA1,
         position: index + 1,
         question: `Grandfathered ${index}`,
-        answerType: "yes_no" as const,
+        content: YES_NO_CONTENT,
         tool: { version: 1 as const, role: "fast" as const },
       })),
     );
@@ -343,7 +361,7 @@ describe("a run answers only the cells that need it", () => {
       organizationId: ids.orgA,
       decisionId: decisionOne,
       state: "answered",
-      answer: { type: "yes_no", value: "yes" },
+      answer: { version: 1, type: "single-select", value: "yes" },
       updatedAt: answeredAt,
     });
 
@@ -428,7 +446,7 @@ describe("a run answers only the cells that need it", () => {
         await testDb.transaction(async (tx) => await fn(tx)),
     };
     const columns = [
-      { columnId, question: "Stale claim?", answerType: "yes_no" as const },
+      { columnId, question: "Stale claim?", content: YES_NO_CONTENT },
     ];
 
     await runResearchAnswers(
@@ -487,6 +505,83 @@ describe("a run answers only the cells that need it", () => {
     ).toBe(false);
   });
 
+  test("changing a column's kind drops the answers it held", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Outcome?");
+    await testDb.insert(caseLawResearchAnswers).values({
+      columnId,
+      organizationId: ids.orgA,
+      decisionId: decisionOne,
+      state: "answered",
+      answer: { version: 1, type: "single-select", value: "yes" },
+    });
+
+    const updated = await call(updateResearchColumn, ids.orgA, ids.userA1, {
+      params: { columnId },
+      body: { answerType: "text" },
+    });
+    expect(updated).toMatchObject({ content: { version: 1, type: "text" } });
+
+    const remaining = await testDb
+      .select()
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.columnId, columnId));
+    expect(remaining).toHaveLength(0);
+  });
+
+  test("a select column keeps its answers when nothing about it changes", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Upheld?");
+    await testDb.insert(caseLawResearchAnswers).values({
+      columnId,
+      organizationId: ids.orgA,
+      decisionId: decisionOne,
+      state: "answered",
+      answer: { version: 1, type: "single-select", value: "yes" },
+    });
+
+    await call(updateResearchColumn, ids.orgA, ids.userA1, {
+      params: { columnId },
+      body: { answerType: "single-select", options: YES_NO_OPTIONS },
+    });
+
+    const remaining = await testDb
+      .select({ state: caseLawResearchAnswers.state })
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.columnId, columnId));
+    expect(remaining).toEqual([{ state: "answered" }]);
+  });
+
+  test("dropping an option a cell answered with invalidates the answers", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Upheld too?");
+    await testDb.insert(caseLawResearchAnswers).values({
+      columnId,
+      organizationId: ids.orgA,
+      decisionId: decisionOne,
+      state: "answered",
+      answer: { version: 1, type: "single-select", value: "no" },
+    });
+
+    await call(updateResearchColumn, ids.orgA, ids.userA1, {
+      params: { columnId },
+      body: {
+        answerType: "single-select",
+        options: [{ color: "green", value: "yes" }],
+      },
+    });
+
+    const remaining = await testDb
+      .select()
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.columnId, columnId));
+    expect(remaining).toHaveLength(0);
+  });
+
+  test("a select question without options is refused", async () => {
+    const refused = await call(createResearchColumn, ids.orgA, ids.userA1, {
+      body: { question: "Pick one", answerType: "single-select" },
+    });
+    expect(statusOf(refused)).toBe(400);
+  });
+
   test("a lookup returns only the caller's organization's cells", async () => {
     const columnA = await addColumn(ids.orgA, ids.userA1, "Org A question");
     const columnB = await addColumn(ids.orgB, ids.userB1, "Org B question");
@@ -496,14 +591,14 @@ describe("a run answers only the cells that need it", () => {
         organizationId: ids.orgA,
         decisionId: decisionOne,
         state: "answered",
-        answer: { type: "yes_no", value: "yes" },
+        answer: { version: 1, type: "single-select", value: "yes" },
       },
       {
         columnId: columnB,
         organizationId: ids.orgB,
         decisionId: decisionOne,
         state: "answered",
-        answer: { type: "yes_no", value: "no" },
+        answer: { version: 1, type: "single-select", value: "no" },
       },
     ]);
 
@@ -511,5 +606,32 @@ describe("a run answers only the cells that need it", () => {
       body: { decisionIds: [decisionOne] },
     });
     expect(looked).toMatchObject({ items: [{ columnId: columnA }] });
+  });
+
+  test("an answer that is not field content is refused by the table", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Refused?");
+    // Everything but the answer is the same valid row each time, so the
+    // content check is the only thing that can refuse one.
+    const storeAnswer = async (answer: string): Promise<"stored" | "refused"> =>
+      await testDb
+        .execute(
+          sql`INSERT INTO case_law_research_answers
+            (column_id, organization_id, decision_id, state, answer)
+            VALUES (${columnId}, ${ids.orgA}, ${decisionOne}, 'answered', ${answer}::text::jsonb)`,
+        )
+        .then(
+          (): "stored" => "stored",
+          (): "refused" => "refused",
+        );
+
+    // A document without `type` leaves the kind test unknown, and a CHECK that
+    // evaluates to unknown is satisfied; the guard has to reject it outright.
+    expect(await storeAnswer(`{"version":1}`)).toBe("refused");
+    expect(
+      await storeAnswer(`{"version":1,"type":"yes_no","value":"yes"}`),
+    ).toBe("refused");
+    expect(await storeAnswer(`{"version":1,"type":"text","value":"ano"}`)).toBe(
+      "stored",
+    );
   });
 });

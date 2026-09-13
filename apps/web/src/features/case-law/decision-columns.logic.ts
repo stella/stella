@@ -1,3 +1,6 @@
+import type { ReactElement } from "react";
+
+import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
 
 /**
@@ -22,6 +25,70 @@ export const DECISION_COLUMN_IDS = [
 ] as const;
 
 export type DecisionColumnId = (typeof DECISION_COLUMN_IDS)[number];
+
+type DecisionColumnModel = {
+  /** The width the column starts at, before a stored resize. */
+  size: number;
+  /** Whether the reader may hide it. */
+  hide: boolean;
+  emphasis: "content" | "metadata";
+};
+
+/**
+ * What a reader may do to each decision column, and how wide it starts.
+ *
+ * The case-number column is the row's identity, so it never hides; the rest
+ * are the reader's to arrange. Data rather than part of the renderer, so the
+ * column set stays testable without drawing one.
+ */
+export const DECISION_COLUMN_MODEL = {
+  caseNumber: { size: 320, hide: false, emphasis: "content" },
+  summary: { size: 460, hide: true, emphasis: "content" },
+  court: { size: 220, hide: true, emphasis: "metadata" },
+  country: { size: 90, hide: true, emphasis: "metadata" },
+  date: { size: 130, hide: true, emphasis: "metadata" },
+  type: { size: 120, hide: true, emphasis: "metadata" },
+  headnote: { size: 420, hide: true, emphasis: "content" },
+  citedBy: { size: 96, hide: true, emphasis: "metadata" },
+  language: { size: 120, hide: true, emphasis: "metadata" },
+} as const satisfies Record<DecisionColumnId, DecisionColumnModel>;
+
+/** The narrowest a decision column may be dragged. */
+export const DECISION_COLUMN_MIN_SIZE = 80;
+
+/**
+ * What draws a decision column: the column itself, drawn by
+ * `renderDecisionCell`. One member of the table's column union, declared
+ * here because the public results page cannot reach into a matter's route.
+ */
+export type DecisionColumnRender = {
+  type: "decision";
+  column: DecisionColumnId;
+};
+
+/**
+ * A column the host adds to the decision model: the note a matter pinned the
+ * decision with, the way back out of that matter. It is arranged, hidden and
+ * pinned like any other column, because a reader does not care where a column
+ * came from.
+ */
+export type DecisionExtraColumn = {
+  id: string;
+  /** Already translated; also the label the column chooser shows. */
+  label: string;
+  size: number;
+  /** Synchronous by type: a cell is an element or text, never a promise. */
+  render: (decision: Decision) => ReactElement | string | null;
+};
+
+/** What draws a host-added decision column. One member of the column union. */
+export type DecisionExtraColumnRender = {
+  type: "decision-extra";
+  column: DecisionExtraColumn;
+};
+
+/** The decision columns' labels, resolved for the reader by the caller. */
+export type DecisionTableLabels = Record<DecisionColumnId, string>;
 
 export const DECISION_COLUMN_LABEL_KEYS = {
   caseNumber: "caseLaw.columns.caseNumber",

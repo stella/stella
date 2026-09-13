@@ -3,12 +3,16 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import type { TableColumn } from "@/components/workspaces/table/types";
+import type {
+  TableColumn,
+  TableRowData,
+  TableTreeNode,
+} from "@/components/workspaces/table/types";
 
 export type SortHint = "text" | "date" | "number";
 
-type SortPropertyProps = {
-  column: TableColumn;
+type SortPropertyProps<TRow extends TableRowData> = {
+  column: TableColumn<TRow>;
   sortHint?: SortHint | undefined;
 };
 
@@ -19,7 +23,10 @@ const LABELS = {
   date: { asc: "", desc: "" },
 } as const satisfies Record<SortHint, { asc: string; desc: string }>;
 
-export const SortProperty = ({ column, sortHint }: SortPropertyProps) => {
+export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
+  column,
+  sortHint,
+}: SortPropertyProps<TRow>) => {
   const t = useTranslations("workspaces.properties");
   const disabled = !column.getCanSort();
 

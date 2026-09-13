@@ -6,20 +6,53 @@ import {
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
 } from "@stll/api-contract";
 import type { ResearchAnswerRunCheck } from "@stll/api-contract";
+import { roles } from "@stll/permissions";
 
 import {
+  allowedColumnActions,
   answerKey,
   questionColumnSurface,
+  READ_ONLY_QUESTIONS,
   questionEditDiscardsAnswers,
   questionRunSet,
+  questionSuggestionBody,
   researchRunBatches,
+  UNSEARCHED_SCOPE,
 } from "./question-columns.logic";
-import type { QuestionAnswer, QuestionColumn } from "./question-columns.logic";
+import type {
+  QuestionAnswer,
+  QuestionColumn,
+  QuestionColumnGrants,
+  QuestionSuggestionScope,
+} from "./question-columns.logic";
+
+/**
+ * A yes/no question, which the property model spells as a two-option select:
+ * there is no boolean content type, and the null value a select already has is
+ * the decision not settling the question.
+ */
+const YES_NO_CONTENT = {
+  version: 1,
+  type: "single-select",
+  options: [
+    { value: "yes", color: "green" },
+    { value: "no", color: "red" },
+  ],
+  fallback: null,
+} as const satisfies QuestionColumn["content"];
+
+const TEXT_CONTENT = {
+  version: 1,
+  type: "text",
+} as const satisfies QuestionColumn["content"];
+
+const ids = (count: number): string[] =>
+  Array.from({ length: count }, (_, index) => `d${index}`);
 
 const column = (id: string): QuestionColumn => ({
   id,
   question: `question ${id}`,
-  answerType: "yes_no",
+  content: YES_NO_CONTENT,
 });
 
 const answer = (
@@ -34,7 +67,10 @@ const answer = (
     decisionId,
     state,
     stale,
-    answer: state === "answered" ? { type: "yes_no", value: "yes" } : null,
+    answer:
+      state === "answered"
+        ? { version: 1, type: "single-select", value: "yes" }
+        : null,
   },
 ];
 
@@ -234,9 +270,6 @@ describe("what a run covers", () => {
 });
 
 describe("how a run reaches the endpoint", () => {
-  const ids = (count: number): string[] =>
-    Array.from({ length: count }, (_, index) => `d${index}`);
-
   test("a page fits in one request", () => {
     expect(researchRunBatches([])).toEqual([]);
     expect(
@@ -265,23 +298,178 @@ describe("how a run reaches the endpoint", () => {
 });
 
 describe("who is shown question columns", () => {
-  test("a reader with an organization sees them", () => {
+  const noop = () => undefined;
+  const available = {
+    answersByKey: new Map<string, QuestionAnswer>(),
+    columns,
+    grants: READ_ONLY_QUESTIONS,
+    isRunning: false,
+    onColumnAction: noop,
+    onRetryAnswer: noop,
+    onShowPassage: noop,
+    suggestion: { ...UNSEARCHED_SCOPE, decisionIds: [] },
+  };
+
+  // What the results page passes: questions are authored there, so the
+  // columns are read whether or not this search returned anything.
+  test("a signed-in reader with an organization sees the results table's", () => {
     expect(
-      questionColumnSurface({ columns, hasActiveOrganization: true }),
-    ).toEqual({ type: "available", columns });
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: "org_1",
+        enabled: true,
+      }),
+    ).toEqual({ type: "available", ...available });
   });
 
-  test("a reader without one sees no column and no control", () => {
+  test("a reader without an organization sees no column and no control", () => {
     expect(
-      questionColumnSurface({ columns, hasActiveOrganization: false }),
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: null,
+        enabled: true,
+      }),
     ).toEqual({ type: "hidden" });
+  });
+
+  test("a matter with nothing linked asks nothing of anyone", () => {
+    expect(
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: "org_1",
+        enabled: false,
+      }),
+    ).toEqual({ type: "hidden" });
+  });
+
+  // Reading the organization's answers is not a grant: a member it has not
+  // licensed still gets the columns, and is offered nothing to change.
+  test("a member without a grant still sees the columns", () => {
+    expect(
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: "org_1",
+        enabled: true,
+        grants: READ_ONLY_QUESTIONS,
+      }).type,
+    ).toBe("available");
+  });
+});
+
+describe("what each role may do to a question column", () => {
+  // Read out of the permission matrix rather than restated here, so a grant
+  // moved between roles fails this test instead of drifting past it.
+  const grantsFor = (role: keyof typeof roles): QuestionColumnGrants => ({
+    create: roles[role].authorize({ caseLawResearch: ["create"] }).success,
+    update: roles[role].authorize({ caseLawResearch: ["update"] }).success,
+    delete: roles[role].authorize({ caseLawResearch: ["delete"] }).success,
+    run: roles[role].authorize({ caseLawResearch: ["run"] }).success,
+  });
+
+  test.each(["owner", "admin", "member"] as const)(
+    "%s authors, answers and removes",
+    (role) => {
+      const grants = grantsFor(role);
+
+      expect(grants.create).toBe(true);
+      expect(allowedColumnActions(grants)).toEqual(["edit", "run", "delete"]);
+    },
+  );
+
+  test.each(["intern", "external"] as const)(
+    "%s reads the answers and is offered nothing",
+    (role) => {
+      const grants = grantsFor(role);
+
+      expect(grants).toEqual(READ_ONLY_QUESTIONS);
+      expect(allowedColumnActions(grants)).toEqual([]);
+    },
+  );
+
+  test("a reader who may only ask again gets just that", () => {
+    expect(allowedColumnActions({ ...READ_ONLY_QUESTIONS, run: true })).toEqual(
+      ["run"],
+    );
+  });
+});
+
+describe("what a suggestion request carries", () => {
+  const scope: QuestionSuggestionScope = {
+    country: "CZ",
+    query: "náhrada škody",
+    filters: {
+      court: "Nejvyšší soud",
+      decisionType: undefined,
+      dateFrom: "2020-01-01",
+      dateTo: undefined,
+      language: undefined,
+    },
+    decisionIds: ids(9),
+  };
+
+  test("the search, the answer kind and its options", () => {
+    expect(
+      questionSuggestionBody({
+        draft: {
+          question: "  Byla žaloba zamítnuta?  ",
+          content: YES_NO_CONTENT,
+        },
+        instruction: "Make it concise.",
+        scope,
+      }),
+    ).toEqual({
+      question: "Byla žaloba zamítnuta?",
+      answerKind: "single-select",
+      options: YES_NO_CONTENT.options,
+      instruction: "Make it concise.",
+      country: "CZ",
+      query: "náhrada škody",
+      filters: { court: "Nejvyšší soud", dateFrom: "2020-01-01" },
+      decisionIds: ids(5),
+    });
+  });
+
+  test("at most the sample allowance of decisions, and only their ids", () => {
+    const body = questionSuggestionBody({
+      draft: { question: "Which damages head?", content: TEXT_CONTENT },
+      instruction: "Polish the writing.",
+      scope,
+    });
+
+    expect(scope.decisionIds.length).toBeGreaterThan(body.decisionIds.length);
+    expect(body.decisionIds).toEqual(scope.decisionIds.slice(0, 5));
+    expect(Object.keys(body).toSorted()).toEqual([
+      "answerKind",
+      "country",
+      "decisionIds",
+      "filters",
+      "instruction",
+      "query",
+      "question",
+    ]);
+  });
+
+  test("a listing nobody searched for names no jurisdiction and no query", () => {
+    const body = questionSuggestionBody({
+      draft: { question: "Which damages head?", content: TEXT_CONTENT },
+      instruction: "Polish the writing.",
+      scope: { ...UNSEARCHED_SCOPE, decisionIds: ids(2) },
+    });
+
+    expect(body).toEqual({
+      question: "Which damages head?",
+      answerKind: "text",
+      instruction: "Polish the writing.",
+      filters: {},
+      decisionIds: ids(2),
+    });
   });
 });
 
 describe("when saving a question throws its answers away", () => {
   const stored = {
     question: "Was the termination valid?",
-    answerType: "yes_no",
+    content: YES_NO_CONTENT,
   } as const;
 
   test("adding a question has nothing to discard", () => {
@@ -318,9 +506,67 @@ describe("when saving a question throws its answers away", () => {
   test("a different kind of answer discards them", () => {
     expect(
       questionEditDiscardsAnswers({
-        draft: { ...stored, answerType: "text" },
+        draft: { ...stored, content: { version: 1, type: "text" } },
         stored,
       }),
     ).toBe(true);
+  });
+
+  // An answer holding an option the column no longer offers is not an answer
+  // any more, and the server drops the cells on any content change.
+  test("dropping an option discards them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: {
+          ...stored,
+          content: {
+            ...YES_NO_CONTENT,
+            options: [{ value: "yes", color: "green" }],
+          },
+        },
+        stored,
+      }),
+    ).toBe(true);
+  });
+
+  test("recolouring an option discards them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: {
+          ...stored,
+          content: {
+            ...YES_NO_CONTENT,
+            options: [
+              { value: "yes", color: "green" },
+              { value: "no", color: "orange" },
+            ],
+          },
+        },
+        stored,
+      }),
+    ).toBe(true);
+  });
+
+  // The stored content arrives from a JSONB column and the draft is built by
+  // the composer, so the same options in the same order must compare equal
+  // however either side happens to order its keys.
+  test("the same options written in another key order keep them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: {
+          ...stored,
+          content: {
+            fallback: null,
+            options: [
+              { color: "green", value: "yes" },
+              { color: "red", value: "no" },
+            ],
+            type: "single-select",
+            version: 1,
+          },
+        },
+        stored,
+      }),
+    ).toBe(false);
   });
 });

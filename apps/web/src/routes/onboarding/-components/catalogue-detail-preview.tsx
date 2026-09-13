@@ -3,7 +3,7 @@ import {
   BanknoteIcon,
   CogIcon,
   ExternalLinkIcon,
-  ScaleIcon,
+  FileBadgeIcon,
   TagIcon,
   UserIcon,
   XIcon,
@@ -106,7 +106,7 @@ export const CatalogueDetailPreview = ({
                 />
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailLicense")}
-                  icon={ScaleIcon}
+                  icon={FileBadgeIcon}
                   value={entry.license}
                 />
                 <Field

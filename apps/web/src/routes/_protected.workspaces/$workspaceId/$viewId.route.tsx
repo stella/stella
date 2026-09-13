@@ -18,6 +18,8 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
+import { resolveEntityFind } from "@/components/workspaces/table/entity-find.logic";
+import { UNRESTRICTED_FIND } from "@/components/workspaces/table/table-find.logic";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -47,10 +49,6 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { windowIncludesAssignees } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import {
-  resolveTableFind,
-  UNRESTRICTED_FIND,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
@@ -222,8 +220,9 @@ export const Route = createFileRoute(
       // A live find is part of the window's key: without it the layout would
       // suspend a second time on the window it actually reads.
       const find = useTableStore.getState().find[workspaceId]?.[activeView.id];
-      const { request } = resolveTableFind({
-        layout: activeView.layout,
+      const { request } = resolveEntityFind({
+        hasNameColumn: includesListItems(activeView.layout.filters),
+        hiddenProperties: activeView.layout.hiddenProperties,
         properties,
         selection: find?.scope ?? UNRESTRICTED_FIND,
         term: find?.submitted ?? "",

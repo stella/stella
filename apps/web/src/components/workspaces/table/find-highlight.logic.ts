@@ -60,3 +60,13 @@ export const splitByMatch = (text: string, term: string): TextSegment[] => {
   }
   return segments;
 };
+
+/**
+ * Whether the find term produced any run in `text`.
+ *
+ * Defined through the splitter rather than beside it: a client-side find uses
+ * this to decide which rows stay and the same splitter to mark them, so a row
+ * survives exactly when a mark is drawn in it.
+ */
+export const containsMatch = (text: string, term: string): boolean =>
+  splitByMatch(text, term).some((segment) => segment.matched);

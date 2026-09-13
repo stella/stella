@@ -13,7 +13,7 @@ const routeParams = t.Object({
 });
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { integration: ["delete"] },
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
 } satisfies HandlerConfig;

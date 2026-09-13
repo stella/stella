@@ -10,7 +10,6 @@ import {
   Columns3Icon,
   ClockIcon,
   DownloadIcon,
-  EyeIcon,
   HashIcon,
   Loader2Icon,
   PlayIcon,
@@ -50,11 +49,14 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/components/workspaces/entity-utils";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
+import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import { resolveDocumentTypeClassifier } from "@/components/workspaces/table/group-columns";
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -93,7 +95,6 @@ import { useWorkspaceStore } from "@/lib/workspaces/store";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
-import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
@@ -138,6 +139,7 @@ export const ViewToolbar = ({
       layout: mergeLayout(view.layout, changes),
     });
   };
+  const columnToggleGroups = useMatterColumnToggleGroups(properties);
 
   return (
     <div className="flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:ms-auto md:flex-wrap md:justify-end md:overflow-visible [&::-webkit-scrollbar]:hidden">
@@ -175,10 +177,10 @@ export const ViewToolbar = ({
         sorts={sorts}
       />
 
-      <PropertiesToggle
-        hiddenProperties={hiddenProperties}
+      <ColumnToggle
+        groups={columnToggleGroups}
+        hidden={hiddenProperties}
         onChange={(next) => handleUpdate({ hiddenProperties: next })}
-        properties={properties}
       />
 
       {view.layout.type === "kanban" && (
@@ -277,7 +279,10 @@ export const ViewToolbar = ({
           <TableContentModeControl viewId={view.id} workspaceId={workspaceId} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
           <RunPlaybookControl workspaceId={workspaceId} />
-          <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
+          <BulkAddColumns
+            target={{ kind: "workspace", workspaceId }}
+            triggerVariant="labelled"
+          />
         </>
       )}
 
@@ -1172,125 +1177,75 @@ const KanbanGroupingSettings = ({
   );
 };
 
-type PropertiesToggleProps = {
-  properties: WorkspaceProperty[];
-  hiddenProperties: string[];
-  onChange: (hiddenProperties: string[]) => void;
-};
-
-const metadataFields = [
-  { id: getInternalPropertyId("created-by"), name: "Author", icon: UserIcon },
+const METADATA_COLUMNS = [
+  {
+    id: getInternalPropertyId("created-by"),
+    labelKey: "common.author",
+    icon: UserIcon,
+  },
   {
     id: getInternalPropertyId("updated-at"),
-    name: "Last updated",
+    labelKey: "workspaces.filesystem.lastUpdated",
     icon: ClockIcon,
   },
-  { id: getInternalPropertyId("version"), name: "Version", icon: HashIcon },
-] as const;
+  {
+    id: getInternalPropertyId("version"),
+    labelKey: "common.version",
+    icon: HashIcon,
+  },
+] as const satisfies readonly {
+  id: string;
+  labelKey: TranslationKey;
+  icon: ComponentType<{ className?: string }>;
+}[];
 
-const PropertiesToggle = ({
-  properties,
-  hiddenProperties,
-  onChange,
-}: PropertiesToggleProps) => {
+/**
+ * A matter's toggleable columns: its metadata, the properties someone fills
+ * in, and the ones AI answers.
+ *
+ * Verdict properties render as a badge inside their ASK column rather than a
+ * column of their own, so they are omitted: toggling one would target a
+ * column that does not exist. Their visibility follows the ASK column.
+ */
+const useMatterColumnToggleGroups = (
+  properties: WorkspaceProperty[],
+): ColumnToggleGroup[] => {
   const t = useTranslations();
-  const toggleProperty = (propertyId: string) => {
-    if (hiddenProperties.includes(propertyId)) {
-      const next = hiddenProperties.filter((id) => id !== propertyId);
-      onChange(next);
-    } else {
-      onChange([...hiddenProperties, propertyId]);
-    }
-  };
+  const propertyColumns = (tool: WorkspaceProperty["tool"]["type"]) =>
+    properties
+      .filter((property) => property.tool.type === tool)
+      .map((property) => ({
+        id: property.id,
+        name: property.name,
+        icon: <PropertyIcon type={property.content.type} />,
+      }));
 
-  const manualProperties = properties.filter(
-    (p) => p.tool.type === "manual-input",
-  );
-  // Verdict properties render as a badge inside their ASK column rather than a
-  // column of their own, so they're omitted here: toggling them would target a
-  // column that no longer exists. Their visibility follows the ASK column.
-  const aiProperties = properties.filter((p) => p.tool.type === "ai-model");
-
-  return (
-    <Menu>
-      <MenuTrigger
-        aria-label={t("common.columns")}
-        render={<Button size="icon-xs" variant="ghost" />}
-      >
-        <EyeIcon className="size-3.5" />
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuGroup>
-          <MenuGroupLabel>{t("common.metadata")}</MenuGroupLabel>
-          {metadataFields.map((meta) => {
-            const isVisible = !hiddenProperties.includes(meta.id);
-            return (
-              <MenuItem
-                key={meta.id}
-                closeOnClick={false}
-                onClick={() => toggleProperty(meta.id)}
-              >
-                <meta.icon className="size-4" />
-                <span className="flex-1">{meta.name}</span>
-                {isVisible && <span className="text-primary">{"\u2713"}</span>}
-              </MenuItem>
-            );
-          })}
-        </MenuGroup>
-        {manualProperties.length > 0 && (
-          <>
-            <MenuSeparator />
-            <MenuGroup>
-              <MenuGroupLabel>{t("common.properties")}</MenuGroupLabel>
-              {manualProperties.map((prop) => {
-                const isVisible = !hiddenProperties.includes(prop.id);
-                return (
-                  <MenuItem
-                    closeOnClick={false}
-                    key={prop.id}
-                    onClick={() => toggleProperty(prop.id)}
-                  >
-                    <PropertyIcon type={prop.content.type} />
-                    <span className="flex-1">{prop.name}</span>
-                    {isVisible && (
-                      <span className="text-primary">{"\u2713"}</span>
-                    )}
-                  </MenuItem>
-                );
-              })}
-            </MenuGroup>
-          </>
-        )}
-        {aiProperties.length > 0 && (
-          <>
-            <MenuSeparator />
-            <MenuGroup>
-              <MenuGroupLabel>
-                <SparklesIcon className="me-1 inline size-3" />
-                {t("workspaces.views.aiGenerated")}
-              </MenuGroupLabel>
-              {aiProperties.map((prop) => {
-                const isVisible = !hiddenProperties.includes(prop.id);
-                return (
-                  <MenuItem
-                    closeOnClick={false}
-                    key={prop.id}
-                    onClick={() => toggleProperty(prop.id)}
-                  >
-                    <PropertyIcon type={prop.content.type} />
-                    <span className="flex-1">{prop.name}</span>
-                    {isVisible && (
-                      <span className="text-primary">{"\u2713"}</span>
-                    )}
-                  </MenuItem>
-                );
-              })}
-            </MenuGroup>
-          </>
-        )}
-      </MenuPopup>
-    </Menu>
-  );
+  return [
+    {
+      id: "metadata",
+      label: t("common.metadata"),
+      columns: METADATA_COLUMNS.map((meta) => ({
+        id: meta.id,
+        name: t(meta.labelKey),
+        icon: <meta.icon className="size-4" />,
+      })),
+    },
+    {
+      id: "properties",
+      label: t("common.properties"),
+      columns: propertyColumns("manual-input"),
+    },
+    {
+      id: "ai",
+      label: (
+        <>
+          <SparklesIcon className="me-1 inline size-3" />
+          {t("workspaces.views.aiGenerated")}
+        </>
+      ),
+      columns: propertyColumns("ai-model"),
+    },
+  ];
 };
 
 // -- Calendar controls --

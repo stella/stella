@@ -60,6 +60,8 @@ const CITING_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/citing-decisions.ts";
 const LAUNCH_READINESS_FILE =
   "packages/api-contract/src/case-law-launch-readiness.ts";
+const RESEARCH_SUGGEST_PROMPT_FILE =
+  "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts";
 
 /**
  * Every route this slice mounts, sorted.
@@ -506,5 +508,18 @@ describe("public case-law route boundary", () => {
     );
     expect(decisionProvisionsSource).not.toContain("decisionId: SafeId");
     expect(citingDecisionsSource).toContain("redistributableCaseLawSource");
+  });
+
+  test("the question suggestion grounds only in what the public gate returns", async () => {
+    const suggestSource = await readSource(RESEARCH_SUGGEST_PROMPT_FILE);
+
+    // The grounding is read here, never accepted from the client: the summaries
+    // reader is the same redistribution-gated read the answer runner uses, and
+    // a decision it withholds simply never reaches the prompt.
+    expect(suggestSource).toContain("readPublicDecisionSummaries({");
+    expect(suggestSource).toContain("caseLawDb: caseLawPublicReadDb");
+    // Only the published headnote, never the decision's own text.
+    expect(suggestSource).not.toContain("readDecisionText");
+    expect(suggestSource).not.toContain("body.samples");
   });
 });

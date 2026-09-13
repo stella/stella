@@ -15,6 +15,7 @@ import { readOverviewActivityPage } from "./read-overview-activity.query";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "read",
   query: t.Object({
     ...matterActivityFilterQueryProperties,
     cursor: t.Optional(tPaginationCursor()),

@@ -25,3 +25,44 @@ export const decisionsLoadMode = ({
   hasCachedPages,
 }: DecisionsLoadModeInput): DecisionsLoadMode =>
   hasCachedPages || cause === "stay" ? "background" : "await";
+
+/**
+ * Whether the router has this page's rows yet. Both renders are the same page:
+ * pending is the page the URL describes, before any row exists.
+ */
+export type DecisionRouteState = "pending" | "loaded";
+
+/** What the results region shows while the page around it stays put. */
+export type DecisionRowsPhase =
+  /** There are no rows to draw: the grid stands in skeleton. */
+  | "skeleton"
+  /** The rows on screen answer the search before this one. */
+  | "stale"
+  /** The rows answer the search the rest of the page describes. */
+  | "rows";
+
+type DecisionRowsPhaseInput = {
+  routeState: DecisionRouteState;
+  /** Whether the row query has yet to resolve anything for this search. */
+  isLoading: boolean;
+  /** Whether the rows on screen were kept from the previous search. */
+  isPlaceholderData: boolean;
+};
+
+/**
+ * The rows are the only part of the page that waits, so this is the one place
+ * that decides what they show. A pending render and a first fetch are the same
+ * thing to the reader — the page is drawn and the grid is empty — and rows are
+ * only called stale when there are rows to keep.
+ */
+export const decisionRowsPhase = ({
+  isLoading,
+  isPlaceholderData,
+  routeState,
+}: DecisionRowsPhaseInput): DecisionRowsPhase => {
+  if (routeState === "pending" || isLoading) {
+    return "skeleton";
+  }
+
+  return isPlaceholderData ? "stale" : "rows";
+};

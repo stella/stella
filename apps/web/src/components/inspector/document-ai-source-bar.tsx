@@ -111,9 +111,12 @@ export const DocumentAiSourceBar = ({
       justification
         ? {
             ...justification.content,
+            // Named positively: only the two block kinds that cite a workspace
+            // file belong on a file's source bar, so a block kind citing
+            // something else (a decision passage) never lands here by default.
             blocks: justification.content.blocks.filter(
               (block) =>
-                block.kind !== "playbook-verdict" &&
+                (block.kind === "pdf-bates" || block.kind === "docx-folio") &&
                 block.fileFieldId === activeTab.id,
             ),
           }
@@ -351,6 +354,12 @@ export const DocumentAiSourceBar = ({
       return;
     }
 
+    // A decision passage points into the public corpus, not into this file;
+    // the block filter above keeps it off this bar, and the chip draws nothing.
+    if (citation.kind === "decision-passage") {
+      return;
+    }
+
     setActiveJustification({
       id: justification.id,
       pageNumber: citation.pageNumber,
@@ -551,6 +560,11 @@ const SourceCitationChip = ({
         p.&nbsp;{citation.pageNumber}
       </button>
     );
+  }
+
+  // Filtered off this bar before it renders; nothing here points at a corpus.
+  if (citation.kind === "decision-passage") {
+    return null;
   }
 
   if (citation.citationStatus === "unverified") {

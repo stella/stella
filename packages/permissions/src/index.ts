@@ -37,6 +37,23 @@ export const statements = {
   auditLog: ["read"],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: ["create", "update"],
+  // The organization's case-law question columns and the AI runs that fill
+  // them. Organization-scoped like `agentSkill`: one set serves every member,
+  // so authoring and running it is a grant of its own rather than a matter
+  // permission.
+  caseLawResearch: ["create", "update", "delete", "run"],
+  // Highlights and comments a reader leaves on a decision. Private by
+  // default, shareable with colleagues, so the mark is organization content
+  // rather than a view preference.
+  caseLawAnnotation: ["create", "update", "delete"],
+  // A reader's own stored search: their criteria, their matters, capped per
+  // user, and audited like any other stored query.
+  savedSearch: ["create", "update", "delete"],
+  // The member's own link between their account and an outside system: an
+  // MCP server they connect, a SharePoint sign-in, an agent client bound to
+  // them, a desktop registry key. What the organization permits to be linked
+  // at all stays under `organizationSettings`.
+  integration: ["create", "update", "delete"],
 } as const;
 
 type PermissionMap = {
@@ -79,6 +96,10 @@ const externalStellaGrants = {
   auditLog: [],
   agentSkill: [],
   firmMemory: [],
+  caseLawResearch: [],
+  caseLawAnnotation: [],
+  savedSearch: [],
+  integration: [],
 } satisfies StellaPermissionMap;
 
 const internStellaGrants = {
@@ -88,6 +109,12 @@ const internStellaGrants = {
   timeEntry: ["read", "create", "update"],
   expense: ["create", "update"],
   chat: ["create", "update", "delete"],
+  // The same line the time entry, expense and chat grants draw: an intern
+  // keeps their own work, so they annotate, store a search, and connect
+  // their own account.
+  caseLawAnnotation: ["create", "update", "delete"],
+  savedSearch: ["create", "update", "delete"],
+  integration: ["create", "update", "delete"],
 } satisfies StellaPermissionMap;
 
 const memberStellaGrants = {
@@ -112,6 +139,14 @@ const memberStellaGrants = {
   auditLog: [],
   agentSkill: ["create", "update", "delete", "propose", "comment"],
   firmMemory: [],
+  // Staff author and run research columns in full, as they do agent skills:
+  // the matrix reserves management-only treatment for firm administration
+  // (rates, firm memory, the audit log) and for approval actions, not for
+  // deleting a peer's work.
+  caseLawResearch: ["create", "update", "delete", "run"],
+  caseLawAnnotation: ["create", "update", "delete"],
+  savedSearch: ["create", "update", "delete"],
+  integration: ["create", "update", "delete"],
 } satisfies StellaPermissionMap;
 
 const managementStellaGrants = {

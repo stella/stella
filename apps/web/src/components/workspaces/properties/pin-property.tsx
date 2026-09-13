@@ -5,16 +5,22 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import type { TableColumn } from "@/components/workspaces/table/types";
+import type {
+  TableColumn,
+  TableRowData,
+  TableTreeNode,
+} from "@/components/workspaces/table/types";
 
-type PinPropertyProps = {
-  column: TableColumn;
+type PinPropertyProps<TRow extends TableRowData> = {
+  column: TableColumn<TRow>;
 };
 
 const isColumnPinned = (pinning: ColumnPinningState, columnId: string) =>
   pinning.start.includes(columnId) || pinning.end.includes(columnId);
 
-export const PinProperty = ({ column }: PinPropertyProps) => {
+export const PinProperty = <TRow extends TableRowData = TableTreeNode>({
+  column,
+}: PinPropertyProps<TRow>) => {
   const t = useTranslations();
   // Subscribe to the pinning slice instead of calling `column.getIsPinned()`.
   // Column objects are memoized on `options.columns`, so their identity does

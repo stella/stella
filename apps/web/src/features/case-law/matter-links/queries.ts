@@ -73,9 +73,7 @@ export const linkDecisionsToMatter = async ({
     }),
   );
 
-export type MatterLinkBatchResult = Awaited<
-  ReturnType<typeof linkDecisionsToMatter>
->;
+type MatterLinkBatchResult = Awaited<ReturnType<typeof linkDecisionsToMatter>>;
 
 /** Why one decision of a batch was refused; the toast names each reason. */
 export type MatterLinkRejectionReason =

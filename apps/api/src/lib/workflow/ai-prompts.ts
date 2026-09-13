@@ -3,8 +3,9 @@ import * as v from "valibot";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
-import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import type { PromptSafeText } from "@/api/lib/prompt-safety";
+import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
+import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
@@ -51,65 +52,7 @@ export const buildExtractedFileMessage = ({
     content,
   ].join("\n\n");
 
-// --------------- Schema context ---------------
-
-const context = {
-  text: {
-    description:
-      "Answer for property. Keep it plain text, keep it " +
-      "short and concise, less than 100 characters. Answer null if the " +
-      "source does not state this value; never guess.",
-    examples: ["Contract for sale of goods", null],
-  },
-  singleSelect: {
-    description:
-      "Answer for property. Select exactly one option from the list " +
-      "below, or null if the source does not state this value or no " +
-      "option applies; never guess.",
-    examples: [null],
-  },
-  multiSelect: {
-    description:
-      "Answer for property. Select one or more options from the list " +
-      "below, or null if the source does not state this value or no " +
-      "option applies; never guess.",
-    examples: [null],
-  },
-  date: {
-    description:
-      "Answer in ISO YYYY-MM-DD format, " +
-      "or null if no date is found in the document.",
-    examples: ["2024-03-15", null],
-  },
-  int: {
-    description:
-      "Answer for property, or null if the source does not state this " +
-      "value; never guess.",
-    amount: {
-      description: "The integer amount extracted from the document",
-      examples: [1500],
-    },
-    currency: {
-      description:
-        "ISO 4217 currency code if the value represents money, " +
-        "otherwise null",
-      examples: ["USD", "EUR", "CZK"],
-    },
-  },
-};
-
-const describeOptions = (options: string[]): string =>
-  `Valid options: ${options.join(", ")}.`;
-
 // --------------- Schema builders ---------------
-
-// `null` is an explicit "the source does not state this" answer, valid for
-// every property type — not just date/select, which supported it already.
-export type Answer =
-  | string
-  | string[]
-  | null
-  | { amount: number; currency: string | null };
 
 const createJustificationSchema = (filenames: JustificationFilenames) => {
   const hasPdf = filenames.some((file) => file.kind === "pdf-bates");
@@ -232,102 +175,16 @@ export const buildBatchSchema = (
   > = {};
 
   for (const property of properties) {
-    const content = property.content;
-
-    switch (content.type) {
-      case "text": {
-        schemaShape[property.id] = v.strictObject({
-          answer: v.pipe(
-            v.nullable(v.string()),
-            v.description(context.text.description),
-            v.examples(context.text.examples),
-          ),
-          justification: justificationSchema,
-        });
-        break;
-      }
-      case "single-select": {
-        const options = content.options.map((opt) => opt.value);
-        if (options.length > 0) {
-          // The picklist isn't enforced as a JSON Schema enum: a model
-          // deviation would otherwise fail `v.parse` for the whole batch
-          // object, not just this property. The raw string passes through
-          // to `validateAIOutput`, which checks membership against
-          // `content.options` and reports a property-scoped
-          // `WorkflowValidationError` instead of a silent null.
-          schemaShape[property.id] = v.strictObject({
-            answer: v.pipe(
-              v.nullable(v.string()),
-              v.description(
-                `${context.singleSelect.description} ${describeOptions(options)}`,
-              ),
-              v.examples(context.singleSelect.examples),
-            ),
-            justification: justificationSchema,
-          });
-        }
-        break;
-      }
-      case "multi-select": {
-        const options = content.options.map((opt) => opt.value);
-        if (options.length > 0) {
-          // See the single-select case above: options pass through as raw
-          // strings so an out-of-picklist answer surfaces as a validation
-          // error on this property, not a silent null or a whole-batch parse
-          // failure.
-          schemaShape[property.id] = v.strictObject({
-            answer: v.pipe(
-              v.nullable(v.pipe(v.array(v.string()), v.nonEmpty())),
-              v.description(
-                `${context.multiSelect.description} ${describeOptions(options)}`,
-              ),
-              v.examples(context.multiSelect.examples),
-            ),
-            justification: justificationSchema,
-          });
-        }
-        break;
-      }
-      case "date": {
-        schemaShape[property.id] = v.strictObject({
-          answer: v.pipe(
-            v.nullable(v.pipe(v.string(), v.isoDate())),
-            v.description(context.date.description),
-            v.examples(context.date.examples),
-          ),
-          justification: justificationSchema,
-        });
-        break;
-      }
-      case "int": {
-        schemaShape[property.id] = v.strictObject({
-          answer: v.pipe(
-            v.nullable(
-              v.strictObject({
-                amount: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.description(context.int.amount.description),
-                  v.examples(context.int.amount.examples),
-                ),
-                currency: v.pipe(
-                  v.nullable(v.string()),
-                  v.description(context.int.currency.description),
-                  v.examples(context.int.currency.examples),
-                ),
-              }),
-            ),
-            v.description(context.int.description),
-          ),
-          justification: justificationSchema,
-        });
-        break;
-      }
-      default:
-        throw new Unreachable({
-          message: "Property type not matched",
-        });
+    // Null only for a select with no options: there is nothing to choose from,
+    // so the column is left out of the batch rather than asked unanswerably.
+    const answer = answerSchemaForContent(property.content);
+    if (answer === null) {
+      continue;
     }
+    schemaShape[property.id] = v.strictObject({
+      answer,
+      justification: justificationSchema,
+    });
   }
 
   return v.strictObject(schemaShape);

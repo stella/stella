@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   keepPreviousData,
@@ -29,9 +29,9 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import {
   activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
@@ -63,10 +63,7 @@ import type { DecisionFilterChip } from "@/features/case-law/components/decision
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
-import {
-  DEFAULT_DECISION_TABLE_LAYOUT,
-  toggledFacetRail,
-} from "@/features/case-law/decision-column-preferences.logic";
+import { toggledFacetRail } from "@/features/case-law/decision-column-preferences.logic";
 import {
   decisionPageIndex,
   decisionPageNumber,
@@ -78,10 +75,14 @@ import {
   reachableDecisionPage,
 } from "@/features/case-law/decision-pagination.logic";
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
-import { decisionsLoadMode } from "@/features/case-law/decisions-load-mode.logic";
+import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
+import {
+  decisionRowsPhase,
+  decisionsLoadMode,
+} from "@/features/case-law/decisions-load-mode.logic";
+import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import { SaveIntoMatterAction } from "@/features/case-law/matter-links/save-into-matter";
-import { openDecisionAtPassage } from "@/features/case-law/open-decision-at-passage";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -98,7 +99,6 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
-import { NO_QUESTION_COLUMNS } from "@/features/case-law/research/question-columns.logic";
 import {
   addRefineTerm,
   canonicalRefinements,
@@ -106,6 +106,7 @@ import {
   refineTermsOfQuery,
   removeRefineTerm,
 } from "@/features/case-law/search-refine.logic";
+import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -488,53 +489,20 @@ export const Route = createFileRoute("/law/cases/")({
       type: "website",
     });
   },
-  component: PublicCaseLawIndex,
-  pendingComponent: PublicCaseLawIndexPending,
+  // One page, two states. Only a cold arrival renders the pending one — a
+  // filter, a sort or a page step keeps the page it is already on — and what
+  // waits there is the grid alone: the box, the rail, the toolbar, the chips
+  // and the pager are the URL's own and are already correct.
+  component: () => <PublicCaseLawIndex routeState="loaded" />,
+  pendingComponent: () => <PublicCaseLawIndex routeState="pending" />,
 });
 
-// Only a cold arrival reaches this: a filter, a sort or a page step keeps the
-// real page and swaps its rows. The shape is the real one — same heading, same
-// search row, rail, count line, table header and pager — so the values shimmer
-// into the layout they will occupy rather than the layout jumping around them.
-function PublicCaseLawIndexPending() {
-  const t = useTranslations();
-  return (
-    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <h1 className="sr-only">{t("common.caseLaw")}</h1>
-      <div className="flex flex-wrap items-center gap-2">
-        <Skeleton className="h-9 w-40 rounded-md" />
-        <Skeleton className="h-9 w-full max-w-md flex-1 rounded-md" />
-      </div>
-      {/*
-        No rail column: the defaults fold it away, and storage — which is what
-        could say otherwise — is not readable here.
-      */}
-      <div className="flex min-w-0 flex-1 items-start gap-6">
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <Skeleton className="h-7 w-full max-w-sm" />
-          {/*
-            The defaults, not the reader's stored choice: storage is not
-            readable during SSR, and a header that changes on hydration is a
-            worse shift than one that occasionally shows a column too many.
-          */}
-          <DecisionTable
-            decisions={[]}
-            isLoading
-            layout={DEFAULT_DECISION_TABLE_LAYOUT}
-            onLayoutChange={() => undefined}
-            onSelectedIdsChange={() => undefined}
-            order="newest"
-            questions={null}
-            selectedIds={EMPTY_SELECTION}
-          />
-          <Skeleton className="h-8 w-full max-w-sm" />
-        </div>
-      </div>
-    </main>
-  );
-}
+type PublicCaseLawIndexProps = {
+  /** Whether the router has this page's rows yet. */
+  routeState: DecisionRouteState;
+};
 
-function PublicCaseLawIndex() {
+function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
@@ -573,9 +541,15 @@ function PublicCaseLawIndex() {
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
 
+  // The resolution `beforeLoad` performs, not a reading of the canonical URL
+  // it writes: a pending render can precede that redirect, and a page drawn
+  // for the locale's jurisdiction is the page the redirect is on its way to.
+  // A loaded page always carries the country, so this reads it back.
   const scope =
-    publicCaseLawCountryFromParam(search.country) ??
-    panic("The case-law route rendered without a launch-ready country.");
+    resolveCaseLawRouteCountry({
+      country: search.country,
+      locale: getMessageLocale(),
+    }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
   const effectiveQuery = queryWithRefinements(search.q, search.within);
   const intent = readDecisionIntent(effectiveQuery, { jurisdiction: scope });
@@ -613,6 +587,9 @@ function PublicCaseLawIndex() {
   }
 
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
+  // The results column — toolbar, chips and grid: what a Cmd/Ctrl+F inside
+  // belongs to, so a press with a cell focused opens this table's find.
+  const paneRef = useRef<HTMLDivElement>(null);
 
   const pageSize = decisionPageSize(search.pageSize);
   // Read, not suspended on: the loader primes this only on a cold arrival, and
@@ -635,10 +612,11 @@ function PublicCaseLawIndex() {
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
   });
-  // The rows on screen answer the search before this one. Everything else on
-  // the page is already the new search's, so the rows say so themselves rather
+  // The rows are the only region that waits: either they are not there yet,
+  // or they answer the search before this one and say so themselves rather
   // than the page being replaced.
-  const isRefreshing = isPlaceholderData;
+  const rows = decisionRowsPhase({ isLoading, isPlaceholderData, routeState });
+  const isRefreshing = rows === "stale";
 
   // One page of the chain is on screen, never the chain itself: the pages
   // behind the reader are cursors kept for the links, not rows to draw.
@@ -714,6 +692,7 @@ function PublicCaseLawIndex() {
 
   // Picked rows narrow a run to them; the page they belong to is the only
   // page they mean anything on, so a step forward clears them.
+  const openDecision = useOpenDecisionInspector();
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
   const [selectionPage, setSelectionPage] = useState(pager.currentPage);
@@ -726,14 +705,31 @@ function PublicCaseLawIndex() {
     // The results page is where questions are authored, so the columns are
     // read whether or not this particular search returned anything.
     enabled: true,
-    onShowSource: (decision, anchorId) => {
-      detached(
-        openDecisionAtPassage(routerNavigate, decision, anchorId),
-        "cases.show-source",
-      );
-    },
+    onShowPassage: openDecision,
     pageDecisionIds,
+    // The search the reader is looking at, so a suggested question targets
+    // these decisions rather than court decisions in general.
+    search: {
+      country: filters.country,
+      query: filters.search,
+      filters: {
+        court: filters.court,
+        decisionType: filters.decisionType,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        language: filters.language,
+      },
+    },
     selectedDecisionIds: selectedIds,
+  });
+  // Find-in-table over the page on screen, beside the control that narrows the
+  // search itself. Kept per jurisdiction, the way the arrangement is.
+  const find = useDecisionFind({
+    decisions: ordered,
+    layout,
+    paneRef,
+    questions: questions.surface,
+    surfaceKey: countryParam,
   });
 
   const setPageSize = (next: DecisionPageSize) => {
@@ -854,7 +850,6 @@ function PublicCaseLawIndex() {
   const sort: SearchSort | null = sortable
     ? decisionSortOrder(search.sort)
     : null;
-  const order = intent.type === "empty" ? "newest" : (sort ?? "relevance");
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -887,9 +882,10 @@ function PublicCaseLawIndex() {
           }}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
           <DecisionResultsToolbar
             activeFilterCount={activeCaseLawFilterCount(search)}
+            find={<TableFindBar {...find.bar} />}
             actions={
               <>
                 <QuestionColumnControls controller={questions} />
@@ -922,11 +918,7 @@ function PublicCaseLawIndex() {
                 "cases.sort-navigate",
               );
             }}
-            questionColumns={
-              questions.surface === null
-                ? NO_QUESTION_COLUMNS
-                : questions.surface.columns
-            }
+            questions={questions.surface}
             railState={layout.facetRail}
             sort={sort}
             summary={
@@ -958,13 +950,13 @@ function PublicCaseLawIndex() {
           />
 
           <DecisionTable
-            decisions={ordered}
-            isLoading={isLoading}
+            decisions={find.decisions}
+            findHighlight={find.highlight}
+            isLoading={rows === "skeleton"}
             isRefreshing={isRefreshing}
             layout={layout}
             onLayoutChange={setLayout}
             onSelectedIdsChange={setSelectedIds}
-            order={order}
             query={effectiveQuery}
             questions={questions.surface}
             selectedIds={selectedIds}

@@ -207,7 +207,7 @@ export const PersonFieldValue = ({
     >
       <PersonAvatar image={content.image} name={content.name} />
       <span className="truncate">
-        <HighlightedText propertyId={propertyId} text={content.name} />
+        <HighlightedText columnId={propertyId} text={content.name} />
       </span>
     </span>
   );
@@ -356,7 +356,7 @@ const FileFieldValue = ({
       as="span"
       className={cn(variant === "table" ? "truncate" : "text-sm")}
     >
-      <HighlightedText propertyId={propertyId} text={content.fileName} />
+      <HighlightedText columnId={propertyId} text={content.fileName} />
     </BidiText>
   );
 };
@@ -370,9 +370,7 @@ const TextFieldValue = ({
   propertyId: string;
   variant: FieldValueVariant;
 }) => {
-  const value = (
-    <HighlightedText propertyId={propertyId} text={content.value} />
-  );
+  const value = <HighlightedText columnId={propertyId} text={content.value} />;
 
   if (variant === "kanban") {
     if (!content.value.trim()) {
@@ -472,7 +470,7 @@ const SelectFieldValue = ({
     value === null ? (
       t("common.empty")
     ) : (
-      <HighlightedText propertyId={propertyId} text={value} />
+      <HighlightedText columnId={propertyId} text={value} />
     );
 
   if (variant === "kanban") {

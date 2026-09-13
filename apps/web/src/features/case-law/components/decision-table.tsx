@@ -1,125 +1,51 @@
-import type { ReactNode } from "react";
+/**
+ * The public results table.
+ *
+ * It is the workspace table: the same shell, the same header menus, the same
+ * column drag-and-drop, pinning and resizing, the same field-value cell for an
+ * AI answer and the same justification card behind it. What this module adds is
+ * the decision half — the rows, their columns, and where a reader's
+ * arrangement of them is kept — so a decision reads the same here as in a
+ * matter, and neither table can drift from the other.
+ */
+
 import { useMemo } from "react";
 
 import { useTable } from "@tanstack/react-table";
-import type {
-  ColumnDef,
-  ColumnOrderState,
-  ColumnPinningState,
-  ColumnVisibilityState,
-  OnChangeFn,
-  RowSelectionState,
-} from "@tanstack/react-table";
-import {
-  ArrowDownIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  Columns3Icon,
-  EyeOffIcon,
-  MoreHorizontalIcon,
-  PencilLineIcon,
-  PinIcon,
-  PinOffIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-} from "lucide-react";
+import type { RowSelectionState } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
-import { DataTable } from "@stll/ui/data-table";
-import type { DataTableColumn } from "@stll/ui/data-table";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  Menu,
-  MenuCheckboxItem,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "@stll/ui/menu";
+import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
+import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
+import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
-import type { WorkspaceTableFeatures } from "@/components/workspaces/table/table-features";
+import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
+import type { DecisionRowData } from "@/components/workspaces/table/types";
+import { useTableState } from "@/components/workspaces/table/use-table-state";
+import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
+import type { DecisionExtraColumn } from "@/features/case-law/decision-columns.logic";
+import { useDecisionRowHost } from "@/features/case-law/decision-row-host";
 import {
-  DEFAULT_DECISION_TABLE_LAYOUT,
-  decisionColumnOrder,
-  decisionColumnPins,
-  withDecisionColumnMoved,
-  withDecisionColumnPinned,
-} from "@/features/case-law/decision-column-preferences.logic";
-import type {
-  DecisionColumnMove,
-  DecisionTableLayout,
-} from "@/features/case-law/decision-column-preferences.logic";
-import { decisionTableSchema } from "@/features/case-law/decision-columns";
-import {
-  DECISION_COLUMN_LABEL_KEYS,
-  decisionColumnWidthClassNames,
-  decisionIdentityLineFields,
-} from "@/features/case-law/decision-columns.logic";
-import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
+  DecisionRenderScope,
+  useDecisionTableColumns,
+} from "@/features/case-law/decision-table-columns";
 import { queryHighlightTokens } from "@/features/case-law/headnote-highlight.logic";
-import { answerTypeMeta } from "@/features/case-law/research/answer-type";
-import {
-  answerKey,
-  NO_QUESTION_COLUMNS,
-} from "@/features/case-law/research/question-columns.logic";
-import type {
-  QuestionAnswer,
-  QuestionColumn,
-} from "@/features/case-law/research/question-columns.logic";
-import { ResearchAnswerCell } from "@/features/case-law/research/research-answer-cell";
+import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
 
-/**
- * How the rows are ordered, so the header can say so honestly: newest first
- * when browsing, by relevance when searching (which no column expresses).
- */
-export type DecisionTableOrder = "newest" | "relevance";
-
-export type QuestionColumnAction = "run" | "edit" | "delete";
-
-/**
- * The organization's questions on this table: the columns, the cells they
- * already hold, and what the reader can do to one. Null for a reader without
- * an organization, which is also why they get no selection column — nothing on
- * this page acts on a selection except a run.
- */
-export type DecisionQuestionSurface = {
-  columns: readonly QuestionColumn[];
-  answersByKey: ReadonlyMap<string, QuestionAnswer>;
-  onColumnAction: (
-    column: QuestionColumn,
-    action: QuestionColumnAction,
-  ) => void;
-  /** Asks one failed cell again, from the cell itself. */
-  onRetryAnswer: (column: QuestionColumn, decisionId: string) => void;
-  onShowSource: (decision: Decision, anchorId: string) => void;
-  /** True while a run is being queued, so every run control settles together. */
-  isRunning: boolean;
-};
-
-/**
- * A column the host adds to the decision model: a note the matter recorded, a
- * row action only that screen has. It is arranged, hidden and pinned like any
- * other column, because a reader does not care where a column came from.
- */
-export type DecisionExtraColumn = {
-  id: string;
-  /** Already translated; also the label the column chooser shows. */
-  label: string;
-  size: number;
-  render: (decision: Decision) => ReactNode;
-};
-
 type DecisionTableProps = {
   decisions: readonly Decision[];
-  /** Columns this screen adds to the shared model; empty on the results page. */
+  /** Columns this screen adds to the shared model; none on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
+  /** The find's marks, or null when no term is applied. */
+  findHighlight?: TableFindHighlight | null | undefined;
   isLoading: boolean;
   /**
    * The rows on screen answer the previous search while a new one is in
@@ -130,91 +56,36 @@ type DecisionTableProps = {
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   onSelectedIdsChange: (decisionIds: string[]) => void;
-  order: DecisionTableOrder;
   /** What was searched for, so the summary cell can say why a row matched. */
   query?: string | undefined;
-  questions: DecisionQuestionSurface | null;
+  questions: QuestionColumnSurface;
   selectedIds: readonly string[];
 };
 
-const SELECT_COLUMN_ID = "select";
-const ANSWER_COLUMN_PREFIX = "answer:";
-
-const questionColumnId = (columnId: string): string =>
-  `${ANSWER_COLUMN_PREFIX}${columnId}`;
-
-const isDecisionColumnId = (value: string): value is DecisionColumnId =>
-  value in DECISION_COLUMN_LABEL_KEYS;
-
-/** What a header offers for the column it names. */
-type ColumnArrangement = {
-  order: readonly string[];
-  isPinned: (columnId: string) => boolean;
-  onMove: (columnId: string, move: DecisionColumnMove) => void;
-  onTogglePin: (columnId: string) => void;
-  onHide: (columnId: string) => void;
-  canHide: (columnId: string) => boolean;
-};
-
-/**
- * The public results table.
- *
- * The shell is the generic one the workspace table uses — TanStack owns which
- * columns are visible, in what order, which are pinned, and which rows are
- * picked — while the cells stay the shared decision column model, so a row
- * here and the same row anywhere else draw the same thing. Rendering is the
- * kit's data table: this page has no virtualization, no inline editing and no
- * entity behind a row, so a header, rows and a loading state is all of it.
- */
 export const DecisionTable = ({
   decisions,
-  extraColumns = NO_EXTRA_COLUMNS,
+  extraColumns,
+  findHighlight = null,
   isLoading,
   isRefreshing = false,
   layout,
   onLayoutChange,
   onSelectedIdsChange,
-  order,
   query,
   questions,
   selectedIds,
 }: DecisionTableProps) => {
   const t = useTranslations();
-  const questionColumns =
-    questions === null ? NO_QUESTION_COLUMNS : questions.columns;
-  const columns = decisionColumnDefs({
-    extraColumns,
-    questionColumns,
-    withSelection: questions !== null,
-  });
-  const availableIds = columns.map((column) => column.id ?? "");
-
-  // TanStack compares controlled state by identity, one level deep, and
-  // publishes it back to the table from a layout effect whenever it differs.
-  // A fresh array here is therefore not a wasted allocation but a render loop:
-  // publish, re-render, rebuild, publish. The identity has to be tied to the
-  // arrangement, which is what these two memos do — the one case the
-  // no-prophylactic-memo rule exempts, because a library contract requires it.
-  //
-  // The ids travel into the memo as one string and are read back inside it:
-  // the array is rebuilt every render, so what the memo may depend on is what
-  // the ids say, not which array said it.
-  const columnKey = availableIds.join("\u0000");
-  const { columnOrder, columnPinning, columnVisibility } = useMemo(() => {
-    const visibility: ColumnVisibilityState = {};
-    for (const columnId of layout.hidden) {
-      visibility[columnId] = false;
-    }
-    const ids = columnKey.length === 0 ? [] : columnKey.split("\u0000");
-    return {
-      columnOrder: decisionColumnOrder(ids, layout.order),
-      columnPinning: {
-        start: decisionColumnPins(ids, layout.pinned),
-        end: [],
-      } satisfies ColumnPinningState,
-      columnVisibility: visibility,
-    };
-  }, [columnKey, layout.hidden, layout.order, layout.pinned]);
+  const columns = useDecisionTableColumns({ extraColumns, questions });
+  const rows = useMemo(
+    () =>
+      decisions.map((decision): DecisionRowData => ({
+        kind: "decision",
+        decision,
+        children: [],
+      })),
+    [decisions],
+  );
   const rowSelection: RowSelectionState = useMemo(() => {
     const selection: RowSelectionState = {};
     for (const decisionId of selectedIds) {
@@ -223,568 +94,106 @@ export const DecisionTable = ({
     return selection;
   }, [selectedIds]);
 
-  const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
-    const next = typeof updater === "function" ? updater(columnOrder) : updater;
-    onLayoutChange({ ...layout, order: next });
-  };
-  const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
-    const next =
-      typeof updater === "function" ? updater(columnPinning) : updater;
-    onLayoutChange({ ...layout, pinned: [...next.start, ...next.end] });
-  };
-  const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> = (
-    updater,
-  ) => {
-    const next =
-      typeof updater === "function" ? updater(columnVisibility) : updater;
-    onLayoutChange({
-      ...layout,
-      hidden: Object.entries(next)
-        .filter(([, visible]) => !visible)
-        .map(([columnId]) => columnId),
-    });
-  };
-  const onRowSelectionChange: OnChangeFn<RowSelectionState> = (updater) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
-    // A selection map holds only picked rows, so its keys are the selection.
-    onSelectedIdsChange(Object.keys(next));
-  };
+  const tableState = useTableState({
+    columnLayout: {
+      hidden: layout.hidden,
+      order: layout.order,
+      pinned: layout.pinned,
+      onChange: ({ hidden, order, pinned }) => {
+        onLayoutChange({
+          ...layout,
+          ...(hidden === undefined ? {} : { hidden }),
+          ...(order === undefined ? {} : { order }),
+          ...(pinned === undefined ? {} : { pinned }),
+        });
+      },
+    },
+    columnSizing: {
+      sizing: layout.sizing,
+      onChange: (sizing) => onLayoutChange({ ...layout, sizing }),
+    },
+    rowSelection: {
+      selection: rowSelection,
+      onChange: (updater) => {
+        const next =
+          typeof updater === "function" ? updater(rowSelection) : updater;
+        // A selection map holds only picked rows, so its keys are the selection.
+        onSelectedIdsChange(Object.keys(next));
+      },
+    },
+    // The search decides the order; no column of this table does.
+    sorting: null,
+  });
 
   const table = useTable({
     features: workspaceTableFeatures,
-    data: decisions,
+    columnResizeMode: "onChange",
+    data: rows,
     columns,
-    getRowId: (decision) => decision.id,
-    state: { columnOrder, columnPinning, columnVisibility, rowSelection },
-    onColumnOrderChange,
-    onColumnPinningChange,
-    onColumnVisibilityChange,
-    onRowSelectionChange,
+    defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },
+    getRowId: (row) => row.decision.id,
+    state: tableState.state,
+    ...tableState.listeners,
   });
 
-  // Pinned first, then the rest: a column put in front stays in front however
-  // the columns after it are rearranged.
-  const leafColumns = [
-    ...table.getStartVisibleLeafColumns(),
-    ...table.getCenterVisibleLeafColumns(),
-    ...table.getEndVisibleLeafColumns(),
-  ];
-  const context = {
-    contentMode: layout.contentMode,
-    identityLineFields: decisionIdentityLineFields(
-      leafColumns.map((column) => column.id),
-    ),
-    queryTokens: queryHighlightTokens(query),
-  };
-
-  const arrangement: ColumnArrangement = {
-    order: columnOrder,
-    isPinned: (columnId) => columnPinning.start.includes(columnId),
-    onMove: (columnId, move) =>
-      table.setColumnOrder((previous) =>
-        withDecisionColumnMoved(previous, columnId, move),
-      ),
-    onTogglePin: (columnId) =>
-      table.setColumnPinning((previous) => ({
-        ...previous,
-        start: withDecisionColumnPinned(
-          previous.start,
-          columnId,
-          !previous.start.includes(columnId),
-        ),
-      })),
-    onHide: (columnId) =>
-      table.setColumnVisibility((previous) => ({
-        ...previous,
-        [columnId]: false,
-      })),
-    canHide: (columnId) =>
-      columns.find((column) => column.id === columnId)?.enableHiding === true,
-  };
-
-  const rendered: DataTableColumn<Decision>[] = [];
-  for (const column of leafColumns) {
-    if (column.id === SELECT_COLUMN_ID) {
-      rendered.push({
-        id: SELECT_COLUMN_ID,
-        header: (
-          <Checkbox
-            aria-label={t("common.selectAll")}
-            checked={table.getIsAllRowsSelected()}
-            indeterminate={table.getIsSomeRowsSelected()}
-            onCheckedChange={(checked) => table.toggleAllRowsSelected(checked)}
-          />
-        ),
-        headClassName: "w-px",
-        cellClassName: "w-px",
-        render: (decision) => (
-          <Checkbox
-            aria-label={decision.caseNumber}
-            checked={rowSelection[decision.id] === true}
-            onCheckedChange={(checked) =>
-              table.setRowSelection((previous) =>
-                withRowSelected(previous, decision.id, checked),
-              )
-            }
-          />
-        ),
-      });
-      continue;
-    }
-
-    const questionColumn = questionColumns.find(
-      (candidate) => questionColumnId(candidate.id) === column.id,
-    );
-    if (questionColumn !== undefined && questions !== null) {
-      rendered.push({
-        id: column.id,
-        header: (
-          <QuestionColumnHeader
-            arrangement={arrangement}
-            column={questionColumn}
-            columnId={column.id}
-            isRunning={questions.isRunning}
-            onAction={questions.onColumnAction}
-          />
-        ),
-        headClassName: "min-w-40 align-top",
-        cellClassName: "min-w-40 max-w-80 align-top whitespace-normal",
-        render: (decision) => (
-          <ResearchAnswerCell
-            answer={questions.answersByKey.get(
-              answerKey(questionColumn.id, decision.id),
-            )}
-            answerType={questionColumn.answerType}
-            onRetry={() => questions.onRetryAnswer(questionColumn, decision.id)}
-            onShowSource={(anchorId) =>
-              questions.onShowSource(decision, anchorId)
-            }
-          />
-        ),
-      });
-      continue;
-    }
-
-    const extra = extraColumns.find((candidate) => candidate.id === column.id);
-    if (extra !== undefined) {
-      rendered.push({
-        id: extra.id,
-        header: (
-          <ColumnHeader
-            arrangement={arrangement}
-            columnId={extra.id}
-            label={extra.label}
-          >
-            {extra.label}
-          </ColumnHeader>
-        ),
-        headClassName: "align-top",
-        cellClassName: "align-top whitespace-normal",
-        render: extra.render,
-      });
-      continue;
-    }
-
-    const descriptor = decisionTableSchema.columns.find(
-      (candidate) => candidate.id === column.id,
-    );
-    if (descriptor === undefined || !isDecisionColumnId(descriptor.id)) {
-      continue;
-    }
-    const label = t(DECISION_COLUMN_LABEL_KEYS[descriptor.id]);
-    const sortedByThis = descriptor.id === "date" && order === "newest";
-    const width = decisionColumnWidthClassNames(descriptor.id);
-    rendered.push({
-      id: descriptor.id,
-      header: (
-        <ColumnHeader
-          arrangement={arrangement}
-          columnId={descriptor.id}
-          label={label}
-        >
-          {label}
-          {sortedByThis && (
-            <ArrowDownIcon aria-hidden="true" className="size-3" />
-          )}
-        </ColumnHeader>
-      ),
-      ...(sortedByThis ? { ariaSort: "descending" as const } : {}),
-      headClassName: width.head,
-      cellClassName: cn(
-        width.cell,
-        descriptor.emphasis === "metadata" && "text-muted-foreground",
-      ),
-      render: (decision) => descriptor.render(decision, context),
-    });
-  }
-
-  const [first, ...rest] = rendered;
-  if (first === undefined) {
-    return null;
-  }
-
-  return (
-    <div
-      aria-busy={isRefreshing}
-      className="border-border/45 bg-background/60 overflow-hidden rounded-md border"
-    >
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={[first, ...rest]}
-          emptyLabel={t("common.noResults")}
-          getRowProps={(decision) => ({
-            className: cn(
-              "transition-opacity duration-200",
-              rowSelection[decision.id] === true && "bg-muted/40",
-              isRefreshing && "opacity-56",
-            ),
-          })}
-          isLoading={isLoading}
-          loadingLabel={t("common.loading")}
-          loadingRowCount={8}
-          rowKey={(decision) => decision.id}
-          rows={table.getRowModel().rows.map((row) => row.original)}
-        />
-      </div>
-    </div>
-  );
-};
-
-const QUESTION_COLUMN_SIZE = 220;
-
-const NO_EXTRA_COLUMNS: readonly DecisionExtraColumn[] = [];
-
-/**
- * One row picked or let go. A selection map holds only picked rows, so letting
- * one go removes its key rather than storing a false against it.
- */
-const withRowSelected = (
-  previous: RowSelectionState,
-  decisionId: string,
-  selected: boolean,
-): RowSelectionState => {
-  if (selected) {
-    return { ...previous, [decisionId]: true };
-  }
-  return Object.fromEntries(
-    Object.entries(previous).filter(([id]) => id !== decisionId),
-  );
-};
-
-/**
- * The column model TanStack arranges. Identity and capability only: what a
- * cell draws stays the shared decision schema's, resolved at render time, so
- * the two cannot end up describing different columns.
- */
-const decisionColumnDefs = ({
-  extraColumns,
-  questionColumns,
-  withSelection,
-}: {
-  extraColumns: readonly DecisionExtraColumn[];
-  questionColumns: readonly QuestionColumn[];
-  withSelection: boolean;
-}): ColumnDef<WorkspaceTableFeatures, Decision>[] => {
-  const defs: ColumnDef<WorkspaceTableFeatures, Decision>[] = [];
-  if (withSelection) {
-    defs.push({
-      id: SELECT_COLUMN_ID,
-      size: 40,
-      enableHiding: false,
-      enablePinning: false,
-    });
-  }
-  for (const column of decisionTableSchema.columns) {
-    defs.push({
-      id: column.id,
-      size: column.size,
-      minSize: column.minSize ?? decisionTableSchema.defaultMinSize,
-      enableHiding: column.capabilities.hide,
-      enablePinning: column.capabilities.pin,
-    });
-  }
-  for (const column of questionColumns) {
-    defs.push({
-      id: questionColumnId(column.id),
-      size: QUESTION_COLUMN_SIZE,
-      enableHiding: true,
-      enablePinning: true,
-    });
-  }
-  for (const column of extraColumns) {
-    defs.push({
-      id: column.id,
-      size: column.size,
-      enableHiding: true,
-      enablePinning: true,
-    });
-  }
-  return defs;
-};
-
-/**
- * A column header and the menu that rearranges it. The menu is quiet until the
- * header is hovered or its trigger focused, so a results page stays a results
- * page and the arrangement is still reachable from the keyboard.
- */
-const ColumnHeader = ({
-  arrangement,
-  children,
-  columnId,
-  label,
-}: {
-  arrangement: ColumnArrangement;
-  children: React.ReactNode;
-  columnId: string;
-  label: string;
-}) => (
-  <span className="group/header inline-flex items-center gap-1">
-    {children}
-    <ColumnArrangeMenu
-      arrangement={arrangement}
-      columnId={columnId}
-      label={label}
-    />
-  </span>
-);
-
-const ColumnArrangeMenu = ({
-  arrangement,
-  columnId,
-  label,
-}: {
-  arrangement: ColumnArrangement;
-  columnId: string;
-  label: string;
-}) => {
-  const t = useTranslations();
-  const index = arrangement.order.indexOf(columnId);
-  const pinned = arrangement.isPinned(columnId);
-
-  return (
-    <Menu>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={t("caseLaw.columns.arrange", { column: label })}
-            className="text-muted-foreground shrink-0 opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
-            size="icon-xs"
-            variant="ghost"
-          />
+  // The rail is a write affordance: a reader the organization has not granted
+  // `create` gets the table without it, not a trigger that fails on submit.
+  const rowHost = useDecisionRowHost(
+    questions.type === "available" && questions.grants.create
+      ? {
+          addColumnRail: (
+            <BulkAddColumns
+              target={{
+                kind: "organisation",
+                suggestion: questions.suggestion,
+              }}
+              triggerVariant="rail"
+            />
+          ),
         }
-      >
-        <MoreHorizontalIcon aria-hidden="true" className="size-3.5" />
-      </MenuTrigger>
-      <MenuPopup align="start">
-        <MenuItem
-          disabled={index <= 0}
-          onClick={() => arrangement.onMove(columnId, "earlier")}
-        >
-          {t("caseLaw.columns.moveEarlier")}
-        </MenuItem>
-        <MenuItem
-          disabled={index === -1 || index >= arrangement.order.length - 1}
-          onClick={() => arrangement.onMove(columnId, "later")}
-        >
-          {t("caseLaw.columns.moveLater")}
-        </MenuItem>
-        <MenuItem onClick={() => arrangement.onTogglePin(columnId)}>
-          {pinned ? t("common.unpin") : t("caseLaw.columns.pin")}
-        </MenuItem>
-        {arrangement.canHide(columnId) && (
-          <>
-            <MenuSeparator />
-            <MenuItem onClick={() => arrangement.onHide(columnId)}>
-              {t("caseLaw.columns.hide")}
-            </MenuItem>
-          </>
+      : {},
+  );
+
+  const renderScope = useMemo(
+    () => ({
+      contentMode: layout.contentMode,
+      queryTokens: queryHighlightTokens(query),
+    }),
+    [layout.contentMode, query],
+  );
+
+  return (
+    <MobileTableOrientationGate>
+      <div
+        aria-busy={isRefreshing}
+        className={cn(
+          "border-border/45 bg-background/60 flex min-h-64 flex-col overflow-hidden rounded-md border transition-opacity duration-200",
+          isRefreshing && "opacity-56",
         )}
-      </MenuPopup>
-    </Menu>
-  );
-};
-
-/**
- * The question, and what the reader can do to the column that asks it.
- *
- * The whole header is the trigger and the menu carries the same actions in the
- * same order as the matter table's AI column header — edit, arrange, run
- * again, delete — because from the reader's side it is the same extraction
- * engine asking the question.
- */
-const QuestionColumnHeader = ({
-  arrangement,
-  column,
-  columnId,
-  isRunning,
-  onAction,
-}: {
-  arrangement: ColumnArrangement;
-  column: QuestionColumn;
-  columnId: string;
-  isRunning: boolean;
-  onAction: (column: QuestionColumn, action: QuestionColumnAction) => void;
-}) => {
-  const t = useTranslations();
-  const index = arrangement.order.indexOf(columnId);
-  const pinned = arrangement.isPinned(columnId);
-  const AnswerTypeIcon = answerTypeMeta(column.answerType).icon;
-
-  return (
-    <Menu>
-      <MenuTrigger
-        render={
-          <button
-            className="hover:bg-accent flex w-full items-start gap-1.5 rounded-sm px-1 py-0.5 text-start"
-            title={column.question}
-            type="button"
-          />
-        }
       >
-        <AnswerTypeIcon
-          aria-hidden="true"
-          className="text-muted-foreground mt-0.5 size-3.5 shrink-0"
-        />
-        <span className="text-foreground line-clamp-2 font-medium">
-          {column.question}
-        </span>
-      </MenuTrigger>
-      <MenuPopup align="start" className="min-w-56">
-        <MenuItem onClick={() => onAction(column, "edit")}>
-          <PencilLineIcon />
-          {t("caseLaw.research.editQuestion")}
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem
-          disabled={index <= 0}
-          onClick={() => arrangement.onMove(columnId, "earlier")}
-        >
-          <DirectionalIcon icon={ArrowLeftIcon} />
-          {t("caseLaw.columns.moveEarlier")}
-        </MenuItem>
-        <MenuItem
-          disabled={index === -1 || index >= arrangement.order.length - 1}
-          onClick={() => arrangement.onMove(columnId, "later")}
-        >
-          <DirectionalIcon icon={ArrowRightIcon} />
-          {t("caseLaw.columns.moveLater")}
-        </MenuItem>
-        <MenuItem onClick={() => arrangement.onTogglePin(columnId)}>
-          {pinned ? <PinOffIcon /> : <PinIcon />}
-          {pinned ? t("common.unpin") : t("caseLaw.columns.pin")}
-        </MenuItem>
-        <MenuItem onClick={() => arrangement.onHide(columnId)}>
-          <EyeOffIcon />
-          {t("caseLaw.columns.hide")}
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem disabled={isRunning} onClick={() => onAction(column, "run")}>
-          <RefreshCwIcon />
-          {t("caseLaw.research.runColumn")}
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem
-          onClick={() => onAction(column, "delete")}
-          variant="destructive"
-        >
-          <Trash2Icon />
-          {t("caseLaw.research.deleteColumn")}
-        </MenuItem>
-      </MenuPopup>
-    </Menu>
-  );
-};
-
-type DecisionColumnChooserProps = {
-  extraColumns?: readonly DecisionExtraColumn[] | undefined;
-  layout: DecisionTableLayout;
-  onLayoutChange: (layout: DecisionTableLayout) => void;
-  questionColumns: readonly QuestionColumn[];
-};
-
-/** Which columns show; the arrangement itself lives in each column's header. */
-export const DecisionColumnChooser = ({
-  extraColumns = NO_EXTRA_COLUMNS,
-  layout,
-  onLayoutChange,
-  questionColumns,
-}: DecisionColumnChooserProps) => {
-  const t = useTranslations();
-  const hidden = new Set(layout.hidden);
-  const toggle = (columnId: string, checked: boolean) => {
-    const next = new Set(hidden);
-    if (checked) {
-      next.delete(columnId);
-    } else {
-      next.add(columnId);
-    }
-    onLayoutChange({ ...layout, hidden: [...next] });
-  };
-
-  return (
-    <Menu>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={t("common.columns")}
-            className="text-muted-foreground"
-            size="sm"
-            variant="ghost"
-          />
-        }
-      >
-        <Columns3Icon aria-hidden="true" className="size-3.5" />
-        {t("common.columns")}
-      </MenuTrigger>
-      <MenuPopup>
-        {decisionTableSchema.columns
-          .filter((column) => column.capabilities.hide)
-          .map((column) => (
-            <MenuCheckboxItem
-              checked={!hidden.has(column.id)}
-              key={column.id}
-              onCheckedChange={(checked) => toggle(column.id, checked)}
-            >
-              {isDecisionColumnId(column.id)
-                ? t(DECISION_COLUMN_LABEL_KEYS[column.id])
-                : column.id}
-            </MenuCheckboxItem>
-          ))}
-        {questionColumns.map((column) => (
-          <MenuCheckboxItem
-            checked={!hidden.has(questionColumnId(column.id))}
-            key={column.id}
-            onCheckedChange={(checked) =>
-              toggle(questionColumnId(column.id), checked)
-            }
-          >
-            {column.question}
-          </MenuCheckboxItem>
-        ))}
-        {extraColumns.map((column) => (
-          <MenuCheckboxItem
-            checked={!hidden.has(column.id)}
-            key={column.id}
-            onCheckedChange={(checked) => toggle(column.id, checked)}
-          >
-            {column.label}
-          </MenuCheckboxItem>
-        ))}
-        <MenuSeparator />
-        <MenuItem
-          onClick={() =>
-            onLayoutChange({
-              ...layout,
-              hidden: [...DEFAULT_DECISION_TABLE_LAYOUT.hidden],
-              order: [],
-              pinned: [],
-            })
-          }
-        >
-          {t("caseLaw.columns.reset")}
-        </MenuItem>
-      </MenuPopup>
-    </Menu>
+        <DecisionRenderScope value={renderScope}>
+          <FindHighlightScope highlight={findHighlight}>
+            <WorkspaceTable
+              contentMode={layout.contentMode}
+              rowHost={rowHost}
+              table={table}
+            />
+          </FindHighlightScope>
+        </DecisionRenderScope>
+        {rows.length === 0 && (
+          <div className="text-muted-foreground flex flex-col gap-2 p-4 text-sm">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-2/3" />
+              </>
+            ) : (
+              t("common.noResults")
+            )}
+          </div>
+        )}
+      </div>
+    </MobileTableOrientationGate>
   );
 };

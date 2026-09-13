@@ -479,8 +479,11 @@ const EntityMetadataContent = ({
               </div>
               <div className="text-foreground-strong-muted text-xs leading-relaxed wrap-break-word">
                 <Justification
-                  justification={activeJustification}
-                  workspaceId={workspaceId}
+                  source={{
+                    kind: "field",
+                    justification: activeJustification,
+                    workspaceId,
+                  }}
                 />
               </div>
             </div>

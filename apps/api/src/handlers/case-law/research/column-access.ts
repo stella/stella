@@ -14,9 +14,6 @@ export type ResearchColumnRow = typeof caseLawResearchColumns.$inferSelect;
 
 /** Columns a client never sees. */
 const UNPROJECTED_RESEARCH_COLUMN_COLUMNS = [
-  // The retiring research tables own this link; a column now belongs to the
-  // organization, and the client addresses it by id alone.
-  "tableId",
   // Tenant scope comes from the caller's session, never the response.
   "organizationId",
   // Which model answers the question is a server-side execution detail.
@@ -29,7 +26,7 @@ export const toResearchColumnResponse = (row: ResearchColumnRow) => ({
   createdBy: row.createdBy,
   position: row.position,
   question: row.question,
-  answerType: row.answerType,
+  content: row.content,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });

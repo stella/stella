@@ -63,6 +63,12 @@ Small, almost invisible touches. Linear is a good reference.
 - Use the magic wand icon for AI text rewrite/refine/redraft
   actions, including search query refinement and prompt editing.
   Do not use generic sparkles for this function.
+- Never draw scales of justice or a gavel (lucide `Scale`, `Gavel`).
+  Legal cliché is decoration every product in the category already
+  uses; name the concept instead — a court is `Landmark`, a decision
+  `FileText` (`BookOpen` for a collection of them), and the case-law
+  section takes the glyph its sidebar entry already uses.
+  `no-legal-cliche-glyph` enforces it.
 
 ## Review chrome
 

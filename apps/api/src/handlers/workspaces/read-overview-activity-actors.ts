@@ -17,6 +17,7 @@ import { readOverviewActivityActorRows } from "./read-overview-activity.query";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "read",
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(

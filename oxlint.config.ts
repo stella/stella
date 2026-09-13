@@ -214,6 +214,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-decorated-search-input.fixture.tsx", [
     "no-decorated-search-input/no-decorated-search-input",
   ]),
+  fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
+    "no-legal-cliche-glyph/no-legal-cliche-glyph",
+  ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
   ]),
@@ -1028,6 +1031,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
+    "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -1229,7 +1233,7 @@ export default defineConfig({
         "apps/web/src/components/search-dialog.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx",
+        "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx",
         "packages/ui/src/kanban/virtual-cell.tsx",
       ],
       rules: {
@@ -2219,6 +2223,24 @@ export default defineConfig({
       ],
       rules: {
         "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item": "error",
+      },
+    },
+    {
+      // Scales of justice and gavels are the stock iconography of legal
+      // software: decorative, interchangeable, and drawn by every product in
+      // the category. This design system names the concept instead — a court
+      // is a Landmark, a decision a FileText. Scoped to the surfaces a reader
+      // sees, so a script or a fixture elsewhere is unaffected.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        "apps/landing/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-legal-cliche-glyph.fixture.tsx",
+      ],
+      rules: {
+        "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
       },
     },
     {

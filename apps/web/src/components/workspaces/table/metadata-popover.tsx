@@ -1,0 +1,60 @@
+import { EyeOffIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Separator } from "@stll/ui/separator";
+
+import { PinProperty } from "@/components/workspaces/properties/pin-property";
+import { SortProperty } from "@/components/workspaces/properties/sort-property";
+import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import type {
+  TableColumn,
+  TableRowData,
+  TableTreeNode,
+} from "@/components/workspaces/table/types";
+
+type MetadataPopoverProps<TRow extends TableRowData> = {
+  column: TableColumn<TRow>;
+  icon: LucideIcon;
+  label: string;
+  sortHint?: SortHint | undefined;
+};
+
+export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
+  column,
+  icon: Icon,
+  label,
+  sortHint,
+}: MetadataPopoverProps<TRow>) => {
+  const t = useTranslations();
+
+  return (
+    <Popover modal>
+      <PopoverTrigger className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start">
+        <Icon className="size-3.5 shrink-0" />
+        <span className="w-0 flex-1 truncate">{label}</span>
+      </PopoverTrigger>
+      <PopoverPopup
+        align="start"
+        className="min-w-48 overflow-clip *:data-[slot=popover-viewport]:p-0!"
+        initialFocus={false}
+      >
+        <SortProperty column={column} sortHint={sortHint} />
+        <Separator />
+        <div className="flex flex-col p-1">
+          <PinProperty column={column} />
+          <Button
+            className="justify-start font-semibold"
+            onClick={() => column.toggleVisibility(false)}
+            variant="ghost"
+          >
+            <EyeOffIcon />
+            {t("workspaces.kanban.hideColumn")}
+          </Button>
+        </div>
+      </PopoverPopup>
+    </Popover>
+  );
+};

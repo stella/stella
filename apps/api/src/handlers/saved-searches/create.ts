@@ -17,7 +17,7 @@ import { toSavedSearchResponse } from "./response";
 import { createSavedSearchBodySchema } from "./schema";
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { savedSearch: ["create"] },
   mcp: { type: "internal", reason: "search_ui" },
   body: createSavedSearchBodySchema,
 } satisfies HandlerConfig;

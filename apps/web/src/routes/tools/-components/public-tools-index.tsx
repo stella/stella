@@ -5,11 +5,11 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   ArrowRightIcon,
+  BookOpenIcon,
   Building2Icon,
   CircleHelpIcon,
   FileOutputIcon,
   FileSearchIcon,
-  GavelIcon,
   PlusIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
@@ -67,7 +67,7 @@ const TASK_LABEL_KEY = {
 const TASK_ICON = {
   "prepare-documents": FileOutputIcon,
   "protect-client-data": ShieldCheckIcon,
-  "research-precedents": GavelIcon,
+  "research-precedents": BookOpenIcon,
   "review-agreements": FileSearchIcon,
   "verify-organizations": Building2Icon,
 } as const satisfies Record<PublicToolTask, LucideIcon>;
@@ -468,7 +468,7 @@ function FeaturedTools() {
         <OutcomeToolCard
           body={t("publicTools.discovery.jurisRankBody")}
           entry={jurisRank}
-          icon={GavelIcon}
+          icon={BookOpenIcon}
           task="research-precedents"
         >
           <PreviewFrame label={t("common.preview")}>

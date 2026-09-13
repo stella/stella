@@ -1,13 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
-
-import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
+import { eq, sql } from "drizzle-orm";
 
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
-  caseLawResearchTableDecisions,
-  caseLawResearchTables,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,73 +16,37 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 let ids: TestIds;
-const orgATableId = createSafeId<"caseLawResearchTable">();
-const orgBTableId = createSafeId<"caseLawResearchTable">();
 const orgAColumnId = createSafeId<"caseLawResearchColumn">();
 const orgBColumnId = createSafeId<"caseLawResearchColumn">();
-
-const savedQuery = {
-  version: 1,
-  query: "nájemní smlouva",
-  country: "CZE",
-} satisfies CaseLawResearchSavedQuery;
 
 beforeAll(
   async () => {
     const fixture = await getRlsFixture();
     testDb = fixture.testDb;
     ids = fixture.ids;
-    await testDb.insert(caseLawResearchTables).values([
-      {
-        id: orgATableId,
-        organizationId: ids.orgA,
-        ownerUserId: ids.userA1,
-        name: "Org A leases",
-        savedQuery,
-      },
-      {
-        id: orgBTableId,
-        organizationId: ids.orgB,
-        ownerUserId: ids.userB1,
-        name: "Org B leases",
-        savedQuery,
-      },
-    ]);
-    await testDb.insert(caseLawResearchTableDecisions).values([
-      {
-        tableId: orgATableId,
-        organizationId: ids.orgA,
-        decisionId: ids.caseLawDecisionA,
-        disposition: "pinned",
-        position: 1,
-        addedBy: ids.userA1,
-      },
-      {
-        tableId: orgBTableId,
-        organizationId: ids.orgB,
-        decisionId: ids.caseLawDecisionB,
-        disposition: "excluded",
-        position: 0,
-        addedBy: ids.userB1,
-      },
-    ]);
     await testDb.insert(caseLawResearchColumns).values([
       {
         id: orgAColumnId,
-        tableId: orgATableId,
         organizationId: ids.orgA,
         position: 1,
         question: "Did the court uphold the lease?",
-        answerType: "yes_no",
+        content: {
+          version: 1,
+          type: "single-select",
+          options: [
+            { color: "green", value: "yes" },
+            { color: "red", value: "no" },
+          ],
+          fallback: null,
+        },
         tool: { version: 1, role: "fast" },
       },
       {
         id: orgBColumnId,
-        tableId: orgBTableId,
         organizationId: ids.orgB,
         position: 1,
         question: "Outcome?",
-        answerType: "text",
+        content: { version: 1, type: "text" },
         tool: { version: 1, role: "fast" },
       },
     ]);
@@ -96,14 +56,14 @@ beforeAll(
         organizationId: ids.orgA,
         decisionId: ids.caseLawDecisionA,
         state: "answered",
-        answer: { type: "yes_no", value: "yes" },
+        answer: { version: 1, type: "single-select", value: "yes" },
         run: {
           version: 1,
           model: "test-model",
           completedAt: "2026-09-01T00:00:00.000Z",
           retrieved: false,
           rationale: "The court dismissed the appeal.",
-          passages: [],
+          justification: { version: 1, blocks: [] },
         },
       },
       {
@@ -121,55 +81,7 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-describe("case-law research tables RLS", () => {
-  test("a member sees every table of their organization and none of another's", async () => {
-    // A2 did not create the table; organization-wide visibility is the v1 rule.
-    const scoped = createScopedDb(testDb, [], ids.orgA, ids.userA2);
-    const tables = await scoped((tx) =>
-      tx.select({ id: caseLawResearchTables.id }).from(caseLawResearchTables),
-    );
-    expect(tables).toEqual([{ id: orgATableId }]);
-
-    const dispositions = await scoped((tx) =>
-      tx
-        .select({ tableId: caseLawResearchTableDecisions.tableId })
-        .from(caseLawResearchTableDecisions),
-    );
-    expect(dispositions).toEqual([{ tableId: orgATableId }]);
-  });
-
-  test("another organization can neither update nor pin into the table", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgB, ids.userB1);
-    const renamed = await scoped((tx) =>
-      tx
-        .update(caseLawResearchTables)
-        .set({ name: "attempted cross-organization rename" })
-        .where(eq(caseLawResearchTables.id, orgATableId))
-        .returning({ id: caseLawResearchTables.id }),
-    );
-    expect(renamed).toEqual([]);
-
-    // The child row names org A's table with org B's tenant column: the
-    // composite foreign key refuses the pair even before RLS is consulted.
-    const pinned: unknown = await scoped((tx) =>
-      tx
-        .insert(caseLawResearchTableDecisions)
-        .values({
-          tableId: orgATableId,
-          organizationId: ids.orgB,
-          decisionId: ids.caseLawDecisionB,
-          disposition: "pinned",
-          position: 1,
-          addedBy: ids.userB1,
-        })
-        .returning({ tableId: caseLawResearchTableDecisions.tableId }),
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(pinned).toBeInstanceOf(Error);
-  });
-
+describe("case-law research columns and answers RLS", () => {
   test("question columns and answers stay inside their organization", async () => {
     const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA2);
     const columns = await scopedA((tx) =>
@@ -231,7 +143,7 @@ describe("case-law research tables RLS", () => {
         organizationId: ids.orgA,
         decisionId: ids.caseLawDecisionB,
         state: "pending",
-        answer: { type: "yes_no", value: "no" },
+        answer: { version: 1, type: "single-select", value: "no" },
       }),
     ).then(
       () => null,
@@ -253,5 +165,28 @@ describe("case-law research tables RLS", () => {
       (error: unknown) => error,
     );
     expect(duplicate).toBeInstanceOf(Error);
+  });
+
+  test("a cell cannot hold a value that is not field content", async () => {
+    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    // Raw SQL on purpose: the typed insert cannot express the pre-property
+    // shape, and the guard under test is the database's, not TypeScript's.
+    const legacyShape: unknown = await scopedA((tx) =>
+      tx.execute(sql`
+        INSERT INTO case_law_research_answers
+          (column_id, organization_id, decision_id, state, answer)
+        VALUES (
+          ${orgAColumnId}::uuid,
+          ${ids.orgA},
+          ${ids.caseLawDecisionB}::uuid,
+          'answered',
+          '{"type":"yes_no","value":"yes"}'::jsonb
+        )
+      `),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(legacyShape).toBeInstanceOf(Error);
   });
 });

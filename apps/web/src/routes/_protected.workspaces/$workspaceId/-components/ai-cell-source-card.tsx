@@ -330,6 +330,20 @@ const flattenStatements = (content: JustificationContent): CardStatement[] => {
       continue;
     }
 
+    // A cited passage of a decision has no statement of its own: the reasoning
+    // lives on the run beside it, so the excerpt reads as the quote.
+    if (block.kind === "decision-passage") {
+      statements.push({
+        key: `${blockIndex}-passage`,
+        text: "",
+        pages: [],
+        quotes: [
+          { key: `${blockIndex}-passage-excerpt`, text: block.excerpt.trim() },
+        ],
+      });
+      continue;
+    }
+
     for (const [statementIndex, statement] of block.statements.entries()) {
       const key = `${blockIndex}-${statementIndex}`;
       statements.push({

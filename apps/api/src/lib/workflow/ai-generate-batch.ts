@@ -19,6 +19,7 @@ import {
   streamTanStackObjectForRole,
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
+import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
@@ -27,7 +28,6 @@ import {
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
 } from "@/api/lib/workflow/ai-prompts";
-import type { Answer } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";

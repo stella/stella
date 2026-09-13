@@ -16,11 +16,11 @@ import * as React from "react";
 
 import {
   CheckIcon,
+  CircleAlertIcon,
   EyeIcon,
   FilterIcon,
   FlagIcon,
   HistoryIcon,
-  ScaleIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -122,7 +122,7 @@ function ClaimSpan({
     >
       {text}
       {contested && (
-        <ScaleIcon
+        <CircleAlertIcon
           aria-hidden="true"
           className="text-warning ms-0.5 inline-block size-3 align-middle"
         />

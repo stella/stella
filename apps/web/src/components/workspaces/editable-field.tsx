@@ -762,7 +762,7 @@ const TableFileField = ({
           mimeType={content.mimeType}
         />
         <BidiText as="span" className="min-w-0 truncate text-start">
-          <HighlightedText propertyId={propertyId} text={content.fileName} />
+          <HighlightedText columnId={propertyId} text={content.fileName} />
         </BidiText>
       </Tooltip>
     );
@@ -781,7 +781,7 @@ const TableFileField = ({
         mimeType={content.mimeType}
       />
       <BidiText as="span" className="min-w-0 truncate text-start">
-        <HighlightedText propertyId={propertyId} text={content.fileName} />
+        <HighlightedText columnId={propertyId} text={content.fileName} />
       </BidiText>
     </Tooltip>
   );

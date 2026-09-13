@@ -27,6 +27,7 @@ type MatterActivityExportFormat =
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "read",
   transport: {
     type: "file-response",
     response: {

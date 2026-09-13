@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import type { Block } from "@stll/legal-ast/document-ast";
+import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 
 import type { AnchorScrollContainer } from "@/components/legal-reader/reader-outline";
 import {
@@ -11,6 +11,7 @@ import {
   outlineFromHeadings,
   parseOutlineJump,
   parseProvisionDesignation,
+  provisionHeadingLine,
   resolveAnchorPct,
   statuteOutlineFromHeadings,
   withProvisionRanges,
@@ -26,7 +27,7 @@ const heading = ({
   anchorId: string;
   level: 1 | 2 | 3 | 4 | 5 | 6;
   lines: string[];
-}): Block => ({
+}): HeadingBlock => ({
   type: "heading",
   id: anchorId,
   anchorId,
@@ -118,7 +119,54 @@ describe("outlineFromHeadings", () => {
   });
 });
 
+describe("provisionHeadingLine", () => {
+  test("finds the designation whichever line the publisher states it on", () => {
+    // The three orders a section is published in. It is the same citable
+    // unit in each, so the designation has to be read out of each.
+    for (const lines of [
+      ["§ 55"],
+      ["§ 55", "Omezení svéprávnosti"],
+      ["Omezení svéprávnosti", "§ 55"],
+    ]) {
+      const found = provisionHeadingLine(
+        heading({ anchorId: "par-55", level: 5, lines }),
+      );
+
+      expect(found?.text).toBe("§ 55");
+      expect(found?.index).toBe(lines.indexOf("§ 55"));
+      expect(found?.designation.number).toBe("55");
+    }
+  });
+
+  test("a container heading opens no provision", () => {
+    expect(
+      provisionHeadingLine(
+        heading({ anchorId: "hlava-i", level: 2, lines: ["HLAVA I", "OSOBY"] }),
+      ),
+    ).toBeNull();
+  });
+});
+
 describe("statuteOutlineFromHeadings", () => {
+  test("lists a section under its designation, title-first or not", () => {
+    const outline = statuteOutlineFromHeadings([
+      heading({ anchorId: "hlava-i", level: 2, lines: ["HLAVA I", "OSOBY"] }),
+      heading({
+        anchorId: "par-55",
+        level: 5,
+        lines: ["Omezení svéprávnosti", "§ 55"],
+      }),
+    ]);
+    const section = outline.find((item) => item.id === "par-55");
+
+    expect(section?.label).toBe("§ 55");
+    expect(section?.title).toBe("Omezení svéprávnosti");
+    // What the reader types into the jump field has to reach it.
+    expect(findProvisionAnchorId(outline, parseOutlineJump("§ 55"))).toBe(
+      "par-55",
+    );
+  });
+
   test("omits preamble prose misclassified as headings", () => {
     const statuteBlocks: Block[] = [
       heading({

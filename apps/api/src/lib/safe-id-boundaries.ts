@@ -245,11 +245,6 @@ export const brandPersistedTemplateLookupFormatId = (
   formatId: string,
 ): SafeId<"templateLookupFormat"> => toSafeId<"templateLookupFormat">(formatId);
 
-export const brandPersistedCaseLawResearchTableId = (
-  researchTableId: string,
-): SafeId<"caseLawResearchTable"> =>
-  toSafeId<"caseLawResearchTable">(researchTableId);
-
 export const brandPersistedCaseLawResearchColumnId = (
   researchColumnId: string,
 ): SafeId<"caseLawResearchColumn"> =>

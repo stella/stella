@@ -14,7 +14,11 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { toTableEntities } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
+import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
+import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
+import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
+import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -29,17 +33,13 @@ import {
   EmptyState,
   FilteredEmptyState,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout";
-import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
-import {
-  DEFAULT_TABLE_COLUMN_MIN_SIZE,
-  useTableColumns,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
-import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
-import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
-import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
+import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
+import { useViewTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const loadTableDevtoolsGate = async () => {
@@ -97,7 +97,8 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
 const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const t = useTranslations();
-  const tableState = useTableState({ workspaceId, view });
+  const columnLayout = useViewColumnLayout({ workspaceId, view });
+  const tableState = useViewTableState({ workspaceId, view, columnLayout });
   const updateView = useUpdateView(workspaceId);
   const showListItems = includesListItems(view.layout.filters);
   const excludedKinds: EntityKind[] = showListItems
@@ -110,7 +111,12 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   // marks and the empty state describe the rows on screen, not the term whose
   // fetch is still in flight.
   const find = useDeferredValue(
-    useTableFind({ properties, view, workspaceId }),
+    useEntityTableFind({
+      hasNameColumn: showListItems,
+      hiddenProperties: view.layout.hiddenProperties,
+      properties,
+      view: { workspaceId, viewId: view.id },
+    }),
   );
   const fieldIds = useMemo(
     () =>
@@ -177,6 +183,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     state: tableState.state,
     ...tableState.listeners,
   });
+  const rowHost = useEntityRowHost({ workspaceId, table, addRow: true });
 
   if (table.getRowModel().rows.length === 0) {
     // Ahead of the filter and upload states: with a find running, "upload your
@@ -222,9 +229,9 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
           onLoadMore={() => {
             detached(fetchNextPage(), "table-layout.fetch-next-page");
           }}
+          rowHost={rowHost}
           table={table}
           contentMode={tableState.contentMode}
-          workspaceId={workspaceId}
         />
       </FindHighlightScope>
       {TableDevtoolsGate ? (

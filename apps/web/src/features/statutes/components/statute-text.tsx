@@ -7,7 +7,7 @@ import {
   BlockRenderer,
   FulltextFallback,
 } from "@/components/legal-reader/document-ast-text";
-import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
+import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 
@@ -37,15 +37,6 @@ type StatuteTextProps = {
   versionCount: number;
   versionValidFrom: string | null;
 };
-
-/**
- * A heading that opens a provision. It is the unit case law cites and the
- * unit a drafting history is about, so the affordance keys off the one
- * designation parser rather than guessing at the shape of a heading.
- */
-const isProvisionHeading = (block: Block): boolean =>
-  block.type === "heading" &&
-  parseProvisionDesignation(block.plainText) !== null;
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",
@@ -115,9 +106,12 @@ export const StatuteText = ({
       >
         {masthead !== null && <StatuteMasthead masthead={masthead} />}
         {blocks.map((block) => {
-          const provisionHeading = isProvisionHeading(block);
+          // The unit case law cites and a drafting history is about: the
+          // designation the heading states, wherever the publisher put it.
+          const provision =
+            block.type === "heading" ? provisionHeadingLine(block) : null;
           const detailsAction =
-            provisionHeading && citationWork !== null ? (
+            provision !== null && citationWork !== null ? (
               <ProvisionDetailsAction
                 citationCount={provisionCitationCounts.get(block.anchorId)}
                 onOpen={() => {
@@ -127,14 +121,14 @@ export const StatuteText = ({
                       documentId,
                       eli: citationWork.eli,
                       jurisdiction: citationWork.jurisdiction,
-                      provisionLabel: block.plainText,
+                      provisionLabel: provision.text,
                       statuteTitle,
                       versionCount,
                       versionValidFrom,
                     }),
                   );
                 }}
-                provision={block.plainText}
+                provision={provision.text}
               />
             ) : undefined;
 
@@ -143,9 +137,13 @@ export const StatuteText = ({
               activeMatchIndex={NO_ACTIVE_MATCH}
               block={block}
               headingPresentation={
-                provisionHeading
-                  ? { accessory: detailsAction, type: "provision" }
-                  : undefined
+                provision === null
+                  ? undefined
+                  : {
+                      accessory: detailsAction,
+                      designationLine: provision.index,
+                      type: "provision",
+                    }
               }
               key={block.id}
               noteBackJumpTo={

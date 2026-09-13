@@ -28,7 +28,6 @@ export type SafeIdType =
   | "caseLawReconciliationItem"
   | "caseLawResearchAnswerClaim"
   | "caseLawResearchColumn"
-  | "caseLawResearchTable"
   | "caseLawSource"
   | "caseLawSourceIngestionLease"
   | "chatMessage"

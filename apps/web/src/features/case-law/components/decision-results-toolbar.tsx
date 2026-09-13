@@ -25,13 +25,13 @@ import {
 } from "@stll/ui/select";
 
 import Tooltip from "@/components/tooltip";
-import { DecisionColumnChooser } from "@/features/case-law/components/decision-table";
+import { DecisionColumnToggle } from "@/features/case-law/components/decision-column-toggle";
 import type {
   DecisionFacetRailState,
   DecisionTableLayout,
 } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionContentMode } from "@/features/case-law/decision-columns.logic";
-import type { QuestionColumn } from "@/features/case-law/research/question-columns.logic";
+import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -44,14 +44,24 @@ type DecisionResultsToolbarProps = {
   /**
    * What the reader can do with the whole result set, drawn last. A node
    * rather than props, so the toolbar owes nothing to the research slice.
+   *
+   * Outside the scrolling control row: these are the row's only write
+   * affordances, and the row hides its scrollbar, so a narrow viewport used
+   * to carry them off the end with nothing to say they were there.
    */
   actions?: ReactNode;
   /** How many rail filters are on; drawn on the toggle while the rail is folded. */
   activeFilterCount: number;
+  /**
+   * Find-in-table: the shared bar, in the place a matter's toolbar keeps it —
+   * at the head of the reading controls, beside the control that narrows the
+   * search itself.
+   */
+  find: ReactNode;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   /** Drawn in the column chooser too, so a question can be hidden like any column. */
-  questionColumns: readonly QuestionColumn[];
+  questions: QuestionColumnSurface;
   /** Adds the entry to the query as one more thing every hit must say. */
   onRefine: (entry: string) => void;
   onRailToggle: () => void;
@@ -66,18 +76,21 @@ type DecisionResultsToolbarProps = {
 
 /**
  * What the reader does to the result set: read how large it is, narrow it,
- * order it, and choose what each row shows. One scrolling row, so a narrow
- * viewport drops nothing.
+ * order it, and choose what each row shows. The reading controls scroll as one
+ * row, so a narrow viewport drops none of them; the actions wrap beside it
+ * instead, because a write affordance that scrolls out of a scrollbar-less row
+ * is one the reader cannot find.
  */
 export const DecisionResultsToolbar = ({
   actions,
   activeFilterCount,
+  find,
   layout,
   onLayoutChange,
   onRailToggle,
   onRefine,
   onSortChange,
-  questionColumns,
+  questions,
   railState,
   sort,
   summary,
@@ -95,7 +108,8 @@ export const DecisionResultsToolbar = ({
         {summary}
       </div>
       <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        <RefineWithinResults onRefine={onRefine} />
+        {find}
+        <NarrowResults onRefine={onRefine} />
         {sort !== null && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
@@ -138,18 +152,18 @@ export const DecisionResultsToolbar = ({
           }))}
           value={layout.contentMode}
         />
-        <DecisionColumnChooser
+        <DecisionColumnToggle
           layout={layout}
           onLayoutChange={onLayoutChange}
-          questionColumns={questionColumns}
+          questions={questions}
         />
-        {actions !== undefined && (
-          <>
-            <span className="bg-border mx-1 h-4 w-px" />
-            {actions}
-          </>
-        )}
       </div>
+      {actions !== undefined && (
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="bg-border mx-1 h-4 w-px" />
+          {actions}
+        </div>
+      )}
     </div>
   );
 };
@@ -236,12 +250,12 @@ true satisfies DecisionContentMode extends OfferedContentMode ? true : never;
  * One more word every hit has to carry. It is written into the query itself,
  * because the query is the only text the search reads; the chips below say
  * which words came from here, and take them back out.
+ *
+ * Its neighbour in the toolbar is find-in-table, which looks only at the rows
+ * already on screen. Both say so: the label names what this one does to the
+ * result set, and the tooltip says it in a clause.
  */
-const RefineWithinResults = ({
-  onRefine,
-}: {
-  onRefine: (entry: string) => void;
-}) => {
+const NarrowResults = ({ onRefine }: { onRefine: (entry: string) => void }) => {
   const t = useTranslations();
   const [entry, setEntry] = useState("");
 
@@ -254,13 +268,18 @@ const RefineWithinResults = ({
         setEntry("");
       }}
     >
-      <Input
-        aria-label={t("caseLaw.refineWithinResults")}
-        className="h-7 min-h-0 w-40 text-xs sm:w-52"
-        onChange={(event) => setEntry(event.target.value)}
-        placeholder={t("caseLaw.refineWithinResults")}
-        type="search"
-        value={entry}
+      <Tooltip
+        content={t("caseLaw.narrowResultsHint")}
+        render={
+          <Input
+            aria-label={t("caseLaw.refineWithinResults")}
+            className="h-7 min-h-0 w-40 text-xs sm:w-52"
+            onChange={(event) => setEntry(event.target.value)}
+            placeholder={t("caseLaw.refineWithinResults")}
+            type="search"
+            value={entry}
+          />
+        }
       />
     </form>
   );

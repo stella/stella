@@ -249,6 +249,14 @@ const justificationToComment = (
       }
       continue;
     }
+    // A cited decision passage exports as the passage itself; it has no
+    // statement the model wrote around it.
+    if (block.kind === "decision-passage") {
+      if (block.excerpt.length > 0) {
+        parts.push(block.excerpt);
+      }
+      continue;
+    }
     for (const statement of block.statements) {
       if (statement.text.length > 0) {
         parts.push(statement.text);

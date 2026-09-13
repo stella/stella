@@ -10,7 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { savedSearchParamsSchema } from "./schema";
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { savedSearch: ["delete"] },
   mcp: { type: "internal", reason: "search_ui" },
   params: savedSearchParamsSchema,
 } satisfies HandlerConfig;
