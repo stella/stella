@@ -1,9 +1,13 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { documentReferenceBase } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { documentCounters, documentReferenceCounters } from "@/api/db/schema";
+import {
+  documentCounters,
+  documentReferenceCounters,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toDocumentReference } from "@/api/lib/document-reference";
@@ -171,57 +175,86 @@ export const allocateEntityStamp = async (
 };
 
 /** Keep the reference high-water mark current when a later version is stamped. */
-type RecordEntityStampOptions = {
+type RecordEntityStampsOptions = {
   tx: Transaction;
-  workspaceId: SafeId<"workspace">;
-  stamp: string;
+  stamps: readonly {
+    workspaceId: SafeId<"workspace">;
+    stamp: string;
+  }[];
 };
 
-export const recordEntityStamp = async ({
+export const recordEntityStamps = async ({
   tx,
-  workspaceId,
-  stamp,
-}: RecordEntityStampOptions): Promise<void> => {
-  const workspace = await tx.query.workspaces.findFirst({
-    where: { id: { eq: workspaceId } },
-    columns: { organizationId: true },
-  });
-  if (!workspace) {
-    panic("Document stamp recorded for a missing workspace");
+  stamps,
+}: RecordEntityStampsOptions): Promise<void> => {
+  if (stamps.length === 0) return;
+  const workspaceIds = [
+    ...new Set(stamps.map(({ workspaceId }) => workspaceId)),
+  ];
+  const workspaceRows = await tx
+    .select({ id: workspaces.id, organizationId: workspaces.organizationId })
+    .from(workspaces)
+    .where(inArray(workspaces.id, workspaceIds));
+  const organizations = new Map(
+    workspaceRows.map((row) => [row.id, row.organizationId]),
+  );
+  const ledgerValues = new Map<
+    string,
+    {
+      id: SafeId<"documentReferenceCounter">;
+      organizationId: SafeId<"organization">;
+      reference: string;
+      workspaceId: SafeId<"workspace">;
+      lastValue: number;
+    }
+  >();
+  for (const { workspaceId, stamp } of stamps) {
+    const organizationId = organizations.get(workspaceId);
+    if (!organizationId) panic("Document stamp recorded for a missing workspace");
+    const base = documentReferenceBase(stamp);
+    const sequence = /\/(\d+)$/.exec(base)?.[1];
+    const reference = sequence ? base.slice(0, -(sequence.length + 1)) : null;
+    const lastValue = sequence ? Number(sequence) : NaN;
+    if (!reference || !Number.isSafeInteger(lastValue)) {
+      panic("Document stamp has an invalid reference format");
+    }
+    const key = `${organizationId}:${reference}`;
+    const existing = ledgerValues.get(key);
+    if (existing && existing.workspaceId !== workspaceId) {
+      panic("Document stamp reference belongs to another workspace");
+    }
+    if (!existing || lastValue > existing.lastValue) {
+      ledgerValues.set(key, {
+        id: existing?.id ?? createSafeId<"documentReferenceCounter">(),
+        organizationId,
+        reference,
+        workspaceId,
+        lastValue: Math.max(existing?.lastValue ?? 0, lastValue),
+      });
+    }
   }
-  const base = documentReferenceBase(stamp);
-  const sequence = /\/(\d+)$/.exec(base)?.[1];
-  const reference = sequence ? base.slice(0, -(sequence.length + 1)) : null;
-  if (!reference || !sequence) {
-    panic("Document stamp has an invalid reference format");
-  }
-
-  const lastValue = Number(sequence);
-  if (!Number.isSafeInteger(lastValue)) {
-    panic("Document stamp sequence is not a safe integer");
-  }
-
   const rows = await tx
     .insert(documentReferenceCounters)
-    .values({
-      id: createSafeId<"documentReferenceCounter">(),
-      organizationId: workspace.organizationId,
-      reference,
-      workspaceId,
-      lastValue,
-    })
+    .values(
+      [...ledgerValues.values()].toSorted((a, b) =>
+        `${a.organizationId}:${a.reference}` <
+        `${b.organizationId}:${b.reference}`
+          ? -1
+          : `${a.organizationId}:${a.reference}` ===
+              `${b.organizationId}:${b.reference}`
+            ? 0
+            : 1,
+      ),
+    )
     .onConflictDoUpdate({
-      target: [
-        documentReferenceCounters.organizationId,
-        documentReferenceCounters.reference,
-      ],
+      target: [documentReferenceCounters.organizationId, documentReferenceCounters.reference],
       set: {
-        lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, ${lastValue})`,
+        lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, excluded.last_value)`,
       },
-      where: eq(documentReferenceCounters.workspaceId, workspaceId),
+      where: sql`${documentReferenceCounters.workspaceId} = excluded.workspace_id`,
     })
     .returning({ id: documentReferenceCounters.id });
-  if (!rows.at(0)) {
+  if (rows.length !== ledgerValues.size) {
     panic("Document stamp reference belongs to another workspace");
   }
 };

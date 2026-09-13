@@ -946,8 +946,10 @@ export const copyEntities = async ({
     });
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
-    await insertEntityVersions(tx, versionRows, {
-      reserveStamps: transfer.type === "copy",
+    await insertEntityVersions({
+      tx,
+      values: versionRows,
+      stampOrigin: transfer.type === "copy" ? "issued" : "copied",
     });
 
     const newVersionId =
