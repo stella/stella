@@ -1,10 +1,6 @@
 {
   "apps/api": {
-<<<<<<< HEAD
-    "count": 759,
-=======
-    "count": 756,
->>>>>>> c8668798da (feat(case-law): the results page is the workspace table)
+    "count": 754,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -424,6 +420,7 @@
       "apps/web/src/components/docx-preview-zoom.ts": 1,
       "apps/web/src/components/docx/docx-browser-editor.tsx": 1,
       "apps/web/src/components/docx/docx-loading-shell.tsx": 1,
+      "apps/web/src/components/docx/evidence-reference.ts": 1,
       "apps/web/src/components/docx/use-folio-collaboration-room.ts": 2,
       "apps/web/src/components/file-tree/file-tree.tsx": 3,
       "apps/web/src/components/flows/flow-meta.ts": 3,
@@ -503,7 +500,6 @@
       "apps/web/src/lib/citations.ts": 2,
       "apps/web/src/lib/consts.ts": 1,
       "apps/web/src/lib/deepl/languages.ts": 1,
-      "apps/web/src/lib/desktop-bridge.ts": 1,
       "apps/web/src/lib/dev-store.ts": 1,
       "apps/web/src/lib/document-search.ts": 1,
       "apps/web/src/lib/files/file-metadata-query.logic.ts": 1,
