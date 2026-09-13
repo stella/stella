@@ -59,6 +59,36 @@ export const readerAnnotationTargetKey = (
 });
 
 /**
+ * What a citation points at inside the document, from the marked paragraphs
+ * alone: the provision a statute passage sits in. A decision's locator is its
+ * reporter page, which only the live selection can say, so a passage read back
+ * from stored spans carries none.
+ */
+export const readerSpansLocator = ({
+  spans,
+  target,
+}: {
+  spans: readonly { blockAnchorId: string }[];
+  target: ReaderAnnotationTarget;
+}): string | null => {
+  switch (target.type) {
+    case "decision": {
+      return null;
+    }
+    case "statute": {
+      const blockAnchorId = spans.at(0)?.blockAnchorId;
+      return blockAnchorId === undefined
+        ? null
+        : (target.provisionByAnchorId.get(blockAnchorId) ?? null);
+    }
+    default: {
+      target satisfies never;
+      return panic(`Unhandled reader target: ${String(target)}`);
+    }
+  }
+};
+
+/**
  * What a citation points at inside the document: the reporter page a
  * quotation starts on for a decision, the provision it sits in for a statute.
  * Null where the document offers neither.
@@ -74,32 +104,21 @@ export const readerSelectionLocator = ({
   spans: readonly SelectionAnchor[];
   target: ReaderAnnotationTarget;
 }): string | null => {
-  switch (target.type) {
-    case "decision": {
-      let last: string | null = null;
-      for (const marker of root.querySelectorAll(".reader-page-marker")) {
-        // -1: the marker sits before the selection's start.
-        if (range.comparePoint(marker, 0) !== -1) {
-          continue;
-        }
-        const digits = /\d+/u.exec(marker.textContent)?.[0];
-        if (digits !== undefined) {
-          last = digits;
-        }
-      }
-      return last;
+  if (target.type !== "decision") {
+    return readerSpansLocator({ spans, target });
+  }
+  let last: string | null = null;
+  for (const marker of root.querySelectorAll(".reader-page-marker")) {
+    // -1: the marker sits before the selection's start.
+    if (range.comparePoint(marker, 0) !== -1) {
+      continue;
     }
-    case "statute": {
-      const blockAnchorId = spans.at(0)?.blockAnchorId;
-      return blockAnchorId === undefined
-        ? null
-        : (target.provisionByAnchorId.get(blockAnchorId) ?? null);
-    }
-    default: {
-      target satisfies never;
-      return panic(`Unhandled reader target: ${String(target)}`);
+    const digits = /\d+/u.exec(marker.textContent)?.[0];
+    if (digits !== undefined) {
+      last = digits;
     }
   }
+  return last;
 };
 
 /** The citation a copied quotation carries. */

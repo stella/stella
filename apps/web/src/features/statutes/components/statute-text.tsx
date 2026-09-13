@@ -3,10 +3,7 @@ import { useTranslations } from "use-intl";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import {
-  buildBlockAnnotationAnchors,
-  buildStandaloneAnnotationAnchors,
-} from "@/components/legal-reader/annotations/annotation-anchors";
+import { buildAnnotationAnchors } from "@/components/legal-reader/annotations/annotation-anchors";
 import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import {
   BlockRenderer,
@@ -110,10 +107,7 @@ export const StatuteText = ({
   const t = useTranslations();
   const { open } = useInspectorView();
   if (blocks.length > 0) {
-    const anchorsByPieceId = buildBlockAnnotationAnchors(
-      annotationAnchors,
-      blocks,
-    );
+    const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
     return (
       <article
         className="reader-statute text-card-foreground text-start"
@@ -189,7 +183,7 @@ export const StatuteText = ({
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorsByPieceId={buildStandaloneAnnotationAnchors(annotationAnchors)}
+          anchorsByPieceId={buildAnnotationAnchors(annotationAnchors)}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />

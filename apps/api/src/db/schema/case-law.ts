@@ -6,6 +6,14 @@ import {
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import {
+  READER_ANNOTATION_BODY_MAX_LENGTH,
+  READER_ANNOTATION_COLORS,
+  READER_ANNOTATION_KINDS,
+  READER_ANNOTATION_QUOTE_MAX_LENGTH,
+  READER_ANNOTATION_STYLES,
+  READER_ANNOTATION_VISIBILITIES,
+} from "@stll/api-contract/legal-reader-annotations";
+import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
@@ -51,6 +59,7 @@ import {
 } from "@/api/lib/decision-date-bounds-sql";
 
 import {
+  authoredNotePolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
@@ -58,6 +67,7 @@ import {
   isNotNull,
   isNull,
   jsonb,
+  organization,
   orgPolicies,
   p,
   pUuid,
@@ -1829,6 +1839,103 @@ export const caseLawResearchAnswers = p.pgTable(
 // ---------------------------------------------------------------------------
 // Case Law — Search index (global, no tenant column)
 // ---------------------------------------------------------------------------
+
+const retiredSqlValues = (values: readonly string[]) =>
+  values.map((value) => sql.raw(`'${value}'`));
+
+const RETIRED_ANNOTATION_KIND_SQL_VALUES = retiredSqlValues(
+  READER_ANNOTATION_KINDS,
+);
+const RETIRED_ANNOTATION_VISIBILITY_SQL_VALUES = retiredSqlValues(
+  READER_ANNOTATION_VISIBILITIES,
+);
+const RETIRED_ANNOTATION_COLOR_SQL_VALUES = retiredSqlValues(
+  READER_ANNOTATION_COLORS,
+);
+const RETIRED_ANNOTATION_STYLE_SQL_VALUES = retiredSqlValues(
+  READER_ANNOTATION_STYLES,
+);
+
+/**
+ * The reader's marks as they were stored before statutes could be marked too.
+ * Superseded by `legalReaderAnnotations`, which the cutover migration copies
+ * every row into; nothing reads this table any more. It stays declared so the
+ * schema still describes the database the cutover leaves behind, and is
+ * dropped by the follow-up migration once that deploy is out.
+ */
+export const caseLawDecisionAnnotations = p.pgTable(
+  "case_law_decision_annotations",
+  {
+    id: pUuid<"legalReaderAnnotation">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    userId: p.text("user_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    groupId: p.uuid("group_id"),
+    kind: p.text("kind", { enum: READER_ANNOTATION_KINDS }).notNull(),
+    visibility: p
+      .text("visibility", { enum: READER_ANNOTATION_VISIBILITIES })
+      .notNull()
+      .default("private"),
+    color: p.text("color", { enum: READER_ANNOTATION_COLORS }),
+    style: p.text("style", { enum: READER_ANNOTATION_STYLES }),
+    blockAnchorId: p.varchar("block_anchor_id", { length: 64 }).notNull(),
+    startOffset: p.integer("start_offset").notNull(),
+    endOffset: p.integer("end_offset").notNull(),
+    quote: p.varchar({ length: READER_ANNOTATION_QUOTE_MAX_LENGTH }).notNull(),
+    body: p.varchar({ length: READER_ANNOTATION_BODY_MAX_LENGTH }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_decision_annotations_organization_id_fk",
+        columns: [t.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_decision_annotations_user_id_fk",
+        columns: [t.userId],
+        foreignColumns: [user.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("case_law_decision_annotations_decision_idx")
+      .on(t.organizationId, t.decisionId, t.createdAt, t.id),
+    p
+      .index("case_law_decision_annotations_group_idx")
+      .on(t.organizationId, t.groupId)
+      .where(isNotNull(t.groupId)),
+    p.check(
+      "case_law_decision_annotations_kind_values",
+      sql`${t.kind} IN (${sql.join(RETIRED_ANNOTATION_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_visibility_values",
+      sql`${t.visibility} IN (${sql.join(RETIRED_ANNOTATION_VISIBILITY_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_color_values",
+      sql`${t.color} IS NULL OR ${t.color} IN (${sql.join(RETIRED_ANNOTATION_COLOR_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_style_values",
+      sql`${t.style} IS NULL OR ${t.style} IN (${sql.join(RETIRED_ANNOTATION_STYLE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_annotations_kind_shape",
+      sql`(${t.kind} = 'highlight' AND ${t.color} IS NOT NULL AND ${t.style} IS NOT NULL AND ${t.body} IS NULL)
+        OR (${t.kind} = 'comment' AND ${t.style} IS NULL AND ((${t.body} IS NOT NULL AND ${t.body} <> '') OR ${t.groupId} IS NOT NULL))`,
+    ),
+    p.check(
+      "case_law_decision_annotations_span_shape",
+      sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
+    ),
+    ...authoredNotePolicies(),
+  ],
+);
 
 export const caseLawCourtWeights = p.pgTable(
   "case_law_court_weights",

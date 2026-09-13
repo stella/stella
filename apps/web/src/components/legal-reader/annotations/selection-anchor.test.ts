@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  isInnermostAnchoredBlock,
   isReaderChromeParent,
   readerAnnotationActivationAction,
   readerSelectionContainmentAction,
@@ -75,4 +76,29 @@ test("a mark activates only after a click, never during a text drag", () => {
       target: "other",
     }),
   ).toBe("ignore");
+});
+
+test("a table is a container; the cell the words are in owns the mark", () => {
+  // `contains` is the whole of what the rule reads, so plain fakes state the
+  // nesting exactly as the DOM would report it.
+  type Fake = { contains: (other: Fake | null) => boolean; name: string };
+  const cells: Fake[] = ["cell-0", "cell-1"].map((name) => ({
+    contains: (other) => other?.name === name,
+    name,
+  }));
+  const table: Fake = {
+    contains: () => true,
+    name: "table",
+  };
+  const paragraph: Fake = {
+    contains: (other) => other?.name === "paragraph",
+    name: "paragraph",
+  };
+  const anchored = [table, ...cells, paragraph];
+
+  expect(isInnermostAnchoredBlock(table, anchored)).toBe(false);
+  for (const cell of cells) {
+    expect(isInnermostAnchoredBlock(cell, anchored)).toBe(true);
+  }
+  expect(isInnermostAnchoredBlock(paragraph, anchored)).toBe(true);
 });

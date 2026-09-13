@@ -15,8 +15,8 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
 
 import {
-  annotationTextAnchor,
-  buildStandaloneAnnotationAnchors,
+  annotationTextAnchors,
+  buildAnnotationAnchors,
   renderLinkAnnotations,
 } from "@/components/legal-reader/annotations/annotation-anchors";
 import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
@@ -188,9 +188,12 @@ const EditorialSupplementBody = ({
   <div className="space-y-3">
     {editorialSupplementBlocks(text).map((block) => {
       const blockAnchorId = supplementBlockAnchorId(pieceId, block.start);
-      const anchors = annotationAnchors
-        .filter((annotation) => annotation.blockAnchorId === blockAnchorId)
-        .map((annotation) => annotationTextAnchor(annotation, block.start));
+      const anchors = annotationTextAnchors(
+        annotationAnchors.filter(
+          (annotation) => annotation.blockAnchorId === blockAnchorId,
+        ),
+        block.start,
+      );
       const content = (
         <InlineContent
           activeMatchIndex={activeMatchIndex}
@@ -407,11 +410,10 @@ const buildAnchorsByPieceId = ({
     const blockAnnotations = annotationsByBlock.get(blockId);
     // A reader's mark over a link keeps the link: links are the text's own
     // structure, and intersecting marks are repeated inside them below.
-    for (const annotation of optionalArray(blockAnnotations)) {
-      // Plain inline markup keeps the paragraph's own wrapping and
-      // justification. The toolbar handles clicks on the mark by id.
-      anchors.push(annotationTextAnchor(annotation));
-    }
+    // Plain inline markup keeps the paragraph's own wrapping and
+    // justification, and overlapping marks are split into runs so no word is
+    // printed twice. The toolbar handles clicks on the mark by id.
+    anchors.push(...annotationTextAnchors(optionalArray(blockAnnotations)));
     for (const span of optionalArray(citationSpans[blockId])) {
       const linkAnnotations = annotationsOverlappingTextSpan(
         optionalArray(blockAnnotations),
@@ -832,7 +834,7 @@ export const DecisionText = ({
         />
         <FulltextFallback
           activeMatchIndex={activeMatchIndex}
-          anchorsByPieceId={buildStandaloneAnnotationAnchors(
+          anchorsByPieceId={buildAnnotationAnchors(
             hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
           )}
           rangesByPieceId={searchResults.rangesByPieceId}

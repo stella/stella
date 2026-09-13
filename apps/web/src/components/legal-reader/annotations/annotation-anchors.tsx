@@ -82,65 +82,121 @@ const renderAnnotation = (
   </mark>
 );
 
-export const annotationTextAnchor = (
-  annotation: AnnotationAnchorSource,
+/** One run of text and the single mark that draws it. */
+export type AnnotationSegment = {
+  annotation: AnnotationAnchorSource;
+  end: number;
+  start: number;
+};
+
+/**
+ * Which of the marks covering a run draws it: the innermost one, and among
+ * equals the lower id. A reader who highlights a phrase inside a paragraph
+ * they had already marked means the phrase, so the narrower mark is the one
+ * they see and the one a click on those words activates. The id breaks the
+ * remaining tie so the same marks always produce the same reading.
+ */
+const drawsRun = (
+  left: AnnotationAnchorSource,
+  right: AnnotationAnchorSource,
+): number =>
+  right.startOffset - left.startOffset ||
+  left.endOffset - right.endOffset ||
+  // eslint-disable-next-line require-cached-collator/require-cached-collator -- a UUID is a key, not words: the tie-break only has to be the same everywhere, never locale-aware
+  left.id.localeCompare(right.id);
+
+/**
+ * The marks of one piece as runs that do not overlap. The renderer walks
+ * anchors with a single cursor and re-emits whatever a later anchor covers
+ * behind it, so two marks over the same words would print those words twice;
+ * splitting at every boundary is what keeps the text on screen exactly the
+ * text the document holds. Runs that the same mark draws end to end are
+ * merged again, so a mark nothing overlaps stays one element.
+ */
+export const annotationSegments = (
+  annotations: readonly AnnotationAnchorSource[],
+): AnnotationSegment[] => {
+  const spans = annotations.filter(
+    (annotation) => annotation.endOffset > annotation.startOffset,
+  );
+  const boundaries = [
+    ...new Set(
+      spans.flatMap((annotation) => [
+        annotation.startOffset,
+        annotation.endOffset,
+      ]),
+    ),
+  ].toSorted((left, right) => left - right);
+
+  const segments: AnnotationSegment[] = [];
+  for (let index = 0; index + 1 < boundaries.length; index += 1) {
+    const start = boundaries[index];
+    const end = boundaries[index + 1];
+    if (start === undefined || end === undefined) {
+      continue;
+    }
+    const covering = spans.filter(
+      (annotation) =>
+        annotation.startOffset <= start && annotation.endOffset >= end,
+    );
+    const annotation = covering.toSorted(drawsRun).at(0);
+    if (annotation === undefined) {
+      // A gap between two marks that do not touch.
+      continue;
+    }
+    const previous = segments.at(-1);
+    if (previous?.annotation === annotation && previous.end === start) {
+      previous.end = end;
+      continue;
+    }
+    segments.push({ annotation, end, start });
+  }
+  return segments;
+};
+
+/** The anchors for one piece's marks, offset into the piece's own text. */
+export const annotationTextAnchors = (
+  annotations: readonly AnnotationAnchorSource[],
   offset = 0,
-): TextAnchor => ({
-  end: offset + annotation.endOffset,
-  key: `annotation:${annotation.id}`,
-  render: (children): ReactElement => renderAnnotation(annotation, children),
-  start: offset + annotation.startOffset,
-});
-
-const pushAnchor = (
-  anchorsByPieceId: Record<string, TextAnchor[]>,
-  pieceId: string,
-  annotation: AnnotationAnchorSource,
-): void => {
-  const anchors = anchorsByPieceId[pieceId];
-  if (anchors === undefined) {
-    anchorsByPieceId[pieceId] = [annotationTextAnchor(annotation)];
-    return;
-  }
-  anchors.push(annotationTextAnchor(annotation));
-};
+): TextAnchor[] =>
+  annotationSegments(annotations).map(({ annotation, end, start }) => ({
+    end: offset + end,
+    key: `annotation:${annotation.id}:${String(start)}`,
+    render: (children): ReactElement => renderAnnotation(annotation, children),
+    start: offset + start,
+  }));
 
 /**
- * Every mark by the piece it sits in, where a piece is named by the block
- * anchor the mark was stored against. That is the fulltext fallback, whose
- * paragraphs are their own anchors.
+ * Every mark by the piece it is drawn in. A mark is stored against the
+ * element the reader selected in, which is a block's stable anchor in a
+ * parsed document and the piece's own id everywhere else (a table cell, a
+ * fulltext paragraph); `blocks` translates the first kind, and an anchor
+ * that is already a piece id passes through. A mark whose piece the document
+ * no longer has is dropped rather than drawn somewhere else.
  */
-export const buildStandaloneAnnotationAnchors = (
+export const buildAnnotationAnchors = (
   annotations: readonly AnnotationAnchorSource[],
-): Record<string, TextAnchor[]> => {
-  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
-  for (const annotation of annotations) {
-    pushAnchor(anchorsByPieceId, annotation.blockAnchorId, annotation);
-  }
-  return anchorsByPieceId;
-};
-
-/**
- * Every mark by the piece it sits in, for a parsed document. A mark is stored
- * against the block's stable anchor, which is what the reader selects and
- * deep-links by, while `BlockRenderer` lays anchors by the block's render id;
- * translating between the two is what puts the mark on the right words. A
- * mark whose block the document no longer has is dropped rather than drawn
- * somewhere else.
- */
-export const buildBlockAnnotationAnchors = (
-  annotations: readonly AnnotationAnchorSource[],
-  blocks: readonly Block[],
+  blocks: readonly Block[] = [],
 ): Record<string, TextAnchor[]> => {
   const pieceIdByBlockAnchorId = new Map(
     blocks.map((block) => [block.anchorId, block.id] as const),
   );
-  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  const byPiece = new Map<string, AnnotationAnchorSource[]>();
   for (const annotation of annotations) {
-    const pieceId = pieceIdByBlockAnchorId.get(annotation.blockAnchorId);
-    if (pieceId !== undefined) {
-      pushAnchor(anchorsByPieceId, pieceId, annotation);
+    const pieceId =
+      pieceIdByBlockAnchorId.get(annotation.blockAnchorId) ??
+      annotation.blockAnchorId;
+    const existing = byPiece.get(pieceId);
+    if (existing === undefined) {
+      byPiece.set(pieceId, [annotation]);
+      continue;
     }
+    existing.push(annotation);
+  }
+
+  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  for (const [pieceId, pieceAnnotations] of byPiece) {
+    anchorsByPieceId[pieceId] = annotationTextAnchors(pieceAnnotations);
   }
   return anchorsByPieceId;
 };

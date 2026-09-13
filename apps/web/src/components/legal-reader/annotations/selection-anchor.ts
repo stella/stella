@@ -62,6 +62,21 @@ export const readerSelectionContainmentAction = ({
   return drag === "active" && snapshot === "available" ? "restore" : "ignore";
 };
 
+type AnchoredBlock<T> = { contains: (other: T | null) => boolean };
+
+/**
+ * Whether this anchored element is the one a mark inside it belongs to. A
+ * table is anchored and so is every cell in it: the table is a container
+ * whose "text" is every cell run together, while a cell owns the offsets a
+ * mark is stored with. The innermost anchored element is the one that owns
+ * the words, so a container that holds another anchored element yields no
+ * span of its own and a selection is never anchored twice.
+ */
+export const isInnermostAnchoredBlock = <T extends AnchoredBlock<T>>(
+  block: T,
+  blocks: readonly T[],
+): boolean => !blocks.some((other) => other !== block && block.contains(other));
+
 type ReaderChromeParent = Pick<Element, "closest">;
 
 /** Whether a text node's element parent belongs to non-document reader UI. */
@@ -130,8 +145,12 @@ export const selectionAnchorsFrom = (
   }
   const range = selection.getRangeAt(0);
   const spans: SelectionAnchor[] = [];
-  for (const block of root.querySelectorAll<HTMLElement>("[data-anchor]")) {
-    if (!range.intersectsNode(block)) {
+  const anchored = [...root.querySelectorAll<HTMLElement>("[data-anchor]")];
+  for (const block of anchored) {
+    if (
+      !range.intersectsNode(block) ||
+      !isInnermostAnchoredBlock(block, anchored)
+    ) {
       continue;
     }
     const blockAnchorId = block.dataset["anchor"];

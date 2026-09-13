@@ -36,6 +36,7 @@ import type {
 import {
   askAboutReaderPassage,
   readerSelectionLocator,
+  readerSpansLocator,
   readerTargetCitation,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -50,6 +51,7 @@ import type { SelectionAnchor } from "@/components/legal-reader/annotations/sele
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 /** Room above the words for the bar, so it never covers what was selected. */
@@ -206,6 +208,22 @@ export const AnnotationToolbar = ({
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
+  // The listeners below are installed once, on mount, and the reader moves
+  // between documents without remounting them: a listener that closed over
+  // `target` would go on quoting and citing the document that was open when
+  // it was installed. These read the latest one instead, so the bar cannot
+  // hold a stale document at all.
+  const locatorOf = useLatestCallback(
+    (range: Range, root: HTMLElement, spans: readonly SelectionAnchor[]) =>
+      readerSelectionLocator({ range, root, spans, target }),
+  );
+  const writePassage = useLatestCallback(
+    (dataTransfer: DataTransfer, quote: string) =>
+      writeReaderPassage({ dataTransfer, quote, target }),
+  );
+  const activateAnnotation = useLatestCallback(onActivateAnnotation);
+  const clearActive = useLatestCallback(onClearActive);
+
   useMountEffect(() => {
     const root = scrollContainerRef.current;
     if (root === null) {
@@ -310,7 +328,7 @@ export const AnnotationToolbar = ({
         const spans = selectionAnchorsFrom(selection, root);
         setSelected({
           cleanText: cleanText === "" ? text : cleanText,
-          locator: readerSelectionLocator({ range, root, spans, target }),
+          locator: locatorOf(range, root, spans),
           rect: range.getBoundingClientRect(),
           spans,
           text,
@@ -319,7 +337,7 @@ export const AnnotationToolbar = ({
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClearActive();
+        clearActive();
         ownerDoc.getSelection()?.removeAllRanges();
         return;
       }
@@ -334,7 +352,7 @@ export const AnnotationToolbar = ({
           : null;
       if (mark !== null && id !== null && root.contains(mark)) {
         event.preventDefault();
-        onActivateAnnotation(id);
+        activateAnnotation(id);
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -345,7 +363,7 @@ export const AnnotationToolbar = ({
       if (!(pressed instanceof Node) || barRef.current?.contains(pressed)) {
         return;
       }
-      onClearActive();
+      clearActive();
     };
     const onClick = (event: MouseEvent) => {
       const clicked = event.target;
@@ -371,7 +389,7 @@ export const AnnotationToolbar = ({
         target: "annotation",
       });
       if (action === "activate") {
-        onActivateAnnotation(id);
+        activateAnnotation(id);
       }
     };
     const onPointerEnd = () => {
@@ -392,7 +410,7 @@ export const AnnotationToolbar = ({
       ) {
         return;
       }
-      writeReaderPassage({ dataTransfer: event.dataTransfer, quote, target });
+      writePassage(event.dataTransfer, quote);
     };
     ownerDoc.addEventListener("selectionchange", readSelection);
     ownerDoc.addEventListener("keydown", onKeyDown);
@@ -433,11 +451,14 @@ export const AnnotationToolbar = ({
   };
 
   // A statute consolidation is not a reference the chat's corpus tools take,
-  // so the passage reaches them as a question naming the provision instead.
-  const askAboutPassage = (quote: string) => {
+  // so the passage reaches them as a question naming the document. It carries
+  // the passage's own locator, which for a statute is the provision: a
+  // question about "the act" and a question about "§ 2079 of the act" are not
+  // the same question, and the tools look the provision up by it.
+  const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
       prompt: t("legalReader.annotations.askPassagePrompt", {
-        citation: readerTargetCitation({ locator: null, target }),
+        citation: readerTargetCitation({ locator, target }),
         quote,
       }),
       quote,
@@ -522,7 +543,10 @@ export const AnnotationToolbar = ({
         <div className="flex items-center gap-1">
           <Button
             onClick={() => {
-              askAboutPassage(activeSpans.map((span) => span.quote).join(" "));
+              askAboutPassage(
+                activeSpans.map((span) => span.quote).join(" "),
+                readerSpansLocator({ spans: activeSpans, target }),
+              );
               onClearActive();
             }}
             size="sm"
@@ -725,7 +749,7 @@ export const AnnotationToolbar = ({
             <span className="bg-border mx-1 h-4 w-px" />
             <Button
               onClick={() => {
-                askAboutPassage(selected.text);
+                askAboutPassage(selected.text, selected.locator);
                 clearSelection();
               }}
               size="sm"

@@ -1,9 +1,15 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { legalReaderAnnotations } from "@/api/db/schema";
+import {
+  caseLawDecisionAnnotations,
+  legalReaderAnnotations,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -31,6 +37,14 @@ const mark = (targetType: "decision" | "statute", quote: string) => ({
   endOffset: quote.length,
   quote,
 });
+
+const CUTOVER_MIGRATION = nodePath.resolve(
+  import.meta.dir,
+  "../../../drizzle/20260913210000_legal_reader_annotations/migration.sql",
+);
+
+const columnNames = (table: Parameters<typeof getTableConfig>[0]) =>
+  new Set(getTableConfig(table).columns.map((column) => column.name));
 
 /** A driver wraps the database's own message; read the whole chain. */
 const causeChainText = (error: unknown): string => {
@@ -95,6 +109,29 @@ describe("legal reader annotations", () => {
       );
 
     expect(onStatute.map((row) => row.quote)).toEqual(["§ 2079"]);
+  });
+
+  // The cutover copies rows with a plain INSERT ... SELECT; nothing but a
+  // shape comparison notices a column that stops lining up, and a mismatch
+  // would either fail the deploy or silently leave a reader's words behind.
+  test("carries every column of the table it replaces", () => {
+    const retiring = columnNames(caseLawDecisionAnnotations);
+    const carried = columnNames(legalReaderAnnotations);
+
+    // `decision_id` is the one column the cutover renames; the discriminator
+    // beside it is the one column it adds.
+    expect([...retiring].filter((column) => !carried.has(column))).toEqual([
+      "decision_id",
+    ]);
+    expect(
+      [...carried].filter((column) => !retiring.has(column)).toSorted(),
+    ).toEqual(["target_id", "target_type"]);
+
+    const copy = readFileSync(CUTOVER_MIGRATION, "utf-8");
+    for (const column of carried) {
+      expect(copy).toContain(`"${column}"`);
+    }
+    expect(copy).toContain('FROM "case_law_decision_annotations"');
   });
 
   test("refuses a corpus the schema does not name", async () => {

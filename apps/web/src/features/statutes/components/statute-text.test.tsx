@@ -292,6 +292,35 @@ describe("StatuteText", () => {
     );
   });
 
+  test("anchors every table cell so a mark in one belongs to the cell", () => {
+    const table = blocks.find((block) => block.type === "table");
+    if (table === undefined) {
+      throw new Error("The statute fixture has no table to mark");
+    }
+    const cellPieceId = `table:${table.id}:0:1`;
+    const markup = renderStatute({
+      annotationAnchors: [
+        {
+          blockAnchorId: cellPieceId,
+          color: "yellow",
+          endOffset: 4,
+          id: "019b0121-9dd7-7000-8000-0000000000bb",
+          kind: "highlight",
+          startOffset: 0,
+          style: "highlight",
+        },
+      ],
+    });
+
+    // The cell carries its own anchor, so a selection inside it is stored
+    // against the cell's offsets rather than against the whole table's text.
+    expect(markup).toContain(`data-anchor="${cellPieceId}"`);
+    const cell = markup.slice(markup.indexOf(`data-anchor="${cellPieceId}"`));
+    expect(cell.slice(0, cell.indexOf("</td>"))).toContain(
+      'data-annotation-id="019b0121-9dd7-7000-8000-0000000000bb"',
+    );
+  });
+
   test("falls back to the plain text when the document has no parsed blocks", () => {
     const markup = renderStatute({
       blocks: [],
