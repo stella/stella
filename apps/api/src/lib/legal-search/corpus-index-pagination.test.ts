@@ -765,6 +765,25 @@ describe("only the passages a page emits are highlighted", () => {
     );
   });
 
+  test("every round asks for a compact response body", async () => {
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      chunk_id: `doc-${index}:0`,
+      document_id: `doc-${index}`,
+    }));
+
+    await readPage(3);
+
+    // The engine's own default is `pretty_json`. A scan round returns a few
+    // hundred whole stored documents, so the indentation is bytes the reader
+    // waits on and no parser needs. The endpoint offers no per-hit field
+    // projection, which makes this the round's only width control.
+    expect(requestBodies.length).toBeGreaterThan(1);
+    for (const body of requestBodies) {
+      expect(body["format"]).toBe("json");
+    }
+    expect(snippetRequests()).toHaveLength(1);
+  });
+
   test("a cursor page highlights its own passages, not the previous page's", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
