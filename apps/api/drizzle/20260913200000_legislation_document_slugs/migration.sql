@@ -23,25 +23,22 @@ ALTER TABLE "legislation_documents"
 -- Built CONCURRENTLY so the lookup path never write-locks the corpus table.
 -- Drizzle wraps pending migrations in one transaction and CREATE INDEX
 -- CONCURRENTLY must run outside one: COMMIT, build, then BEGIN again for the
--- migrator's bookkeeping row (same split as 20260603120000_case_law_public_slugs).
+-- migrator's bookkeeping row (same split as 20260827200000_folio_collab_rooms).
 SELECT set_config(
   'stella.migration_statement_timeout',
   current_setting('statement_timeout'),
   false
-);
---> statement-breakpoint
-SET statement_timeout = 0;
---> statement-breakpoint
-COMMIT;
---> statement-breakpoint
+);--> statement-breakpoint
+SET statement_timeout = 0;--> statement-breakpoint
+-- squawk-ignore transaction-nesting
+COMMIT;--> statement-breakpoint
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "legislation_documents_country_slug_idx"
   ON "legislation_documents" ("country", "slug")
-  WHERE "slug" IS NOT NULL;
---> statement-breakpoint
+  WHERE "slug" IS NOT NULL;--> statement-breakpoint
 SELECT set_config(
   'statement_timeout',
   current_setting('stella.migration_statement_timeout'),
   false
-);
---> statement-breakpoint
+);--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
