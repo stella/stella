@@ -33,7 +33,7 @@ const extractedAtToken =
   "2026-04-30 08:01:00.000982" as TimestampCasToken;
 // The token select chain: rootDb.select({...}).from(...).where(...).limit(1)
 const selectLimitMock = mock(async (_limit: number) => [
-  { semanticUpdatedAtToken, extractedAtToken },
+  { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
 ]);
 const selectMock = mock((_fields: unknown) => ({
   from: (_table: unknown) => ({
@@ -142,7 +142,7 @@ beforeEach(() => {
   selectMock.mockClear();
   selectLimitMock.mockClear();
   selectLimitMock.mockResolvedValue([
-    { semanticUpdatedAtToken, extractedAtToken },
+    { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
   ]);
   findFirstMock.mockClear();
   findFirstMock.mockResolvedValue(entityRow);
@@ -159,7 +159,9 @@ afterEach(() => {
 test("persists an entity's semantic updated timestamp when indexing", async () => {
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([query]) =>
+    new PgDialect().sqlToQuery(query).sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -190,7 +192,9 @@ test("persists an entity's semantic updated timestamp when indexing", async () =
 test("rejects an out-of-order projection against the authoritative entity", async () => {
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([query]) =>
+    new PgDialect().sqlToQuery(query).sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -233,7 +237,7 @@ test("propagates workspace activity failures from the projection transaction", a
 
   expect(rejection).toBe(activityFailure);
   expect(transactionMock).toHaveBeenCalledTimes(1);
-  expect(executeMock).toHaveBeenCalledTimes(4);
+  expect(executeMock).toHaveBeenCalledTimes(5);
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {
@@ -307,7 +311,9 @@ test("excludes stale extracted text and fences its observed provenance", async (
   });
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([query]) =>
+    new PgDialect().sqlToQuery(query).sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -398,7 +404,9 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
   expect(
     stringParamsOfExecutedQueries().some((param) => param.includes(legacyText)),
   ).toBe(true);
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([query]) =>
+    new PgDialect().sqlToQuery(query).sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
@@ -490,7 +498,9 @@ const stampedVersion = (stamp: string, suffix: number): VersionRow => ({
  * insert binds it twice: the stored column, and the tsvector it builds.
  */
 const projectedSearchableTextContaining = (marker: string): string => {
-  const query = executeMock.mock.calls.at(0)?.[0];
+  const query = executeMock.mock.calls.find(([query]) =>
+    new PgDialect().sqlToQuery(query).sql.includes("INSERT INTO search_documents"),
+  )?.[0];
   if (!query) {
     return "";
   }
