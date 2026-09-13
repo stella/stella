@@ -4,14 +4,18 @@ import { panic } from "better-result";
 import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
+import { CopyField } from "@/components/copy-field";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import { env } from "@/env";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
@@ -215,7 +219,7 @@ const DocsLink = ({
 }: DocsLinkProps) => (
   <a
     className={cn(
-      "inline-flex items-center gap-1.5 text-sm underline-offset-4 hover:underline",
+      "inline-flex min-h-11 items-center gap-1.5 text-sm underline-offset-4 hover:underline",
       className,
     )}
     href={sanitizeHref(href)}
@@ -243,6 +247,15 @@ const AssistantPanel = () => {
       <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
         {t("onboarding.mcpCardDescription")}
       </p>
+      {/* The guide names the hosted server; a self-hosted deployment has to
+          hand its own address over here or the reader connects to the wrong
+          stella. */}
+      {env.VITE_SELFHOST && (
+        <CopyField
+          label={t("settings.connections.mcpUrlLabel")}
+          value={`${externalApiOrigin().replace(/\/$/u, "")}${MCP_HTTP_PATH}`}
+        />
+      )}
       <DocsLink href={ASSISTANT_DOCS_URL}>
         {t("onboarding.assistantDocsLink")}
       </DocsLink>
