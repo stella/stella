@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { STATUTE_SLUG_SQL_PATTERN } from "@/api/db/schema";
 import {
   createStatuteSlug,
@@ -66,6 +68,7 @@ describe("statute public slugs", () => {
           expect((slug ?? "").length).toBeLessThanOrEqual(256);
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -106,6 +109,7 @@ describe("statute public slugs", () => {
           expect(left).not.toBe(right);
         },
       ),
+      propertyConfig(),
     );
   });
 
