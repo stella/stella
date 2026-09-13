@@ -29,7 +29,7 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { createStatuteDocumentRouteParams } from "@/lib/statute-route";
 
 /**
  * Works whose act is looked up when the panel opens. A reference names its
@@ -268,11 +268,11 @@ const WorkReferences = ({
               <Link
                 className="text-primary text-xs hover:underline"
                 hash={row.anchor}
-                params={{
-                  country: toStatuteCountrySegment(document.country),
+                params={createStatuteDocumentRouteParams({
+                  country: document.country,
                   documentId: document.id,
-                }}
-                to="/law/$country/statutes/$documentId"
+                })}
+                to="/law/$country/statutes/$slug"
               >
                 {label}
               </Link>

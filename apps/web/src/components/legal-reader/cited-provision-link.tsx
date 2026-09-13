@@ -21,7 +21,7 @@ import { createProvisionViewTab } from "@/features/statutes/provision-inspector.
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
 import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { createStatuteDocumentRouteParams } from "@/lib/statute-route";
 
 export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */
@@ -128,11 +128,11 @@ export const CitedProvisionLink = ({
               provision.payload.highlightAnchorId ?? provision.payload.anchorId
             }
             onClick={onProvisionClick}
-            params={{
-              country: toStatuteCountrySegment(provision.document.country),
+            params={createStatuteDocumentRouteParams({
+              country: provision.document.country,
               documentId: provision.document.id,
-            }}
-            to="/law/$country/statutes/$documentId"
+            })}
+            to="/law/$country/statutes/$slug"
           />
         }
       >

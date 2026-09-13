@@ -1,0 +1,38 @@
+import { createFileRoute } from "@tanstack/react-router";
+
+import { PublicStatuteViewer } from "@/routes/law/-statute-detail";
+import {
+  createPublicStatuteHead,
+  loadPublicStatuteRoute,
+  publicStatuteSearchSchema,
+} from "@/routes/law/-statute-detail.logic";
+
+/**
+ * A statute at its canonical address: the readable segment alone, which
+ * always names the latest consolidation. The same route answers the legacy
+ * document-id form and redirects it here.
+ */
+export const Route = createFileRoute("/law/$country/statutes/$slug/")({
+  validateSearch: publicStatuteSearchSchema,
+  loaderDeps: ({ search: { asOf, jump } }) => ({ asOf, jump }),
+  loader: async ({ context: { queryClient }, deps, params }) =>
+    await loadPublicStatuteRoute({ params, queryClient, search: deps }),
+  head: ({ loaderData }) =>
+    loaderData ? createPublicStatuteHead(loaderData) : { meta: [] },
+  component: PublicStatuteRoute,
+});
+
+function PublicStatuteRoute() {
+  const { statute, work } = Route.useLoaderData();
+  const asOf = Route.useSearch({ select: (search) => search.asOf });
+  const requestedJump = Route.useSearch({ select: (search) => search.jump });
+
+  return (
+    <PublicStatuteViewer
+      asOf={asOf}
+      requestedJump={requestedJump}
+      statute={statute}
+      work={work}
+    />
+  );
+}

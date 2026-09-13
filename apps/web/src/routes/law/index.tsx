@@ -72,6 +72,7 @@ import {
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { createStatuteRouteParams } from "@/lib/statute-route";
 import {
   type LawScope,
   lawHomeDescriptor,
@@ -489,8 +490,12 @@ function LawHome() {
             <Link
               className={LANDING_ROW_CLASS}
               key={item.id}
-              params={{ country: statuteCountry, documentId: item.id }}
-              to="/law/$country/statutes/$documentId"
+              params={createStatuteRouteParams({
+                country: statuteCountry,
+                documentId: item.id,
+                slug: item.slug,
+              })}
+              to="/law/$country/statutes/$slug"
             >
               <LandingItemText
                 meta={signalLine(side, item.versionValidFrom)}

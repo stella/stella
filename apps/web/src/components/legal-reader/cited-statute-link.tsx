@@ -11,7 +11,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { createStatuteDocumentRouteParams } from "@/lib/statute-route";
 
 export type CitedStatuteTarget = {
   document: { country: string; id: string };
@@ -33,11 +33,11 @@ export const CitedStatuteLink = ({
       render={
         <Link
           className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
-          params={{
-            country: toStatuteCountrySegment(target.document.country),
+          params={createStatuteDocumentRouteParams({
+            country: target.document.country,
             documentId: target.document.id,
-          }}
-          to="/law/$country/statutes/$documentId"
+          })}
+          to="/law/$country/statutes/$slug"
         />
       }
     >

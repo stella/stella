@@ -30,13 +30,14 @@ export type StatuteListFilters = {
 };
 
 /**
- * A Work plus the date to read it at. The identifier addresses the Work and
- * the date picks the consolidation, so the trio is the cache identity.
+ * A Work addressed the way its public URL addresses it: a jurisdiction and
+ * the readable segment, plus the consolidation opening when the URL names
+ * one. Absent `asOf` reads the latest consolidation the corpus holds.
  */
-export type StatuteAsOfKey = {
-  asOf: string;
-  eli: string;
-  language: string;
+export type StatuteSlugKey = {
+  asOf?: string;
+  country: string;
+  slug: string;
 };
 
 export const statuteKeys = {
@@ -54,10 +55,10 @@ export const statuteKeys = {
   ],
   shelf: (country: string) => [...statuteKeys.all, "shelf", { country }],
   byId: (documentId: string) => [...statuteKeys.all, "detail", documentId],
-  asOf: (key: StatuteAsOfKey) => [
+  bySlug: (key: StatuteSlugKey) => [
     ...statuteKeys.all,
-    "asOf",
-    { asOf: key.asOf, eli: key.eli, language: key.language },
+    "bySlug",
+    { asOf: key.asOf, country: key.country, slug: key.slug },
   ],
   versions: (documentId: string) => [
     ...statuteKeys.all,
@@ -136,21 +137,26 @@ export const statuteOptions = (documentId: string) =>
   });
 
 /**
- * The consolidation of a Work that applied on a given date, or null when the
- * corpus covers no version on it. A date outside the covered range is a real
- * answer the reader shows, not a failed request.
+ * The statute a public URL names, or null when nothing answers to it: an
+ * unknown segment, or a date no consolidation of the Work covers. Both are
+ * answers the route acts on (not found, or the empty reader), not failures.
  */
-export const statuteAsOfOptions = (key: StatuteAsOfKey) =>
+export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
   queryOptions({
-    queryKey: statuteKeys.asOf(key),
+    queryKey: statuteKeys.bySlug(
+      asOf === undefined ? { country, slug } : { asOf, country, slug },
+    ),
     queryFn: async ({ signal }) => {
-      const response = await api.law.statutes["by-eli"].get({
-        query: { asOf: key.asOf, eli: key.eli, language: key.language },
+      const response = await api.law.statutes["by-slug"]({ slug }).get({
+        query: { country, ...(asOf === undefined ? {} : { asOf }) },
         fetch: { signal },
       });
 
       if (response.error) {
-        const error = toPublicLawError(response.error, "readPublicStatuteAsOf");
+        const error = toPublicLawError(
+          response.error,
+          "readPublicStatuteBySlug",
+        );
 
         if (APIError.is(error) && error.status === NOT_FOUND_STATUS) {
           return null;
@@ -159,7 +165,7 @@ export const statuteAsOfOptions = (key: StatuteAsOfKey) =>
         throw error;
       }
 
-      return unwrapPublicLawEden(response, "readPublicStatuteAsOf");
+      return unwrapPublicLawEden(response, "readPublicStatuteBySlug");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
