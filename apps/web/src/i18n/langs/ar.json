@@ -658,6 +658,7 @@
       "saveTitle": "حفظ في ملف",
       "saved": "{count, plural, zero {لم يُحفظ أي حكم} one {تم حفظ حكم واحد} two {تم حفظ حكمين} few {تم حفظ # أحكام} many {تم حفظ # حكمًا} other {تم حفظ # حكم}} في {matter}"
     },
+    "narrowResultsHint": "يجب أن تحتوي عليه كل نتيجة",
     "newestDecisions": "أحدث الأحكام",
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "الديباجة"
     },
-    "refineWithinResults": "ابحث داخل النتائج",
+    "refineWithinResults": "تضييق النتائج",
     "research": {
       "answering": "{count, plural, zero {لا توجد خلايا قيد الإجابة…} one {تجري الإجابة عن خلية واحدة…} two {تجري الإجابة عن خليتين…} few {تجري الإجابة عن # خلايا…} many {تجري الإجابة عن # خلية…} other {تجري الإجابة عن # خلية…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "نعم"
       },
       "deleteColumnConfirm": "يزيل السؤال وكل إجاباته.",
-      "editQuestionHint": "يؤدي تغيير الصياغة أو نوع الإجابة إلى حذف الإجابات الحالية؛ شغّل العمود مجددًا بعد ذلك.",
+      "editQuestionHint": "يؤدي تغيير الصياغة أو نوع الإجابة أو خياراته إلى حذف الإجابات الحالية؛ شغّل العمود مجددًا بعد ذلك.",
       "nothingToRun": "كل خلية لديها إجابة بالفعل",
       "questionPlaceholder": "مثلًا: هل اعتبرت المحكمة الفصل صحيحًا؟",
       "runAll": "الإجابة عن الكل",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "استخدم عامل تصفية لهذا العمود بدل البحث فيه",
       "findColumns": "الأعمدة المشمولة بالبحث",
       "findInTable": "البحث في الجدول",
+      "findInTableHint": "يبحث في صفوف هذه الصفحة",
       "findPlaceholder": "ابحث في الصفوف…",
       "findScopeColumns": "{count, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}}",
       "findTermTooShort": "{count, plural, zero {اكتب حرفًا واحدًا على الأقل} one {اكتب حرفًا واحدًا على الأقل} two {اكتب حرفين على الأقل} few {اكتب # أحرف على الأقل} many {اكتب # حرفًا على الأقل} other {اكتب # حرف على الأقل}}",

@@ -661,6 +661,7 @@ type Messages = {
       "saveTitle": "Save into a matter";
       "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}";
     };
+    "narrowResultsHint": "Every result must contain it";
     "newestDecisions": "Newest decisions";
     "notesFilter": {
       "ai": "AI";
@@ -685,7 +686,7 @@ type Messages = {
     "reader": {
       "headMatter": "Head matter";
     };
-    "refineWithinResults": "Search within results";
+    "refineWithinResults": "Narrow results";
     "research": {
       "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}";
       "answers": {
@@ -698,7 +699,7 @@ type Messages = {
         "yes": "Yes";
       };
       "deleteColumnConfirm": "This removes the question and every answer it holds.";
-      "editQuestionHint": "Changing the wording or the answer type discards the current answers; run the column again afterwards.";
+      "editQuestionHint": "Changing the wording, the answer type or its options discards the current answers; run the column again afterwards.";
       "nothingToRun": "Every cell already has an answer";
       "questionPlaceholder": "e.g. Did the court find the termination valid?";
       "runAll": "Answer all";
@@ -5409,6 +5410,7 @@ type Messages = {
       "findColumnNotSearchable": "Filter this column instead of finding in it";
       "findColumns": "Columns to find in";
       "findInTable": "Find in table";
+      "findInTableHint": "Finds in the rows on this page";
       "findPlaceholder": "Find in rows…";
       "findScopeColumns": "{count, plural, one {# column} other {# columns}}";
       "findTermTooShort": "{count, plural, one {Type at least # character} other {Type at least # characters}}";

@@ -6,6 +6,7 @@ import {
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
+  settleColumnWrites,
 } from "@/components/workspaces/bulk-add-columns.logic";
 import type { Draft } from "@/components/workspaces/bulk-add-columns.logic";
 import type { QuestionColumn } from "@/features/case-law/research/question-columns.logic";
@@ -112,5 +113,56 @@ describe("editing a stored question", () => {
     expect(columns.map((column) => questionDraft(column).name)).toEqual(
       columns.map((column) => column.question),
     );
+  });
+});
+
+describe("what a partly refused batch leaves behind", () => {
+  test("a column that committed is read back even though a sibling failed", async () => {
+    const committed: string[] = [];
+    let refreshes = 0;
+    const refused = new Error("Question column limit reached");
+
+    const failure = await settleColumnWrites({
+      writes: [
+        async () => {
+          committed.push("first");
+        },
+        async () => {
+          throw refused;
+        },
+      ],
+      refresh: async () => {
+        refreshes += 1;
+      },
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBe(refused);
+    expect(committed).toEqual(["first"]);
+    expect(refreshes).toBe(1);
+  });
+
+  test("the refresh runs once every write has settled", async () => {
+    const order: string[] = [];
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const settled = settleColumnWrites({
+      writes: [
+        async () => {
+          await blocked;
+          order.push("write");
+        },
+      ],
+      refresh: async () => {
+        order.push("refresh");
+      },
+    });
+
+    expect(order).toEqual([]);
+    release?.();
+    await settled;
+    expect(order).toEqual(["write", "refresh"]);
   });
 });

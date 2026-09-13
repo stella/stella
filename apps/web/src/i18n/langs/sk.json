@@ -658,6 +658,7 @@
       "saveTitle": "Uložiť do spisu",
       "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
     },
+    "narrowResultsHint": "Každý výsledok to musí obsahovať",
     "newestDecisions": "Najnovšie rozhodnutia",
     "notesFilter": {
       "ai": "AI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Úvodná časť"
     },
-    "refineWithinResults": "Hľadať vo výsledkoch",
+    "refineWithinResults": "Zúžiť výsledky",
     "research": {
       "answering": "{count, plural, one {Odpovedám na # bunku…} few {Odpovedám na # bunky…} many {Odpovedám na # bunky…} other {Odpovedám na # buniek…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Áno"
       },
       "deleteColumnConfirm": "Odstráni otázku aj všetky jej odpovede.",
-      "editQuestionHint": "Zmena znenia alebo typu odpovede zahodí existujúce odpovede; stĺpec potom spustite znova.",
+      "editQuestionHint": "Zmena znenia, typu odpovede alebo jeho možností zahodí existujúce odpovede; stĺpec potom spustite znova.",
       "nothingToRun": "Každá bunka už má odpoveď",
       "questionPlaceholder": "napr. Považoval súd výpoveď za platnú?",
       "runAll": "Odpovedať na všetko",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Tento stĺpec radšej filtrujte, než v ňom hľadajte",
       "findColumns": "Stĺpce na prehľadanie",
       "findInTable": "Nájsť v tabuľke",
+      "findInTableHint": "Hľadá v riadkoch na tejto stránke",
       "findPlaceholder": "Hľadať v riadkoch…",
       "findScopeColumns": "{count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}}",
       "findTermTooShort": "{count, plural, one {Zadajte aspoň # znak} few {Zadajte aspoň # znaky} other {Zadajte aspoň # znakov}}",

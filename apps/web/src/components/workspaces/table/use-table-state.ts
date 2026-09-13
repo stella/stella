@@ -44,6 +44,17 @@ export type TableColumnSizingLayout = {
   onChange: (sizing: ColumnSizingState) => void;
 };
 
+/**
+ * A width the reader has dragged but the store has not heard yet, over the
+ * stored map it was dragged against. Naming that map is what makes the
+ * override lapse on its own: the moment the store hands over a different one,
+ * this width is answering a question nobody is asking any more.
+ */
+type PendingColumnSizing = {
+  over: ColumnSizingState;
+  sizing: ColumnSizingState;
+};
+
 /** Which rows are picked, and how that is published. */
 type TableRowSelectionLayout = {
   selection: RowSelectionState;
@@ -73,19 +84,34 @@ export const useTableState = ({
   rowSelection,
   sorting,
 }: UseTableStateProps) => {
-  // Resizing publishes on every pointer move; the local copy keeps the drag at
-  // frame rate and the store hears the settled width.
-  const [columnSizing, setColumnSizing] = useState(storedColumnSizing.sizing);
+  // Resizing publishes on every pointer move; the pending width keeps the drag
+  // at frame rate and the store hears the settled one. Everything else is read
+  // straight off the store on every render, and so is this the moment the
+  // store moves: widths arriving after hydration, and the widths of another
+  // matter table or another jurisdiction, are followed exactly the way the
+  // order and the hidden set are.
+  const [pendingColumnSizing, setPendingColumnSizing] =
+    useState<PendingColumnSizing | null>(null);
+  const columnSizing: ColumnSizingState =
+    pendingColumnSizing !== null &&
+    pendingColumnSizing.over === storedColumnSizing.sizing
+      ? pendingColumnSizing.sizing
+      : storedColumnSizing.sizing;
+
+  // The listener travels with the width rather than being closed over, so a
+  // publish that lands after the reader has moved on still reaches the store
+  // the drag was made against instead of writing those widths into the next.
   const publishColumnSizing = useDebouncedCallback(
-    storedColumnSizing.onChange,
+    (publish: (sizing: ColumnSizingState) => void, sizing: ColumnSizingState) =>
+      publish(sizing),
     COLUMN_SIZING_DEBOUNCE_MS,
   );
 
   const onColumnSizingChange: OnChangeFn<ColumnSizingState> = (updater) => {
     const data =
       typeof updater === "function" ? updater(columnSizing) : updater;
-    setColumnSizing(data);
-    publishColumnSizing(data);
+    setPendingColumnSizing({ over: storedColumnSizing.sizing, sizing: data });
+    publishColumnSizing(storedColumnSizing.onChange, data);
   };
 
   const columnPinning: ColumnPinningState = createColumnPinningState(

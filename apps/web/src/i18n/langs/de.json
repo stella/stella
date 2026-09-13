@@ -658,6 +658,7 @@
       "saveTitle": "In Akte speichern",
       "saved": "{count, plural, one {# Entscheidung} other {# Entscheidungen}} in {matter} gespeichert"
     },
+    "narrowResultsHint": "Jedes Ergebnis muss es enthalten",
     "newestDecisions": "Neueste Entscheidungen",
     "notesFilter": {
       "ai": "KI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Rubrum"
     },
-    "refineWithinResults": "In den Ergebnissen suchen",
+    "refineWithinResults": "Ergebnisse eingrenzen",
     "research": {
       "answering": "{count, plural, one {# Zelle wird beantwortet…} other {# Zellen werden beantwortet…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Ja"
       },
       "deleteColumnConfirm": "Entfernt die Frage und alle ihre Antworten.",
-      "editQuestionHint": "Eine Änderung des Wortlauts oder des Antworttyps verwirft die vorhandenen Antworten; führen Sie die Spalte danach erneut aus.",
+      "editQuestionHint": "Eine Änderung des Wortlauts, des Antworttyps oder seiner Optionen verwirft die vorhandenen Antworten; führen Sie die Spalte danach erneut aus.",
       "nothingToRun": "Jede Zelle hat bereits eine Antwort",
       "questionPlaceholder": "z. B. Hielt das Gericht die Kündigung für wirksam?",
       "runAll": "Alle beantworten",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Diese Spalte filtern statt durchsuchen",
       "findColumns": "Zu durchsuchende Spalten",
       "findInTable": "In Tabelle suchen",
+      "findInTableHint": "Sucht in den Zeilen auf dieser Seite",
       "findPlaceholder": "In Zeilen suchen…",
       "findScopeColumns": "{count, plural, one {# Spalte} other {# Spalten}}",
       "findTermTooShort": "{count, plural, one {Geben Sie mindestens # Zeichen ein} other {Geben Sie mindestens # Zeichen ein}}",

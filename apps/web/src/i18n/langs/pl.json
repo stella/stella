@@ -658,6 +658,7 @@
       "saveTitle": "Zapisz do sprawy",
       "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
     },
+    "narrowResultsHint": "Każdy wynik musi to zawierać",
     "newestDecisions": "Najnowsze orzeczenia",
     "notesFilter": {
       "ai": "AI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Część wstępna"
     },
-    "refineWithinResults": "Szukaj w wynikach",
+    "refineWithinResults": "Zawęź wyniki",
     "research": {
       "answering": "{count, plural, one {Odpowiadam na # komórkę…} few {Odpowiadam na # komórki…} many {Odpowiadam na # komórek…} other {Odpowiadam na # komórki…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Tak"
       },
       "deleteColumnConfirm": "Usuwa pytanie i wszystkie jego odpowiedzi.",
-      "editQuestionHint": "Zmiana treści lub rodzaju odpowiedzi odrzuca obecne odpowiedzi; uruchom kolumnę ponownie.",
+      "editQuestionHint": "Zmiana treści, rodzaju odpowiedzi lub jego opcji odrzuca obecne odpowiedzi; uruchom kolumnę ponownie.",
       "nothingToRun": "Każda komórka ma już odpowiedź",
       "questionPlaceholder": "np. Czy sąd uznał wypowiedzenie za skuteczne?",
       "runAll": "Odpowiedz na wszystko",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Tę kolumnę filtruj, zamiast w niej szukać",
       "findColumns": "Kolumny do przeszukania",
       "findInTable": "Znajdź w tabeli",
+      "findInTableHint": "Szuka w wierszach na tej stronie",
       "findPlaceholder": "Szukaj w wierszach…",
       "findScopeColumns": "{count, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}}",
       "findTermTooShort": "{count, plural, one {Wpisz co najmniej # znak} few {Wpisz co najmniej # znaki} many {Wpisz co najmniej # znaków} other {Wpisz co najmniej # znaku}}",

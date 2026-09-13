@@ -658,6 +658,7 @@
       "saveTitle": "Salvar em um caso",
       "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
     },
+    "narrowResultsHint": "Todos os resultados devem conter o termo",
     "newestDecisions": "Decisões mais recentes",
     "notesFilter": {
       "ai": "IA",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Cabeçalho"
     },
-    "refineWithinResults": "Pesquisar nos resultados",
+    "refineWithinResults": "Refinar resultados",
     "research": {
       "answering": "{count, plural, one {Respondendo # célula…} other {Respondendo # células…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Sim"
       },
       "deleteColumnConfirm": "Remove a pergunta e todas as suas respostas.",
-      "editQuestionHint": "Alterar a redação ou o tipo de resposta descarta as respostas atuais; execute a coluna novamente depois.",
+      "editQuestionHint": "Alterar a redação, o tipo de resposta ou suas opções descarta as respostas atuais; execute a coluna novamente depois.",
       "nothingToRun": "Todas as células já têm resposta",
       "questionPlaceholder": "ex.: O tribunal considerou a rescisão válida?",
       "runAll": "Responder tudo",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Filtre esta coluna em vez de localizar nela",
       "findColumns": "Colunas onde localizar",
       "findInTable": "Localizar na tabela",
+      "findInTableHint": "Busca nas linhas desta página",
       "findPlaceholder": "Localizar nas linhas…",
       "findScopeColumns": "{count, plural, one {# coluna} other {# colunas}}",
       "findTermTooShort": "{count, plural, one {Digite pelo menos # caractere} other {Digite pelo menos # caracteres}}",

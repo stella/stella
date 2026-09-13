@@ -658,6 +658,7 @@
       "saveTitle": "Uložit do spisu",
       "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
     },
+    "narrowResultsHint": "Každý výsledek to musí obsahovat",
     "newestDecisions": "Nejnovější rozhodnutí",
     "notesFilter": {
       "ai": "AI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Úvodní část"
     },
-    "refineWithinResults": "Hledat ve výsledcích",
+    "refineWithinResults": "Zúžit výsledky",
     "research": {
       "answering": "{count, plural, one {Odpovídám na # buňku…} few {Odpovídám na # buňky…} many {Odpovídám na # buňky…} other {Odpovídám na # buněk…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Ano"
       },
       "deleteColumnConfirm": "Odebere otázku i všechny její odpovědi.",
-      "editQuestionHint": "Změna znění nebo typu odpovědi zahodí stávající odpovědi; sloupec poté spusťte znovu.",
+      "editQuestionHint": "Změna znění, typu odpovědi nebo jeho možností zahodí stávající odpovědi; sloupec poté spusťte znovu.",
       "nothingToRun": "Každá buňka už má odpověď",
       "questionPlaceholder": "např. Shledal soud výpověď platnou?",
       "runAll": "Odpovědět na vše",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Tento sloupec místo hledání filtrujte",
       "findColumns": "Sloupce k prohledání",
       "findInTable": "Najít v tabulce",
+      "findInTableHint": "Hledá v řádcích na této stránce",
       "findPlaceholder": "Hledat v řádcích…",
       "findScopeColumns": "{count, plural, one {# sloupec} few {# sloupce} other {# sloupců}}",
       "findTermTooShort": "{count, plural, one {Zadejte alespoň # znak} few {Zadejte alespoň # znaky} other {Zadejte alespoň # znaků}}",

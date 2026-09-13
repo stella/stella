@@ -607,4 +607,31 @@ describe("a run answers only the cells that need it", () => {
     });
     expect(looked).toMatchObject({ items: [{ columnId: columnA }] });
   });
+
+  test("an answer that is not field content is refused by the table", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Refused?");
+    // Everything but the answer is the same valid row each time, so the
+    // content check is the only thing that can refuse one.
+    const storeAnswer = async (answer: string): Promise<"stored" | "refused"> =>
+      await testDb
+        .execute(
+          sql`INSERT INTO case_law_research_answers
+            (column_id, organization_id, decision_id, state, answer)
+            VALUES (${columnId}, ${ids.orgA}, ${decisionOne}, 'answered', ${answer}::text::jsonb)`,
+        )
+        .then<"stored" | "refused">(
+          () => "stored",
+          () => "refused",
+        );
+
+    // A document without `type` leaves the kind test unknown, and a CHECK that
+    // evaluates to unknown is satisfied; the guard has to reject it outright.
+    expect(await storeAnswer(`{"version":1}`)).toBe("refused");
+    expect(
+      await storeAnswer(`{"version":1,"type":"yes_no","value":"yes"}`),
+    ).toBe("refused");
+    expect(await storeAnswer(`{"version":1,"type":"text","value":"ano"}`)).toBe(
+      "stored",
+    );
+  });
 });

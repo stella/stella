@@ -658,6 +658,7 @@
       "saveTitle": "Mentés ügybe",
       "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
     },
+    "narrowResultsHint": "Minden találatnak tartalmaznia kell",
     "newestDecisions": "Legújabb határozatok",
     "notesFilter": {
       "ai": "MI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Fejrész"
     },
-    "refineWithinResults": "Keresés a találatok között",
+    "refineWithinResults": "Találatok szűkítése",
     "research": {
       "answering": "{count, plural, one {# cella megválaszolása…} other {# cella megválaszolása…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Igen"
       },
       "deleteColumnConfirm": "Eltávolítja a kérdést és minden válaszát.",
-      "editQuestionHint": "A szöveg vagy a válasz típusának módosítása elveti a jelenlegi válaszokat; utána futtassa újra az oszlopot.",
+      "editQuestionHint": "A szöveg, a válasz típusának vagy a lehetőségeinek módosítása elveti a jelenlegi válaszokat; utána futtassa újra az oszlopot.",
       "nothingToRun": "Minden cellának van már válasza",
       "questionPlaceholder": "pl. Érvényesnek találta a bíróság a felmondást?",
       "runAll": "Mind megválaszolása",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Ezt az oszlopot szűrje ahelyett, hogy keresne benne",
       "findColumns": "Keresendő oszlopok",
       "findInTable": "Keresés a táblázatban",
+      "findInTableHint": "A lap sorai között keres",
       "findPlaceholder": "Keresés a sorokban…",
       "findScopeColumns": "{count, plural, one {# oszlop} other {# oszlop}}",
       "findTermTooShort": "{count, plural, one {Írjon be legalább # karaktert} other {Írjon be legalább # karaktert}}",

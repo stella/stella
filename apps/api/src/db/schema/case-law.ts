@@ -1826,10 +1826,12 @@ export const caseLawResearchAnswers = p.pgTable(
     ),
     // Field content of an answerable kind. The exact shape is validated on read
     // against `fieldContentSchema`; this keeps a row that is not field content
-    // at all out of the table.
+    // at all out of the table. `IS TRUE` closes the three-valued gap: a
+    // document without a `type` key makes the membership test unknown, and a
+    // CHECK that evaluates to unknown is satisfied.
     p.check(
       "case_law_research_answers_answer_content_check",
-      sql`${t.answer} IS NULL OR (jsonb_typeof(${t.answer}) = 'object' AND ${t.answer}->'version' = '1'::jsonb AND ${t.answer}->>'type' IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)}))`,
+      sql`(${t.answer} IS NULL OR (jsonb_typeof(${t.answer}) = 'object' AND ${t.answer}->'version' = '1'::jsonb AND ${t.answer}->>'type' IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)}))) IS TRUE`,
     ),
     // An answered cell carries its answer; every other state carries none.
     p.check(

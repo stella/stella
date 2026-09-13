@@ -658,6 +658,7 @@
       "saveTitle": "Išsaugoti byloje",
       "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
     },
+    "narrowResultsHint": "To turi būti kiekviename rezultate",
     "newestDecisions": "Naujausi sprendimai",
     "notesFilter": {
       "ai": "DI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Antraštinė dalis"
     },
-    "refineWithinResults": "Ieškoti rezultatuose",
+    "refineWithinResults": "Susiaurinti rezultatus",
     "research": {
       "answering": "{count, plural, one {Atsakoma į # langelį…} few {Atsakoma į # langelius…} many {Atsakoma į # langelio…} other {Atsakoma į # langelių…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Taip"
       },
       "deleteColumnConfirm": "Pašalina klausimą ir visus jo atsakymus.",
-      "editQuestionHint": "Pakeitus formuluotę ar atsakymo tipą, esami atsakymai atmetami; po to paleiskite stulpelį iš naujo.",
+      "editQuestionHint": "Pakeitus formuluotę, atsakymo tipą ar jo parinktis, esami atsakymai atmetami; po to paleiskite stulpelį iš naujo.",
       "nothingToRun": "Kiekvienas langelis jau turi atsakymą",
       "questionPlaceholder": "pvz., Ar teismas pripažino atleidimą teisėtu?",
       "runAll": "Atsakyti į visus",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Šį stulpelį filtruokite, o ne jame ieškokite",
       "findColumns": "Stulpeliai, kuriuose ieškoti",
       "findInTable": "Ieškoti lentelėje",
+      "findInTableHint": "Ieško šio puslapio eilutėse",
       "findPlaceholder": "Ieškoti eilutėse…",
       "findScopeColumns": "{count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}}",
       "findTermTooShort": "{count, plural, one {Įveskite bent # simbolį} few {Įveskite bent # simbolius} many {Įveskite bent # simbolio} other {Įveskite bent # simbolių}}",

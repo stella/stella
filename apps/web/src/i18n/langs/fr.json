@@ -658,6 +658,7 @@
       "saveTitle": "Enregistrer dans un dossier",
       "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
     },
+    "narrowResultsHint": "Chaque résultat doit le contenir",
     "newestDecisions": "Décisions les plus récentes",
     "notesFilter": {
       "ai": "IA",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "En-tête"
     },
-    "refineWithinResults": "Rechercher dans les résultats",
+    "refineWithinResults": "Affiner les résultats",
     "research": {
       "answering": "{count, plural, one {Réponse en cours pour # cellule…} other {Réponse en cours pour # cellules…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Oui"
       },
       "deleteColumnConfirm": "Supprime la question et toutes ses réponses.",
-      "editQuestionHint": "Modifier la formulation ou le type de réponse efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
+      "editQuestionHint": "Modifier la formulation, le type de réponse ou ses options efface les réponses actuelles ; exécutez ensuite la colonne à nouveau.",
       "nothingToRun": "Chaque cellule a déjà une réponse",
       "questionPlaceholder": "p. ex. La juridiction a-t-elle jugé le licenciement valable ?",
       "runAll": "Tout répondre",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Filtrez cette colonne au lieu d’y rechercher",
       "findColumns": "Colonnes à rechercher",
       "findInTable": "Rechercher dans le tableau",
+      "findInTableHint": "Recherche dans les lignes de cette page",
       "findPlaceholder": "Rechercher dans les lignes…",
       "findScopeColumns": "{count, plural, one {# colonne} other {# colonnes}}",
       "findTermTooShort": "{count, plural, one {Saisissez au moins # caractère} other {Saisissez au moins # caractères}}",

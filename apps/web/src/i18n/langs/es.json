@@ -658,6 +658,7 @@
       "saveTitle": "Guardar en un asunto",
       "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
     },
+    "narrowResultsHint": "Todos los resultados deben contenerlo",
     "newestDecisions": "Resoluciones más recientes",
     "notesFilter": {
       "ai": "IA",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Encabezamiento"
     },
-    "refineWithinResults": "Buscar en los resultados",
+    "refineWithinResults": "Acotar resultados",
     "research": {
       "answering": "{count, plural, one {Respondiendo # celda…} other {Respondiendo # celdas…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Sí"
       },
       "deleteColumnConfirm": "Quita la pregunta y todas sus respuestas.",
-      "editQuestionHint": "Cambiar la redacción o el tipo de respuesta descarta las respuestas actuales; vuelva a ejecutar la columna después.",
+      "editQuestionHint": "Cambiar la redacción, el tipo de respuesta o sus opciones descarta las respuestas actuales; vuelva a ejecutar la columna después.",
       "nothingToRun": "Todas las celdas ya tienen respuesta",
       "questionPlaceholder": "p. ej. ¿Consideró el tribunal válido el despido?",
       "runAll": "Responder todo",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Filtre esta columna en lugar de buscar en ella",
       "findColumns": "Columnas donde buscar",
       "findInTable": "Buscar en la tabla",
+      "findInTableHint": "Busca en las filas de esta página",
       "findPlaceholder": "Buscar en las filas…",
       "findScopeColumns": "{count, plural, one {# columna} other {# columnas}}",
       "findTermTooShort": "{count, plural, one {Escriba al menos # carácter} other {Escriba al menos # caracteres}}",

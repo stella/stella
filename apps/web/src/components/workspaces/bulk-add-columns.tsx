@@ -45,6 +45,7 @@ import {
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
+  settleColumnWrites,
 } from "@/components/workspaces/bulk-add-columns.logic";
 import type { Draft } from "@/components/workspaces/bulk-add-columns.logic";
 import { usePropertiesCountLimit } from "@/components/workspaces/hooks/use-limits";
@@ -708,15 +709,21 @@ const QuestionColumnsBody = ({
   const save = useMutation({
     mutationFn: async (inputs: readonly QuestionColumnInput[]) => {
       // The requests name disjoint columns, so they go together rather than
-      // one round trip after another.
-      await Promise.all(
-        inputs.map(async (input) =>
-          editing === undefined
-            ? await createQuestionColumn(input)
-            : await updateQuestionColumn({ ...input, columnId: editing.id }),
+      // one round trip after another; they settle, so whatever committed is
+      // read back before the failure is reported.
+      await settleColumnWrites({
+        writes: inputs.map(
+          (input) => async () =>
+            editing === undefined
+              ? await createQuestionColumn(input)
+              : await updateQuestionColumn({ ...input, columnId: editing.id }),
         ),
-      );
-      await queryClient.invalidateQueries({ queryKey: questionColumnKeys.all });
+        refresh: async () => {
+          await queryClient.invalidateQueries({
+            queryKey: questionColumnKeys.all,
+          });
+        },
+      });
     },
   });
   const canSubmit = validDrafts.length > 0 && !save.isPending;

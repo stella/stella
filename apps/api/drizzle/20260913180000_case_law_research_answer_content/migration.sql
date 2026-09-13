@@ -69,18 +69,19 @@ WHERE "answer" IS NOT NULL
 -- Everything the mapping could not express: an empty text answer has no field
 -- content that means "answered", and any other stored shape is not field
 -- content at all. The predicate is the negation of the constraint added below,
--- so no row can survive this statement and then fail that one.
+-- and both sides read an unknown predicate as unsatisfied, so no row can
+-- survive this statement and then fail that one.
 UPDATE "case_law_research_answers"
 SET "state" = 'failed',
     "failure_reason" = CASE WHEN "answer"->>'type' = 'text' THEN 'not_stated' ELSE 'wrong_type' END,
     "answer" = NULL,
     "run" = NULL
 WHERE "answer" IS NOT NULL
-  AND NOT (
+  AND (
     jsonb_typeof("answer") = 'object'
     AND "answer"->'version' = '1'::jsonb
     AND "answer"->>'type' IN ('text', 'single-select', 'multi-select', 'date', 'int')
-  );
+  ) IS NOT TRUE;
 --> statement-breakpoint
 
 UPDATE "case_law_research_answers"
@@ -114,11 +115,12 @@ WHERE "run" IS NOT NULL
 ALTER TABLE "case_law_research_answers"
   ADD CONSTRAINT "case_law_research_answers_answer_content_check"
   CHECK (
-    "answer" IS NULL
-    OR (jsonb_typeof("answer") = 'object'
-      AND "answer"->'version' = '1'::jsonb
-      AND "answer"->>'type' IN ('text', 'single-select', 'multi-select', 'date', 'int')
-    )
+    ("answer" IS NULL
+      OR (jsonb_typeof("answer") = 'object'
+        AND "answer"->'version' = '1'::jsonb
+        AND "answer"->>'type' IN ('text', 'single-select', 'multi-select', 'date', 'int')
+      )
+    ) IS TRUE
   ) NOT VALID;
 --> statement-breakpoint
 

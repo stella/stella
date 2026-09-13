@@ -202,12 +202,42 @@ export const researchRunBatches = (
 };
 
 /**
+ * One content document as a string that depends on nothing but its values.
+ *
+ * The server decides on structural equality over the whole document, so the
+ * dialog has to as well; comparing the fields it happens to know about would
+ * go blind the moment the content model grows one. Key order is not part of
+ * the meaning: the stored content comes back from a JSONB column, the draft is
+ * built by the composer, and the two order their keys differently.
+ */
+const contentFingerprint = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map(contentFingerprint).join(",")}]`;
+  }
+  if (typeof value === "object" && value !== null) {
+    const entries = new Map(Object.entries(value));
+    // Code-unit order, not collation: these are field names, not words.
+    const fields = [...entries.keys()]
+      .filter((key) => entries.get(key) !== undefined)
+      .sort()
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${contentFingerprint(entries.get(key))}`,
+      );
+    return `{${fields.join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
+
+/**
  * Whether saving this edit throws the column's answers away.
  *
  * The server trims the wording and drops every answer the column holds the
- * moment the wording or the answer type differs from what is stored, so the
- * dialog warns exactly when that happens: neither on a no-op save nor, in the
- * other direction, silently. Adding a column has nothing to discard.
+ * moment the wording or the content differs from what is stored, so the dialog
+ * warns exactly when that happens: neither on a no-op save nor, in the other
+ * direction, silently. The content is the whole document, options included —
+ * an answer holding an option the column no longer offers is not an answer any
+ * more. Adding a column has nothing to discard.
  */
 export const questionEditDiscardsAnswers = ({
   draft,
@@ -219,7 +249,7 @@ export const questionEditDiscardsAnswers = ({
 }): boolean =>
   stored !== undefined &&
   (stored.question.trim() !== draft.question.trim() ||
-    stored.content.type !== draft.content.type);
+    contentFingerprint(stored.content) !== contentFingerprint(draft.content));
 
 /**
  * The decisions a question is being written for: the search that returned

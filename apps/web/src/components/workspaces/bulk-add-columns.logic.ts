@@ -8,7 +8,7 @@
  * the question column drifting away from the property it is modelled on.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
@@ -98,3 +98,43 @@ export const questionDraft = (column: QuestionColumn): Draft => ({
     ? { options: column.content.options }
     : {}),
 });
+
+type SettleColumnWritesOptions = {
+  /** One column's create or update each; they name disjoint columns. */
+  writes: readonly (() => Promise<unknown>)[];
+  /** Re-reads the target's columns. */
+  refresh: () => Promise<void>;
+};
+
+/**
+ * Runs every write to completion, refreshes the columns, then reports the
+ * first failure.
+ *
+ * Settling rather than rejecting at the first error is what keeps the cache
+ * honest: the writes are independent requests, so one may commit while another
+ * is refused (two drafts competing for the organization's last free column),
+ * and the column that did land has to reach the cache even though the dialog
+ * reports the other's failure.
+ */
+export const settleColumnWrites = async ({
+  writes,
+  refresh,
+}: SettleColumnWritesOptions): Promise<void> => {
+  const [, failures] = await Result.partitionAsync(
+    writes.map(
+      async (write) =>
+        await Result.tryPromise({
+          try: write,
+          // An `APIError` arrives as itself, so the dialog reports the
+          // failure exactly as it would without the batching.
+          catch: (cause) =>
+            cause instanceof Error ? cause : new Error(String(cause)),
+        }),
+    ),
+  );
+  await refresh();
+  const failure = failures.at(0);
+  if (failure !== undefined) {
+    throw failure;
+  }
+};

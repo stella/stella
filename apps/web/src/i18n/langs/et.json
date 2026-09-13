@@ -658,6 +658,7 @@
       "saveTitle": "Salvesta toimikusse",
       "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
     },
+    "narrowResultsHint": "Iga tulemus peab seda sisaldama",
     "newestDecisions": "Uusimad lahendid",
     "notesFilter": {
       "ai": "AI",
@@ -682,7 +683,7 @@
     "reader": {
       "headMatter": "Päis"
     },
-    "refineWithinResults": "Otsi tulemuste seast",
+    "refineWithinResults": "Kitsenda tulemusi",
     "research": {
       "answering": "{count, plural, one {Vastan # lahtrile…} other {Vastan # lahtrile…}}",
       "answers": {
@@ -695,7 +696,7 @@
         "yes": "Jah"
       },
       "deleteColumnConfirm": "Eemaldab küsimuse ja kõik selle vastused.",
-      "editQuestionHint": "Sõnastuse või vastuse tüübi muutmine kustutab praegused vastused; käivitage veerg seejärel uuesti.",
+      "editQuestionHint": "Sõnastuse, vastuse tüübi või selle valikute muutmine kustutab praegused vastused; käivitage veerg seejärel uuesti.",
       "nothingToRun": "Igal lahtril on juba vastus",
       "questionPlaceholder": "nt Kas kohus pidas ülesütlemist kehtivaks?",
       "runAll": "Vasta kõigile",
@@ -5406,6 +5407,7 @@
       "findColumnNotSearchable": "Filtreeri seda veergu, ära otsi sellest",
       "findColumns": "Otsitavad veerud",
       "findInTable": "Otsi tabelist",
+      "findInTableHint": "Otsib selle lehe ridadelt",
       "findPlaceholder": "Otsi ridadest…",
       "findScopeColumns": "{count, plural, one {# veerg} other {# veergu}}",
       "findTermTooShort": "{count, plural, one {Sisesta vähemalt # märk} other {Sisesta vähemalt # märki}}",

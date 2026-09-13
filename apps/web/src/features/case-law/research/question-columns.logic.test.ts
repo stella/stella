@@ -511,4 +511,62 @@ describe("when saving a question throws its answers away", () => {
       }),
     ).toBe(true);
   });
+
+  // An answer holding an option the column no longer offers is not an answer
+  // any more, and the server drops the cells on any content change.
+  test("dropping an option discards them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: {
+          ...stored,
+          content: {
+            ...YES_NO_CONTENT,
+            options: [{ value: "yes", color: "green" }],
+          },
+        },
+        stored,
+      }),
+    ).toBe(true);
+  });
+
+  test("recolouring an option discards them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: {
+          ...stored,
+          content: {
+            ...YES_NO_CONTENT,
+            options: [
+              { value: "yes", color: "green" },
+              { value: "no", color: "orange" },
+            ],
+          },
+        },
+        stored,
+      }),
+    ).toBe(true);
+  });
+
+  // The stored content arrives from a JSONB column and the draft is built by
+  // the composer, so the same options in the same order must compare equal
+  // however either side happens to order its keys.
+  test("the same options written in another key order keep them", () => {
+    expect(
+      questionEditDiscardsAnswers({
+        draft: {
+          ...stored,
+          content: {
+            fallback: null,
+            options: [
+              { color: "green", value: "yes" },
+              { color: "red", value: "no" },
+            ],
+            type: "single-select",
+            version: 1,
+          },
+        },
+        stored,
+      }),
+    ).toBe(false);
+  });
 });
