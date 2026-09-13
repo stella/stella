@@ -2611,8 +2611,6 @@
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
     "@stll/docx-core": ["@stll/docx-core@0.19.4", "", { "dependencies": { "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-6zWCPrV8WR6tVMP1hG/gTUJE096TWj4RlV1UDZ8ja+PbLQdJJI8QqZWiRcCF2M9kFAY7T+I0xUpG5IKJ16Jqug=="],
-    "@stll/docx-core": ["@stll/docx-core@0.19.3", "", { "dependencies": { "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-G82/xMKiOhTW9AthMMkWGT937ruhntpTYv1SNefY8X+5/rb1UdvUXph3BRwVI6w9Ehg4MnJyNyVPg86LJ1IU2w=="],
-
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
     "@stll/errors": ["@stll/errors@workspace:packages/errors"],
