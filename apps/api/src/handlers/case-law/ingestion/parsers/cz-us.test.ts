@@ -4,6 +4,7 @@ import { hasBlockInlines } from "@/api/handlers/case-law/document-ast";
 import type { Block } from "@/api/handlers/case-law/document-ast";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -607,6 +608,93 @@ describe("parseUsDecisionHtml", () => {
       expect(fulltext).toContain("Ústavní stížností");
       expect(fulltext).toContain("kasační stížnost");
       expect(fulltext).toContain("III.ÚS 84/94");
+    });
+  });
+
+  describe("embedded pictures", () => {
+    /**
+     * Pl.ÚS-st. 27/09 prints a horizontal rule between the majority opinion
+     * and the first dissent. Word exports that rule twice — as a PNG in an
+     * ignorable `{\*\shppict}` destination and as a metafile in
+     * `{\nonshppict}` — and both carry their bytes as hex. Read as text,
+     * the pair put `\pict\*\picprop\shplid1025 … \pngblip` and hundreds of
+     * hex digits into the decision, immediately before "1. Odlišné
+     * stanovisko".
+     */
+    const pngPayload = "89504e470d0a1a0a0000000d49484452".repeat(8);
+    const metafilePayload = "0100090000034f00000000004f000000".repeat(8);
+    const pictureRtf = [
+      "\\pard\\b NÁLEZ\\b0",
+      "\\par",
+      "O d ů v o d n ě n í :",
+      "\\par",
+      "1. Srov. rozsudek ESLP ze dne 12. listopadu 2008 ve věci Demir",
+      "a Baykara proti Turecku, stížnost č. 34503/97.",
+      "\\par",
+      `{\\*\\shppict{\\pict{\\*\\picprop\\shplid1025{\\sp{\\sn shapeType}{\\sv 75}}}\\picw16113\\pich26\\picwgoal9135\\pichgoal15\\pngblip ${pngPayload}}}{\\nonshppict{\\pict\\wmetafile8 ${metafilePayload}}}\\insrsid14565320\\charrsid14565320 1. Odlišné stanovisko soudkyně Elišky Wagnerové.`,
+    ].join("\n");
+
+    const pictureHtml = `
+      <html><body>
+        <span id="lblDecisionForm">NÁLEZ</span>
+        <input id="docContentHidden" value="${pictureRtf}" />
+        <input id="docIdHidden" value="54321" />
+      </body></html>
+    `;
+
+    test("skips picture destinations and keeps the dissent that follows", () => {
+      const { documentAst, fulltext } = parseUsDecisionHtml(
+        baseInput(pictureHtml, { caseNumber: "Pl.ÚS-st. 27/09" }),
+      );
+
+      const citationIndex = documentAst.blocks.findIndex((block) =>
+        block.plainText.includes("34503/97"),
+      );
+      expect(citationIndex).toBeGreaterThanOrEqual(0);
+      expect(documentAst.blocks.at(citationIndex + 1)?.plainText).toBe(
+        "Odlišné stanovisko soudkyně Elišky Wagnerové.",
+      );
+      expect(fulltext).toContain("Odlišné stanovisko");
+    });
+
+    test("leaves no control words, hex payload or revision ids in the text", () => {
+      const { fulltext } = parseUsDecisionHtml(
+        baseInput(pictureHtml, { caseNumber: "Pl.ÚS-st. 27/09" }),
+      );
+
+      expect(fulltext).not.toMatch(/\\[a-zA-Z]/u);
+      expect(fulltext).not.toMatch(/[0-9a-fA-F]{32,}/u);
+      expect(fulltext).not.toContain("insrsid");
+      expect(fulltext).not.toContain("pngblip");
+      expect(markupResidueIn(fulltext)).toBeUndefined();
+    });
+
+    test("skips the font, colour and revision tables of a whole document", () => {
+      const rtf = [
+        "{\\rtf1\\ansi\\deff0",
+        "{\\fonttbl{\\f0\\froman Times New Roman;}{\\f1\\fswiss Arial;}}",
+        "{\\colortbl ;\\red0\\green0\\blue0;}",
+        "{\\*\\rsidtbl \\rsid14565320\\rsid2296163}",
+        "{\\info{\\title Nalez}{\\author Ustavni soud}}",
+        "\\pard\\f0\\fs24 Ústavní soud rozhodl takto:",
+        "\\par",
+        "Ústavní stížnost se odmítá.",
+        "}",
+      ].join("\n");
+      const { fulltext } = parseUsDecisionHtml(
+        baseInput(`
+          <html><body>
+            <span id="lblDecisionForm">USNESENÍ</span>
+            <input id="docContentHidden" value="${rtf}" />
+            <input id="docIdHidden" value="54322" />
+          </body></html>
+        `),
+      );
+
+      expect(fulltext).toContain("Ústavní stížnost se odmítá.");
+      expect(fulltext).not.toContain("Times New Roman");
+      expect(fulltext).not.toContain("Ustavni soud");
+      expect(markupResidueIn(fulltext)).toBeUndefined();
     });
   });
 

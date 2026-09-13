@@ -44,7 +44,7 @@ export type ValidationResult = {
 };
 
 /** Source markup found in one block, named by the anchor that holds it. */
-export type BlockMarkupResidue = MarkupResidue & { anchorId: string };
+type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -213,6 +213,9 @@ const inlineText = (inlines: readonly Inline[]): string => {
 
 const collapseWhitespace = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();
+
+/** Issue code for source markup found in a block's text. */
+const MARKUP_RESIDUE = "MARKUP_RESIDUE";
 
 // ── Validator ──────────────────────────────────────────────
 
@@ -491,8 +494,9 @@ export const validateAst = (
       code: MARKUP_RESIDUE,
       message:
         `${markupResidue.length} block(s) carry source markup ` +
-        `(${firstResidue.reason} at ${firstResidue.anchorId}): ${ 
-        firstResidue.excerpt}`,
+        `(${firstResidue.reason} at ${firstResidue.anchorId}): ${
+          firstResidue.excerpt
+        }`,
       severity: "error",
     });
   }
@@ -512,6 +516,7 @@ export const validateAst = (
       tinyBlocks,
       hugeBlocks,
       duplicateBlocks,
+      markupResidue,
     },
   };
 };
@@ -541,6 +546,14 @@ export type ValidationSubject = {
  * decision, and neither the reader nor the AI pipeline can tell.
  */
 export const AST_CONTENT_LOST = "case_law.ingestion.ast_content_lost";
+
+/**
+ * Log event emitted when a block's text still carries the source's own
+ * markup — RTF control words, a tag, an entity, a binary payload. Reported
+ * at ERROR and swept per source: the text is wrong in the corpus, and
+ * `sourceRaw` is what a fixed parser re-reads.
+ */
+export const AST_MARKUP_RESIDUE = "case_law.ingestion.ast_markup_residue";
 
 /**
  * Log event emitted when the text is all present but its structure is
@@ -594,6 +607,7 @@ export const storedDecisionSignal = (stored: {
  * assert on it.
  */
 export type ValidationSignal =
+  | { event: typeof AST_MARKUP_RESIDUE; level: "error" }
   | { event: typeof AST_CONTENT_LOST; level: "error" }
   | { event: typeof AST_STRUCTURE_DEGRADED; level: "warn" };
 
@@ -608,6 +622,13 @@ export const validationSignal = (
 ): ValidationSignal | undefined => {
   if (result.issues.length === 0) {
     return undefined;
+  }
+  // Residue outranks content loss, and the log line carries every code
+  // either way: retention is measured over text that includes the markup,
+  // so it reads high while the document is wrong. Fixing the parser and
+  // re-parsing from sourceRaw is the action for both.
+  if (result.issues.some((issue) => issue.code === MARKUP_RESIDUE)) {
+    return { event: AST_MARKUP_RESIDUE, level: "error" };
   }
   return result.ok
     ? { event: AST_STRUCTURE_DEGRADED, level: "warn" }
@@ -645,8 +666,17 @@ export const validateAndLog = (
     return result;
   }
 
+  const residue = result.stats.markupResidue.at(0);
   logger.error(signal.event, {
     ...common,
+    ...(residue === undefined
+      ? {}
+      : {
+          residueRule: residue.rule,
+          residueAnchorId: residue.anchorId,
+          residueExcerpt: residue.excerpt,
+          residueBlocks: result.stats.markupResidue.length,
+        }),
     retainedPct: result.stats.retainedPct,
     missingWordCount: result.stats.missingWords.length,
     missingWords: result.stats.missingWords.slice(0, 25).join(", "),

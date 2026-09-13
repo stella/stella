@@ -243,17 +243,62 @@ one number, and a case can carry both a judgment and an opinion.
 | ------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
 | `case_law.ingestion.decision_empty`         | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
 | `case_law.ingestion.ast_content_lost`       | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
+| `case_law.ingestion.ast_markup_residue`     | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
 | `case_law.ingestion.ast_missing`            | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
 | `case_law.ingestion.ast_structure_degraded` | WARN  | Text is complete, structure is imperfect.                                                |
 
-The two ERROR events are the ones to act on. Sweep for them to find
+The three ERROR events are the ones to act on. Sweep for them to find
 decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
 means most can be re-parsed without touching the court's site.
 
-The last two events come from the pipeline rather than from a parser,
-so they also cover sources whose parser never runs — which is the case
-that would otherwise be silent, since a parser that is not called
-cannot report anything.
+`ast_missing`, `decision_empty` and `ast_markup_residue` come from the
+pipeline as well as from a parser, so they also cover sources whose parser
+never runs — which is the case that would otherwise be silent, since a
+parser that is not called cannot report anything.
+
+Residue outranks content loss when both fire, and the log line carries
+every code either way: retention is measured over text that includes the
+markup, so it reads high while the document is wrong.
+
+### 11a. Source markup is never the court's text
+
+`markup-residue.ts` scans every block's `plainText` for shapes a court
+never writes: two RTF control words in a row or `{\*`, an HTML tag, an XML
+prologue or CDATA, PDF object syntax, an undecoded entity, a run of 40 or
+more contiguous digits, a run of 32 or more hex characters containing a
+letter (48 without). The thresholds are measured on contiguous characters
+so that an IČO, a bank account with its separators, an ECLI, a docket, an
+ISBN, a phone number and an amount with thousands separators all stay
+clean; `markup-residue.test.ts` holds those samples.
+
+The check is the class-level guard, not the fix. Each leak is a parser
+bug — `parsers/cz-us.ts` read RTF as a string, so a picture destination's
+control words and its hex payload printed between the majority opinion and
+the dissent of Pl.ÚS-st. 27/09 — and the parser is what changes.
+
+To find the decisions already stored with residue, sweep per source. Every
+pattern below is `markupResidueSweepRules()`'s, and a test holds this block
+and those rules to exact agreement. Matching is case-insensitive (`~*`), so the SQL is never narrower than the
+check. Run it against a replica, never against production writes, and re-parse the hits from `source_raw`; the SQL is a
+candidate finder, and the re-parse is what decides.
+
+```sql
+SELECT d.id, d.case_number, d.source_url, left(d.fulltext, 200) AS head
+FROM case_law_decisions d
+WHERE d.source_id = $1
+  AND d.fulltext IS NOT NULL
+  AND (
+    d.fulltext ~* '(\{\\\*|\\[a-zA-Z]{1,32}-?[0-9]{0,10}[[:space:]{}]{0,4}\\[a-zA-Z]{1,32})'
+    OR d.fulltext ~* '(</?[a-zA-Z][a-zA-Z0-9-]{0,30}([[:space:]]+[a-zA-Z-]+[[:space:]]*=|[[:space:]]*/?>))'
+    OR d.fulltext ~* '(<\?xml[[:space:]?]|<!\[CDATA\[|<!DOCTYPE[[:space:]])'
+    OR d.fulltext ~* '(<<[[:space:]]*/[a-zA-Z]|\mendobj\M|\mendstream\M)'
+    OR d.fulltext ~* '&([a-zA-Z]{2,12}|#[0-9]{1,7});'
+    OR d.fulltext ~* '[0-9]{40,}'
+    OR d.fulltext ~* '[0-9a-fA-F]{32,}'
+  )
+ORDER BY d.created_at
+LIMIT 500;
+```
 
 ### 12. Check a parser against the publisher, not against yourself
 
