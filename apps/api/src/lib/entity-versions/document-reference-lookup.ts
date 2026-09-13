@@ -75,7 +75,7 @@ const completeMatch = (row: MatchedVersion): DocumentReferenceMatch | null => {
     currentStamp: row.currentStamp,
     currentVersionNumber:
       row.currentVersionNumber ??
-      panic("Document reference matched an entity whose current version is missing"),
+      panic("Document reference matched an entity without a current version"),
   };
 };
 

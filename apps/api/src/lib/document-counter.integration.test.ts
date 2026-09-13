@@ -415,12 +415,14 @@ test("later issuance reserves its prefix while moved history keeps its original 
     await tx.insert(entities).values([
       {
         id: sourceEntity,
+        name: "Original document",
         workspaceId: source,
         kind: "document",
         docSequence: 7,
       },
       {
         id: targetEntity,
+        name: "Moved document",
         workspaceId: target,
         kind: "document",
         docSequence: 1,
