@@ -40,8 +40,8 @@ struct TestBridge {
 }
 
 impl TestBridge {
-  fn client() -> reqwest::Client {
-    reqwest::Client::new()
+  fn client() -> crate::http_client::DesktopHttpClient {
+    crate::http_client::DesktopHttpClient::new(Default::default()).unwrap()
   }
 
   fn url(&self, path: &str) -> String {
@@ -104,7 +104,7 @@ async fn spawn_test_bridge_with_origins(
     port,
     static_allowed_origins,
     manager.clone(),
-    Arc::new(Mutex::new(crate::registry::RegistryConnection::default())),
+    Arc::new(Mutex::new(crate::account::AccountStore::Memory(None))),
     Arc::new(|| ()),
   ));
 

@@ -17,6 +17,8 @@ path = "src/main.rs"
 all = { level = "warn", priority = -1 }
 cast_lossless = "warn"
 dbg_macro = "deny"
+disallowed_methods = "deny"
+disallowed_types = "deny"
 doc_link_with_quotes = "warn"
 filter_map_next = "warn"
 flat_map_option = "warn"

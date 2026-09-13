@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -11,9 +12,8 @@ import {
  */
 const scriptedStore = () => {
   const bridgeAnswered = Promise.withResolvers<boolean>();
-  const linked = Promise.withResolvers<string>();
+  const linked = Promise.withResolvers<Result<string, unknown>>();
   const linkCalls: number[] = [];
-  const manualLinkCalls: number[] = [];
   const errors: unknown[] = [];
   const watchSignals: AbortSignal[] = [];
   const seen: DesktopConnectionState[] = [];
@@ -22,10 +22,6 @@ const scriptedStore = () => {
     link: async () => {
       linkCalls.push(linkCalls.length);
       return await linked.promise;
-    },
-    manualLink: async () => {
-      manualLinkCalls.push(manualLinkCalls.length);
-      return "manual@example.com";
     },
     onError: (error) => {
       errors.push(error);
@@ -45,7 +41,6 @@ const scriptedStore = () => {
     errors,
     linkCalls,
     linked,
-    manualLinkCalls,
     seen,
     store,
     watchSignals,
@@ -82,7 +77,7 @@ describe("desktop connection store", () => {
     await flush();
     expect(store.getState()).toEqual({ status: "connecting" });
 
-    linked.resolve("lawyer@example.com");
+    linked.resolve(Result.ok("lawyer@example.com"));
     await watching;
     expect(store.getState()).toEqual({
       status: "connected",
@@ -93,31 +88,6 @@ describe("desktop connection store", () => {
       "connecting",
       "connected",
     ]);
-  });
-
-  test("automatic watches never invoke the explicit-connect link", async () => {
-    const { bridgeAnswered, linkCalls, linked, manualLinkCalls, store } =
-      scriptedStore();
-    store.retain();
-
-    const watching = store.startWatch();
-    bridgeAnswered.resolve(true);
-    linked.resolve("watch@example.com");
-    await watching;
-
-    expect(linkCalls.length).toBe(1);
-    expect(manualLinkCalls.length).toBe(0);
-  });
-
-  test("manual connect invokes the explicit-connect link", async () => {
-    const { manualLinkCalls, store } = scriptedStore();
-    store.retain();
-
-    expect(await store.connect(true)).toEqual({
-      status: "connected",
-      email: "manual@example.com",
-    });
-    expect(manualLinkCalls.length).toBe(1);
   });
 
   test("a watch that finds nothing falls back to saying nothing", async () => {
@@ -140,7 +110,7 @@ describe("desktop connection store", () => {
     await flush();
 
     const manual = store.connect();
-    linked.resolve("lawyer@example.com");
+    linked.resolve(Result.ok("lawyer@example.com"));
 
     expect(await manual).toEqual({
       status: "connected",
@@ -150,28 +120,25 @@ describe("desktop connection store", () => {
     expect(linkCalls.length).toBe(1);
   });
 
-  test("an explicit connect during an automatic link still runs the explicit link", async () => {
-    const { bridgeAnswered, linkCalls, linked, manualLinkCalls, store } =
-      scriptedStore();
+  test("a manual connect during an automatic link joins the same account link", async () => {
+    const { bridgeAnswered, linkCalls, linked, store } = scriptedStore();
     store.retain();
     const watching = store.startWatch();
     bridgeAnswered.resolve(true);
     await flush();
 
-    const explicit = store.connect(true);
-    expect(manualLinkCalls.length).toBe(0);
-    linked.resolve("watch@example.com");
+    const manual = store.connect();
+    linked.resolve(Result.ok("watch@example.com"));
 
-    expect(await explicit).toEqual({
+    expect(await manual).toEqual({
       status: "connected",
-      email: "manual@example.com",
+      email: "watch@example.com",
     });
     await watching;
     expect(linkCalls.length).toBe(1);
-    expect(manualLinkCalls.length).toBe(1);
     expect(store.getState()).toEqual({
       status: "connected",
-      email: "manual@example.com",
+      email: "watch@example.com",
     });
   });
 
@@ -181,7 +148,7 @@ describe("desktop connection store", () => {
     store.retain();
     const watching = store.startWatch();
 
-    linked.resolve("lawyer@example.com");
+    linked.resolve(Result.ok("lawyer@example.com"));
     expect(await store.connect()).toEqual({
       status: "connected",
       email: "lawyer@example.com",
@@ -207,7 +174,7 @@ describe("desktop connection store", () => {
     await flush();
 
     const failure = new Error("bridge refused the link");
-    linked.reject(failure);
+    linked.resolve(Result.err(failure));
     await watching;
 
     expect(store.getState()).toEqual({ status: "error" });
@@ -220,7 +187,7 @@ describe("desktop connection store", () => {
     const watching = store.startWatch();
     bridgeAnswered.resolve(true);
     await flush();
-    linked.reject(new Error("bridge refused the link"));
+    linked.resolve(Result.err(new Error("bridge refused the link")));
     await watching;
 
     // The scripted link keeps failing, so the retry fails too; what matters
@@ -239,7 +206,7 @@ describe("desktop connection store", () => {
     expect(watchSignals.length).toBe(1);
 
     bridgeAnswered.resolve(true);
-    linked.resolve("lawyer@example.com");
+    linked.resolve(Result.ok("lawyer@example.com"));
     await Promise.all([watching, second]);
     expect(linkCalls.length).toBe(1);
   });
@@ -267,7 +234,7 @@ describe("desktop connection store", () => {
     store.retain();
     const watching = store.startWatch();
     bridgeAnswered.resolve(true);
-    linked.resolve("lawyer@example.com");
+    linked.resolve(Result.ok("lawyer@example.com"));
     await watching;
 
     await store.startWatch();

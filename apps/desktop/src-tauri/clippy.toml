@@ -2,6 +2,10 @@
 # are banned everywhere else so a second "which screen" rule cannot appear;
 # the owner carries the only `allow`.
 disallowed-methods = [
+  { path = "reqwest::Client::new", reason = "use http_client::DesktopHttpClient so desktop HTTP identity cannot be omitted" },
+  { path = "reqwest::Client::builder", reason = "use http_client::DesktopHttpClient so desktop HTTP identity cannot be omitted" },
+  { path = "reqwest::ClientBuilder::new", reason = "use http_client::DesktopHttpClient so desktop HTTP identity cannot be omitted" },
+  { path = "reqwest::get", reason = "use http_client::DesktopHttpClient so desktop HTTP identity cannot be omitted" },
   { path = "tauri::webview::WebviewWindowBuilder::center", reason = "use window_placement::centered_on_target_screen" },
   { path = "tauri::webview::WebviewWindow::center", reason = "position from window_placement::target_work_area" },
   { path = "tauri::window::WindowBuilder::center", reason = "use window_placement::centered_on_target_screen" },
@@ -27,4 +31,11 @@ disallowed-methods = [
   { path = "objc2_app_kit::NSScreen::screens", reason = "screen selection lives in window_placement" },
   { path = "objc2_app_kit::NSScreen::mainScreen", reason = "screen selection lives in window_placement" },
   { path = "objc2_app_kit::NSEvent::mouseLocation", reason = "screen selection lives in window_placement" },
+]
+
+# Ban the types too: Default::default() and imported aliases must not create
+# an anonymous client around the constructor guard. Only http_client allows them.
+disallowed-types = [
+  { path = "reqwest::Client", reason = "use http_client::DesktopHttpClient" },
+  { path = "reqwest::ClientBuilder", reason = "configure http_client::HttpClientOptions" },
 ]

@@ -21,6 +21,7 @@ use crate::diagnostics::{
   DiagnosticNotificationPreferences, DiagnosticSession, DiagnosticStoreLoadIssue,
   DiagnosticUpdate, DiagnosticsInput, render_diagnostics,
 };
+use crate::http_client::DesktopHttpClient;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
 use zip::ZipArchive;
@@ -71,7 +72,6 @@ const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
 const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const MICROSOFT_OFFICE_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
-const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
 const CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
 const MAX_OFFICE_DOWNLOAD_BYTES: u64 = 50 * 1024 * 1024;
 const ZIP_LOCAL_FILE_HEADER_MAGIC: &[u8] = b"PK\x03\x04";
@@ -192,7 +192,7 @@ pub struct SessionManager {
   edit_root: PathBuf,
   support_root: PathBuf,
   store_load_issue: Option<StoreLoadIssue>,
-  http_client: reqwest::Client,
+  http_client: DesktopHttpClient,
   app_handle: Option<AppHandle>,
 }
 
@@ -203,13 +203,6 @@ pub(crate) enum LinkedAccountOriginUpdate {
 
 fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String {
   format!("{workspace_id}:{entity_id}:{property_id}")
-}
-
-fn build_http_client() -> reqwest::Client {
-  reqwest::Client::builder()
-    .user_agent(DESKTOP_HTTP_USER_AGENT)
-    .build()
-    .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 fn has_file_type_extension(name: &str, file_type: DesktopEditFileType) -> bool {
@@ -549,18 +542,14 @@ impl SessionManager {
       edit_root: data_dir.join("editing"),
       support_root: data_dir.clone(),
       store_load_issue: None,
-      http_client: build_http_client(),
+      http_client: DesktopHttpClient::new(Default::default())
+        .expect("desktop HTTP client initialization failed"),
       app_handle: None,
     }
   }
 
   pub fn set_app_handle(&mut self, handle: AppHandle) {
     self.app_handle = Some(handle);
-  }
-
-  #[cfg(test)]
-  pub fn set_store_path_for_test(&mut self, store_path: PathBuf) {
-    self.store_path = store_path;
   }
 
   pub async fn initialize(&mut self) {
@@ -704,7 +693,6 @@ impl SessionManager {
         .iter()
         .map(|s| (*s).to_string())
         .collect(),
-      linked_account: self.linked_account.clone(),
       notification_preferences: self.notification_preferences.clone(),
       running_since: self.running_since.clone(),
       sessions,
@@ -714,14 +702,14 @@ impl SessionManager {
   }
 
   /// Expose the HTTP client so callers can download outside the lock.
-  pub fn http_client(&self) -> &reqwest::Client {
+  pub fn http_client(&self) -> &DesktopHttpClient {
     &self.http_client
   }
 
   pub fn remote_status_probe_details(
     &self,
     session_id: &str,
-  ) -> Option<(reqwest::Client, String, String)> {
+  ) -> Option<(DesktopHttpClient, String, String)> {
     self.sessions.get(session_id).map(|session| {
       (
         self.http_client.clone(),
@@ -2403,7 +2391,7 @@ pub async fn run_retry_loop(manager: Arc<Mutex<SessionManager>>) {
 /// Used by the bridge to avoid blocking other operations during network I/O.
 pub async fn download_file_standalone(
   file_type: DesktopEditFileType,
-  client: &reqwest::Client,
+  client: &DesktopHttpClient,
   url: &str,
 ) -> Result<Vec<u8>, String> {
   let response = client
@@ -2781,7 +2769,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn link_account_updates_snapshot_and_persists() {
+  async fn document_account_identity_and_origin_persist() {
     let path = std::env::temp_dir().join(format!(
       "stella-desktop-sessions-{}.json",
       uuid::Uuid::new_v4()
@@ -2805,7 +2793,6 @@ mod tests {
 
     assert_eq!(
       manager
-        .get_snapshot()
         .linked_account
         .as_ref()
         .map(|value| value.email.as_str()),

@@ -11,6 +11,6 @@
 mod park;
 #[cfg(target_os = "macos")]
 pub use park::{
-  disable_occlusion_detection, park_window, prepare_transient_overlay,
-  present_key_panel,
+  disable_occlusion_detection, is_panel_presented, park_window,
+  prepare_transient_overlay, present_key_panel,
 };

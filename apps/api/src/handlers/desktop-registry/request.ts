@@ -6,6 +6,11 @@ import type {
   DesktopRegistryConfig,
   DesktopRegistrySearchResponse,
 } from "@stll/api-contract/desktop-registry";
+import type {
+  DesktopAccountIdentity,
+  LinkedAccountSnapshot,
+} from "@stll/api-contract/desktop-rpc";
+import { Temporal } from "@stll/time";
 
 import {
   formatDesktopRegistry,
@@ -49,7 +54,10 @@ const config = {
 // A dedicated bearer boundary, not an unauthenticated registry proxy. The
 // ordinary session middleware intentionally does not recognize these keys.
 type RegistryReply =
-  | DesktopRegistryConfig
+  | (DesktopRegistryConfig & {
+      account: LinkedAccountSnapshot;
+      identity: DesktopAccountIdentity;
+    })
   | DesktopRegistrySearchResponse
   | { text: string }
   | { revoked: boolean };
@@ -90,10 +98,47 @@ export default createSafePublicHandler(
         );
         return Result.ok({ revoked: true });
       }
-      case "config":
-        return Result.ok(
-          yield* Result.await(getDesktopRegistryConfig(context)),
+      case "config": {
+        const account = yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await context.scopedDb((tx) =>
+                tx.query.user.findFirst({
+                  where: { id: { eq: context.userId } },
+                  columns: { email: true, name: true },
+                }),
+              ),
+            catch: (cause) =>
+              new HandlerError({
+                status: 503,
+                message: "Could not verify desktop account",
+                cause,
+              }),
+          }),
         );
+        if (!account) {
+          return Result.err(
+            new HandlerError({
+              status: 401,
+              message: "Desktop account is unavailable",
+            }),
+          );
+        }
+        const registryConfig = yield* Result.await(
+          getDesktopRegistryConfig(context),
+        );
+        return Result.ok({
+          ...registryConfig,
+          identity: {
+            userId: context.userId,
+            organizationId: context.organizationId,
+          },
+          account: {
+            ...account,
+            verifiedAt: Temporal.Now.instant().toString(),
+          },
+        });
+      }
       case "search":
         return Result.ok(
           yield* Result.await(searchDesktopRegistry(context, body)),

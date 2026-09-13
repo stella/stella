@@ -27,28 +27,6 @@ const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
 const CLIPBOARD_EDITOR_WIDTH: f64 = 700.0;
 const CLIPBOARD_EDITOR_HEIGHT: f64 = 520.0;
 
-/// Whether the clipboard window is parked. Parking keeps the window on screen
-/// fully transparent and click-through instead of ordering it out: WebKit
-/// reclaims a hidden page's graphics caches within seconds and its compiled JS
-/// within minutes, which made the next open after an idle spell paint its
-/// content 200-600ms late. A parked page stays warm, so reopening paints
-/// immediately.
-#[derive(Default)]
-pub struct ClipboardWindowPark(Mutex<bool>);
-
-impl ClipboardWindowPark {
-  fn is_parked(&self) -> bool {
-    self.0.lock().map(|parked| *parked).unwrap_or(false)
-  }
-
-  #[cfg(target_os = "macos")]
-  fn set_parked(&self, parked: bool) {
-    if let Ok(mut state) = self.0.lock() {
-      *state = parked;
-    }
-  }
-}
-
 /// Timing anchor for the clipboard window's creation. Page load and frontend
 /// spans are measured against it, and the first snapshot read after creation
 /// claims its spans once so steady-state history reads stay unmeasured.
@@ -178,13 +156,7 @@ fn on_main_thread<T: Send + 'static>(
 #[cfg(target_os = "macos")]
 fn present(window: &WebviewWindow) -> tauri::Result<()> {
   let presented = on_main_thread(window, false, |window| {
-    let presented = stella_desktop_macos::present_key_panel(window);
-    if presented
-      && let Some(park) = window.app_handle().try_state::<ClipboardWindowPark>()
-    {
-      park.set_parked(false);
-    }
-    presented
+    stella_desktop_macos::present_key_panel(window)
   });
   if presented {
     return Ok(());
@@ -202,19 +174,7 @@ fn present(window: &WebviewWindow) -> tauri::Result<()> {
 /// ordering the window out.
 #[cfg(target_os = "macos")]
 fn park(window: &WebviewWindow) -> bool {
-  on_main_thread(window, false, |window| {
-    let Some(park) = window.app_handle().try_state::<ClipboardWindowPark>() else {
-      return false;
-    };
-    if park.is_parked() {
-      return true;
-    }
-    if !stella_desktop_macos::park_window(window) {
-      return false;
-    }
-    park.set_parked(true);
-    true
-  })
+  on_main_thread(window, false, stella_desktop_macos::park_window)
 }
 
 /// Whether the clipboard windows are kept out of screenshots and screen
@@ -388,13 +348,17 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
 }
 
 pub fn toggle(app: &AppHandle) {
-  let parked = app
-    .try_state::<ClipboardWindowPark>()
-    .is_some_and(|park| park.is_parked());
-  if !parked
-    && let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL)
-    && window.is_visible().unwrap_or(false)
-  {
+  let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL) else {
+    show(app);
+    return;
+  };
+  #[cfg(target_os = "macos")]
+  let presented = on_main_thread(&window, false, |window| {
+    stella_desktop_macos::is_panel_presented(window)
+  });
+  #[cfg(not(target_os = "macos"))]
+  let presented = window.is_visible().unwrap_or(false);
+  if presented {
     if hide(&window).is_err() {
       capture_window_error(
         app,

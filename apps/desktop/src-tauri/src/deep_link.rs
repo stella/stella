@@ -353,7 +353,7 @@ struct RedeemDesktopEditHandoffRequest<'a> {
 }
 
 async fn redeem_desktop_edit_handoff(
-  client: &reqwest::Client,
+  client: &crate::http_client::DesktopHttpClient,
   api_base_url: &str,
   handoff_token: &str,
 ) -> Result<OpenFileRequest, String> {
@@ -391,7 +391,7 @@ struct AcknowledgeDesktopEditHandoffOpenedRequest<'a> {
 }
 
 async fn acknowledge_desktop_edit_handoff_opened(
-  client: &reqwest::Client,
+  client: &crate::http_client::DesktopHttpClient,
   api_base_url: &str,
   handoff_id: &str,
   handoff_token: &str,
@@ -441,9 +441,17 @@ async fn redeem_and_open_desktop_edit(
     let mgr = manager.lock().await;
     mgr.http_client().clone()
   };
+  // The handoff token travels in the request body; a redirect would replay it
+  // to another origin, so handoff requests never follow one.
+  let handoff_client =
+    crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
+      redirect: reqwest::redirect::Policy::none(),
+      timeout: None,
+    })
+    .map_err(|e| format!("stella desktop could not start the handoff client: {e}"))?;
 
   let request =
-    redeem_desktop_edit_handoff(&http_client, &api_base_url, &handoff_token).await?;
+    redeem_desktop_edit_handoff(&handoff_client, &api_base_url, &handoff_token).await?;
   let handoff_id = request.handoff_id.clone();
 
   if !is_safe_session_id(&request.remote_session.session_id) {
@@ -473,7 +481,7 @@ async fn redeem_and_open_desktop_edit(
 
   if let Some(handoff_id) = handoff_id
     && let Err(error) = acknowledge_desktop_edit_handoff_opened(
-      &http_client,
+      &handoff_client,
       &api_base_url,
       &handoff_id,
       &handoff_token,

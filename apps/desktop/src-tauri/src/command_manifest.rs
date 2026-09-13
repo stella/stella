@@ -1,11 +1,11 @@
 macro_rules! with_stella_commands {
   ($consumer:ident) => {
     $consumer! {
+      account::account_get_state => "account_get_state",
+      account::account_disconnect => "account_disconnect",
       commands::get_state => "get_state",
       registry::registry_copy => "registry_copy",
       registry::registry_get_state => "registry_get_state",
-      registry::registry_connect => "registry_connect",
-      registry::registry_disconnect => "registry_disconnect",
       registry::registry_search => "registry_search",
       registry::registry_format => "registry_format",
       registry::registry_open_company_format => "registry_open_company_format",

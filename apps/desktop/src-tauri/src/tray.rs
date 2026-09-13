@@ -331,7 +331,6 @@ mod tests {
         .iter()
         .map(|s| (*s).to_string())
         .collect(),
-      linked_account: None,
       notification_preferences: DesktopNotificationPreferences::default(),
       running_since: "2026-01-01T00:00:00Z".into(),
       sessions,

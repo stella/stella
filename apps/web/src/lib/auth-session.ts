@@ -14,12 +14,16 @@ export const getFreshLinkedAccount = async () => {
     return null;
   }
 
-  const { user } = result.data;
+  const { user, session } = result.data;
   if (user.email.length === 0) {
     return null;
   }
 
   return {
+    identity: {
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    },
     email: user.email,
     name: user.name,
     verifiedAt: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),

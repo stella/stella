@@ -16,41 +16,70 @@ use crate::config::KEYCHAIN_SERVICE_NAME;
 use keyring_core::{Entry, Error};
 
 const CLIPBOARD_HISTORY_KEY: &str = "clipboard:history:v1";
-const REGISTRY_ACCOUNT_KEY: &str = "registry:account:v1";
+const ACCOUNT_CONNECTION_KEY: &str = "account:connection:v1";
+const LEGACY_REGISTRY_ACCOUNT_KEY: &str = "registry:account:v1";
+const ACCOUNT_KEYS_TO_DELETE: [&str; 2] =
+  [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY];
 
-pub async fn delete_registry_credential() -> Result<(), String> {
-  tokio::task::spawn_blocking(|| {
-    match named_entry(REGISTRY_ACCOUNT_KEY)?.delete_credential() {
-      Ok(()) | Err(Error::NoEntry) => Ok(()),
-      Err(_) => Err("Could not remove registry account from Keychain".to_string()),
+fn delete_named_credential(key: &str) -> Result<(), String> {
+  match named_entry(key)?.delete_credential() {
+    Ok(()) | Err(Error::NoEntry) => Ok(()),
+    Err(_) => Err("Could not remove desktop account from Keychain".to_string()),
+  }
+}
+
+fn delete_account_keys(
+  mut delete: impl FnMut(&str) -> Result<(), String>,
+) -> Result<(), String> {
+  let mut failure = None;
+  for key in ACCOUNT_KEYS_TO_DELETE {
+    if let Err(error) = delete(key)
+      && failure.is_none()
+    {
+      failure = Some(error);
     }
-  })
-  .await
-  .map_err(|_| "Registry Keychain task failed".to_string())?
+  }
+  failure.map_or(Ok(()), Err)
 }
 
-pub async fn store_registry_credential(value: String) -> Result<(), String> {
+// Migration cleanup only: a failure here must never block the current
+// account record from being read or written.
+fn delete_legacy_registry_account() {
+  if let Err(error) = delete_named_credential(LEGACY_REGISTRY_ACCOUNT_KEY) {
+    tracing::warn!(error = %error, "legacy registry account cleanup failed");
+  }
+}
+
+pub async fn delete_account_connection() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| delete_account_keys(delete_named_credential))
+    .await
+    .map_err(|_| "Account Keychain task failed".to_string())?
+}
+
+pub async fn store_account_connection(value: String) -> Result<(), String> {
   tokio::task::spawn_blocking(move || {
-    named_entry(REGISTRY_ACCOUNT_KEY)?
+    delete_legacy_registry_account();
+    named_entry(ACCOUNT_CONNECTION_KEY)?
       .set_password(&value)
-      .map_err(|_| "Could not save registry account in Keychain".to_string())
+      .map_err(|_| "Could not save desktop account in Keychain".to_string())
   })
   .await
-  .map_err(|_| "Registry Keychain task failed".to_string())?
+  .map_err(|_| "Account Keychain task failed".to_string())?
 }
 
-pub async fn get_registry_credential() -> Result<Option<String>, String> {
+pub async fn get_account_connection() -> Result<Option<String>, String> {
   let read = tokio::task::spawn_blocking(|| {
-    match named_entry(REGISTRY_ACCOUNT_KEY)?.get_password() {
+    delete_legacy_registry_account();
+    match named_entry(ACCOUNT_CONNECTION_KEY)?.get_password() {
       Ok(value) => Ok(Some(value)),
       Err(Error::NoEntry) => Ok(None),
-      Err(_) => Err("Registry Keychain read failed".to_string()),
+      Err(_) => Err("Account Keychain read failed".to_string()),
     }
   });
   tokio::time::timeout(std::time::Duration::from_secs(5), read)
     .await
-    .map_err(|_| "Registry Keychain read timed out".to_string())?
-    .map_err(|_| "Registry Keychain task failed".to_string())?
+    .map_err(|_| "Account Keychain read timed out".to_string())?
+    .map_err(|_| "Account Keychain task failed".to_string())?
 }
 
 #[derive(Debug)]
@@ -232,4 +261,43 @@ pub fn create_clipboard_key() -> Result<[u8; 32], String> {
     .set_secret(&key)
     .map_err(|e| format!("keychain store error: {e}"))?;
   Ok(key.into())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn account_cleanup_owns_current_and_released_key_names() {
+    let mut deleted = Vec::new();
+    delete_account_keys(|key| {
+      deleted.push(key.to_string());
+      Ok(())
+    })
+    .unwrap();
+
+    assert_eq!(
+      deleted,
+      [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY]
+    );
+  }
+
+  #[test]
+  fn account_cleanup_attempts_the_legacy_key_after_a_current_key_failure() {
+    let mut deleted = Vec::new();
+    let error = delete_account_keys(|key| {
+      deleted.push(key.to_string());
+      if key == ACCOUNT_CONNECTION_KEY {
+        return Err("current key failure".into());
+      }
+      Ok(())
+    })
+    .unwrap_err();
+
+    assert_eq!(error, "current key failure");
+    assert_eq!(
+      deleted,
+      [ACCOUNT_CONNECTION_KEY, LEGACY_REGISTRY_ACCOUNT_KEY]
+    );
+  }
 }

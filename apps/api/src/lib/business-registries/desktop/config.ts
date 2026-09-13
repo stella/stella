@@ -1,11 +1,13 @@
 import * as v from "valibot";
 
+import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type { PermissionInput } from "@stll/permissions";
 
 export const DESKTOP_REGISTRY_KEY_CONFIG = "desktop-registry";
-export const DESKTOP_REGISTRY_KEY_PREFIX = "stella_dr_";
-// The prototype requires a fresh, explicit connection after one hour.
-export const DESKTOP_REGISTRY_KEY_SECONDS = 60 * 60;
+export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
+// A revocable seven-day account link replaces the hourly registry prototype.
+export const DESKTOP_REGISTRY_KEY_SECONDS =
+  DESKTOP_ACCOUNT_POLICY.credentialLifetimeSeconds;
 export const DESKTOP_REGISTRY_PERMISSION = {
   workspace: ["read"],
 } satisfies PermissionInput;

@@ -27,17 +27,24 @@ pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String
 pub async fn open_stella_account(
   app: tauri::AppHandle,
   state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
 ) -> Result<(), String> {
+  let linked = crate::account::current(&account).await?;
   let linked_self_host_origin = {
     let manager = state.lock().await;
     manager.linked_self_host_origin().map(str::to_owned)
   };
+  let web_origin = linked
+    .as_ref()
+    .map(|account| account.web_origin.as_str())
+    .or(linked_self_host_origin.as_deref());
+  let mut url = stella_account_url(web_origin);
+  if linked.is_none() {
+    url.push_str("#desktop-account");
+  }
   app
     .opener()
-    .open_url(
-      stella_account_url(linked_self_host_origin.as_deref()),
-      None::<&str>,
-    )
+    .open_url(url, None::<&str>)
     .map_err(|e| format!("stella desktop could not open stella web: {e}"))
 }
 

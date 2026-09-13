@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
@@ -29,6 +29,7 @@ import {
   SUPPORTED_LANGUAGES,
 } from "../i18n";
 import type { SupportedLanguage } from "../i18n";
+import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { isAppSnapshot } from "../shared/rpc";
 import type {
@@ -43,6 +44,8 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import { accountPresentation } from "./account-presentation";
+import type { DesktopAccountState } from "./account-presentation";
 import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
@@ -240,17 +243,20 @@ const AutoStartToggle = () => {
 
 const GeneralPane = ({
   language,
-  linkedAccount,
+  accountState,
   onLanguageChange,
-  onOpenStellaWeb,
+  onAccountAction,
 }: {
   language: SupportedLanguage;
-  linkedAccount: LinkedAccountSnapshot | null;
+  accountState: DesktopAccountState;
   onLanguageChange: (language: SupportedLanguage) => void;
-  onOpenStellaWeb: () => void;
+  onAccountAction: () => void;
 }) => {
   const format = useFormatter();
   const t = useTranslations("settings");
+  const presentation = accountPresentation(accountState);
+  const linkedAccount =
+    accountState.status === "connected" ? accountState.account : null;
 
   return (
     <div className="space-y-4">
@@ -266,18 +272,18 @@ const GeneralPane = ({
                 t("stellaDesktop")}
             </p>
             <p className="text-muted-foreground truncate text-sm">
-              {linkedAccount?.email ?? t("connectToStellaDescription")}
+              {linkedAccount?.email ?? t(presentation.webDescriptionKey)}
             </p>
           </div>
           <span
             className={cn(
               "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
-              linkedAccount
+              presentation.status === "linked"
                 ? "border-success/20 bg-success/10 text-success-foreground"
                 : "bg-muted text-muted-foreground border-border",
             )}
           >
-            {linkedAccount ? t("connected") : t("notConnected")}
+            {t(presentation.statusKey)}
           </span>
         </div>
         {linkedAccount ? (
@@ -303,13 +309,18 @@ const GeneralPane = ({
         <Separator />
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t("connectToStella")}</p>
+            <p className="text-sm font-medium">{t(presentation.webTitleKey)}</p>
             <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t("connectToStellaDescription")}
+              {t(presentation.webDescriptionKey)}
             </p>
           </div>
-          <Button onClick={onOpenStellaWeb} size="sm" variant="outline">
-            {t("openStellaWeb")}
+          <Button
+            disabled={presentation.status === "loading"}
+            onClick={onAccountAction}
+            size="sm"
+            variant="outline"
+          >
+            {t(presentation.actionKey)}
           </Button>
         </div>
         <Separator />
@@ -475,6 +486,11 @@ const App = () => {
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
+  const [accountState, setAccountState] = useState<DesktopAccountState>({
+    status: "loading",
+  });
+  const accountRefresh = useRef<() => void>(() => undefined);
+  const accountGeneration = useRef(0);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
 
   useEffect(() => {
@@ -560,6 +576,55 @@ const App = () => {
       stopListening();
     };
   }, [t]);
+
+  useEffect(() => {
+    let disposed = false;
+    const refresh = () => {
+      const request = ++accountGeneration.current;
+      void invoke<
+        Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
+      >("account_get_state")
+        .then((nextAccountState) => {
+          if (!disposed && request === accountGeneration.current) {
+            startTransition(() => setAccountState(nextAccountState));
+          }
+          return;
+        })
+        .catch(() => {
+          if (!disposed && request === accountGeneration.current) {
+            startTransition(() => setAccountState({ status: "unavailable" }));
+          }
+        });
+    };
+    const stopListening = subscribeDesktopEvent({
+      event: "desktop-account-changed",
+      handler: refresh,
+      onError: reportSubscriptionFailure,
+    });
+    accountRefresh.current = refresh;
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      disposed = true;
+      accountGeneration.current += 1;
+      window.removeEventListener("focus", refresh);
+      stopListening();
+    };
+  }, []);
+
+  const accountExpiresAt =
+    accountState.status === "connected" ? accountState.expiresAt : null;
+  useEffect(() => {
+    if (!accountExpiresAt) {
+      return () => undefined;
+    }
+    const delay = accountExpiryDelay(
+      accountExpiresAt,
+      Temporal.Now.instant().epochMilliseconds,
+    );
+    const timer = window.setTimeout(() => accountRefresh.current(), delay);
+    return () => window.clearTimeout(timer);
+  }, [accountExpiresAt]);
 
   const notificationPreferences =
     state?.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
@@ -736,13 +801,34 @@ const App = () => {
               <ScrollArea className="h-full">
                 <div className="space-y-4 p-4">
                   <GeneralPane
+                    accountState={accountState}
                     language={language}
-                    linkedAccount={state?.linkedAccount ?? null}
+                    onAccountAction={() => {
+                      if (accountState.status === "unavailable") {
+                        setAccountState({ status: "loading" });
+                        accountRefresh.current();
+                        return;
+                      }
+                      if (accountState.status === "connected") {
+                        void invoke("account_disconnect")
+                          .then(() => {
+                            setAccountState({ status: "disconnected" });
+                            setError(null);
+                            return;
+                          })
+                          .catch((disconnectError: unknown) => {
+                            setError(
+                              disconnectError instanceof Error
+                                ? disconnectError.message
+                                : t("errorDisconnectAccount"),
+                            );
+                          });
+                        return;
+                      }
+                      void handleOpenStellaWeb();
+                    }}
                     onLanguageChange={(nextLanguage) => {
                       void handleLanguageChange(nextLanguage);
-                    }}
-                    onOpenStellaWeb={() => {
-                      void handleOpenStellaWeb();
                     }}
                   />
                 </div>

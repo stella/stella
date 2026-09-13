@@ -64,9 +64,48 @@ fn main() {
       assert!(webview.window().is_none());
       window.close();
     }
+
+    // The persistent clipboard panel owns dismissal at AppKit's key-window
+    // lifecycle boundary. Generic framework focus events are not reliable
+    // after the runtime NSWindow is converted into this NSPanel subclass.
+    // SAFETY: initialized on the main thread and retained until after close;
+    // disabling release-on-close prevents AppKit consuming that ownership.
+    let panel = unsafe {
+      let panel = NSWindow::initWithContentRect_styleMask_backing_defer(
+        NSWindow::alloc(main_thread),
+        frame,
+        NSWindowStyleMask::Borderless,
+        NSBackingStoreType::Buffered,
+        false,
+      );
+      panel.setReleasedWhenClosed(false);
+      panel
+    };
+    make_nonactivating_panel(&panel);
+    panel.setAlphaValue(1.0);
+    panel.setIgnoresMouseEvents(false);
+    panel.makeKeyAndOrderFront(None);
+    assert!(panel.isKeyWindow());
+
+    // Explicit dismissal (the path invoked after web content gives Escape to
+    // the clipboard) uses the same native parking transition.
+    set_panel_parked(&panel);
+    assert_eq!(panel.alphaValue(), 0.0);
+    assert!(panel.ignoresMouseEvents());
+
+    panel.setAlphaValue(1.0);
+    panel.setIgnoresMouseEvents(false);
+    panel.makeKeyAndOrderFront(None);
+    assert!(panel.isKeyWindow());
+
+    // Clicking outside transfers key status and invokes the panel override.
+    panel.resignKeyWindow();
+
+    assert_eq!(panel.alphaValue(), 0.0);
+    assert!(panel.ignoresMouseEvents());
+    panel.close();
   });
 }
 
 #[cfg(not(target_os = "macos"))]
 fn main() {}
-
