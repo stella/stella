@@ -55,16 +55,7 @@ type IndexedSearchDocument = {
   entityId: SafeId<"entity">;
 };
 
-/**
- * Newest versions read per projection. The same rows answer the
- * latest-version probe and supply the stamps, so the read stays one query;
- * the cap is what keeps it bounded when an entity's history is pathological.
- * Documents carry a handful of versions in practice, so the only cost is
- * that the very oldest references of such an entity stop being searchable.
- */
-const STAMP_SCAN_VERSION_LIMIT = 500;
-
-// Compare the exact bounded projection inputs, including tombstones. Entity
+// Compare the complete projection inputs, including tombstones. Entity
 // timestamps do not change when a non-current version is deleted.
 const versionSetToken = (entityId: SQL, workspaceId: SQL) => sql<string>`(
   SELECT COALESCE(jsonb_agg(
@@ -76,7 +67,6 @@ const versionSetToken = (entityId: SQL, workspaceId: SQL) => sql<string>`(
     FROM entity_versions
     WHERE entity_id = ${entityId} AND workspace_id = ${workspaceId}
     ORDER BY version_number DESC, id DESC
-    LIMIT ${STAMP_SCAN_VERSION_LIMIT}
   ) v
 )`;
 
@@ -216,10 +206,11 @@ const buildSearchDocument = async (
       workspaceId: { eq: entity.workspaceId },
     },
     columns: { deletedAt: true, id: true, stamp: true },
-    // Include tombstones: a deleted newer version must keep legacy,
-    // provenance-free text from being attributed to a promoted old version.
+    // Read this one entity's full history: a window would permanently hide
+    // references printed on older live versions. Include tombstones so a
+    // deleted newer version keeps legacy text without provenance from being
+    // attributed to a promoted old version.
     orderBy: { versionNumber: "desc", id: "desc" },
-    limit: STAMP_SCAN_VERSION_LIMIT,
   });
   const latestVersion = versions.at(0);
 

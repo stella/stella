@@ -72,8 +72,8 @@ export const allocateEntityStamps = async ({
 
   // The ledger row is created on first use and then locked, so concurrent
   // allocations under the same reference serialize here rather than racing
-  // for the same block of sequence numbers. `DO NOTHING` leaves an existing
-  // row's owner alone: the first matter to number under a reference keeps it.
+  // for the same block of sequence numbers. A zero-value seed is unissued,
+  // so its owner may be replaced by the matter that performs the issuance.
   let referenceFloor = 0;
   if (matterReference) {
     await tx
@@ -84,15 +84,20 @@ export const allocateEntityStamps = async ({
         reference: matterReference,
         workspaceId,
       })
-      .onConflictDoNothing({
+      .onConflictDoUpdate({
         target: [
           documentReferenceCounters.organizationId,
           documentReferenceCounters.reference,
         ],
+        set: { workspaceId: sql`excluded.workspace_id` },
+        setWhere: eq(documentReferenceCounters.lastValue, 0),
       });
 
     const ledgerRows = await tx
-      .select({ lastValue: documentReferenceCounters.lastValue })
+      .select({
+        lastValue: documentReferenceCounters.lastValue,
+        workspaceId: documentReferenceCounters.workspaceId,
+      })
       .from(documentReferenceCounters)
       .where(
         and(
@@ -106,6 +111,9 @@ export const allocateEntityStamps = async ({
       // The insert above either created the row or found it, inside this
       // transaction; a missing row here would mean it was deleted under us.
       panic("Document reference ledger row disappeared during allocation");
+    }
+    if (ledger.lastValue > 0 && ledger.workspaceId !== workspaceId) {
+      panic("Document stamp reference belongs to another workspace");
     }
     referenceFloor = ledger.lastValue;
   }
@@ -253,8 +261,9 @@ export const recordEntityStamps = async ({
       ],
       set: {
         lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, excluded.last_value)`,
+        workspaceId: sql`excluded.workspace_id`,
       },
-      setWhere: sql`${documentReferenceCounters.workspaceId} = excluded.workspace_id`,
+      setWhere: sql`${documentReferenceCounters.workspaceId} = excluded.workspace_id OR ${documentReferenceCounters.lastValue} = 0`,
     })
     .returning({ id: documentReferenceCounters.id });
   if (rows.length !== ledgerValues.size) {

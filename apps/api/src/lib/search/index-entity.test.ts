@@ -559,11 +559,3 @@ test("drops the reference of a version that was deleted", async () => {
   const text = projectedSearchableTextContaining(firstStamp);
   expect(text).not.toContain(LATER_MATTER_REFERENCE);
 });
-
-test("bounds the versions one projection reads", async () => {
-  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
-
-  expect(versionsFindManyMock).toHaveBeenCalledWith(
-    expect.objectContaining({ limit: expect.any(Number) }),
-  );
-});

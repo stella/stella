@@ -104,7 +104,40 @@ afterAll(async () => {
 });
 
 describe("document stamp allocation across a matter reference", () => {
-  test("a matter taking over a freed reference continues its numbering", async () => {
+  test("claims an unissued zero-value ledger before the first stamp", async () => {
+    const reference = "ZERO-SEED/2026";
+    const matter = await createMatter("ZERO-SEED-TEMP/2026");
+    await testDb.insert(documentReferenceCounters).values({
+      id: createSafeId<"documentReferenceCounter">(),
+      organizationId: ids.orgA,
+      reference,
+      workspaceId: null,
+      lastValue: 0,
+    });
+    await setReference(matter, reference);
+
+    const [stamp] = await allocate(matter, 1);
+
+    expect(stamp).toEqual({
+      docSequence: 1,
+      stamp: `${reference}/001.v1`,
+    });
+    const [ledger] = await testDb
+      .select({
+        workspaceId: documentReferenceCounters.workspaceId,
+        lastValue: documentReferenceCounters.lastValue,
+      })
+      .from(documentReferenceCounters)
+      .where(
+        and(
+          eq(documentReferenceCounters.organizationId, ids.orgA),
+          eq(documentReferenceCounters.reference, reference),
+        ),
+      );
+    expect(ledger).toEqual({ workspaceId: matter, lastValue: 1 });
+  });
+
+  test("a retired reference rejects a new matter before allocation", async () => {
     const handoverReference = "HANDOVER/2026";
     const matterA = await createMatter(handoverReference);
 
@@ -115,23 +148,30 @@ describe("document stamp allocation across a matter reference", () => {
       `${handoverReference}/003.v1`,
     ]);
 
-    // The reference is freed and handed to a brand-new matter, whose own
-    // document counter starts at zero. Without the reference ledger the next
-    // stamp would be HANDOVER/2026/001.v1 again.
+    // Bypass the reference-edit guard to verify allocation also preserves
+    // issued ownership when a different matter presents the same reference.
     await setReference(matterA, "HANDOVER-RETIRED/2026");
     const matterB = await createMatter(handoverReference);
 
-    const second = await allocate(matterB, 2);
-    expect(second.map(({ stamp }) => stamp)).toEqual([
-      `${handoverReference}/004.v1`,
-      `${handoverReference}/005.v1`,
-    ]);
-
-    const stamps = [...first, ...second].map(({ stamp }) => stamp);
-    expect(new Set(stamps).size).toBe(stamps.length);
+    await expect(allocate(matterB, 2)).rejects.toThrow(
+      "Document stamp reference belongs to another workspace",
+    );
+    const [ledger] = await testDb
+      .select({
+        workspaceId: documentReferenceCounters.workspaceId,
+        lastValue: documentReferenceCounters.lastValue,
+      })
+      .from(documentReferenceCounters)
+      .where(
+        and(
+          eq(documentReferenceCounters.organizationId, ids.orgA),
+          eq(documentReferenceCounters.reference, handoverReference),
+        ),
+      );
+    expect(ledger).toEqual({ workspaceId: matterA, lastValue: 3 });
   });
 
-  test("a matter returning to a reference it lent out does not repeat", async () => {
+  test("a matter returning to its reference resumes after rejected borrowing", async () => {
     const original = "ROUNDTRIP/2026";
     const interim = "ROUNDTRIP-INTERIM/2026";
     const borrower = "ROUNDTRIP-BORROWER/2026";
@@ -140,12 +180,12 @@ describe("document stamp allocation across a matter reference", () => {
 
     const before = await allocate(matter, 2);
 
-    // The reference goes to another matter, which carries it further, and then
-    // comes back. The original matter's own counter still stands at two, so
-    // only the reference ledger can stop it from reissuing 003.
+    // Rejected borrowing must leave the original owner and counter intact.
     await setReference(matter, interim);
     await setReference(other, original);
-    const borrowed = await allocate(other, 2);
+    await expect(allocate(other, 2)).rejects.toThrow(
+      "Document stamp reference belongs to another workspace",
+    );
     await setReference(other, borrower);
     await setReference(matter, original);
     const after = await allocate(matter, 1);
@@ -154,22 +194,13 @@ describe("document stamp allocation across a matter reference", () => {
       `${original}/001.v1`,
       `${original}/002.v1`,
     ]);
-    expect(borrowed.map(({ stamp }) => stamp)).toEqual([
-      `${original}/003.v1`,
-      `${original}/004.v1`,
-    ]);
-    expect(after.map(({ stamp }) => stamp)).toEqual([`${original}/005.v1`]);
+    expect(after.map(({ stamp }) => stamp)).toEqual([`${original}/003.v1`]);
 
-    const stamps = [...before, ...borrowed, ...after].map(({ stamp }) => stamp);
+    const stamps = [...before, ...after].map(({ stamp }) => stamp);
     expect(new Set(stamps).size).toBe(stamps.length);
   });
 
-  // PGlite drives one single-threaded connection, so two transactions cannot
-  // genuinely overlap here; this asserts the observable invariant instead —
-  // separate transactions allocating under a shared reference from different
-  // matters receive disjoint, strictly increasing blocks, which is what the
-  // ledger's `FOR UPDATE` serialization has to produce.
-  test("separate transactions under one reference receive disjoint blocks", async () => {
+  test("a separate matter cannot allocate a claimed reference", async () => {
     const shared = "SHARED/2026";
     const matterA = await createMatter(shared);
     const matterB = await createMatter("SHARED-OTHER/2026");
@@ -177,14 +208,10 @@ describe("document stamp allocation across a matter reference", () => {
     const blockA = await allocate(matterA, 2);
     await setReference(matterA, "SHARED-RETIRED/2026");
     await setReference(matterB, shared);
-    const blockB = await allocate(matterB, 2);
-
-    const sequences = [...blockA, ...blockB].map(
-      ({ docSequence }) => docSequence,
+    await expect(allocate(matterB, 2)).rejects.toThrow(
+      "Document stamp reference belongs to another workspace",
     );
-    expect(sequences).toEqual([1, 2, 3, 4]);
-    const stamps = [...blockA, ...blockB].map(({ stamp }) => stamp);
-    expect(new Set(stamps).size).toBe(stamps.length);
+    expect(blockA.map(({ docSequence }) => docSequence)).toEqual([1, 2]);
   });
 
   test("a matter with an empty reference gets sequence numbers and no stamp", async () => {
@@ -400,6 +427,17 @@ test("later issuance reserves its prefix while moved history keeps its original 
   const reference = "LATER-ISSUANCE/2026";
   const source = await createMatter(reference);
   const target = await createMatter("MOVED-HISTORY/2026");
+  const staleOwner = await createMatter("STALE-ZERO-OWNER/2026");
+  const zeroReference = "ZERO-LATER-ISSUANCE/2026";
+  const zeroSource = await createMatter("ZERO-LATER-TEMP/2026");
+  await testDb.insert(documentReferenceCounters).values({
+    id: createSafeId<"documentReferenceCounter">(),
+    organizationId: ids.orgA,
+    reference: zeroReference,
+    workspaceId: staleOwner,
+    lastValue: 0,
+  });
+  await setReference(zeroSource, zeroReference);
   const sourceEntity = createSafeId<"entity">();
   const targetEntity = createSafeId<"entity">();
   const versions = [2, 3].map((versionNumber) => ({
@@ -410,7 +448,7 @@ test("later issuance reserves its prefix while moved history keeps its original 
       versionNumber,
     }),
   }));
-  const { scopedDb } = scopeFor([source, target]);
+  const { scopedDb } = scopeFor([source, target, zeroSource]);
   await scopedDb(async (tx) => {
     await tx.insert(entities).values([
       {
@@ -446,6 +484,30 @@ test("later issuance reserves its prefix while moved history keeps its original 
         entityId: targetEntity,
       })),
     });
+    const zeroEntity = createSafeId<"entity">();
+    await tx.insert(entities).values({
+      id: zeroEntity,
+      name: "Zero-value ledger document",
+      workspaceId: zeroSource,
+      kind: "document",
+      docSequence: 4,
+    });
+    await insertEntityVersions({
+      tx,
+      stampOrigin: "issued",
+      values: [
+        {
+          workspaceId: zeroSource,
+          entityId: zeroEntity,
+          versionNumber: 1,
+          stamp: toDocumentReference({
+            matterReference: zeroReference,
+            docSequence: 4,
+            versionNumber: 1,
+          }),
+        },
+      ],
+    });
   });
 
   const [ledger] = await testDb
@@ -470,4 +532,17 @@ test("later issuance reserves its prefix while moved history keeps its original 
   expect(copied.map(({ stamp }) => stamp)).toEqual(
     versions.map(({ stamp }) => stamp),
   );
+  const [zeroLedger] = await testDb
+    .select({
+      workspaceId: documentReferenceCounters.workspaceId,
+      lastValue: documentReferenceCounters.lastValue,
+    })
+    .from(documentReferenceCounters)
+    .where(
+      and(
+        eq(documentReferenceCounters.organizationId, ids.orgA),
+        eq(documentReferenceCounters.reference, zeroReference),
+      ),
+    );
+  expect(zeroLedger).toEqual({ workspaceId: zeroSource, lastValue: 4 });
 });

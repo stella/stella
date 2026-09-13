@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -273,24 +273,79 @@ test("an ordinary query still matches loosely", async () => {
 
 test("a delayed projection cannot restore a tombstoned historical reference", async () => {
   const database = projectionDatabase();
-  await upsertSearchDocument(entityId, {
-    database: {
-      ...database,
-      transaction: async (run) => {
-        // The old projection has already read every stamp. A deletion and its
-        // repair finish before that old projection acquires the entity lock.
-        await db
-          .update(entityVersions)
-          .set({ deletedAt: new Date() })
-          .where(eq(entityVersions.id, versionId(1)));
-        await indexEntity();
-        expect(await matchesReferenceExactly(firstReference)).toBe(false);
-        return await database.transaction(run);
+  try {
+    await upsertSearchDocument(entityId, {
+      database: {
+        ...database,
+        transaction: async (run) => {
+          // The old projection has already read every stamp. A deletion and its
+          // repair finish before that old projection acquires the entity lock.
+          await db
+            .update(entityVersions)
+            .set({ deletedAt: new Date() })
+            .where(eq(entityVersions.id, versionId(1)));
+          await indexEntity();
+          expect(await matchesReferenceExactly(firstReference)).toBe(false);
+          return await database.transaction(run);
+        },
       },
-    },
-    syncActivity: async () => undefined,
-  });
+      syncActivity: async () => undefined,
+    });
 
-  expect(await matchesReferenceExactly(firstReference)).toBe(false);
-  expect(await matchesReferenceExactly(secondReference)).toBe(true);
+    expect(await matchesReferenceExactly(firstReference)).toBe(false);
+    expect(await matchesReferenceExactly(secondReference)).toBe(true);
+  } finally {
+    await db
+      .update(entityVersions)
+      .set({ deletedAt: null })
+      .where(eq(entityVersions.id, versionId(1)));
+    await indexEntity();
+  }
+});
+
+test("original references remain searchable after more than 500 later versions", async () => {
+  const laterVersions = Array.from({ length: 501 }, (_, index) => {
+    const versionNumber = currentVersionNumber + index + 1;
+    return {
+      id: versionId(versionNumber),
+      entityId,
+      workspaceId,
+      versionNumber,
+      createdAt: SEED_AT,
+      stamp: toDocumentReference({
+        matterReference: SECOND_MATTER_REFERENCE,
+        docSequence: SECOND_DOC_SEQUENCE,
+        versionNumber,
+      }),
+    };
+  });
+  const latest = laterVersions.at(-1);
+  expect(latest).toBeDefined();
+  if (!latest) {
+    return;
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(entityVersions).values(laterVersions);
+      await tx
+        .update(entities)
+        .set({ currentVersionId: latest.id })
+        .where(eq(entities.id, entityId));
+    });
+    await indexEntity();
+    expect(await matchesReferenceExactly(firstReference)).toBe(true);
+    expect(await matchesReferenceExactly(latest.stamp)).toBe(true);
+  } finally {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(entities)
+        .set({ currentVersionId: versionId(currentVersionNumber) })
+        .where(eq(entities.id, entityId));
+      await tx
+        .delete(entityVersions)
+        .where(inArray(entityVersions.id, laterVersions.map(({ id }) => id)));
+    });
+    await indexEntity();
+  }
 });

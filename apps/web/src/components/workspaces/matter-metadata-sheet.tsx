@@ -54,7 +54,11 @@ type DuplicateMode = "metadata" | "content";
 
 type ReferenceConfirmation =
   | { status: "closed" }
-  | { status: "confirming"; newReference: string };
+  | {
+      status: "confirming";
+      newReference: string;
+      workspaceId: string;
+    };
 
 export const MatterMetadataPanel = ({
   workspaceId,
@@ -98,6 +102,7 @@ export const MatterMetadataPanel = ({
       setNameValue(workspace.name);
       setReferenceValue(workspace.reference);
       setReferenceError("");
+      setReferenceConfirmation({ status: "closed" });
       return;
     }
 
@@ -209,6 +214,7 @@ export const MatterMetadataPanel = ({
         setReferenceConfirmation({
           status: "confirming",
           newReference: edit.reference,
+          workspaceId,
         });
         return;
       case "save":
@@ -225,9 +231,15 @@ export const MatterMetadataPanel = ({
     revertReference();
   };
 
-  const confirmReferenceChange = (newReference: string) => {
+  const confirmReferenceChange = () => {
+    if (
+      referenceConfirmation.status !== "confirming" ||
+      referenceConfirmation.workspaceId !== workspaceId
+    ) {
+      return;
+    }
     setReferenceConfirmation({ status: "closed" });
-    saveReference(newReference);
+    saveReference(referenceConfirmation.newReference);
   };
 
   const handleDeleteWorkspace = async () => {
@@ -512,17 +524,16 @@ export const MatterMetadataPanel = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-      {referenceConfirmation.status === "confirming" && (
-        <ReferenceChangeConfirmation
-          newReference={referenceConfirmation.newReference}
-          oldReference={workspace.reference}
-          onCancel={cancelReferenceChange}
-          onConfirm={() =>
-            confirmReferenceChange(referenceConfirmation.newReference)
-          }
-          stampedVersionCount={workspace.stampedVersionCount}
-        />
-      )}
+      {referenceConfirmation.status === "confirming" &&
+        referenceConfirmation.workspaceId === workspaceId && (
+          <ReferenceChangeConfirmation
+            newReference={referenceConfirmation.newReference}
+            oldReference={workspace.reference}
+            onCancel={cancelReferenceChange}
+            onConfirm={confirmReferenceChange}
+            stampedVersionCount={workspace.stampedVersionCount}
+          />
+        )}
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmLabel={t("common.delete")}
