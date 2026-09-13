@@ -467,7 +467,7 @@ test("excludes legacy extracted text after a deleted-version rollback", async ()
   ).toBe(false);
   expect(versionsFindManyMock).toHaveBeenCalledWith(
     expect.objectContaining({
-      orderBy: { versionNumber: "desc", id: "desc" },
+      orderBy: { versionNumber: "desc" },
     }),
   );
 });

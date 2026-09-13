@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -36,6 +36,21 @@ export const createCursorPage = <T>({
         : null,
   };
 };
+
+/** Walk cursor pages sequentially, retaining only the current page. */
+export async function* iterateCursorPages<T>(
+  readPage: (cursor: string | null) => Promise<Page<T>>,
+): AsyncGenerator<T[]> {
+  let cursor: string | null = null;
+  do {
+    const page = await readPage(cursor);
+    if (page.nextCursor !== null && page.nextCursor === cursor) {
+      panic("Cursor page did not advance");
+    }
+    yield page.items;
+    cursor = page.nextCursor;
+  } while (cursor !== null);
+}
 
 export const encodePaginationCursor = (
   parts: readonly CursorPrimitive[],

@@ -16,6 +16,8 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
+import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
@@ -200,19 +202,27 @@ const buildSearchDocument = async (
   const workspace = entity.workspace ?? panic("Entity has no workspace");
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
-  const versions = await database.query.entityVersions.findMany({
-    where: {
-      entityId: { eq: entityId },
-      workspaceId: { eq: entity.workspaceId },
-    },
-    columns: { deletedAt: true, id: true, stamp: true },
-    // Read this one entity's full history: a window would permanently hide
-    // references printed on older live versions. Include tombstones so a
-    // deleted newer version keeps legacy text without provenance from being
-    // attributed to a promoted old version.
-    orderBy: { versionNumber: "desc", id: "desc" },
+  // Page through every version: truncation would hide old printed references.
+  const versionPages = iterateCursorPages(async (cursor) => {
+    const rows = await database.query.entityVersions.findMany({
+      where: {
+        entityId: { eq: entityId },
+        workspaceId: { eq: entity.workspaceId },
+        versionNumber: cursor === null ? undefined : { lt: Number(cursor) },
+      },
+      // Include tombstones: a deleted newer version must prevent legacy text
+      // from being attributed to a promoted older version.
+      columns: { deletedAt: true, id: true, stamp: true, versionNumber: true },
+      orderBy: { versionNumber: "desc" },
+      limit: LIMITS.versionsPageSizeDefault + 1,
+    });
+    return createCursorPage({
+      rows,
+      limit: LIMITS.versionsPageSizeDefault,
+      cursorForItem: (row) => String(row.versionNumber),
+    });
   });
-  const latestVersion = versions.at(0);
+  let latestVersionId: SafeId<"entityVersion"> | undefined;
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -248,14 +258,16 @@ const buildSearchDocument = async (
   // excluded, so a deleted version's reference stops resolving here the same
   // way it stops resolving everywhere else.
   const stampTexts = new Set<string>();
-  for (const { deletedAt, stamp } of versions) {
-    if (deletedAt || !stamp) {
-      continue;
+  for await (const versions of versionPages) {
+    latestVersionId ??= versions.at(0)?.id;
+    for (const { deletedAt, stamp } of versions) {
+      if (deletedAt || !stamp) {
+        continue;
+      }
+      // PostgreSQL parses a whole stamp as one token, so index its base too.
+      stampTexts.add(stamp);
+      stampTexts.add(documentReferenceBase(stamp));
     }
-    // PostgreSQL's parser reads a whole stamp as one `file` token, so the
-    // version-less form a reader normally types has to be its own token.
-    stampTexts.add(stamp);
-    stampTexts.add(documentReferenceBase(stamp));
   }
   if (stampTexts.size > 0) {
     fieldTexts.push([...stampTexts].join(" "));
@@ -269,7 +281,7 @@ const buildSearchDocument = async (
   const extractedContentRow = entity.extractedContent;
   const currentExtractedContent = selectCurrentExtractedContent({
     extracted: extractedContentRow,
-    allowLegacy: latestVersion?.id === version.id,
+    allowLegacy: latestVersionId === version.id,
     currentVersionCreatedAt: version.createdAt,
     currentVersionId: version.id,
     fields: version.fields,

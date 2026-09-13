@@ -153,9 +153,16 @@ describe("document stamp allocation across a matter reference", () => {
     await setReference(matterA, "HANDOVER-RETIRED/2026");
     const matterB = await createMatter(handoverReference);
 
-    await expect(allocate(matterB, 2)).rejects.toThrow(
-      "Document stamp reference belongs to another workspace",
-    );
+    const attempted = await Result.tryPromise({
+      try: async () => await allocate(matterB, 2),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toMatchObject({
+        message: "Document stamp reference belongs to another workspace",
+      });
+    }
     const [ledger] = await testDb
       .select({
         workspaceId: documentReferenceCounters.workspaceId,
@@ -183,9 +190,16 @@ describe("document stamp allocation across a matter reference", () => {
     // Rejected borrowing must leave the original owner and counter intact.
     await setReference(matter, interim);
     await setReference(other, original);
-    await expect(allocate(other, 2)).rejects.toThrow(
-      "Document stamp reference belongs to another workspace",
-    );
+    const attempted = await Result.tryPromise({
+      try: async () => await allocate(other, 2),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toMatchObject({
+        message: "Document stamp reference belongs to another workspace",
+      });
+    }
     await setReference(other, borrower);
     await setReference(matter, original);
     const after = await allocate(matter, 1);
@@ -208,9 +222,16 @@ describe("document stamp allocation across a matter reference", () => {
     const blockA = await allocate(matterA, 2);
     await setReference(matterA, "SHARED-RETIRED/2026");
     await setReference(matterB, shared);
-    await expect(allocate(matterB, 2)).rejects.toThrow(
-      "Document stamp reference belongs to another workspace",
-    );
+    const attempted = await Result.tryPromise({
+      try: async () => await allocate(matterB, 2),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toMatchObject({
+        message: "Document stamp reference belongs to another workspace",
+      });
+    }
     expect(blockA.map(({ docSequence }) => docSequence)).toEqual([1, 2]);
   });
 
