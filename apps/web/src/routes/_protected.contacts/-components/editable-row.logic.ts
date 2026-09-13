@@ -24,7 +24,9 @@ export const EDITABLE_FIELD_POLICY = {
 } as const satisfies Record<EditableField, EditableFieldPolicy>;
 
 type NumericEditableField = {
-  [Field in EditableField]: (typeof EDITABLE_FIELD_POLICY)[Field]["valueKind"] extends "nonNegativeInteger"
+  [
+    Field in EditableField
+  ]: (typeof EDITABLE_FIELD_POLICY)[Field]["valueKind"] extends "nonNegativeInteger"
     ? Field
     : never;
 }[EditableField];

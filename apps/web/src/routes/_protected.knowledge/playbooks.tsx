@@ -8,11 +8,17 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
-import { knowledgeKeys, playbooksOptions } from "@/lib/knowledge/queries";
+import {
+  knowledgeKeys,
+  playbooksOptions,
+  recentPlaybooksOptions,
+} from "@/lib/knowledge/queries";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { PlaybookEditor } from "@/routes/_protected.knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/_protected.knowledge/-components/playbook-list";
 
@@ -23,6 +29,28 @@ type View = { kind: "list" } | { kind: "editor"; playbookId: string | null };
 // ── Route ────────────────────────────────────────────
 
 export const Route = createFileRoute("/_protected/knowledge/playbooks")({
+  loader: ({ context }) => {
+    const organizationId = context.user.activeOrganizationId;
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+
+    detached(
+      Promise.all([
+        prefetchRouteQuery(
+          context.queryClient,
+          playbooksOptions(organizationId),
+          onPrefetchError,
+        ),
+        prefetchRouteQuery(
+          context.queryClient,
+          recentPlaybooksOptions(organizationId),
+          onPrefetchError,
+        ),
+      ]),
+      "knowledge-playbooks.prefetch",
+    );
+  },
   component: RouteComponent,
 });
 

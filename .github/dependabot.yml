@@ -68,6 +68,21 @@ updates:
       - "jan-kubica"
 
   - package-ecosystem: "docker"
+    directory: "/packages/agent-engine/docker"
+    schedule:
+      interval: "daily"
+      time: "07:00"
+      timezone: "Europe/Prague"
+    cooldown:
+      default-days: 5
+    labels:
+      - "📦 dependencies"
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "jan-kubica"
+
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "daily"

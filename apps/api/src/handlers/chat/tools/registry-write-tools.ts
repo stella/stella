@@ -41,7 +41,9 @@ import {
  * so it drops out of this union without a hardcoded exclusion.
  */
 export type ProjectedWriteToolName = {
-  [K in RegistryWriteToolName]: (typeof WRITE_TOOL_REF_FIELD_MAP)[K]["chatProjectable"] extends true
+  [
+    K in RegistryWriteToolName
+  ]: (typeof WRITE_TOOL_REF_FIELD_MAP)[K]["chatProjectable"] extends true
     ? K
     : never;
 }[RegistryWriteToolName];

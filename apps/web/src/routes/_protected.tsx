@@ -97,8 +97,6 @@ import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 
-const MEMORY_ROUTE_PATH = "/settings/account/memory";
-
 const LazyInspectorPanel = lazy(
   async () =>
     await import("@/components/inspector/inspector-panel").then((m) => ({
@@ -178,15 +176,8 @@ export const Route = createFileRoute("/_protected")({
 
     const activeOrganizationId = authContext.session.activeOrganizationId;
 
-    // These shell queries only gate optional affordances. AI config stays
-    // non-blocking. The role cache MUST be settled before chrome that reads it
-    // via a non-suspense useQuery mounts (app-sidebar, inspector): a cold-cache
-    // role fetch resolving mid-mount triggers React's "state update on a
-    // not-yet-mounted component" warning, which the route-smoke e2e treats as a
-    // failure. We therefore settle the role before chrome mounts: normally in
-    // this parent, or in the memory child while it primes that route's panel
-    // data. The prefetch is non-throwing, so a role-fetch failure resolves it
-    // rather than stalling or taking down the shell.
+    // Start optional shell data immediately. The loader settles the role before
+    // chrome mounts, while child loaders fetch their independent data in parallel.
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
@@ -210,19 +201,6 @@ export const Route = createFileRoute("/_protected")({
         "protected-layout.notifications-prefetch",
       );
     }
-    const rolePrefetch = prefetchRouteQuery(
-      context.queryClient,
-      roleOptions,
-      onPrefetchError,
-    );
-    if (location.pathname === MEMORY_ROUTE_PATH) {
-      // The child settles this same in-flight query together with its panel
-      // data before chrome can mount, keeping all three requests in one wave.
-      detached(rolePrefetch, "protected-layout.role-prefetch");
-    } else {
-      await rolePrefetch;
-    }
-
     // Seed the pinned-matters store from localStorage before the
     // sidebar renders. The store's `init` is idempotent (skips when
     // the same userId is already loaded), so re-runs on navigation
@@ -242,6 +220,10 @@ export const Route = createFileRoute("/_protected")({
       },
     };
   },
+  loader: async ({ context }) =>
+    await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
+      getAnalytics().captureError(error);
+    }),
   component: ProtectedComponent,
   // This subtree is private and client-only. Rendering a loading
   // shell in SSR gives no SEO value and previously tripped React's

@@ -38,11 +38,13 @@ type InferSchemaOutput<TSchema> = TSchema extends StandardTypedV1
   : unknown;
 
 export type ChatUIToolsFor<TTools extends ChatToolMap> = {
-  [TName in keyof TTools & string as DefinedChatTool<
-    TTools[TName]
-  > extends never
-    ? never
-    : TName]: {
+  [
+    TName in keyof TTools & string as DefinedChatTool<
+      TTools[TName]
+    > extends never
+      ? never
+      : TName
+  ]: {
     input: InferSchemaInput<InputSchemaOf<DefinedChatTool<TTools[TName]>>>;
     output: InferSchemaOutput<OutputSchemaOf<DefinedChatTool<TTools[TName]>>>;
   };

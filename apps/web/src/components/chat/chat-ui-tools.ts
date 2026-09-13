@@ -127,9 +127,9 @@ export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 // reclassification (e.g. a tool moving off `public_official`) breaks
 // typecheck here rather than silently keeping stale frontend behavior.
 type ToolNameWithPolicyKind<K extends string> = {
-  [Name in keyof BuiltInChatToolPolicyKindByName]: BuiltInChatToolPolicyKindByName[Name] extends K
-    ? Name
-    : never;
+  [
+    Name in keyof BuiltInChatToolPolicyKindByName
+  ]: BuiltInChatToolPolicyKindByName[Name] extends K ? Name : never;
 }[keyof BuiltInChatToolPolicyKindByName];
 type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,

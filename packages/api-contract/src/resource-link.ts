@@ -118,7 +118,9 @@ export type ChatResourceHref =
   `${(typeof CHAT_RESOURCE_HREF_PREFIX)[keyof typeof CHAT_RESOURCE_HREF_PREFIX]}${string}`;
 
 type ChatMentionableResourceType = {
-  [TType in ResourceType]: (typeof CHAT_RESOURCE_LINK_DISPOSITION)[TType] extends {
+  [
+    TType in ResourceType
+  ]: (typeof CHAT_RESOURCE_LINK_DISPOSITION)[TType] extends {
     mention: "selectable";
   }
     ? TType

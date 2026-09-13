@@ -14,6 +14,8 @@ import type {
   FolioAgentToolName,
 } from "@stll/folio-agents";
 
+import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
+
 /**
  * Client-executed document tools backed by `@stll/folio-agents`'
  * provider-neutral tool catalog. All of these run against the live DOCX
@@ -76,6 +78,13 @@ export const requireFolioToolDefinition = (
   );
 };
 
+export const providerSafeFolioInputSchema = ({
+  inputSchema,
+}: FolioAgentToolDefinition) =>
+  projectToProviderSafeJsonSchema(inputSchema, {
+    nullUnionStrategy: "json-schema",
+  }).schema;
+
 /** A client-executed folio-agents doc tool the surface auto-runs (no per-call approval). */
 const autoRunDocTool = (
   definitions: readonly FolioAgentToolDefinition[],
@@ -85,7 +94,7 @@ const autoRunDocTool = (
   return toolDefinition({
     name: definition.name,
     description: definition.description,
-    inputSchema: definition.inputSchema,
+    inputSchema: providerSafeFolioInputSchema(definition),
   });
 };
 
@@ -98,7 +107,7 @@ const approvalDocTool = (
   return toolDefinition({
     name: definition.name,
     description: definition.description,
-    inputSchema: definition.inputSchema,
+    inputSchema: providerSafeFolioInputSchema(definition),
     needsApproval: true,
   });
 };
@@ -106,10 +115,9 @@ const approvalDocTool = (
 /**
  * Build the client-executed folio-agents read and comment tools from
  * `getFolioToolDefinitions()`. Descriptions and JSON-Schema input schemas
- * come straight from `@stll/folio-agents` (raw JSON Schema; no valibot
- * wrapping, no manual provider-safe projection: both are handled generically
- * downstream, the same way `external-mcp-tools-normalization.ts` already
- * proves raw JSON Schema tool definitions work end to end).
+ * come from `@stll/folio-agents` as raw JSON Schema. Project them through the
+ * shared provider-safe boundary before registration; provider-specific null
+ * handling is applied again when the final model request is assembled.
  *
  * Client-executed (no `.server()`). Read tools carry no `needsApproval` and
  * are classified `CHAT_TOOL_POLICY_KIND.internal`; the comment mutation

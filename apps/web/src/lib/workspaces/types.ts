@@ -92,7 +92,9 @@ const MATTERS_COLUMN_FILTERABILITY = {
 } as const satisfies Record<MattersColumnId, "filterable" | "not-filterable">;
 
 export type FilterableColumnId = {
-  [TColumnId in MattersColumnId]: (typeof MATTERS_COLUMN_FILTERABILITY)[TColumnId] extends "filterable"
+  [
+    TColumnId in MattersColumnId
+  ]: (typeof MATTERS_COLUMN_FILTERABILITY)[TColumnId] extends "filterable"
     ? TColumnId
     : never;
 }[MattersColumnId];

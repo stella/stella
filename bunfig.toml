@@ -10,34 +10,9 @@ publicHoistPattern = ["*"]
 # less than 5 days ago to mitigate supply chain attacks.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  # Temporary third-party exceptions must carry the exact instant at which
-  # the normal five-day quarantine admits the currently pinned release.
-  # TanStack's paired SSR releases stream query arrays, avoiding an undefined
-  # whole-state hydration path with Query 5.102.5. Keep the pair coherent.
-  # @silurus/ooxml 0.82.1 adds host-controlled XLSX viewer chrome colors.
-  # Remove this exception once the normal quarantine admits it.
-  # @vscode/markdown-editor ships near-daily pre-release builds; the hybrid
-  # markdown editor pins the current one. Remove this exception once the normal
-  # quarantine admits it.
-  # Keep Astro's framework and Markdown packages on one patch line while
-  # verifying their Vite 8.2/Rolldown 1.2 compatibility. Remove these
-  # exceptions once the normal quarantine admits them.
-  # bun-types 1.4.2 keeps the compiler contract aligned with Bun 1.4.2.
-  # Remove this exception once the normal quarantine admits it.
-  # TanStack AI 0.48.0 contains the upstream fixes that replace Stella's local
-  # package patches. Keep the release family coherent across direct and
-  # transitive packages; remove these exceptions after the normal quarantine.
-  # anydoc 0.2.3 adds in-house Excel parsing while retaining the bounded PDF
-  # parser. Keep every napi binding in the same temporary exception so Bun
-  # cannot silently omit the native binary.
   # First-party @stll packages are on public npm (open source). They share a
   # release cadence and would otherwise be blocked on every publish cycle.
   # Permanent exclusions record their original introduction for auditability.
-  # @vitejs/plugin-react 6.1.0 is required for the Oxc React Compiler Vite
-  # integration. Remove this exception once the normal quarantine admits it.
-  # oxc-transform-react 0.145.0 replaces the Babel React Compiler transform.
-  # Keep every napi binding in the same temporary exception: Bun otherwise
-  # skips quarantined optional bindings and leaves the parent unusable.
   # Oxlint 1.82 and Ultracite 7.11.1 add branch-wise loop-condition checking.
   # Keep the plugin SDK and every native binding with the pinned release;
   # quarantined optional bindings otherwise leave the executable unavailable.

@@ -77,7 +77,9 @@ export const MCP_RESOURCE_SERIALIZATION_DISPOSITION = {
 };
 
 type AuthorizedCorpusMcpResourceType = {
-  [TType in ResourceType]: (typeof MCP_RESOURCE_SERIALIZATION_DISPOSITION)[TType]["type"] extends "authorized_corpus_resource_name"
+  [
+    TType in ResourceType
+  ]: (typeof MCP_RESOURCE_SERIALIZATION_DISPOSITION)[TType]["type"] extends "authorized_corpus_resource_name"
     ? TType
     : never;
 }[ResourceType];

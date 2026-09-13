@@ -85,7 +85,9 @@ export const DYNAMIC_TOOL_FAMILY_POLICIES = {
 
 /** Families whose tools serve a Stella contract; derived, never listed twice. */
 export type StellaOwnedDynamicToolNamespace = {
-  [TNamespace in DynamicToolNamespace]: (typeof DYNAMIC_TOOL_FAMILY_POLICIES)[TNamespace] extends {
+  [
+    TNamespace in DynamicToolNamespace
+  ]: (typeof DYNAMIC_TOOL_FAMILY_POLICIES)[TNamespace] extends {
     owner: "stella";
   }
     ? TNamespace

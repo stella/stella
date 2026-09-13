@@ -37,11 +37,14 @@ import {
   styleSetsOptions,
 } from "@/features/style-sets/style-set-queries";
 import { usePermissions } from "@/hooks/use-permissions";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -356,6 +359,21 @@ const StyleSetsPage = () => {
 };
 
 export const Route = createFileRoute("/_protected/knowledge/styles")({
+  loader: ({ context }) => {
+    const organizationId = context.user.activeOrganizationId;
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+
+    detached(
+      prefetchRouteQuery(
+        context.queryClient,
+        styleSetsOptions(organizationId),
+        onPrefetchError,
+      ),
+      "knowledge-styles.prefetch",
+    );
+  },
   component: StyleSetsPage,
 });
 

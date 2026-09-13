@@ -95,7 +95,9 @@ type RisListingPage = {
 };
 
 type DecisionDateAdapterKey = {
-  [TKey in AdapterKey]: (typeof ADAPTER_MANIFESTS)[TKey]["dateRange"]["type"] extends "decision-date"
+  [
+    TKey in AdapterKey
+  ]: (typeof ADAPTER_MANIFESTS)[TKey]["dateRange"]["type"] extends "decision-date"
     ? TKey
     : never;
 }[AdapterKey];

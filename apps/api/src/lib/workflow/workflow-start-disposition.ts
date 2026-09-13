@@ -42,7 +42,9 @@ const DISPOSITION_BY_STATUS = {
  * changes disposition leaves the response type with it.
  */
 type ReportedWorkflowStartStatus = {
-  [Status in WorkflowStartStatus]: (typeof DISPOSITION_BY_STATUS)[Status] extends typeof WORKFLOW_START_DISPOSITION.REPORT
+  [
+    Status in WorkflowStartStatus
+  ]: (typeof DISPOSITION_BY_STATUS)[Status] extends typeof WORKFLOW_START_DISPOSITION.REPORT
     ? Status
     : never;
 }[WorkflowStartStatus];

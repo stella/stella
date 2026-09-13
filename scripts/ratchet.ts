@@ -93,41 +93,21 @@ const isExcludedFromResultConventionMetrics = (file: string): boolean =>
   isResultConventionExcludedFile(file);
 
 // --- Counters ---------------------------------------------------------------
-// All counters take raw file text and return a per-file occurrence count. They
-// are line-oriented so cheap comment/import filtering can drop obvious noise.
+// All counters take raw file text and return a per-file occurrence count. Most
+// are line-oriented; syntax-sensitive counters use the TypeScript tree when a
+// lexical scan cannot distinguish type syntax from value expressions.
 
 // Lines that are pure comments (JSDoc `*`, `//`, `/* ... */` openers).
 const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/u;
 const LINE_COMMENT_TAIL = /\/\/.*/u;
-// `as unknown as T` is one assertion, not two: collapse it before counting.
-const AS_UNKNOWN_AS = /\bas\s+unknown\s+as\b/gu;
-// A type assertion: ` as ` not immediately followed by `const`.
-const AS_CAST = /\bas\s+(?!const\b)/gu;
-const AS_UNKNOWN_PLACEHOLDER = "as  ";
-const MAPPED_TYPE_REMAP_PLACEHOLDER = "remap ";
-// Mapped types use `as` to remap keys (`[K in keyof T as F<K>]`). This is
-// type-level syntax, not a value assertion. The `in` before `as` distinguishes
-// it from computed array/index expressions that may contain a real assertion.
-const MAPPED_TYPE_KEY_REMAP =
-  /(?<mappedPrefix>\[[^\][]*\bin\b[^\][]*)\bas\s+/gu;
-
-// Module syntax carries alias `as` (`import { x as y }`, `import * as ns`,
-// `export { x as y }`, `export * as ns`) that is NOT a type assertion. These
-// statements can span multiple lines, so exclude the whole statement, not just
-// the opening line.
-const MODULE_STMT_OPEN =
-  /^\s*(?:import\b|export\s+(?:type\s+)?\{|export\s+\*)/u;
-const MODULE_STMT_TERMINATOR = /\bfrom\b|\};?\s*$|;\s*$/u;
-
 // --- String/template literal stripping --------------------------------------
 // A regex counter scanning raw line text cannot tell "as" the type-assertion
 // keyword from "as" the English word sitting inside a string, and a stray `//`
 // inside a string (e.g. a URL) must not be mistaken for a comment tail. Every
-// counter below first blanks string/template literal contents so it only ever
-// scans code, keeping with the file's "dumb, deterministic, line-based — no
-// AST" design: this is still a single char-by-char pass per line, carrying
-// only the minimal state needed to survive a template literal that spans
-// multiple lines.
+// lexical counter below first blanks string/template literal contents so it
+// only ever scans code. This is still a single char-by-char pass per line,
+// carrying only the minimal state needed to survive a template literal that
+// spans multiple lines.
 //
 // Trade-off: `${...}` interpolation inside a template literal is NOT parsed
 // specially — the whole template span up to the next unescaped backtick is
@@ -263,42 +243,40 @@ const stripBlockComments = (
 };
 
 const countAsCasts = (content: string): number => {
+  const source = ts.createSourceFile(
+    "ratchet-source.tsx",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   let total = 0;
-  let inModuleStmt = false;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
 
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
+  const visit = (node: ts.Node): void => {
+    if (!ts.isAsExpression(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const isConstAssertion =
+      ts.isTypeReferenceNode(node.type) &&
+      ts.isIdentifier(node.type.typeName) &&
+      node.type.typeName.text === "const";
+    if (isConstAssertion) {
+      ts.forEachChild(node.expression, visit);
+      return;
+    }
+    total += 1;
+    if (
+      ts.isAsExpression(node.expression) &&
+      node.expression.type.kind === ts.SyntaxKind.UnknownKeyword
+    ) {
+      ts.forEachChild(node.expression.expression, visit);
+      return;
+    }
+    ts.forEachChild(node.expression, visit);
+  };
 
-    if (inModuleStmt) {
-      if (MODULE_STMT_TERMINATOR.test(code)) {
-        inModuleStmt = false;
-      }
-      continue;
-    }
-    if (COMMENT_LINE.test(code)) {
-      continue;
-    }
-    if (MODULE_STMT_OPEN.test(code)) {
-      if (!MODULE_STMT_TERMINATOR.test(code)) {
-        inModuleStmt = true;
-      }
-      continue;
-    }
-    const scanned = code
-      .replace(AS_UNKNOWN_AS, () => AS_UNKNOWN_PLACEHOLDER)
-      .replace(
-        MAPPED_TYPE_KEY_REMAP,
-        (_match, mappedPrefix: string) =>
-          `${mappedPrefix}${MAPPED_TYPE_REMAP_PLACEHOLDER}`,
-      );
-    total += (scanned.match(AS_CAST) ?? []).length;
-  }
+  visit(source);
   return total;
 };
 
@@ -2572,6 +2550,14 @@ const AS_CAST_FIXTURE_LINES = [
   "second line: also as filler",
   "end` as Widget;",
   `type Remapped<T> = { [K in keyof T as \`get\${K & string}\`]: T[K] };`,
+  "type MultilineRemapped<T> = {",
+  "  [",
+  "    K in keyof T as K extends string ? K : never",
+  "  ]: T[K];",
+  "};",
+  "/*",
+  " * A block comment with `code` described as prose.",
+  " */",
 ];
 const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // Expected as-casts: `a`(1), `c` collapsed(1), `d`(1), `real`'s two casts(2),
@@ -2580,8 +2566,8 @@ const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // `wide as narrow` / `other as thing` continuation lines), `as const`, the
 // pure-comment line, all three string-literal false positives (double/single/
 // template quoted), the escaped-quote string, the "as" text inside the
-// multi-line template body, and the "//" inside the url string are all
-// excluded.
+// multi-line template body, both single- and multi-line mapped-type remaps,
+// the block comment, and the "//" inside the url string are all excluded.
 const EXPECTED_AS_CASTS = 7;
 
 const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
