@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { Loader2Icon, SquareMinusIcon } from "lucide-react";
+import { SquareMinusIcon } from "lucide-react";
 import { Temporal } from "temporal-polyfill/full";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
@@ -256,27 +256,35 @@ const PendingFieldValue = ({
 
   if (variant === "table") {
     return (
-      <>
-        <Loader2Icon
-          aria-hidden="true"
-          className="text-muted-foreground absolute end-1 top-1 z-20 size-3 shrink-0 animate-spin"
-          strokeWidth={2.25}
-        />
+      <div
+        aria-busy="true"
+        aria-label={t("workspaces.fields.calculating")}
+        className="flex min-w-0 flex-col gap-1"
+        role="status"
+      >
         {hasPreview ? (
-          <BidiText as="div" className="line-clamp-2 min-w-0">
-            {trimmedPreview}
-          </BidiText>
+          <>
+            <BidiText as="span" className="line-clamp-2 min-w-0">
+              {trimmedPreview}
+            </BidiText>
+            {/* The preview is the value so far; the trailing line is the rest
+                of it still arriving. */}
+            <Skeleton className="h-2.5 w-2/5" />
+          </>
         ) : (
           <PendingSkeleton contentType={contentType} />
         )}
-      </>
+      </div>
     );
   }
 
   return (
-    <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
+    <span
+      aria-busy="true"
+      className="text-muted-foreground text-sm"
+      role="status"
+    >
       {t("workspaces.fields.calculating")}
-      <span className="bg-muted-foreground size-2 animate-pulse rounded-full" />
     </span>
   );
 };

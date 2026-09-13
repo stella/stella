@@ -1473,7 +1473,6 @@ export default defineConfig({
                 reason:
                   "The loading toast type spins a lucide icon in the toast's icon slot; it moves to `Loader` with the button port.",
               },
-              "packages/workspace-ui/src/field-value.tsx",
             ],
           },
         ],
