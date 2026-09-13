@@ -95,6 +95,21 @@ const staticStringValue = (value: unknown): string | null => {
   return null;
 };
 
+/** The `className` attribute when it carries a leading padding utility. */
+const leadingPaddedClassName = (element: unknown): AstNode | null => {
+  const className = attributeNamed(element, "className");
+  if (className === null) {
+    return null;
+  }
+  const classes = staticStringValue(className.value);
+  if (classes === null) {
+    return null;
+  }
+  return classes.split(/\s+/u).some((token) => LEADING_PADDING.test(token))
+    ? className
+    : null;
+};
+
 const childElements = (node: unknown): AstNode[] => {
   if (!isAstNode(node) || !Array.isArray(node.children)) {
     return [];
@@ -217,20 +232,12 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const className = attributeNamed(node, "className");
-            if (className !== null) {
-              const classes = staticStringValue(className.value);
-              if (
-                classes !== null &&
-                classes
-                  .split(/\s+/u)
-                  .some((token) => LEADING_PADDING.test(token))
-              ) {
-                context.report({
-                  node: className,
-                  messageId: "decoratedPadding",
-                });
-              }
+            const paddedClassName = leadingPaddedClassName(node);
+            if (paddedClassName !== null) {
+              context.report({
+                node: paddedClassName,
+                messageId: "decoratedPadding",
+              });
             }
 
             for (const icon of duplicatedIcons(node)) {
