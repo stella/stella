@@ -1,14 +1,14 @@
 // Data shapes for the JSON-Schema -> stricli route-map generator.
 //
-// This module is types only (spec 051 S5.1). The generator itself
-// (`generateRouteMap`), the annotation table (S1), and every domain command
-// are out of scope for this phase; see `src/generated/route-map.ts` for the
-// placeholder the real generator will replace.
+// Shared transport limits live beside the shapes they constrain.
 
 import type { McpCliToolScope } from "./generated/mcp-contract.js";
 
 /** A JSON Schema fragment, as emitted by the MCP tool registry's prop builders. */
 export type JsonSchema = Record<string, unknown>;
+
+/** Maximum finite transport deadline an API capability may project into the CLI. */
+export const MAX_REQUEST_TIMEOUT_MS = 600_000;
 
 /** The MCP scope strings a tool annotation can require (client-side precheck only). */
 export type ToolScope = McpCliToolScope;
@@ -142,6 +142,8 @@ export type CapabilityFlagSpec = FlagSpec & {
 export type CapabilityLeafSpec = {
   commandPath: readonly string[];
   capabilityId: string;
+  /** API-owned finite transport deadline for this generated capability command. */
+  requestTimeoutMs?: number;
   /**
    * The catalog entry's `description`: the single authored sentence about what
    * this capability does, sourced from the handler config. Used verbatim as the

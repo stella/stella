@@ -332,6 +332,8 @@ export type HandlerConfig = InputSchema &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
+    /** Finite API-owned transport deadline for a generated capability command. */
+    requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     mcp: McpExposure;
   };

@@ -44,10 +44,7 @@ import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
 import readExpenses from "@/api/handlers/expenses/list";
-import {
-  readEmailHtmlPreviewHandler,
-  readFileHandler,
-} from "@/api/handlers/files/get";
+import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
 import listLegalLists from "@/api/handlers/lists/list";
@@ -65,6 +62,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readFileHandler } from "@/api/lib/files/read-file";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -328,6 +326,7 @@ const isolationCases: IsolationCase[] = [
           documentId: testIds.entityB1,
         },
         body: {
+          filePropertyId: testIds.filePropertyB1,
           selection: {
             type: "versions",
             baseVersionId: testIds.entityVersionB1,
@@ -345,6 +344,7 @@ const isolationCases: IsolationCase[] = [
           documentId: testIds.entityB1,
         },
         body: {
+          filePropertyId: testIds.filePropertyB1,
           selection: {
             type: "versions",
             baseVersionId: testIds.entityVersionB1,

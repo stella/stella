@@ -201,6 +201,7 @@ describe("documents.compare capability contract", () => {
         input: {
           params: { matterId: MATTER_ID, documentId: DOCUMENT_ID },
           body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
             selection,
             mode: "strict",
             granularity: "word",

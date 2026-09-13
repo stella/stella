@@ -383,6 +383,51 @@ describe("createEntityVersionFromBuffer", () => {
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 
+  test("cleans the newly uploaded object and intent when a comparison save replays", async () => {
+    const comparisonVersionId = toSafeId<"entityVersion">("comparison_1");
+    const existingFieldId = toSafeId<"field">("existing_field_1");
+    writeFileVersionMock.mockResolvedValue({
+      status: "replayed",
+      entityVersionId: comparisonVersionId,
+      fieldId: existingFieldId,
+      filePropertyId: toSafeId<"property">("property_1"),
+      fileName: "existing-redline.docx",
+      versionNumber: 7,
+    });
+
+    const result = await createEntityVersionFromBuffer({
+      ...baseInput,
+      writePolicy: {
+        type: "append-derived-file-from-version",
+        comparisonVersionId,
+        expectedCurrentVersionId: toSafeId<"entityVersion">("current_1"),
+        sourceVersionId: toSafeId<"entityVersion">("source_1"),
+        filePropertyId: toSafeId<"property">("property_1"),
+      },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({
+        entityId: "entity_1",
+        entityVersionId: comparisonVersionId,
+        fieldId: existingFieldId,
+        fileName: "existing-redline.docx",
+        versionNumber: 7,
+      });
+    }
+    expect(requestedKeys("PUT")).toEqual([OBJECT_KEY]);
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
+    expect(intentStatuses).toEqual(["scanning", "rejected"]);
+    expect(requestNativeExtractionRunMock).not.toHaveBeenCalled();
+    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(pdfDerivativeMock).not.toHaveBeenCalled();
+    expect(thumbnailDerivativeMock).not.toHaveBeenCalled();
+    expect(diffStatsMock).not.toHaveBeenCalled();
+    expect(broadcastMock).not.toHaveBeenCalled();
+  });
+
   test("deletes the object when the transaction callback fails before commit", async () => {
     writeFileVersionMock.mockRejectedValue(new Error("db unavailable"));
 

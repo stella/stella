@@ -26,6 +26,7 @@ import type {
   RegistryToolListing,
   ToolAnnotation,
 } from "./route-types.js";
+import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
 
 const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
@@ -59,7 +60,12 @@ const cliAnnotationSchema = v.object({
   command: stringArraySchema,
   additionalScopes: v.optional(v.array(v.picklist(MCP_CLI_TOOL_SCOPES))),
   requestTimeoutMs: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(600_000)),
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_REQUEST_TIMEOUT_MS),
+    ),
   ),
   excluded: v.optional(v.literal(true)),
   scope: v.optional(v.picklist(MCP_CLI_TOOL_SCOPES)),

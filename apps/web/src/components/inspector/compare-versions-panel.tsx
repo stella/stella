@@ -85,22 +85,33 @@ type RequestComparisonOptions = {
 type CompareVersionsPanelProps = {
   currentFieldId: string;
   entityId: string;
+  filePropertyId: string;
   versions: readonly EntityVersion[];
   workspaceId: string;
 };
 
 const compareOutcomeOptions = ({
+  filePropertyId,
   entityId,
   workspaceId,
-}: Pick<CompareVersionsPanelProps, "entityId" | "workspaceId">) =>
+}: Pick<
+  CompareVersionsPanelProps,
+  "entityId" | "workspaceId" | "filePropertyId"
+>) =>
   queryOptions({
-    queryKey: ["document-compare-outcome", workspaceId, entityId] as const,
+    queryKey: [
+      "document-compare-outcome",
+      workspaceId,
+      entityId,
+      filePropertyId,
+    ] as const,
     queryFn: async () => await Promise.resolve<CompareOutcome | null>(null),
   });
 
 export const CompareVersionsPanel = ({
   currentFieldId,
   entityId,
+  filePropertyId,
   versions,
   workspaceId,
 }: CompareVersionsPanelProps) => {
@@ -111,7 +122,11 @@ export const CompareVersionsPanel = ({
   });
   const queryClient = useQueryClient();
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
-  const outcomeOptions = compareOutcomeOptions({ entityId, workspaceId });
+  const outcomeOptions = compareOutcomeOptions({
+    entityId,
+    workspaceId,
+    filePropertyId,
+  });
   const outcomeQuery = useQuery({
     ...outcomeOptions,
     enabled: false,
@@ -138,6 +153,8 @@ export const CompareVersionsPanel = ({
     versions: comparableVersions,
   });
   const outcome = outcomeQuery.data;
+  const isRequestPending =
+    requestState.status === "previewing" || requestState.status === "saving";
 
   const clearOutcome = () => {
     queryClient.removeQueries({
@@ -174,6 +191,7 @@ export const CompareVersionsPanel = ({
       fileName: file.fileName,
       mimeType: file.mimeType,
       pdfFileId: null,
+      propertyId: file.propertyId,
       workspaceId,
       facet: "preview",
     });
@@ -211,6 +229,7 @@ export const CompareVersionsPanel = ({
           .documents({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .document({ documentId: toSafeId<"entity">(entityId) })
           .compare.post({
+            filePropertyId: toSafeId<"property">(filePropertyId),
             selection: {
               type: "versions",
               baseVersionId: toSafeId<"entityVersion">(baseVersionId),
@@ -377,6 +396,7 @@ export const CompareVersionsPanel = ({
         <div className="space-y-3">
           <VersionSelect
             disabledId={selection.targetVersionId}
+            disabled={isRequestPending}
             id="compare-base-version"
             label={t("fileDetail.base")}
             selectedId={selection.baseVersionId}
@@ -387,6 +407,7 @@ export const CompareVersionsPanel = ({
           />
           <VersionSelect
             disabledId={selection.baseVersionId}
+            disabled={isRequestPending}
             id="compare-target-version"
             label={t("fileDetail.compareTo")}
             selectedId={selection.targetVersionId}
@@ -397,6 +418,7 @@ export const CompareVersionsPanel = ({
           />
           <div className="grid grid-cols-2 gap-2">
             <DispositionSelect
+              disabled={isRequestPending}
               id="compare-base-tracked-changes"
               label={`${t("fileDetail.base")} · ${t("docxReview.applyTracked")}`}
               value={baseTrackedChanges}
@@ -406,6 +428,7 @@ export const CompareVersionsPanel = ({
               }}
             />
             <DispositionSelect
+              disabled={isRequestPending}
               id="compare-target-tracked-changes"
               label={`${t("fileDetail.compareTo")} · ${t("docxReview.applyTracked")}`}
               value={targetTrackedChanges}
@@ -417,7 +440,7 @@ export const CompareVersionsPanel = ({
           </div>
           <Button
             className="w-full"
-            disabled={requestState.status === "previewing"}
+            disabled={isRequestPending}
             onClick={() => {
               detached(previewComparison(), "compare-versions-panel.preview");
             }}
@@ -463,6 +486,7 @@ export const CompareVersionsPanel = ({
 };
 
 type VersionSelectProps = {
+  disabled: boolean;
   disabledId: string;
   id: string;
   label: string;
@@ -476,6 +500,7 @@ type VersionSelectProps = {
 };
 
 const VersionSelect = ({
+  disabled,
   disabledId,
   id,
   label,
@@ -486,6 +511,7 @@ const VersionSelect = ({
   <Field>
     <FieldLabel htmlFor={id}>{label}</FieldLabel>
     <Select
+      disabled={disabled}
       onValueChange={(value) => {
         if (typeof value === "string") {
           onChange(value);
@@ -516,6 +542,7 @@ const VersionSelect = ({
 );
 
 type DispositionSelectProps = {
+  disabled: boolean;
   id: string;
   label: string;
   onChange: (value: TrackedChangeDisposition) => void;
@@ -525,6 +552,7 @@ type DispositionSelectProps = {
 const TRACKED_CHANGE_DISPOSITIONS = ["keep", "accept", "reject"] as const;
 
 const DispositionSelect = ({
+  disabled,
   id,
   label,
   onChange,
@@ -535,6 +563,7 @@ const DispositionSelect = ({
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Select
+        disabled={disabled}
         onValueChange={(next) => {
           if (
             next !== null &&
@@ -707,7 +736,11 @@ const CompareResultView = ({
               : t("fileDetail.saveComparison")}
           </Button>
         )}
-        <Button onClick={onCompareAnother} variant="outline">
+        <Button
+          disabled={isSaving}
+          onClick={onCompareAnother}
+          variant="outline"
+        >
           {t("fileDetail.compareAnother")}
         </Button>
       </div>

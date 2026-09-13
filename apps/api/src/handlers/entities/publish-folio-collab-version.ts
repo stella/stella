@@ -597,6 +597,7 @@ const publishFolioCollabVersion = createSafeHandler(
           } as const;
         case "current-version-changed":
         case "current-version-not-found":
+        case "source-version-not-found":
         case "missing-file-field":
         case "target-file-not-found":
           return { status: "base-drift" } as const;
@@ -607,6 +608,10 @@ const publishFolioCollabVersion = createSafeHandler(
         case "edit-session-open":
         case "workspace-not-active":
           return { status: "unavailable" } as const;
+        case "replayed":
+          return panic(
+            "Collaboration publication cannot replay a derived comparison",
+          );
         default: {
           versionWrite satisfies never;
           return panic(`Unhandled version write: ${String(versionWrite)}`);

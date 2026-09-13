@@ -11120,8 +11120,9 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "documents", "compare"],
                 capabilityId: "documents.compare",
+                requestTimeoutMs: 600000,
                 description:
-                  "Create tracked-changes DOCX redlines between stored versions of one document in a matter. Select an explicit base and up to 8 targets, or compare one target with its immediate predecessor. Strict mode refuses an unverified redline; best-effort returns it with explicit verification failures. Output preview compares without writing; output version explicitly saves each successful redline as a derived document version without replacing the current version. The operation may partially succeed across multiple targets, so inspect every result status. Folio-exact review preserves both document endpoints; compatibility reports when pending history requires Folio and may be discarded by Word on save. Created results include an openUrl and a temporary DOCX download URL. Show these links to the user; if download delivery is unavailable, the redline is already saved: open it in Stella instead of creating it again.",
+                  "Create tracked-changes DOCX redlines between stored versions of one document in a matter. Select an explicit base and up to 8 targets, or compare one target with its immediate predecessor. Strict mode refuses an unverified redline; best-effort returns it with explicit verification failures. Output preview compares without writing; output version explicitly saves each successful redline as a derived document version without replacing the current version. The operation may partially succeed across multiple targets, so inspect every result status. Saving the same comparison inputs again returns the same derived version; retrying a lost response does not create a duplicate. Folio-exact review preserves both document endpoints; compatibility reports when pending history requires Folio and may be discarded by Word on save. Created results include an openUrl and a temporary DOCX download URL. Show these links to the user; if download delivery is unavailable, the redline is already saved: open it in stella instead of creating it again.",
                 access: "write",
                 flags: [
                   {
@@ -11141,6 +11142,15 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                     part: "params",
                     partPath: "documentId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--file-property-id",
+                    prop: "filePropertyId",
+                    required: true,
+                    part: "body",
+                    partPath: "filePropertyId",
                   },
                 ],
                 inputOnly: [
@@ -11162,12 +11172,20 @@ export const generatedRouteMap: RouteNode = {
                       additionalProperties: false,
                       type: "object",
                       required: [
+                        "filePropertyId",
                         "selection",
                         "baseTrackedChanges",
                         "targetTrackedChanges",
                         "output",
                       ],
                       properties: {
+                        filePropertyId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
                         selection: {
                           anyOf: [
                             {
@@ -14064,6 +14082,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "query",
                     partPath: "before",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--file-property-id",
+                    prop: "filePropertyId",
+                    required: false,
+                    part: "query",
+                    partPath: "filePropertyId",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -14097,6 +14124,13 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         before: {
+                          type: "string",
+                        },
+                        filePropertyId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },

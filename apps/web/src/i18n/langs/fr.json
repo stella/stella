@@ -1941,7 +1941,7 @@
     "compareRedlineUnavailable": "La comparaison a été enregistrée, mais son fichier n'a pas pu être ouvert. Actualisez l'historique des versions pour réessayer.",
     "compareRequestFailed": "Les versions n'ont pas pu être comparées.",
     "compareTo": "Comparer à",
-    "compareUnsupported": "{count, plural, one {# pièce non comparée} other {# pièces non comparées}}",
+    "compareUnsupported": "{count, plural, one {# partie non comparée} other {# parties non comparées}}",
     "compareUnsupportedDescription": "Ces parties du document n'ont pas été comparées :",
     "compareUnsupportedReasons": {
       "missingInBase": "La partie du document existe uniquement dans la cible",

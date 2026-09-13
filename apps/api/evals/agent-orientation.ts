@@ -81,6 +81,7 @@ import type {
   RegistryToolListing,
   RouteNode,
 } from "../../../packages/cli/src/route-types";
+import { sameCliFlagValue } from "./lib/cli-flag-score";
 import { runEvalModelTurn } from "./lib/model-turn";
 
 // A bare id resolves through whichever configured provider rates it (GPT
@@ -663,7 +664,7 @@ const TASKS: readonly Task[] = [
     id: "compare-document-versions",
     request:
       "Use documents.compare to create a strict word-level tracked-changes comparison in matter " +
-      "11111111-1111-4111-8111-111111111111 for document " +
+      "11111111-1111-4111-8111-111111111111 for file property 55555555-5555-4555-8555-555555555555 on document " +
       "22222222-2222-4222-8222-222222222222, comparing target version " +
       "44444444-4444-4444-8444-444444444444 with its immediate predecessor. " +
       "Keep tracked changes in the base, accept tracked changes in the target, " +
@@ -679,6 +680,7 @@ const TASKS: readonly Task[] = [
             documentId: "22222222-2222-4222-8222-222222222222",
           },
           body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
             selection: {
               type: "previous",
               targetVersionId: "44444444-4444-4444-8444-444444444444",
@@ -713,6 +715,11 @@ const TASKS: readonly Task[] = [
           ["input", "body", "selection", "targetVersionId"],
           "44444444-4444-4444-8444-444444444444",
         ),
+        ...nestedField(
+          args,
+          ["input", "body", "filePropertyId"],
+          "55555555-5555-4555-8555-555555555555",
+        ),
         ...nestedField(args, ["input", "body", "mode"], "strict"),
         ...nestedField(args, ["input", "body", "granularity"], "word"),
         ...nestedField(args, ["input", "body", "baseTrackedChanges"], "keep"),
@@ -731,7 +738,7 @@ const TASKS: readonly Task[] = [
         "matter-id": "11111111-1111-4111-8111-111111111111",
         "document-id": "22222222-2222-4222-8222-222222222222",
         input:
-          '{"body":{"selection":{"type":"previous","targetVersionId":"44444444-4444-4444-8444-444444444444"},"mode":"strict","granularity":"word","baseTrackedChanges":"keep","targetTrackedChanges":"accept","output":{"type":"version"}}}',
+          '{"body":{"filePropertyId":"55555555-5555-4555-8555-555555555555","selection":{"type":"previous","targetVersionId":"44444444-4444-4444-8444-444444444444"},"mode":"strict","granularity":"word","baseTrackedChanges":"keep","targetTrackedChanges":"accept","output":{"type":"version"}}}',
       },
     },
   },
@@ -1436,7 +1443,13 @@ const scoreCliRun = ({
   }
   for (const [flagName, expectedValue] of Object.entries(expected.flags)) {
     const actual = resolveFlagValue(parsed, flagName);
-    if (actual !== expectedValue) {
+    if (
+      !sameCliFlagValue({
+        actual,
+        expected: expectedValue,
+        flagName,
+      })
+    ) {
       issues.push(
         `--${flagName}: expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actual)}`,
       );

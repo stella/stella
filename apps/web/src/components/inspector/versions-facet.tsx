@@ -41,12 +41,14 @@ type VersionsFacetProps = {
   workspaceId: string;
   entityId: string;
   currentFieldId: string;
+  currentFilePropertyId?: string | undefined;
 };
 
 export const VersionsFacet = ({
   workspaceId,
   entityId,
   currentFieldId,
+  currentFilePropertyId,
 }: VersionsFacetProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -54,7 +56,13 @@ export const VersionsFacet = ({
     select: (state) => state.location.pathname,
   });
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
-  const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
+  const { data } = useQuery(
+    entityVersionsOptions({
+      workspaceId,
+      entityId,
+      filePropertyId: currentFilePropertyId,
+    }),
+  );
 
   // Accumulated list seeded from the query's newest page and extended
   // by each older page. Re-seed whenever a fresh `data` object arrives:
@@ -111,7 +119,13 @@ export const VersionsFacet = ({
     setLoadOlderError(false);
 
     const result = await Result.tryPromise(
-      async () => await fetchOlderVersions({ workspaceId, entityId, before }),
+      async () =>
+        await fetchOlderVersions({
+          workspaceId,
+          entityId,
+          before,
+          filePropertyId: currentFilePropertyId,
+        }),
     );
 
     // Discard a response that resolved after the page was rehydrated (entity
@@ -155,7 +169,7 @@ export const VersionsFacet = ({
     });
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [entityId, t, workspaceId]);
+  }, [currentFilePropertyId, entityId, t, workspaceId]);
 
   // When the document viewer deep-links to a field from a version older than
   // the newest page (switch to an old version, then reload), the preview
@@ -232,9 +246,10 @@ export const VersionsFacet = ({
   };
 
   const canCompare =
+    currentFilePropertyId !== undefined &&
     accumulated.filter(({ file }) => file?.mimeType === DOCX_MIME).length >= 2;
 
-  if (view === "compare") {
+  if (view === "compare" && currentFilePropertyId !== undefined) {
     return (
       <div className="bg-background flex h-full min-h-0 flex-col">
         {shouldLoadDeepLinkedVersion && olderCursor !== null && (
@@ -254,6 +269,7 @@ export const VersionsFacet = ({
         <CompareVersionsPanel
           currentFieldId={currentFieldId}
           entityId={entityId}
+          filePropertyId={currentFilePropertyId}
           versions={accumulated}
           workspaceId={workspaceId}
         />

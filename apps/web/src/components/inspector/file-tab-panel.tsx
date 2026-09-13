@@ -1274,6 +1274,7 @@ export const FileTabPanel = ({
           {fullViewFacet === "versions" && (
             <VersionsFacet
               currentFieldId={tab.id}
+              currentFilePropertyId={filePropertyId}
               entityId={tab.entityId}
               workspaceId={tab.workspaceId}
             />
@@ -1403,6 +1404,7 @@ export const FileTabPanel = ({
           {sidepeekFacet === "versions" && (
             <VersionsFacet
               currentFieldId={tab.id}
+              currentFilePropertyId={filePropertyId}
               entityId={tab.entityId}
               workspaceId={tab.workspaceId}
             />

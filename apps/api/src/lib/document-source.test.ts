@@ -19,7 +19,7 @@ describe("documentSourceSchema", () => {
       granularity: "character",
       baseTrackedChanges: "reject",
       targetTrackedChanges: "accept",
-    };
+    } as const;
 
     expect(v.parse(documentSourceSchema, comparison)).toEqual(comparison);
     expect(

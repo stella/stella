@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/documents/compare";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { DocumentSource } from "@/api/lib/document-source";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -43,6 +44,12 @@ const redlineVersionId = toSafeId<"entityVersion">(
 );
 const propertyId = toSafeId<"property">("00000000-0000-4000-8000-000000000009");
 const fieldId = toSafeId<"field">("00000000-0000-4000-8000-000000000010");
+const secondaryPropertyId = toSafeId<"property">(
+  "00000000-0000-4000-8000-000000000012",
+);
+const secondaryFieldId = toSafeId<"field">(
+  "00000000-0000-4000-8000-000000000013",
+);
 
 const versionRow = (
   id: typeof baseVersionId,
@@ -102,8 +109,10 @@ type Dependencies = NonNullable<
 type HarnessOptions = {
   compareDocx?: Dependencies["compareDocx"];
   compareResults?: Result<CompareResult, CompareDocxError>[];
+  createdFieldId?: typeof fieldId;
   documentFound?: boolean;
   previous?: boolean;
+  predecessors?: { id: typeof baseVersionId; source: DocumentSource | null }[];
   readBuffers?: ReadonlyMap<string, ArrayBuffer>;
   rows?: ReturnType<typeof versionRow>[];
   timeoutLabel?: string;
@@ -113,14 +122,15 @@ type HarnessOptions = {
 const createHarness = ({
   compareDocx: realCompareDocx,
   compareResults = [Result.ok(verifiedComparison)],
+  createdFieldId = fieldId,
   documentFound = true,
   previous = false,
+  predecessors,
   readBuffers,
   rows = [baseRow, firstTargetRow],
   timeoutLabel,
   downloadFails = false,
 }: HarnessOptions = {}) => {
-  let previousRead = 0;
   const tx = {
     query: {
       entities: {
@@ -134,11 +144,15 @@ const createHarness = ({
             : null,
       },
       entityVersions: {
-        findMany: async () => rows,
-        findFirst: async () => {
-          const result = previousRead === 0 ? firstTargetRow : baseRow;
-          previousRead += 1;
-          return result;
+        findMany: async () => (previous && predecessors ? predecessors : rows),
+        findFirst: async ({
+          where,
+        }: {
+          where: { id?: { eq: typeof baseVersionId } };
+        }) => {
+          const selectedId =
+            where.id?.eq ?? predecessors?.at(0)?.id ?? baseVersionId;
+          return rows.find(({ id }) => id === selectedId);
         },
       },
     },
@@ -175,7 +189,7 @@ const createHarness = ({
       return Result.ok({
         entityId: documentId,
         entityVersionId,
-        fieldId,
+        fieldId: createdFieldId,
         fileName: "Agreement redline.docx",
         versionNumber: 4 + persistedIndex,
       });
@@ -235,6 +249,7 @@ const createHarness = ({
   const auditRecorder = mock(async () => {});
   const context = asTestRaw<Ctx>({
     body: {
+      filePropertyId: propertyId,
       selection: {
         type: previous ? "previous" : "versions",
         ...(previous
@@ -316,7 +331,71 @@ const bodyText = async (buffer: ArrayBuffer): Promise<string> => {
   return paragraphs.join("\n");
 };
 
+const copyToArrayBuffer = (buffer: ArrayBuffer | Uint8Array): ArrayBuffer => {
+  if (buffer instanceof ArrayBuffer) {
+    return buffer;
+  }
+  const copy = new ArrayBuffer(buffer.byteLength);
+  new Uint8Array(copy).set(buffer);
+  return copy;
+};
+
 describe("documents.compare", () => {
+  test("uses the requested file property for both source versions and the derived write", async () => {
+    const selectedRows = [baseRow, firstTargetRow].map((row) => ({
+      ...row,
+      fields: [
+        ...row.fields,
+        {
+          id: secondaryFieldId,
+          propertyId: secondaryPropertyId,
+          content: {
+            version: 1,
+            type: "file" as const,
+            id: "00000000-0000-4000-8000-000000000014",
+            fileName: `Exhibit v${String(row.versionNumber)}.docx`,
+            mimeType: DOCX_MIME_TYPE,
+            sizeBytes: 128,
+            encrypted: false,
+            sha256Hex: "b".repeat(64),
+            pdfFileId: null,
+          },
+        },
+      ],
+    }));
+    const harness = createHarness({
+      createdFieldId: secondaryFieldId,
+      rows: selectedRows,
+    });
+
+    const result = await harness.definition.handler({
+      ...harness.context,
+      body: { ...harness.context.body, filePropertyId: secondaryPropertyId },
+    });
+
+    expect(result).toMatchObject({
+      results: [
+        {
+          status: "created",
+          file: { fieldId: secondaryFieldId, propertyId: secondaryPropertyId },
+        },
+      ],
+    });
+    expect(
+      harness.readEntityVersionFileMock.mock.calls.map(
+        ([file]) => file.fileName,
+      ),
+    ).toEqual(["Exhibit v1.docx", "Exhibit v2.docx"]);
+    expect(
+      harness.createEntityVersionFromBufferMock.mock.calls.at(0)?.[0],
+    ).toMatchObject({
+      writePolicy: {
+        type: "append-derived-file-from-version",
+        filePropertyId: secondaryPropertyId,
+      },
+    });
+  });
+
   test.each([
     {
       direction: "forward",
@@ -357,11 +436,12 @@ describe("documents.compare", () => {
         throw new Error("comparison did not persist a redline buffer");
       }
 
-      const accepting = await FolioDocxReviewer.fromBuffer(persisted.buffer);
+      const redlineBuffer = copyToArrayBuffer(persisted.buffer);
+      const accepting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
       expect(accepting.acceptAll()).toBeGreaterThan(0);
       expect(await bodyText(await accepting.toBuffer())).toBe(targetText);
 
-      const rejecting = await FolioDocxReviewer.fromBuffer(persisted.buffer);
+      const rejecting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
       expect(rejecting.rejectAll()).toBeGreaterThan(0);
       expect(await bodyText(await rejecting.toBuffer())).toBe(baseText);
     },
@@ -381,6 +461,7 @@ describe("documents.compare", () => {
           redlineVersionId,
           file: {
             fieldId,
+            propertyId,
             fileName: "Agreement redline.docx",
             mimeType: DOCX_MIME_TYPE,
             versionNumber: 5,
@@ -432,6 +513,7 @@ describe("documents.compare", () => {
       writePolicy: {
         type: "append-derived-file-from-version",
         expectedCurrentVersionId: firstTargetId,
+        filePropertyId: propertyId,
         sourceVersionId: firstTargetId,
       },
     });
@@ -589,6 +671,57 @@ describe("documents.compare", () => {
         },
       ],
     });
+  });
+
+  test("previous skips a saved comparison between ordinary versions", async () => {
+    const derived = versionRow(
+      secondTargetId,
+      2,
+      new Date("2026-09-02T09:00:00Z"),
+    );
+    const target = { ...firstTargetRow, versionNumber: 3 };
+    const harness = createHarness({
+      previous: true,
+      rows: [baseRow, derived, target],
+      predecessors: [
+        {
+          id: derived.id,
+          source: {
+            kind: "comparison",
+            baseVersionId,
+            targetVersionId: firstTargetId,
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "keep",
+          },
+        },
+        { id: baseRow.id, source: null },
+      ],
+    });
+    const result = await harness.definition.handler(harness.context);
+    expect(result).toMatchObject({
+      results: [
+        { status: "created", baseVersionId, targetVersionId: firstTargetId },
+      ],
+    });
+    expect(
+      harness.readEntityVersionFileMock.mock.calls.map(
+        ([file]) => file.fileName,
+      ),
+    ).toEqual(["Agreement v1.docx", "Agreement v2.docx"]);
+  });
+
+  test("a persistence deadline does not start another save or request a download", async () => {
+    const harness = createHarness({
+      timeoutLabel: "documents.compare.persist",
+    });
+    const result = await harness.definition.handler(harness.context);
+    expect(result).toMatchObject({
+      results: [{ status: "failed", error: { code: "persistence_failed" } }],
+    });
+    expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 
   test("returns per-target outcomes and never writes a failed comparison", async () => {

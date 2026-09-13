@@ -92,7 +92,12 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
 
   test("projects only known fields and drops unknown keys from a valid entry", () => {
     const parsed = parseCapabilityCatalog([
-      validEntry({ id: "x", injected: "should-not-survive", nested: { a: 1 } }),
+      validEntry({
+        id: "x",
+        injected: "should-not-survive",
+        nested: { a: 1 },
+        requestTimeoutMs: 330_000,
+      }),
     ]);
     expect(parsed).not.toBeNull();
     const entry = parsed?.at(0);
@@ -104,9 +109,20 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
       "handlerKind",
       "id",
       "inputSchema",
+      "requestTimeoutMs",
       "scope",
       "transport",
     ]);
+    expect(entry?.requestTimeoutMs).toBe(330_000);
+  });
+
+  test("rejects an invalid capability transport deadline", () => {
+    expect(
+      parseCapabilityCatalog([validEntry({ requestTimeoutMs: 0 })]),
+    ).toBeNull();
+    expect(
+      parseCapabilityCatalog([validEntry({ requestTimeoutMs: 600_001 })]),
+    ).toBeNull();
   });
 
   test("rejects an entry with no inputSchema at all", () => {

@@ -39,8 +39,10 @@ export type FileVersionWritePolicy =
     }
   | {
       type: "append-derived-file-from-version";
+      comparisonVersionId: SafeId<"entityVersion">;
       expectedCurrentVersionId: SafeId<"entityVersion">;
       sourceVersionId: SafeId<"entityVersion">;
+      filePropertyId: SafeId<"property">;
     }
   | {
       type: "automatic-docx-edit";
@@ -55,6 +57,14 @@ export type FileVersionWritePolicy =
     };
 
 export type WriteFileVersionResult =
+  | {
+      status: "replayed";
+      entityVersionId: SafeId<"entityVersion">;
+      fieldId: SafeId<"field">;
+      filePropertyId: SafeId<"property">;
+      fileName: string;
+      versionNumber: number;
+    }
   | {
       status: "ok";
       entityVersionId: SafeId<"entityVersion">;
@@ -252,10 +262,13 @@ export const writeFileVersion = async ({
     }
   }
 
-  const targetsFileProperty =
+  const locksFileProperty =
     writePolicy.type === "automatic-docx-edit" ||
     writePolicy.type === "collaboration-room-publish";
-  const lockedWorkspace = targetsFileProperty
+  const targetsFileProperty =
+    locksFileProperty ||
+    writePolicy.type === "append-derived-file-from-version";
+  const lockedWorkspace = locksFileProperty
     ? await tx
         .select({ reference: workspaces.reference, status: workspaces.status })
         .from(workspaces)
@@ -264,7 +277,7 @@ export const writeFileVersion = async ({
         .for("update")
         .then((rows) => rows.at(0))
     : null;
-  if (targetsFileProperty && lockedWorkspace?.status !== "active") {
+  if (locksFileProperty && lockedWorkspace?.status !== "active") {
     return { status: "workspace-not-active" };
   }
 
@@ -291,6 +304,45 @@ export const writeFileVersion = async ({
   }
   if (lockedEntity.kind !== "document") {
     return { status: "missing-file-field" };
+  }
+
+  if (writePolicy.type === "append-derived-file-from-version") {
+    if (entityVersionId !== writePolicy.comparisonVersionId) {
+      panic("Derived comparison must use its deterministic version identity");
+    }
+    // The entity lock serializes creation and replay, including concurrent retries.
+    const existing = await tx.query.entityVersions.findFirst({
+      where: {
+        id: { eq: entityVersionId },
+        entityId: { eq: entityId },
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { id: true, versionNumber: true, deletedAt: true },
+      with: {
+        fields: {
+          where: { propertyId: { eq: writePolicy.filePropertyId } },
+          columns: { id: true, content: true },
+          limit: 1,
+        },
+      },
+    });
+    if (existing) {
+      const existingField = existing.fields.at(0);
+      if (
+        existing.deletedAt !== null ||
+        existingField?.content.type !== "file"
+      ) {
+        return { status: "target-file-not-found" };
+      }
+      return {
+        status: "replayed",
+        entityVersionId: existing.id,
+        fieldId: existingField.id,
+        filePropertyId: writePolicy.filePropertyId,
+        fileName: existingField.content.fileName,
+        versionNumber: existing.versionNumber,
+      };
+    }
   }
 
   const currentVersionId = lockedEntity.currentVersionId;
@@ -332,7 +384,8 @@ export const writeFileVersion = async ({
           (writePolicy.type !== "automatic-docx-edit" ||
             candidate.id === writePolicy.replacedFileFieldId) &&
           candidate.content.type === "file" &&
-          candidate.content.mimeType === DOCX_MIME_TYPE,
+          (writePolicy.type !== "append-derived-file-from-version" ||
+            candidate.content.mimeType === DOCX_MIME_TYPE),
       )
     : fieldSourceVersion.fields.find(
         (candidate) => candidate.content.type === "file",

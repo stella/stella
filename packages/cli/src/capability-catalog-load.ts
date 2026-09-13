@@ -12,6 +12,7 @@ import type {
   CapabilityCatalogEntry,
   CapabilityTransport,
 } from "./generate-capability-tree.js";
+import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
 
 const CATALOG_URL = new URL("../capability-catalog.json", import.meta.url);
 
@@ -40,6 +41,14 @@ const catalogEntrySchema = v.object({
   destructive: v.boolean(),
   scope: v.string(),
   additionalScopes: v.optional(v.array(v.string())),
+  requestTimeoutMs: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_REQUEST_TIMEOUT_MS),
+    ),
+  ),
   transport: transportSchema,
   inputSchema: v.object({
     $defs: v.optional(jsonSchemaSchema),
@@ -128,6 +137,9 @@ export const parseCapabilityCatalog = (
     };
     if (entry.additionalScopes !== undefined) {
       projected.additionalScopes = entry.additionalScopes;
+    }
+    if (entry.requestTimeoutMs !== undefined) {
+      projected.requestTimeoutMs = entry.requestTimeoutMs;
     }
     if (entry.description !== undefined) {
       projected.description = entry.description;

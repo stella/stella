@@ -13,10 +13,6 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
-import {
-  FILE_READ_URL_EXPIRY_SECONDS,
-  readFileHandler,
-} from "@/api/handlers/files/get";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -26,11 +22,16 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { comparisonVersionId } from "@/api/lib/entity-versions/comparison-version-id";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { readEntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  FILE_READ_URL_EXPIRY_SECONDS,
+  readFileHandler,
+} from "@/api/lib/files/read-file";
 import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
@@ -40,6 +41,8 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 export const DOCUMENT_COMPARE_TARGET_LIMIT = 8;
 export const DOCUMENT_COMPARE_READ_TIMEOUT_MS = 30_000;
 export const DOCUMENT_COMPARE_TIMEOUT_MS = 60_000;
+export const DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS = 600_000;
+const DOCUMENT_COMPARE_DEADLINE_MS = 550_000;
 
 const TRACKED_CHANGE_DISPOSITIONS = ["keep", "accept", "reject"] as const;
 type TrackedChangeDisposition = (typeof TRACKED_CHANGE_DISPOSITIONS)[number];
@@ -90,17 +93,21 @@ const config = {
     "version explicitly saves each successful redline as a derived document " +
     "version without replacing the current version. The operation may " +
     "partially succeed across multiple targets, so inspect every result status. " +
+    "Saving the same comparison inputs again returns the same derived version; " +
+    "retrying a lost response does not create a duplicate. " +
     "Folio-exact review preserves both document endpoints; compatibility reports " +
     "when pending history requires Folio and may be discarded by Word on save. " +
     "Created results include an openUrl and a temporary DOCX download URL. " +
     "Show these links to the user; if download delivery is unavailable, the " +
-    "redline is already saved: open it in Stella instead of creating it again.",
+    "redline is already saved: open it in stella instead of creating it again.",
+  requestTimeoutMs: DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS,
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
   params: workspaceParams({ documentId: tSafeId("entity") }),
   body: t.Object(
     {
+      filePropertyId: tSafeId("property"),
       selection: compareSelectionSchema,
       mode: t.Optional(
         t.Union([t.Literal("strict"), t.Literal("best-effort")], {
@@ -148,6 +155,7 @@ type CreatedComparison = {
   redlineVersionId: SafeId<"entityVersion">;
   file: {
     fieldId: SafeId<"field">;
+    propertyId: SafeId<"property">;
     fileName: string;
     mimeType: typeof DOCX_MIME_TYPE;
     versionNumber: number;
@@ -322,9 +330,11 @@ const resolveVersion = (
   row: VersionRow,
   workspaceId: SafeId<"workspace">,
   documentId: SafeId<"entity">,
+  filePropertyId: SafeId<"property">,
 ): ResolvedVersion | null => {
   const field = row.fields.find(
-    ({ content }) =>
+    ({ content, propertyId }) =>
+      propertyId === filePropertyId &&
       content.type === "file" &&
       content.mimeType === DOCX_MIME_TYPE &&
       !content.encrypted,
@@ -366,7 +376,7 @@ const comparisonSource = ({
   granularity: CompareGranularity;
   baseTrackedChanges: TrackedChangeDisposition;
   targetTrackedChanges: TrackedChangeDisposition;
-}): DocumentSource => ({
+}): Extract<DocumentSource, { kind: "comparison" }> => ({
   kind: "comparison",
   baseVersionId: pair.base.id,
   targetVersionId: pair.target.id,
@@ -388,6 +398,10 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
     recordAuditEvent,
     request,
   }: CompareHandlerProps): SafeHandlerGenerator<DocumentCompareResponse> {
+    const comparisonSignal = AbortSignal.any([
+      request.signal,
+      AbortSignal.timeout(DOCUMENT_COMPARE_DEADLINE_MS),
+    ]);
     const documentId = params.documentId;
     const mode = body.mode ?? "strict";
     const granularity = body.granularity ?? "word";
@@ -456,12 +470,29 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
           if (!target) {
             return { type: "target-not-found" as const };
           }
-          const base = await tx.query.entityVersions.findFirst({
+          const predecessors = await tx.query.entityVersions.findMany({
             where: {
               entityId: { eq: documentId },
               workspaceId: { eq: workspaceId },
               deletedAt: { isNull: true },
               versionNumber: { lt: target.versionNumber },
+            },
+            columns: { id: true, source: true },
+            orderBy: { versionNumber: "desc", id: "desc" },
+            limit: LIMITS.versionsPerEntity,
+          });
+          const predecessor = predecessors.find(
+            (version) => version.source?.kind !== "comparison",
+          );
+          if (!predecessor) {
+            return { type: "previous-not-found" as const };
+          }
+          const base = await tx.query.entityVersions.findFirst({
+            where: {
+              id: { eq: predecessor.id },
+              entityId: { eq: documentId },
+              workspaceId: { eq: workspaceId },
+              deletedAt: { isNull: true },
             },
             columns: { createdAt: true, id: true, versionNumber: true },
             orderBy: { versionNumber: "desc", id: "desc" },
@@ -561,7 +592,12 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
 
     const versionMap = new Map<SafeId<"entityVersion">, ResolvedVersion>();
     for (const row of resolved.rows) {
-      const version = resolveVersion(row, workspaceId, documentId);
+      const version = resolveVersion(
+        row,
+        workspaceId,
+        documentId,
+        body.filePropertyId,
+      );
       if (version !== null) {
         versionMap.set(version.id, version);
       }
@@ -592,7 +628,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
                 ),
               {
                 label: "documents.compare.read",
-                signal: request.signal,
+                signal: comparisonSignal,
                 timeoutMs: DOCUMENT_COMPARE_READ_TIMEOUT_MS,
               },
             ),
@@ -604,7 +640,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
               ? failure(
                   "timeout",
                   "Reading the document version timed out.",
-                  "Retry with a smaller document version.",
+                  "Retry the same comparison; if it still times out, check the source version in stella.",
                 )
               : failure(
                   "read_failed",
@@ -632,7 +668,10 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
         }
         return Result.ok(read.value);
       })();
-      rawBufferCache.set(version.id, loading);
+      // Only bases are reused; completed targets must not retain their DOCX bytes.
+      if (resolved.pairIds.some(({ baseId }) => baseId === version.id)) {
+        rawBufferCache.set(version.id, loading);
+      }
       return await loading;
     };
 
@@ -645,34 +684,53 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
       compared,
       expectedCurrentVersionId,
       pair,
-    }: PersistComparisonArgs) =>
-      await Result.tryPromise({
+    }: PersistComparisonArgs) => {
+      const source = comparisonSource({
+        pair,
+        mode,
+        granularity,
+        baseTrackedChanges: body.baseTrackedChanges,
+        targetTrackedChanges: body.targetTrackedChanges,
+      });
+      return await Result.tryPromise({
         try: async () =>
-          await dependencies.createEntityVersionFromBuffer({
-            safeDb,
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            entityId: documentId,
-            userId: user.id,
-            recordAuditEvent,
-            buffer: compared.buffer,
-            fileName: redlineFileName(pair.target.file.fileName),
-            mimeType: DOCX_MIME_TYPE,
-            source: comparisonSource({
-              pair,
-              mode,
-              granularity,
-              baseTrackedChanges: body.baseTrackedChanges,
-              targetTrackedChanges: body.targetTrackedChanges,
-            }),
-            writePolicy: {
-              type: "append-derived-file-from-version",
-              expectedCurrentVersionId,
-              sourceVersionId: pair.target.id,
+          await dependencies.withTimeout(
+            async () =>
+              await dependencies.createEntityVersionFromBuffer({
+                safeDb,
+                organizationId: session.activeOrganizationId,
+                workspaceId,
+                entityId: documentId,
+                userId: user.id,
+                recordAuditEvent,
+                buffer: compared.buffer,
+                fileName: redlineFileName(pair.target.file.fileName),
+                mimeType: DOCX_MIME_TYPE,
+                source,
+                writePolicy: {
+                  type: "append-derived-file-from-version",
+                  comparisonVersionId: comparisonVersionId({
+                    organizationId: session.activeOrganizationId,
+                    workspaceId,
+                    entityId: documentId,
+                    userId: user.id,
+                    filePropertyId: pair.target.file.filePropertyId,
+                    source,
+                  }),
+                  expectedCurrentVersionId,
+                  sourceVersionId: pair.target.id,
+                  filePropertyId: pair.target.file.filePropertyId,
+                },
+              }),
+            {
+              label: "documents.compare.persist",
+              timeoutMs: DOCUMENT_COMPARE_DEADLINE_MS,
+              signal: comparisonSignal,
             },
-          }),
+          ),
         catch: (cause) => cause,
       });
+    };
 
     const results: DocumentCompareResponse["results"] = [];
     const expectedCurrentVersionId = resolved.currentVersionId;
@@ -744,7 +802,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
             },
             {
               label: "documents.compare.folio",
-              signal: request.signal,
+              signal: comparisonSignal,
               timeoutMs: DOCUMENT_COMPARE_TIMEOUT_MS,
             },
           ),
@@ -850,7 +908,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
               }),
             {
               label: "documents.compare.download",
-              signal: request.signal,
+              signal: comparisonSignal,
               timeoutMs: DOCUMENT_COMPARE_READ_TIMEOUT_MS,
             },
           ),
@@ -866,7 +924,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
               status: "unavailable",
               message:
                 "The redline was saved, but its download link could not be prepared.",
-              hint: "Open the saved redline in Stella and download it there; do not repeat the comparison to retry delivery.",
+              hint: "Open the saved redline in stella and download it there; do not repeat the comparison to retry delivery.",
             };
       results.push({
         status: "created",
@@ -875,6 +933,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
         redlineVersionId: saved.entityVersionId,
         file: {
           fieldId: saved.fieldId,
+          propertyId: pair.target.file.filePropertyId,
           fileName: saved.fileName,
           mimeType: DOCX_MIME_TYPE,
           versionNumber: saved.versionNumber,

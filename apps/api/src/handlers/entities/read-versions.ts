@@ -21,6 +21,7 @@ const readVersionsParamsSchema = workspaceParams({
 
 const readVersionsQuerySchema = t.Object({
   before: t.Optional(t.String()),
+  filePropertyId: t.Optional(tSafeId("property")),
 });
 
 type ReadVersionsHandlerProps = {
@@ -28,6 +29,7 @@ type ReadVersionsHandlerProps = {
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   before: string | undefined;
+  filePropertyId: SafeId<"property"> | undefined;
 };
 
 const readVersionsHandler = async function* ({
@@ -35,6 +37,7 @@ const readVersionsHandler = async function* ({
   workspaceId,
   entityId,
   before,
+  filePropertyId,
 }: ReadVersionsHandlerProps) {
   const cursor = before !== undefined ? decodeVersionCursor(before) : null;
   if (before !== undefined && cursor === null) {
@@ -204,6 +207,9 @@ const readVersionsHandler = async function* ({
             inArray(fields.entityVersionId, pageVersionIds),
             eq(fields.workspaceId, workspaceId),
             isNull(entityVersions.deletedAt),
+            filePropertyId === undefined
+              ? undefined
+              : eq(fields.propertyId, filePropertyId),
           ),
         )
         .limit(LIMITS.versionFieldsScanLimit);
@@ -255,7 +261,9 @@ const readVersionsHandler = async function* ({
     });
   }
 
-  // Build version → file field map (pick the first file-type field)
+  // Build version → file field map. Without a property request this preserves
+  // the historical first-file metadata; callers with a selected file property
+  // receive only that property's file from every version.
   const versionFileMap = new Map<
     string,
     {
@@ -334,6 +342,7 @@ const readVersions = createSafeHandler(
       workspaceId,
       entityId: params.entityId,
       before: query.before,
+      filePropertyId: query.filePropertyId,
     });
   },
 );

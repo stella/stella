@@ -194,6 +194,9 @@ export const runCapabilityCommand = async ({
       token,
       toolName: INVOKE_TOOL,
       cursorInto: (base, cursor) => withCursor(base, paginationPart, cursor),
+      ...(spec.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: spec.requestTimeoutMs }),
     });
     return;
   }
@@ -203,6 +206,9 @@ export const runCapabilityCommand = async ({
     token,
     name: INVOKE_TOOL,
     args: toolArgs,
+    ...(spec.requestTimeoutMs === undefined
+      ? {}
+      : { timeoutMs: spec.requestTimeoutMs }),
   });
   if (Result.isError(call)) {
     writers.stderr(`${call.error.message}\n`);
@@ -219,7 +225,7 @@ export const runCapabilityCommand = async ({
     label: spec.commandPath.join(" "),
     renderCall,
     serverUrl,
-    timeoutMs: undefined,
+    timeoutMs: spec.requestTimeoutMs,
     token,
     toolName: INVOKE_TOOL,
     writers,

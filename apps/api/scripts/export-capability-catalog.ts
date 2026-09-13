@@ -432,6 +432,8 @@ type CapabilityEntry = {
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
+  /** API-owned finite transport deadline for this generated capability command. */
+  requestTimeoutMs?: number;
   /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
   allowsArchivedWorkspace?: true;
   /**
@@ -714,6 +716,7 @@ type BuildCatalogEntryOptions = {
   access: { access: "read" | "write"; destructive: boolean };
   scope: string;
   additionalScopes: readonly string[];
+  requestTimeoutMs: number | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /**
@@ -742,6 +745,7 @@ const buildCatalogEntry = ({
   access,
   scope,
   additionalScopes,
+  requestTimeoutMs,
   hasPermissions,
   permissions,
   compactedInputSchema,
@@ -756,6 +760,7 @@ const buildCatalogEntry = ({
   destructive: access.destructive,
   scope,
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
+  ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
   ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -1123,6 +1128,19 @@ const buildCatalog = async (): Promise<BuildResult> => {
 
     const permissions = endpoint.config["permissions"];
     const hasPermissions = "permissions" in endpoint.config;
+    const requestTimeoutValue = endpoint.config["requestTimeoutMs"];
+    const requestTimeoutMs =
+      typeof requestTimeoutValue === "number" &&
+      Number.isInteger(requestTimeoutValue) &&
+      requestTimeoutValue > 0
+        ? requestTimeoutValue
+        : undefined;
+    if (requestTimeoutValue !== undefined && requestTimeoutMs === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid requestTimeoutMs; expected a positive integer`,
+      );
+      return;
+    }
     const verbs = extractVerbs(permissions);
     // `access` is DECLARED on the config, not inferred: a handler's permission
     // gate answers "who may call this", a different axis from whether it reads
@@ -1336,6 +1354,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         access: accessResolution,
         scope,
         additionalScopes,
+        requestTimeoutMs,
         hasPermissions,
         permissions,
         compactedInputSchema,

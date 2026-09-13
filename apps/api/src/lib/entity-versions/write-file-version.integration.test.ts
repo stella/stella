@@ -20,7 +20,8 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { FileVersionWritePolicy } from "@/api/lib/entity-versions/write-file-version";
@@ -41,6 +42,7 @@ let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const createdEntityIds: SafeId<"entity">[] = [];
 const filePropertyId = createSafeId<"property">();
+const secondaryFilePropertyId = createSafeId<"property">();
 const recordAuditEvent: AuditRecorder = async () => undefined;
 
 beforeAll(async () => {
@@ -64,6 +66,16 @@ beforeAll(async () => {
     system: true,
     kinds: ["document"],
   });
+  await testDb.insert(properties).values({
+    id: secondaryFilePropertyId,
+    workspaceId: ids.wsA1,
+    name: "Exhibits",
+    content: { type: "file", version: 1 },
+    tool: { type: "manual-input", version: 1 },
+    status: "fresh",
+    system: false,
+    kinds: ["document"],
+  });
 });
 
 afterAll(async () => {
@@ -74,6 +86,9 @@ afterAll(async () => {
         .where(inArray(entities.id, createdEntityIds));
     }
     await testDb.delete(properties).where(eq(properties.id, filePropertyId));
+    await testDb
+      .delete(properties)
+      .where(eq(properties.id, secondaryFilePropertyId));
   } finally {
     await releaseRlsFixture();
   }
@@ -97,6 +112,10 @@ const createEmptyEntity = async (kind: "document" | "folder") => {
 };
 
 type WriteTestFileOptions = {
+  entityVersionId?: SafeId<"entityVersion">;
+  fieldId?: SafeId<"field">;
+  fileName?: string;
+  recordAuditEvent?: AuditRecorder;
   scanWarnings?: string[];
   versionMetadata?: {
     collaborationContributorUserIds?: string[];
@@ -118,11 +137,12 @@ const writeTestFile = async (
         workspaceId: ids.wsA1,
         entityId,
         userId: ids.userA1,
-        recordAuditEvent,
-        entityVersionId: createSafeId<"entityVersion">(),
-        fieldId: createSafeId<"field">(),
+        recordAuditEvent: options.recordAuditEvent ?? recordAuditEvent,
+        entityVersionId:
+          options.entityVersionId ?? createSafeId<"entityVersion">(),
+        fieldId: options.fieldId ?? createSafeId<"field">(),
         fileId: allocateFileObject(),
-        fileName: "smlouva.docx",
+        fileName: options.fileName ?? "smlouva.docx",
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         sizeBytes: 12,
@@ -289,10 +309,14 @@ describe("first file version persistence", () => {
       throw new Error(`Current write failed: ${current.value.status}`);
     }
 
+    const derivedVersionId = createSafeId<"entityVersion">();
     const derived = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
       writePolicy: {
         type: "append-derived-file-from-version",
+        comparisonVersionId: derivedVersionId,
         expectedCurrentVersionId: current.value.entityVersionId,
+        filePropertyId,
         sourceVersionId: source.value.entityVersionId,
       },
     });
@@ -312,6 +336,326 @@ describe("first file version persistence", () => {
         eq(entityVersions.entityId, entityId),
       ),
     ).toBe(4);
+  });
+
+  test("replays a sequential comparison save without a second audit or current-version update", async () => {
+    const entityId = await createEmptyEntity("document");
+    const source = await writeTestFile(entityId);
+    if (Result.isError(source)) throw source.error;
+    if (source.value.status !== "ok")
+      throw new Error(`Source write failed: ${source.value.status}`);
+    const current = await writeTestFile(entityId);
+    if (Result.isError(current)) throw current.error;
+    if (current.value.status !== "ok")
+      throw new Error(`Current write failed: ${current.value.status}`);
+
+    const auditEvents: AuditEvent[] = [];
+    const captureAuditEvent: AuditRecorder = async (_tx, event) => {
+      if (Array.isArray(event)) {
+        auditEvents.push(...event);
+        return;
+      }
+      auditEvents.push(event);
+    };
+    const derivedVersionId = createSafeId<"entityVersion">();
+    const policy = {
+      type: "append-derived-file-from-version",
+      comparisonVersionId: derivedVersionId,
+      expectedCurrentVersionId: current.value.entityVersionId,
+      filePropertyId,
+      sourceVersionId: source.value.entityVersionId,
+    } as const satisfies FileVersionWritePolicy;
+    const firstFieldId = createSafeId<"field">();
+    const first = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      fieldId: firstFieldId,
+      recordAuditEvent: captureAuditEvent,
+      writePolicy: policy,
+    });
+    if (Result.isError(first)) throw first.error;
+    if (first.value.status !== "ok")
+      throw new Error(`First comparison write failed: ${first.value.status}`);
+
+    const replay = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      fieldId: createSafeId<"field">(),
+      recordAuditEvent: captureAuditEvent,
+      writePolicy: policy,
+    });
+    if (Result.isError(replay)) throw replay.error;
+    expect(replay.value).toEqual({
+      status: "replayed",
+      entityVersionId: derivedVersionId,
+      fieldId: firstFieldId,
+      filePropertyId,
+      fileName: "smlouva.docx",
+      versionNumber: first.value.versionNumber,
+    });
+    expect(
+      auditEvents.filter((event) => event.action === AUDIT_ACTION.CREATE),
+    ).toHaveLength(1);
+    const entity = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(entity?.currentVersionId).toBe(current.value.entityVersionId);
+  });
+
+  test("serializes concurrent comparison saves into one artifact and replay", async () => {
+    const entityId = await createEmptyEntity("document");
+    const source = await writeTestFile(entityId);
+    if (Result.isError(source)) throw source.error;
+    if (source.value.status !== "ok")
+      throw new Error(`Source write failed: ${source.value.status}`);
+    const current = await writeTestFile(entityId);
+    if (Result.isError(current)) throw current.error;
+    if (current.value.status !== "ok")
+      throw new Error(`Current write failed: ${current.value.status}`);
+
+    const auditEvents: AuditEvent[] = [];
+    const captureAuditEvent: AuditRecorder = async (_tx, event) => {
+      if (Array.isArray(event)) {
+        auditEvents.push(...event);
+        return;
+      }
+      auditEvents.push(event);
+    };
+    const derivedVersionId = createSafeId<"entityVersion">();
+    const policy = {
+      type: "append-derived-file-from-version",
+      comparisonVersionId: derivedVersionId,
+      expectedCurrentVersionId: current.value.entityVersionId,
+      filePropertyId,
+      sourceVersionId: source.value.entityVersionId,
+    } as const satisfies FileVersionWritePolicy;
+    const [first, second] = await Promise.all([
+      writeTestFile(entityId, {
+        entityVersionId: derivedVersionId,
+        fieldId: createSafeId<"field">(),
+        recordAuditEvent: captureAuditEvent,
+        writePolicy: policy,
+      }),
+      writeTestFile(entityId, {
+        entityVersionId: derivedVersionId,
+        fieldId: createSafeId<"field">(),
+        recordAuditEvent: captureAuditEvent,
+        writePolicy: policy,
+      }),
+    ]);
+    if (Result.isError(first)) throw first.error;
+    if (Result.isError(second)) throw second.error;
+    const outcomes = [first.value, second.value];
+    const created = outcomes.find((outcome) => outcome.status === "ok");
+    const replayed = outcomes.find((outcome) => outcome.status === "replayed");
+    if (!created || !replayed) {
+      throw new Error(
+        `Expected one created comparison and one replay, received ${outcomes.map((outcome) => outcome.status).join(", ")}`,
+      );
+    }
+
+    expect(replayed).toEqual({
+      status: "replayed",
+      entityVersionId: derivedVersionId,
+      fieldId: created.fieldId,
+      filePropertyId,
+      fileName: "smlouva.docx",
+      versionNumber: created.versionNumber,
+    });
+    expect(
+      auditEvents.filter((event) => event.action === AUDIT_ACTION.CREATE),
+    ).toHaveLength(1);
+    expect(
+      await testDb.$count(
+        entityVersions,
+        eq(entityVersions.entityId, entityId),
+      ),
+    ).toBe(4);
+    const entity = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(entity?.currentVersionId).toBe(current.value.entityVersionId);
+  });
+
+  test("replays a comparison after the current version advances", async () => {
+    const entityId = await createEmptyEntity("document");
+    const source = await writeTestFile(entityId);
+    if (Result.isError(source)) throw source.error;
+    if (source.value.status !== "ok")
+      throw new Error(`Source write failed: ${source.value.status}`);
+    const current = await writeTestFile(entityId);
+    if (Result.isError(current)) throw current.error;
+    if (current.value.status !== "ok")
+      throw new Error(`Current write failed: ${current.value.status}`);
+
+    const auditEvents: AuditEvent[] = [];
+    const captureAuditEvent: AuditRecorder = async (_tx, event) => {
+      if (Array.isArray(event)) {
+        auditEvents.push(...event);
+        return;
+      }
+      auditEvents.push(event);
+    };
+    const derivedVersionId = createSafeId<"entityVersion">();
+    const policy = {
+      type: "append-derived-file-from-version",
+      comparisonVersionId: derivedVersionId,
+      expectedCurrentVersionId: current.value.entityVersionId,
+      filePropertyId,
+      sourceVersionId: source.value.entityVersionId,
+    } as const satisfies FileVersionWritePolicy;
+    const derived = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      fieldId: createSafeId<"field">(),
+      recordAuditEvent: captureAuditEvent,
+      writePolicy: policy,
+    });
+    if (Result.isError(derived)) throw derived.error;
+    if (derived.value.status !== "ok")
+      throw new Error(`Comparison write failed: ${derived.value.status}`);
+
+    const advanced = await writeTestFile(entityId);
+    if (Result.isError(advanced)) throw advanced.error;
+    if (advanced.value.status !== "ok")
+      throw new Error(`Advance write failed: ${advanced.value.status}`);
+    const replay = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      fieldId: createSafeId<"field">(),
+      recordAuditEvent: captureAuditEvent,
+      writePolicy: policy,
+    });
+    if (Result.isError(replay)) throw replay.error;
+    expect(replay.value).toEqual({
+      status: "replayed",
+      entityVersionId: derivedVersionId,
+      fieldId: derived.value.fieldId,
+      filePropertyId,
+      fileName: "smlouva.docx",
+      versionNumber: derived.value.versionNumber,
+    });
+    expect(
+      auditEvents.filter((event) => event.action === AUDIT_ACTION.CREATE),
+    ).toHaveLength(1);
+    const entity = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(entity?.currentVersionId).toBe(advanced.value.entityVersionId);
+  });
+
+  test("does not replay a withdrawn comparison version", async () => {
+    const entityId = await createEmptyEntity("document");
+    const source = await writeTestFile(entityId);
+    if (Result.isError(source)) throw source.error;
+    if (source.value.status !== "ok")
+      throw new Error(`Source write failed: ${source.value.status}`);
+    const current = await writeTestFile(entityId);
+    if (Result.isError(current)) throw current.error;
+    if (current.value.status !== "ok")
+      throw new Error(`Current write failed: ${current.value.status}`);
+
+    const derivedVersionId = createSafeId<"entityVersion">();
+    const policy = {
+      type: "append-derived-file-from-version",
+      comparisonVersionId: derivedVersionId,
+      expectedCurrentVersionId: current.value.entityVersionId,
+      filePropertyId,
+      sourceVersionId: source.value.entityVersionId,
+    } as const satisfies FileVersionWritePolicy;
+    const derived = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      writePolicy: policy,
+    });
+    if (Result.isError(derived)) throw derived.error;
+    if (derived.value.status !== "ok")
+      throw new Error(`Comparison write failed: ${derived.value.status}`);
+    await testDb
+      .update(entityVersions)
+      .set({ deletedAt: new Date() })
+      .where(eq(entityVersions.id, derivedVersionId));
+
+    const replay = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      writePolicy: policy,
+    });
+    if (Result.isError(replay)) throw replay.error;
+    expect(replay.value).toEqual({ status: "target-file-not-found" });
+  });
+
+  test("appends a derived version into the selected file property", async () => {
+    const entityId = await createEmptyEntity("document");
+    const source = await writeTestFile(entityId);
+    if (Result.isError(source)) {
+      throw source.error;
+    }
+    if (source.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${source.value.status}`);
+    }
+
+    await testDb.insert(fields).values({
+      id: createSafeId<"field">(),
+      workspaceId: ids.wsA1,
+      entityVersionId: source.value.entityVersionId,
+      propertyId: secondaryFilePropertyId,
+      content: {
+        version: 1,
+        type: "file",
+        id: allocateFileObject(),
+        fileName: "exhibit.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 12,
+        encrypted: false,
+        sha256Hex:
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        pdfFileId: null,
+      },
+    });
+
+    const derivedVersionId = createSafeId<"entityVersion">();
+    const derived = await writeTestFile(entityId, {
+      entityVersionId: derivedVersionId,
+      fileName: "exhibit redline.docx",
+      writePolicy: {
+        type: "append-derived-file-from-version",
+        comparisonVersionId: derivedVersionId,
+        expectedCurrentVersionId: source.value.entityVersionId,
+        filePropertyId: secondaryFilePropertyId,
+        sourceVersionId: source.value.entityVersionId,
+      },
+    });
+    if (Result.isError(derived)) {
+      throw derived.error;
+    }
+    if (derived.value.status !== "ok") {
+      throw new Error(`Derived write failed: ${derived.value.status}`);
+    }
+    expect(derived.value.filePropertyId).toBe(secondaryFilePropertyId);
+
+    const entity = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(entity?.currentVersionId).toBe(source.value.entityVersionId);
+
+    const version = await testDb.query.entityVersions.findFirst({
+      where: { id: { eq: derived.value.entityVersionId } },
+      with: { fields: true },
+    });
+    const primaryFile = version?.fields.find(
+      (field) => field.propertyId === filePropertyId,
+    );
+    const selectedFile = version?.fields.find(
+      (field) => field.propertyId === secondaryFilePropertyId,
+    );
+    expect(primaryFile?.content).toMatchObject({
+      type: "file",
+      fileName: "smlouva.docx",
+    });
+    expect(selectedFile?.content).toMatchObject({
+      type: "file",
+      fileName: "exhibit redline.docx",
+    });
   });
 
   test("publishes collaboration metadata through the targeted canonical writer", async () => {
