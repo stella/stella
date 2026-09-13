@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { SKELETON_ROW_KEYS } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import {
   getGroupSkeletonLayout,
-  GROUP_SKELETON_ROW_KEYS,
   GROUP_TABLE_PAGE_SIZE,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
 
@@ -12,9 +12,7 @@ describe("grouped table loading layout", () => {
       const { fillerRowCount, skeletonRowCount } =
         getGroupSkeletonLayout(totalRowCount);
 
-      expect(skeletonRowCount).toBeLessThanOrEqual(
-        GROUP_SKELETON_ROW_KEYS.length,
-      );
+      expect(skeletonRowCount).toBeLessThanOrEqual(SKELETON_ROW_KEYS.length);
       expect(fillerRowCount).toBeGreaterThanOrEqual(0);
       expect(skeletonRowCount + fillerRowCount).toBe(
         Math.min(totalRowCount, GROUP_TABLE_PAGE_SIZE),

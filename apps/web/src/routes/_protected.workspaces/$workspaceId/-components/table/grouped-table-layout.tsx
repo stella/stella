@@ -57,7 +57,6 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedColumns } from "@/components/workspaces/table/workspace-grid-order";
-import { RowEndFillerCell } from "@/components/workspaces/table/workspace-table/end-fillers";
 import { HeaderEndFillerCell } from "@/components/workspaces/table/workspace-table/header-cells";
 import {
   TABLE_ROW_ESTIMATE_PX,
@@ -70,6 +69,7 @@ import {
   getWorkspaceGridTemplateColumns,
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
+import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -90,7 +90,6 @@ import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import {
   getGroupSkeletonLayout,
-  GROUP_SKELETON_ROW_KEYS,
   GROUP_TABLE_PAGE_SIZE,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
@@ -525,24 +524,10 @@ const GroupSkeleton = ({
           renderColumns={renderColumns}
         />
       </WorkspaceGridRow>
-      {GROUP_SKELETON_ROW_KEYS.slice(0, skeletonRowCount).map((rowKey) => (
-        <WorkspaceGridRow className="pointer-events-none" key={rowKey}>
-          {renderColumns.map((column) => (
-            <WorkspaceGridCell
-              className="flex min-h-12 items-center px-2"
-              key={column.id}
-              role="presentation"
-            >
-              <Skeleton className="h-3.5 w-3/5" />
-            </WorkspaceGridCell>
-          ))}
-          <RowEndFillerCell
-            addPropertyColumn={null}
-            renderColumns={renderColumns}
-            selected={false}
-          />
-        </WorkspaceGridRow>
-      ))}
+      <WorkspaceTableSkeletonRows
+        renderColumns={renderColumns}
+        rowCount={skeletonRowCount}
+      />
       {fillerRowCount > 0 && (
         <WorkspaceGridRow
           className="pointer-events-none"
