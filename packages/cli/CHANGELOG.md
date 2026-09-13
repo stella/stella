@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.12
+
+### Patch Changes
+
+- [#3268](https://github.com/stella/stella/pull/3268) [`d088d60`](https://github.com/stella/stella/commit/d088d602c7e377fa123c7aa5c9917a80bd47f77d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report the current document reference on verification-code matches and the continued numbering when a matter takes over a reference used before.
+
 ## 1.2.11
 
 ### Patch Changes
