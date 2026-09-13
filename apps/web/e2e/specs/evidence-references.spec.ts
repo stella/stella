@@ -39,13 +39,16 @@ const readEvidenceMessages = async (locale: string) => {
     typeof catalog.folio !== "object" ||
     catalog.folio === null ||
     !("evidenceReferences" in catalog.folio) ||
-    typeof catalog.folio.evidenceReferences !== "string"
+    typeof catalog.folio.evidenceReferences !== "string" ||
+    !("insertEvidence" in catalog.folio) ||
+    typeof catalog.folio.insertEvidence !== "string"
   ) {
     throw new Error(`Missing evidence test labels for ${locale}`);
   }
   return {
     save: catalog.common.save,
     evidenceReferences: catalog.folio.evidenceReferences,
+    insertEvidence: catalog.folio.insertEvidence,
   };
 };
 
@@ -246,14 +249,14 @@ for (const locale of ["cs", "en", "ar"] as const) {
 
       const documentUrl =
         `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document` +
-        `?entity=${pleadingUpload.entityId}&field=${pleadingField!.id}&editing=true`;
+        `?entity=${pleadingUpload.entityId}&field=${pleadingField!.id}`;
       await page.goto(documentUrl, { waitUntil: "domcontentloaded" });
 
       const saveButton = page.getByRole("button", {
         exact: true,
         name: messages.save,
       });
-      await expect(saveButton).toBeEnabled({ timeout: 45_000 });
+      await expect(saveButton).toBeHidden();
       await expect(
         page.locator(".layout-run-text", {
           hasText: "Stella E2E test document.",
@@ -267,17 +270,18 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
 
       const evidenceButton = page.getByRole("button", {
-        name: messages.evidenceReferences,
+        name: messages.insertEvidence,
       });
       await evidenceButton.click();
       const evidenceDialog = page.getByRole("dialog", {
-        name: messages.evidenceReferences,
+        name: messages.insertEvidence,
       });
       await expect(evidenceDialog).toBeVisible();
       await evidenceDialog
         .getByRole("button", { name: "evidence-source.docx", exact: true })
         .click();
       await expect(evidenceDialog).toBeHidden();
+      await expect(saveButton).toBeEnabled({ timeout: 45_000 });
 
       await page
         .locator('[aria-label="Document content"]')
@@ -320,7 +324,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
 
       await evidenceButton.click();
       const reloadedDialog = page.getByRole("dialog", {
-        name: messages.evidenceReferences,
+        name: messages.insertEvidence,
       });
       const sourceRequest = page.waitForResponse(
         (response) =>

@@ -71,7 +71,10 @@ import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
-import { EvidenceReferences } from "@/components/docx/evidence-references";
+import {
+  EvidenceReferencesButton,
+  EvidenceReferencesDialog,
+} from "@/components/docx/evidence-references";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useDocxFind } from "@/components/docx/use-docx-find";
 import { useEvidenceReferences } from "@/components/docx/use-evidence-references";
@@ -187,6 +190,20 @@ type PendingCollaborationPublication = {
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
 
+type EvidenceReferencesDialogState = "closed" | "open" | "requested";
+
+const canInsertEvidenceReference = (
+  canUnlock: boolean,
+  compatibility: DocxCompatibility | null,
+) => canUnlock && compatibility?.canSafelyEdit !== false;
+
+type DocxBrowserEditorContentProps = DocxBrowserEditorProps & {
+  evidenceReferencesDialogState: EvidenceReferencesDialogState;
+  onEvidenceReferencesDialogStateChange: (
+    state: EvidenceReferencesDialogState,
+  ) => void;
+};
+
 export type DocxBrowserEditorActions = {
   cancel: () => Promise<void>;
   finalize: () => void;
@@ -207,6 +224,8 @@ export type DocxBrowserEditorActions = {
 
 export const DocxBrowserEditor = (props: DocxBrowserEditorProps) => {
   const { errorFallback, fieldId, onError, workspaceId } = props;
+  const [evidenceReferencesDialogState, setEvidenceReferencesDialogState] =
+    useState<EvidenceReferencesDialogState>("closed");
 
   return (
     <QuerySuspenseBoundary
@@ -217,16 +236,23 @@ export const DocxBrowserEditor = (props: DocxBrowserEditorProps) => {
       resetKeys={[workspaceId, fieldId]}
     >
       <RenderStormRegion name="docx-browser-editor">
-        <DocxBrowserEditorContent {...props} />
+        <DocxBrowserEditorContent
+          {...props}
+          evidenceReferencesDialogState={evidenceReferencesDialogState}
+          onEvidenceReferencesDialogStateChange={
+            setEvidenceReferencesDialogState
+          }
+        />
       </RenderStormRegion>
     </QuerySuspenseBoundary>
   );
 };
 
-const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
+const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const {
     workspaceId,
     entityId,
+    evidenceReferencesDialogState,
     fieldId,
     propertyId,
     actionsKey,
@@ -241,6 +267,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onCollaborationPublishableChange,
     onCompatibilityChange,
     onBlockedUnlock,
+    onEvidenceReferencesDialogStateChange,
     onUnlockedChange,
     onSaved,
     onScrollTopChange,
@@ -1002,7 +1029,32 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const evidence = useEvidenceReferences(
     isUnlocked && editorMode !== "viewing",
   );
+  const canInsertEvidence = canInsertEvidenceReference(
+    canUnlock,
+    compatibility,
+  );
   const wasUnlockedRef = useRef(false);
+
+  const handleEvidenceReferencesClick = useCallback(() => {
+    if (!canInsertEvidence || isUnlocked) {
+      if (canInsertEvidence) {
+        editorRef.current?.ensureEditorView({ focus: false });
+      }
+      onEvidenceReferencesDialogStateChange("open");
+      return;
+    }
+
+    editorRef.current?.ensureEditorView({ focus: false });
+    onEvidenceReferencesDialogStateChange("requested");
+    if (!didOpenRef.current) {
+      detached(requestEditMode(), "evidence-reference.request-edit-mode");
+    }
+  }, [
+    canInsertEvidence,
+    isUnlocked,
+    onEvidenceReferencesDialogStateChange,
+    requestEditMode,
+  ]);
 
   useExternalSyncEffect(() => {
     onUnlockedChange?.(isUnlocked);
@@ -1685,16 +1737,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return (
         <>
           {actionBarControls}
-          <EvidenceReferences
-            workspaceId={workspaceId}
-            entityId={entityId}
-            fieldId={fieldId}
-            view={editorViewForAnonymization}
+          <EvidenceReferencesButton
+            canInsert={canInsertEvidence}
             document={evidence.document}
-            editable={isUnlocked && editorMode !== "viewing"}
-            onPrepareEditor={() => {
-              editorRef.current?.ensureEditorView({ focus: false });
-            }}
+            onClick={handleEvidenceReferencesClick}
           />
           {showActionBar && collaborationState.room !== null && (
             <>
@@ -1881,6 +1927,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       ref={composedContainerRef}
       className="flex h-full w-full min-w-0 flex-col"
     >
+      <EvidenceReferencesDialog
+        workspaceId={workspaceId}
+        entityId={entityId}
+        fieldId={fieldId}
+        view={editorViewForAnonymization}
+        document={evidence.document}
+        canInsert={canInsertEvidence}
+        editable={isUnlocked && editorMode !== "viewing"}
+        open={
+          evidenceReferencesDialogState === "open" ||
+          (evidenceReferencesDialogState === "requested" && isUnlocked)
+        }
+        onOpenChange={(nextOpen) => {
+          onEvidenceReferencesDialogStateChange(nextOpen ? "open" : "closed");
+        }}
+      />
       {find.isOpen && <DocxFindBar find={find} />}
       {/* Folio editor with AI overlay */}
       <div
