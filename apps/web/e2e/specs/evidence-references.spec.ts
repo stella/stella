@@ -24,7 +24,7 @@ const readEvidenceMessages = async (locale: string) => {
   const catalog: unknown = JSON.parse(
     await readFile(
       path.resolve(import.meta.dirname, `../../src/i18n/langs/${locale}.json`),
-      "utf8",
+      "utf-8",
     ),
   );
   if (
@@ -311,17 +311,9 @@ for (const locale of ["cs", "en", "ar"] as const) {
           `?entity=${pleadingUpload.entityId}&field=${savedFieldId}&editing=true`,
         { waitUntil: "domcontentloaded" },
       );
-      await expect(
-        page.getByRole("button", {
-          name: messages.finishEditing,
-        }),
-      ).toBeEnabled({ timeout: 45_000 });
+      await expect(finishEditingButton).toBeEnabled({ timeout: 45_000 });
 
-      await page
-        .getByRole("button", {
-          name: messages.evidenceReferences,
-        })
-        .click();
+      await evidenceButton.click();
       const reloadedDialog = page.getByRole("dialog", {
         name: messages.evidenceReferences,
       });
@@ -345,15 +337,8 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await page
         .locator('[aria-label="Document content"]')
         .press("Control+End");
-      await page
-        .getByRole("button", {
-          name: messages.evidenceReferences,
-        })
-        .click();
-      await page
-        .getByRole("dialog", {
-          name: messages.evidenceReferences,
-        })
+      await evidenceButton.click();
+      await reloadedDialog
         .getByRole("button", {
           name: "evidence-second-source.docx",
           exact: true,
@@ -370,9 +355,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
           response.url().endsWith("/finalize"),
         { timeout: 45_000 },
       );
-      await page
-        .getByRole("button", { name: messages.finishEditing })
-        .click();
+      await finishEditingButton.click();
       expect((await secondFinalizeResponse).ok()).toBe(true);
       await expect(finishEditingButton).toBeHidden();
       const finalDocument = await waitForDocumentContaining(

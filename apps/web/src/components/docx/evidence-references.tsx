@@ -186,8 +186,8 @@ const EvidenceFilePicker = ({
   );
   const files =
     query.data?.pages.flatMap((page) =>
-      page.entities.flatMap((entity) => {
-        return Object.values(entity.fields).flatMap((field) => {
+      page.entities.flatMap((entity) =>
+        Object.values(entity.fields).flatMap((field) => {
           if (
             field?.content.type !== "file" ||
             !isFileDisplayable(field.content) ||
@@ -202,8 +202,8 @@ const EvidenceFilePicker = ({
               title: field.content.fileName,
             },
           ];
-        });
-      }),
+        }),
+      ),
     ) ?? [];
   const reportInsertError = (error: unknown) => {
     if (controller.current?.signal.aborted !== false) {

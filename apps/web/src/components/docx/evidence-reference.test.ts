@@ -89,7 +89,7 @@ describe("evidence references", () => {
               0,
               fixedPoint.state.doc.content.size,
             ),
-          ).toMatch(/ ordinary prose$/);
+          ).toMatch(/ ordinary prose$/u);
         },
       ),
     );

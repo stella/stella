@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
 import { request as playwrightRequest } from "@playwright/test";
+import { Result } from "better-result";
+import { describe, expect, test } from "bun:test";
 
 import {
   createTestWorkspaceWithOperations,
@@ -85,15 +86,18 @@ describe("deleteTestWorkspace", () => {
     });
     const apiRequest = await playwrightRequest.newContext();
     const originalDelete = apiRequest.delete.bind(apiRequest);
-    apiRequest.delete = (url, options) =>
-      originalDelete(new URL(new URL(url).pathname, server.url).href, options);
+    apiRequest.delete = async (url, options) =>
+      await originalDelete(
+        new URL(new URL(url).pathname, server.url).href,
+        options,
+      );
 
     try {
       await deleteTestWorkspace(apiRequest, workspaceId);
       expect(requests).toEqual([`DELETE ${deletePath}`, `DELETE ${deletePath}`]);
     } finally {
       await apiRequest.dispose();
-      server.stop();
+      await server.stop();
     }
   });
 
@@ -110,15 +114,18 @@ describe("deleteTestWorkspace", () => {
     });
     const apiRequest = await playwrightRequest.newContext();
     const originalDelete = apiRequest.delete.bind(apiRequest);
-    apiRequest.delete = (url, options) =>
-      originalDelete(new URL(new URL(url).pathname, server.url).href, options);
+    apiRequest.delete = async (url, options) =>
+      await originalDelete(
+        new URL(new URL(url).pathname, server.url).href,
+        options,
+      );
 
     try {
       await deleteTestWorkspace(apiRequest, workspaceId);
       expect(requests).toEqual([`DELETE ${deletePath}`]);
     } finally {
       await apiRequest.dispose();
-      server.stop();
+      await server.stop();
     }
   });
 
@@ -138,19 +145,28 @@ describe("deleteTestWorkspace", () => {
       });
       const apiRequest = await playwrightRequest.newContext();
       const originalDelete = apiRequest.delete.bind(apiRequest);
-      apiRequest.delete = (url, options) =>
-        originalDelete(new URL(new URL(url).pathname, server.url).href, options);
+      apiRequest.delete = async (url, options) =>
+        await originalDelete(
+          new URL(new URL(url).pathname, server.url).href,
+          options,
+        );
 
       try {
-        await expect(
-          deleteTestWorkspace(apiRequest, workspaceId),
-        ).rejects.toThrow(
-          `DELETE /workspaces/${workspaceId} -> ${response.status}: ${response.body}`,
+        const result = await Result.tryPromise(async () =>
+          await deleteTestWorkspace(apiRequest, workspaceId),
         );
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(result.error.cause).toEqual(
+            new Error(
+              `DELETE /workspaces/${workspaceId} -> ${response.status}: ${response.body}`,
+            ),
+          );
+        }
         expect(requests).toHaveLength(1);
       } finally {
         await apiRequest.dispose();
-        server.stop();
+        await server.stop();
       }
     }
   });
