@@ -8,6 +8,7 @@ import {
 } from "@stll/folio-core/prosemirror/conversion";
 import { schema } from "@stll/folio-core/prosemirror/schema";
 import { createDocx, parseDocx } from "@stll/folio-core/server";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   collectEvidenceReferences,
@@ -92,6 +93,7 @@ describe("evidence references", () => {
           ).toMatch(/ ordinary prose$/u);
         },
       ),
+      propertyConfig(),
     );
   });
 
