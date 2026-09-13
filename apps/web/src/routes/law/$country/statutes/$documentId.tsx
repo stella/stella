@@ -24,7 +24,7 @@ import {
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
 } from "@/components/legal-reader/reader-outline";
-import { StatuteText } from "@/features/statutes/components/statute-text";
+import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
 import {
@@ -432,14 +432,17 @@ const StatuteReader = ({
               {t("statutes.noVersionInForce")}
             </p>
           ) : (
-            <StatuteText
+            <AnnotatedStatuteText
               blocks={blocks}
               citationWork={citationWork}
+              country={statute.country}
               documentId={statute.id}
+              eli={statute.eli}
               fulltext={statute.fulltext}
               language={statute.language}
               masthead={preparedReader.masthead}
               provisionCitationCounts={provisionCitationCounts}
+              scrollContainerRef={readerRef}
               statuteTitle={statute.title}
               versionCount={versions.length}
               versionValidFrom={statute.versionValidFrom}

@@ -574,28 +574,6 @@ type Messages = {
       "treatment": "Later treatment";
     };
     "analyzing": "Analyzing...";
-    "annotations": {
-      "colorGreen": "Green";
-      "colorRed": "Red";
-      "colorSky": "Blue";
-      "colorViolet": "Violet";
-      "colorYellow": "Yellow";
-      "commentPlaceholder": "Write a comment…";
-      "createFreeAccount": "Create free account";
-      "guestAuthor": "You";
-      "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.";
-      "guestMigrationComplete": "Highlights and notes saved.";
-      "guestMigrationFailed": "Some highlights and notes could not be saved. They will stay in this tab for another attempt.";
-      "guestSavePrompt": "Your highlights and notes will be saved when you create a free account.";
-      "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.";
-      "highlight": "Highlight";
-      "removeHighlight": "Remove highlight";
-      "sharedBadge": "Shared";
-      "styleHighlight": "Highlight";
-      "styleSquiggly": "Squiggly";
-      "styleStrikethrough": "Strikethrough";
-      "visibilityShared": "Shared with organization";
-    };
     "citation": {
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
@@ -622,13 +600,6 @@ type Messages = {
       "citedBy": "Cited by";
       "headnote": "Headnote";
       "summary": "Headnote / match";
-    };
-    "copyMenu": {
-      "blockQuoteWithCitation": "Block quote with citation";
-      "citationOnly": "Citation only";
-      "citationWithQuote": "Citation with quote";
-      "quoteWithCitation": "Quote with citation";
-      "textOnly": "Text only";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";
@@ -3223,6 +3194,38 @@ type Messages = {
     };
     "topCourts": "From the top courts";
     "tryIdentifier": "Try an identifier";
+  };
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "About this passage of {citation}:\n\n“{quote}”\n\n";
+      "colorGreen": "Green";
+      "colorRed": "Red";
+      "colorSky": "Blue";
+      "colorViolet": "Violet";
+      "colorYellow": "Yellow";
+      "commentPlaceholder": "Write a comment…";
+      "createFreeAccount": "Create free account";
+      "guestAuthor": "You";
+      "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.";
+      "guestMigrationComplete": "Highlights and notes saved.";
+      "guestMigrationFailed": "Some highlights and notes could not be saved. They will stay in this tab for another attempt.";
+      "guestSavePrompt": "Your highlights and notes will be saved when you create a free account.";
+      "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.";
+      "highlight": "Highlight";
+      "removeHighlight": "Remove highlight";
+      "sharedBadge": "Shared";
+      "styleHighlight": "Highlight";
+      "styleSquiggly": "Squiggly";
+      "styleStrikethrough": "Strikethrough";
+      "visibilityShared": "Shared with organization";
+    };
+    "copyMenu": {
+      "blockQuoteWithCitation": "Block quote with citation";
+      "citationOnly": "Citation only";
+      "citationWithQuote": "Citation with quote";
+      "quoteWithCitation": "Quote with citation";
+      "textOnly": "Text only";
+    };
   };
   "markdownEditor": {
     "rawLabel": "Markdown source";

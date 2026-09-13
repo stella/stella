@@ -571,28 +571,6 @@
       "treatment": "Późniejsze orzecznictwo"
     },
     "analyzing": "Analizowanie...",
-    "annotations": {
-      "colorGreen": "Zielony",
-      "colorRed": "Czerwony",
-      "colorSky": "Niebieski",
-      "colorViolet": "Fioletowy",
-      "colorYellow": "Żółty",
-      "commentPlaceholder": "Napisz komentarz…",
-      "createFreeAccount": "Utwórz bezpłatne konto",
-      "guestAuthor": "Ty",
-      "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
-      "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
-      "guestMigrationFailed": "Niektórych wyróżnień i notatek nie udało się zapisać. Pozostaną na tej karcie do kolejnej próby.",
-      "guestSavePrompt": "Twoje wyróżnienia i notatki zostaną zapisane po utworzeniu bezpłatnego konta.",
-      "guestStorageUnavailable": "Nie udało się zapisać wyróżnień i notatek na tej karcie.",
-      "highlight": "Wyróżnij",
-      "removeHighlight": "Usuń wyróżnienie",
-      "sharedBadge": "Udostępnione",
-      "styleHighlight": "Wyróżnienie",
-      "styleSquiggly": "Falista linia",
-      "styleStrikethrough": "Przekreślenie",
-      "visibilityShared": "Udostępnione organizacji"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
@@ -619,13 +597,6 @@
       "citedBy": "Cytowane przez",
       "headnote": "Teza",
       "summary": "Teza / trafienie"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
-      "citationOnly": "Tylko odesłanie",
-      "citationWithQuote": "Odesłanie z cytatem",
-      "quoteWithCitation": "Cytat z odesłaniem",
-      "textOnly": "Tylko tekst"
     },
     "courtTiers": {
       "constitutional": "Trybunały konstytucyjne",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "Z najwyższych sądów",
     "tryIdentifier": "Wypróbuj identyfikator"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "W sprawie tego fragmentu {citation}:\n\n„{quote}”\n\n",
+      "colorGreen": "Zielony",
+      "colorRed": "Czerwony",
+      "colorSky": "Niebieski",
+      "colorViolet": "Fioletowy",
+      "colorYellow": "Żółty",
+      "commentPlaceholder": "Napisz komentarz…",
+      "createFreeAccount": "Utwórz bezpłatne konto",
+      "guestAuthor": "Ty",
+      "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
+      "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
+      "guestMigrationFailed": "Niektórych wyróżnień i notatek nie udało się zapisać. Pozostaną na tej karcie do kolejnej próby.",
+      "guestSavePrompt": "Twoje wyróżnienia i notatki zostaną zapisane po utworzeniu bezpłatnego konta.",
+      "guestStorageUnavailable": "Nie udało się zapisać wyróżnień i notatek na tej karcie.",
+      "highlight": "Wyróżnij",
+      "removeHighlight": "Usuń wyróżnienie",
+      "sharedBadge": "Udostępnione",
+      "styleHighlight": "Wyróżnienie",
+      "styleSquiggly": "Falista linia",
+      "styleStrikethrough": "Przekreślenie",
+      "visibilityShared": "Udostępnione organizacji"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
+      "citationOnly": "Tylko odesłanie",
+      "citationWithQuote": "Odesłanie z cytatem",
+      "quoteWithCitation": "Cytat z odesłaniem",
+      "textOnly": "Tylko tekst"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Źródło Markdown"

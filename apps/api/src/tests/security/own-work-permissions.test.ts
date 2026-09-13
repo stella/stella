@@ -3,11 +3,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import confirmAgentClaim from "@/api/handlers/agent-auth/confirm";
-import createDecisionAnnotation from "@/api/handlers/case-law/annotations/create";
-import deleteDecisionAnnotation from "@/api/handlers/case-law/annotations/delete";
-import listDecisionAnnotations from "@/api/handlers/case-law/annotations/list";
-import updateDecisionAnnotation from "@/api/handlers/case-law/annotations/update";
 import grantDesktopRegistryKey from "@/api/handlers/desktop-registry/grant";
+import createReaderAnnotation from "@/api/handlers/legal-reader/annotations/create";
+import deleteReaderAnnotation from "@/api/handlers/legal-reader/annotations/delete";
+import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
+import updateReaderAnnotation from "@/api/handlers/legal-reader/annotations/update";
 import connectMcpConnector from "@/api/handlers/mcp-connectors/connect";
 import createMcpConnection from "@/api/handlers/mcp-connectors/create-connection";
 import deleteMcpConnection from "@/api/handlers/mcp-connectors/delete-connection";
@@ -31,8 +31,8 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
- * The writes a member makes to their own work: a mark on a decision, a stored
- * search, a link between their account and an outside system. Each names the
+ * The writes a member makes to their own work: a mark on a decision or a
+ * statute, a stored search, a link between their account and an outside system. Each names the
  * resource it writes instead of riding the baseline `workspace:["read"]` grant
  * every role holds, and each follows the line the time entry, expense and chat
  * grants already draw: staff and interns keep their own work, an external
@@ -43,10 +43,10 @@ const GRANTED_ROLES = ["owner", "admin", "member", "intern"] as const;
 
 const MUTATIONS = {
   "agent-auth/confirm.ts": confirmAgentClaim,
-  "case-law/annotations/create.ts": createDecisionAnnotation,
-  "case-law/annotations/delete.ts": deleteDecisionAnnotation,
-  "case-law/annotations/update.ts": updateDecisionAnnotation,
   "desktop-registry/grant.ts": grantDesktopRegistryKey,
+  "legal-reader/annotations/create.ts": createReaderAnnotation,
+  "legal-reader/annotations/delete.ts": deleteReaderAnnotation,
+  "legal-reader/annotations/update.ts": updateReaderAnnotation,
   "mcp-connectors/connect.ts": connectMcpConnector,
   "mcp-connectors/create-connection.ts": createMcpConnection,
   "mcp-connectors/delete-connection.ts": deleteMcpConnection,
@@ -62,7 +62,7 @@ const MUTATIONS = {
 
 /** The sibling reads: on the baseline grant, and affirmed as reads. */
 const READS = {
-  "case-law/annotations/list.ts": listDecisionAnnotations,
+  "legal-reader/annotations/list.ts": listReaderAnnotations,
   "mcp-connectors/list-connections.ts": listMcpConnections,
   "mcp-connectors/list-connectors.ts": listMcpConnectors,
   "sharepoint/list-drive-root.ts": listSharepointDriveRoot,
@@ -113,10 +113,16 @@ describe("own-work permissions", () => {
 
     expect(declared).toEqual({
       "agent-auth/confirm.ts": { integration: ["create"] },
-      "case-law/annotations/create.ts": { caseLawAnnotation: ["create"] },
-      "case-law/annotations/delete.ts": { caseLawAnnotation: ["delete"] },
-      "case-law/annotations/update.ts": { caseLawAnnotation: ["update"] },
       "desktop-registry/grant.ts": { integration: ["create"] },
+      "legal-reader/annotations/create.ts": {
+        legalReaderAnnotation: ["create"],
+      },
+      "legal-reader/annotations/delete.ts": {
+        legalReaderAnnotation: ["delete"],
+      },
+      "legal-reader/annotations/update.ts": {
+        legalReaderAnnotation: ["update"],
+      },
       "mcp-connectors/connect.ts": { integration: ["create"] },
       "mcp-connectors/create-connection.ts": { integration: ["create"] },
       "mcp-connectors/delete-connection.ts": { integration: ["delete"] },

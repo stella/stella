@@ -1,5 +1,5 @@
 import { Fragment, useRef, useState } from "react";
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -14,6 +14,12 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  annotationTextAnchors,
+  buildAnnotationAnchors,
+  renderLinkAnnotations,
+} from "@/components/legal-reader/annotations/annotation-anchors";
+import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { ExternalCitationLink } from "@/components/legal-reader/citation-link";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { CitedProvisionLink } from "@/components/legal-reader/cited-provision-link";
@@ -60,18 +66,6 @@ type Decision = {
   fulltext: string | null;
   documentAst?: unknown;
   textFields: ReadDecisionTextFields;
-};
-
-/** A reader's highlight or comment, as a span to draw over the text. */
-export type AnnotationAnchorSource = {
-  blockAnchorId: string;
-  color: string | null;
-  endOffset: number;
-  id: string;
-  kind: "highlight" | "comment";
-  startOffset: number;
-  /** How a highlight is drawn; null for a comment. */
-  style: "highlight" | "underline" | "squiggly" | "strikethrough" | null;
 };
 
 type DecisionTextProps = {
@@ -176,79 +170,6 @@ const supplementText = (field: TextField): string | null => {
   }
 };
 
-/**
- * A mark on the text, drawn the way PDF readers draw mark-up: a colour and a
- * style. A comment is a dotted underline in the margin colour; the words
- * stay readable under every style, including a strike, since the reader's
- * own mark must never hide the court's text.
- */
-const annotationClassName = ({
-  kind,
-  style,
-}: AnnotationAnchorSource): string => {
-  if (kind === "comment") {
-    return "cursor-pointer bg-transparent text-inherit underline decoration-dotted decoration-2 underline-offset-4";
-  }
-  switch (style) {
-    case "underline": {
-      return "cursor-pointer bg-transparent text-inherit underline decoration-2 underline-offset-3";
-    }
-    case "squiggly": {
-      return "cursor-pointer bg-transparent text-inherit underline decoration-wavy decoration-2 underline-offset-3";
-    }
-    case "strikethrough": {
-      return "cursor-pointer bg-transparent text-inherit line-through decoration-2";
-    }
-    case "highlight":
-    case null: {
-      // No padding or rounding: a mark over several inline runs is several
-      // elements, and only a flat background reads as one continuous mark.
-      return "cursor-pointer text-inherit";
-    }
-    default: {
-      style satisfies never;
-      return panic(`Unhandled style: ${String(style)}`);
-    }
-  }
-};
-
-const annotationStyle = ({
-  color,
-  kind,
-  style,
-}: AnnotationAnchorSource): CSSProperties => {
-  if (kind === "comment") {
-    return { textDecorationColor: "var(--option-sky)" };
-  }
-  const swatch = `var(--option-${color ?? "yellow"})`;
-  return style === "highlight" || style === null
-    ? { backgroundColor: `color-mix(in srgb, ${swatch} 32%, transparent)` }
-    : { textDecorationColor: swatch };
-};
-
-const renderAnnotation = (
-  annotation: AnnotationAnchorSource,
-  children: ReactNode,
-): ReactElement => (
-  <mark
-    className={cn(annotationClassName(annotation))}
-    data-annotation-id={annotation.id}
-    style={annotationStyle(annotation)}
-  >
-    {children}
-  </mark>
-);
-
-const annotationTextAnchor = (
-  annotation: AnnotationAnchorSource,
-  offset = 0,
-): TextAnchor => ({
-  end: offset + annotation.endOffset,
-  key: `annotation:${annotation.id}`,
-  render: (children): ReactElement => renderAnnotation(annotation, children),
-  start: offset + annotation.startOffset,
-});
-
 const EditorialSupplementBody = ({
   activeMatchIndex,
   annotationAnchors,
@@ -267,9 +188,12 @@ const EditorialSupplementBody = ({
   <div className="space-y-3">
     {editorialSupplementBlocks(text).map((block) => {
       const blockAnchorId = supplementBlockAnchorId(pieceId, block.start);
-      const anchors = annotationAnchors
-        .filter((annotation) => annotation.blockAnchorId === blockAnchorId)
-        .map((annotation) => annotationTextAnchor(annotation, block.start));
+      const anchors = annotationTextAnchors(
+        annotationAnchors.filter(
+          (annotation) => annotation.blockAnchorId === blockAnchorId,
+        ),
+        block.start,
+      );
       const content = (
         <InlineContent
           activeMatchIndex={activeMatchIndex}
@@ -384,46 +308,6 @@ const EditorialSupplement = ({
   );
 };
 
-/**
- * Every inline link in the text, by block: cited decisions and applied
- * provisions, located separately and merged so the two kinds never nest. A
- * decision citation and a provision reference cannot share characters in
- * honest text, so whichever starts first simply wins.
- */
-const buildStandaloneAnnotationAnchors = (
-  annotations: readonly AnnotationAnchorSource[],
-): Record<string, TextAnchor[]> => {
-  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
-  for (const annotation of annotations) {
-    const anchors = anchorsByPieceId[annotation.blockAnchorId];
-    if (anchors === undefined) {
-      anchorsByPieceId[annotation.blockAnchorId] = [
-        annotationTextAnchor(annotation),
-      ];
-      continue;
-    }
-    anchors.push(annotationTextAnchor(annotation));
-  }
-  return anchorsByPieceId;
-};
-
-const renderLinkAnnotations = ({
-  annotations,
-  children,
-}: {
-  annotations: readonly AnnotationAnchorSource[];
-  children: ReactNode;
-}): ReactNode => {
-  let marked = children;
-  for (let index = annotations.length - 1; index >= 0; index -= 1) {
-    const annotation = annotations.at(index);
-    if (annotation !== undefined) {
-      marked = renderAnnotation(annotation, marked);
-    }
-  }
-  return marked;
-};
-
 /** The pieces of a mark left once the links inside it are cut out. */
 const splitAroundLinks = (
   mark: TextAnchor,
@@ -455,6 +339,12 @@ const splitAroundLinks = (
   return pieces;
 };
 
+/**
+ * Every inline link in the text, by block: cited decisions and applied
+ * provisions, located separately and merged so the two kinds never nest. A
+ * decision citation and a provision reference cannot share characters in
+ * honest text, so whichever starts first simply wins.
+ */
 const buildAnchorsByPieceId = ({
   annotations,
   blocks,
@@ -520,11 +410,10 @@ const buildAnchorsByPieceId = ({
     const blockAnnotations = annotationsByBlock.get(blockId);
     // A reader's mark over a link keeps the link: links are the text's own
     // structure, and intersecting marks are repeated inside them below.
-    for (const annotation of optionalArray(blockAnnotations)) {
-      // Plain inline markup keeps the paragraph's own wrapping and
-      // justification. The toolbar handles clicks on the mark by id.
-      anchors.push(annotationTextAnchor(annotation));
-    }
+    // Plain inline markup keeps the paragraph's own wrapping and
+    // justification, and overlapping marks are split into runs so no word is
+    // printed twice. The toolbar handles clicks on the mark by id.
+    anchors.push(...annotationTextAnchors(optionalArray(blockAnnotations)));
     for (const span of optionalArray(citationSpans[blockId])) {
       const linkAnnotations = annotationsOverlappingTextSpan(
         optionalArray(blockAnnotations),
@@ -874,7 +763,7 @@ export const DecisionText = ({
               >
                 {annotation.kind === "comment"
                   ? t("folio.comment")
-                  : t("caseLaw.annotations.highlight")}
+                  : t("legalReader.annotations.highlight")}
               </button>
             ))}
           </div>
@@ -945,7 +834,7 @@ export const DecisionText = ({
         />
         <FulltextFallback
           activeMatchIndex={activeMatchIndex}
-          anchorsByPieceId={buildStandaloneAnnotationAnchors(
+          anchorsByPieceId={buildAnnotationAnchors(
             hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
           )}
           rangesByPieceId={searchResults.rangesByPieceId}

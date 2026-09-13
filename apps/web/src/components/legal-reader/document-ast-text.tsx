@@ -1122,11 +1122,18 @@ export const BlockRenderer = ({
                       cell.header && "text-start font-semibold",
                     )}
                     colSpan={cell.colSpan}
+                    // A cell's words are their own piece with their own
+                    // offsets, so a mark left in one is anchored to the cell.
+                    // The table around it is a container: `selectionAnchorsFrom`
+                    // takes the innermost anchored element, so the two never
+                    // both claim the same selection.
+                    data-anchor={pieceId}
                     key={pieceId}
                     rowSpan={cell.rowSpan}
                   >
                     <InlineContent
                       activeMatchIndex={activeMatchIndex}
+                      anchors={anchorsForPiece(anchorsByPieceId, pieceId)}
                       inlines={cell.inlines}
                       pieceId={pieceId}
                       ranges={rangesForPiece(rangesByPieceId, pieceId)}

@@ -1,10 +1,6 @@
 import Elysia from "elysia";
 
 import generateDecisionAnalysis from "@/api/handlers/case-law/analysis/generate";
-import createDecisionAnnotation from "@/api/handlers/case-law/annotations/create";
-import deleteDecisionAnnotation from "@/api/handlers/case-law/annotations/delete";
-import listDecisionAnnotations from "@/api/handlers/case-law/annotations/list";
-import updateDecisionAnnotation from "@/api/handlers/case-law/annotations/update";
 import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/status";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
@@ -27,28 +23,6 @@ const authenticatedCaseLawRoute = new Elysia({
   .get("/decisions/:decisionId/analysis", generateDecisionAnalysis.handler, {
     params: generateDecisionAnalysis.config.params,
     permissions: generateDecisionAnalysis.config.permissions,
-  })
-  .get("/decisions/:decisionId/annotations", listDecisionAnnotations.handler, {
-    params: listDecisionAnnotations.config.params,
-    permissions: listDecisionAnnotations.config.permissions,
-  })
-  .post(
-    "/decisions/:decisionId/annotations",
-    createDecisionAnnotation.handler,
-    {
-      body: createDecisionAnnotation.config.body,
-      params: createDecisionAnnotation.config.params,
-      permissions: createDecisionAnnotation.config.permissions,
-    },
-  )
-  .patch("/annotations/:annotationId", updateDecisionAnnotation.handler, {
-    body: updateDecisionAnnotation.config.body,
-    params: updateDecisionAnnotation.config.params,
-    permissions: updateDecisionAnnotation.config.permissions,
-  })
-  .delete("/annotations/:annotationId", deleteDecisionAnnotation.handler, {
-    params: deleteDecisionAnnotation.config.params,
-    permissions: deleteDecisionAnnotation.config.permissions,
   });
 
 /**

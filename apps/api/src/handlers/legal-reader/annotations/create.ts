@@ -2,26 +2,26 @@ import { panic, Result } from "better-result";
 import { randomUUIDv7 } from "bun";
 import { and, eq } from "drizzle-orm";
 
-import { caseLawDecisionAnnotations } from "@/api/db/schema";
-import { storedAnnotationMatchesRequest } from "@/api/handlers/case-law/annotations/create.logic";
+import { legalReaderAnnotations } from "@/api/db/schema";
+import { storedAnnotationMatchesRequest } from "@/api/handlers/legal-reader/annotations/create.logic";
 import {
   createAnnotationBodySchema,
-  decisionParamsSchema,
   requireAnnotationColor,
   requireAnnotationStyle,
+  requireAnnotationTargetType,
   requireAnnotationVisibility,
-} from "@/api/handlers/case-law/annotations/schema";
-import type { CreateAnnotationBody } from "@/api/handlers/case-law/annotations/schema";
+} from "@/api/handlers/legal-reader/annotations/schema";
+import type { CreateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
+import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  permissions: { caseLawAnnotation: ["create"] },
+  permissions: { legalReaderAnnotation: ["create"] },
   mcp: { type: "internal", reason: "reader_annotations" },
-  params: decisionParamsSchema,
   body: createAnnotationBodySchema,
 } satisfies HandlerConfig;
 
@@ -29,22 +29,15 @@ const annotationVisibility = ({ visibility }: CreateAnnotationBody) =>
   requireAnnotationVisibility(visibility ?? "private");
 
 /**
- * Leaves a highlight or a comment on a passage. A passage over several
- * paragraphs becomes one row per paragraph under one group, so it reads,
- * changes and disappears as one mark. Private unless the reader says
- * otherwise; the author and organization come from the session, never from
- * the request.
+ * Leaves a highlight or a comment on a passage of a decision or a statute. A
+ * passage over several paragraphs becomes one row per paragraph under one
+ * group, so it reads, changes and disappears as one mark. Private unless the
+ * reader says otherwise; the author and organization come from the session,
+ * never from the request.
  */
-const createDecisionAnnotation = createSafeRootHandler(
+const createReaderAnnotation = createSafeRootHandler(
   config,
-  async function* ({
-    body,
-    params: { decisionId },
-    recordAuditEvent,
-    safeDb,
-    session,
-    user,
-  }) {
+  async function* ({ body, recordAuditEvent, safeDb, session, user }) {
     if (body.spans.some((span) => span.endOffset <= span.startOffset)) {
       return Result.err(
         new HandlerError({
@@ -54,6 +47,8 @@ const createDecisionAnnotation = createSafeRootHandler(
       );
     }
 
+    const targetType = requireAnnotationTargetType(body.targetType);
+    const targetId = body.targetId;
     const groupId =
       body.spans.length > 1 ? (body.requestId ?? randomUUIDv7()) : null;
     const visibility = annotationVisibility(body);
@@ -63,10 +58,11 @@ const createDecisionAnnotation = createSafeRootHandler(
           id:
             index === 0 && body.requestId !== undefined
               ? body.requestId
-              : createSafeId<"caseLawDecisionAnnotation">(),
+              : createSafeId<"legalReaderAnnotation">(),
           organizationId: session.activeOrganizationId,
           userId: user.id,
-          decisionId,
+          targetType,
+          targetId,
           groupId,
           kind: body.kind,
           visibility,
@@ -94,29 +90,29 @@ const createDecisionAnnotation = createSafeRootHandler(
         let mutatedRows: { id: typeof firstValue.id }[];
         if (body.requestId === undefined) {
           mutatedRows = await tx
-            .insert(caseLawDecisionAnnotations)
+            .insert(legalReaderAnnotations)
             .values(values)
-            .returning({ id: caseLawDecisionAnnotations.id });
+            .returning({ id: legalReaderAnnotations.id });
         } else {
           const insertedFirst = await tx
-            .insert(caseLawDecisionAnnotations)
+            .insert(legalReaderAnnotations)
             .values(firstValue)
-            .onConflictDoNothing({ target: caseLawDecisionAnnotations.id })
-            .returning({ id: caseLawDecisionAnnotations.id });
+            .onConflictDoNothing({ target: legalReaderAnnotations.id })
+            .returning({ id: legalReaderAnnotations.id });
           if (insertedFirst.length === 0) {
             const firstExisting = await tx
               .select({
-                groupId: caseLawDecisionAnnotations.groupId,
+                groupId: legalReaderAnnotations.groupId,
               })
-              .from(caseLawDecisionAnnotations)
+              .from(legalReaderAnnotations)
               .where(
                 and(
                   eq(
-                    caseLawDecisionAnnotations.organizationId,
+                    legalReaderAnnotations.organizationId,
                     session.activeOrganizationId,
                   ),
-                  eq(caseLawDecisionAnnotations.userId, user.id),
-                  eq(caseLawDecisionAnnotations.id, body.requestId),
+                  eq(legalReaderAnnotations.userId, user.id),
+                  eq(legalReaderAnnotations.id, body.requestId),
                 ),
               )
               .limit(1);
@@ -126,39 +122,34 @@ const createDecisionAnnotation = createSafeRootHandler(
             }
             const existingRows = await tx
               .select({
-                blockAnchorId: caseLawDecisionAnnotations.blockAnchorId,
-                body: caseLawDecisionAnnotations.body,
-                color: caseLawDecisionAnnotations.color,
-                decisionId: caseLawDecisionAnnotations.decisionId,
-                endOffset: caseLawDecisionAnnotations.endOffset,
-                groupId: caseLawDecisionAnnotations.groupId,
-                id: caseLawDecisionAnnotations.id,
-                kind: caseLawDecisionAnnotations.kind,
-                quote: caseLawDecisionAnnotations.quote,
-                startOffset: caseLawDecisionAnnotations.startOffset,
-                style: caseLawDecisionAnnotations.style,
-                visibility: caseLawDecisionAnnotations.visibility,
+                blockAnchorId: legalReaderAnnotations.blockAnchorId,
+                body: legalReaderAnnotations.body,
+                color: legalReaderAnnotations.color,
+                endOffset: legalReaderAnnotations.endOffset,
+                groupId: legalReaderAnnotations.groupId,
+                id: legalReaderAnnotations.id,
+                kind: legalReaderAnnotations.kind,
+                quote: legalReaderAnnotations.quote,
+                startOffset: legalReaderAnnotations.startOffset,
+                style: legalReaderAnnotations.style,
+                targetId: legalReaderAnnotations.targetId,
+                targetType: legalReaderAnnotations.targetType,
+                visibility: legalReaderAnnotations.visibility,
               })
-              .from(caseLawDecisionAnnotations)
+              .from(legalReaderAnnotations)
               .where(
                 and(
                   eq(
-                    caseLawDecisionAnnotations.organizationId,
+                    legalReaderAnnotations.organizationId,
                     session.activeOrganizationId,
                   ),
-                  eq(caseLawDecisionAnnotations.userId, user.id),
+                  eq(legalReaderAnnotations.userId, user.id),
                   existingGroupId === null
-                    ? eq(caseLawDecisionAnnotations.id, body.requestId)
-                    : eq(caseLawDecisionAnnotations.groupId, existingGroupId),
+                    ? eq(legalReaderAnnotations.id, body.requestId)
+                    : eq(legalReaderAnnotations.groupId, existingGroupId),
                 ),
               );
-            if (
-              !storedAnnotationMatchesRequest({
-                body,
-                decisionId,
-                rows: existingRows,
-              })
-            ) {
+            if (!storedAnnotationMatchesRequest({ body, rows: existingRows })) {
               return { status: "conflict" } as const;
             }
             return {
@@ -172,19 +163,20 @@ const createDecisionAnnotation = createSafeRootHandler(
             remainingValues.length === 0
               ? []
               : await tx
-                  .insert(caseLawDecisionAnnotations)
+                  .insert(legalReaderAnnotations)
                   .values(remainingValues)
-                  .returning({ id: caseLawDecisionAnnotations.id });
+                  .returning({ id: legalReaderAnnotations.id });
           mutatedRows = [...insertedFirst, ...insertedRemaining];
         }
         const first = mutatedRows.at(0);
         if (first !== undefined) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION,
+            resourceType: annotationAuditResourceType(targetType),
             resourceId: first.id,
             metadata: {
-              decisionId,
+              targetId,
+              targetType,
               kind: body.kind,
               spanCount: body.spans.length,
               visibility,
@@ -219,4 +211,4 @@ const createDecisionAnnotation = createSafeRootHandler(
   },
 );
 
-export default createDecisionAnnotation;
+export default createReaderAnnotation;

@@ -8,10 +8,6 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/case-law/annotations/list.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/case-law/decisions/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

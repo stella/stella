@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { caseLawDecisionAnnotations } from "@/api/db/schema";
+import { legalReaderAnnotations } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -15,20 +15,20 @@ export const wholeAnnotationSql = ({
   organizationId,
   userId,
 }: {
-  annotationId: SafeId<"caseLawDecisionAnnotation">;
+  annotationId: SafeId<"legalReaderAnnotation">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 }): SQL | undefined =>
   and(
-    eq(caseLawDecisionAnnotations.organizationId, organizationId),
-    eq(caseLawDecisionAnnotations.userId, userId),
+    eq(legalReaderAnnotations.organizationId, organizationId),
+    eq(legalReaderAnnotations.userId, userId),
     or(
-      eq(caseLawDecisionAnnotations.id, annotationId),
+      eq(legalReaderAnnotations.id, annotationId),
       and(
-        isNotNull(caseLawDecisionAnnotations.groupId),
+        isNotNull(legalReaderAnnotations.groupId),
         eq(
-          caseLawDecisionAnnotations.groupId,
-          sql`(SELECT ${caseLawDecisionAnnotations.groupId} FROM ${caseLawDecisionAnnotations} WHERE ${caseLawDecisionAnnotations.id} = ${annotationId})`,
+          legalReaderAnnotations.groupId,
+          sql`(SELECT ${legalReaderAnnotations.groupId} FROM ${legalReaderAnnotations} WHERE ${legalReaderAnnotations.id} = ${annotationId})`,
         ),
       ),
     ),

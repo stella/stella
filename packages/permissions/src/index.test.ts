@@ -236,9 +236,9 @@ describe("role grant boundaries", () => {
       [
         {
           permissions: {
-            caseLawAnnotation: ["create", "update", "delete"],
+            legalReaderAnnotation: ["create", "update", "delete"],
           },
-          resource: "caseLawAnnotation",
+          resource: "legalReaderAnnotation",
         },
         {
           permissions: { savedSearch: ["create", "update", "delete"] },

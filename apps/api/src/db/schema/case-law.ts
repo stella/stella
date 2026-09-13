@@ -6,20 +6,6 @@ import {
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import {
-  CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_COLORS,
-  CASE_LAW_ANNOTATION_KINDS,
-  CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_STYLES,
-  CASE_LAW_ANNOTATION_VISIBILITIES,
-} from "@stll/api-contract/case-law-annotations";
-import type {
-  CaseLawAnnotationColor,
-  CaseLawAnnotationKind,
-  CaseLawAnnotationStyle,
-  CaseLawAnnotationVisibility,
-} from "@stll/api-contract/case-law-annotations";
-import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
@@ -65,7 +51,6 @@ import {
 } from "@/api/lib/decision-date-bounds-sql";
 
 import {
-  authoredNotePolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
@@ -73,7 +58,6 @@ import {
   isNotNull,
   isNull,
   jsonb,
-  organization,
   orgPolicies,
   p,
   pUuid,
@@ -108,6 +92,10 @@ import type {
   CorpusIndexJobOperation,
   CorpusIndexJobStatus,
 } from "./corpus-index-jobs";
+import {
+  readerAnnotationColumns,
+  readerAnnotationConstraints,
+} from "./legal-reader";
 
 /** The declaration the column's `enum` and the CHECK both derive from. */
 const CASE_LAW_CORPUS_MIRROR_STATUSES = ["settled", "pending"] as const;
@@ -1846,126 +1834,30 @@ export const caseLawResearchAnswers = p.pgTable(
 // Case Law — Search index (global, no tenant column)
 // ---------------------------------------------------------------------------
 
-export {
-  CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_COLORS,
-  CASE_LAW_ANNOTATION_KINDS,
-  CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_STYLES,
-  CASE_LAW_ANNOTATION_VISIBILITIES,
-};
-export type {
-  CaseLawAnnotationColor,
-  CaseLawAnnotationKind,
-  CaseLawAnnotationStyle,
-  CaseLawAnnotationVisibility,
-};
-
-const CASE_LAW_ANNOTATION_KIND_SQL_VALUES = CASE_LAW_ANNOTATION_KINDS.map(
-  (value) => sql.raw(`'${value}'`),
-);
-const CASE_LAW_ANNOTATION_VISIBILITY_SQL_VALUES =
-  CASE_LAW_ANNOTATION_VISIBILITIES.map((value) => sql.raw(`'${value}'`));
-const CASE_LAW_ANNOTATION_COLOR_SQL_VALUES = CASE_LAW_ANNOTATION_COLORS.map(
-  (value) => sql.raw(`'${value}'`),
-);
-const CASE_LAW_ANNOTATION_STYLE_SQL_VALUES = CASE_LAW_ANNOTATION_STYLES.map(
-  (value) => sql.raw(`'${value}'`),
-);
+const CASE_LAW_DECISION_ANNOTATIONS = "case_law_decision_annotations";
 
 /**
- * A reader's highlights and comments on a decision. Organization-owned,
- * author-controlled: private by default, visible to the organization once
- * shared, and only ever edited by its author (`authoredNotePolicies`).
+ * The reader's marks as they were stored before statutes could be marked too.
+ * Superseded by `legalReaderAnnotations`, which the cutover migration copies
+ * every row into; nothing reads this table any more. It stays declared so the
+ * schema still describes the database the cutover leaves behind, and is
+ * dropped by the follow-up migration once that deploy is out.
  *
- * The decision is referenced by id without a foreign key: the public-law
- * corpus may live in another database (`PUBLIC_LAW_DATABASE_URL`), and a
- * decision withdrawn from the corpus leaves its notes behind rather than
- * deleting a reader's own words.
- *
- * The anchor is the block's stable anchor plus offsets into its rendered
- * text and the quoted text itself, so a re-parse that moves offsets can
- * still find the words.
+ * Its shape is the shape it is being replaced by, minus the discriminator:
+ * both tables take their columns and constraints from the same definitions,
+ * so the cutover cannot be reading one shape and writing another.
  */
 export const caseLawDecisionAnnotations = p.pgTable(
-  "case_law_decision_annotations",
+  CASE_LAW_DECISION_ANNOTATIONS,
   {
-    id: pUuid<"caseLawDecisionAnnotation">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    userId: p.text("user_id").notNull(),
+    ...readerAnnotationColumns(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
-    /**
-     * Ties the rows of one mark that spans several paragraphs; null for a
-     * mark inside one. A change to the mark reaches every row of the group.
-     */
-    groupId: p.uuid("group_id"),
-    kind: p.text("kind", { enum: CASE_LAW_ANNOTATION_KINDS }).notNull(),
-    visibility: p
-      .text("visibility", { enum: CASE_LAW_ANNOTATION_VISIBILITIES })
-      .notNull()
-      .default("private"),
-    color: p.text("color", { enum: CASE_LAW_ANNOTATION_COLORS }),
-    style: p.text("style", { enum: CASE_LAW_ANNOTATION_STYLES }),
-    blockAnchorId: p.varchar("block_anchor_id", { length: 64 }).notNull(),
-    startOffset: p.integer("start_offset").notNull(),
-    endOffset: p.integer("end_offset").notNull(),
-    quote: p
-      .varchar({ length: CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH })
-      .notNull(),
-    body: p.varchar({ length: CASE_LAW_ANNOTATION_BODY_MAX_LENGTH }),
-    createdAt: timestamptz("created_at").defaultNow().notNull(),
-    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
     p
-      .foreignKey({
-        name: "case_law_decision_annotations_organization_id_fk",
-        columns: [t.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
-        name: "case_law_decision_annotations_user_id_fk",
-        columns: [t.userId],
-        foreignColumns: [user.id],
-      })
-      .onDelete("cascade"),
-    p
-      .index("case_law_decision_annotations_decision_idx")
+      .index(`${CASE_LAW_DECISION_ANNOTATIONS}_decision_idx`)
       .on(t.organizationId, t.decisionId, t.createdAt, t.id),
-    p
-      .index("case_law_decision_annotations_group_idx")
-      .on(t.organizationId, t.groupId)
-      .where(isNotNull(t.groupId)),
-    p.check(
-      "case_law_decision_annotations_kind_values",
-      sql`${t.kind} IN (${sql.join(CASE_LAW_ANNOTATION_KIND_SQL_VALUES, sql`, `)})`,
-    ),
-    p.check(
-      "case_law_decision_annotations_visibility_values",
-      sql`${t.visibility} IN (${sql.join(CASE_LAW_ANNOTATION_VISIBILITY_SQL_VALUES, sql`, `)})`,
-    ),
-    p.check(
-      "case_law_decision_annotations_color_values",
-      sql`${t.color} IS NULL OR ${t.color} IN (${sql.join(CASE_LAW_ANNOTATION_COLOR_SQL_VALUES, sql`, `)})`,
-    ),
-    p.check(
-      "case_law_decision_annotations_style_values",
-      sql`${t.style} IS NULL OR ${t.style} IN (${sql.join(CASE_LAW_ANNOTATION_STYLE_SQL_VALUES, sql`, `)})`,
-    ),
-    // A highlight is a colour and a style on the text; a comment is words,
-    // carried by its first row when the passage spans paragraphs.
-    p.check(
-      "case_law_decision_annotations_kind_shape",
-      sql`(${t.kind} = 'highlight' AND ${t.color} IS NOT NULL AND ${t.style} IS NOT NULL AND ${t.body} IS NULL)
-        OR (${t.kind} = 'comment' AND ${t.style} IS NULL AND ((${t.body} IS NOT NULL AND ${t.body} <> '') OR ${t.groupId} IS NOT NULL))`,
-    ),
-    p.check(
-      "case_law_decision_annotations_span_shape",
-      sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
-    ),
-    ...authoredNotePolicies(),
+    ...readerAnnotationConstraints(CASE_LAW_DECISION_ANNOTATIONS, t),
   ],
 );
 

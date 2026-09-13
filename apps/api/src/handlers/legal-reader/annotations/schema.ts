@@ -3,56 +3,71 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import {
-  CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_COLORS,
-  CASE_LAW_ANNOTATION_MAX_SPANS,
-  CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
-  CASE_LAW_ANNOTATION_STYLES,
-  CASE_LAW_ANNOTATION_VISIBILITIES,
-} from "@stll/api-contract/case-law-annotations";
+  READER_ANNOTATION_BODY_MAX_LENGTH,
+  READER_ANNOTATION_COLORS,
+  READER_ANNOTATION_MAX_SPANS,
+  READER_ANNOTATION_QUOTE_MAX_LENGTH,
+  READER_ANNOTATION_STYLES,
+  READER_ANNOTATION_TARGET_TYPES,
+  READER_ANNOTATION_VISIBILITIES,
+} from "@stll/api-contract/legal-reader-annotations";
 import type {
-  CaseLawAnnotationColor,
-  CaseLawAnnotationStyle,
-  CaseLawAnnotationVisibility,
-} from "@stll/api-contract/case-law-annotations";
+  ReaderAnnotationColor,
+  ReaderAnnotationStyle,
+  ReaderAnnotationTargetType,
+  ReaderAnnotationVisibility,
+} from "@stll/api-contract/legal-reader-annotations";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, tUuid } from "@/api/lib/custom-schema";
 
+const ANNOTATION_TARGET_TYPE_SCHEMA_VALUES = [
+  READER_ANNOTATION_TARGET_TYPES[0],
+  READER_ANNOTATION_TARGET_TYPES[1],
+] as const satisfies readonly ReaderAnnotationTargetType[];
 const ANNOTATION_COLOR_SCHEMA_VALUES = [
-  CASE_LAW_ANNOTATION_COLORS[0],
-  CASE_LAW_ANNOTATION_COLORS[1],
-  CASE_LAW_ANNOTATION_COLORS[2],
-  CASE_LAW_ANNOTATION_COLORS[3],
-  CASE_LAW_ANNOTATION_COLORS[4],
-] as const satisfies readonly CaseLawAnnotationColor[];
+  READER_ANNOTATION_COLORS[0],
+  READER_ANNOTATION_COLORS[1],
+  READER_ANNOTATION_COLORS[2],
+  READER_ANNOTATION_COLORS[3],
+  READER_ANNOTATION_COLORS[4],
+] as const satisfies readonly ReaderAnnotationColor[];
 const ANNOTATION_STYLE_SCHEMA_VALUES = [
-  CASE_LAW_ANNOTATION_STYLES[0],
-  CASE_LAW_ANNOTATION_STYLES[1],
-  CASE_LAW_ANNOTATION_STYLES[2],
-  CASE_LAW_ANNOTATION_STYLES[3],
-] as const satisfies readonly CaseLawAnnotationStyle[];
+  READER_ANNOTATION_STYLES[0],
+  READER_ANNOTATION_STYLES[1],
+  READER_ANNOTATION_STYLES[2],
+  READER_ANNOTATION_STYLES[3],
+] as const satisfies readonly ReaderAnnotationStyle[];
 const ANNOTATION_VISIBILITY_SCHEMA_VALUES = [
-  CASE_LAW_ANNOTATION_VISIBILITIES[0],
-  CASE_LAW_ANNOTATION_VISIBILITIES[1],
-] as const satisfies readonly CaseLawAnnotationVisibility[];
+  READER_ANNOTATION_VISIBILITIES[0],
+  READER_ANNOTATION_VISIBILITIES[1],
+] as const satisfies readonly ReaderAnnotationVisibility[];
 
+type MissingAnnotationTargetType = Exclude<
+  ReaderAnnotationTargetType,
+  (typeof ANNOTATION_TARGET_TYPE_SCHEMA_VALUES)[number]
+>;
 type MissingAnnotationColor = Exclude<
-  CaseLawAnnotationColor,
+  ReaderAnnotationColor,
   (typeof ANNOTATION_COLOR_SCHEMA_VALUES)[number]
 >;
 type MissingAnnotationStyle = Exclude<
-  CaseLawAnnotationStyle,
+  ReaderAnnotationStyle,
   (typeof ANNOTATION_STYLE_SCHEMA_VALUES)[number]
 >;
 type MissingAnnotationVisibility = Exclude<
-  CaseLawAnnotationVisibility,
+  ReaderAnnotationVisibility,
   (typeof ANNOTATION_VISIBILITY_SCHEMA_VALUES)[number]
 >;
 
+true satisfies MissingAnnotationTargetType extends never ? true : never;
 true satisfies MissingAnnotationColor extends never ? true : never;
 true satisfies MissingAnnotationStyle extends never ? true : never;
 true satisfies MissingAnnotationVisibility extends never ? true : never;
 
+export const annotationTargetTypeSchema = t.Union([
+  t.Literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[0]),
+  t.Literal(ANNOTATION_TARGET_TYPE_SCHEMA_VALUES[1]),
+]);
 export const annotationColorSchema = t.Union([
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[0]),
   t.Literal(ANNOTATION_COLOR_SCHEMA_VALUES[1]),
@@ -72,9 +87,21 @@ export const annotationVisibilitySchema = t.Union([
 ]);
 
 /** The route schema has validated these values; preserve its closed domain. */
+export const requireAnnotationTargetType = (
+  value: string,
+): ReaderAnnotationTargetType => {
+  switch (value) {
+    case "decision":
+    case "statute":
+      return value;
+    default:
+      return panic(`Invalid annotation target type: ${value}`);
+  }
+};
+
 export const requireAnnotationColor = (
   value: string,
-): CaseLawAnnotationColor => {
+): ReaderAnnotationColor => {
   switch (value) {
     case "yellow":
     case "green":
@@ -89,7 +116,7 @@ export const requireAnnotationColor = (
 
 export const requireAnnotationStyle = (
   value: string,
-): CaseLawAnnotationStyle => {
+): ReaderAnnotationStyle => {
   switch (value) {
     case "highlight":
     case "underline":
@@ -103,7 +130,7 @@ export const requireAnnotationStyle = (
 
 export const requireAnnotationVisibility = (
   value: string,
-): CaseLawAnnotationVisibility => {
+): ReaderAnnotationVisibility => {
   switch (value) {
     case "private":
     case "shared":
@@ -113,20 +140,30 @@ export const requireAnnotationVisibility = (
   }
 };
 
-/** Where on the decision one paragraph's share of the annotation sits. */
+/**
+ * The document a mark sits on: the corpus, and the id within it. The id is a
+ * plain UUID rather than a branded one because the brand differs with the
+ * corpus; `targetType` is what says which identity it is.
+ */
+const targetSchemaFields = {
+  targetType: annotationTargetTypeSchema,
+  targetId: tUuid,
+} as const;
+
+/** Where on the document one paragraph's share of the annotation sits. */
 const spanSchema = t.Object({
   blockAnchorId: t.String({ minLength: 1, maxLength: 64 }),
   startOffset: t.Integer({ minimum: 0 }),
   endOffset: t.Integer({ minimum: 1 }),
   quote: t.String({
     minLength: 1,
-    maxLength: CASE_LAW_ANNOTATION_QUOTE_MAX_LENGTH,
+    maxLength: READER_ANNOTATION_QUOTE_MAX_LENGTH,
   }),
 });
 
 const spansSchema = t.Array(spanSchema, {
   minItems: 1,
-  maxItems: CASE_LAW_ANNOTATION_MAX_SPANS,
+  maxItems: READER_ANNOTATION_MAX_SPANS,
 });
 
 /**
@@ -135,20 +172,22 @@ const spansSchema = t.Array(spanSchema, {
  */
 export const createAnnotationBodySchema = t.Union([
   t.Object({
+    ...targetSchemaFields,
     kind: t.Literal("highlight"),
     color: annotationColorSchema,
     style: annotationStyleSchema,
-    requestId: t.Optional(tSafeId("caseLawDecisionAnnotation")),
+    requestId: t.Optional(tSafeId("legalReaderAnnotation")),
     visibility: t.Optional(annotationVisibilitySchema),
     spans: spansSchema,
   }),
   t.Object({
+    ...targetSchemaFields,
     kind: t.Literal("comment"),
     body: t.String({
       minLength: 1,
-      maxLength: CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
+      maxLength: READER_ANNOTATION_BODY_MAX_LENGTH,
     }),
-    requestId: t.Optional(tSafeId("caseLawDecisionAnnotation")),
+    requestId: t.Optional(tSafeId("legalReaderAnnotation")),
     visibility: t.Optional(annotationVisibilitySchema),
     spans: spansSchema,
   }),
@@ -162,7 +201,7 @@ export const updateAnnotationBodySchema = t.Union([
     change: t.Literal("body"),
     body: t.String({
       minLength: 1,
-      maxLength: CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
+      maxLength: READER_ANNOTATION_BODY_MAX_LENGTH,
     }),
   }),
   t.Object({ change: t.Literal("color"), color: annotationColorSchema }),
@@ -175,10 +214,6 @@ export const updateAnnotationBodySchema = t.Union([
 
 export type UpdateAnnotationBody = Static<typeof updateAnnotationBodySchema>;
 
-export const decisionParamsSchema = t.Object({
-  decisionId: tSafeId("caseLawDecision"),
-});
-
 export const annotationParamsSchema = t.Object({
-  annotationId: tSafeId("caseLawDecisionAnnotation"),
+  annotationId: tSafeId("legalReaderAnnotation"),
 });

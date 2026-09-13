@@ -284,6 +284,10 @@ export const LIMITS = {
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   exportRowLimit: 10_000,
+  /** One reader's highlights and comments on one decision or statute
+   *  version, read whole when the reader opens the document. */
+  readerAnnotationsPageSizeDefault: 100,
+  readerAnnotationsPageSizeMax: 100,
   exportPdfRowLimit: 5000,
   /** Hard cap on rows (contracts) a single view-to-report export may span.
    *  A DD report drafts per-contract AI narrative, so the row count bounds
@@ -429,8 +433,6 @@ export const LIMITS = {
    * no preview and read their own when a reader opens them.
    */
   caseLawProvisionPreviewVersionsMax: 8,
-  caseLawAnnotationsPageSizeDefault: 100,
-  caseLawAnnotationsPageSizeMax: 100,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
   /** Max language variants for one decision's languageGroupKey. Bounds the

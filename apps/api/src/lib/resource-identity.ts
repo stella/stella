@@ -69,7 +69,6 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CASE_LAW_DECISION,
   },
-  caseLawDecisionAnnotation: { type: "non_resource", reason: "subresource" },
   caseLawCorpusUploadIntent: { type: "non_resource", reason: "workflow" },
   caseLawIndexJob: { type: "non_resource", reason: "job" },
   caseLawIngestionEvent: { type: "non_resource", reason: "event" },
@@ -206,6 +205,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   legalListItemReview: { type: "non_resource", reason: "subresource" },
   legalListItemSource: { type: "non_resource", reason: "subresource" },
   legalListSection: { type: "non_resource", reason: "subresource" },
+  legalReaderAnnotation: { type: "non_resource", reason: "subresource" },
   matter: { type: "alias", resourceType: RESOURCE_TYPE.WORKSPACE },
   matterCounter: { type: "non_resource", reason: "projection" },
   mcpConnector: {

@@ -49,6 +49,7 @@ import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
+import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
@@ -692,6 +693,7 @@ const api = new Elysia()
       .use(savedSearchesRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
+      .use(legalReaderRoute)
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)

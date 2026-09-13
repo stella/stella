@@ -7,6 +7,7 @@ import { IntlProvider } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
+import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { StatuteText } from "@/features/statutes/components/statute-text";
 import { citingDecisionKeys } from "@/features/statutes/queries/citing-decisions";
 import { FormattingProvider } from "@/i18n/formatting-context";
@@ -92,11 +93,14 @@ const blocks = [
   },
 ] satisfies Block[];
 
+const NO_ANNOTATIONS: readonly AnnotationAnchorSource[] = [];
+
 const renderStatute = (
   overrides: Partial<ComponentProps<typeof StatuteText>> = {},
 ) =>
   renderWithIntl(
     <StatuteText
+      annotationAnchors={NO_ANNOTATIONS}
       blocks={blocks}
       citationWork={null}
       documentId={DOCUMENT_ID}
@@ -258,6 +262,65 @@ describe("StatuteText", () => {
     }
   });
 
+  test("draws a mark on the block whose anchor it was stored against", () => {
+    // The mark is stored against the block's stable anchor, which is what the
+    // reader selects and deep-links by; the renderer lays anchors by the
+    // block's render id. Nothing but this test notices when the two stop
+    // being translated into each other: the highlight simply never appears.
+    const marked = blocks.find((block) => block.type === "paragraph");
+    if (marked === undefined) {
+      throw new Error("The statute fixture has no paragraph to mark");
+    }
+    expect(marked.anchorId).not.toBe(marked.id);
+
+    const markup = renderStatute({
+      annotationAnchors: [
+        {
+          blockAnchorId: marked.anchorId,
+          color: "yellow",
+          endOffset: 4,
+          id: "019b0121-9dd7-7000-8000-0000000000aa",
+          kind: "highlight",
+          startOffset: 0,
+          style: "highlight",
+        },
+      ],
+    });
+
+    expect(markup).toContain(
+      'data-annotation-id="019b0121-9dd7-7000-8000-0000000000aa"',
+    );
+  });
+
+  test("anchors every table cell so a mark in one belongs to the cell", () => {
+    const table = blocks.find((block) => block.type === "table");
+    if (table === undefined) {
+      throw new Error("The statute fixture has no table to mark");
+    }
+    const cellPieceId = `table:${table.id}:0:1`;
+    const markup = renderStatute({
+      annotationAnchors: [
+        {
+          blockAnchorId: cellPieceId,
+          color: "yellow",
+          endOffset: 4,
+          id: "019b0121-9dd7-7000-8000-0000000000bb",
+          kind: "highlight",
+          startOffset: 0,
+          style: "highlight",
+        },
+      ],
+    });
+
+    // The cell carries its own anchor, so a selection inside it is stored
+    // against the cell's offsets rather than against the whole table's text.
+    expect(markup).toContain(`data-anchor="${cellPieceId}"`);
+    const cell = markup.slice(markup.indexOf(`data-anchor="${cellPieceId}"`));
+    expect(cell.slice(0, cell.indexOf("</td>"))).toContain(
+      'data-annotation-id="019b0121-9dd7-7000-8000-0000000000bb"',
+    );
+  });
+
   test("falls back to the plain text when the document has no parsed blocks", () => {
     const markup = renderStatute({
       blocks: [],
@@ -306,6 +369,7 @@ describe("StatuteText", () => {
       <QueryClientProvider client={queryClient}>
         <FormattingProvider locale="en" timeZone="UTC">
           <StatuteText
+            annotationAnchors={NO_ANNOTATIONS}
             blocks={blocks}
             citationWork={CITATION_WORK}
             documentId={DOCUMENT_ID}

@@ -571,28 +571,6 @@
       "treatment": "Vēlākā judikatūra"
     },
     "analyzing": "Analizē...",
-    "annotations": {
-      "colorGreen": "Zaļš",
-      "colorRed": "Sarkans",
-      "colorSky": "Zils",
-      "colorViolet": "Violets",
-      "colorYellow": "Dzeltens",
-      "commentPlaceholder": "Rakstiet komentāru…",
-      "createFreeAccount": "Izveidot bezmaksas kontu",
-      "guestAuthor": "Jūs",
-      "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
-      "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
-      "guestMigrationFailed": "Dažus izcēlumus un piezīmes neizdevās saglabāt. Tie paliks šajā cilnē nākamajam mēģinājumam.",
-      "guestSavePrompt": "Jūsu izcēlumi un piezīmes tiks saglabāti, kad izveidosiet bezmaksas kontu.",
-      "guestStorageUnavailable": "Izcēlumus un piezīmes šajā cilnē neizdevās saglabāt.",
-      "highlight": "Izcelt",
-      "removeHighlight": "Noņemt izcēlumu",
-      "sharedBadge": "Kopīgots",
-      "styleHighlight": "Izcēlums",
-      "styleSquiggly": "Viļņota līnija",
-      "styleStrikethrough": "Pārsvītrojums",
-      "visibilityShared": "Kopīgots ar organizāciju"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
@@ -619,13 +597,6 @@
       "citedBy": "Citēts",
       "headnote": "Kopsavilkums",
       "summary": "Tiesību atziņa / atbilsme"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Bloka citāts ar atsauci",
-      "citationOnly": "Tikai atsauce",
-      "citationWithQuote": "Atsauce ar citātu",
-      "quoteWithCitation": "Citāts ar atsauci",
-      "textOnly": "Tikai teksts"
     },
     "courtTiers": {
       "constitutional": "Konstitucionālās tiesas",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "No augstākajām tiesām",
     "tryIdentifier": "Izmēģiniet identifikatoru"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "Par šo {citation} fragmentu:\n\n„{quote}”\n\n",
+      "colorGreen": "Zaļš",
+      "colorRed": "Sarkans",
+      "colorSky": "Zils",
+      "colorViolet": "Violets",
+      "colorYellow": "Dzeltens",
+      "commentPlaceholder": "Rakstiet komentāru…",
+      "createFreeAccount": "Izveidot bezmaksas kontu",
+      "guestAuthor": "Jūs",
+      "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
+      "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
+      "guestMigrationFailed": "Dažus izcēlumus un piezīmes neizdevās saglabāt. Tie paliks šajā cilnē nākamajam mēģinājumam.",
+      "guestSavePrompt": "Jūsu izcēlumi un piezīmes tiks saglabāti, kad izveidosiet bezmaksas kontu.",
+      "guestStorageUnavailable": "Izcēlumus un piezīmes šajā cilnē neizdevās saglabāt.",
+      "highlight": "Izcelt",
+      "removeHighlight": "Noņemt izcēlumu",
+      "sharedBadge": "Kopīgots",
+      "styleHighlight": "Izcēlums",
+      "styleSquiggly": "Viļņota līnija",
+      "styleStrikethrough": "Pārsvītrojums",
+      "visibilityShared": "Kopīgots ar organizāciju"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Bloka citāts ar atsauci",
+      "citationOnly": "Tikai atsauce",
+      "citationWithQuote": "Atsauce ar citātu",
+      "quoteWithCitation": "Citāts ar atsauci",
+      "textOnly": "Tikai teksts"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Markdown avotteksts"

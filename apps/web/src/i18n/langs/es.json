@@ -571,28 +571,6 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
-    "annotations": {
-      "colorGreen": "Verde",
-      "colorRed": "Rojo",
-      "colorSky": "Azul",
-      "colorViolet": "Violeta",
-      "colorYellow": "Amarillo",
-      "commentPlaceholder": "Escribe un comentario…",
-      "createFreeAccount": "Crear cuenta gratuita",
-      "guestAuthor": "Tú",
-      "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
-      "guestMigrationComplete": "Resaltados y notas guardados.",
-      "guestMigrationFailed": "No se han podido guardar algunos resaltados y notas. Permanecerán en esta pestaña para otro intento.",
-      "guestSavePrompt": "Tus resaltados y notas se guardarán cuando crees una cuenta gratuita.",
-      "guestStorageUnavailable": "No se han podido guardar los resaltados y notas en esta pestaña.",
-      "highlight": "Resaltar",
-      "removeHighlight": "Quitar resaltado",
-      "sharedBadge": "Compartido",
-      "styleHighlight": "Resaltado",
-      "styleSquiggly": "Ondulado",
-      "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartido con la organización"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
@@ -619,13 +597,6 @@
       "citedBy": "Citada por",
       "headnote": "Sumario",
       "summary": "Sumario / coincidencia"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Cita en bloque con referencia",
-      "citationOnly": "Solo referencia",
-      "citationWithQuote": "Referencia con cita",
-      "quoteWithCitation": "Cita textual con referencia",
-      "textOnly": "Solo texto"
     },
     "courtTiers": {
       "constitutional": "Tribunales constitucionales",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "De los tribunales superiores",
     "tryIdentifier": "Prueba un identificador"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "Sobre este pasaje de {citation}:\n\n«{quote}»\n\n",
+      "colorGreen": "Verde",
+      "colorRed": "Rojo",
+      "colorSky": "Azul",
+      "colorViolet": "Violeta",
+      "colorYellow": "Amarillo",
+      "commentPlaceholder": "Escribe un comentario…",
+      "createFreeAccount": "Crear cuenta gratuita",
+      "guestAuthor": "Tú",
+      "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
+      "guestMigrationComplete": "Resaltados y notas guardados.",
+      "guestMigrationFailed": "No se han podido guardar algunos resaltados y notas. Permanecerán en esta pestaña para otro intento.",
+      "guestSavePrompt": "Tus resaltados y notas se guardarán cuando crees una cuenta gratuita.",
+      "guestStorageUnavailable": "No se han podido guardar los resaltados y notas en esta pestaña.",
+      "highlight": "Resaltar",
+      "removeHighlight": "Quitar resaltado",
+      "sharedBadge": "Compartido",
+      "styleHighlight": "Resaltado",
+      "styleSquiggly": "Ondulado",
+      "styleStrikethrough": "Tachado",
+      "visibilityShared": "Compartido con la organización"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Cita en bloque con referencia",
+      "citationOnly": "Solo referencia",
+      "citationWithQuote": "Referencia con cita",
+      "quoteWithCitation": "Cita textual con referencia",
+      "textOnly": "Solo texto"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Código fuente Markdown"
