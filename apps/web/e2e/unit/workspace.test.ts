@@ -93,7 +93,10 @@ describe("deleteTestWorkspace", () => {
 
     try {
       await deleteTestWorkspace(apiRequest, workspaceId);
-      expect(requests).toEqual([`DELETE ${deletePath}`, `DELETE ${deletePath}`]);
+      expect(requests).toEqual([
+        `DELETE ${deletePath}`,
+        `DELETE ${deletePath}`,
+      ]);
     } finally {
       await apiRequest.dispose();
       await server.stop();
