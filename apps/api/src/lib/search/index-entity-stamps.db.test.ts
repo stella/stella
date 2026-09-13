@@ -319,6 +319,7 @@ test("original references remain searchable after more than 500 later versions",
       }),
     };
   });
+  const laterVersionIds = laterVersions.map(({ id }) => id);
   const latest = laterVersions.at(-1);
   expect(latest).toBeDefined();
   if (!latest) {
@@ -344,7 +345,7 @@ test("original references remain searchable after more than 500 later versions",
         .where(eq(entities.id, entityId));
       await tx
         .delete(entityVersions)
-        .where(inArray(entityVersions.id, laterVersions.map(({ id }) => id)));
+        .where(inArray(entityVersions.id, laterVersionIds));
     });
     await indexEntity();
   }
