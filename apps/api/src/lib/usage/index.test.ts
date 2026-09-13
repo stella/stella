@@ -322,16 +322,10 @@ describe("usage ledger — allocation + usage math", () => {
         })
         .from(usageEvents)
         .where(eq(usageEvents.organizationId, fx.organizationId));
-      expect(events).toHaveLength(2);
-      expect(events.map(({ unitsConsumed }) => unitsConsumed)).toEqual([
-        300,
-        300,
+      expect(events).toEqual([
+        { unitsConsumed: 300, workspaceId: null },
+        { unitsConsumed: 300, workspaceId: null },
       ]);
-      expect(
-        events.every(
-          ({ workspaceId: eventWorkspaceId }) => eventWorkspaceId === null,
-        ),
-      ).toBeTrue();
     });
   });
 
