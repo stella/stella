@@ -161,6 +161,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "report_exports_workspace_requester_created_idx",
     tableName: "report_exports",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "folio_collab_rooms_workspace_source_version_idx" ON public."folio_collab_rooms" USING btree ("workspace_id", "source_version_id")',
+    definitionBody:
+      "ON public.folio_collab_rooms USING btree (workspace_id, source_version_id)",
+    isUnique: false,
+    name: "folio_collab_rooms_workspace_source_version_idx",
+    tableName: "folio_collab_rooms",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
