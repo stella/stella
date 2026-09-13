@@ -8,7 +8,6 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import {
   desktopEditSessions,
   entities,
-  entityVersions,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -32,6 +31,7 @@ import {
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import {
   buildVersionStamp,
@@ -44,6 +44,7 @@ import {
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -454,7 +455,18 @@ export const finalizeDesktopEditSessionHandler = async ({
           panic("Workspace not found for finalized desktop edit session"),
       });
 
-      const storedBytes = new Uint8Array(checkpointBuffer);
+      // The file Word opened came from clean stored bytes, so the checkpoint
+      // normally carries nothing. It carries a reference when the editor pasted
+      // a stamped download over it, and that must not become this version's
+      // stored bytes.
+      const { bytes: storedBytes, strippedArchive } =
+        await storedDocumentBytes(checkpointBuffer);
+      const storedSha256Hex =
+        strippedArchive === null
+          ? editSession.checkpointSha256Hex
+          : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+      const storedSizeBytes = storedBytes.byteLength;
+
       const nextVersionId = createSafeId<"entityVersion">();
       const sourceFileId = allocateFileObject();
       const sourceKey = createFileKey({
@@ -471,12 +483,11 @@ export const finalizeDesktopEditSessionHandler = async ({
         key: sourceKey,
       });
 
-      await tx.insert(entityVersions).values({
+      await insertEntityVersion(tx, {
         entityId: editSession.entityId,
         id: nextVersionId,
         source: DESKTOP_EDIT_DOCUMENT_SOURCE,
         stamp: nextVersionStamp.stamp,
-        verificationCode: nextVersionStamp.verificationCode,
         versionNumber: nextVersionNumber,
         workspaceId: authorizedSession.value.workspaceId,
       });
@@ -495,8 +506,8 @@ export const finalizeDesktopEditSessionHandler = async ({
             encrypted: false,
             mimeType: canonicalMimeType,
           }),
-          sha256Hex: editSession.checkpointSha256Hex,
-          sizeBytes: editSession.checkpointSizeBytes,
+          sha256Hex: storedSha256Hex,
+          sizeBytes: storedSizeBytes,
           type: "file",
           version: 1,
           ...(editSession.checkpointScanWarnings !== null && {
@@ -556,8 +567,8 @@ export const finalizeDesktopEditSessionHandler = async ({
                 versionNumber: nextVersionNumber,
                 fileName: editSession.fileName,
                 fileType: editSession.fileType,
-                sha256Hex: editSession.checkpointSha256Hex,
-                sizeBytes: editSession.checkpointSizeBytes,
+                sha256Hex: storedSha256Hex,
+                sizeBytes: storedSizeBytes,
               },
             },
           },

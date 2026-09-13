@@ -1327,6 +1327,7 @@
     "convertTo": "Konvertuoti į",
     "copied": "Nukopijuota",
     "copy": "Kopijuoti",
+    "copyDocumentReference": "Kopijuoti dokumento nuorodos numerį",
     "copyLink": "Kopijuoti nuorodą",
     "country": "Valstybė",
     "court": "Teismas",
@@ -1345,6 +1346,7 @@
     "disconnect": "Atjungti",
     "displayName": "Rodomas vardas",
     "document": "Dokumentas",
+    "documentReference": "Dokumento nuorodos numeris",
     "documentTitle": "Dokumento pavadinimas",
     "documentation": "Dokumentacija",
     "done": "Atlikta",
@@ -2234,7 +2236,6 @@
       "replaceText": "Pakeičiantysis tekstas",
       "wholeWords": "Visi žodžiai"
     },
-    "finishEditing": "Baigti redagavimą",
     "fontColor": "Šrifto spalva",
     "fontGroup": "Šriftas",
     "fontSize": "Šrifto dydis",
@@ -4659,6 +4660,11 @@
     "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",
     "slugRequired": "Slug yra privalomas"
   },
+  "verify": {
+    "notFound": "Jūsų organizacijoje nėra dokumento su šiuo nuorodos numeriu.",
+    "opened": "Atidaryta pagal nuorodos numerį <bdi>{reference}</bdi>.",
+    "superseded": "Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4758,6 +4764,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Pridėkite failo savybę norėdami įkelti failus",
+      "attachedTemplateUpload": {
+        "confirm": "Pašalinti saitą ir įkelti",
+        "description": "{count, plural, one {Šiame faile yra saitas į už dokumento ribų esantį „Word“ šabloną.} few {Šiuose failuose yra saitų į už dokumentų ribų esančius „Word“ šablonus.} many {Šiuose failuose yra saitų į už dokumentų ribų esančius „Word“ šablonus.} other {Šiuose failuose yra saitų į už dokumentų ribų esančius „Word“ šablonus.}} stella blokuoja nepakeistų failų įkėlimą, nes per šiuos saitus „Word“ gali įkelti turinį arba makrokomandas.",
+        "effect": "Tęsiant šablono saitas pašalinamas tik iš įkeliamos kopijos. Pradinis failas jūsų įrenginyje nepakeičiamas.",
+        "localLocation": "Šablono vieta: vietinis failo kelias už šio dokumento ribų",
+        "mixedLocation": "Šablonų vietos: kelių rūšių išoriniai keliai",
+        "networkLocation": "Šablono vieta: tinklo arba interneto adresas",
+        "ruleLabel": "Saugos taisyklė:",
+        "title": "Pašalinti „Word“ šablonų saitus?",
+        "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
+      },
       "defaultPropertyName": "Dokumentai",
       "desktopEdit": {
         "action": "Redaguoti darbalaukio programoje",
@@ -4782,19 +4799,28 @@
         "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji atsinaujins automatiškai, kai bus baigti aktyvūs darbalaukio redagavimai; bandykite dar kartą po paleidimo iš naujo.",
         "updateRequiredTitle": "Atnaujinkite stella desktop"
       },
+      "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
       "downloadExtractedText": "Išgautas tekstas (.txt)",
-      "downloadOriginal": "Originalus failas",
-      "downloadPdf": "PDF",
+      "downloadFailed": "Nepavyko atsisiųsti",
+      "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadScrubbed": "Atsisiųsti be metaduomenų",
       "downloadScrubbedHint": "Pašalina faile esantį autorių, įmonę ir redagavimo istoriją. Byloje esanti kopija juos išsaugo.",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
+      "downloadWithReference": "Atsisiųsti su nuorodos numeriu",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
       "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
+      "referencedUpload": {
+        "choiceLabel": "Ką daryti su failu {fileName}",
+        "description": "{count, plural, one {# failas turi dokumento, kurį jau turite, nuorodos numerį.} few {# failai turi dokumentų, kuriuos jau turite, nuorodos numerius.} many {# failų turi dokumentų, kuriuos jau turite, nuorodos numerius.} other {# failų turi dokumentų, kuriuos jau turite, nuorodos numerius.}} Pasirinkite, ką daryti su kiekvienu.",
+        "matchedDocument": "Dokumento <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number} versija byloje <bdi>{matterName}</bdi>",
+        "title": "Įrašyti juos kaip naujas versijas?",
+        "uploadAsNewDocument": "Įkelti kaip naują dokumentą"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
       "runOcr": "Įtraukti OCR į eilę",
@@ -4805,13 +4831,23 @@
       "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti",
       "uploadingProgress": "{completed, number} iš {total, number} įkelta",
       "versionOrNewFile": {
+        "addAsVersion": "Pridėti kaip {version, number} versiją",
+        "addAsVersionThere": "Pridėti ten kaip {version, number} versiją",
+        "checkingReference": "Tikrinamas failo nuorodos numeris...",
         "createNewOption": "Sukurti naują failą",
         "description": "Numetėte \"{fileName}\" ant esamo dokumento.",
         "extensionMismatch": "Plėtinys nesutampa: tikėtasi {expected}, gauta {actual}",
         "extensionMismatchError": "Failo plėtinys nesutampa su esamu dokumentu",
+        "newDocumentDropsReference": "Senas nuorodos numeris bus pašalintas iš failo.",
         "noExtension": "be plėtinio",
+        "referenceElsewhere": "Šis failas yra dokumento <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number} versija byloje <bdi>{matterName}</bdi>.",
+        "referenceHere": "Šis failas yra dokumento <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number} versija.",
+        "referenceLineRemoved": "Iš šio failo pašalinta nuorodos numerio eilutė, todėl jis laikomas nauju dokumentu, nebent pasirinksite kitaip.",
+        "referenceSuperseded": "Jis parengtas pagal {basedOn, number} versiją; dabartinė yra {current, number} versija.",
         "replaceOption": "Įkelti kaip naują versiją",
-        "title": "Įkelti naują versiją ar sukurti naują failą?"
+        "title": "Įkelti naują versiją ar sukurti naują failą?",
+        "unnamedDocument": "be pavadinimo",
+        "uploadAsNewDocumentHere": "Įkelti čia kaip naują dokumentą"
       },
       "versionUploadFailed": "Nepavyko įkelti versijos",
       "versionUploaded": "Nauja versija įkelta",
@@ -5288,6 +5324,8 @@
     "reference": "Nuorodos numeris",
     "referenceConventionHint": "Pageidaujamas formatas: {example}",
     "referenceFormatWarning": "Neatitinka pageidaujamo formato.",
+    "referenceNumberingEmptyHint": "Nurodykite nuorodos numerį, kad šios bylos dokumentai būtų numeruojami.",
+    "referenceNumberingHint": "Šios bylos dokumentai numeruojami <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> ir taip toliau; kiekviena versija prideda <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "pvz. 2024/001",
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {

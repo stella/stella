@@ -1327,6 +1327,7 @@
     "convertTo": "Converter para",
     "copied": "Copiado",
     "copy": "Copiar",
+    "copyDocumentReference": "Copiar a referência do documento",
     "copyLink": "Copiar link",
     "country": "País",
     "court": "Tribunal",
@@ -1345,6 +1346,7 @@
     "disconnect": "Desconectar",
     "displayName": "Nome de exibição",
     "document": "Documento",
+    "documentReference": "Referência do documento",
     "documentTitle": "Título do documento",
     "documentation": "Documentação",
     "done": "Concluído",
@@ -2234,7 +2236,6 @@
       "replaceText": "Texto de substituição",
       "wholeWords": "Palavras inteiras"
     },
-    "finishEditing": "Concluir a edição",
     "fontColor": "Cor da fonte",
     "fontGroup": "Fonte",
     "fontSize": "Tamanho da fonte",
@@ -4659,6 +4660,11 @@
     "slugFormat": "O slug deve conter letras minúsculas, números e hifens",
     "slugRequired": "O slug é obrigatório"
   },
+  "verify": {
+    "notFound": "Nenhum documento com esta referência está disponível na sua organização.",
+    "opened": "Aberto pela referência <bdi>{reference}</bdi>.",
+    "superseded": "Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4758,6 +4764,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Adicione uma propriedade de arquivo para fazer upload de arquivos",
+      "attachedTemplateUpload": {
+        "confirm": "Remover link e enviar",
+        "description": "{count, plural, one {Este arquivo contém um link para um modelo do Word fora do documento.} other {Estes arquivos contêm links para modelos do Word fora dos documentos.}} A stella não os enviará sem alterações porque o Word pode carregar conteúdo ou macros por esses links.",
+        "effect": "Ao continuar, somente o link do modelo é removido da cópia enviada. O arquivo original no seu dispositivo não é alterado.",
+        "localLocation": "Local do modelo: um caminho de arquivo local fora deste documento",
+        "mixedLocation": "Locais dos modelos: mais de um tipo de caminho externo",
+        "networkLocation": "Local do modelo: um endereço de rede ou da Internet",
+        "ruleLabel": "Regra de segurança:",
+        "title": "Remover links para modelos do Word?",
+        "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
+      },
       "defaultPropertyName": "Documentos",
       "desktopEdit": {
         "action": "Editar no desktop",
@@ -4782,19 +4799,28 @@
         "updateRequiredDescription": "O stella desktop precisa de uma atualização. Ele será atualizado automaticamente quando as edições ativas no desktop terminarem; tente novamente após reiniciar.",
         "updateRequiredTitle": "Atualize o stella desktop"
       },
+      "downloadAs": "Baixar como…",
       "downloadAsZip": "Baixe como ZIP",
       "downloadExtractedText": "Texto extraído (.txt)",
-      "downloadOriginal": "Arquivo original",
-      "downloadPdf": "PDF",
+      "downloadFailed": "Falha ao baixar",
+      "downloadPdf": "Baixar como PDF",
       "downloadScrubbed": "Baixar sem metadados",
       "downloadScrubbedHint": "Remove o autor, a empresa e o histórico de edição contidos no arquivo. A cópia no caso os mantém.",
       "downloadSearchablePdf": "PDF pesquisável",
+      "downloadWithReference": "Baixar com número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
       "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
+      "referencedUpload": {
+        "choiceLabel": "O que fazer com {fileName}",
+        "description": "{count, plural, one {# arquivo carrega a referência de um documento que você já tem.} other {# arquivos carregam referências de documentos que você já tem.}} Escolha o que fazer com cada um.",
+        "matchedDocument": "Versão {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) no caso <bdi>{matterName}</bdi>",
+        "title": "Arquivar como novas versões?",
+        "uploadAsNewDocument": "Enviar como novo documento"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# arquivo renomeado para evitar conflitos} many {# arquivos renomeados para evitar conflitos} other {# arquivos renomeados para evitar conflitos}}",
       "retryFailed": "Tentar novamente {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}}",
       "runOcr": "Colocar OCR na fila",
@@ -4805,13 +4831,23 @@
       "uploadingDescription": "Não feche esta página até que os arquivos sejam carregados",
       "uploadingProgress": "{completed, number} de {total, number} enviados",
       "versionOrNewFile": {
+        "addAsVersion": "Adicionar como versão {version, number}",
+        "addAsVersionThere": "Adicionar lá como versão {version, number}",
+        "checkingReference": "Verificando a referência do arquivo...",
         "createNewOption": "Criar novo arquivo",
         "description": "Você soltou \"{fileName}\" em um documento existente.",
         "extensionMismatch": "Extensão não corresponde: esperado {expected}, recebido {actual}",
         "extensionMismatchError": "A extensão do arquivo não corresponde ao documento existente",
+        "newDocumentDropsReference": "A referência antiga será removida do arquivo.",
         "noExtension": "sem extensão",
+        "referenceElsewhere": "Este arquivo é a versão {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) no caso <bdi>{matterName}</bdi>.",
+        "referenceHere": "Este arquivo é a versão {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
+        "referenceLineRemoved": "A linha da referência foi removida deste arquivo, por isso ele é tratado como um documento novo, a menos que você escolha outra opção.",
+        "referenceSuperseded": "Ele parte da versão {basedOn, number}; a versão atual é a {current, number}.",
         "replaceOption": "Enviar como nova versão",
-        "title": "Enviar nova versão ou criar novo arquivo?"
+        "title": "Enviar nova versão ou criar novo arquivo?",
+        "unnamedDocument": "um documento sem título",
+        "uploadAsNewDocumentHere": "Enviar aqui como novo documento"
       },
       "versionUploadFailed": "Falha ao enviar versão",
       "versionUploaded": "Nova versão enviada",
@@ -5288,6 +5324,8 @@
     "reference": "Número de referência",
     "referenceConventionHint": "Formato preferido: {example}",
     "referenceFormatWarning": "Não corresponde ao formato preferido.",
+    "referenceNumberingEmptyHint": "Informe um número de referência para começar a numerar os documentos deste caso.",
+    "referenceNumberingHint": "Os documentos deste caso são numerados <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> e assim por diante; cada versão acrescenta <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "por exemplo 2024/001",
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {

@@ -30,18 +30,21 @@ const readEvidenceMessages = async (locale: string) => {
   if (
     typeof catalog !== "object" ||
     catalog === null ||
+    !("common" in catalog) ||
+    typeof catalog.common !== "object" ||
+    catalog.common === null ||
+    !("save" in catalog.common) ||
+    typeof catalog.common.save !== "string" ||
     !("folio" in catalog) ||
     typeof catalog.folio !== "object" ||
     catalog.folio === null ||
-    !("finishEditing" in catalog.folio) ||
-    typeof catalog.folio.finishEditing !== "string" ||
     !("evidenceReferences" in catalog.folio) ||
     typeof catalog.folio.evidenceReferences !== "string"
   ) {
     throw new Error(`Missing evidence test labels for ${locale}`);
   }
   return {
-    finishEditing: catalog.folio.finishEditing,
+    save: catalog.common.save,
     evidenceReferences: catalog.folio.evidenceReferences,
   };
 };
@@ -246,10 +249,11 @@ for (const locale of ["cs", "en", "ar"] as const) {
         `?entity=${pleadingUpload.entityId}&field=${pleadingField!.id}&editing=true`;
       await page.goto(documentUrl, { waitUntil: "domcontentloaded" });
 
-      const finishEditingButton = page.getByRole("button", {
-        name: messages.finishEditing,
+      const saveButton = page.getByRole("button", {
+        exact: true,
+        name: messages.save,
       });
-      await expect(finishEditingButton).toBeEnabled({ timeout: 45_000 });
+      await expect(saveButton).toBeEnabled({ timeout: 45_000 });
       await expect(
         page.locator(".layout-run-text", {
           hasText: "Stella E2E test document.",
@@ -290,9 +294,9 @@ for (const locale of ["cs", "en", "ar"] as const) {
           response.url().endsWith("/finalize"),
         { timeout: 45_000 },
       );
-      await finishEditingButton.click();
+      await saveButton.click();
       expect((await finalizeResponse).ok()).toBe(true);
-      await expect(finishEditingButton).toBeHidden();
+      await expect(saveButton).toBeHidden();
 
       const savedFieldId = await waitForFileFieldId(
         request,
@@ -312,7 +316,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
           `?entity=${pleadingUpload.entityId}&field=${savedFieldId}&editing=true`,
         { waitUntil: "domcontentloaded" },
       );
-      await expect(finishEditingButton).toBeEnabled({ timeout: 45_000 });
+      await expect(saveButton).toBeEnabled({ timeout: 45_000 });
 
       await evidenceButton.click();
       const reloadedDialog = page.getByRole("dialog", {
@@ -356,9 +360,9 @@ for (const locale of ["cs", "en", "ar"] as const) {
           response.url().endsWith("/finalize"),
         { timeout: 45_000 },
       );
-      await finishEditingButton.click();
+      await saveButton.click();
       expect((await secondFinalizeResponse).ok()).toBe(true);
-      await expect(finishEditingButton).toBeHidden();
+      await expect(saveButton).toBeHidden();
       const finalDocument = await waitForDocumentContaining(
         request,
         testWorkspace.id,

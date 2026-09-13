@@ -12,7 +12,7 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-tabs-store";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 
@@ -25,13 +25,6 @@ export const useDocxTabEditSession = ({
 }: UseDocxTabEditSessionOptions) => {
   const t = useTranslations();
   const [editingDocxTabId, setEditingDocxTabId] = useState<string | null>(null);
-  const [flashingDocxEditTabId, setFlashingDocxEditTabId] = useState<
-    string | null
-  >(null);
-  const flashDocxEditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-
   const docxActionsRef = useRef(new Map<string, DocxBrowserEditorActions>());
   const [docxScrollTopByTab, setDocxScrollTopByTab] = useState<
     Map<string, number>
@@ -76,23 +69,6 @@ export const useDocxTabEditSession = ({
     },
     [docxCompatibilityByTab, editingDocxTabId, t],
   );
-
-  const flashDocxEditButton = (tabId: string) => {
-    if (flashDocxEditTimerRef.current !== null) {
-      clearTimeout(flashDocxEditTimerRef.current);
-    }
-    setFlashingDocxEditTabId(tabId);
-    flashDocxEditTimerRef.current = setTimeout(() => {
-      setFlashingDocxEditTabId(null);
-      flashDocxEditTimerRef.current = null;
-    }, 2200);
-  };
-
-  useMountEffect(() => () => {
-    if (flashDocxEditTimerRef.current !== null) {
-      clearTimeout(flashDocxEditTimerRef.current);
-    }
-  });
 
   const pendingDocxEditTabId = useInspectorCommandStore(
     (s) => s.pendingDocxEditTabId,
@@ -140,12 +116,8 @@ export const useDocxTabEditSession = ({
 
   return {
     docxActionsRef,
-    docxCompatibilityByTab,
     docxScrollTopByTab,
     editingDocxTabId,
-    flashingDocxEditTabId,
-    flashDocxEditButton,
-    handleStartDocxEdit,
     setDocxCompatibilityByTab,
     setDocxScrollTopByTab,
     setEditingDocxTabId,

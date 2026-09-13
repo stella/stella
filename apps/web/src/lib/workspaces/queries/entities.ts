@@ -123,6 +123,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
     createdByDeletedAt: entity.createdByDeletedAt,
     updatedAt: entity.updatedAt,
     version: entity.version,
+    currentVersionReference: entity.currentVersionReference,
     // These columns are varchar for backwards compatibility. Treat unknown
     // wire values as absent at this boundary so consumers cannot render an
     // unhandled task state accidentally.

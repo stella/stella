@@ -2,7 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import { entities, fields, workspaces } from "@/api/db/schema";
+import type { entityVersions } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -11,6 +12,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import {
+  carryVerificationCodes,
+  insertEntityVersions,
+} from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -42,15 +47,65 @@ export type EntityFieldSnapshot = {
   content: FieldContent;
 };
 
+/**
+ * The version columns a move carries across unchanged. A stamp and its
+ * verification code are frozen the moment they are printed, so re-homing a
+ * document must reproduce the row, not mint a replacement for it. Picked from
+ * the table so each column keeps the type the schema gives it.
+ */
+type CarriedVersionColumns = Pick<
+  typeof entityVersions.$inferSelect,
+  | "id"
+  | "versionNumber"
+  | "stamp"
+  | "label"
+  | "description"
+  | "diffWordsAdded"
+  | "diffWordsRemoved"
+  | "createdBy"
+  | "source"
+  | "collaborationContributorUserIds"
+  | "detectedLanguage"
+  | "createdAt"
+>;
+
+/**
+ * The relational-query column selection that produces {@link
+ * CarriedVersionColumns}. Total over that shape, so a column added to the
+ * carried set cannot be left unread by the loaders.
+ */
+const CARRIED_VERSION_COLUMNS = {
+  id: true,
+  versionNumber: true,
+  stamp: true,
+  label: true,
+  description: true,
+  diffWordsAdded: true,
+  diffWordsRemoved: true,
+  createdBy: true,
+  source: true,
+  collaborationContributorUserIds: true,
+  detectedLanguage: true,
+  createdAt: true,
+} as const satisfies Record<keyof CarriedVersionColumns, true>;
+
+export type EntityVersionSnapshot = CarriedVersionColumns & {
+  fields: EntityFieldSnapshot[];
+};
+
+/**
+ * One source entity and the versions to write for it. A copy loads the current
+ * version alone and mints a fresh identity for it; a move loads the whole
+ * non-deleted history, so both run through one insert path.
+ */
 export type EntitySnapshot = {
   id: SafeId<"entity">;
   kind: EntityKind;
   name: string;
   parentId: SafeId<"entity"> | null;
   readOnly?: boolean;
-  currentVersion: {
-    fields: EntityFieldSnapshot[];
-  } | null;
+  currentVersionId: SafeId<"entityVersion"> | null;
+  versions: EntityVersionSnapshot[];
 };
 
 type WritableEntityFieldSnapshot = {
@@ -59,11 +114,81 @@ type WritableEntityFieldSnapshot = {
   content: WritableFieldContent;
 };
 
-export type WritableEntitySnapshot = Omit<EntitySnapshot, "currentVersion"> & {
-  currentVersion: {
-    fields: WritableEntityFieldSnapshot[];
-  } | null;
+export type WritableEntityVersionSnapshot = CarriedVersionColumns & {
+  fields: WritableEntityFieldSnapshot[];
 };
+
+export type WritableEntitySnapshot = Omit<EntitySnapshot, "versions"> & {
+  versions: WritableEntityVersionSnapshot[];
+};
+
+/**
+ * Which operation the target rows belong to. A copy is a new document: one
+ * version, numbered 1, stamped and coded under the target matter. A move is
+ * the same document in another matter, so every version keeps the number,
+ * stamp and verification code already printed on it.
+ */
+export type EntityTransfer = { type: "copy" } | { type: "move" };
+
+/** Entity columns every snapshot carries. */
+export const ENTITY_SNAPSHOT_COLUMNS = {
+  id: true,
+  kind: true,
+  name: true,
+  parentId: true,
+  readOnly: true,
+  currentVersionId: true,
+} as const;
+
+const VERSION_FIELDS_SELECT = {
+  // Ascending field id is ascending creation order, the order
+  // `findExtractionFileField` requires, so the copy resolves the
+  // same extraction source as the entity it came from. At most
+  // one field per property bounds the read.
+  columns: { id: true, propertyId: true, content: true },
+  orderBy: { id: "asc" },
+  limit: LIMITS.propertiesCount,
+} as const;
+
+/** A copy writes one version, so it reads one: the entity as it stands. */
+export const CURRENT_VERSION_SELECT = {
+  currentVersion: {
+    columns: CARRIED_VERSION_COLUMNS,
+    with: { fields: VERSION_FIELDS_SELECT },
+  },
+} as const;
+
+/**
+ * A move re-homes the document itself, so it reads the whole surviving
+ * history, oldest first. Tombstoned versions stay behind with the source rows.
+ */
+export const EVERY_LIVE_VERSION_SELECT = {
+  versions: {
+    columns: CARRIED_VERSION_COLUMNS,
+    where: { deletedAt: { isNull: true } },
+    orderBy: { versionNumber: "asc" },
+    limit: LIMITS.versionsPerEntity,
+    with: { fields: VERSION_FIELDS_SELECT },
+  },
+} as const;
+
+type EntityRowWithCurrentVersion = Omit<EntitySnapshot, "versions"> & {
+  currentVersion: EntityVersionSnapshot | null;
+};
+
+/**
+ * The copy loader's row as a snapshot. The version it loaded is by
+ * construction the current one, so naming it here lets one insert path serve
+ * both transfers.
+ */
+export const snapshotOfCurrentVersion = ({
+  currentVersion,
+  ...entity
+}: EntityRowWithCurrentVersion): EntitySnapshot => ({
+  ...entity,
+  currentVersionId: currentVersion?.id ?? null,
+  versions: currentVersion ? [currentVersion] : [],
+});
 
 export type CopiedEntity = {
   sourceId: SafeId<"entity">;
@@ -102,7 +227,6 @@ export type FileMapping = {
   newFileId: MintedFileId;
   sourceEntityId: SafeId<"entity">;
   sourceFileId: string;
-  sourcePropertyId: SafeId<"property">;
   mimeType: string;
 };
 
@@ -110,19 +234,28 @@ export type FileCopySource = {
   sourceEntityId: SafeId<"entity">;
   sourceKey: string;
   sourceFileId: string;
-  sourcePropertyId: SafeId<"property">;
   mimeType: string;
 };
 
 type FileMappingKeyInput = {
   sourceEntityId: SafeId<"entity">;
-  sourcePropertyId: SafeId<"property">;
+  sourceFileId: string;
 };
 
+/**
+ * One target object per source object per entity.
+ *
+ * Keyed by file id, not by property: consecutive versions of a document share
+ * the object whose bytes did not change, and the whole carried history must
+ * point at one copy of it the way the source did. Keyed per entity all the
+ * same: S3 keys derive from the file id and deleting an entity deletes its
+ * objects, so two entities that happen to reference one source object still
+ * get an object each.
+ */
 const fileMappingKey = ({
   sourceEntityId,
-  sourcePropertyId,
-}: FileMappingKeyInput) => `${sourceEntityId}:${sourcePropertyId}`;
+  sourceFileId,
+}: FileMappingKeyInput) => `${sourceEntityId}:${sourceFileId}`;
 
 type CollectFileCopySourcesOptions = {
   sourceEntities: EntitySnapshot[];
@@ -131,7 +264,8 @@ type CollectFileCopySourcesOptions = {
 };
 
 /**
- * Collect all source file objects needed for S3 copy.
+ * Collect all source file objects needed for S3 copy, across every version the
+ * transfer carries.
  */
 export const collectFileCopySources = ({
   sourceEntities,
@@ -139,28 +273,35 @@ export const collectFileCopySources = ({
   sourceWorkspaceId,
 }: CollectFileCopySourcesOptions): FileCopySource[] => {
   const sources: FileCopySource[] = [];
+  const collected = new Set<string>();
 
   for (const entity of sourceEntities) {
-    if (!entity.currentVersion) {
-      continue;
-    }
-    for (const field of entity.currentVersion.fields) {
-      if (field.content.type !== "file" || !field.content.id) {
-        continue;
-      }
-      const { mimeType, id: fileId } = field.content;
-      sources.push({
-        sourceEntityId: entity.id,
-        sourceFileId: fileId,
-        sourcePropertyId: field.propertyId,
-        mimeType,
-        sourceKey: createFileKey({
-          organizationId,
-          workspaceId: sourceWorkspaceId,
-          fileId,
+    for (const version of entity.versions) {
+      for (const field of version.fields) {
+        if (field.content.type !== "file" || !field.content.id) {
+          continue;
+        }
+        const { mimeType, id: fileId } = field.content;
+        const key = fileMappingKey({
+          sourceEntityId: entity.id,
+          sourceFileId: fileId,
+        });
+        if (collected.has(key)) {
+          continue;
+        }
+        collected.add(key);
+        sources.push({
+          sourceEntityId: entity.id,
+          sourceFileId: fileId,
           mimeType,
-        }),
-      });
+          sourceKey: createFileKey({
+            organizationId,
+            workspaceId: sourceWorkspaceId,
+            fileId,
+            mimeType,
+          }),
+        });
+      }
     }
   }
 
@@ -182,7 +323,6 @@ type CopyFileObjectOptions = FileCopySource & {
 export const copyFileObject = async ({
   sourceEntityId,
   sourceFileId,
-  sourcePropertyId,
   sourceKey,
   mimeType,
   organizationId,
@@ -208,7 +348,6 @@ export const copyFileObject = async ({
   return {
     sourceEntityId,
     sourceFileId,
-    sourcePropertyId,
     sourceKey,
     targetKey,
     newFileId,
@@ -285,65 +424,70 @@ export const remapFileIds = (
     fileMappings.map((m) => [fileMappingKey(m), m.newFileId]),
   );
 
-  return sourceEntities.map((entity) => {
-    if (!entity.currentVersion) {
-      return { ...entity, currentVersion: null };
-    }
+  return sourceEntities.map((entity) => ({
+    ...entity,
+    versions: entity.versions.map((version) => ({
+      ...version,
+      fields: version.fields.map((field) =>
+        remapFieldFileId({ entityId: entity.id, field, idMap }),
+      ),
+    })),
+  }));
+};
 
-    const remappedFields: WritableEntityFieldSnapshot[] =
-      entity.currentVersion.fields.map((field) => {
-        if (field.content.type !== "file") {
-          return {
-            id: field.id,
-            content: field.content,
-            propertyId: field.propertyId,
-          };
-        }
+type RemapFieldFileIdOptions = {
+  entityId: SafeId<"entity">;
+  field: EntityFieldSnapshot;
+  idMap: Map<string, MintedFileId>;
+};
 
-        const newFileId = idMap.get(
-          fileMappingKey({
-            sourceEntityId: entity.id,
-            sourcePropertyId: field.propertyId,
-          }),
-        );
-        if (!newFileId) {
-          panic("Missing file mapping for copied file field");
-        }
-
-        const {
-          pdfDerivative: _pdfDerivative,
-          placeholder: _placeholder,
-          thumbnailDerivative: _thumbnailDerivative,
-          ...restContent
-        } = field.content;
-
-        return {
-          ...field,
-          content: fileContentWithMintedObject({
-            ...restContent,
-            id: newFileId,
-            pdfFileId: null,
-            pdfDerivative: pdfDerivativeStateForFile({
-              encrypted: field.content.encrypted,
-              mimeType: field.content.mimeType,
-            }),
-            thumbnailFileId: null,
-            thumbnailDerivative: thumbnailDerivativeStateForFile({
-              encrypted: field.content.encrypted,
-              mimeType: field.content.mimeType,
-            }),
-          }),
-        };
-      });
-
+const remapFieldFileId = ({
+  entityId,
+  field,
+  idMap,
+}: RemapFieldFileIdOptions): WritableEntityFieldSnapshot => {
+  if (field.content.type !== "file") {
     return {
-      ...entity,
-      currentVersion: {
-        ...entity.currentVersion,
-        fields: remappedFields,
-      },
+      id: field.id,
+      content: field.content,
+      propertyId: field.propertyId,
     };
-  });
+  }
+
+  const newFileId = idMap.get(
+    fileMappingKey({
+      sourceEntityId: entityId,
+      sourceFileId: field.content.id,
+    }),
+  );
+  if (!newFileId) {
+    panic("Missing file mapping for copied file field");
+  }
+
+  const {
+    pdfDerivative: _pdfDerivative,
+    placeholder: _placeholder,
+    thumbnailDerivative: _thumbnailDerivative,
+    ...restContent
+  } = field.content;
+
+  return {
+    ...field,
+    content: fileContentWithMintedObject({
+      ...restContent,
+      id: newFileId,
+      pdfFileId: null,
+      pdfDerivative: pdfDerivativeStateForFile({
+        encrypted: field.content.encrypted,
+        mimeType: field.content.mimeType,
+      }),
+      thumbnailFileId: null,
+      thumbnailDerivative: thumbnailDerivativeStateForFile({
+        encrypted: field.content.encrypted,
+        mimeType: field.content.mimeType,
+      }),
+    }),
+  };
 };
 
 /**
@@ -529,12 +673,13 @@ type CopyEntitiesProps = {
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
   /**
-   * Whether the caller will delete the source rows in the same
-   * transaction (a move) as opposed to leaving them untouched (a
-   * copy). Only a move mutates the source workspace, so only a move
-   * needs the source row locked — see the lock-set comment below.
+   * Whether the target rows are a new document (a copy) or the same
+   * document in another matter (a move, whose source rows the caller
+   * deletes in this transaction). Only a move mutates the source
+   * workspace, so only a move needs the source row locked — see the
+   * lock-set comment below.
    */
-  deleteSource: boolean;
+  transfer: EntityTransfer;
   fieldMapping:
     | { type: "omit" }
     | { type: "single"; sourceFieldId: SafeId<"field"> };
@@ -551,6 +696,71 @@ const defaultCopyEntitiesDependencies = {
   requestNativeExtractionRuns: async (options) =>
     await requestNativeExtractionRuns(options),
 } satisfies CopyEntitiesDependencies;
+
+/** A source version and the row written in its place. */
+type VersionTransfer = {
+  sourceVersionId: SafeId<"entityVersion">;
+  targetVersionId: SafeId<"entityVersion">;
+};
+
+type TargetVersionValuesOptions = {
+  /** Stamp allocated in the target matter; null for folders and tasks. */
+  copyStamp: string | null;
+  entityId: SafeId<"entity">;
+  id: SafeId<"entityVersion">;
+  transfer: EntityTransfer;
+  version: WritableEntityVersionSnapshot;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * The row written for one source version. A copy is a new document, so its
+ * single version starts the history again under the target matter's reference;
+ * a move reproduces the version it carries, down to the stamp printed on it.
+ * The verification code is never among these values: `insertEntityVersions`
+ * mints one per stamped row, and `carryVerificationCodes` moves the printed
+ * ones across afterwards.
+ */
+const targetVersionValues = ({
+  copyStamp,
+  entityId,
+  id,
+  transfer,
+  version,
+  workspaceId,
+}: TargetVersionValuesOptions) => {
+  switch (transfer.type) {
+    case "copy":
+      return {
+        id,
+        workspaceId,
+        entityId,
+        versionNumber: 1,
+        stamp: copyStamp,
+      };
+    case "move":
+      return {
+        id,
+        workspaceId,
+        entityId,
+        versionNumber: version.versionNumber,
+        stamp: version.stamp,
+        label: version.label,
+        description: version.description,
+        diffWordsAdded: version.diffWordsAdded,
+        diffWordsRemoved: version.diffWordsRemoved,
+        createdBy: version.createdBy,
+        source: version.source,
+        collaborationContributorUserIds:
+          version.collaborationContributorUserIds,
+        detectedLanguage: version.detectedLanguage,
+        createdAt: version.createdAt,
+      };
+    default:
+      transfer satisfies never;
+      return panic("Unhandled entity transfer");
+  }
+};
 
 /**
  * Copy entities to a target workspace. Used by both duplicate
@@ -575,7 +785,7 @@ export const copyEntities = async ({
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId,
-  deleteSource,
+  transfer,
   fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
 }: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
@@ -583,16 +793,16 @@ export const copyEntities = async ({
   // target only: a pure copy never mutates the source workspace's
   // rows or its cap, so locking the source would only add unrelated
   // contention (blocking uploads/tasks/clips there) for no
-  // correctness benefit. Only a cross-workspace MOVE
-  // (`deleteSource`) also locks the source, since the caller deletes
-  // source rows in the same transaction and that must serialize with
+  // correctness benefit. Only a cross-workspace MOVE also locks the
+  // source, since the caller deletes the source rows in the same
+  // transaction and that must serialize with
   // concurrent source-side inserts. Both ids go through
   // `lockWorkspacesForEntityCap`, which sorts them ascending before
   // locking — see that function for why this closes the
   // cross-workspace ABBA between an A->B and a concurrent B->A move.
   await lockWorkspacesForEntityCap(
     tx,
-    sourceWorkspaceId && deleteSource
+    sourceWorkspaceId && transfer.type === "move"
       ? [sourceWorkspaceId, targetWorkspaceId]
       : [targetWorkspaceId],
   );
@@ -659,8 +869,13 @@ export const copyEntities = async ({
   });
   let nextStampIndex = 0;
 
+  const versionTransfers: VersionTransfer[] = [];
+
   for (const source of sourceEntities) {
-    if (!source.currentVersion) {
+    const currentVersion = source.versions.find(
+      (version) => version.id === source.currentVersionId,
+    );
+    if (!currentVersion) {
       throw new HandlerError({
         status: 400,
         message: "Entity has no current version",
@@ -668,7 +883,6 @@ export const copyEntities = async ({
     }
 
     const newEntityId = createSafeId<"entity">();
-    const newVersionId = createSafeId<"entityVersion">();
     const mappedParentId = source.parentId
       ? idMap.get(source.parentId)
       : undefined;
@@ -713,15 +927,30 @@ export const copyEntities = async ({
       docSequence: entityStamp?.docSequence ?? null,
     });
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
-    await tx.insert(entityVersions).values({
-      id: newVersionId,
-      workspaceId: targetWorkspaceId,
-      entityId: newEntityId,
-      versionNumber: 1,
-      stamp: entityStamp?.stamp ?? null,
-      verificationCode: entityStamp?.verificationCode ?? null,
+    const targetVersionIds = new Map<
+      SafeId<"entityVersion">,
+      SafeId<"entityVersion">
+    >();
+    const versionRows = source.versions.map((version) => {
+      const targetVersionId = createSafeId<"entityVersion">();
+      targetVersionIds.set(version.id, targetVersionId);
+      versionTransfers.push({ sourceVersionId: version.id, targetVersionId });
+      return targetVersionValues({
+        copyStamp: entityStamp?.stamp ?? null,
+        entityId: newEntityId,
+        id: targetVersionId,
+        transfer,
+        version,
+        workspaceId: targetWorkspaceId,
+      });
     });
+
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
+    await insertEntityVersions(tx, versionRows);
+
+    const newVersionId =
+      targetVersionIds.get(currentVersion.id) ??
+      panic("Current version was not written for the copied entity");
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
     await tx
@@ -729,43 +958,59 @@ export const copyEntities = async ({
       .set({ currentVersionId: newVersionId })
       .where(eq(entities.id, newEntityId));
 
+    const carriedFieldInserts: CopiedFieldInsert[] = [];
+    // The returned field, derivative queueing and extraction all describe the
+    // document as it stands, so they read the current version's rows; older
+    // versions are carried for their history alone.
     const fieldInserts: CopiedFieldInsert[] = [];
-    for (const field of source.currentVersion.fields) {
-      const fieldId = createSafeId<"field">();
+    for (const version of source.versions) {
+      const entityVersionId =
+        targetVersionIds.get(version.id) ??
+        panic("Carried version was not written for the copied entity");
+      const isCurrentVersion = version.id === currentVersion.id;
 
-      if (
-        fieldMapping.type === "single" &&
-        field.id === fieldMapping.sourceFieldId
-      ) {
-        copiedField = {
-          sourceEntityId: source.id,
-          sourceFieldId: field.id,
-          entityId: newEntityId,
-          fieldId,
+      for (const field of version.fields) {
+        const fieldId = createSafeId<"field">();
+
+        if (
+          isCurrentVersion &&
+          fieldMapping.type === "single" &&
+          field.id === fieldMapping.sourceFieldId
+        ) {
+          copiedField = {
+            sourceEntityId: source.id,
+            sourceFieldId: field.id,
+            entityId: newEntityId,
+            fieldId,
+          };
+        }
+
+        // Track file fields for PDF derivative enqueueing
+        if (isCurrentVersion && field.content.type === "file") {
+          fileFields.push({
+            entityId: newEntityId,
+            fieldId,
+            mimeType: field.content.mimeType,
+            encrypted: field.content.encrypted,
+          });
+        }
+
+        const fieldInsert = {
+          id: fieldId,
+          workspaceId: targetWorkspaceId,
+          propertyId: field.propertyId,
+          entityVersionId,
+          content: field.content,
         };
+        carriedFieldInserts.push(fieldInsert);
+        if (isCurrentVersion) {
+          fieldInserts.push(fieldInsert);
+        }
       }
-
-      // Track file fields for PDF derivative enqueueing
-      if (field.content.type === "file") {
-        fileFields.push({
-          entityId: newEntityId,
-          fieldId,
-          mimeType: field.content.mimeType,
-          encrypted: field.content.encrypted,
-        });
-      }
-
-      fieldInserts.push({
-        id: fieldId,
-        workspaceId: targetWorkspaceId,
-        propertyId: field.propertyId,
-        entityVersionId: newVersionId,
-        content: field.content,
-      });
     }
-    if (fieldInserts.length > 0) {
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential field insert depends on the version created in this iteration
-      await tx.insert(fields).values(fieldInserts);
+    if (carriedFieldInserts.length > 0) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential field insert depends on the versions created in this iteration
+      await tx.insert(fields).values(carriedFieldInserts);
     }
 
     idMap.set(source.id, newEntityId);
@@ -792,6 +1037,13 @@ export const copyEntities = async ({
       name: copyName,
       parentId: newParentId ?? null,
     });
+  }
+
+  // A copy's versions were minted their own codes by the insert above. A move
+  // is the same document elsewhere, so the codes already printed on its
+  // versions travel with them and keep resolving.
+  if (transfer.type === "move") {
+    await carryVerificationCodes(tx, versionTransfers);
   }
 
   await tx

@@ -139,6 +139,13 @@ export type {
   DocumentPropertyValue,
 } from "./document-properties";
 export {
+  isVerificationCode,
+  VERIFICATION_CODE_ALPHABET,
+  VERIFICATION_CODE_LENGTH,
+  VERIFICATION_CODE_PATTERN,
+} from "./document-reference";
+export type { DocumentReferenceMatch } from "./document-reference";
+export {
   ENTITY_FIND_SCOPE_TYPES,
   ENTITY_FIND_TERM_MIN_LENGTH,
   isFindablePropertyType,
@@ -197,8 +204,10 @@ export {
 } from "./entity-options";
 export type { EntityPriority, TaskStatus } from "./entity-options";
 export {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  FILE_SECURITY_REMEDIATION,
   normalizeApiError,
   parseApiErrorValue,
 } from "./error";
@@ -206,7 +215,11 @@ export type {
   ApiErrorInput,
   ApiErrorObjectValue,
   ApiErrorValue,
+  ApiFileSecurityIssue,
+  ApiFileSecurityRejection,
+  ApiFileSecurityRejectionDetails,
   ApiValidationErrorValue,
+  FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
 export {

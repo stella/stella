@@ -4,10 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import { entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  generateVerificationCode,
-  toDocumentReference,
-} from "@/api/lib/document-reference";
+import { toDocumentReference } from "@/api/lib/document-reference";
 import {
   reuseFileObjectWithinEntity,
   type WritableFileFieldContent,
@@ -40,9 +37,9 @@ type BuildVersionStampInput = {
  * deriving the next number from the current or base version's number plus one
  * is unsafe because tombstoning the latest version vN promotes
  * `currentVersionId` back to v(N-1), so the next writer would allocate vN again
- * and collide with the tombstoned row (there is no unique index on
- * (entityId, versionNumber), so the collision is a silent duplicate number
- * rather than an error).
+ * and collide with the tombstoned row, which
+ * `entity_versions_entity_number_uidx` rejects: the write fails rather than
+ * double-numbering the entity.
  *
  * Derive instead from MAX(versionNumber) over ALL of the entity's versions,
  * INCLUDING tombstoned ones, computed in the writer's own transaction. Callers
@@ -71,16 +68,18 @@ export const nextEntityVersionNumber = async (
   return (rows.at(0)?.max ?? 0) + 1;
 };
 
+/**
+ * The frozen reference for a new version, or null when the workspace has no
+ * numbering. The matching verification code is minted by
+ * `insertEntityVersions`, which owns the uniqueness of that column.
+ */
 export const buildVersionStamp = ({
   docSequence,
   versionNumber,
   workspaceReference,
 }: BuildVersionStampInput) => {
   if (docSequence === null || workspaceReference === null) {
-    return {
-      stamp: null,
-      verificationCode: null,
-    };
+    return { stamp: null };
   }
 
   return {
@@ -89,7 +88,6 @@ export const buildVersionStamp = ({
       docSequence,
       versionNumber,
     }),
-    verificationCode: generateVerificationCode(),
   };
 };
 

@@ -635,6 +635,7 @@ describe("MCP anonymization canary corpus", () => {
               currentVersion: {
                 createdAt: new Date("2026-01-01T00:00:00.000Z"),
                 id: "ver_current",
+                stamp: null,
                 fields: [
                   {
                     id: "field_current",
@@ -780,6 +781,7 @@ describe("MCP anonymization canary corpus", () => {
               currentVersion: {
                 createdAt: new Date("2026-01-01T00:00:00.000Z"),
                 id: "ver_current",
+                stamp: null,
                 fields: [
                   {
                     id: "field_1",

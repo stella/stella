@@ -106,8 +106,9 @@ const captures = [
     readyText: "Supplier_Agreement.docx",
     readySelector: ".layout-run-text",
     // `?editing=true` is a request, not a state: without this the shot can
-    // land on the read-only viewer while the editor is still unlocking.
-    readyControl: { role: "button", name: "Finish editing" },
+    // land on the read-only viewer while the editor is still unlocking. The
+    // autosave indicator exists only in edit mode.
+    readyControl: { role: "status", name: "Synced" },
     versionAnchor: {
       workspaceId: AKVIZICE_WORKSPACE_ID,
       entityId: SUPPLIER_AGREEMENT_ENTITY_ID,

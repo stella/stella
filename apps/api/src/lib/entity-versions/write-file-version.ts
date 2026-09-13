@@ -6,7 +6,6 @@ import {
   cellMetadata,
   desktopEditSessions,
   entities,
-  entityVersions,
   fileChatThreads,
   fields,
   folioCollabRooms,
@@ -19,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -371,7 +371,7 @@ export const writeFileVersion = async ({
     workspaceReference: workspace?.reference ?? null,
   });
 
-  await tx.insert(entityVersions).values({
+  await insertEntityVersion(tx, {
     collaborationContributorUserIds:
       versionMetadata?.collaborationContributorUserIds,
     createdBy: userId,
@@ -380,7 +380,6 @@ export const writeFileVersion = async ({
     id: entityVersionId,
     label: versionMetadata?.label,
     stamp: stamp.stamp,
-    verificationCode: stamp.verificationCode,
     versionNumber,
     workspaceId,
     source,

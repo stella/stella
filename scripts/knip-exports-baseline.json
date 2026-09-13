@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 761,
+    "count": 759,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -82,7 +82,7 @@
       "apps/api/src/handlers/document-reviews/schemas.ts": 4,
       "apps/api/src/handlers/docx-suggestions/schemas.ts": 4,
       "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts": 1,
-      "apps/api/src/handlers/entities/copy-utils.ts": 5,
+      "apps/api/src/handlers/entities/copy-utils.ts": 4,
       "apps/api/src/handlers/entities/desktop-edit-handoffs.ts": 3,
       "apps/api/src/handlers/entities/join-folio-collab-room.ts": 2,
       "apps/api/src/handlers/entities/open-desktop-edit-session.ts": 1,
@@ -179,7 +179,6 @@
       "apps/api/src/lib/document-translation/segments.ts": 2,
       "apps/api/src/lib/docx-archive.ts": 1,
       "apps/api/src/lib/docx-review-markup.ts": 1,
-      "apps/api/src/lib/docx-stamp.ts": 1,
       "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
       "apps/api/src/lib/docx/block-directives.ts": 2,
       "apps/api/src/lib/docx/lookup-fields.ts": 2,

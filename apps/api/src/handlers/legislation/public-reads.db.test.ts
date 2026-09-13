@@ -221,6 +221,7 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     const db = drizzle({ client });
+    await db.execute(sql.raw("SET TIME ZONE 'UTC'"));
 
     await db.insert(legislationSources).values([
       {

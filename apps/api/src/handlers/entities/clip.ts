@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { entities, entityVersions, workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -100,13 +101,12 @@ export default createSafeHandler(
           docSequence: entityStamp.docSequence,
         });
 
-        await tx.insert(entityVersions).values({
+        await insertEntityVersion(tx, {
           id: entityVersionId,
           workspaceId,
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
-          verificationCode: entityStamp.verificationCode,
         });
 
         await tx

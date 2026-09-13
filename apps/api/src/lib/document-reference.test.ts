@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  VERIFICATION_CODE_ALPHABET,
+  VERIFICATION_CODE_LENGTH,
+} from "@stll/api-contract";
+
+import {
   generateVerificationCode,
   toDocumentReference,
 } from "@/api/lib/document-reference";
 
-const ALLOWED_CHARS = /^[abcdefghjkmnpqrstuvwxyz23456789]+$/u;
+const ALLOWED_CHARS = new RegExp(`^[${VERIFICATION_CODE_ALPHABET}]+$`, "u");
 
 describe("toDocumentReference", () => {
   test("formats with matter ref, padded seq, and version", () => {
@@ -60,9 +65,9 @@ describe("toDocumentReference", () => {
 });
 
 describe("generateVerificationCode", () => {
-  test("returns a 10-character string", () => {
+  test("returns a code of the contract's length", () => {
     const code = generateVerificationCode();
-    expect(code).toHaveLength(10);
+    expect(code).toHaveLength(VERIFICATION_CODE_LENGTH);
   });
 
   test("contains only allowed characters", () => {

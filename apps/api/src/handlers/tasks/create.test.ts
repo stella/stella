@@ -1,9 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { taskAssignees, workObligations } from "@/api/db/schema";
+import {
+  entityVersions,
+  taskAssignees,
+  workObligations,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -217,12 +222,15 @@ describe("createTaskHandler validation", () => {
         }),
       }),
       insert: (table: unknown) => ({
-        values: async (
+        values: (
           values: Record<string, unknown> | Record<string, unknown>[],
         ) => {
           if (table === taskAssignees) {
             assigneeRows.push(...(Array.isArray(values) ? values : [values]));
           }
+          return table === entityVersions
+            ? entityVersionInsertResult(values)
+            : undefined;
         },
         select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
@@ -294,10 +302,13 @@ describe("createTaskHandler validation", () => {
         }),
       }),
       insert: (table: unknown) => ({
-        values: async (values: Record<string, unknown>) => {
+        values: (values: Record<string, unknown>) => {
           if (table === workObligations) {
             obligationRows.push(values);
           }
+          return table === entityVersions
+            ? entityVersionInsertResult(values)
+            : undefined;
         },
         select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
@@ -376,10 +387,13 @@ describe("createTaskHandler validation", () => {
         }),
       }),
       insert: (table: unknown) => ({
-        values: async (values: Record<string, unknown>) => {
+        values: (values: Record<string, unknown>) => {
           if (table === workObligations) {
             obligationRows.push(values);
           }
+          return table === entityVersions
+            ? entityVersionInsertResult(values)
+            : undefined;
         },
         select: () => ({ onConflictDoUpdate: async () => [] }),
       }),

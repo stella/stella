@@ -1327,6 +1327,7 @@
     "convertTo": "Převést na",
     "copied": "Zkopírováno",
     "copy": "Kopírovat",
+    "copyDocumentReference": "Kopírovat referenční číslo dokumentu",
     "copyLink": "Kopírovat odkaz",
     "country": "Stát",
     "court": "Soud",
@@ -1345,6 +1346,7 @@
     "disconnect": "Odpojit",
     "displayName": "Zobrazované jméno",
     "document": "Dokument",
+    "documentReference": "Referenční číslo dokumentu",
     "documentTitle": "Název dokumentu",
     "documentation": "Dokumentace",
     "done": "Hotovo",
@@ -2234,7 +2236,6 @@
       "replaceText": "Text náhrady",
       "wholeWords": "Celá slova"
     },
-    "finishEditing": "Ukončit editaci",
     "fontColor": "Barva písma",
     "fontGroup": "Písmo",
     "fontSize": "Velikost písma",
@@ -4659,6 +4660,11 @@
     "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky",
     "slugRequired": "Slug je povinný"
   },
+  "verify": {
+    "notFound": "Ve vaší organizaci není k dispozici žádný dokument s tímto referenčním číslem.",
+    "opened": "Otevřeno podle referenčního čísla <bdi>{reference}</bdi>.",
+    "superseded": "Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4758,6 +4764,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",
+      "attachedTemplateUpload": {
+        "confirm": "Odebrat odkaz a nahrát",
+        "description": "{count, plural, one {Tento soubor obsahuje odkaz na vzor Wordu mimo dokument.} few {Tyto soubory obsahují odkazy na vzory Wordu mimo dokumenty.} other {Tyto soubory obsahují odkazy na vzory Wordu mimo dokumenty.}} stella blokuje nahrání beze změn, protože Word může přes tyto odkazy načíst obsah nebo makra.",
+        "effect": "Pokračováním se odkaz na vzor odebere pouze z nahrávané kopie. Původní soubor ve vašem zařízení se nezmění.",
+        "localLocation": "Umístění vzoru: místní cesta k souboru mimo tento dokument",
+        "mixedLocation": "Umístění vzorů: více druhů externích cest",
+        "networkLocation": "Umístění vzoru: síťová nebo internetová adresa",
+        "ruleLabel": "Bezpečnostní pravidlo:",
+        "title": "Odebrat odkazy na vzory Wordu?",
+        "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
+      },
       "defaultPropertyName": "Dokumenty",
       "desktopEdit": {
         "action": "Upravit v desktopu",
@@ -4782,19 +4799,28 @@
         "updateRequiredDescription": "stella desktop vyžaduje aktualizaci. Proběhne automaticky po dokončení aktivních desktopových úprav; zkuste to znovu po restartu.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
+      "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
-      "downloadOriginal": "Původní soubor",
-      "downloadPdf": "PDF",
+      "downloadFailed": "Stažení se nezdařilo",
+      "downloadPdf": "Stáhnout jako PDF",
       "downloadScrubbed": "Stáhnout bez metadat",
       "downloadScrubbedHint": "Odstraní autora, společnost i historii úprav, které soubor nese. Kopie ve spisu si je ponechá.",
       "downloadSearchablePdf": "Prohledávatelné PDF",
+      "downloadWithReference": "Stáhnout s referenčním číslem",
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
       "ocrAlreadyProcessed": "Rozpoznávání textu již bylo dokončeno",
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
       "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "rateLimited": "Omezení rychlosti; pokračování za {seconds, number} s",
+      "referencedUpload": {
+        "choiceLabel": "Co udělat se souborem {fileName}",
+        "description": "{count, plural, one {# soubor nese referenční číslo dokumentu, který už máte.} few {# soubory nesou referenční čísla dokumentů, které už máte.} other {# souborů nese referenční čísla dokumentů, které už máte.}} Vyberte, jak s každým naložit.",
+        "matchedDocument": "Verze {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) ve spisu <bdi>{matterName}</bdi>",
+        "title": "Založit je jako nové verze?",
+        "uploadAsNewDocument": "Nahrát jako nový dokument"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům}}",
       "retryFailed": "Opakovat {count, plural, one {# soubor} few {# soubory} other {# souborů}}",
       "runOcr": "Zařadit OCR do fronty",
@@ -4805,13 +4831,23 @@
       "uploadingDescription": "Nezavírejte tuto stránku, dokud nebudou soubory nahrány",
       "uploadingProgress": "{completed, number} z {total, number} nahráno",
       "versionOrNewFile": {
+        "addAsVersion": "Přidat jako verzi {version, number}",
+        "addAsVersionThere": "Přidat tam jako verzi {version, number}",
+        "checkingReference": "Ověřuji referenční číslo souboru...",
         "createNewOption": "Vytvořit nový soubor",
         "description": "Přetáhli jste \"{fileName}\" na existující dokument.",
         "extensionMismatch": "Neshodná přípona: očekáváno {expected}, dostáno {actual}",
         "extensionMismatchError": "Přípona souboru neodpovídá existujícímu dokumentu",
+        "newDocumentDropsReference": "Původní referenční číslo bude ze souboru odstraněno.",
         "noExtension": "bez přípony",
+        "referenceElsewhere": "Tento soubor je verze {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) ve spisu <bdi>{matterName}</bdi>.",
+        "referenceHere": "Tento soubor je verze {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
+        "referenceLineRemoved": "Z tohoto souboru byl odstraněn řádek s referenčním číslem, proto s ním nakládáme jako s novým dokumentem, pokud nezvolíte jinak.",
+        "referenceSuperseded": "Vychází z verze {basedOn, number}; aktuální je verze {current, number}.",
         "replaceOption": "Nahrát jako novou verzi",
-        "title": "Nahrát novou verzi nebo vložit jako nový soubor?"
+        "title": "Nahrát novou verzi nebo vložit jako nový soubor?",
+        "unnamedDocument": "bez názvu",
+        "uploadAsNewDocumentHere": "Nahrát sem jako nový dokument"
       },
       "versionUploadFailed": "Nahrání verze selhalo",
       "versionUploaded": "Nová verze nahrána",
@@ -5288,6 +5324,8 @@
     "reference": "Referenční číslo",
     "referenceConventionHint": "Preferovaný formát: {example}",
     "referenceFormatWarning": "Neodpovídá preferovanému formátu.",
+    "referenceNumberingEmptyHint": "Zadejte referenční číslo a dokumenty v tomto spisu se začnou číslovat.",
+    "referenceNumberingHint": "Dokumenty v tomto spisu se číslují <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> a tak dále; každá verze přidává <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "např. 2024/001",
     "referenceTaken": "Toto referenční číslo je již použito",
     "sections": {

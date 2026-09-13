@@ -31,6 +31,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -310,7 +311,9 @@ const buildTx = ({
             returning: async () => [{ id: "intent_1" }],
           };
         }
-        return undefined;
+        return table === entityVersions
+          ? entityVersionInsertResult(values)
+          : undefined;
       },
     }),
     update: (table: unknown) => ({

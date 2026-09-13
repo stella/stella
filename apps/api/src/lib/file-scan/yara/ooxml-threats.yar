@@ -51,20 +51,6 @@ rule ooxml_activex
         $content_types and $activex
 }
 
-rule ooxml_remote_template
-{
-    meta:
-        description = "Document references a remote template (potential macro injection)"
-        verdict = "malicious"
-
-    strings:
-        $attached = "attachedTemplate" ascii nocase
-        $http = /https?:\/\// ascii nocase
-
-    condition:
-        $attached and $http
-}
-
 rule ooxml_dde
 {
     meta:

@@ -18,6 +18,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -205,11 +206,11 @@ describe("createEntityFromBuffer", () => {
             };
           }
 
-          if (
-            table === entities ||
-            table === entityVersions ||
-            table === fields
-          ) {
+          if (table === entityVersions) {
+            return entityVersionInsertResult(values);
+          }
+
+          if (table === entities || table === fields) {
             if (table === entities) {
               insertedEntity = values;
             }
@@ -384,14 +385,18 @@ describe("createEntityFromBuffer", () => {
       $count: async () => 0,
       select: createParentSelect({ parentKind: "folder" }),
       insert: (table: unknown) => ({
-        values: () =>
-          table === documentCounters
-            ? {
-                onConflictDoUpdate: () => ({
-                  returning: async () => [{ lastValue: 1 }],
-                }),
-              }
-            : undefined,
+        values: (values: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+          return table === entityVersions
+            ? entityVersionInsertResult(values)
+            : undefined;
+        },
       }),
       update: () => ({
         set: () => ({ where: async () => {} }),
@@ -444,14 +449,18 @@ describe("createEntityFromBuffer", () => {
       $count: async () => 0,
       select: createParentSelect({ parentKind: "folder" }),
       insert: (table: unknown) => ({
-        values: () =>
-          table === documentCounters
-            ? {
-                onConflictDoUpdate: () => ({
-                  returning: async () => [{ lastValue: 1 }],
-                }),
-              }
-            : undefined,
+        values: (values: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+          return table === entityVersions
+            ? entityVersionInsertResult(values)
+            : undefined;
+        },
       }),
       update: () => ({
         set: () => ({ where: async () => {} }),
@@ -511,17 +520,21 @@ describe("createEntityFromBuffer", () => {
       $count: async () => 0,
       select: createParentSelect({ parentKind: "folder" }),
       insert: (table: unknown) => ({
-        values: () =>
-          table === documentCounters
-            ? {
-                onConflictDoUpdate: () => ({
-                  returning: async () => {
-                    nextDocumentSequence += 1;
-                    return [{ lastValue: nextDocumentSequence }];
-                  },
-                }),
-              }
-            : undefined,
+        values: (values: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+          return table === entityVersions
+            ? entityVersionInsertResult(values)
+            : undefined;
+        },
       }),
       update: () => ({
         set: () => ({ where: async () => {} }),

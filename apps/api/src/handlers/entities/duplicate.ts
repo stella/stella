@@ -9,11 +9,14 @@ import {
   copyEntities,
   type CopyEntitiesDependencies,
   copyFileObjects,
+  CURRENT_VERSION_SELECT,
+  ENTITY_SNAPSHOT_COLUMNS,
   type EntitySnapshot,
   type FileMapping,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
+  snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -74,37 +77,14 @@ const duplicateEntityHandler = async function* ({
   dependencies,
 }: DuplicateEntityHandlerProps) {
   const source = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
+    safeDb(async (tx) => {
+      const entity = await tx.query.entities.findFirst({
         where: { id: { eq: sourceEntityId }, workspaceId: { eq: workspaceId } },
-        columns: {
-          id: true,
-          kind: true,
-          name: true,
-          parentId: true,
-        },
-        with: {
-          currentVersion: {
-            columns: { id: true },
-            with: {
-              // Ascending field id is ascending creation order, the order
-              // `findExtractionFileField` requires, so the copy resolves the
-              // same extraction source as the entity it came from. At most
-              // one field per property bounds the read.
-              fields: {
-                columns: {
-                  id: true,
-                  propertyId: true,
-                  content: true,
-                },
-                orderBy: { id: "asc" },
-                limit: LIMITS.propertiesCount,
-              },
-            },
-          },
-        },
-      }),
-    ),
+        columns: ENTITY_SNAPSHOT_COLUMNS,
+        with: CURRENT_VERSION_SELECT,
+      });
+      return entity && snapshotOfCurrentVersion(entity);
+    }),
   );
 
   if (!source) {
@@ -116,34 +96,15 @@ const duplicateEntityHandler = async function* ({
   let sourceEntities: EntitySnapshot[] = [source];
   if (source.kind === "folder") {
     const workspaceEntities = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findMany({
+      safeDb(async (tx) => {
+        const rows = await tx.query.entities.findMany({
           where: { workspaceId: { eq: workspaceId } },
-          columns: {
-            id: true,
-            kind: true,
-            name: true,
-            parentId: true,
-          },
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: {
-                    id: true,
-                    propertyId: true,
-                    content: true,
-                  },
-                  orderBy: { id: "asc" },
-                  limit: LIMITS.propertiesCount,
-                },
-              },
-            },
-          },
+          columns: ENTITY_SNAPSHOT_COLUMNS,
+          with: CURRENT_VERSION_SELECT,
           limit: LIMITS.entitiesCount,
-        }),
-      ),
+        });
+        return rows.map(snapshotOfCurrentVersion);
+      }),
     );
 
     const subtree = getFolderSubtree(workspaceEntities, sourceEntityId);
@@ -193,9 +154,9 @@ const duplicateEntityHandler = async function* ({
         recordAuditEvent,
         sourceEntityId,
         sourceEntities: remappedEntities,
-        // Same-workspace duplicate never deletes the source; the
-        // lock set is target-only regardless (see `copyEntities`).
-        deleteSource: false,
+        // A duplicate is a new document in the same matter: its own
+        // version 1, its own stamp and code.
+        transfer: { type: "copy" },
         fieldMapping: { type: "omit" },
         dependencies,
       }),

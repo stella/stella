@@ -14,7 +14,7 @@ import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   CopyIcon,
   CropIcon,
@@ -72,7 +72,10 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
-import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
+import {
+  ENTITY_VERSION_UPLOAD_RESULT,
+  uploadEntityVersion,
+} from "@/lib/files/upload-entity-version";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
 import {
@@ -917,12 +920,23 @@ const LoadedPDFPageOrganizer = ({
     abortRef.current = uploadController;
     await withCleanup(
       async () => {
-        await uploadEntityVersion({
+        const uploadResult = await uploadEntityVersion({
           workspaceId,
           entityId,
           file: makeFile(bytes, `${baseName}.pdf`),
           signal: uploadController.signal,
         });
+        switch (uploadResult.type) {
+          case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
+            break;
+          case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
+            return panic("Generated PDF version upload was cancelled");
+          default:
+            uploadResult satisfies never;
+            return panic(
+              `Unhandled entity version upload: ${String(uploadResult)}`,
+            );
+        }
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
@@ -935,6 +949,7 @@ const LoadedPDFPageOrganizer = ({
         });
         savedRef.current = true;
         onClose();
+        return uploadResult.type;
       },
       () => {
         abortRef.current = null;

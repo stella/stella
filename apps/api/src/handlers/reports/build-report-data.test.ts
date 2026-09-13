@@ -155,6 +155,7 @@ const makeEntity = (
   createdByImage: null,
   createdByDeletedAt: null,
   version: 1,
+  currentVersionReference: null,
   updatedAt: null,
   status: null,
   priority: null,

@@ -27,6 +27,7 @@ const entity = (value: number): WorkspaceEntity => {
     createdByDeletedAt: null,
     updatedAt: null,
     version: 1,
+    currentVersionReference: null,
     status: null,
     priority: null,
     listItemType: "task",

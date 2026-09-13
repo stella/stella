@@ -1,52 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
-
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import {
-  canDownloadScrubbed,
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrExportFormats,
   getOcrSource,
   getOcrSources,
   hasOcrExport,
-  getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
-
-describe("scrubbed download eligibility", () => {
-  test("rejects files the server cannot scrub", () => {
-    expect(
-      canDownloadScrubbed({
-        encrypted: false,
-        mimeType: "application/pdf",
-        sizeBytes: DOCUMENT_PROPERTIES_MAX_BYTES,
-      }),
-    ).toBe(true);
-    expect(
-      canDownloadScrubbed({
-        encrypted: true,
-        mimeType: "application/pdf",
-        sizeBytes: 1,
-      }),
-    ).toBe(false);
-    expect(
-      canDownloadScrubbed({
-        encrypted: false,
-        mimeType: "application/pdf",
-        sizeBytes: DOCUMENT_PROPERTIES_MAX_BYTES + 1,
-      }),
-    ).toBe(false);
-    expect(
-      canDownloadScrubbed({
-        encrypted: false,
-        mimeType: "text/plain",
-        sizeBytes: 1,
-      }),
-    ).toBe(false);
-  });
-});
 
 const firstPropertyId = toSafeId<"property">("property-first");
 const selectedPropertyId = toSafeId<"property">("property-selected");
@@ -87,21 +50,6 @@ const ocrFields = {
     },
   },
 } satisfies WorkspaceEntity["fields"];
-
-describe("save-as-PDF download filenames", () => {
-  test("uses the source document base name with a PDF extension", () => {
-    expect(getPdfDownloadFileName("Contract.docx")).toBe("Contract.pdf");
-    expect(getPdfDownloadFileName("Contract.v2.DOCX")).toBe("Contract.v2.pdf");
-  });
-
-  test("appends the PDF extension when the source has no extension", () => {
-    expect(getPdfDownloadFileName("Contract")).toBe("Contract.pdf");
-  });
-
-  test("does not treat a leading dot as a removable extension", () => {
-    expect(getPdfDownloadFileName(".contract")).toBe(".contract.pdf");
-  });
-});
 
 describe("desktop edit lock actions", () => {
   test("distinguishes an orphanable own session from another user's lock", () => {

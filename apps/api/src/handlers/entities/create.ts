@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, entityVersions, workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -16,6 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueEntitySearchRepairs,
@@ -109,13 +110,12 @@ export const createEntitiesHandler = async function* ({
 
       const entityVersionId = createSafeId<"entityVersion">();
 
-      await tx.insert(entityVersions).values({
+      await insertEntityVersion(tx, {
         id: entityVersionId,
         workspaceId,
         entityId,
         versionNumber: 1,
         stamp: entityStamp?.stamp ?? null,
-        verificationCode: entityStamp?.verificationCode ?? null,
       });
 
       await tx

@@ -44,6 +44,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -640,14 +641,13 @@ export const finalizeEntityCreate = async function* ({
       createdBy: userId,
       docSequence: entityStamp.docSequence,
     });
-    await tx.insert(entityVersions).values({
+    await insertEntityVersion(tx, {
       id: entityVersionId,
       workspaceId,
       entityId,
       versionNumber: 1,
       source: UPLOAD_DOCUMENT_SOURCE,
       stamp: entityStamp.stamp,
-      verificationCode: entityStamp.verificationCode,
     });
     await tx
       .update(entities)

@@ -14,7 +14,7 @@ export type Match = {
 };
 
 export type Scanner = {
-  scan: (bytes: Uint8Array) => Promise<Match[]>;
+  scan: (bytes: Uint8Array, context?: ScanContext) => Promise<Match[]>;
 };
 
 export type ScanContext = {
@@ -29,9 +29,9 @@ export type ComposedScanner = (
 
 export const composeScanners =
   (...scanners: Scanner[]): ComposedScanner =>
-  async (buffer) => {
+  async (buffer, context) => {
     const results = await Promise.all(
-      scanners.map(async (s) => await s.scan(buffer)),
+      scanners.map(async (s) => await s.scan(buffer, context)),
     );
 
     // An archive is presented to the rule set twice, as raw container bytes

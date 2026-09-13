@@ -7,7 +7,6 @@ import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { transactionAbortError } from "@/api/db/safe-db";
 import {
   entities,
-  entityVersions,
   fields,
   matterCounters,
   properties,
@@ -31,6 +30,7 @@ import {
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -878,13 +878,12 @@ export const createDuplicateWorkspace = (
             });
 
             // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
-            await tx.insert(entityVersions).values({
+            await insertEntityVersion(tx, {
               id: newVersionId,
               workspaceId: targetWorkspaceId,
               entityId: newEntityId,
               versionNumber: 1,
               stamp: entityStamp?.stamp ?? null,
-              verificationCode: entityStamp?.verificationCode ?? null,
               createdBy: user.id,
             });
 

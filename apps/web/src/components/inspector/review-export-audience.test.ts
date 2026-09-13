@@ -89,7 +89,10 @@ describe("what the counterparty export is told", () => {
       start,
       MENU_SOURCE.indexOf("return (", start),
     );
-    expect(counterpartyPath).toContain("downloadTabOriginalFile");
+    expect(counterpartyPath).toContain("downloadTabFile");
+    // The bytes as uploaded: the run says nothing about whether this version
+    // can be handed over with its reference, so the variant is pinned here.
+    expect(counterpartyPath).toContain('variant: "original"');
     expect(counterpartyPath).not.toContain("runId");
   });
 });

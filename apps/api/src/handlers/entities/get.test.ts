@@ -17,6 +17,7 @@ describe("readEntityByIdHandler", () => {
       currentVersion: {
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
         id: "entity_version_1",
+        stamp: null,
         fields: [
           {
             id: "field_1",
@@ -86,6 +87,7 @@ describe("readEntityByIdHandler", () => {
       currentVersion: {
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
         id: "entity_version_1",
+        stamp: null,
         fields: [
           {
             id: "field_text",
@@ -151,6 +153,7 @@ describe("readEntityByIdHandler", () => {
       currentVersion: {
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
         id: "entity_version_1",
+        stamp: null,
         fields: [
           {
             id: "field_current",
@@ -200,6 +203,7 @@ describe("readEntityByIdHandler", () => {
       currentVersion: {
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
         id: "entity_version_2",
+        stamp: null,
         fields: [
           {
             id: "field_replacement",
@@ -243,6 +247,7 @@ describe("readEntityByIdHandler", () => {
       currentVersion: {
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
         id: "entity_version_1",
+        stamp: null,
         fields: [
           {
             id: "field_null",

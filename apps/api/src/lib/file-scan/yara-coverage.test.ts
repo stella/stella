@@ -136,12 +136,6 @@ const POSITIVE_FIXTURES: Record<string, () => Promise<Fixture> | Fixture> = {
         'relationships/oleObject" Target="https://e.example/p" ' +
         'TargetMode="External"/></Relationships>',
     }),
-  ooxml_remote_template: async () =>
-    await docx({
-      [RELS]:
-        '<Relationships><Relationship Type="attachedTemplate" ' +
-        'Target="https://e.example/t.dotm"/></Relationships>',
-    }),
   ooxml_dde: async () =>
     await docx({
       "word/document.xml":

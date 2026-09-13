@@ -6,6 +6,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
@@ -90,13 +91,14 @@ export default createSafeHandler(
       );
     }
     if (scanResult.value.verdict === "reject") {
-      const reasons = scanResult.value.findings.flatMap((finding) =>
-        finding.severity === "reject" ? [finding.message] : [],
-      );
+      const rejection = fileSecurityRejection(scanResult.value);
+      if (rejection === null) {
+        panic("Rejecting scan had no rejecting findings");
+      }
       return Result.err(
         new HandlerError({
+          ...rejection,
           status: 422,
-          message: `File rejected: ${reasons.join("; ")}`,
         }),
       );
     }

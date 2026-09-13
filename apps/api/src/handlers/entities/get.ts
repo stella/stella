@@ -61,7 +61,7 @@ export const readEntityByIdHandler = async function* ({
             },
           },
           currentVersion: {
-            columns: { createdAt: true, id: true },
+            columns: { createdAt: true, id: true, stamp: true },
             with: {
               // Fields of one entity version: at most one row per property
               // (fields_property_id_entity_version_id_key), so this is
@@ -127,6 +127,10 @@ export const readEntityByIdHandler = async function* ({
     name: entity.name,
     currentVersionId: entity.currentVersion.id,
     currentVersionCreatedAt: entity.currentVersion.createdAt,
+    // Per version, not per matter: an older version carries no reference even
+    // when the matter has one, and only a referenced version can be served as
+    // a reference copy.
+    currentVersionReference: entity.currentVersion.stamp,
     extractionFileFieldId: extractionFileField?.id ?? null,
     processingFileFieldId: processingFileField?.id ?? null,
     fields: entity.currentVersion.fields,
@@ -136,8 +140,8 @@ export const readEntityByIdHandler = async function* ({
 const config = {
   description:
     "Read one document, folder, or task in a matter: its kind, name, current " +
-    "version id and creation time, that version's field values, and which " +
-    "field is the current text-extraction source. Use " +
+    "version id, creation time and document reference, that version's field " +
+    "values, and which field is the current text-extraction source. Use " +
     "entities.read-version-by-id to read a historical version, and " +
     "entities.read-versions for the version list.",
   permissions: { workspace: ["read"] },
@@ -165,6 +169,7 @@ const readEntityById = createSafeHandler(
       name: entity.name,
       currentVersionId: entity.currentVersionId,
       currentVersionCreatedAt: entity.currentVersionCreatedAt,
+      currentVersionReference: entity.currentVersionReference,
       extractionFileFieldId: entity.extractionFileFieldId,
       fields: entity.fields,
     });

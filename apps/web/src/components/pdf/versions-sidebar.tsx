@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   CheckIcon,
   DownloadIcon,
@@ -21,6 +21,7 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -28,6 +29,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useContentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import Tooltip from "@/components/tooltip";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -38,7 +40,10 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys } from "@/lib/files/queries";
-import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
+import {
+  ENTITY_VERSION_UPLOAD_RESULT,
+  uploadEntityVersion,
+} from "@/lib/files/upload-entity-version";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -234,9 +239,17 @@ export const VersionsSidebar = ({
   const handleUploadVersion = async (file: File) => {
     setIsUploading(true);
     try {
-      await uploadEntityVersion({ workspaceId, entityId, file });
-
-      await invalidateVersions();
+      const result = await uploadEntityVersion({ workspaceId, entityId, file });
+      switch (result.type) {
+        case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
+          return;
+        case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
+          await invalidateVersions();
+          return;
+        default:
+          result satisfies never;
+          panic(`Unhandled entity version upload: ${String(result)}`);
+      }
     } finally {
       setIsUploading(false);
     }
@@ -571,13 +584,30 @@ const VersionItem = ({
         isViewing={isSelected && !isCurrent}
         loadDiff={loadDiff}
         meta={
-          version.label && (
-            <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
-              <span
-                className={cn("size-2 shrink-0 rounded-full", labelDotColor)}
-              />
-              {version.label}
-            </span>
+          (version.stamp !== null || version.label !== null) && (
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
+              {version.stamp !== null && (
+                <Tooltip
+                  content={t("common.documentReference")}
+                  render={
+                    <span className="text-muted-foreground truncate font-mono text-[10px]" />
+                  }
+                >
+                  <BidiText direction="ltr">{version.stamp}</BidiText>
+                </Tooltip>
+              )}
+              {version.label !== null && (
+                <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      labelDotColor,
+                    )}
+                  />
+                  {version.label}
+                </span>
+              )}
+            </div>
           )
         }
         stats={stats}
@@ -720,6 +750,11 @@ const VersionItem = ({
 
 const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
 
+// Keys the surrounding menu keeps: Escape closes it and the arrows move
+// between items. Every other key, Enter included, stays in the field so the
+// menu's typeahead cannot eat the typed label and Enter submits the form.
+const MENU_OWNED_KEYS = ["Escape", "ArrowDown", "ArrowUp"] as const;
+
 // Uncontrolled custom-label field (the form action reads it via FormData). It
 // is free text in any language, so resolve direction from the typed content
 // (empty inherits the UI direction; first character sets LTR vs RTL).
@@ -737,6 +772,11 @@ const VersionLabelInput = ({ placeholder }: { placeholder: string }) => {
       maxLength={128}
       name="customLabel"
       onChange={(event) => labelDir.trackValue(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (!MENU_OWNED_KEYS.some((key) => key === event.key)) {
+          event.stopPropagation();
+        }
+      }}
       placeholder={placeholder}
     />
   );

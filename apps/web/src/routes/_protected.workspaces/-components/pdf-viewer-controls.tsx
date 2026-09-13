@@ -7,7 +7,6 @@ import { produce } from "immer";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  DownloadIcon,
   FilePenLineIcon,
   PrinterIcon,
 } from "lucide-react";
@@ -17,6 +16,9 @@ import { Button } from "@stll/ui/button";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 
+import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
+import type { DownloadRendition } from "@/components/inspector/file-download-service.logic";
 import {
   fetchPrintPdf,
   printPdfBuffer,
@@ -24,12 +26,8 @@ import {
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { ClientOperationError } from "@/lib/errors/client";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import {
@@ -38,7 +36,6 @@ import {
   PDF_MIN_SCALE_OFFSET,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
-import { downloadFile } from "@/lib/utils";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const routeApi = getRouteApi(
@@ -49,6 +46,7 @@ type PdfViewerControlsProps = {
   workspaceId: string;
   fieldId: string;
   currentPage: number;
+  downloadRenditions: readonly DownloadRendition[];
   variant?: "row" | "inline" | undefined;
   showFileActions?: boolean | undefined;
   onPrint?: (() => void) | undefined;
@@ -61,6 +59,7 @@ export const PdfViewerControls = ({
   workspaceId,
   fieldId,
   currentPage,
+  downloadRenditions,
   variant = "row",
   showFileActions = true,
   onPrint,
@@ -80,7 +79,6 @@ export const PdfViewerControls = ({
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
   const [editingPage, setEditingPage] = useState<number | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const pageInputValue = editingPage ?? currentPage;
   const isDocx =
@@ -126,42 +124,6 @@ export const PdfViewerControls = ({
       }),
       "pdf-viewer-controls.navigate",
     );
-  };
-
-  const handleDownload = async () => {
-    if (!fileMetadata || fieldId.length === 0 || isDownloading) {
-      return;
-    }
-
-    setIsDownloading(true);
-    try {
-      const response = await api
-        .files({ workspaceId })
-        .url({ fieldId })
-        .get({ query: { purpose: "download" } });
-
-      const data = unwrapEden(response);
-
-      const fileResponse = await fetchWithTimeout(data.presignedUrl, {
-        timeoutMs: 60_000,
-      });
-      if (!fileResponse.ok) {
-        throw new ClientOperationError({
-          action: "downloadFullViewFile",
-          message: "Failed to fetch file from storage",
-        });
-      }
-
-      downloadFile(await fileResponse.blob(), fileMetadata.fileName);
-    } catch (error: unknown) {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    } finally {
-      setIsDownloading(false);
-    }
   };
 
   const handlePrint = async () => {
@@ -305,17 +267,25 @@ export const PdfViewerControls = ({
                 {t("workspaces.pdf.pageEditor.editPages")}
               </Button>
             )}
-            <Button
-              disabled={!fileMetadata || isDownloading || fieldId.length === 0}
-              onClick={() => {
-                detached(handleDownload(), "pdf-viewer-controls.download");
-              }}
-              size="icon-xs"
-              tooltip={t("common.download")}
-              variant="ghost"
-            >
-              <DownloadIcon className="size-3.5" />
-            </Button>
+            {fileMetadata !== undefined && fieldId.length > 0 && (
+              <DownloadSplitButton
+                onDownload={(downloadVariant) =>
+                  detached(
+                    downloadTabFile({
+                      fieldId,
+                      fileName: fileMetadata.fileName,
+                      variant: downloadVariant,
+                      workspaceId,
+                      onError: (message) => {
+                        stellaToast.add({ title: message, type: "error" });
+                      },
+                    }),
+                    "pdf-viewer-controls.download",
+                  )
+                }
+                renditions={downloadRenditions}
+              />
+            )}
             <Button
               disabled={printDisabled || isPrinting || fieldId.length === 0}
               onClick={() => {

@@ -9,12 +9,13 @@ import type { CaseEvent, CaseSearchResult, HearingEvent } from "@stll/infosoud";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
+import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
 import { LIMITS } from "@/api/lib/limits";
 import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
 import {
@@ -191,7 +192,7 @@ export const importInfoSoudAgendaItems = async ({
       createdBy: actorUserId,
     }));
 
-    await tx.insert(entityVersions).values(versions);
+    await insertEntityVersions(tx, versions);
     const currentVersionCases = versions.map(
       (version) => sql`when ${version.entityId} then ${version.id}`,
     );
