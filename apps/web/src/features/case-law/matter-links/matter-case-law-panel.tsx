@@ -23,6 +23,7 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
+import { UNSEARCHED_SCOPE } from "@/features/case-law/research/question-columns.logic";
 import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -83,6 +84,9 @@ export const MatterCaseLawPanel = ({
     enabled: hasLinks,
     onShowPassage: openDecision,
     pageDecisionIds: decisions.map((decision) => decision.id),
+    // The matter's links were pinned one at a time, not searched for, so a
+    // suggestion is grounded in the linked decisions alone.
+    search: UNSEARCHED_SCOPE,
     selectedDecisionIds: selectedIds,
   });
 

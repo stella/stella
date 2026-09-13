@@ -136,7 +136,10 @@ export const DecisionTable = ({
       ? {
           addColumnRail: (
             <BulkAddColumns
-              target={{ kind: "organisation" }}
+              target={{
+                kind: "organisation",
+                suggestion: questions.suggestion,
+              }}
               triggerVariant="rail"
             />
           ),

@@ -729,6 +729,19 @@ function PublicCaseLawIndex() {
     enabled: true,
     onShowPassage: openDecision,
     pageDecisionIds,
+    // The search the reader is looking at, so a suggested question targets
+    // these decisions rather than court decisions in general.
+    search: {
+      country: filters.country,
+      query: filters.search,
+      filters: {
+        court: filters.court,
+        decisionType: filters.decisionType,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        language: filters.language,
+      },
+    },
     selectedDecisionIds: selectedIds,
   });
 

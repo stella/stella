@@ -89,3 +89,11 @@ export const CASE_LAW_RESEARCH_RUN_DECISIONS_MAX = 100;
  * this without any of them being refused a read or a run.
  */
 export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;
+
+/**
+ * Decisions a question-column prompt suggestion may be grounded in. The client
+ * sends the rows it has on screen up to this many; the server rejects a longer
+ * list, reads those decisions through the public gate itself, and quotes only
+ * their published headnotes.
+ */
+export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;

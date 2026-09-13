@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1086,
+    "count": 1085,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 1,
@@ -322,7 +322,7 @@
       "apps/web/src/lib/use-shortcut-rebinding.ts": 1,
       "apps/web/src/lib/workspaces/mutations.ts": 4,
       "apps/web/src/lib/workspaces/mutations/create-file-tree-upload.logic.ts": 2,
-      "apps/web/src/lib/workspaces/mutations/properties.ts": 2,
+      "apps/web/src/lib/workspaces/mutations/properties.ts": 1,
       "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts": 4,
       "apps/web/src/lib/workspaces/queries/legal-lists.ts": 8,
       "apps/web/src/lib/workspaces/time-entries-api.ts": 2,

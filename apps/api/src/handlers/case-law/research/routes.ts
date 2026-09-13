@@ -6,6 +6,7 @@ import createResearchColumn from "@/api/handlers/case-law/research/columns-creat
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
 import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
+import suggestResearchColumnPrompt from "@/api/handlers/case-law/research/columns-suggest-prompt";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
@@ -27,6 +28,10 @@ export const caseLawResearchRoute = new Elysia({ prefix: "/case/research" })
   .put("/columns/order", reorderResearchColumns.handler, {
     body: reorderResearchColumns.config.body,
     permissions: reorderResearchColumns.config.permissions,
+  })
+  .post("/columns/suggest-prompt", suggestResearchColumnPrompt.handler, {
+    body: suggestResearchColumnPrompt.config.body,
+    permissions: suggestResearchColumnPrompt.config.permissions,
   })
   .patch("/columns/:columnId", updateResearchColumn.handler, {
     body: updateResearchColumn.config.body,

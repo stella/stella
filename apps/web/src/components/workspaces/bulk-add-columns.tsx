@@ -38,6 +38,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import Tooltip from "@/components/tooltip";
 import {
   makeEmptyDraft,
@@ -67,12 +68,14 @@ import {
 import {
   createQuestionColumn,
   questionColumnKeys,
+  suggestQuestionPrompt,
   updateQuestionColumn,
 } from "@/features/case-law/research/queries";
 import { questionEditDiscardsAnswers } from "@/features/case-law/research/question-columns.logic";
 import type {
   QuestionColumn,
   QuestionColumnInput,
+  QuestionSuggestionScope,
 } from "@/features/case-law/research/question-columns.logic";
 import { useQuestionColumnsCountLimit } from "@/features/case-law/research/use-question-column-limit";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -81,8 +84,8 @@ import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency } from "@/lib/types";
 import {
+  suggestPropertyPrompt,
   useCreatePropertiesBatch,
-  useSuggestPrompt,
 } from "@/lib/workspaces/mutations/properties";
 import type { CreatePropertySpec } from "@/lib/workspaces/mutations/properties";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -140,6 +143,8 @@ type AddColumnsTarget =
        * over it — the composer is the same one a new question is written in.
        */
       editing?: QuestionColumn | undefined;
+      /** The search the questions are asked of; grounds the suggestion. */
+      suggestion: QuestionSuggestionScope;
     };
 
 type BulkAddColumnsProps = {
@@ -325,6 +330,7 @@ const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
         dirtyRef={dirtyRef}
         {...(target.editing === undefined ? {} : { editing: target.editing })}
         onClose={onClose}
+        suggestion={target.suggestion}
       />
     );
   }
@@ -660,7 +666,8 @@ const PropertyColumnsBody = ({
           {...handlersFor(draft)}
           draft={draft}
           key={draft.id}
-          sources={{
+          target={{
+            kind: "workspace",
             allProperties,
             dependencyCount: dependencyCountOf(draft),
             workspaceId,
@@ -683,7 +690,11 @@ const QuestionColumnsBody = ({
   editing,
   onClose,
   dirtyRef,
-}: ColumnsBodyProps & { editing?: QuestionColumn | undefined }) => {
+  suggestion,
+}: ColumnsBodyProps & {
+  editing?: QuestionColumn | undefined;
+  suggestion: QuestionSuggestionScope;
+}) => {
   const t = useTranslations();
   const submit = useColumnsSubmit(onClose);
   const queryClient = useQueryClient();
@@ -756,7 +767,7 @@ const QuestionColumnsBody = ({
           {...handlersFor(draft)}
           draft={draft}
           key={draft.id}
-          sources={null}
+          target={{ kind: "organisation", suggestion }}
         />
       ))}
     </BulkColumnsForm>
@@ -772,21 +783,26 @@ const useNextId = (initial: number) => {
 };
 
 /**
- * What a column may read from, and therefore what the card offers beside the
- * name: the matter's other columns, the prompt that reads them, and the cap on
- * how many one column may read. Null for a question asked of a public
- * decision, which reads the decision and nothing else.
+ * What one card is composing, and therefore what it offers beside the name.
+ *
+ * A matter's column may read the matter's other columns, so it carries them,
+ * the prompt that reads them, and the cap on how many one column may read. A
+ * question is asked of a public decision and reads nothing else, so it carries
+ * the search it is written for instead — which is all its suggestion needs.
  */
-type DraftSources = {
-  allProperties: FileChip[];
-  /** Dependencies this draft would create, scope gate included. */
-  dependencyCount: number;
-  workspaceId: string;
-};
+type DraftCardTarget =
+  | {
+      kind: "workspace";
+      allProperties: FileChip[];
+      /** Dependencies this draft would create, scope gate included. */
+      dependencyCount: number;
+      workspaceId: string;
+    }
+  | { kind: "organisation"; suggestion: QuestionSuggestionScope };
 
 type DraftCardProps = DraftHandlers & {
   draft: Draft;
-  sources: DraftSources | null;
+  target: DraftCardTarget;
 };
 
 const NO_FILE_CHIPS: FileChip[] = [];
@@ -794,17 +810,17 @@ const NO_FILE_CHIPS: FileChip[] = [];
 const DraftCard = ({
   draft,
   canRemove,
-  sources,
+  target,
   onChange,
   onRemove,
 }: DraftCardProps) => {
-  const allProperties = sources?.allProperties ?? NO_FILE_CHIPS;
-  const dependencyCount = sources?.dependencyCount ?? 0;
-  const workspaceId = sources?.workspaceId ?? "";
+  const isWorkspace = target.kind === "workspace";
+  const allProperties = isWorkspace ? target.allProperties : NO_FILE_CHIPS;
+  const dependencyCount = isWorkspace ? target.dependencyCount : 0;
+  const workspaceId = isWorkspace ? target.workspaceId : "";
   const t = useTranslations();
   const format = useFormatter();
   const chipDefs = useChipDefinitions();
-  const suggestPrompt = useSuggestPrompt();
   const editorRef = useRef<Editor | null>(null);
   const [initialPrompt] = useState(() => draft.prompt);
   const handlePromptChange = useLatestCallback((next: string) => {
@@ -833,51 +849,66 @@ const DraftCard = ({
   }, []);
 
   const trimmedName = draft.name.trim();
-  const isAi = draft.tool === "ai-model" && sources !== null;
-  const autoPromptDisabled =
-    !isAi || trimmedName.length === 0 || suggestPrompt.isPending;
+  const isAi = draft.tool === "ai-model" && isWorkspace;
 
-  const handleAutoPrompt = useCallback(
-    (instruction: string) => {
-      if (autoPromptDisabled) {
-        return;
-      }
-      suggestPrompt.mutate(
-        {
-          workspaceId,
-          name: trimmedName,
-          contentType: draft.contentType,
-          instruction,
-        },
-        {
-          onSuccess: ({ prompt: suggested }) => {
-            const editor = editorRef.current;
-            if (!editor || editor.isDestroyed) {
-              onChange({ prompt: suggested });
-              return;
-            }
-            editor.commands.setContent(suggested);
-            onChange({ prompt: editor.getHTML() });
-          },
-          onError: () => {
-            stellaToast.add({
-              title: t("workspaces.properties.autoPromptFailed"),
-              type: "error",
-            });
-          },
-        },
-      );
+  /**
+   * One suggestion affordance, two things a column can be asked of: a matter's
+   * documents, or the decisions the reader's current search returned. The
+   * target decides which endpoint answers and where the wording lands — a
+   * matter column's prompt, or the question itself, which is all a question
+   * column has.
+   */
+  const suggestPrompt = useMutation({
+    mutationFn: async (instruction: string) =>
+      target.kind === "workspace"
+        ? await suggestPropertyPrompt({
+            workspaceId: target.workspaceId,
+            name: trimmedName,
+            contentType: draft.contentType,
+            instruction,
+          })
+        : await suggestQuestionPrompt({
+            draft: {
+              question: trimmedName,
+              content: questionColumnContent(draft),
+            },
+            instruction,
+            scope: target.suggestion,
+          }),
+    onError: (error) => {
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("workspaces.properties.autoPromptFailed"),
+        type: "error",
+      });
     },
-    [
-      autoPromptDisabled,
-      draft.contentType,
-      onChange,
-      suggestPrompt,
-      t,
-      trimmedName,
-      workspaceId,
-    ],
-  );
+  });
+
+  const suggestDisabled = trimmedName.length === 0 || suggestPrompt.isPending;
+  const autoPromptDisabled = !isAi || suggestDisabled;
+
+  const applySuggestion = (suggested: string) => {
+    if (target.kind === "organisation") {
+      onChange({ name: suggested });
+      return;
+    }
+    const editor = editorRef.current;
+    if (!editor || editor.isDestroyed) {
+      onChange({ prompt: suggested });
+      return;
+    }
+    editor.commands.setContent(suggested);
+    onChange({ prompt: editor.getHTML() });
+  };
+
+  const handleAutoPrompt = (instruction: string) => {
+    if (suggestDisabled) {
+      return;
+    }
+    suggestPrompt.mutate(instruction, {
+      onSuccess: ({ prompt: suggested }) => applySuggestion(suggested),
+    });
+  };
 
   const sourceIds = useMemo(
     () => [...new Set([...draft.fileIds, ...draft.mentions])],
@@ -912,13 +943,25 @@ const DraftCard = ({
           className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={
-            sources === null
-              ? t("caseLaw.research.questionPlaceholder")
-              : t("workspaces.properties.newColumnName")
+            isWorkspace
+              ? t("workspaces.properties.newColumnName")
+              : t("caseLaw.research.questionPlaceholder")
           }
           unstyled
           value={draft.name}
         />
+        {!isWorkspace && (
+          // A question column has no prompt beside its wording, so the
+          // suggestion works on the wording itself and the control sits with
+          // it rather than inside a prompt editor there is none of.
+          <AiRewriteControl
+            className="text-muted-foreground hover:text-foreground shrink-0"
+            disabled={suggestDisabled}
+            isPending={suggestPrompt.isPending}
+            label={t("workspaces.properties.suggestWithAI")}
+            onRewrite={handleAutoPrompt}
+          />
+        )}
         {canRemove && (
           <Button
             aria-label={t("common.remove")}
@@ -982,12 +1025,12 @@ const DraftCard = ({
       {needsOptions && (
         <InlineOptionEditor
           fallback={draft.fallback}
-          {...(sources === null
-            ? {}
-            : {
+          {...(isWorkspace
+            ? {
                 onFallbackChange: (next: string | null) =>
                   onChange({ fallback: next }),
-              })}
+              }
+            : {})}
           options={draft.options}
           pushOption={(option) =>
             onChange({ options: [...draft.options, option] })
@@ -1008,7 +1051,7 @@ const DraftCard = ({
       <TypeChipsRow
         chipDefs={chipDefs}
         contentType={draft.contentType}
-        {...(sources === null ? {} : { manualChip })}
+        {...(isWorkspace ? { manualChip } : {})}
         onContentTypeChange={(next) =>
           onChange({ contentType: next, tool: "ai-model" })
         }

@@ -12,9 +12,15 @@ import {
   questionColumnSurface,
   questionEditDiscardsAnswers,
   questionRunSet,
+  questionSuggestionBody,
   researchRunBatches,
+  UNSEARCHED_SCOPE,
 } from "./question-columns.logic";
-import type { QuestionAnswer, QuestionColumn } from "./question-columns.logic";
+import type {
+  QuestionAnswer,
+  QuestionColumn,
+  QuestionSuggestionScope,
+} from "./question-columns.logic";
 
 /**
  * A yes/no question, which the property model spells as a two-option select:
@@ -30,6 +36,14 @@ const YES_NO_CONTENT = {
   ],
   fallback: null,
 } as const satisfies QuestionColumn["content"];
+
+const TEXT_CONTENT = {
+  version: 1,
+  type: "text",
+} as const satisfies QuestionColumn["content"];
+
+const ids = (count: number): string[] =>
+  Array.from({ length: count }, (_, index) => `d${index}`);
 
 const column = (id: string): QuestionColumn => ({
   id,
@@ -252,9 +266,6 @@ describe("what a run covers", () => {
 });
 
 describe("how a run reaches the endpoint", () => {
-  const ids = (count: number): string[] =>
-    Array.from({ length: count }, (_, index) => `d${index}`);
-
   test("a page fits in one request", () => {
     expect(researchRunBatches([])).toEqual([]);
     expect(
@@ -291,6 +302,7 @@ describe("who is shown question columns", () => {
     onColumnAction: noop,
     onRetryAnswer: noop,
     onShowPassage: noop,
+    suggestion: { ...UNSEARCHED_SCOPE, decisionIds: [] },
   };
 
   test("a reader with an organization sees them", () => {
@@ -303,6 +315,79 @@ describe("who is shown question columns", () => {
     expect(
       questionColumnSurface({ ...available, hasActiveOrganization: false }),
     ).toEqual({ type: "hidden" });
+  });
+});
+
+describe("what a suggestion request carries", () => {
+  const scope: QuestionSuggestionScope = {
+    country: "CZ",
+    query: "náhrada škody",
+    filters: {
+      court: "Nejvyšší soud",
+      decisionType: undefined,
+      dateFrom: "2020-01-01",
+      dateTo: undefined,
+      language: undefined,
+    },
+    decisionIds: ids(9),
+  };
+
+  test("the search, the answer kind and its options", () => {
+    expect(
+      questionSuggestionBody({
+        draft: {
+          question: "  Byla žaloba zamítnuta?  ",
+          content: YES_NO_CONTENT,
+        },
+        instruction: "Make it concise.",
+        scope,
+      }),
+    ).toEqual({
+      question: "Byla žaloba zamítnuta?",
+      answerKind: "single-select",
+      options: YES_NO_CONTENT.options,
+      instruction: "Make it concise.",
+      country: "CZ",
+      query: "náhrada škody",
+      filters: { court: "Nejvyšší soud", dateFrom: "2020-01-01" },
+      decisionIds: ids(5),
+    });
+  });
+
+  test("at most the sample allowance of decisions, and only their ids", () => {
+    const body = questionSuggestionBody({
+      draft: { question: "Which damages head?", content: TEXT_CONTENT },
+      instruction: "Polish the writing.",
+      scope,
+    });
+
+    expect(scope.decisionIds.length).toBeGreaterThan(body.decisionIds.length);
+    expect(body.decisionIds).toEqual(scope.decisionIds.slice(0, 5));
+    expect(Object.keys(body).toSorted()).toEqual([
+      "answerKind",
+      "country",
+      "decisionIds",
+      "filters",
+      "instruction",
+      "query",
+      "question",
+    ]);
+  });
+
+  test("a listing nobody searched for names no jurisdiction and no query", () => {
+    const body = questionSuggestionBody({
+      draft: { question: "Which damages head?", content: TEXT_CONTENT },
+      instruction: "Polish the writing.",
+      scope: { ...UNSEARCHED_SCOPE, decisionIds: ids(2) },
+    });
+
+    expect(body).toEqual({
+      question: "Which damages head?",
+      answerKind: "text",
+      instruction: "Polish the writing.",
+      filters: {},
+      decisionIds: ids(2),
+    });
   });
 });
 

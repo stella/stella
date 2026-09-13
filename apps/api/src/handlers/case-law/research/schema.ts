@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 import {
   CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX,
   CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
+  CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
 } from "@stll/api-contract";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
@@ -98,6 +99,42 @@ export const runResearchAnswersBodySchema = t.Object(
     }),
     /** Re-answer cells that already hold an answer. */
     force: t.Optional(t.Boolean()),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * The search a suggestion is written for, and the rows it may be grounded in.
+ *
+ * The client never sends decision text: it names the decisions it has on
+ * screen and the server reads their published headnotes through the same
+ * public, redistribution-gated read the answer runner uses. `country` and
+ * `query` are absent where the listing has neither — a matter's linked
+ * decisions span jurisdictions and were never searched for.
+ */
+export const suggestResearchColumnPromptBodySchema = t.Object(
+  {
+    /** The wording as it stands; the suggestion refines it. */
+    question: researchQuestionSchema,
+    answerKind: researchAnswerTypeSchema,
+    /** Select kinds only; the suggestion is asked to choose among them. */
+    options: t.Optional(researchColumnOptionsSchema),
+    instruction: t.String({ minLength: 1, maxLength: 2000 }),
+    country: t.Optional(t.String({ minLength: 2, maxLength: 3 })),
+    query: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
+    filters: t.Object(
+      {
+        court: t.Optional(t.String({ maxLength: 512 })),
+        decisionType: t.Optional(t.String({ maxLength: 128 })),
+        dateFrom: t.Optional(t.String({ format: "date" })),
+        dateTo: t.Optional(t.String({ format: "date" })),
+        language: t.Optional(t.String({ maxLength: 8 })),
+      },
+      { additionalProperties: false },
+    ),
+    decisionIds: t.Array(tSafeId("caseLawDecision"), {
+      maxItems: CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+    }),
   },
   { additionalProperties: false },
 );

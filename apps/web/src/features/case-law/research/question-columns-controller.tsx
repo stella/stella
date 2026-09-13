@@ -47,6 +47,7 @@ import type {
   QuestionColumnAction,
   QuestionColumnSurface,
   QuestionRunSet,
+  QuestionSuggestionSearch,
 } from "@/features/case-law/research/question-columns.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -64,6 +65,12 @@ type QuestionColumnsInput = {
   pageDecisionIds: readonly string[];
   /** The rows the reader picked; empty means the whole page. */
   selectedDecisionIds: readonly string[];
+  /**
+   * The search these rows came from. It grounds a new question's suggested
+   * wording; a surface whose rows were never searched for passes
+   * `UNSEARCHED_SCOPE`.
+   */
+  search: QuestionSuggestionSearch;
   /** Opens a decision at a cited passage, with the reader's highlight. */
   onShowPassage: (decision: Decision, anchorId: string) => void;
 };
@@ -101,6 +108,7 @@ export const useQuestionColumns = ({
   enabled,
   onShowPassage,
   pageDecisionIds,
+  search,
   selectedDecisionIds,
 }: QuestionColumnsInput): QuestionColumnsController => {
   const t = useTranslations();
@@ -238,6 +246,7 @@ export const useQuestionColumns = ({
         );
       },
       onShowPassage,
+      suggestion: { ...search, decisionIds: pageDecisionIds },
     }),
     editing,
     onEditingChange: setEditing,
@@ -289,7 +298,7 @@ export const QuestionColumnControls = ({
   return (
     <>
       <BulkAddColumns
-        target={{ kind: "organisation" }}
+        target={{ kind: "organisation", suggestion: surface.suggestion }}
         triggerVariant="labelled"
       />
       {surface.columns.length > 0 && (
@@ -315,7 +324,11 @@ export const QuestionColumnControls = ({
             }
           }}
           open
-          target={{ kind: "organisation", editing }}
+          target={{
+            kind: "organisation",
+            editing,
+            suggestion: surface.suggestion,
+          }}
           triggerVariant="none"
         />
       )}

@@ -723,7 +723,7 @@ describe("custom oxlint guardrails", () => {
 
   test("workspace table measures scroll metrics after mount", () => {
     const tableSource = readRootFixture(
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx",
+      "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx",
     );
 
     expect(tableSource).toContain("useExternalSyncEffect(() => {");

@@ -1,6 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { researchRunBatches } from "@/features/case-law/research/question-columns.logic";
+import {
+  questionSuggestionBody,
+  researchRunBatches,
+} from "@/features/case-law/research/question-columns.logic";
 import type { QuestionColumnInput } from "@/features/case-law/research/question-columns.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -128,6 +131,25 @@ export const updateQuestionColumn = async ({
       .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
       .patch(toColumnBody(input)),
   );
+
+/**
+ * One drafted or refined question wording. The search the column is being
+ * added to travels with it, so the suggestion targets those decisions; the
+ * server reads them itself from the ids the body names.
+ */
+export const suggestQuestionPrompt = async (
+  input: Parameters<typeof questionSuggestionBody>[0],
+) => {
+  const { decisionIds, ...body } = questionSuggestionBody(input);
+  return unwrapEden(
+    await api.case.research.columns["suggest-prompt"].post({
+      ...body,
+      decisionIds: decisionIds.map((decisionId) =>
+        toSafeId<"caseLawDecision">(decisionId),
+      ),
+    }),
+  );
+};
 
 export const deleteQuestionColumn = async (columnId: string) =>
   unwrapEden(

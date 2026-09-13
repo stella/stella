@@ -1,6 +1,7 @@
 import {
   answerNeedsRun,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
+  CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
 } from "@stll/api-contract";
 import type {
   CaseLawResearchAnswerState,
@@ -219,6 +220,97 @@ export const questionEditDiscardsAnswers = ({
   (stored.question.trim() !== draft.question.trim() ||
     stored.content.type !== draft.content.type);
 
+/**
+ * The decisions a question is being written for: the search that returned
+ * them, and the rows drawn from it. A matter's linked decisions were never
+ * searched for and span jurisdictions, so it carries neither a country nor a
+ * query — only the rows.
+ */
+export type QuestionSuggestionScope = {
+  country: string | undefined;
+  query: string | undefined;
+  filters: {
+    court: string | undefined;
+    decisionType: string | undefined;
+    dateFrom: string | undefined;
+    dateTo: string | undefined;
+    language: string | undefined;
+  };
+  /** Every decision on the page, in the order it is drawn. */
+  decisionIds: readonly string[];
+};
+
+/** The search half of the scope; the rows come from the surface drawing them. */
+export type QuestionSuggestionSearch = Omit<
+  QuestionSuggestionScope,
+  "decisionIds"
+>;
+
+/** A listing that was never searched for: a matter's links, for instance. */
+export const UNSEARCHED_SCOPE: QuestionSuggestionSearch = {
+  country: undefined,
+  query: undefined,
+  filters: {
+    court: undefined,
+    decisionType: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    language: undefined,
+  },
+};
+
+type QuestionSuggestionInput = {
+  draft: QuestionDraft;
+  /** The adjustment the reader picked, or typed. */
+  instruction: string;
+  scope: QuestionSuggestionScope;
+};
+
+/**
+ * A suggestion request as the endpoint takes it.
+ *
+ * Only decision IDS travel: the server reads those decisions through the
+ * public gate and quotes their published headnotes itself, so no decision text
+ * ever leaves the client. The list is cut to the sample allowance here as well
+ * as refused past it there, so a page of rows asks for a suggestion rather
+ * than losing it to a validation error.
+ */
+export const questionSuggestionBody = ({
+  draft,
+  instruction,
+  scope,
+}: QuestionSuggestionInput) => ({
+  question: draft.question.trim(),
+  answerKind: draft.content.type,
+  ...(draft.content.type === "single-select" ||
+  draft.content.type === "multi-select"
+    ? { options: draft.content.options }
+    : {}),
+  instruction,
+  ...(scope.country === undefined ? {} : { country: scope.country }),
+  ...(scope.query === undefined ? {} : { query: scope.query }),
+  filters: setFilters(scope.filters),
+  decisionIds: scope.decisionIds.slice(
+    0,
+    CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+  ),
+});
+
+/** A filter the reader has not set is absent from the body, never undefined. */
+const setFilters = ({
+  court,
+  dateFrom,
+  dateTo,
+  decisionType,
+  language,
+}: QuestionSuggestionScope["filters"]) => ({
+  ...(court === undefined ? {} : { court }),
+  ...(decisionType === undefined ? {} : { decisionType }),
+  ...(dateFrom === undefined ? {} : { dateFrom }),
+  ...(dateTo === undefined ? {} : { dateTo }),
+  ...(language === undefined ? {} : { language }),
+});
+
 /** What the reader can do to the column a question is asked in. */
 export type QuestionColumnAction = "run" | "edit" | "delete";
 
@@ -237,6 +329,12 @@ export type AvailableQuestionColumns = {
   onShowPassage: (decision: Decision, anchorId: string) => void;
   /** True while a run is being queued, so every run control settles together. */
   isRunning: boolean;
+  /**
+   * What a newly written question's suggested wording is grounded in. It lives
+   * on the available surface because the composer that uses it is drawn from
+   * the same answer: a reader who gets no columns gets no way to add one.
+   */
+  suggestion: QuestionSuggestionScope;
 };
 
 /**
