@@ -192,9 +192,7 @@ export const recordEntityStamps = async ({
   if (stamps.length === 0) {
     return;
   }
-  const workspaceIds = [
-    ...new Set(stamps.map((stamp) => stamp.workspaceId)),
-  ];
+  const workspaceIds = [...new Set(stamps.map((stamp) => stamp.workspaceId))];
   const workspaceRows = await tx
     .select({ id: workspaces.id, organizationId: workspaces.organizationId })
     .from(workspaces)
