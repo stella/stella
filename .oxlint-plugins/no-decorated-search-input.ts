@@ -181,7 +181,10 @@ export default eslintCompatPlugin({
         // renders ahead of the field, the position the primitive already
         // occupies; an addon counts on either side, because its `align` prop,
         // not source order, decides which edge it paints.
-        const duplicatedIcons = (input: AstNode): AstNode[] => {
+        const duplicatedIcons = (input: unknown): AstNode[] => {
+          if (!isAstNode(input)) {
+            return [];
+          }
           const parent = input.parent;
           const siblings = childElements(parent);
           const index = siblings.indexOf(input);
