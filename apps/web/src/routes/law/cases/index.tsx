@@ -699,6 +699,9 @@ function PublicCaseLawIndex() {
   }
   const pageDecisionIds = decisions.map((decision) => decision.id);
   const questions = useQuestionColumns({
+    // The results page is where questions are authored, so the columns are
+    // read whether or not this particular search returned anything.
+    enabled: true,
     onShowSource: (decision, anchorId) => {
       detached(
         openDecisionAtPassage(routerNavigate, decision, anchorId),

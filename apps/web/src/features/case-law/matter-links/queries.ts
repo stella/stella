@@ -35,6 +35,10 @@ export const matterLinksOptions = (key: MatterLinksKey) =>
         await matterLinksApi(key.workspaceId).get({ fetch: { signal } }),
       ).links,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    // Links change only when someone pins or unpins one, and both mutations
+    // invalidate this key; re-reading the whole set every time the tab regains
+    // focus would spend a request on the matter's hot path for nothing.
+    refetchOnWindowFocus: false,
   });
 
 export type MatterDecisionLink = Awaited<
