@@ -77,9 +77,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    // override: 2026-09-09: AWS documents PDF input for Nova Pro through Bedrock Converse; models.dev lists text, image and video only
     "us.amazon.nova-pro-v1:0",
-    // override: 2026-09-09: AWS documents PDF input for Nova Lite through Bedrock Converse; models.dev lists text, image and video only
     "us.amazon.nova-lite-v1:0",
   ],
   mistral: [],
@@ -146,9 +144,6 @@ export const MODEL_REASONING_EFFORTS = {
   "mistral-large-latest": null,
   "mistral-medium-latest": ["none", "high"],
   "mistral-small-latest": ["none", "high"],
-  "magistral-medium-latest": null,
-  "magistral-small": null,
-  "pixtral-large-latest": null,
 } as const satisfies Record<
   OfferedBYOKModelId,
   readonly ReasoningEffort[] | null
@@ -212,9 +207,6 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "mistral-large-latest": null,
   "mistral-medium-latest": null,
   "mistral-small-latest": null,
-  "magistral-medium-latest": null,
-  "magistral-small": null,
-  "pixtral-large-latest": null,
 } as const satisfies Record<
   OfferedBYOKModelId,
   ReasoningEffort | null
@@ -278,7 +270,4 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "mistral-large-latest": "emit",
   "mistral-medium-latest": "emit",
   "mistral-small-latest": "emit",
-  "magistral-medium-latest": "emit",
-  "magistral-small": "emit",
-  "pixtral-large-latest": "emit",
 } as const satisfies Record<OfferedBYOKModelId, TemperaturePolicy>;

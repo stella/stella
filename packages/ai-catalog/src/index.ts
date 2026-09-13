@@ -174,7 +174,7 @@ export const BYOK_DEFAULT_MODELS = {
     fast: "claude-opus-5",
     chat: "claude-opus-5",
     reasoning: "claude-opus-5",
-    pdf: "claude-opus-5",
+    pdf: "claude-opus-4-8",
   },
   bedrock: {
     fast: "us.amazon.nova-micro-v1:0",
@@ -185,7 +185,7 @@ export const BYOK_DEFAULT_MODELS = {
   mistral: {
     fast: "mistral-small-latest",
     chat: "mistral-medium-latest",
-    reasoning: "magistral-medium-latest",
+    reasoning: "mistral-medium-latest",
     pdf: "mistral-large-latest",
   },
 } as const satisfies Record<TanStackAIProvider, Record<ModelRole, string>>;
@@ -291,9 +291,6 @@ export const BYOK_MODEL_OPTIONS = {
     "mistral-large-latest",
     "mistral-medium-latest",
     "mistral-small-latest",
-    "magistral-medium-latest",
-    "magistral-small",
-    "pixtral-large-latest",
   ],
 } as const satisfies Record<TanStackAIProvider, readonly string[]>;
 
@@ -512,18 +509,6 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "Mistral Small",
     iconProvider: "mistral",
   },
-  "magistral-medium-latest": {
-    displayName: "Magistral Medium",
-    iconProvider: "mistral",
-  },
-  "magistral-small": {
-    displayName: "Magistral Small",
-    iconProvider: "mistral",
-  },
-  "pixtral-large-latest": {
-    displayName: "Pixtral Large",
-    iconProvider: "mistral",
-  },
 } as const satisfies Record<OfferedBYOKModelId, ModelDisplayMetadata>;
 
 const MODEL_DISPLAY_METADATA_BY_ID: Readonly<
@@ -583,11 +568,7 @@ export const isBYOKModelRoleSupported = ({
  */
 export const CHAT_PDF_ATTACHMENT_MODEL_OPTIONS = {
   ...BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
-  mistral: [
-    "mistral-medium-latest",
-    "mistral-small-latest",
-    "pixtral-large-latest",
-  ],
+  mistral: ["mistral-medium-latest", "mistral-small-latest"],
 } as const satisfies {
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
 };
@@ -989,10 +970,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "mistral-large-latest": 128_000,
   "mistral-medium-latest": 128_000,
   "mistral-medium-3-5": 128_000,
-  "magistral-medium-latest": 128_000,
   "magistral-small-latest": 128_000,
-  "magistral-small": 128_000,
-  "pixtral-large-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
   "google/gemini-3.8-flash": 1_048_576,
   "google/gemini-3.7-flash": 1_048_576,
