@@ -7,7 +7,12 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import {
+  Popover,
+  PopoverPanel,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -86,6 +91,8 @@ export const DecisionFilterPopover = ({
         className="w-72 max-w-[calc(100vw-2rem)]"
         contentClassName="gap-5"
       >
+        {/* The trigger names the button, not the portaled popup. */}
+        <PopoverTitle className="sr-only">{t("common.filters")}</PopoverTitle>
         <FacetSections
           dateRange={dateRange}
           facets={facets}
