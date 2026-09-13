@@ -5,9 +5,8 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- Collaboration is undeployed. Adding a required column without a default
 -- refuses existing rooms instead of rebinding saved paragraph tokens to a
 -- different DOCX. Discard old test rooms before applying this clean cutover.
--- squawk-ignore adding-required-field -- Undeployed collaboration uses a clean cutover; existing rooms must be discarded, never rebound to a different source.
-ALTER TABLE "folio_collab_rooms"
-  ADD COLUMN "source_version_id" uuid NOT NULL;--> statement-breakpoint
+-- squawk-ignore adding-required-field
+ALTER TABLE "folio_collab_rooms" ADD COLUMN "source_version_id" uuid NOT NULL;--> statement-breakpoint
 
 ALTER TABLE "folio_collab_rooms"
   ADD CONSTRAINT "folio_collab_rooms_source_version_entity_workspace_fk"

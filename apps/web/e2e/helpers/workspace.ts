@@ -117,8 +117,8 @@ export const deleteTestWorkspace = async (
   await expect
     .poll(
       async () => {
-        const attempt = await Result.tryPromise(async () =>
-          await apiDeleteStatus(request, path),
+        const attempt = await Result.tryPromise(
+          async () => await apiDeleteStatus(request, path),
         );
         // expect.poll retries thrown errors too; return before surfacing failures.
         if (Result.isError(attempt)) {

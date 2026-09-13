@@ -32,12 +32,14 @@ const readDocumentText = async (page: Page) =>
 
 const openCollaborativeDocument = async ({
   entityId,
+  expectedText,
   fieldId,
   page,
   viewId,
   workspaceId,
 }: {
   entityId: string;
+  expectedText: string;
   fieldId: string;
   page: Page;
   viewId: string;
@@ -54,11 +56,9 @@ const openCollaborativeDocument = async ({
   await expect(
     page.getByRole("status").filter({ hasText: "Synced" }).first(),
   ).toBeVisible();
-  await expect(
-    page.locator(".layout-run-text", {
-      hasText: "Stella E2E test document.",
-    }),
-  ).toBeVisible({ timeout: 45_000 });
+  await expect
+    .poll(async () => await readDocumentText(page), { timeout: 45_000 })
+    .toContain(expectedText);
 };
 
 test.describe("lockless DOCX collaboration", () => {
@@ -120,6 +120,7 @@ test.describe("lockless DOCX collaboration", () => {
     try {
       await openCollaborativeDocument({
         entityId: uploaded.entityId,
+        expectedText: "Stella E2E test document.",
         fieldId: fileField.id,
         page,
         viewId: testWorkspace.viewId,
@@ -127,6 +128,7 @@ test.describe("lockless DOCX collaboration", () => {
       });
       await openCollaborativeDocument({
         entityId: uploaded.entityId,
+        expectedText: "Stella E2E test document.",
         fieldId: fileField.id,
         page: collaboratorPage,
         viewId: testWorkspace.viewId,
@@ -245,6 +247,7 @@ test.describe("lockless DOCX collaboration", () => {
       stopTrackingCollaborator = browserErrors.trackPage(rejoinedPage);
       await openCollaborativeDocument({
         entityId: uploaded.entityId,
+        expectedText: whilePublishingToken,
         fieldId: publishedFileField.id,
         page: rejoinedPage,
         viewId: testWorkspace.viewId,
@@ -253,7 +256,8 @@ test.describe("lockless DOCX collaboration", () => {
 
       const secondToken = ` SECOND${String(Date.now())}`;
       await rejoinedPage
-        .locator(".layout-run-text", { hasText: "Stella E2E" })
+        .locator(".layout-run-text")
+        .first()
         .click();
       await rejoinedPage.keyboard.insertText(secondToken);
       await expect

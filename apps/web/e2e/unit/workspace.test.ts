@@ -152,8 +152,8 @@ describe("deleteTestWorkspace", () => {
         );
 
       try {
-        const result = await Result.tryPromise(async () =>
-          await deleteTestWorkspace(apiRequest, workspaceId),
+        const result = await Result.tryPromise(
+          async () => await deleteTestWorkspace(apiRequest, workspaceId),
         );
         expect(Result.isError(result)).toBe(true);
         if (Result.isError(result)) {
