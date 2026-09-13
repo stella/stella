@@ -12,14 +12,19 @@ import {
   formatValidityDate,
 } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import {
+  createStatuteRouteParams,
+  type StatuteRouteParams,
+} from "@/lib/statute-route";
 
 export type StatuteListItem = {
   citationCaseCount: number | null;
   country: string;
   documentType: string | null;
   effectiveDate: string | null;
+  eli: string;
   id: string;
+  slug: string | null;
   status: string;
   title: string;
   versionValidFrom: string | null;
@@ -58,10 +63,12 @@ export const StatuteListRow = ({ statute }: { statute: StatuteListItem }) => {
         </>
       }
       title={statute.title}
-      to={{
-        country: toStatuteCountrySegment(statute.country),
+      to={createStatuteRouteParams({
+        country: statute.country,
         documentId: statute.id,
-      }}
+        eli: statute.eli,
+        slug: statute.slug,
+      })}
     />
   );
 };
@@ -89,7 +96,7 @@ const RowShell = ({
 }: {
   meta: ReactNode;
   title: ReactNode;
-  to: { country: string; documentId: string } | null;
+  to: StatuteRouteParams | null;
 }) => {
   // Block containers: the loading row puts block skeletons here, and a block
   // inside an inline element is markup the browser would reparse, which a
@@ -110,8 +117,8 @@ const RowShell = ({
   return (
     <Link
       className={cn(ROW_CLASS, "hover:bg-muted/50 transition-colors")}
-      params={to}
-      to="/law/$country/statutes/$documentId"
+      params={{ country: to.country, slug: to.slug }}
+      to="/law/$country/statutes/$slug"
     >
       {body}
     </Link>

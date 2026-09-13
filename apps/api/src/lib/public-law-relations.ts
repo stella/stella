@@ -172,6 +172,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     id: "required",
     source_id: "required",
     eli: "required",
+    slug: "required",
     title: "required",
     country: "required",
     language: "required",

@@ -21,11 +21,17 @@ import { createProvisionViewTab } from "@/features/statutes/provision-inspector.
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
 import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */
-  document: { country: string; id: string };
+  document: {
+    country: string;
+    eli?: string | null;
+    id: string;
+    slug?: string | null;
+    versionValidFrom?: string | null;
+  };
   payload: ProvisionViewPayload;
   /**
    * The wording the reference's own list already carried, when it did. A
@@ -128,11 +134,13 @@ export const CitedProvisionLink = ({
               provision.payload.highlightAnchorId ?? provision.payload.anchorId
             }
             onClick={onProvisionClick}
-            params={{
-              country: toStatuteCountrySegment(provision.document.country),
+            {...createStatuteLinkTarget({
+              country: provision.document.country,
               documentId: provision.document.id,
-            }}
-            to="/law/$country/statutes/$documentId"
+              eli: provision.document.eli,
+              slug: provision.document.slug,
+              versionValidFrom: provision.document.versionValidFrom,
+            })}
           />
         }
       >

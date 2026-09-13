@@ -28,7 +28,7 @@ import { topCitingDecisionsOptions } from "@/features/statutes/queries/citing-de
 import { statuteVersionsOptions } from "@/features/statutes/queries/statutes";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 // The ask actions pull the chat composer's draft machinery; a visitor who
 // cannot chat never loads it.
@@ -118,11 +118,13 @@ export const ProvisionInspectorView = ({
             <Link
               className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
               hash={payload.highlightAnchorId ?? payload.anchorId}
-              params={{
-                country: toStatuteCountrySegment(payload.jurisdiction),
+              {...createStatuteLinkTarget({
+                country: selectedVersion?.country ?? payload.jurisdiction,
                 documentId: payload.documentId,
-              }}
-              to="/law/$country/statutes/$documentId"
+                eli: selectedVersion?.eli,
+                slug: selectedVersion?.slug,
+                versionValidFrom: selectedVersion?.versionValidFrom,
+              })}
             >
               {t("statutes.showInText")}
             </Link>

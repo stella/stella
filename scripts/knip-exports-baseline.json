@@ -368,7 +368,7 @@
     }
   },
   "apps/web": {
-    "count": 413,
+    "count": 412,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -518,7 +518,6 @@
       "apps/web/src/lib/pdf/pdf-search.ts": 1,
       "apps/web/src/lib/pdf/pdf-viewport.tsx": 1,
       "apps/web/src/lib/prompts/types.ts": 1,
-      "apps/web/src/lib/public-law-material-route.ts": 1,
       "apps/web/src/lib/public-law-sitemap.ts": 2,
       "apps/web/src/lib/public-seo.ts": 1,
       "apps/web/src/lib/public-tools-github-content.ts": 1,

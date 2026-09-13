@@ -11,10 +11,16 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
-import { toStatuteCountrySegment } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 export type CitedStatuteTarget = {
-  document: { country: string; id: string };
+  document: {
+    country: string;
+    eli?: string | null;
+    id: string;
+    slug?: string | null;
+    versionValidFrom?: string | null;
+  };
   statuteTitle: string;
 };
 
@@ -33,11 +39,13 @@ export const CitedStatuteLink = ({
       render={
         <Link
           className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
-          params={{
-            country: toStatuteCountrySegment(target.document.country),
+          {...createStatuteLinkTarget({
+            country: target.document.country,
             documentId: target.document.id,
-          }}
-          to="/law/$country/statutes/$documentId"
+            eli: target.document.eli,
+            slug: target.document.slug,
+            versionValidFrom: target.document.versionValidFrom,
+          })}
         />
       }
     >

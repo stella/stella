@@ -110,6 +110,7 @@ export const listStatuteVersionsHandler = async ({
       .select({
         id: legislationDocuments.id,
         eli: legislationDocuments.eli,
+        slug: legislationDocuments.slug,
         title: legislationDocuments.title,
         country: legislationDocuments.country,
         language: legislationDocuments.language,

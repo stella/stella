@@ -36,8 +36,8 @@ import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import {
   createStatuteIndexPath,
   createStatutePath,
+  createStatuteRouteParams,
   isStatuteCountry,
-  toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
@@ -144,10 +144,14 @@ export const Route = createFileRoute("/law/$country/statutes/")({
           ? loaderData.statutes.map((statute) => ({
               name: statute.title,
               url: createPublicLawCanonicalUrl(
-                createStatutePath({
-                  country: statute.country,
-                  documentId: statute.id,
-                }),
+                createStatutePath(
+                  createStatuteRouteParams({
+                    country: statute.country,
+                    documentId: statute.id,
+                    eli: statute.eli,
+                    slug: statute.slug,
+                  }),
+                ),
               ),
             }))
           : [],
@@ -289,14 +293,17 @@ function PublicStatutesIndex() {
         if (only === undefined) {
           return;
         }
+        const params = createStatuteRouteParams({
+          country: only.country,
+          documentId: only.id,
+          eli: only.eli,
+          slug: only.slug,
+        });
         await navigate({
-          params: {
-            country: toStatuteCountrySegment(only.country),
-            documentId: only.id,
-          },
+          params: { country: params.country, slug: params.slug },
           search:
             submitted.provision === null ? {} : { jump: submitted.provision },
-          to: "/law/$country/statutes/$documentId",
+          to: "/law/$country/statutes/$slug",
         });
       })(),
       "statutes.open-match",

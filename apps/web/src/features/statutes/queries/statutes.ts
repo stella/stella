@@ -30,13 +30,14 @@ export type StatuteListFilters = {
 };
 
 /**
- * A Work plus the date to read it at. The identifier addresses the Work and
- * the date picks the consolidation, so the trio is the cache identity.
+ * A Work addressed the way its public URL addresses it: a jurisdiction and
+ * the readable segment, plus the consolidation opening when the URL names
+ * one. Absent `asOf` reads the latest consolidation the corpus holds.
  */
-export type StatuteAsOfKey = {
-  asOf: string;
-  eli: string;
-  language: string;
+export type StatuteSlugKey = {
+  asOf?: string;
+  country: string;
+  slug: string;
 };
 
 export const statuteKeys = {
@@ -54,10 +55,15 @@ export const statuteKeys = {
   ],
   shelf: (country: string) => [...statuteKeys.all, "shelf", { country }],
   byId: (documentId: string) => [...statuteKeys.all, "detail", documentId],
-  asOf: (key: StatuteAsOfKey) => [
+  publicById: (documentId: string) => [
     ...statuteKeys.all,
-    "asOf",
-    { asOf: key.asOf, eli: key.eli, language: key.language },
+    "public-detail",
+    documentId,
+  ],
+  bySlug: (key: StatuteSlugKey) => [
+    ...statuteKeys.all,
+    "bySlug",
+    { asOf: key.asOf, country: key.country, slug: key.slug },
   ],
   versions: (documentId: string) => [
     ...statuteKeys.all,
@@ -136,30 +142,70 @@ export const statuteOptions = (documentId: string) =>
   });
 
 /**
- * The consolidation of a Work that applied on a given date, or null when the
- * corpus covers no version on it. A date outside the covered range is a real
- * answer the reader shows, not a failed request.
+ * Whether a failed public-law response is a plain miss rather than a
+ * transport, gate, or server failure. Classifying first is what lets a route
+ * act on the miss while `unwrapPublicLawEden` still raises everything else,
+ * the disabled-surface marker included.
  */
-export const statuteAsOfOptions = (key: StatuteAsOfKey) =>
+const isPublicLawMiss = (
+  error: { status: number; value: unknown },
+  action: string,
+): boolean => {
+  const classified = toPublicLawError(error, action);
+
+  return APIError.is(classified) && classified.status === NOT_FOUND_STATUS;
+};
+
+/**
+ * The statute a legacy document-id URL names, or null when the corpus no
+ * longer holds it. The public reader answers that miss by sending the reader
+ * to the law home, so it reads as a value rather than a failure — unlike
+ * `statuteOptions`, whose callers render an "unavailable" state instead.
+ */
+export const publicStatuteOptions = (documentId: string) =>
   queryOptions({
-    queryKey: statuteKeys.asOf(key),
+    queryKey: statuteKeys.publicById(documentId),
     queryFn: async ({ signal }) => {
-      const response = await api.law.statutes["by-eli"].get({
-        query: { asOf: key.asOf, eli: key.eli, language: key.language },
+      const response = await api.law
+        .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
+        .get({ fetch: { signal } });
+
+      if (
+        response.error &&
+        isPublicLawMiss(response.error, "readPublicStatute")
+      ) {
+        return null;
+      }
+
+      return unwrapPublicLawEden(response, "readPublicStatute");
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * The statute a public URL names, or null when nothing answers to it: an
+ * unknown segment, or a date no consolidation of the Work covers. Both are
+ * answers the route acts on (not found, or the empty reader), not failures.
+ */
+export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
+  queryOptions({
+    queryKey: statuteKeys.bySlug(
+      asOf === undefined ? { country, slug } : { asOf, country, slug },
+    ),
+    queryFn: async ({ signal }) => {
+      const response = await api.law.statutes["by-slug"]({ slug }).get({
+        query: { country, ...(asOf === undefined ? {} : { asOf }) },
         fetch: { signal },
       });
 
-      if (response.error) {
-        const error = toPublicLawError(response.error, "readPublicStatuteAsOf");
-
-        if (APIError.is(error) && error.status === NOT_FOUND_STATUS) {
-          return null;
-        }
-
-        throw error;
+      if (
+        response.error &&
+        isPublicLawMiss(response.error, "readPublicStatuteBySlug")
+      ) {
+        return null;
       }
 
-      return unwrapPublicLawEden(response, "readPublicStatuteAsOf");
+      return unwrapPublicLawEden(response, "readPublicStatuteBySlug");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

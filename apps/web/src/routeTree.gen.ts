@@ -85,7 +85,6 @@ import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './route
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as LawCountryStatutesIndexRouteImport } from './routes/law/$country/statutes/index'
-import { Route as LawCountryStatutesDocumentIdRouteImport } from './routes/law/$country/statutes/$documentId'
 import { Route as LawCasesResearchIndexRouteImport } from './routes/law/cases/research/index'
 import { Route as LawCasesResearchTableIdRouteImport } from './routes/law/cases/research/$tableId'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
@@ -96,8 +95,10 @@ import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
 import { Route as ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport } from './routes/_protected.workspaces/$workspaceId/reports/$exportId'
 import { Route as LawCountryCasesCourtSlugRouteImport } from './routes/law/$country/cases/$court/$slug'
+import { Route as LawCountryStatutesSlugIndexRouteImport } from './routes/law/$country/statutes/$slug/index'
 import { Route as SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/{$month}[.]xml'
 import { Route as LawCountryCasesCourtLanguageSlugRouteImport } from './routes/law/$country/cases/$court/$language/$slug'
+import { Route as LawCountryStatutesSlugVVersionRouteImport } from './routes/law/$country/statutes/$slug/v/$version'
 import { Route as SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/$month/{$bucket}[.]xml'
 
 const IndexRoute = IndexRouteImport.update({
@@ -514,12 +515,6 @@ const LawCountryStatutesIndexRoute = LawCountryStatutesIndexRouteImport.update({
   path: '/$country/statutes/',
   getParentRoute: () => LawRouteRoute,
 } as any)
-const LawCountryStatutesDocumentIdRoute =
-  LawCountryStatutesDocumentIdRouteImport.update({
-    id: '/$country/statutes/$documentId',
-    path: '/$country/statutes/$documentId',
-    getParentRoute: () => LawRouteRoute,
-  } as any)
 const LawCasesResearchIndexRoute = LawCasesResearchIndexRouteImport.update({
   id: '/cases/research/',
   path: '/cases/research/',
@@ -578,6 +573,12 @@ const LawCountryCasesCourtSlugRoute =
     path: '/$country/cases/$court/$slug',
     getParentRoute: () => LawRouteRoute,
   } as any)
+const LawCountryStatutesSlugIndexRoute =
+  LawCountryStatutesSlugIndexRouteImport.update({
+    id: '/$country/statutes/$slug/',
+    path: '/$country/statutes/$slug/',
+    getParentRoute: () => LawRouteRoute,
+  } as any)
 const SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute =
   SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport.update({
     id: '/sitemaps/law-cases/$country/$year/{$month}.xml',
@@ -588,6 +589,12 @@ const LawCountryCasesCourtLanguageSlugRoute =
   LawCountryCasesCourtLanguageSlugRouteImport.update({
     id: '/$country/cases/$court/$language/$slug',
     path: '/$country/cases/$court/$language/$slug',
+    getParentRoute: () => LawRouteRoute,
+  } as any)
+const LawCountryStatutesSlugVVersionRoute =
+  LawCountryStatutesSlugVVersionRouteImport.update({
+    id: '/$country/statutes/$slug/v/$version',
+    path: '/$country/statutes/$slug/v/$version',
     getParentRoute: () => LawRouteRoute,
   } as any)
 const SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute =
@@ -670,7 +677,6 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
-  '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
   '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -685,7 +691,9 @@ export interface FileRoutesByFullPath {
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
+  '/law/$country/statutes/$slug/': typeof LawCountryStatutesSlugIndexRoute
   '/law/$country/cases/$court/$language/$slug': typeof LawCountryCasesCourtLanguageSlugRoute
+  '/law/$country/statutes/$slug/v/$version': typeof LawCountryStatutesSlugVVersionRoute
   '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
 }
 export interface FileRoutesByTo {
@@ -752,7 +760,6 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
-  '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
   '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -767,7 +774,9 @@ export interface FileRoutesByTo {
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
+  '/law/$country/statutes/$slug': typeof LawCountryStatutesSlugIndexRoute
   '/law/$country/cases/$court/$language/$slug': typeof LawCountryCasesCourtLanguageSlugRoute
+  '/law/$country/statutes/$slug/v/$version': typeof LawCountryStatutesSlugVVersionRoute
   '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
 }
 export interface FileRoutesById {
@@ -845,7 +854,6 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/_protected/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
-  '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
   '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -860,7 +868,9 @@ export interface FileRoutesById {
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/_protected/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
+  '/law/$country/statutes/$slug/': typeof LawCountryStatutesSlugIndexRoute
   '/law/$country/cases/$court/$language/$slug': typeof LawCountryCasesCourtLanguageSlugRoute
+  '/law/$country/statutes/$slug/v/$version': typeof LawCountryStatutesSlugVVersionRoute
   '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
 }
 export interface FileRouteTypes {
@@ -938,7 +948,6 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/lists'
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
-    | '/law/$country/statutes/$documentId'
     | '/law/cases/research/$tableId'
     | '/settings/organization/'
     | '/workspaces/$workspaceId/'
@@ -953,7 +962,9 @@ export interface FileRouteTypes {
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/workspaces/$workspaceId/$viewId/'
+    | '/law/$country/statutes/$slug/'
     | '/law/$country/cases/$court/$language/$slug'
+    | '/law/$country/statutes/$slug/v/$version'
     | '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1020,7 +1031,6 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/lists'
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
-    | '/law/$country/statutes/$documentId'
     | '/law/cases/research/$tableId'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
@@ -1035,7 +1045,9 @@ export interface FileRouteTypes {
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/workspaces/$workspaceId/$viewId'
+    | '/law/$country/statutes/$slug'
     | '/law/$country/cases/$court/$language/$slug'
+    | '/law/$country/statutes/$slug/v/$version'
     | '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
   id:
     | '__root__'
@@ -1112,7 +1124,6 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/lists'
     | '/_protected/workspaces/$workspaceId/timesheets'
     | '/_protected/workspaces/$workspaceId/workflows'
-    | '/law/$country/statutes/$documentId'
     | '/law/cases/research/$tableId'
     | '/_protected/settings/organization/'
     | '/_protected/workspaces/$workspaceId/'
@@ -1127,7 +1138,9 @@ export interface FileRouteTypes {
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/_protected/workspaces/$workspaceId/$viewId/'
+    | '/law/$country/statutes/$slug/'
     | '/law/$country/cases/$court/$language/$slug'
+    | '/law/$country/statutes/$slug/v/$version'
     | '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
   fileRoutesById: FileRoutesById
 }
@@ -1685,13 +1698,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LawCountryStatutesIndexRouteImport
       parentRoute: typeof LawRouteRoute
     }
-    '/law/$country/statutes/$documentId': {
-      id: '/law/$country/statutes/$documentId'
-      path: '/$country/statutes/$documentId'
-      fullPath: '/law/$country/statutes/$documentId'
-      preLoaderRoute: typeof LawCountryStatutesDocumentIdRouteImport
-      parentRoute: typeof LawRouteRoute
-    }
     '/law/cases/research/': {
       id: '/law/cases/research/'
       path: '/cases/research'
@@ -1762,6 +1768,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LawCountryCasesCourtSlugRouteImport
       parentRoute: typeof LawRouteRoute
     }
+    '/law/$country/statutes/$slug/': {
+      id: '/law/$country/statutes/$slug/'
+      path: '/$country/statutes/$slug'
+      fullPath: '/law/$country/statutes/$slug/'
+      preLoaderRoute: typeof LawCountryStatutesSlugIndexRouteImport
+      parentRoute: typeof LawRouteRoute
+    }
     '/sitemaps/law-cases/$country/$year/{$month}.xml': {
       id: '/sitemaps/law-cases/$country/$year/{$month}.xml'
       path: '/sitemaps/law-cases/$country/$year/{$month}.xml'
@@ -1774,6 +1787,13 @@ declare module '@tanstack/react-router' {
       path: '/$country/cases/$court/$language/$slug'
       fullPath: '/law/$country/cases/$court/$language/$slug'
       preLoaderRoute: typeof LawCountryCasesCourtLanguageSlugRouteImport
+      parentRoute: typeof LawRouteRoute
+    }
+    '/law/$country/statutes/$slug/v/$version': {
+      id: '/law/$country/statutes/$slug/v/$version'
+      path: '/$country/statutes/$slug/v/$version'
+      fullPath: '/law/$country/statutes/$slug/v/$version'
+      preLoaderRoute: typeof LawCountryStatutesSlugVVersionRouteImport
       parentRoute: typeof LawRouteRoute
     }
     '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': {
@@ -1811,23 +1831,25 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 interface LawRouteRouteChildren {
   LawIndexRoute: typeof LawIndexRoute
   LawCasesIndexRoute: typeof LawCasesIndexRoute
-  LawCountryStatutesDocumentIdRoute: typeof LawCountryStatutesDocumentIdRoute
   LawCasesResearchTableIdRoute: typeof LawCasesResearchTableIdRoute
   LawCountryStatutesIndexRoute: typeof LawCountryStatutesIndexRoute
   LawCasesResearchIndexRoute: typeof LawCasesResearchIndexRoute
   LawCountryCasesCourtSlugRoute: typeof LawCountryCasesCourtSlugRoute
+  LawCountryStatutesSlugIndexRoute: typeof LawCountryStatutesSlugIndexRoute
   LawCountryCasesCourtLanguageSlugRoute: typeof LawCountryCasesCourtLanguageSlugRoute
+  LawCountryStatutesSlugVVersionRoute: typeof LawCountryStatutesSlugVVersionRoute
 }
 
 const LawRouteRouteChildren: LawRouteRouteChildren = {
   LawIndexRoute: LawIndexRoute,
   LawCasesIndexRoute: LawCasesIndexRoute,
-  LawCountryStatutesDocumentIdRoute: LawCountryStatutesDocumentIdRoute,
   LawCasesResearchTableIdRoute: LawCasesResearchTableIdRoute,
   LawCountryStatutesIndexRoute: LawCountryStatutesIndexRoute,
   LawCasesResearchIndexRoute: LawCasesResearchIndexRoute,
   LawCountryCasesCourtSlugRoute: LawCountryCasesCourtSlugRoute,
+  LawCountryStatutesSlugIndexRoute: LawCountryStatutesSlugIndexRoute,
   LawCountryCasesCourtLanguageSlugRoute: LawCountryCasesCourtLanguageSlugRoute,
+  LawCountryStatutesSlugVVersionRoute: LawCountryStatutesSlugVVersionRoute,
 }
 
 const LawRouteRouteWithChildren = LawRouteRoute._addFileChildren(
@@ -2102,12 +2124,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

@@ -6,6 +6,11 @@ import {
   readStatuteByEliHandler,
   readStatuteByEliQuerySchema,
 } from "@/api/handlers/legislation/by-eli";
+import {
+  readStatuteBySlugHandler,
+  readStatuteBySlugParamsSchema,
+  readStatuteBySlugQuerySchema,
+} from "@/api/handlers/legislation/by-slug";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   listStatutesHandler,
@@ -73,6 +78,28 @@ const readStatuteByEli = createSafePublicHandler(
       Result.tryPromise(
         async () =>
           await readStatuteByEliHandler(query, legislationPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readStatuteBySlug = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    params: readStatuteBySlugParamsSchema,
+    query: readStatuteBySlugQuerySchema,
+  },
+  async function* ({ params, query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readStatuteBySlugHandler({
+            legislationDb: legislationPublicReadDb,
+            params,
+            query,
+          }),
       ),
     );
 
@@ -171,6 +198,12 @@ export const publicLegislationRoute = new Elysia({
   // a document id and rejected by the UUID schema.
   .get("/statutes/by-eli", readStatuteByEli.handler, {
     query: readStatuteByEli.config.query,
+  })
+  // Ahead of `/statutes/:documentId` for the same reason: `by-slug` is a
+  // literal segment, not a document id.
+  .get("/statutes/by-slug/:slug", readStatuteBySlug.handler, {
+    params: readStatuteBySlug.config.params,
+    query: readStatuteBySlug.config.query,
   })
   .get("/statutes/:documentId", readStatute.handler, {
     params: readStatute.config.params,

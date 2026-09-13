@@ -553,6 +553,7 @@ describe("legislation shelf", () => {
       "eli",
       "id",
       "language",
+      "slug",
       "status",
       "title",
       "versionValidFrom",

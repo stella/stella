@@ -334,7 +334,11 @@ const countEntityKindGlyphs = (content: string): number => {
 // migration-debt counter deliberately tracks only non-identifier throw shapes,
 // preserving its established baseline without putting an AST parse in the
 // ratchet's hot path.
-const THROW_STATEMENT_START = /^\s*throw\b/u;
+// A `throw` statement opener. Requires something other than `:` after the
+// keyword, so an object key named `throw` — `redirect({ to, throw: true })`,
+// which TanStack Router uses to throw the redirect from inside the library —
+// is never mistaken for a statement: a key is always followed by `:`.
+const THROW_STATEMENT_START = /^\s*throw\b(?!\s*:)/u;
 const THROW_PANIC_CALL = /^\s*throw\s+panic\s*\(/u;
 
 const isAsciiIdentifierCodePoint = (codePoint: number): boolean =>
@@ -3092,13 +3096,19 @@ const THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
   "const invariant = () => {",
   '  throw panic("impossible state");',
   "};",
+  "const libraryThrows = () => {",
+  "  redirect({",
+  '    to: "/law",',
+  "    throw: true,",
+  "  });",
+  "};",
   '// throw new Error("commented out") must not count',
 ];
 const SELF_TEST_THROW_OUTSIDE_BOUNDARY = `${THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
 // The lexical ratchet counts `single`, `multiLine`, and `factoryThrow` (3).
 // Identifier throws are excluded from this debt budget; Oxlint performs the
-// precise scope-aware enforcement on changed files. `throw panic(...)` and the
-// commented-out throw are also excluded.
+// precise scope-aware enforcement on changed files. `throw panic(...)`, the
+// `throw:` object key, and the commented-out throw are also excluded.
 const EXPECTED_THROW_OUTSIDE_BOUNDARY = 3;
 
 const TRY_CATCH_OUTSIDE_BOUNDARY_FIXTURE_LINES = [

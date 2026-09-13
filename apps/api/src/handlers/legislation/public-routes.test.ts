@@ -63,6 +63,38 @@ describe("public statute routes", () => {
     expect(response.status).toBe(422);
   });
 
+  test("reads `by-slug` as its own route, not as a document id", async () => {
+    // Without the ordering in the route file, the literal segment lands on
+    // `/statutes/:documentId` and the UUID schema answers 422 instead.
+    const response = await publicLegislationRoute.handle(
+      new Request("http://localhost/law/statutes/by-slug/89-2012-sb"),
+    );
+
+    // No country: the resolver's own schema rejects it, so the request did
+    // reach the by-slug route.
+    expect(response.status).toBe(422);
+  });
+
+  test("rejects a slug read with an asOf that is not a calendar date", async () => {
+    const response = await publicLegislationRoute.handle(
+      new Request(
+        "http://localhost/law/statutes/by-slug/89-2012-sb?country=CZE&asOf=yesterday",
+      ),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  test("rejects a slug longer than the column can hold", async () => {
+    const response = await publicLegislationRoute.handle(
+      new Request(
+        `http://localhost/law/statutes/by-slug/${"a".repeat(257)}?country=CZE`,
+      ),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
   test("rejects a provision-history anchor on a non-UUID document", async () => {
     const response = await publicLegislationRoute.handle(
       new Request(

@@ -12,9 +12,9 @@ import {
 } from "@/features/statutes/statute-query-intent";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import {
+  createStatuteRouteParams,
   isStatuteCountry,
   type StatuteCountry,
-  toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
 /**
@@ -95,13 +95,17 @@ export const openStatuteMatch = async ({
     return false;
   }
 
+  const params = createStatuteRouteParams({
+    country: only.country,
+    documentId: only.id,
+    eli: only.eli,
+    slug: only.slug,
+  });
+
   await navigate({
-    params: {
-      country: toStatuteCountrySegment(only.country),
-      documentId: only.id,
-    },
+    params: { country: params.country, slug: params.slug },
     search: intent.provision === null ? {} : { jump: intent.provision },
-    to: "/law/$country/statutes/$documentId",
+    to: "/law/$country/statutes/$slug",
   });
 
   return true;
