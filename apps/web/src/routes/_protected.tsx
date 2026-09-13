@@ -48,6 +48,7 @@ import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
+import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
@@ -335,7 +336,14 @@ function ProtectedComponent() {
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const workspaceChatMatch = useMatch({
+    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
+    shouldThrow: false,
+  });
+  const activeWorkspaceId = resolveSidebarWorkspaceId({
+    chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
+    workspaceId: workspaceMatch?.params.workspaceId,
+  });
   const { data: activeWorkspace } = useChromeQuery({
     ...workspaceOptions(activeWorkspaceId ?? ""),
     enabled: activeWorkspaceId !== undefined,
@@ -416,7 +424,11 @@ function ProtectedComponent() {
                 <DragAndDropLiveRegion />
                 <WorkspaceFrame
                   composition="host-responsive"
-                  endDock={<WorkspaceInspectorSidePanel />}
+                  endDock={
+                    <WorkspaceInspectorSidePanel
+                      matterChromeStyle={matterChromeStyle}
+                    />
+                  }
                   navigation={{ content: <AppSidebar />, mode: "responsive" }}
                   topBar={() => <ProtectedContent />}
                 >
@@ -691,7 +703,11 @@ const getInspectorTabWorkspaceId = (
  * viewport height and the topbar doesn't need to leave room for
  * inspector chrome.
  */
-function WorkspaceInspectorSidePanel() {
+function WorkspaceInspectorSidePanel({
+  matterChromeStyle,
+}: {
+  matterChromeStyle: MatterChromeStyle;
+}) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
   const projectMatch = useMatch({
@@ -790,6 +806,7 @@ function WorkspaceInspectorSidePanel() {
           className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
           showCloseButton={false}
           side="inline-end"
+          style={matterChromeStyle}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{t("inspector.title")}</SheetTitle>
