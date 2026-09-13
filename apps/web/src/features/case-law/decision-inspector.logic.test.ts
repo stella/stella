@@ -25,6 +25,16 @@ const decision: Decision = {
   citationCount: 0,
 };
 
+const alternate = {
+  caseNumber: "9 A 34/2025",
+  country: "CZE",
+  court: "Městský soud v Praze",
+  decisionDate: "2025-05-21",
+  id: "decision-1",
+  language: "cs",
+  slug: "9-a-34-2025",
+};
+
 describe("opening a results row in the inspector", () => {
   test("the row's own facts are what the tab is built from", () => {
     expect(decisionTabTarget(decision)).toEqual({
@@ -56,21 +66,40 @@ describe("opening a results row in the inspector", () => {
 
 describe("which row the inspector is showing", () => {
   test("the open decision's row is the active one", () => {
-    expect(
-      isDecisionRowActive(caseDecisionTabId("decision-1"), "decision-1"),
-    ).toBe(true);
+    expect(isDecisionRowActive(caseDecisionTabId("decision-1"), decision)).toBe(
+      true,
+    );
   });
 
   test("another decision's row is not", () => {
+    expect(isDecisionRowActive(caseDecisionTabId("decision-2"), decision)).toBe(
+      false,
+    );
+  });
+
+  // The case-number link opens the reader's language, which is a decision of
+  // its own; the row it was opened from is still the row that is open.
+  test("a row is active for any of its language versions", () => {
+    const multilingual: Decision = {
+      ...decision,
+      languageAlternates: [
+        { ...alternate, id: "decision-1", language: "cs" },
+        { ...alternate, id: "decision-1-en", language: "en" },
+      ],
+    };
+
     expect(
-      isDecisionRowActive(caseDecisionTabId("decision-2"), "decision-1"),
+      isDecisionRowActive(caseDecisionTabId("decision-1-en"), multilingual),
+    ).toBe(true);
+    expect(
+      isDecisionRowActive(caseDecisionTabId("decision-1-en"), decision),
     ).toBe(false);
   });
 
   // A tab of another kind is open, or none is: no row is marked, rather than
   // the first row being marked because the ids happen to compare loosely.
   test("no tab, or a tab of another kind, marks no row", () => {
-    expect(isDecisionRowActive(null, "decision-1")).toBe(false);
-    expect(isDecisionRowActive("decision-1", "decision-1")).toBe(false);
+    expect(isDecisionRowActive(null, decision)).toBe(false);
+    expect(isDecisionRowActive("decision-1", decision)).toBe(false);
   });
 });

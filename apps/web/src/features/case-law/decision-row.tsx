@@ -95,7 +95,7 @@ export const DecisionRow = ({
         .getVisibleCells()
         .find((cell) => cell.column.id === addPropertyColumn.id)
     : undefined;
-  const isActive = isDecisionRowActive(activeTabId, decision.id);
+  const isActive = isDecisionRowActive(activeTabId, decision);
 
   const open = () => onOpen(decision);
   const handleClick = (event: React.MouseEvent) => {
