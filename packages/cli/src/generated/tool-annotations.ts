@@ -46,6 +46,11 @@ export const generatedToolAnnotations: Readonly<
     scope: "read",
     windowedText: true,
   },
+  read_case_law_citations: {
+    command: ["case-law", "citations"],
+    scope: "read",
+    itemsKey: "citations",
+  },
   read_contact: {
     command: ["contact", "read"],
     scope: "read",

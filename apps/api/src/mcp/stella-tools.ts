@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { DEFAULT_SEARCH_SORT, SEARCH_SORTS } from "@stll/api-contract/search";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
@@ -14,6 +15,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
+import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -29,11 +31,13 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import {
   type AssertNoExtraFields,
   type LIST_MATTERS_DETAIL_PROJECTION,
   type LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
+  READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
   READ_CONTENT_ACROSS_MATTERS_PROJECTION,
@@ -113,6 +117,11 @@ const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument
     await (
       await import("@/api/handlers/case-law/decisions/get-deferred-document")
     ).readGatedDecisionWithDocument(input);
+const defaultReadGatedDecisionCitations: typeof readGatedDecisionCitations =
+  async (input) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/citation-passages")
+    ).readGatedDecisionCitations(input);
 const defaultSearchDecisionsHandler: typeof searchDecisionsHandler = async (
   input,
   database,
@@ -144,6 +153,7 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
 const MCP_CONTENT_MAX_CHARS = 8000;
 type StellaToolName =
   | "list_matters"
+  | "read_case_law_citations"
   | "read_case_law_decision"
   | "read_contact"
   | "read_content_across_matters"
@@ -630,6 +640,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),
     ),
+    sort: v.optional(
+      v.pipe(
+        v.picklist(SEARCH_SORTS),
+        v.description(
+          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.`,
+        ),
+      ),
+    ),
   }),
 );
 
@@ -659,6 +677,39 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.maxLength(MAX_CURSOR_LENGTH),
         v.description(
           "Opaque cursor from a previous call to read the next window of decision text and citations",
+        ),
+      ),
+    ),
+  }),
+);
+
+const readCaseLawCitationsArgsSchema = nullAsAbsent(
+  v.strictObject({
+    decision_id: uuidInputSchema("Case-law decision ID"),
+    direction: v.pipe(
+      v.picklist(CITATION_READ_DIRECTIONS),
+      v.description(
+        "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+      ),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.caseLawDecisionCitationPageSize),
+        v.description(
+          `Citations per page; defaults to ${LIMITS.caseLawAgentCitationPageSizeDefault}, at most ${LIMITS.caseLawDecisionCitationPageSize}.`,
+        ),
+      ),
+    ),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous read_case_law_citations call to read the next page",
         ),
       ),
     ),
@@ -763,8 +814,15 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Search case law within one country. Filters include court, language, " +
-      "dates, and decision type. Results include a route-independent resourceName.",
+      "Search case law within one country. Filters: court, language, dates " +
+      "(ISO YYYY-MM-DD), decision type, and source_id (the id a `facets." +
+      "source` bucket carries in `value`). `sort` defaults to '" +
+      `${DEFAULT_SEARCH_SORT}'. Facets and total are returned on the first ` +
+      "page only, and describe the whole result set. Each hit carries " +
+      "citationAuthority (the score the ranking blends in), matchingPassages " +
+      "(how many of its passages matched, at least 1) and a route-independent " +
+      "resourceName. Call read_case_law_citations for how a decision was " +
+      "treated by the courts citing it.",
     inputSchema: searchCaseLawArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -806,10 +864,16 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read a single case-law decision by its decision ID. Returns metadata, " +
-      "explicit decision text fields, plain text, citation links, source URLs, " +
-      "and its route-independent resourceName. Long decision text and large citation lists are returned " +
-      "in windows; pass the returned nextCursor back as cursor to read more.",
+      "Read a single case-law decision by its decision ID: its own text. " +
+      "Returns metadata, explicit decision text fields, plain text, source " +
+      "URLs, its route-independent resourceName, and bare citation ids. " +
+      "It does NOT say how other courts have treated this decision, and " +
+      "its citation entries carry no treatment and no surrounding text: " +
+      "to learn what the citing courts said, or what this decision relied " +
+      "on, call read_case_law_citations ({ decision_id: '<uuid>', " +
+      "direction: 'cited_by' }) instead. Long decision text and large " +
+      "citation lists are returned in windows; pass the returned " +
+      "nextCursor back as cursor to read more.",
     inputSchema: readCaseLawDecisionArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -817,6 +881,35 @@ export const STELLA_TOOL_DEFINITIONS = [
     // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_case_law_decision",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Read case-law citations",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Find out what the courts citing a decision said about it (followed, " +
+      "distinguished, overruled), or what a decision relied on. Returns one " +
+      "page of citations, each with the citing court's treatment and the " +
+      "paragraph the citation sits in. `direction: 'cited_by'` returns the " +
+      "decisions relying on this one; `'cites'` returns what it relied on. " +
+      "`polarity` is the classified reading, or 'unclassified' where there " +
+      "is none. `decision` is null for a citation the corpus holds no " +
+      "decision for; its text is still returned. `passage` is null when the " +
+      "source bars AI use of its text, the document is not parsed, or no " +
+      "paragraph carries the citation. Example: { decision_id: '<uuid>', " +
+      "direction: 'cited_by', limit: 20 }. Pass the returned nextCursor " +
+      "back as cursor to read more.",
+    inputSchema: readCaseLawCitationsArgsSchema,
+    access: "read",
+    anonymized: { exposure: "passthrough" },
+    // Backed by the public case-law corpus (caseLawPublicReadDb), the same
+    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    feature: "FEATURE_PUBLIC_LAW",
+    name: "read_case_law_citations",
     scope: "stella:read",
   }),
   defineValibotMcpTool({
@@ -1644,6 +1737,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     decision_type: decisionType,
     language,
     query,
+    sort,
     source_id: sourceId,
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
@@ -1669,6 +1763,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
+      ...(sort === undefined ? {} : { sort }),
     },
     caseLawPublicReadDb,
   );
@@ -1699,6 +1794,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           slug: hit.slug,
         }),
         caseNumber: hit.caseNumber,
+        citationAuthority: hit.citationAuthority,
         citationCount: hit.citationCount,
         country: hit.country,
         court: hit.court,
@@ -1708,6 +1804,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         decisionType: hit.decisionType,
         ecli: hit.ecli,
         language: hit.language,
+        matchingPassages: hit.matchingPassages,
         snippet: toPlainTextSnippet(hit.headline),
         sourceUrl: hit.sourceUrl,
       };
@@ -1866,6 +1963,82 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
 };
 
+const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(readCaseLawCitationsArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { cursor, decision_id: decisionId, direction } = parsed.output;
+  const limit =
+    parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault;
+
+  // The same publication gate the decision read applies, and for the same
+  // reason: a decision's citation texts are as much its content as its
+  // full text.
+  const read = await (
+    context.testDependencies?.readGatedDecisionCitations ??
+    defaultReadGatedDecisionCitations
+  )({
+    caseLawDb: caseLawPublicReadDb,
+    cursor,
+    decisionId: brandPersistedCaseLawDecisionId(decisionId),
+    direction,
+    limit,
+  });
+  if (read === null) {
+    return notFoundResult(
+      "Decision not found",
+      "Find a decision with search_case_law and pass its decisionId as decision_id.",
+    );
+  }
+  if (read.type === "invalid_cursor") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous read_case_law_citations call, or omit it for the first page.",
+    });
+  }
+
+  return toolDataResult({
+    decisionId,
+    direction,
+    nextCursor: read.page.nextCursor,
+    citations: read.page.items.map((item) => ({
+      citationId: item.id,
+      citationText: item.citationText,
+      polarity: item.treatment,
+      decision:
+        item.decision === null
+          ? null
+          : {
+              appUrl: buildCaseLawDecisionAppUrl({
+                caseNumber: item.decision.caseNumber,
+                country: item.decision.country,
+                court: item.decision.court,
+                language: item.decision.language,
+                slug: item.decision.slug,
+              }),
+              caseNumber: item.decision.caseNumber,
+              citationAuthority: item.decision.citationAuthority,
+              court: item.decision.court,
+              decisionDate: item.decision.decisionDate,
+              decisionId: item.decision.id,
+              decisionType: item.decision.decisionType,
+              resourceName: serializeAuthorizedCorpusMcpResourceName(
+                resourceRef({
+                  type: RESOURCE_TYPE.CASE_LAW_DECISION,
+                  id: brandPersistedCaseLawDecisionId(item.decision.id),
+                }),
+              ),
+            },
+      passage: item.passage,
+    })),
+  } satisfies v.InferInput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>);
+};
+
 const handleReadContactTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CONTACT_PROJECTION>
 > = async ({ args, context }) => {
@@ -1970,6 +2143,7 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
 
 export const STELLA_TOOL_HANDLERS = {
   list_matters: handleListMattersTool,
+  read_case_law_citations: handleReadCaseLawCitationsTool,
   read_case_law_decision: handleReadCaseLawDecisionTool,
   read_contact: handleReadContactTool,
   read_content_across_matters: handleReadContentAcrossMattersTool,
@@ -1983,6 +2157,9 @@ export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_HANDLERS,
   {
     list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
+    read_case_law_citations: defineChatProjectionMcpToolOutput(
+      READ_CASE_LAW_CITATIONS_PROJECTION,
+    ),
     read_case_law_decision: defineChatProjectionMcpToolOutput(
       READ_CASE_LAW_DECISION_PROJECTION,
     ),

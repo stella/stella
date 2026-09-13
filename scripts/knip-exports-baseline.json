@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 761,
+    "count": 760,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -21,7 +21,7 @@
       "apps/api/src/handlers/case-law/citation-kind.ts": 2,
       "apps/api/src/handlers/case-law/citation-resolution-census-consts.ts": 10,
       "apps/api/src/handlers/case-law/citation-score.ts": 1,
-      "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 3,
+      "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 2,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
       "apps/api/src/handlers/case-law/document-ast.ts": 24,

@@ -21,6 +21,7 @@ import {
   LIST_TIME_ENTRIES_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
+  READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
   READ_CONTENT_ACROSS_MATTERS_PROJECTION,
@@ -265,6 +266,11 @@ export const READ_TOOL_REF_FIELD_MAP = {
     chatProjectable: true,
     inputRefs: [],
     projection: READ_CASE_LAW_DECISION_PROJECTION,
+  },
+  read_case_law_citations: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: READ_CASE_LAW_CITATIONS_PROJECTION,
   },
   search_legislation: {
     chatProjectable: true,

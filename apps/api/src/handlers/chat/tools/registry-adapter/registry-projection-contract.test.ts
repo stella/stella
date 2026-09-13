@@ -9,6 +9,7 @@ import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -72,6 +73,7 @@ const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
+const readGatedDecisionCitationsMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
@@ -183,6 +185,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       getSearchProvider: () => asTestRaw({ search: searchProviderSearchMock }),
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
+      readGatedDecisionCitations: readGatedDecisionCitationsMock,
       searchConsolidatedLegislation: searchConsolidatedLegislationMock,
       getLawTextBlock: getLawTextBlockMock,
       executeRegistryLookup: executeRegistryLookupMock,
@@ -1161,6 +1164,7 @@ const CONTRACT_CORPUS = {
             {
               anchorId: null,
               caseNumber: "22 Cdo 1000/2020",
+              citationAuthority: 1.4,
               citationCount: 3,
               country: "CZ",
               court: "Nejvyšší soud",
@@ -1181,6 +1185,7 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
@@ -1264,6 +1269,45 @@ const CONTRACT_CORPUS = {
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
+      },
+      expectRefPaths: [],
+    },
+  ],
+  read_case_law_citations: [
+    {
+      mode: "read",
+      buildArgs: () => ({ decision_id: uid(54), direction: "cited_by" }),
+      setup: () => {
+        readGatedDecisionCitationsMock.mockResolvedValue({
+          type: "page",
+          page: {
+            items: [
+              {
+                id: toSafeId<"caseLawCitation">(uid(57)),
+                citationText: "22 Cdo 1000/2020",
+                sectionIndex: 1,
+                treatment: "positive",
+                decision: {
+                  id: toSafeId<"caseLawDecision">(uid(58)),
+                  caseNumber: "23 Cdo 200/2021",
+                  citationAuthority: 2.5,
+                  country: "CZ",
+                  court: "Nejvyšší soud",
+                  decisionDate: "2021-03-04",
+                  decisionType: "judgment",
+                  ecli: "ECLI:CZ:NS:2021:23.CDO.200.2021.1",
+                  language: "cs",
+                  slug: "ns-23-cdo-200-2021",
+                },
+                passage: {
+                  anchorId: "b12",
+                  text: "Soud odkázal na rozsudek 22 Cdo 1000/2020.",
+                },
+              },
+            ],
+            nextCursor: null,
+          },
+        } satisfies Awaited<ReturnType<typeof readGatedDecisionCitations>>);
       },
       expectRefPaths: [],
     },
@@ -1416,6 +1460,7 @@ const ALL_MOCKS = [
   searchProviderSearchMock,
   searchDecisionsHandlerMock,
   readGatedDecisionWithDocumentMock,
+  readGatedDecisionCitationsMock,
   searchConsolidatedLegislationMock,
   getLawTextBlockMock,
   executeRegistryLookupMock,

@@ -491,6 +491,7 @@ const CONTACT_ID = "c0c0c0c0-0000-4000-8000-000000000088";
 const DOCUMENT_ID = "d0d0d0d0-0000-4000-8000-000000000042";
 const TRANSLATION_ENTITY_ID = "7f7f7f7f-1111-4222-8333-444444444444";
 const TRANSLATION_FIELD_ID = "5e5e5e5e-1111-4222-8333-444444444444";
+const CASE_LAW_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000031";
 
 const TASKS: readonly Task[] = [
   {
@@ -533,6 +534,28 @@ const TASKS: readonly Task[] = [
       kind: "command",
       path: ["case-law", "search"],
       flags: { country: "DE" },
+    },
+  },
+  {
+    id: "read-case-law-citations",
+    request: `Decision ${CASE_LAW_DECISION_ID} is the one I want to rely on. Find out what the courts that have cited it since actually said about it.`,
+    mcp: {
+      toolName: "read_case_law_citations",
+      exampleArgs: {
+        decision_id: CASE_LAW_DECISION_ID,
+        direction: "cited_by",
+      },
+      checkArgs: (args) => [
+        ...field(args, "decision_id", CASE_LAW_DECISION_ID),
+        // The whole point of the task: the other direction answers what this
+        // decision relied on, which is not what was asked.
+        ...field(args, "direction", "cited_by"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "citations"],
+      flags: { "decision-id": CASE_LAW_DECISION_ID, direction: "cited_by" },
     },
   },
   {

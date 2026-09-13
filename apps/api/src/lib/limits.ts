@@ -411,6 +411,12 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /** Citations one agent-facing read returns when it names no size of its own. */
+  caseLawAgentCitationPageSizeDefault: 20,
+  /** Citing paragraph sent with a citation, centred on the citation itself. */
+  caseLawCitationPassageChars: 1200,
+  /** Decision ASTs fetched at once while resolving one page of passages. */
+  caseLawCitationPassageConcurrency: 6,
   caseLawAnnotationsPageSizeDefault: 100,
   caseLawAnnotationsPageSizeMax: 100,
   caseLawSearchPageSizeDefault: 20,
