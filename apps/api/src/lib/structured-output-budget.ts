@@ -47,14 +47,14 @@ export const STRUCTURED_OUTPUT_BUDGETS = {
     maxUnionParameters: 1000,
     basis: "documented",
   },
-  // Measured 2026-09-13 against Nova Micro through Bedrock Converse: a
-  // 5,395-byte workflow-batch schema completed, while the former 18,909-byte
-  // placeholder probe failed with `Model produced invalid sequence as part of
-  // ToolUse`. Keep the production boundary at the accepted size.
+  // A 5,395-byte workflow-batch schema with four properties failed against
+  // Nova Micro through Bedrock Converse with `Model produced invalid sequence
+  // as part of ToolUse`. Until a larger workflow shape is demonstrated to
+  // work, admit one property: the smallest useful production batch.
   bedrock: {
-    maxSchemaBytes: 5395,
-    maxUnionParameters: 16,
-    basis: "measured",
+    maxSchemaBytes: 1347,
+    maxUnionParameters: 1,
+    basis: "placeholder",
   },
   // Placeholders. No schema-size or union limit is published for these
   // providers, so these values only stop a runaway schema rather than

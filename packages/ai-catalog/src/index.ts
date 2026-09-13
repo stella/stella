@@ -172,12 +172,12 @@ export const BYOK_DEFAULT_MODELS = {
   },
   anthropic: {
     fast: "claude-opus-5",
-    chat: "claude-opus-5",
+    chat: "claude-opus-4-8",
     reasoning: "claude-opus-5",
     pdf: "claude-opus-4-8",
   },
   bedrock: {
-    fast: "us.amazon.nova-micro-v1:0",
+    fast: "us.amazon.nova-lite-v1:0",
     chat: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     reasoning: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     pdf: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
