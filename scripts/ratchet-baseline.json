@@ -1747,7 +1747,7 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 140,
+    "count": 139,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -1838,7 +1838,6 @@
       "apps/web/src/lib/prompts": 1,
       "apps/web/src/lib/public-law-api.ts": 1,
       "apps/web/src/lib/public-law-launch.ts": 1,
-      "apps/web/src/lib/public-law-material-route.ts": 1,
       "apps/web/src/lib/public-law-seo.ts": 1,
       "apps/web/src/lib/public-law-sitemap.ts": 1,
       "apps/web/src/lib/public-seo.ts": 1,
