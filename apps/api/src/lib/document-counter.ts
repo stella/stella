@@ -193,7 +193,7 @@ export const recordEntityStamps = async ({
     return;
   }
   const workspaceIds = [
-    ...new Set(stamps.map(({ workspaceId }) => workspaceId)),
+    ...new Set(stamps.map((stamp) => stamp.workspaceId)),
   ];
   const workspaceRows = await tx
     .select({ id: workspaces.id, organizationId: workspaces.organizationId })
@@ -220,7 +220,7 @@ export const recordEntityStamps = async ({
     const base = documentReferenceBase(stamp);
     const sequence = /\/(\d+)$/u.exec(base)?.[1];
     const reference = sequence ? base.slice(0, -(sequence.length + 1)) : null;
-    const lastValue = sequence ? Number(sequence) : NaN;
+    const lastValue = sequence ? Number(sequence) : Number.NaN;
     if (!reference || !Number.isSafeInteger(lastValue)) {
       panic("Document stamp has an invalid reference format");
     }
@@ -256,7 +256,7 @@ export const recordEntityStamps = async ({
       set: {
         lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, excluded.last_value)`,
       },
-      where: sql`${documentReferenceCounters.workspaceId} = excluded.workspace_id`,
+      setWhere: sql`${documentReferenceCounters.workspaceId} = excluded.workspace_id`,
     })
     .returning({ id: documentReferenceCounters.id });
   if (rows.length !== ledgerValues.size) {
