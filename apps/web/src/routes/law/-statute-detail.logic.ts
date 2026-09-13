@@ -1,15 +1,15 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { parsePlainDate } from "@stll/time";
 
 import {
+  publicStatuteOptions,
   statuteBySlugOptions,
-  statuteOptions,
 } from "@/features/statutes/queries/statutes";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
-import { APIError } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicLawCanonicalUrl,
@@ -93,18 +93,13 @@ type LoadPublicStatuteRouteOptions = {
  * rule the case-law detail route applies).
  */
 const statuteNotFound = (): never => {
-  throw redirect({ to: "/law", search: { notFound: true }, replace: true });
-};
-
-const ensurePublicStatute = async <T>(load: () => Promise<T>): Promise<T> => {
-  try {
-    return await load();
-  } catch (error) {
-    if (error instanceof APIError && error.status === 404) {
-      return statuteNotFound();
-    }
-    throw error;
-  }
+  redirect({
+    to: "/law",
+    search: { notFound: true },
+    replace: true,
+    throw: true,
+  });
+  return panic("TanStack Router did not throw a redirect response.");
 };
 
 /**
@@ -141,7 +136,7 @@ const redirectToCanonicalStatutePath = ({
   const redirectSearch = search.jump === undefined ? {} : { jump: search.jump };
 
   if (canonicalParams.version) {
-    throw redirect({
+    redirect({
       to: "/law/$country/statutes/$slug/v/$version",
       params: {
         country: canonicalParams.country,
@@ -150,10 +145,11 @@ const redirectToCanonicalStatutePath = ({
       },
       replace: true,
       search: redirectSearch,
+      throw: true,
     });
   }
 
-  throw redirect({
+  redirect({
     to: "/law/$country/statutes/$slug",
     params: {
       country: canonicalParams.country,
@@ -161,7 +157,10 @@ const redirectToCanonicalStatutePath = ({
     },
     replace: true,
     search: redirectSearch,
+    throw: true,
   });
+
+  return panic("TanStack Router did not throw a redirect response.");
 };
 
 const settleCanonicalPath = ({
@@ -201,10 +200,14 @@ export const loadPublicStatuteRoute = async ({
   const country = toStatuteCountrySegment(params.country);
 
   if (isStatuteDocumentId(params.slug)) {
-    const statute = await ensurePublicStatute(
-      async () =>
-        await ensureRouteQueryData(queryClient, statuteOptions(params.slug)),
+    const statute = await ensureRouteQueryData(
+      queryClient,
+      publicStatuteOptions(params.slug),
     );
+
+    if (statute === null) {
+      return statuteNotFound();
+    }
 
     // A document the backfill has not reached has no slug, and the id path is
     // then its canonical address; one with a slug always moves.

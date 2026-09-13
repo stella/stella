@@ -1,4 +1,5 @@
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { Result } from "better-result";
+import { and, asc, gt, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,11 +16,123 @@ type BackfillRow = {
   title: string;
 };
 
+type SlugAssignment = {
+  id: SafeId<"legislationDocument">;
+  slug: string;
+};
+
 export type StatuteSlugBackfillResult = {
   written: number;
   /** Documents whose ELI carries no citation tail: no slug can be derived. */
   skipped: number;
   failed: number;
+};
+
+const readPage = async (
+  db: ScopedDb,
+  after: SafeId<"legislationDocument"> | null,
+): Promise<BackfillRow[]> => {
+  const where: SQL | undefined =
+    after === null
+      ? isNull(legislationDocuments.slug)
+      : and(
+          isNull(legislationDocuments.slug),
+          gt(legislationDocuments.id, after),
+        );
+
+  return await db((tx) =>
+    tx
+      .select({
+        id: legislationDocuments.id,
+        eli: legislationDocuments.eli,
+        title: legislationDocuments.title,
+      })
+      .from(legislationDocuments)
+      .where(where)
+      .orderBy(asc(legislationDocuments.id))
+      .limit(BATCH_SIZE),
+  );
+};
+
+/**
+ * One UPDATE for the whole page, joined against the derived values. The
+ * still-null predicate keeps it a compare-and-set, so a concurrent writer's
+ * slug is left alone rather than overwritten.
+ */
+const writePage = async (
+  db: ScopedDb,
+  assignments: readonly SlugAssignment[],
+): Promise<void> => {
+  const values = sql.join(
+    assignments.map(({ id, slug }) => sql`(${id}::uuid, ${slug}::varchar)`),
+    sql`, `,
+  );
+
+  await db((tx) =>
+    // audit: skip — backfills a derived public slug, not user-facing state
+    tx.execute(sql`
+      UPDATE ${legislationDocuments} AS d
+      SET slug = v.slug
+      FROM (VALUES ${values}) AS v(id, slug)
+      WHERE d.id = v.id AND d.slug IS NULL
+    `),
+  );
+};
+
+type BackfillProgress = StatuteSlugBackfillResult & {
+  after: SafeId<"legislationDocument"> | null;
+};
+
+const backfillFrom = async (
+  db: ScopedDb,
+  progress: BackfillProgress,
+): Promise<StatuteSlugBackfillResult> => {
+  const rows = await readPage(db, progress.after);
+  if (rows.length === 0) {
+    return {
+      written: progress.written,
+      skipped: progress.skipped,
+      failed: progress.failed,
+    };
+  }
+
+  const assignments: SlugAssignment[] = [];
+  let skipped = progress.skipped;
+  for (const row of rows) {
+    const slug = createStatuteSlug({ eli: row.eli, title: row.title });
+    if (slug === null) {
+      skipped += 1;
+      continue;
+    }
+    assignments.push({ id: row.id, slug });
+  }
+
+  const write =
+    assignments.length === 0
+      ? Result.ok(undefined)
+      : await Result.tryPromise({
+          try: async () => await writePage(db, assignments),
+          catch: (cause: unknown) => cause,
+        });
+
+  if (Result.isError(write)) {
+    // One page's failure must not stall the scan: those rows stay null and a
+    // re-run retries them, so the walk moves on past this cursor.
+    captureError(write.error, {
+      after: progress.after ?? "start",
+      step: "backfillStatuteSlugs",
+    });
+  }
+
+  // A keyset walk is sequential by construction: the next page's cursor is
+  // the last id this page returned.
+  return await backfillFrom(db, {
+    after: rows.at(-1)?.id ?? progress.after,
+    written:
+      progress.written + (Result.isError(write) ? 0 : assignments.length),
+    skipped,
+    failed: progress.failed + (Result.isError(write) ? assignments.length : 0),
+  });
 };
 
 /**
@@ -28,78 +141,13 @@ export type StatuteSlugBackfillResult = {
  *
  * The slug is a pure function of the ELI and the title, and the column has no
  * uniqueness boundary (a Work's consolidations share one segment), so there
- * is nothing to allocate and no collision to retry: each row is written with
- * what its own identifiers derive.
+ * is nothing to allocate and no collision to retry: each page derives its
+ * values and writes them in one statement.
  *
- * Idempotent (only null-slug rows) and resumable (keyset by id): a row that
+ * Idempotent (only null-slug rows) and resumable (keyset by id): a page that
  * fails stays null and cannot stall the scan, so re-running retries it.
  */
 export const backfillStatuteSlugs = async (
   db: ScopedDb,
-): Promise<StatuteSlugBackfillResult> => {
-  let lastId: SafeId<"legislationDocument"> | null = null;
-  let written = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  while (true) {
-    const idFilter: SQL | undefined =
-      lastId === null ? undefined : gt(legislationDocuments.id, lastId);
-    const where = idFilter
-      ? and(isNull(legislationDocuments.slug), idFilter)
-      : isNull(legislationDocuments.slug);
-
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential keyset pagination: the next page cursor (lastId) depends on this query
-    const rows: BackfillRow[] = await db((tx) =>
-      tx
-        .select({
-          id: legislationDocuments.id,
-          eli: legislationDocuments.eli,
-          title: legislationDocuments.title,
-        })
-        .from(legislationDocuments)
-        .where(where)
-        .orderBy(asc(legislationDocuments.id))
-        .limit(BATCH_SIZE),
-    );
-
-    if (rows.length === 0) {
-      break;
-    }
-
-    for (const row of rows) {
-      const slug = createStatuteSlug({ eli: row.eli, title: row.title });
-      if (slug === null) {
-        skipped += 1;
-        continue;
-      }
-
-      try {
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, arrow-body-style -- per-row write; one failure must not abort the batch, and the block body carries the audit-skip directive the require-audit-on-mutation rule scans for
-        await db((tx) => {
-          // audit: skip — backfills a derived public slug, not user-facing state
-          return tx
-            .update(legislationDocuments)
-            .set({ slug })
-            .where(
-              and(
-                eq(legislationDocuments.id, row.id),
-                isNull(legislationDocuments.slug),
-              ),
-            );
-        });
-        written += 1;
-      } catch (error) {
-        failed += 1;
-        captureError(error, {
-          documentId: row.id,
-          step: "backfillStatuteSlugs",
-        });
-      }
-    }
-
-    lastId = rows.at(-1)?.id ?? lastId;
-  }
-
-  return { written, skipped, failed };
-};
+): Promise<StatuteSlugBackfillResult> =>
+  await backfillFrom(db, { after: null, written: 0, skipped: 0, failed: 0 });

@@ -55,6 +55,11 @@ export const statuteKeys = {
   ],
   shelf: (country: string) => [...statuteKeys.all, "shelf", { country }],
   byId: (documentId: string) => [...statuteKeys.all, "detail", documentId],
+  publicById: (documentId: string) => [
+    ...statuteKeys.all,
+    "public-detail",
+    documentId,
+  ],
   bySlug: (key: StatuteSlugKey) => [
     ...statuteKeys.all,
     "bySlug",
@@ -137,6 +142,47 @@ export const statuteOptions = (documentId: string) =>
   });
 
 /**
+ * Whether a failed public-law response is a plain miss rather than a
+ * transport, gate, or server failure. Classifying first is what lets a route
+ * act on the miss while `unwrapPublicLawEden` still raises everything else,
+ * the disabled-surface marker included.
+ */
+const isPublicLawMiss = (
+  error: { status: number; value: unknown },
+  action: string,
+): boolean => {
+  const classified = toPublicLawError(error, action);
+
+  return APIError.is(classified) && classified.status === NOT_FOUND_STATUS;
+};
+
+/**
+ * The statute a legacy document-id URL names, or null when the corpus no
+ * longer holds it. The public reader answers that miss by sending the reader
+ * to the law home, so it reads as a value rather than a failure — unlike
+ * `statuteOptions`, whose callers render an "unavailable" state instead.
+ */
+export const publicStatuteOptions = (documentId: string) =>
+  queryOptions({
+    queryKey: statuteKeys.publicById(documentId),
+    queryFn: async ({ signal }) => {
+      const response = await api.law
+        .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
+        .get({ fetch: { signal } });
+
+      if (
+        response.error &&
+        isPublicLawMiss(response.error, "readPublicStatute")
+      ) {
+        return null;
+      }
+
+      return unwrapPublicLawEden(response, "readPublicStatute");
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
  * The statute a public URL names, or null when nothing answers to it: an
  * unknown segment, or a date no consolidation of the Work covers. Both are
  * answers the route acts on (not found, or the empty reader), not failures.
@@ -152,17 +198,11 @@ export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        const error = toPublicLawError(
-          response.error,
-          "readPublicStatuteBySlug",
-        );
-
-        if (APIError.is(error) && error.status === NOT_FOUND_STATUS) {
-          return null;
-        }
-
-        throw error;
+      if (
+        response.error &&
+        isPublicLawMiss(response.error, "readPublicStatuteBySlug")
+      ) {
+        return null;
       }
 
       return unwrapPublicLawEden(response, "readPublicStatuteBySlug");
