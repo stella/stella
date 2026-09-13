@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -25,9 +27,15 @@ import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
 
-export function PublicLawShell() {
+type PublicLawShellProps = {
+  /** The routed page, unless the shell is standing in for one that loads. */
+  content?: ReactElement | undefined;
+};
+
+export function PublicLawShell({ content }: PublicLawShellProps) {
   return (
     <PublicWorkspaceShell
+      content={content}
       inspector={<PublicLawInspector />}
       topBar={<PublicLawTopBar />}
     />

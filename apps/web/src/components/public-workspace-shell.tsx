@@ -76,6 +76,12 @@ const SidebarUserMenu = lazy(async () => {
 
 type PublicWorkspaceShellProps = {
   /**
+   * What the chrome frames: the routed page, unless the caller is standing in
+   * for one that is still loading. The chrome itself is the same either way,
+   * which is the point — a load below it must not take the shell with it.
+   */
+  content?: ReactElement | undefined;
+  /**
    * The surface's own inspector dock. It replaces the anonymous rail, so a
    * surface that supplies one owns the whole right column, sign-in
    * affordances included.
@@ -91,6 +97,7 @@ type PublicWorkspaceShellProps = {
  * supplies its own breadcrumb `topBar`.
  */
 export const PublicWorkspaceShell = ({
+  content,
   inspector,
   topBar,
 }: PublicWorkspaceShellProps) => {
@@ -144,7 +151,7 @@ export const PublicWorkspaceShell = ({
           }}
           topBar={() => topBar}
         >
-          <Outlet />
+          {content ?? <Outlet />}
         </WorkspaceShell>
         {authRedirectTo !== null && (
           <Suspense fallback={null}>

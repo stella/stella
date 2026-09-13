@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { decisionsLoadMode } from "./decisions-load-mode.logic";
+import {
+  decisionRowsPhase,
+  decisionsLoadMode,
+} from "./decisions-load-mode.logic";
 
 describe("whether the results route waits for its rows", () => {
   test("a cold arrival waits: there is nothing to show and nothing to list", () => {
@@ -27,5 +30,47 @@ describe("whether the results route waits for its rows", () => {
         "background",
       );
     }
+  });
+});
+
+describe("what the results region shows while the page stays put", () => {
+  test("a pending render stands in skeleton, never in rows it does not have", () => {
+    expect(
+      decisionRowsPhase({
+        isLoading: false,
+        isPlaceholderData: true,
+        routeState: "pending",
+      }),
+    ).toBe("skeleton");
+  });
+
+  test("a first fetch under a drawn page is the same skeleton", () => {
+    expect(
+      decisionRowsPhase({
+        isLoading: true,
+        isPlaceholderData: false,
+        routeState: "loaded",
+      }),
+    ).toBe("skeleton");
+  });
+
+  test("rows kept from the previous search are stale, not loading", () => {
+    expect(
+      decisionRowsPhase({
+        isLoading: false,
+        isPlaceholderData: true,
+        routeState: "loaded",
+      }),
+    ).toBe("stale");
+  });
+
+  test("a settled page shows its own rows", () => {
+    expect(
+      decisionRowsPhase({
+        isLoading: false,
+        isPlaceholderData: false,
+        routeState: "loaded",
+      }),
+    ).toBe("rows");
   });
 });
