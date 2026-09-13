@@ -4,10 +4,20 @@
 # originate from .ai/local-skills/ or .ai/shared/skills/.
 set -euo pipefail
 
-if [ ! -d ".ai/shared/skills" ]; then
-  echo "warning: .ai/shared submodule not initialized; skipping skill source check" >&2
-  echo "  fix: git submodule update --init" >&2
-  exit 0
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "${1:-.}"
+
+if [[ ! -d ".ai/shared/skills" || ! -f ".ai/shared/scripts/sync-ai-skills.sh" ]]; then
+  if bash "$script_dir/check-ai-skill-sync.sh" . "${2:-origin/main}"; then
+    exit 0
+  else
+    check_status=$?
+  fi
+  # The hook may proceed after an explicit skip for unrelated changes.
+  if [[ "$check_status" -eq 77 ]]; then
+    exit 0
+  fi
+  exit "$check_status"
 fi
 
 errors=0

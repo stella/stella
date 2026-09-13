@@ -18,9 +18,13 @@ identified.
 Fetch paginated review threads through GitHub GraphQL so unresolved state and
 thread replies are preserved. Fetch top-level issue comments separately. Record
 every participant and reply author in a thread, which comments apply to the
-current head, and which are stale. Treat a thread as bot-authored only when every
-participant is a confirmed allowed bot; a mixed or uncertain thread follows the
-human-thread rules.
+current head, and which are stale. Classify participants from a fresh fetch.
+Record a receipt for every workflow reply with its returned reply-node ID and
+exact content, and retain those receipts across resume or handoff. On later
+fetches, exclude only replies matched to an exact receipt; never infer an
+exclusion from the requester account or an attribution footer. All remaining
+participants must be confirmed allowed bots; a human, mixed, or uncertain thread
+follows the human-thread rules.
 
 Do not rely only on the REST review-comments list: it does not represent thread
 resolution or the complete conversation reliably.
@@ -72,10 +76,12 @@ finding. Keep responses short and factual:
 Follow repository attribution rules for GitHub comments. Do not claim a check
 passed unless it ran successfully on the reported head.
 
-After replying, resolve only review threads whose every participant is a
-confirmed allowed bot and that are implemented, already addressed, answered with
-a supported pushback, or deferred to a named follow-up PR. Leave human,
-mixed-participant, and uncertain threads open. Top-level comments have no
+After replying, refetch each candidate thread before resolving it. Exclude only
+exact workflow reply receipts, then require every remaining participant to be a
+confirmed allowed bot. Triage any new bot finding before resolving; any human,
+unknown, mixed-participant, or uncertain arrival leaves the thread open. Resolve
+only when the finding is implemented, already addressed, answered with supported
+pushback, or deferred to a named follow-up PR. Top-level comments have no
 thread-resolution state: a reply naming the follow-up PR is the whole disposition
 there. Do not minimize bot summaries by default.
 

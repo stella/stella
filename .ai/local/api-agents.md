@@ -1,4 +1,14 @@
+## Handler Scope
+
+- Use `createSafeSessionHandler` for session-scoped endpoints,
+  `createSafeTokenHandler` for endpoints that authorize their own token, and
+  `createSafePublicHandler` for intentionally public endpoints. Public handlers
+  must not receive authenticated workspace or root context.
+
 ## Database Domain Values
+
+Table definitions live in `apps/api/src/db/schema/`; `schema.ts` is the shared
+import surface, not the owner of new table definitions.
 
 - For closed persisted domain values, use one named `as const` value list with
   Drizzle `text({ enum: VALUES })`; do not use TypeScript enums or native PostgreSQL
@@ -10,6 +20,7 @@
 
 ## Validation Boundary
 
-- Inside a handler, trust the route schema's types: do not re-parse the body or
-  re-check ownership the access macro and RLS already guarantee. Valibot runs
-  where data enters from JSON columns, webhooks, model output, or storage.
+- Inside a handler, trust the shape and ownership already validated by its entry
+  boundary. Keep business invariants and related-resource authorization in the
+  owning operation. Follow `/conventions-security` for shared validation across
+  HTTP, generated capabilities, and native tool entry points.
