@@ -488,7 +488,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   return (
     <RenderStormRegion name="inspector">
-      <div className="bg-background flex h-full shadow-lg">
+      <div className="flex h-full bg-(--matter-background-tint) shadow-lg">
         <div className="hidden md:contents">
           <InspectorRail
             activeId={activeId}

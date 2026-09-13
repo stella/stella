@@ -17,7 +17,11 @@ import { cn } from "@stll/ui/utils";
  * veil absolutely fills that parent at `-z-10`, behind its siblings.
  * `rounded` is the compact tray treatment used by the main chat. `pane`
  * feathers across the full host width for document overlays, avoiding a
- * visible rounded blur band while keeping text beneath the controls quiet.
+ * visible rounded blur band while keeping text beneath the controls quiet. Its
+ * mask feathers across its top and sides; it stays covered through the host's
+ * bottom edge so the page does not return to sharp focus below the controls.
+ * The tint is deliberately light when backdrop-filter works: blur quiets page
+ * text without painting a conspicuous patch over an otherwise empty canvas.
  */
 export const ComposerVeil = ({
   className,
@@ -36,7 +40,7 @@ export const ComposerVeil = ({
         variant === "rounded" &&
           "bg-background/75 supports-[backdrop-filter]:bg-background/40 inset-0 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
         variant === "pane" &&
-          "via-background/65 to-background/95 supports-[backdrop-filter]:via-background/50 supports-[backdrop-filter]:to-background/85 inset-x-0 -top-5 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)] backdrop-blur-sm",
+          "via-background/45 to-background/75 supports-[backdrop-filter]:via-background/15 supports-[backdrop-filter]:to-background/30 inset-x-0 -top-12 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_right,transparent,black_21%,black_79%,transparent),linear-gradient(to_bottom,transparent,black_3rem)] [mask-composite:intersect] backdrop-blur-md backdrop-saturate-50",
         className,
       )}
     />

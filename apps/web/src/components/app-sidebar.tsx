@@ -132,7 +132,6 @@ import { detached } from "@/lib/detached";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -231,17 +230,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const activeWorkspace = workspaces?.find((ws) => ws.id === activeWorkspaceId);
-  const activeMatterColor =
-    activeWorkspaceId && activeWorkspace
-      ? resolveMatterColor(activeWorkspaceId, activeWorkspace.color)
-      : null;
-  const sidebarStyle: AppSidebarStyle | undefined = activeMatterColor
-    ? {
-        "--matter-sidebar-tint": `color-mix(in srgb, ${activeMatterColor} 2%, var(--sidebar))`,
-      }
-    : undefined;
-
   const handleCreateWorkspace = () => {
     if (!canCreateMatter) {
       return;
@@ -561,15 +549,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
         // translucent veil + backdrop-blur-md instead of the solid
         // sidebar fill so the app chrome reads as one system. The
         // opaque-leaning fallback keeps contrast where backdrop-filter
-        // is unsupported. The matter tint keeps the identical alpha so
-        // accent-tinted sidebars stay in the same language.
-        "[&_[data-slot=sidebar-inner]]:bg-sidebar/80 supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-sidebar/60 [&_[data-slot=sidebar-inner]]:backdrop-blur-md",
-        activeMatterColor &&
-          "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
+        // is unsupported.
+        "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 [&_[data-slot=sidebar-inner]]:backdrop-blur-md supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
         props.className,
       )}
       collapsible="icon"
-      style={{ ...sidebarStyle, ...props.style }}
+      style={props.style}
     >
       {/* Stella logo header */}
       <SidebarHeader className="h-12 border-b p-0">
@@ -910,10 +895,6 @@ type PendingEntityDrop = {
 };
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
-type AppSidebarStyle = React.CSSProperties & {
-  "--matter-sidebar-tint"?: string;
-};
-
 type MatterItemProps = {
   activeOrganizationId: string;
   workspace: MatterIdentity & {

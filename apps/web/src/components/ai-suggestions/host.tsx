@@ -77,7 +77,10 @@ import { detached } from "@/lib/detached";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
-import { DOCKED_COMPOSER_WIDTH_CLASS } from "./composer-geometry";
+import {
+  DOCKED_COMPOSER_VEIL_WIDTH_CLASS,
+  DOCKED_COMPOSER_WIDTH_CLASS,
+} from "./composer-geometry";
 import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
@@ -451,7 +454,10 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => (
       OVERLAY_LAYER_CLASS_NAMES.chrome,
     )}
   >
-    <ComposerVeil variant="pane" />
+    <ComposerVeil
+      className={cn("mx-auto", DOCKED_COMPOSER_VEIL_WIDTH_CLASS)}
+      variant="pane"
+    />
     {chips !== undefined && (
       <div
         className={cn(
