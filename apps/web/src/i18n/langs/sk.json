@@ -690,9 +690,6 @@
       "addColumn": "Pridať stĺpec",
       "addQuestion": "Pridať otázku",
       "addQuestionHint": "Otázka sa položí každému rozhodnutiu v tabuľke; odpovede vzniknú, keď stĺpec spustíte.",
-      "answerType": "Druh odpovede",
-      "answerTypeText": "Krátky text",
-      "answerTypeYesNo": "Áno / nie",
       "answering": "{count, plural, one {Odpovedám na # bunku…} few {Odpovedám na # bunky…} many {Odpovedám na # bunky…} other {Odpovedám na # buniek…}}",
       "answers": {
         "confidence": "Istota {percent} %",

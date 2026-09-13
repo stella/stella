@@ -690,9 +690,6 @@
       "addColumn": "إضافة عمود",
       "addQuestion": "إضافة سؤال",
       "addQuestionHint": "يُطرح السؤال على كل حكم في الجدول؛ وتُنتَج الإجابات عند تشغيل العمود.",
-      "answerType": "طبيعة الإجابة",
-      "answerTypeText": "نص قصير",
-      "answerTypeYesNo": "نعم / لا",
       "answering": "{count, plural, zero {لا توجد خلايا قيد الإجابة…} one {تجري الإجابة عن خلية واحدة…} two {تجري الإجابة عن خليتين…} few {تجري الإجابة عن # خلايا…} many {تجري الإجابة عن # خلية…} other {تجري الإجابة عن # خلية…}}",
       "answers": {
         "confidence": "درجة الثقة {percent}%",

@@ -59,12 +59,12 @@ export const MatterCaseLawPanel = ({
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
 
-  const decisions = links.map(toDecision);
-  const noteByDecisionId = new Map(
-    links.map((link) => [link.decisionId, link.note]),
-  );
-  const linkIdByDecisionId = new Map(
-    links.map((link) => [link.decisionId, link.id]),
+  // Keyed by the row's own id rather than the link's, so the lookup a cell
+  // makes is the key the row was built with and the two cannot drift apart.
+  const rows = links.map((link) => ({ decision: toDecision(link), link }));
+  const decisions = rows.map((row) => row.decision);
+  const linkByDecisionId = new Map(
+    rows.map((row) => [row.decision.id, row.link]),
   );
 
   const questions = useQuestionColumns({
@@ -97,14 +97,14 @@ export const MatterCaseLawPanel = ({
       id: NOTE_COLUMN_ID,
       label: t("caseLaw.matterLinks.note"),
       size: 260,
-      render: (decision) => noteByDecisionId.get(decision.id) ?? "—",
+      render: (decision) => linkByDecisionId.get(decision.id)?.note ?? "—",
     },
     {
       id: UNLINK_COLUMN_ID,
       label: t("caseLaw.matterLinks.remove"),
       size: 56,
       render: (decision) => {
-        const linkId = linkIdByDecisionId.get(decision.id);
+        const linkId = linkByDecisionId.get(decision.id)?.id;
         if (linkId === undefined) {
           return null;
         }

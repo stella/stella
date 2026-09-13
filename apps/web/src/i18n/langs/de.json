@@ -690,9 +690,6 @@
       "addColumn": "Spalte hinzufügen",
       "addQuestion": "Frage hinzufügen",
       "addQuestionHint": "Die Frage wird jeder Entscheidung der Tabelle gestellt; Antworten entstehen, wenn Sie die Spalte ausführen.",
-      "answerType": "Art der Antwort",
-      "answerTypeText": "Kurzer Text",
-      "answerTypeYesNo": "Ja / nein",
       "answering": "{count, plural, one {# Zelle wird beantwortet…} other {# Zellen werden beantwortet…}}",
       "answers": {
         "confidence": "{percent} % Konfidenz",

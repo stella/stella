@@ -690,9 +690,6 @@
       "addColumn": "Dodaj kolumnę",
       "addQuestion": "Dodaj pytanie",
       "addQuestionHint": "Pytanie jest zadawane każdemu orzeczeniu w tabeli; odpowiedzi powstają po uruchomieniu kolumny.",
-      "answerType": "Rodzaj odpowiedzi",
-      "answerTypeText": "Krótki tekst",
-      "answerTypeYesNo": "Tak / nie",
       "answering": "{count, plural, one {Odpowiadam na # komórkę…} few {Odpowiadam na # komórki…} many {Odpowiadam na # komórek…} other {Odpowiadam na # komórki…}}",
       "answers": {
         "confidence": "Pewność {percent}%",

@@ -39,10 +39,10 @@ import {
 import type {
   QuestionAnswer,
   QuestionColumn,
+  QuestionDraft,
   QuestionRunSet,
 } from "@/features/case-law/research/question-columns.logic";
 import { ResearchQuestionDialog } from "@/features/case-law/research/research-question-dialog";
-import type { ResearchQuestionDraft } from "@/features/case-law/research/research-question-dialog";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -65,11 +65,18 @@ type QuestionColumnsInput = {
   onShowSource: DecisionQuestionSurface["onShowSource"];
 };
 
-/** The dialog the add and edit flows share. */
-type QuestionDraft =
+/** Which question the dialog edits, or that it adds one. */
+type QuestionDialogState =
   | { type: "closed" }
   | { type: "create" }
   | { type: "edit"; column: QuestionColumn };
+
+/** One queue request: a confirmed run, or the retry of a single failed cell. */
+type RunRequest = {
+  /** Answer again where an answer already stands. */
+  force: boolean;
+  runSet: QuestionRunSet;
+};
 
 /** A run the reader has been shown the size of and has not yet confirmed. */
 type PendingRun = {
@@ -81,9 +88,9 @@ type PendingRun = {
 export type QuestionColumnsController = {
   /** Null for a reader without an organization: no columns, no controls. */
   surface: DecisionQuestionSurface | null;
-  draft: QuestionDraft;
-  onDraftChange: (draft: QuestionDraft) => void;
-  onSubmitDraft: (draft: ResearchQuestionDraft) => void;
+  draft: QuestionDialogState;
+  onDraftChange: (draft: QuestionDialogState) => void;
+  onSubmitDraft: (draft: QuestionDraft) => void;
   isSaving: boolean;
   pendingRun: PendingRun | null;
   onCancelRun: () => void;
@@ -108,7 +115,7 @@ export const useQuestionColumns = ({
     ? authStatus.user.activeOrganizationId
     : null;
 
-  const [draft, setDraft] = useState<QuestionDraft>({ type: "closed" });
+  const [draft, setDraft] = useState<QuestionDialogState>({ type: "closed" });
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
   const [removing, setRemoving] = useState<QuestionColumn | null>(null);
 
@@ -150,7 +157,7 @@ export const useQuestionColumns = ({
   };
 
   const save = useMutation({
-    mutationFn: async (input: ResearchQuestionDraft & { columnId?: string }) =>
+    mutationFn: async (input: QuestionDraft & { columnId?: string }) =>
       input.columnId === undefined
         ? await createQuestionColumn({
             answerType: input.answerType,
@@ -178,11 +185,15 @@ export const useQuestionColumns = ({
     onError: reportFailure,
   });
 
+  // `force` is the retry of one cell that already holds a failure: the server
+  // treats anything but `pending` as answered, so without it a failed cell
+  // would be skipped and the retry would do nothing.
   const run = useMutation({
-    mutationFn: async (runSet: QuestionRunSet) =>
+    mutationFn: async ({ force, runSet }: RunRequest) =>
       await runAnswers({
         columnIds: runSet.columnIds,
         decisionIds: runSet.decisionIds,
+        ...(force ? { force: true } : {}),
       }),
     onSuccess: async ({ queued }) => {
       setPendingRun(null);
@@ -243,6 +254,19 @@ export const useQuestionColumns = ({
             columns: surface.columns,
             isRunning: run.isPending,
             onColumnAction,
+            onRetryAnswer: (column, decisionId) => {
+              detached(
+                run.mutateAsync({
+                  force: true,
+                  runSet: {
+                    columnIds: [column.id],
+                    decisionIds: [decisionId],
+                    cells: 1,
+                  },
+                }),
+                "case-law-questions.retry-answer",
+              );
+            },
             onShowSource,
           },
     draft,
@@ -263,7 +287,10 @@ export const useQuestionColumns = ({
       if (pendingRun === null) {
         return;
       }
-      detached(run.mutateAsync(pendingRun.runSet), "case-law-questions.run");
+      detached(
+        run.mutateAsync({ force: false, runSet: pendingRun.runSet }),
+        "case-law-questions.run",
+      );
     },
     onRunAll: () => askToRun(null),
     removing,

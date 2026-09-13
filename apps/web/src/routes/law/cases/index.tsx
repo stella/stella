@@ -3,8 +3,8 @@ import { useState } from "react";
 import {
   keepPreviousData,
   useInfiniteQuery,
+  useQuery,
   useQueryClient,
-  useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -30,6 +30,7 @@ import {
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   CASE_LAW_FILTER_KEYS,
@@ -75,6 +76,7 @@ import {
   reachableDecisionPage,
 } from "@/features/case-law/decision-pagination.logic";
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
+import { decisionsLoadMode } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import { SaveIntoMatterAction } from "@/features/case-law/matter-links/save-into-matter";
 import { openDecisionAtPassage } from "@/features/case-law/open-decision-at-passage";
@@ -88,6 +90,7 @@ import {
   decisionFacetsOptions,
   decisionsInfiniteOptions,
 } from "@/features/case-law/queries/decisions";
+import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
 import { railFacets } from "@/features/case-law/rail-facets";
 import {
   QuestionColumnControls,
@@ -128,6 +131,11 @@ const MAX_REFINEMENT_LENGTH = 240;
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
+const NO_BROWSE_FACETS: CaseLawBrowseFacets = {
+  country: [],
+  court: [],
+  year: [],
+};
 
 const optionalBrowseStringSchema = (maxLength: number) =>
   v.optional(
@@ -305,6 +313,24 @@ const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
   return "Public case-law database with indexable court decisions and legal source materials.";
 };
 
+/**
+ * The page the document describes: its rows are what the crawler reads and
+ * what the collection markup lists. Empty while a background load has not
+ * produced that page yet, which only a reader with JavaScript ever sees.
+ */
+const shownDecisions = (
+  walked: { pages: readonly { decisions: Decision[] }[] } | undefined,
+  page: number | undefined,
+): Decision[] => {
+  if (walked === undefined) {
+    return [];
+  }
+  const shown = walked.pages.at(
+    decisionPageIndex(decisionPageNumber(page), walked.pages.length),
+  );
+  return shown ? shown.decisions : [];
+};
+
 export const Route = createFileRoute("/law/cases/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
@@ -369,30 +395,39 @@ export const Route = createFileRoute("/law/cases/")({
       });
     }
   },
-  loader: async ({ context: { queryClient }, deps }) => {
+  loader: async ({ cause, context: { queryClient }, deps }) => {
     const scope =
       publicCaseLawCountryFromParam(deps.country) ??
       panic("The case-law route loaded without a launch-ready country.");
-    const [decisionPages] = await Promise.all([
-      ensureRouteInfiniteQueryData(
-        queryClient,
-        decisionsInfiniteOptions(
-          createDecisionFiltersFromSearch(deps),
-          decisionPageSize(deps.pageSize),
+    const decisionsOptions = decisionsInfiniteOptions(
+      createDecisionFiltersFromSearch(deps),
+      decisionPageSize(deps.pageSize),
+    );
+    const mode = decisionsLoadMode({
+      cause,
+      hasCachedPages:
+        queryClient.getQueryData(decisionsOptions.queryKey) !== undefined,
+    });
+
+    // A filter, a sort or a refinement on a page that is already drawn: the
+    // rail, the toolbar, the headers and the pager are all still correct, so
+    // awaiting the new rows here would replace a live page with a skeleton for
+    // nothing. The components hold the previous rows and swap them in place.
+    if (mode === "background") {
+      return {
+        decisions: shownDecisions(
+          queryClient.getQueryData(decisionsOptions.queryKey),
+          deps.page,
         ),
-      ),
+      };
+    }
+
+    const [decisionPages] = await Promise.all([
+      ensureRouteInfiniteQueryData(queryClient, decisionsOptions),
       ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
     ]);
 
-    // The page on screen is the one the document describes: its rows are what
-    // the crawler reads and what the collection markup lists.
-    const shown = decisionPages.pages.at(
-      decisionPageIndex(
-        decisionPageNumber(deps.page),
-        decisionPages.pages.length,
-      ),
-    );
-    return { decisions: shown ? shown.decisions : [] };
+    return { decisions: shownDecisions(decisionPages, deps.page) };
   },
   head: ({ loaderData, match }) => {
     const search = match.search;
@@ -436,14 +471,15 @@ export const Route = createFileRoute("/law/cases/")({
   pendingComponent: PublicCaseLawIndexPending,
 });
 
-// The loader fetches decisions and facets, so without a pendingComponent the
-// route flashes the glowing logo. Reuse the real page chrome — rail, toolbar
-// and the table's own header — so only the values shimmer in.
+// Only a cold arrival reaches this: a filter, a sort or a page step keeps the
+// real page and swaps its rows. The shape is the real one — same heading, same
+// search row, rail, count line, table header and pager — so the values shimmer
+// into the layout they will occupy rather than the layout jumping around them.
 function PublicCaseLawIndexPending() {
   const t = useTranslations();
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <h1 className="text-lg font-semibold">{t("common.caseLaw")}</h1>
+      <h1 className="sr-only">{t("common.caseLaw")}</h1>
       <div className="flex flex-wrap items-center gap-2">
         <Skeleton className="h-9 w-40 rounded-md" />
         <Skeleton className="h-9 w-full max-w-md flex-1 rounded-md" />
@@ -467,6 +503,7 @@ function PublicCaseLawIndexPending() {
             questions={null}
             selectedIds={EMPTY_SELECTION}
           />
+          <Skeleton className="h-8 w-full max-w-sm" />
         </div>
       </div>
     </main>
@@ -554,14 +591,30 @@ function PublicCaseLawIndex() {
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
 
   const pageSize = decisionPageSize(search.pageSize);
-  const { data: browseFacets } = useSuspenseQuery(decisionFacetsOptions(scope));
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery({
-      ...decisionsInfiniteOptions(filters, pageSize),
-      // The chain the reader has walked stays loaded while the filters change,
-      // so stepping between pages never blanks the table.
-      placeholderData: keepPreviousData,
-    });
+  // Read, not suspended on: the loader primes this only on a cold arrival, and
+  // a jurisdiction switch must not take the whole page down for a list of
+  // court names. The previous rail stays until the new one lands.
+  const { data: browseFacets } = useQuery({
+    ...decisionFacetsOptions(scope),
+    placeholderData: keepPreviousData,
+  });
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isPlaceholderData,
+  } = useInfiniteQuery({
+    ...decisionsInfiniteOptions(filters, pageSize),
+    // The chain the reader has walked stays loaded while the filters change,
+    // so stepping between pages never blanks the table.
+    placeholderData: keepPreviousData,
+  });
+  // The rows on screen answer the search before this one. Everything else on
+  // the page is already the new search's, so the rows say so themselves rather
+  // than the page being replaced.
+  const isRefreshing = isPlaceholderData;
 
   // One page of the chain is on screen, never the chain itself: the pages
   // behind the reader are cursors kept for the links, not rows to draw.
@@ -587,7 +640,7 @@ function PublicCaseLawIndex() {
 
   const searchTotal = data?.pages.at(0)?.total ?? SEARCH_TOTAL_NOT_COUNTED;
   const facets = railFacets({
-    browse: browseFacets,
+    browse: browseFacets ?? NO_BROWSE_FACETS,
     search: data?.pages.at(0)?.facets ?? null,
   });
 
@@ -844,6 +897,7 @@ function PublicCaseLawIndex() {
               <ListHeading
                 exactCount={exact.length}
                 intent={intent}
+                isRefreshing={isRefreshing}
                 page={pager.currentPage}
                 total={searchTotal}
               />
@@ -870,6 +924,7 @@ function PublicCaseLawIndex() {
           <DecisionTable
             decisions={ordered}
             isLoading={isLoading}
+            isRefreshing={isRefreshing}
             layout={layout}
             onLayoutChange={setLayout}
             onSelectedIdsChange={setSelectedIds}
@@ -891,22 +946,44 @@ function PublicCaseLawIndex() {
   );
 }
 
+type ListHeadingProps = {
+  exactCount: number;
+  intent: DecisionQueryIntent;
+  /** The count still answers the previous search; say so without hiding it. */
+  isRefreshing: boolean;
+  page: number;
+  total: SearchTotal;
+};
+
 /**
  * What the list under the box is: newest first while a filter alone narrows
  * it, a choice between courts when a docket names several decisions, a count
  * for a search that could be counted.
+ *
+ * While a new search is in flight the line fades rather than blanking: a
+ * number that disappears and comes back reads as a page reload, which is
+ * exactly what is not happening.
  */
-function ListHeading({
+function ListHeading({ isRefreshing, ...heading }: ListHeadingProps) {
+  return (
+    <div
+      aria-busy={isRefreshing}
+      className={cn(
+        "transition-opacity duration-200",
+        isRefreshing && "opacity-56",
+      )}
+    >
+      <ListHeadingText {...heading} />
+    </div>
+  );
+}
+
+function ListHeadingText({
   exactCount,
   intent,
   page,
   total,
-}: {
-  exactCount: number;
-  intent: DecisionQueryIntent;
-  page: number;
-  total: SearchTotal;
-}) {
+}: Omit<ListHeadingProps, "isRefreshing">) {
   const t = useTranslations();
 
   if (intent.type === "empty") {

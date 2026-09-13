@@ -690,9 +690,6 @@
       "addColumn": "Adicionar coluna",
       "addQuestion": "Adicionar pergunta",
       "addQuestionHint": "A pergunta é feita a cada decisão da tabela; as respostas são geradas ao executar a coluna.",
-      "answerType": "Natureza da resposta",
-      "answerTypeText": "Texto curto",
-      "answerTypeYesNo": "Sim / não",
       "answering": "{count, plural, one {Respondendo # célula…} other {Respondendo # células…}}",
       "answers": {
         "confidence": "{percent}% de confiança",
