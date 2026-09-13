@@ -206,12 +206,10 @@ const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
 };
 
 const connectedState = (
-  status: ConnectedRoomState["status"] | "connecting",
+  status: ConnectedRoomState["status"],
   room: FolioCollaborationRoom,
-): FolioCollaborationRoomState => {
+): ConnectedRoomState => {
   switch (status) {
-    case "connecting":
-      return { status: "connecting", room: null };
     case "synced":
       return { status: "synced", room };
     case "reconnecting":
@@ -296,8 +294,15 @@ export const useFolioCollaborationRoom = ({
       }
       // A non-seeding editor must receive the Yjs source contract before binding.
       // Keep the existing document available during later reconnects.
+      if (!hasSynchronized) {
+        setState({ status: "connecting", room: null });
+        return;
+      }
       setState(
-        connectedState(hasSynchronized ? status : "connecting", activeRoom),
+        connectedState(
+          status === "connecting" ? "reconnecting" : status,
+          activeRoom,
+        ),
       );
     };
     setState({ status: "connecting", room: null });
