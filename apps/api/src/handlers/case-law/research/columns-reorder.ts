@@ -2,11 +2,11 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { caseLawResearchColumns } from "@/api/db/schema";
-import { readOrganizationResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import {
-  reorderResearchColumnsBodySchema,
+  readOrganizationResearchColumns,
   toResearchColumnResponse,
-} from "@/api/handlers/case-law/research/schema";
+} from "@/api/handlers/case-law/research/column-access";
+import { reorderResearchColumnsBodySchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

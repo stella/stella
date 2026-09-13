@@ -5,10 +5,12 @@ import {
   caseLawResearchTableDecisions,
   caseLawResearchTables,
 } from "@/api/db/schema";
-import { readOrganizationResearchColumns } from "@/api/handlers/case-law/research/column-access";
+import {
+  readOrganizationResearchColumns,
+  toResearchColumnResponse,
+} from "@/api/handlers/case-law/research/column-access";
 import {
   researchTableParamsSchema,
-  toResearchColumnResponse,
   toResearchTableResponse,
 } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";

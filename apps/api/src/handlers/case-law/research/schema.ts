@@ -11,7 +11,6 @@ import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import type {
   caseLawResearchAnswers,
-  caseLawResearchColumns,
   caseLawResearchTables,
 } from "@/api/db/schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -164,18 +163,6 @@ export const lookupResearchAnswersBodySchema = t.Object(
   },
   { additionalProperties: false },
 );
-
-export const toResearchColumnResponse = (
-  row: typeof caseLawResearchColumns.$inferSelect,
-) => ({
-  id: row.id,
-  createdBy: row.createdBy,
-  position: row.position,
-  question: row.question,
-  answerType: row.answerType,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-});
 
 export const toResearchAnswerResponse = (
   row: typeof caseLawResearchAnswers.$inferSelect,

@@ -5,8 +5,53 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawResearchColumns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 export type ResearchColumnRow = typeof caseLawResearchColumns.$inferSelect;
+
+/** Columns a client never sees. */
+const UNPROJECTED_RESEARCH_COLUMN_COLUMNS = [
+  // The retiring research tables own this link; a column now belongs to the
+  // organization, and the client addresses it by id alone.
+  "tableId",
+  // Tenant scope comes from the caller's session, never the response.
+  "organizationId",
+  // Which model answers the question is a server-side execution detail.
+  "tool",
+] as const satisfies readonly (keyof ResearchColumnRow)[];
+
+/** One question column as a client reads it. */
+export const toResearchColumnResponse = (row: ResearchColumnRow) => ({
+  id: row.id,
+  createdBy: row.createdBy,
+  position: row.position,
+  question: row.question,
+  answerType: row.answerType,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+type ResearchColumnResponse = ReturnType<typeof toResearchColumnResponse>;
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or excused above, and the projection cannot carry a field that
+// traces back to no real column.
+type MissingProjectedResearchColumn = UnprojectedColumns<
+  ResearchColumnRow,
+  ResearchColumnResponse,
+  (typeof UNPROJECTED_RESEARCH_COLUMN_COLUMNS)[number]
+>;
+type UnexpectedProjectedResearchColumn = UnbackedProjectionKeys<
+  ResearchColumnRow,
+  ResearchColumnResponse,
+  (typeof UNPROJECTED_RESEARCH_COLUMN_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedResearchColumn extends never ? true : never;
+true satisfies UnexpectedProjectedResearchColumn extends never ? true : never;
 
 type ColumnScope = {
   tx: Pick<Transaction, "select">;
