@@ -1002,6 +1002,7 @@ export const FileTabPanel = ({
         <DocxBrowserEditor
           actionsKey={tab.id}
           actionsMapRef={docxActionsRef}
+          canUnlock={canUpdateEntity}
           entityId={tab.entityId}
           errorFallback={viewerErrorFallback}
           fieldId={tab.id}

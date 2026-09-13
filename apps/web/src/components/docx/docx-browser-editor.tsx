@@ -166,7 +166,7 @@ type DocxBrowserEditorBaseProps = {
   onCollaborationPublishableChange?:
     | ((publishable: boolean) => void)
     | undefined;
-  canUnlock?: boolean | undefined;
+  canUnlock: boolean;
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
   onSaved?: ((fieldId: string) => void) | undefined;
@@ -265,7 +265,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     actionsMapRef,
     actionsRef,
     actionBarControls,
-    canUnlock = true,
+    canUnlock,
     collaboration,
     isEditing = true,
     initialScrollTop,

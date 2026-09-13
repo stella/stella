@@ -959,7 +959,7 @@ function RouteComponentInner({
                             workspaceId={workspaceId}
                           />
                         }
-                        canUnlock={useDocxBrowserEditor}
+                        canUnlock={canUpdateEntity && useDocxBrowserEditor}
                         entityId={entityId}
                         fieldId={fieldId}
                         isEditing={initialEditing}
