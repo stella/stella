@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -8,9 +8,15 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
 import {
+  readStoredVersionAst,
   versionAstColumnsFor,
   versionAstFromObjectStorage,
 } from "@/api/lib/legal-search/legislation-version-blocks";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
@@ -121,3 +127,62 @@ test.each([...CORPUS_STORAGE_MODES])(
     }
   },
 );
+
+/**
+ * The fallback runs in a transaction of its own, after the read that gated the
+ * version has committed. A publisher who withdraws redistribution in between
+ * must not have the withdrawn text served by the degraded path.
+ */
+test("the fallback read stops serving a version whose source was revoked", async () => {
+  const legislationDb: LegislationReadDb = async (fn) =>
+    await db.transaction(
+      async (tx) => await fn(asTestRaw<LegislationReadTransaction>(tx)),
+    );
+  const sourceId = toSafeId<"legislationSource">(
+    "0198e331-e578-7000-8000-0000000002b1",
+  );
+  const documentId = toSafeId<"legislationDocument">(
+    "0198e331-e578-7000-8000-0000000002b2",
+  );
+
+  await db.insert(legislationSources).values({
+    id: sourceId,
+    adapterKey: "version-ast-revocation",
+    name: "Version AST revocation",
+    descriptor: {
+      license: "permitted-redistribution",
+      attribution: "Publisher",
+      allowsRedistribution: true,
+      allowsDerivedAi: false,
+    },
+  });
+  await db.insert(legislationDocuments).values({
+    id: documentId,
+    sourceId,
+    eli: "eli/cz/sb/2014/91",
+    title: "Zákon o kybernetické bezpečnosti",
+    country: "CZE",
+    language: "cs",
+    contentHash: "c".repeat(64),
+    astS3Key: "legislation/cze/2014/91/ast.zst",
+    documentAst: DOCUMENT_AST,
+  });
+
+  expect(await readStoredVersionAst(legislationDb, documentId)).toEqual(
+    DOCUMENT_AST,
+  );
+
+  await db
+    .update(legislationSources)
+    .set({
+      descriptor: {
+        license: "restricted",
+        attribution: "Publisher",
+        allowsRedistribution: false,
+        allowsDerivedAi: false,
+      },
+    })
+    .where(eq(legislationSources.id, sourceId));
+
+  expect(await readStoredVersionAst(legislationDb, documentId)).toBeNull();
+});

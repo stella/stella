@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -11,6 +11,7 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
+import { redistributableLegislationVersion } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 /** What a stored consolidation must carry for its blocks to be readable. */
@@ -51,13 +52,15 @@ export const versionAstColumnsFor = (mode: CorpusStorageMode) => ({
 export const versionAstColumns = versionAstColumnsFor(corpusStorageMode);
 
 /**
- * The Postgres copy of one version's AST, on its own.
- *
- * The projection leaves the column out of the rows object storage serves, so
- * this is what stands behind an unreadable object: one row, one column, and
+ * The Postgres copy of one version's AST, on its own: one row, one column, and
  * only after the object read has already failed.
+ *
+ * This is a second transaction, so it re-applies the redistribution gate the
+ * first one passed rather than trusting it. A source revoked between the two
+ * reads answers with no row here, and the caller reports the payload
+ * unavailable instead of serving text the publisher has withdrawn.
  */
-const readStoredVersionAst = async (
+export const readStoredVersionAst = async (
   legislationDb: LegislationReadDb,
   id: SafeId<"legislationDocument">,
 ): Promise<unknown> => {
@@ -66,7 +69,12 @@ const readStoredVersionAst = async (
       await tx
         .select({ documentAst: legislationDocuments.documentAst })
         .from(legislationDocuments)
-        .where(eq(legislationDocuments.id, id))
+        .where(
+          and(
+            eq(legislationDocuments.id, id),
+            redistributableLegislationVersion,
+          ),
+        )
         .limit(1),
   );
   return row?.documentAst ?? null;

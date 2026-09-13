@@ -76,7 +76,7 @@ export type CaseLawSourceRegistry = {
  * reading the ids now and the names of the buckets later, on the far side of
  * the aggregation.
  */
-export const readCaseLawSourceRegistryQuery = definePublicLawSharedQuery(
+const readCaseLawSourceRegistryQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawNonRedistributableSources,
   async (tx: CaseLawPublicReadTransaction): Promise<CaseLawSourceRegistry> => {
     const rows = await tx

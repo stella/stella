@@ -341,7 +341,7 @@ type ConfigurableReadTransaction = {
  * point in a transaction, and this is the transaction's first statement, so
  * nothing that could write ever runs outside it.
  */
-export const PUBLIC_LAW_READ_GUARDS = [
+const PUBLIC_LAW_READ_GUARDS = [
   ["transaction_read_only", "on"],
   ["statement_timeout", "30s"],
 ] as const satisfies readonly PublicLawReadGuard[];
