@@ -42,10 +42,10 @@ export const versionAstFromObjectStorage = (
 export const versionAstColumnsFor = (mode: CorpusStorageMode) => ({
   id: legislationDocuments.id,
   astS3Key: legislationDocuments.astS3Key,
-  documentAst: (mode === "off"
-    ? sql`${legislationDocuments.documentAst}`
-    : sql`CASE WHEN ${legislationDocuments.astS3Key} IS NULL THEN ${legislationDocuments.documentAst} END`
-  ).mapWith(legislationDocuments.documentAst),
+  documentAst:
+    mode === "off"
+      ? sql<unknown>`${legislationDocuments.documentAst}`
+      : sql<unknown>`CASE WHEN ${legislationDocuments.astS3Key} IS NULL THEN ${legislationDocuments.documentAst} END`,
 });
 
 export const versionAstColumns = versionAstColumnsFor(corpusStorageMode);

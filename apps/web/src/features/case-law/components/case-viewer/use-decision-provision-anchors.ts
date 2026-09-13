@@ -31,6 +31,13 @@ export type DecisionProvisionAnchor =
 
 type WorkKey = { asOf: string; eli: string; jurisdiction: string };
 
+/**
+ * A work to resolve, carrying the references that named it. The array is the
+ * one the grouping accumulates into, so references seen after the work was
+ * collected are in it too.
+ */
+type LinkedWork<TRow> = WorkKey & { rows: TRow[] };
+
 const workKeyOf = ({
   eli,
   jurisdiction,
@@ -61,7 +68,7 @@ export const useDecisionProvisionAnchors = (
     ),
   );
 
-  const works: WorkKey[] = [];
+  const works: LinkedWork<(typeof rows)[number]>[] = [];
   const seen = new Set<string>();
   const rowsByWork = new Map<string, (typeof rows)[number][]>();
   const decisionAsOf = decisionDateToIso(decisionDate);
@@ -70,12 +77,12 @@ export const useDecisionProvisionAnchors = (
       continue;
     }
     const key = workKeyOf({ eli: row.workEli, jurisdiction: row.jurisdiction });
-    const grouped = rowsByWork.get(key);
-    if (grouped === undefined) {
-      rowsByWork.set(key, [row]);
-    } else {
-      grouped.push(row);
+    let workRows = rowsByWork.get(key);
+    if (workRows === undefined) {
+      workRows = [];
+      rowsByWork.set(key, workRows);
     }
+    workRows.push(row);
     const asOf = row.versionValidFrom ?? decisionAsOf;
     if (asOf === null) {
       continue;
@@ -84,7 +91,12 @@ export const useDecisionProvisionAnchors = (
       continue;
     }
     seen.add(key);
-    works.push({ asOf, eli: row.workEli, jurisdiction: row.jurisdiction });
+    works.push({
+      asOf,
+      eli: row.workEli,
+      jurisdiction: row.jurisdiction,
+      rows: workRows,
+    });
   }
 
   const statutes = useQueries({
@@ -115,7 +127,7 @@ export const useDecisionProvisionAnchors = (
     const statute = statuteByWork.get(key);
     if (
       statute === undefined ||
-      !referencesOutsideVersion(statute, rowsByWork.get(key) ?? [])
+      !referencesOutsideVersion(statute, work.rows)
     ) {
       continue;
     }

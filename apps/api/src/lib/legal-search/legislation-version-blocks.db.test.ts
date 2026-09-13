@@ -107,12 +107,16 @@ test.each([...CORPUS_STORAGE_MODES])(
 
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      expect({
+      const servedFromObjectStorage = versionAstFromObjectStorage(
+        mode,
+        row.astS3Key,
+      );
+      // Both halves in one assertion: the AST is present for exactly the rows
+      // the reader parses it from, and it arrives as the parsed document
+      // rather than as text the reader would reject.
+      expect({ id: row.id, documentAst: row.documentAst }).toEqual({
         id: row.id,
-        carriesAst: row.documentAst !== null,
-      }).toEqual({
-        id: row.id,
-        carriesAst: !versionAstFromObjectStorage(mode, row.astS3Key),
+        documentAst: servedFromObjectStorage ? null : DOCUMENT_AST,
       });
     }
   },
