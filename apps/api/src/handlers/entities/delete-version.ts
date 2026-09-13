@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -126,7 +126,10 @@ export const deleteEntityVersionHandler = async function* ({
         .from(folioCollabRooms)
         .where(
           and(
-            eq(folioCollabRooms.baseVersionId, params.versionId),
+            or(
+              eq(folioCollabRooms.baseVersionId, params.versionId),
+              eq(folioCollabRooms.sourceVersionId, params.versionId),
+            ),
             eq(folioCollabRooms.workspaceId, workspaceId),
           ),
         )
@@ -180,8 +183,7 @@ export const deleteEntityVersionHandler = async function* ({
         return {
           ok: false as const,
           status: 409 as const,
-          message:
-            "Create a newer collaborative version before deleting this base version",
+          message: "This version is required by a collaborative editing room",
         };
       }
 

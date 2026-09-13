@@ -81,7 +81,6 @@ export const selectEditorBuffer = (
 
 type SelectDocxBrowserEditorBufferOptions = {
   collaborationSeedBuffer: ArrayBuffer | null;
-  isCollaborativeEditing: boolean;
   lastEditingBuffer: ArrayBuffer | null;
   preservedLoadedBuffer: ArrayBuffer | null;
   previewBuffer?: ArrayBuffer | undefined;
@@ -90,14 +89,13 @@ type SelectDocxBrowserEditorBufferOptions = {
 
 export const selectDocxBrowserEditorBuffer = ({
   collaborationSeedBuffer,
-  isCollaborativeEditing,
   lastEditingBuffer,
   preservedLoadedBuffer,
   previewBuffer,
   state,
 }: SelectDocxBrowserEditorBufferOptions) => {
-  if (isCollaborativeEditing) {
-    return collaborationSeedBuffer ?? lastEditingBuffer ?? previewBuffer;
+  if (collaborationSeedBuffer !== null) {
+    return collaborationSeedBuffer;
   }
 
   if (state.status === "editing") {

@@ -314,6 +314,7 @@ beforeAll(async () => {
     entityId: targetDocument.entityId,
     propertyId: targetDocument.propertyId,
     baseVersionId: targetDocument.entityVersionId,
+    sourceVersionId: targetDocument.entityVersionId,
     fileName: "source.docx",
     yjsSnapshotFileId,
     docxCheckpointFileId,

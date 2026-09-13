@@ -2171,6 +2171,7 @@
     "bulletList": "قائمة نقطية",
     "checkingDocxEditDescription": "لا تزال stella تتحقق مما إذا كان يمكن تعديل ملف DOCX هذا بأمان. حاول مرة أخرى عند انتهاء تحميل المستند.",
     "checkingDocxEditTitle": "جارٍ فحص المستند",
+    "chooseEvidence": "اختر ملفًا لإدراج مرجع مرقّم للدليل.",
     "comment": "تعليق",
     "comments": {
       "addPlaceholder": "أضف تعليقًا...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "ليس لديك إذن لتعديل هذا المستند.",
     "editSaveFailedTitle": "تعذّر حفظ ملف DOCX",
     "editSessionTakenOver": "فتح علامة تبويب أو نافذة أو جهاز آخر هذا المستند للتعديل، لذا تم تحرير هذه الجلسة. تم الحفاظ على التغييرات المحلية غير المحفوظة؛ أعد فتح المستند للمتابعة.",
+    "evidenceReferences": "مراجع الأدلة",
+    "evidenceUnavailable": "لا يمكن فتح مرجع الدليل هذا في هذا الملف القانوني.",
     "findReplace": {
       "close": "إغلاق البحث",
       "findAndReplace": "البحث والاستبدال",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "زيادة المسافة البادئة",
     "insertColumnLeft": "إدراج عمود إلى اليسار",
     "insertColumnRight": "إدراج عمود إلى اليمين",
+    "insertEvidence": "إدراج مرجع دليل",
     "insertRowAbove": "إدراج صف أعلى",
     "insertRowBelow": "إدراج صف أسفل",
     "inserted": "مُدرَج",

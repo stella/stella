@@ -44,7 +44,7 @@ export type FolioCollaborationRoom = {
   getDocumentMutationRevision: () => number;
   getLocalMutationRevision: () => number;
   roomId: string;
-  seedDocumentBuffer: ArrayBuffer | null;
+  seedDocumentBuffer: ArrayBuffer;
 };
 
 export type FolioCollaborationFlush = {
@@ -54,7 +54,6 @@ export type FolioCollaborationFlush = {
 };
 
 type ConnectedRoomState =
-  | { status: "connecting"; room: FolioCollaborationRoom }
   | { status: "synced"; room: FolioCollaborationRoom }
   | { status: "reconnecting"; room: FolioCollaborationRoom }
   | { status: "readOnly"; room: FolioCollaborationRoom };
@@ -97,7 +96,7 @@ const joinResponseSchema = v.object({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   roomId: v.string(),
   roomName: v.string(),
-  seedDownloadUrl: v.nullable(v.string()),
+  seedDownloadUrl: v.string(),
   shouldSeed: v.boolean(),
   token: v.string(),
   tokenExpiresAt: v.string(),
@@ -211,8 +210,6 @@ const connectedState = (
   room: FolioCollaborationRoom,
 ): ConnectedRoomState => {
   switch (status) {
-    case "connecting":
-      return { status: "connecting", room };
     case "synced":
       return { status: "synced", room };
     case "reconnecting":
@@ -275,6 +272,7 @@ export const useFolioCollaborationRoom = ({
 
     let disposed = false;
     let hasConnected = false;
+    let hasSynchronized = false;
     let provider: HocuspocusProvider | null = null;
     let activeRoom: FolioCollaborationRoom | null = null;
     let generationRejoinPromise: Promise<void> | null = null;
@@ -288,11 +286,24 @@ export const useFolioCollaborationRoom = ({
       }
     >();
     const isDisposed = () => disposed;
-    const setConnectedState = (status: ConnectedRoomState["status"]) => {
+    const setConnectedState = (
+      status: ConnectedRoomState["status"] | "connecting",
+    ) => {
       if (disposed || activeRoom === null) {
         return;
       }
-      setState(connectedState(status, activeRoom));
+      // A non-seeding editor must receive the Yjs source contract before binding.
+      // Keep the existing document available during later reconnects.
+      if (!hasSynchronized) {
+        setState({ status: "connecting", room: null });
+        return;
+      }
+      setState(
+        connectedState(
+          status === "connecting" ? "reconnecting" : status,
+          activeRoom,
+        ),
+      );
     };
     setState({ status: "connecting", room: null });
 
@@ -315,15 +326,9 @@ export const useFolioCollaborationRoom = ({
         let token = data.token;
         let tokenExpiresAtMs = new Date(data.tokenExpiresAt).getTime();
         let synchronizedStatus: "readOnly" | "synced" = "synced";
-        const seedDocumentBuffer = await (async () => {
-          if (!data.shouldSeed) {
-            return null;
-          }
-          if (data.seedDownloadUrl === null) {
-            panic("Collaborative editing seed file is unavailable.");
-          }
-          return await fetchSeedDocumentBuffer(data.seedDownloadUrl);
-        })();
+        const seedDocumentBuffer = await fetchSeedDocumentBuffer(
+          data.seedDownloadUrl,
+        );
         if (isDisposed()) {
           return;
         }
@@ -449,7 +454,7 @@ export const useFolioCollaborationRoom = ({
                   getLocalMutationRevision:
                     currentRoom.getLocalMutationRevision,
                   roomId: currentRoom.roomId,
-                  seedDocumentBuffer: null,
+                  seedDocumentBuffer: currentRoom.seedDocumentBuffer,
                 };
                 setConnectedState("reconnecting");
                 detached(
@@ -556,6 +561,7 @@ export const useFolioCollaborationRoom = ({
               setConnectedState("reconnecting");
               return;
             }
+            hasSynchronized = true;
             setConnectedState(synchronizedStatus);
           },
           token: refreshTokenIfNeeded,
@@ -640,6 +646,9 @@ export const useFolioCollaborationRoom = ({
           roomId,
           seedDocumentBuffer,
         };
+        if (connectedProvider.isSynced) {
+          hasSynchronized = true;
+        }
         setConnectedState(
           connectedProvider.isSynced ? synchronizedStatus : "connecting",
         );

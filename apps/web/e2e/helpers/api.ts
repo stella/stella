@@ -65,14 +65,24 @@ export const apiDelete = async (
   request: APIRequestContext,
   path: string,
 ): Promise<void> => {
+  const result = await apiDeleteStatus(request, path);
+  if (result.status >= 300 && result.status !== 404) {
+    throw new Error(
+      `DELETE ${path} -> ${String(result.status)}: ${result.body}`,
+    );
+  }
+};
+
+export const apiDeleteStatus = async (
+  request: APIRequestContext,
+  path: string,
+): Promise<{ status: number; body: string }> => {
   const response = await request.delete(url(path), {
     timeout: API_REQUEST_TIMEOUT_MS,
   });
-  if (!response.ok() && response.status() !== 404) {
-    throw new Error(
-      `DELETE ${path} -> ${String(response.status())}: ${await response.text()}`,
-    );
-  }
+  const result = { status: response.status(), body: await response.text() };
+  await response.dispose();
+  return result;
 };
 
 export const apiUploadDocx = async (

@@ -2171,6 +2171,7 @@
     "bulletList": "Odrážkový zoznam",
     "checkingDocxEditDescription": "stella ešte kontroluje, či možno tento DOCX bezpečne upravovať. Skúste to znova, keď sa dokument načíta.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
+    "chooseEvidence": "Vyberte súbor na vloženie číslovaného odkazu na dôkaz.",
     "comment": "Komentár",
     "comments": {
       "addPlaceholder": "Pridať komentár...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Nemáte oprávnenie upravovať tento dokument.",
     "editSaveFailedTitle": "DOCX sa nepodarilo uložiť",
     "editSessionTakenOver": "Túto reláciu úprav prevzalo iné okno.",
+    "evidenceReferences": "Odkazy na dôkazy",
+    "evidenceUnavailable": "Tento odkaz na dôkaz nie je možné v tomto spise otvoriť.",
     "findReplace": {
       "close": "Zavrieť hľadanie",
       "findAndReplace": "Nájsť a nahradiť",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Zväčšiť odsadenie",
     "insertColumnLeft": "Vložiť stĺpec vľavo",
     "insertColumnRight": "Vložiť stĺpec vpravo",
+    "insertEvidence": "Vložiť odkaz na dôkaz",
     "insertRowAbove": "Vložiť riadok nad",
     "insertRowBelow": "Vložiť riadok pod",
     "inserted": "Vložené",

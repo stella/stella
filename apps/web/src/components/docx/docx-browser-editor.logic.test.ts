@@ -128,50 +128,31 @@ describe("DOCX browser editor buffer selection", () => {
     ).toBe(previewBuffer);
   });
 
-  test("uses the collaboration seed buffer before seeding a shared session", () => {
+  test("always uses the original source while collaborating", () => {
     const seedBuffer = bufferFrom([7]);
-    const previewBuffer = bufferFrom([4]);
+    const selected = selectDocxBrowserEditorBuffer({
+      collaborationSeedBuffer: seedBuffer,
+      lastEditingBuffer: bufferFrom([5]),
+      preservedLoadedBuffer: bufferFrom([6]),
+      previewBuffer: bufferFrom([4]),
+      state: { status: "idle" },
+    });
 
-    expect(
-      selectDocxBrowserEditorBuffer({
-        collaborationSeedBuffer: seedBuffer,
-        isCollaborativeEditing: true,
-        lastEditingBuffer: null,
-        preservedLoadedBuffer: null,
-        previewBuffer,
-        state: { status: "idle" },
-      }),
-    ).toBe(seedBuffer);
+    expect(selected).toBe(seedBuffer);
   });
 
-  test("falls back to the preview buffer for already-seeded shared sessions", () => {
+  test("uses normal session selection without a collaboration source", () => {
     const previewBuffer = bufferFrom([4]);
 
     expect(
       selectDocxBrowserEditorBuffer({
         collaborationSeedBuffer: null,
-        isCollaborativeEditing: true,
         lastEditingBuffer: null,
         preservedLoadedBuffer: null,
         previewBuffer,
         state: { status: "idle" },
       }),
     ).toBe(previewBuffer);
-  });
-
-  test("keeps an already-seeded room buffer stable when a publish refreshes the preview", () => {
-    const roomBuffer = bufferFrom([5]);
-
-    expect(
-      selectDocxBrowserEditorBuffer({
-        collaborationSeedBuffer: null,
-        isCollaborativeEditing: true,
-        lastEditingBuffer: roomBuffer,
-        preservedLoadedBuffer: null,
-        previewBuffer: bufferFrom([6]),
-        state: { status: "idle" },
-      }),
-    ).toBe(roomBuffer);
   });
 });
 

@@ -101,6 +101,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
         const rooms = await tx
           .select({
             baseVersionId: folioCollabRooms.baseVersionId,
+            sourceVersionId: folioCollabRooms.sourceVersionId,
             entityId: folioCollabRooms.entityId,
             fileName: folioCollabRooms.fileName,
             generation: folioCollabRooms.generation,
@@ -124,7 +125,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
           return null;
         }
         const sourceFile = await readVersionDocxTarget({
-          entityVersionId: room.baseVersionId,
+          entityVersionId: room.sourceVersionId,
           propertyId: room.propertyId,
           tx,
           workspaceId,

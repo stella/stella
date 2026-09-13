@@ -69,6 +69,7 @@ const insertRoom = async ({
   roomIds.push(roomId);
   await testDb.insert(folioCollabRooms).values({
     baseVersionId: ids.entityVersionA1,
+    sourceVersionId: ids.entityVersionA1,
     docxCheckpointFileId: createSafeId<"userFile">(),
     entityId: ids.entityA1,
     fileName: "contract.docx",
@@ -121,32 +122,53 @@ const claimConcurrently = async ({
   );
 
 describe("folio collaboration room ownership", () => {
-  test("rejects a base version from another entity or workspace", async () => {
-    const roomId = createSafeId<"folioCollabRoom">();
-    roomIds.push(roomId);
-
-    const rejection = await testDb
-      .insert(folioCollabRooms)
-      .values({
+  test("rejects base and source versions outside the room target", async () => {
+    const variants = [
+      {
         baseVersionId: ids.entityVersionA2,
-        docxCheckpointFileId: createSafeId<"userFile">(),
-        entityId: ids.entityA1,
-        fileName: "contract.docx",
-        id: roomId,
-        propertyId: ids.filePropertyA1,
-        workspaceId: ids.wsA1,
-        yjsSnapshotFileId: createSafeId<"userFile">(),
-      })
-      .execute()
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+        sourceVersionId: ids.entityVersionA1,
+      },
+      {
+        baseVersionId: ids.entityVersionA1,
+        sourceVersionId: ids.entityVersionA2,
+      },
+      {
+        baseVersionId: ids.entityVersionB1,
+        sourceVersionId: ids.entityVersionA1,
+      },
+      {
+        baseVersionId: ids.entityVersionA1,
+        sourceVersionId: ids.entityVersionB1,
+      },
+    ];
 
-    expect(rejection).toBeInstanceOf(Error);
-    expect(String(rejection)).toContain(
-      'Failed query: insert into "folio_collab_rooms"',
-    );
+    for (const { baseVersionId, sourceVersionId } of variants) {
+      const roomId = createSafeId<"folioCollabRoom">();
+      roomIds.push(roomId);
+      const rejection = await testDb
+        .insert(folioCollabRooms)
+        .values({
+          baseVersionId,
+          sourceVersionId,
+          docxCheckpointFileId: createSafeId<"userFile">(),
+          entityId: ids.entityA1,
+          fileName: "contract.docx",
+          id: roomId,
+          propertyId: ids.filePropertyA1,
+          workspaceId: ids.wsA1,
+          yjsSnapshotFileId: createSafeId<"userFile">(),
+        })
+        .execute()
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      expect(rejection).toBeInstanceOf(Error);
+      expect(String(rejection)).toContain(
+        'Failed query: insert into "folio_collab_rooms"',
+      );
+    }
   });
 });
 

@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { apiGet, apiUploadDocx } from "../helpers/api";
+import { apiDeleteStatus, apiGet, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -32,12 +32,14 @@ const readDocumentText = async (page: Page) =>
 
 const openCollaborativeDocument = async ({
   entityId,
+  expectedText,
   fieldId,
   page,
   viewId,
   workspaceId,
 }: {
   entityId: string;
+  expectedText: string;
   fieldId: string;
   page: Page;
   viewId: string;
@@ -54,11 +56,9 @@ const openCollaborativeDocument = async ({
   await expect(
     page.getByRole("status").filter({ hasText: "Synced" }).first(),
   ).toBeVisible();
-  await expect(
-    page.locator(".layout-run-text", {
-      hasText: "Stella E2E test document.",
-    }),
-  ).toBeVisible({ timeout: 45_000 });
+  await expect
+    .poll(async () => await readDocumentText(page), { timeout: 45_000 })
+    .toContain(expectedText);
 };
 
 test.describe("lockless DOCX collaboration", () => {
@@ -74,7 +74,7 @@ test.describe("lockless DOCX collaboration", () => {
     }
   });
 
-  test("two browser contexts converge and publishing keeps both editors open", async ({
+  test("two browser contexts converge across rejoin and a second publication", async ({
     browser,
     browserErrors,
     page,
@@ -105,17 +105,22 @@ test.describe("lockless DOCX collaboration", () => {
     if (fileField === undefined) {
       throw new Error("Uploaded entity has no matching DOCX file field.");
     }
+    const originalFieldFile = await apiGet<{ entityVersionId: string }>(
+      request,
+      `/entities/${testWorkspace.id}/entity/${uploaded.entityId}/field/${fileField.id}/file`,
+    );
 
     collaboratorContext = await browser.newContext({
       baseURL: WEB_BASE_URL,
       storageState: STORAGE_STATE,
     });
     const collaboratorPage = await collaboratorContext.newPage();
-    const stopTrackingCollaborator = browserErrors.trackPage(collaboratorPage);
+    let stopTrackingCollaborator = browserErrors.trackPage(collaboratorPage);
 
     try {
       await openCollaborativeDocument({
         entityId: uploaded.entityId,
+        expectedText: "Stella E2E test document.",
         fieldId: fileField.id,
         page,
         viewId: testWorkspace.viewId,
@@ -123,6 +128,7 @@ test.describe("lockless DOCX collaboration", () => {
       });
       await openCollaborativeDocument({
         entityId: uploaded.entityId,
+        expectedText: "Stella E2E test document.",
         fieldId: fileField.id,
         page: collaboratorPage,
         viewId: testWorkspace.viewId,
@@ -206,6 +212,72 @@ test.describe("lockless DOCX collaboration", () => {
           .getByRole("button", { exact: true, name: "Create version" })
           .first(),
       ).toBeEnabled();
+
+      const deletion = await apiDeleteStatus(
+        request,
+        `/entities/${testWorkspace.id}/entity/${uploaded.entityId}/versions/${originalFieldFile.entityVersionId}`,
+      );
+      expect(deletion.status).toBe(409);
+
+      stopTrackingCollaborator();
+      await collaboratorContext.close();
+      collaboratorContext = null;
+      await page.reload({ timeout: 90_000, waitUntil: "commit" });
+      await expect(
+        page.getByRole("status").filter({ hasText: "Synced" }).first(),
+      ).toBeVisible();
+      const publishedEntity = await apiGet<EntityWithFields>(
+        request,
+        `/entities/${testWorkspace.id}/entity/${uploaded.entityId}`,
+      );
+      const publishedFileField = publishedEntity.fields.find(
+        (field) =>
+          field.propertyId === testWorkspace.filePropertyId &&
+          field.content.type === "file",
+      );
+      if (publishedFileField === undefined) {
+        throw new Error("Published entity has no matching DOCX file field.");
+      }
+      expect(publishedFileField.id).not.toBe(fileField.id);
+      collaboratorContext = await browser.newContext({
+        baseURL: WEB_BASE_URL,
+        storageState: STORAGE_STATE,
+      });
+      const rejoinedPage = await collaboratorContext.newPage();
+      stopTrackingCollaborator = browserErrors.trackPage(rejoinedPage);
+      await openCollaborativeDocument({
+        entityId: uploaded.entityId,
+        expectedText: whilePublishingToken,
+        fieldId: publishedFileField.id,
+        page: rejoinedPage,
+        viewId: testWorkspace.viewId,
+        workspaceId: testWorkspace.id,
+      });
+
+      const secondToken = ` SECOND${String(Date.now())}`;
+      await rejoinedPage.locator(".layout-run-text").first().click();
+      await rejoinedPage.keyboard.insertText(secondToken);
+      await expect
+        .poll(async () => await readDocumentText(page))
+        .toContain(secondToken);
+
+      const secondPublishResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          response.url().includes("/folio-collab-rooms/publish-version"),
+        { timeout: 45_000 },
+      );
+      await page
+        .getByRole("button", { exact: true, name: "Create version" })
+        .first()
+        .click();
+      expect((await secondPublishResponse).ok()).toBe(true);
+      await expect(page.getByText("Version created").first()).toBeVisible({
+        timeout: 45_000,
+      });
+      await expect
+        .poll(async () => await readDocumentText(rejoinedPage))
+        .toContain(secondToken);
     } finally {
       stopTrackingCollaborator();
     }

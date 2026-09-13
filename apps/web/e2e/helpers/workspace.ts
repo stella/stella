@@ -1,8 +1,8 @@
-import type { APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext } from "@playwright/test";
 import { Result, panic } from "better-result";
 import { randomUUID } from "node:crypto";
 
-import { apiDelete, apiGet, apiPut } from "./api";
+import { apiDeleteStatus, apiGet, apiPut } from "./api";
 
 type FileProperty = { id: string };
 
@@ -112,5 +112,43 @@ export const deleteTestWorkspace = async (
   request: APIRequestContext,
   workspaceId: string,
 ): Promise<void> => {
-  await apiDelete(request, `/workspaces/${workspaceId}`);
+  const path = `/workspaces/${workspaceId}`;
+  const outcome: { failure: Error | null } = { failure: null };
+  await expect
+    .poll(
+      async () => {
+        const attempt = await Result.tryPromise(
+          async () => await apiDeleteStatus(request, path),
+        );
+        // expect.poll retries thrown errors too; return before surfacing failures.
+        if (Result.isError(attempt)) {
+          outcome.failure = attempt.error;
+          return true;
+        }
+        const result = attempt.value;
+        if (
+          result.status === 404 ||
+          (result.status >= 200 && result.status < 300)
+        ) {
+          return true;
+        }
+        if (
+          result.status === 409 &&
+          result.body.includes(
+            "Wait for document processing or another deletion attempt to finish",
+          )
+        ) {
+          return false;
+        }
+        outcome.failure = new Error(
+          `DELETE ${path} -> ${String(result.status)}: ${result.body}`,
+        );
+        return true;
+      },
+      { timeout: 30_000, intervals: [250, 500, 1000, 2000] },
+    )
+    .toBe(true);
+  if (outcome.failure !== null) {
+    throw outcome.failure;
+  }
 };

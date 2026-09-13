@@ -2171,6 +2171,7 @@
     "bulletList": "Ženklelių sąrašas",
     "checkingDocxEditDescription": "stella vis dar tikrina, ar šį DOCX galima saugiai redaguoti. Bandykite dar kartą, kai dokumentas baigs krautis.",
     "checkingDocxEditTitle": "Tikrinamas dokumentas",
+    "chooseEvidence": "Pasirinkite failą, kad įterptumėte sunumeruotą įrodymo nuorodą.",
     "comment": "Komentaras",
     "comments": {
       "addPlaceholder": "Pridėti komentarą…",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Neturite teisės redaguoti šio dokumento.",
     "editSaveFailedTitle": "Nepavyko išsaugoti DOCX",
     "editSessionTakenOver": "Ši redagavimo sesija buvo perimta kitur.",
+    "evidenceReferences": "Įrodymų nuorodos",
+    "evidenceUnavailable": "Šios įrodymo nuorodos šioje byloje atidaryti negalima.",
     "findReplace": {
       "close": "Uždaryti paiešką",
       "findAndReplace": "Rasti ir pakeisti",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Padidinti įtrauką",
     "insertColumnLeft": "Įterpti stulpelį kairėje",
     "insertColumnRight": "Įterpti stulpelį dešinėje",
+    "insertEvidence": "Įterpti įrodymo nuorodą",
     "insertRowAbove": "Įterpti eilutę virš",
     "insertRowBelow": "Įterpti eilutę po",
     "inserted": "Įterpta",

@@ -2171,6 +2171,7 @@
     "bulletList": "Odrážkový seznam",
     "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
+    "chooseEvidence": "Vyberte soubor pro vložení číslovaného odkazu na důkaz.",
     "comment": "Komentář",
     "comments": {
       "addPlaceholder": "Přidat komentář...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Nemáte oprávnění tento dokument upravovat.",
     "editSaveFailedTitle": "DOCX se nepodařilo uložit",
     "editSessionTakenOver": "Tento dokument byl otevřen k úpravám v jiné kartě, okně nebo zařízení, takže byla tato relace ukončena. Neuložené místní změny zůstávají zachovány — otevřete dokument znovu a pokračujte.",
+    "evidenceReferences": "Odkazy na důkazy",
+    "evidenceUnavailable": "Tento odkaz na důkaz nelze v tomto spisu otevřít.",
     "findReplace": {
       "close": "Zavřít hledání",
       "findAndReplace": "Najít a nahradit",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Zvětšit odsazení",
     "insertColumnLeft": "Vložit sloupec vlevo",
     "insertColumnRight": "Vložit sloupec vpravo",
+    "insertEvidence": "Vložit odkaz na důkaz",
     "insertRowAbove": "Vložit řádek nad",
     "insertRowBelow": "Vložit řádek pod",
     "inserted": "Vloženo",

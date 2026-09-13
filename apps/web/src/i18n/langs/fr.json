@@ -2171,6 +2171,7 @@
     "bulletList": "Liste à puces",
     "checkingDocxEditDescription": "stella vérifie encore si ce DOCX peut être modifié en toute sécurité. Réessayez une fois le document chargé.",
     "checkingDocxEditTitle": "Vérification du document",
+    "chooseEvidence": "Choisissez un fichier pour insérer une référence numérotée à un élément de preuve.",
     "comment": "Commenter",
     "comments": {
       "addPlaceholder": "Ajouter un commentaire...",
@@ -2213,6 +2214,8 @@
     "editPermissionDenied": "Vous n’avez pas l’autorisation de modifier ce document.",
     "editSaveFailedTitle": "Impossible d’enregistrer le DOCX",
     "editSessionTakenOver": "Cette session de modification a été reprise ailleurs.",
+    "evidenceReferences": "Références aux éléments de preuve",
+    "evidenceUnavailable": "Cette référence à un élément de preuve ne peut pas être ouverte dans cette affaire.",
     "findReplace": {
       "close": "Fermer la recherche",
       "findAndReplace": "Rechercher et remplacer",
@@ -2241,6 +2244,7 @@
     "increaseIndent": "Augmenter le retrait",
     "insertColumnLeft": "Insérer une colonne à gauche",
     "insertColumnRight": "Insérer une colonne à droite",
+    "insertEvidence": "Insérer une référence à un élément de preuve",
     "insertRowAbove": "Insérer une ligne au-dessus",
     "insertRowBelow": "Insérer une ligne en dessous",
     "inserted": "Inséré",
