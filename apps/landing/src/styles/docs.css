@@ -1,0 +1,234 @@
+/*
+ * Starlight theme for /docs. Maps Starlight's `--sl-*` variables onto the
+ * landing palette in src/styles/global.css so the docs read as the same site:
+ * neutral stone grays, a monochrome accent, DM Sans body and Cabinet Grotesk
+ * headings. Starlight is dark-first (`:root` is dark, `[data-theme='light']`
+ * overrides), so the blocks below follow that order.
+ */
+
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/CabinetGrotesk-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans-latin-ext-wght-normal.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: swap;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans-latin-wght-italic.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: swap;
+  font-style: italic;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans-latin-ext-wght-italic.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: swap;
+  font-style: italic;
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root,
+::backdrop {
+  /* Landing tokens the docs header and toggle reuse (dark values; light below). */
+  --background: #0c0a09;
+  --foreground: #f5f5f4;
+  --primary: #f5f5f4;
+  --primary-foreground: #1c1917;
+  --muted-foreground: #a8a29e;
+  --border: rgba(255, 255, 255, 0.08);
+
+  --sl-font: "DM Sans";
+  --sl-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --sl-color-white: #f5f5f4;
+  --sl-color-gray-1: #e7e5e4;
+  --sl-color-gray-2: #d6d3d1;
+  --sl-color-gray-3: #a8a29e;
+  --sl-color-gray-4: #78716c;
+  --sl-color-gray-5: #292524;
+  --sl-color-gray-6: #1c1917;
+  --sl-color-black: #0c0a09;
+
+  --sl-color-accent-low: #1c1917;
+  --sl-color-accent: #f5f5f4;
+  --sl-color-accent-high: #f5f5f4;
+
+  --sl-color-text: var(--sl-color-gray-2);
+  --sl-color-text-accent: var(--sl-color-white);
+  --sl-color-text-invert: var(--sl-color-black);
+  --sl-color-bg: var(--sl-color-black);
+  --sl-color-bg-nav: color-mix(in srgb, var(--sl-color-black) 82%, transparent);
+  --sl-color-bg-sidebar: #11100f;
+  --sl-color-bg-inline-code: rgba(255, 255, 255, 0.06);
+  --sl-color-bg-accent: var(--sl-color-white);
+  --sl-color-hairline-light: rgba(255, 255, 255, 0.08);
+  --sl-color-hairline: rgba(255, 255, 255, 0.08);
+  --sl-color-hairline-shade: rgba(255, 255, 255, 0.08);
+  --sl-color-backdrop-overlay: rgba(12, 10, 9, 0.66);
+
+  --sl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --sl-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.32);
+  --sl-shadow-lg:
+    0 1px 2px rgba(0, 0, 0, 0.2), 0 24px 48px -20px rgba(0, 0, 0, 0.55);
+
+  --sl-nav-height: 4.5rem;
+  --sl-content-width: 44rem;
+  --sl-line-height: 1.65;
+}
+
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  --background: #ffffff;
+  --foreground: #1c1917;
+  --primary: #1c1917;
+  --primary-foreground: #fafaf9;
+  --muted-foreground: #6b7280;
+  --border: rgba(0, 0, 0, 0.1);
+
+  --sl-color-white: #1c1917;
+  --sl-color-gray-1: #292524;
+  --sl-color-gray-2: #44403c;
+  --sl-color-gray-3: #6b7280;
+  --sl-color-gray-4: #a8a29e;
+  --sl-color-gray-5: #e7e5e4;
+  --sl-color-gray-6: #f5f5f4;
+  --sl-color-gray-7: #fafafa;
+  --sl-color-black: #ffffff;
+
+  --sl-color-accent-low: #f5f5f4;
+  --sl-color-accent: #1c1917;
+  --sl-color-accent-high: #1c1917;
+
+  --sl-color-text-accent: var(--sl-color-white);
+  --sl-color-text-invert: var(--sl-color-black);
+  --sl-color-bg-nav: color-mix(in srgb, var(--sl-color-black) 82%, transparent);
+  --sl-color-bg-sidebar: #fafafa;
+  --sl-color-bg-inline-code: rgba(0, 0, 0, 0.04);
+  --sl-color-bg-accent: var(--sl-color-white);
+  --sl-color-hairline-light: rgba(0, 0, 0, 0.1);
+  --sl-color-hairline: rgba(0, 0, 0, 0.1);
+  --sl-color-hairline-shade: rgba(0, 0, 0, 0.1);
+  --sl-color-backdrop-overlay: rgba(28, 25, 23, 0.4);
+
+  --sl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sl-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --sl-shadow-lg:
+    0 1px 2px rgba(0, 0, 0, 0.04), 0 24px 48px -20px rgba(0, 0, 0, 0.18);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Header: translucent like the landing's sticky bar. */
+.page > .header {
+  backdrop-filter: blur(12px);
+}
+
+/* Headings in the landing's display face, weights kept light. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6),
+h1[data-page-title] {
+  font-family: "Cabinet Grotesk", system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.sl-markdown-content p {
+  text-wrap: pretty;
+}
+
+/* Links in body copy: underlined, no colour shift. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--sl-color-white);
+  text-decoration: underline;
+  text-decoration-color: var(--sl-color-gray-4);
+  text-underline-offset: 0.2em;
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
+
+/* Sidebar: quiet labels, softly rounded active pill. */
+.sidebar-content {
+  font-size: var(--sl-text-sm);
+}
+.sidebar-content summary,
+.sidebar-content .large {
+  font-size: var(--sl-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+.sidebar-content a {
+  border-radius: 0.5rem;
+}
+
+/* Inline code and blocks: rounded, hairline border, no tinted background. */
+.sl-markdown-content code:not(:where(.not-content *)) {
+  border-radius: 0.375rem;
+  padding-inline: 0.35em;
+}
+.sl-markdown-content .expressive-code .frame {
+  --ec-brdRad: 0.75rem;
+  --ec-brdCol: var(--sl-color-hairline);
+}
+
+/* The landing's ThemeToggle is styled with Tailwind utilities, which the
+   docs pages do not load; give it the same quiet look here. */
+[data-theme-toggle] {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: var(--sl-text-sm);
+  cursor: pointer;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding-inline: 0.5rem;
+  transition: color 150ms;
+}
+[data-theme-toggle]:hover {
+  color: var(--foreground);
+}
+
+/* Search: match the landing's input chrome. */
+site-search button[data-open-modal] {
+  border-radius: 0.625rem;
+  border-color: var(--sl-color-hairline);
+  background-color: transparent;
+}

@@ -1,0 +1,48 @@
+---
+// Starlight override: the mobile menu ends with the same controls as the
+// desktop header (GitHub, theme toggle). The docs are English-only, so the
+// language select Starlight would add here is left out.
+import { GitHubLogoIcon } from "@stll/ui/brand-icons";
+
+import { defaultLocale, isLocale } from "../../i18n/config";
+import { getTranslations } from "../../i18n/utils";
+import ThemeSelect from "./ThemeSelect.astro";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+
+const githubUrl = "https://github.com/stella/stella";
+---
+
+<div class="mobile-preferences sl-flex">
+  <a
+    href={githubUrl}
+    class="icon-link sl-flex"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label={t("nav.github")}
+  >
+    <GitHubLogoIcon />
+  </a>
+  <ThemeSelect />
+</div>
+
+<style>
+  .mobile-preferences {
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--sl-color-hairline);
+    padding-block: 0.5rem;
+  }
+  .icon-link :global(svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .icon-link {
+    align-items: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    color: var(--muted-foreground);
+  }
+</style>
