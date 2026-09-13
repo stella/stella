@@ -2371,12 +2371,16 @@
     },
     "leave": "Salir de la guía",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Abrir guías",
+      "body": "¿Es nuevo aquí? Unos recorridos breves le muestran el espacio."
+    },
     "status": {
       "skipped": "Omitido"
     },
     "tours": {
       "chat": {
-        "description": "Qué hay detrás del botón + y cuándo recurrir a cada opción",
+        "description": "Escriba una solicitud, añada el archivo o asunto adecuado y envíela con seguridad",
         "examplePrompt": "Resume las obligaciones clave de este contrato",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Referenciar un asunto o un archivo",
             "when": "Úsalo en lugar de adjuntar siempre que el documento ya esté archivado. Referencia el asunto para que el asistente lo recorra entero; un solo archivo cuando sabes exactamente cuál debe leer. Escribir @ en un editor vacío abre esta lista directamente."
           },
+          "plusMenu": {
+            "body": "El botón + abre el menú del editor. Los pasos siguientes lo abren y muestran las dos opciones que más usará: adjuntar un archivo y referenciar un asunto.",
+            "title": "Todo lo que puedes añadir está detrás de +",
+            "when": "Recurre a + siempre que la respuesta dependa de algo que el asistente aún no ve: un archivo, un asunto, una regla interna o una fuente externa actualizada."
+          },
+          "send": {
+            "body": "Envía el mensaje junto con todo lo que hayas adjuntado, referenciado o activado arriba. El editor se queda donde está, así que una pregunta de seguimiento puede añadir lo que faltó en la primera respuesta.",
+            "title": "Envíalo",
+            "when": "Envía pronto. Una primera respuesta corta indica antes qué contexto falta que un primer prompt perfecto."
+          }
+        },
+        "title": "Preguntar con el contexto adecuado"
+      },
+      "chatPower": {
+        "description": "Cambie de modelo, ejecute habilidades y conecte servidores de herramientas",
+        "steps": {
           "mcp": {
             "body": "Activa o desactiva las herramientas de un servidor conectado en tus chats: registros mercantiles, sistemas internos, cualquier cosa que tu equipo haya conectado.",
             "title": "Servidores de herramientas conectados",
@@ -2409,14 +2429,8 @@
             "when": "Sube a un modelo más potente para la lectura atenta, la redacción y todo aquello donde una respuesta equivocada sale cara. Quédate en el predeterminado para búsquedas, resúmenes y reescrituras rápidas: ahí la profundidad extra solo cambia la espera."
           },
           "plusMenu": {
-            "body": "El botón + abre el menú del editor: adjuntar un archivo, cambiar de modelo, ejecutar una habilidad, referenciar un asunto o activar un servidor de herramientas conectado. Los pasos siguientes lo abren y recorren cada opción.",
-            "title": "Todo lo que puedes añadir está detrás de +",
-            "when": "Recurre a + siempre que la respuesta dependa de algo que el asistente aún no ve: un archivo, un asunto, una regla interna o una fuente externa actualizada."
-          },
-          "send": {
-            "body": "Envía el mensaje junto con todo lo que hayas adjuntado, referenciado o activado arriba. El editor se queda donde está, así que una pregunta de seguimiento puede añadir lo que faltó en la primera respuesta.",
-            "title": "Envíalo",
-            "when": "Envía pronto. Una primera respuesta corta indica antes qué contexto falta que un primer prompt perfecto."
+            "body": "El mismo menú también contiene el cambio de modelo, las habilidades y los servidores de herramientas conectados. Los pasos siguientes lo abren y recorren cada opción.",
+            "title": "Más detrás del botón +"
           },
           "skills": {
             "body": "Inserta un prompt guardado o una habilidad escrita por tu equipo: un conjunto de instrucciones revisado que resuelve la misma tarea igual cada vez.",
@@ -2424,7 +2438,7 @@
             "when": "Úsala cuando la tarea se repite y la formulación importa, por ejemplo una revisión de contrato estándar o un resumen de apertura. Escribir / en un editor vacío abre esta lista directamente."
           }
         },
-        "title": "Preguntar con el contexto adecuado"
+        "title": "Funciones avanzadas del chat"
       },
       "documents": {
         "description": "Archiva un documento y vuelve a encontrarlo después",

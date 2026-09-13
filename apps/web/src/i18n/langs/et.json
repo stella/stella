@@ -2371,12 +2371,16 @@
     },
     "leave": "Välju juhendist",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Ava juhendid",
+      "body": "Uus siin? Mõni lühike ringkäik näitab teile kõike."
+    },
     "status": {
       "skipped": "Vahele jäetud"
     },
     "tours": {
       "chat": {
-        "description": "Mis peitub nupu + taga ja millal kumbagi valikut kasutada",
+        "description": "Kirjutage päring, lisage õige fail või toimik ja saatke see turvaliselt",
         "examplePrompt": "Võta kokku selle lepingu peamised kohustused",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Viita toimikule või failile",
             "when": "Kasuta seda faili lisamise asemel alati, kui dokument on juba salvestatud. Viita toimikule, kui assistent peaks selle tervikuna läbi vaatama; ühele failile siis, kui tead täpselt, mida lugeda. @ tühjas redaktoris avab selle loendi otse."
           },
+          "plusMenu": {
+            "body": "Nupp + avab redaktori menüü. Järgmised sammud avavad selle ja näitavad kahte kõige sagedamini kasutatavat valikut: faili lisamist ja toimikule viitamist.",
+            "title": "Kõik lisatav peitub nupu + taga",
+            "when": "Kasuta nuppu +, kui vastus sõltub millestki, mida assistent veel ei näe: failist, toimikust, majasisesest reeglist või värskest välisallikast."
+          },
+          "send": {
+            "body": "Saadab sõnumi koos kõigega, mille eespool lisasid, millele viitasid või mille sisse lülitasid. Redaktor jääb paigale, nii et järelküsimusega saad lisada selle, mis esimesest vastusest puudus.",
+            "title": "Saada teele",
+            "when": "Saada varakult. Lühike esimene vastus näitab kiiremini, milline kontekst veel puudub, kui täiuslikuks lihvitud esimene viip."
+          }
+        },
+        "title": "Küsi õige kontekstiga"
+      },
+      "chatPower": {
+        "description": "Vahetage mudeleid, käivitage oskusi ja ühendage tööriistaservereid",
+        "steps": {
           "mcp": {
             "body": "Lülitab ühendatud serveri tööriistad sinu vestlustes sisse või välja: äriregistrid, sisemised süsteemid, kõik, mille sinu meeskond on ühendanud.",
             "title": "Ühendatud tööriistaserverid",
@@ -2409,14 +2429,8 @@
             "when": "Vali tugevam mudel tähelepaneliku lugemise, koostamise ja kõige jaoks, kus vale vastus läheb kalliks. Otsingute, kokkuvõtete ja kiirete ümbersõnastuste puhul jää vaikemudeli juurde: lisasügavus muudab seal ainult ooteaega."
           },
           "plusMenu": {
-            "body": "Nupp + avab redaktori menüü: lisa fail, vaheta mudelit, käivita oskus, viita toimikule või lülita sisse ühendatud tööriistaserver. Järgmised sammud avavad menüü ja käivad valikud ükshaaval läbi.",
-            "title": "Kõik lisatav peitub nupu + taga",
-            "when": "Kasuta nuppu +, kui vastus sõltub millestki, mida assistent veel ei näe: failist, toimikust, majasisesest reeglist või värskest välisallikast."
-          },
-          "send": {
-            "body": "Saadab sõnumi koos kõigega, mille eespool lisasid, millele viitasid või mille sisse lülitasid. Redaktor jääb paigale, nii et järelküsimusega saad lisada selle, mis esimesest vastusest puudus.",
-            "title": "Saada teele",
-            "when": "Saada varakult. Lühike esimene vastus näitab kiiremini, milline kontekst veel puudub, kui täiuslikuks lihvitud esimene viip."
+            "body": "Samas menüüs on ka mudeli vahetus, oskused ja ühendatud tööriistaserverid. Järgmised sammud avavad selle ja käsitlevad iga valikut eraldi.",
+            "title": "Veel nupu + taga"
           },
           "skills": {
             "body": "Lisab salvestatud viiba või sinu meeskonna kirjutatud oskuse: üle vaadatud juhiste kogumi, mis lahendab sama ülesande iga kord ühtmoodi.",
@@ -2424,7 +2438,7 @@
             "when": "Kasuta siis, kui ülesanne kordub ja sõnastus loeb, näiteks tavapärase lepingu ülevaatamisel või vastuvõtu kokkuvõttes. / tühjas redaktoris avab selle loendi otse."
           }
         },
-        "title": "Küsi õige kontekstiga"
+        "title": "Vestluse lisavõimalused"
       },
       "documents": {
         "description": "Lisa dokument toimikusse ja leia see hiljem uuesti",

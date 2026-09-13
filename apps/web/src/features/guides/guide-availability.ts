@@ -22,6 +22,7 @@ export const isGuideTourAvailable = (
 ): boolean => {
   switch (tourId) {
     case GUIDE_TOUR_IDS.chat:
+    case GUIDE_TOUR_IDS.chatPower:
       return availability.canUseChat;
     case GUIDE_TOUR_IDS.documents:
       return availability.canCreateDocument && availability.documentsAvailable;

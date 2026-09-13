@@ -124,16 +124,33 @@ test("Chat guide resolves every live anchor exactly once", async ({ page }) => {
   });
 
   await startGuide(page, "Ask with the right context");
-  await expectGuideStep(page, GUIDE_ANCHORS.chatComposer, "1 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatToolsButton, "2 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuAttach, "3 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuModels, "4 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuSkills, "5 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuContext, "6 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuMcp, "7 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatAnonymize, "8 of 9");
-  await advanceToGuideStep(page, GUIDE_ANCHORS.chatSend, "9 of 9");
+  await expectGuideStep(page, GUIDE_ANCHORS.chatComposer, "1 of 6");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatToolsButton, "2 of 6");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuAttach, "3 of 6");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuContext, "4 of 6");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatAnonymize, "5 of 6");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatSend, "6 of 6");
   await finishGuide(page);
+});
+
+test("Chat power guide ends inside the menu and closes it", async ({
+  page,
+}) => {
+  await enableGuidesTestFeatures(page);
+  await page.goto("/chat", {
+    timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "commit",
+  });
+
+  await startGuide(page, "Chat power features");
+  await expectGuideStep(page, GUIDE_ANCHORS.chatToolsButton, "1 of 4");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuModels, "2 of 4");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuSkills, "3 of 4");
+  await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuMcp, "4 of 4");
+  await finishGuide(page);
+  await expect(
+    page.locator(`[data-guide-anchor="${GUIDE_ANCHORS.chatMenuMcp}"]`),
+  ).toHaveCount(0);
 });
 
 test("Guide checklist stays stable until matter availability resolves", async ({

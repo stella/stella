@@ -2371,12 +2371,16 @@
     },
     "leave": "Sair do guia",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Abrir guias",
+      "body": "Novo por aqui? Alguns tours rápidos mostram tudo."
+    },
     "status": {
       "skipped": "Ignorado"
     },
     "tours": {
       "chat": {
-        "description": "O que está por trás do botão + e quando recorrer a cada opção",
+        "description": "Escreva um pedido, adicione o arquivo ou caso certo e envie com segurança",
         "examplePrompt": "Resuma as principais obrigações deste contrato",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Referenciar um caso ou um arquivo",
             "when": "Use no lugar do anexo sempre que o documento já estiver arquivado. Referencie o caso para o assistente percorrer tudo; um único arquivo quando você sabe exatamente qual ele deve ler. Digitar @ no editor vazio abre essa lista direto."
           },
+          "plusMenu": {
+            "body": "O botão + abre o menu do editor. Os próximos passos o abrem e mostram as duas opções que você mais vai usar: anexar um arquivo e referenciar um caso.",
+            "title": "Tudo o que dá para acrescentar está atrás do +",
+            "when": "Recorra ao + sempre que a resposta depender de algo que o assistente ainda não enxerga: um arquivo, um caso, uma regra interna ou uma fonte externa atualizada."
+          },
+          "send": {
+            "body": "Envia a mensagem junto com tudo o que você anexou, referenciou ou ligou acima. O editor continua no lugar, então uma pergunta seguinte acrescenta o que faltou na primeira resposta.",
+            "title": "Envie a mensagem",
+            "when": "Envie cedo. Uma primeira resposta curta mostra mais rápido qual contexto ainda falta do que um primeiro prompt perfeito."
+          }
+        },
+        "title": "Perguntar com o contexto certo"
+      },
+      "chatPower": {
+        "description": "Troque de modelo, execute habilidades e conecte servidores de ferramentas",
+        "steps": {
           "mcp": {
             "body": "Liga e desliga as ferramentas de um servidor conectado nos seus chats: cadastros de empresas, sistemas internos, tudo o que sua equipe conectou.",
             "title": "Servidores de ferramentas conectados",
@@ -2409,14 +2429,8 @@
             "when": "Suba para um modelo mais forte na leitura atenta, na redação e em tudo onde uma resposta errada sai cara. Fique no padrão para consultas, resumos e reescritas rápidas: ali a profundidade extra só muda a espera."
           },
           "plusMenu": {
-            "body": "O botão + abre o menu do editor: anexar um arquivo, trocar de modelo, executar uma habilidade, referenciar um caso ou ligar um servidor de ferramentas conectado. Os próximos passos abrem o menu e percorrem cada opção.",
-            "title": "Tudo o que dá para acrescentar está atrás do +",
-            "when": "Recorra ao + sempre que a resposta depender de algo que o assistente ainda não enxerga: um arquivo, um caso, uma regra interna ou uma fonte externa atualizada."
-          },
-          "send": {
-            "body": "Envia a mensagem junto com tudo o que você anexou, referenciou ou ligou acima. O editor continua no lugar, então uma pergunta seguinte acrescenta o que faltou na primeira resposta.",
-            "title": "Envie a mensagem",
-            "when": "Envie cedo. Uma primeira resposta curta mostra mais rápido qual contexto ainda falta do que um primeiro prompt perfeito."
+            "body": "O mesmo menu também traz a troca de modelo, as habilidades e os servidores de ferramentas conectados. Os próximos passos o abrem e percorrem cada opção.",
+            "title": "Mais por trás do botão +"
           },
           "skills": {
             "body": "Insere um prompt salvo ou uma habilidade escrita pela sua equipe: um conjunto de instruções revisado que trata a mesma tarefa do mesmo jeito toda vez.",
@@ -2424,7 +2438,7 @@
             "when": "Use quando a tarefa se repete e a formulação importa, por exemplo uma revisão de contrato padrão ou um resumo de abertura. Digitar / no editor vazio abre essa lista direto."
           }
         },
-        "title": "Perguntar com o contexto certo"
+        "title": "Recursos avançados do chat"
       },
       "documents": {
         "description": "Adicione um documento ao caso e encontre-o depois",

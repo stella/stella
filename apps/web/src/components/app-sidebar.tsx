@@ -116,6 +116,10 @@ import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import {
+  GUIDE_DRAWER_STATES,
+  useGuideDrawerStore,
+} from "@/features/guides/guide-drawer-store";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -158,15 +162,6 @@ const GuideHelpDrawer = lazy(async () => {
   return { default: module.GuideHelpDrawer };
 });
 
-const GUIDE_DRAWER_STATES = {
-  closed: "closed",
-  idle: "idle",
-  open: "open",
-} as const;
-
-type GuideDrawerState =
-  (typeof GUIDE_DRAWER_STATES)[keyof typeof GUIDE_DRAWER_STATES];
-
 export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -190,9 +185,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const user = useAuthenticatedUser();
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [guideDrawerState, setGuideDrawerState] = useState<GuideDrawerState>(
-    GUIDE_DRAWER_STATES.idle,
-  );
+  const guideDrawerState = useGuideDrawerStore((store) => store.state);
+  const openGuideDrawer = useGuideDrawerStore((store) => store.open);
+  const setGuideDrawerOpen = useGuideDrawerStore((store) => store.setOpen);
   const [pendingEntityDrop, setPendingEntityDrop] =
     useState<PendingEntityDrop | null>(null);
   const { pinnedOrder, pinnedIds, togglePin, reorderPinned } = usePinnedStore(
@@ -750,7 +745,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <SidebarMenuButton
               aria-expanded={guideDrawerState === GUIDE_DRAWER_STATES.open}
               aria-haspopup="dialog"
-              onClick={() => setGuideDrawerState(GUIDE_DRAWER_STATES.open)}
+              onClick={openGuideDrawer}
               size="sm"
               tooltip={t("guides.help.buttonLabel")}
             >
@@ -760,13 +755,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             {guideDrawerState !== GUIDE_DRAWER_STATES.idle && (
               <Suspense fallback={null}>
                 <GuideHelpDrawer
-                  onOpenChange={(open) =>
-                    setGuideDrawerState(
-                      open
-                        ? GUIDE_DRAWER_STATES.open
-                        : GUIDE_DRAWER_STATES.closed,
-                    )
-                  }
+                  onOpenChange={setGuideDrawerOpen}
                   open={guideDrawerState === GUIDE_DRAWER_STATES.open}
                   workspaceId={activeWorkspaceId ?? workspaces?.at(0)?.id}
                   workspaceSelectionPending={workspacesPending}

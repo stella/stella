@@ -2371,12 +2371,16 @@
     },
     "leave": "Leave guide",
     "minutes": "{count} min",
+    "nudge": {
+      "action": "Open guides",
+      "body": "New here? A few short tours show you around."
+    },
     "status": {
       "skipped": "Skipped"
     },
     "tours": {
       "chat": {
-        "description": "What sits behind the + button, and when to reach for each option",
+        "description": "Write a request, add the right file or matter, and send it safely",
         "examplePrompt": "Summarize the key obligations in this contract",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Reference a matter or a file",
             "when": "Use this instead of attaching whenever the document is already filed. Reference the matter to let the assistant look across it; reference one file when you know exactly which one to read. Typing @ in an empty composer opens this list directly."
           },
+          "plusMenu": {
+            "body": "The + button opens the composer menu. The next steps open it and show the two options you will use most: attaching a file and referencing a matter.",
+            "title": "Everything you can add sits behind +",
+            "when": "Reach for + whenever the answer depends on something the assistant cannot see yet: a file, a matter, an internal rule, or a live external source."
+          },
+          "send": {
+            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
+            "title": "Send it",
+            "when": "Send early. A short first answer tells you which context is still missing faster than a perfect first prompt does."
+          }
+        },
+        "title": "Ask with the right context"
+      },
+      "chatPower": {
+        "description": "Switch models, run skills, and connect tool servers",
+        "steps": {
           "mcp": {
             "body": "Turns a connected server's tools on or off for your chats: business registries, internal systems, anything your team has connected.",
             "title": "Connected tool servers",
@@ -2409,14 +2429,8 @@
             "when": "Switch up for close reading, drafting, and anything where a wrong answer is expensive. Stay on the default for lookups, summaries, and quick rewrites, where the extra depth changes nothing but the wait."
           },
           "plusMenu": {
-            "body": "The + button opens the composer menu: attach a file, switch model, run a skill, reference a matter, or enable a connected tool server. The next steps open it and take each option in turn.",
-            "title": "Everything you can add sits behind +",
-            "when": "Reach for + whenever the answer depends on something the assistant cannot see yet: a file, a matter, an internal rule, or a live external source."
-          },
-          "send": {
-            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
-            "title": "Send it",
-            "when": "Send early. A short first answer tells you which context is still missing faster than a perfect first prompt does."
+            "body": "The same menu also holds the model switch, skills, and connected tool servers. The next steps open it and take each in turn.",
+            "title": "More behind the + button"
           },
           "skills": {
             "body": "Inserts a saved prompt or a skill your team has written: a reviewed set of instructions that handles the same task the same way every time.",
@@ -2424,7 +2438,7 @@
             "when": "Use one when the task repeats and the wording matters, such as a standard contract review or an intake summary. Typing / in an empty composer opens this list directly."
           }
         },
-        "title": "Ask with the right context"
+        "title": "Chat power features"
       },
       "documents": {
         "description": "File a document, then find it again",

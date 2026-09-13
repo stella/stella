@@ -2371,12 +2371,16 @@
     },
     "leave": "Anleitung beenden",
     "minutes": "{count} Min.",
+    "nudge": {
+      "action": "Anleitungen öffnen",
+      "body": "Neu hier? Ein paar kurze Touren zeigen Ihnen alles."
+    },
     "status": {
       "skipped": "Übersprungen"
     },
     "tours": {
       "chat": {
-        "description": "Was hinter der Schaltfläche + steckt und wann Sie zu welcher Option greifen",
+        "description": "Anfrage schreiben, die passende Datei oder Akte hinzufügen und sicher senden",
         "examplePrompt": "Fassen Sie die wichtigsten Pflichten in diesem Vertrag zusammen",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Auf eine Akte oder Datei verweisen",
             "when": "Nutzen Sie das statt eines Anhangs, sobald das Dokument bereits abgelegt ist. Verweisen Sie auf die Akte, wenn der Assistent sie insgesamt durchsehen soll; auf eine einzelne Datei, wenn Sie genau wissen, welche zu lesen ist. Ein @ im leeren Editor öffnet diese Liste direkt."
           },
+          "plusMenu": {
+            "body": "Die Schaltfläche + öffnet das Menü des Editors. Die nächsten Schritte öffnen es und zeigen die zwei Optionen, die Sie am häufigsten brauchen: eine Datei anhängen und auf eine Akte verweisen.",
+            "title": "Alles Ergänzbare steckt hinter +",
+            "when": "Greifen Sie zu +, sobald die Antwort von etwas abhängt, das der Assistent noch nicht sieht: einer Datei, einer Akte, einer internen Regel oder einer aktuellen externen Quelle."
+          },
+          "send": {
+            "body": "Sendet die Nachricht mit allem, was Sie oben angehängt, referenziert oder eingeschaltet haben. Der Editor bleibt stehen, sodass eine Rückfrage nachreichen kann, was in der ersten Antwort fehlte.",
+            "title": "Absenden",
+            "when": "Senden Sie früh. Eine kurze erste Antwort zeigt schneller, welcher Kontext noch fehlt, als ein perfekt formulierter erster Prompt."
+          }
+        },
+        "title": "Mit dem richtigen Kontext fragen"
+      },
+      "chatPower": {
+        "description": "Modelle wechseln, Skills ausführen und Tool-Server verbinden",
+        "steps": {
           "mcp": {
             "body": "Schaltet die Werkzeuge eines verbundenen Servers für Ihre Chats an oder aus: Handelsregister, interne Systeme, alles, was Ihr Team verbunden hat.",
             "title": "Verbundene Werkzeugserver",
@@ -2409,14 +2429,8 @@
             "when": "Wechseln Sie hoch für genaues Lesen, Entwürfe und alles, wo eine falsche Antwort teuer wird. Bei Nachschlagen, Zusammenfassungen und schnellen Umformulierungen bleiben Sie bei der Voreinstellung: Mehr Tiefe ändert dort nur die Wartezeit."
           },
           "plusMenu": {
-            "body": "Die Schaltfläche + öffnet das Editor-Menü: Datei anhängen, Modell wechseln, Fähigkeit ausführen, auf eine Akte verweisen oder einen verbundenen Werkzeugserver aktivieren. Die nächsten Schritte öffnen es und gehen jede Option durch.",
-            "title": "Alles Ergänzbare steckt hinter +",
-            "when": "Greifen Sie zu +, sobald die Antwort von etwas abhängt, das der Assistent noch nicht sieht: einer Datei, einer Akte, einer internen Regel oder einer aktuellen externen Quelle."
-          },
-          "send": {
-            "body": "Sendet die Nachricht mit allem, was Sie oben angehängt, referenziert oder eingeschaltet haben. Der Editor bleibt stehen, sodass eine Rückfrage nachreichen kann, was in der ersten Antwort fehlte.",
-            "title": "Absenden",
-            "when": "Senden Sie früh. Eine kurze erste Antwort zeigt schneller, welcher Kontext noch fehlt, als ein perfekt formulierter erster Prompt."
+            "body": "Dasselbe Menü enthält auch den Modellwechsel, Skills und verbundene Tool-Server. Die nächsten Schritte öffnen es und gehen jede Option durch.",
+            "title": "Mehr hinter der Schaltfläche +"
           },
           "skills": {
             "body": "Fügt einen gespeicherten Prompt oder eine von Ihrem Team geschriebene Fähigkeit ein: ein geprüftes Anweisungspaket, das dieselbe Aufgabe jedes Mal gleich behandelt.",
@@ -2424,7 +2438,7 @@
             "when": "Nutzen Sie eine, wenn die Aufgabe wiederkehrt und die Formulierung zählt, etwa bei einer Standardvertragsprüfung oder einer Erstaufnahme. Ein / im leeren Editor öffnet diese Liste direkt."
           }
         },
-        "title": "Mit dem richtigen Kontext fragen"
+        "title": "Erweiterte Chat-Funktionen"
       },
       "documents": {
         "description": "Legen Sie ein Dokument ab und finden Sie es später wieder",

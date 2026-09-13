@@ -10,7 +10,7 @@ export const GUIDE_TOURS = [
     id: GUIDE_TOUR_IDS.chat,
     titleKey: "guides.tours.chat.title",
     descriptionKey: "guides.tours.chat.description",
-    estMinutes: 4,
+    estMinutes: 3,
     steps: [
       {
         anchor: GUIDE_ANCHORS.chatComposer,
@@ -29,7 +29,8 @@ export const GUIDE_TOURS = [
       {
         // The only step that opens anything: (+) is a pure disclosure trigger,
         // so clicking it on the user's behalf shows the menu and nothing else.
-        // The five steps below explain the options it reveals.
+        // The two steps below explain the everyday options it reveals; the
+        // rest of the menu is the "chat power features" tour.
         anchor: GUIDE_ANCHORS.chatToolsButton,
         titleKey: "guides.tours.chat.steps.plusMenu.title",
         bodyKey: "guides.tours.chat.steps.plusMenu.body",
@@ -45,31 +46,10 @@ export const GUIDE_TOURS = [
         seed: { kind: "none" },
       },
       {
-        anchor: GUIDE_ANCHORS.chatMenuModels,
-        titleKey: "guides.tours.chat.steps.models.title",
-        bodyKey: "guides.tours.chat.steps.models.body",
-        whenKey: "guides.tours.chat.steps.models.when",
-        seed: { kind: "none" },
-      },
-      {
-        anchor: GUIDE_ANCHORS.chatMenuSkills,
-        titleKey: "guides.tours.chat.steps.skills.title",
-        bodyKey: "guides.tours.chat.steps.skills.body",
-        whenKey: "guides.tours.chat.steps.skills.when",
-        seed: { kind: "none" },
-      },
-      {
         anchor: GUIDE_ANCHORS.chatMenuContext,
         titleKey: "guides.tours.chat.steps.context.title",
         bodyKey: "guides.tours.chat.steps.context.body",
         whenKey: "guides.tours.chat.steps.context.when",
-        seed: { kind: "none" },
-      },
-      {
-        anchor: GUIDE_ANCHORS.chatMenuMcp,
-        titleKey: "guides.tours.chat.steps.mcp.title",
-        bodyKey: "guides.tours.chat.steps.mcp.body",
-        whenKey: "guides.tours.chat.steps.mcp.when",
         seed: { kind: "none" },
       },
       {
@@ -86,6 +66,46 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.send.title",
         bodyKey: "guides.tours.chat.steps.send.body",
         whenKey: "guides.tours.chat.steps.send.when",
+        seed: { kind: "none" },
+      },
+    ],
+  },
+  {
+    // The rest of the (+) menu, for a second visit: everything here changes
+    // how the assistant answers rather than what it reads. The tour ends
+    // inside the menu; the runner closes it on every exit.
+    id: GUIDE_TOUR_IDS.chatPower,
+    titleKey: "guides.tours.chatPower.title",
+    descriptionKey: "guides.tours.chatPower.description",
+    estMinutes: 2,
+    steps: [
+      {
+        anchor: GUIDE_ANCHORS.chatToolsButton,
+        route: { type: "static", to: "/chat" },
+        titleKey: "guides.tours.chatPower.steps.plusMenu.title",
+        bodyKey: "guides.tours.chatPower.steps.plusMenu.body",
+        seed: { kind: "none" },
+        interaction: { kind: "open" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.chatMenuModels,
+        titleKey: "guides.tours.chatPower.steps.models.title",
+        bodyKey: "guides.tours.chatPower.steps.models.body",
+        whenKey: "guides.tours.chatPower.steps.models.when",
+        seed: { kind: "none" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.chatMenuSkills,
+        titleKey: "guides.tours.chatPower.steps.skills.title",
+        bodyKey: "guides.tours.chatPower.steps.skills.body",
+        whenKey: "guides.tours.chatPower.steps.skills.when",
+        seed: { kind: "none" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.chatMenuMcp,
+        titleKey: "guides.tours.chatPower.steps.mcp.title",
+        bodyKey: "guides.tours.chatPower.steps.mcp.body",
+        whenKey: "guides.tours.chatPower.steps.mcp.when",
         seed: { kind: "none" },
       },
     ],

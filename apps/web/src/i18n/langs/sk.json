@@ -2371,12 +2371,16 @@
     },
     "leave": "Ukončiť sprievodcu",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Otvoriť sprievodcov",
+      "body": "Ste tu nový? Niekoľko krátkych prehliadok vás prevedie."
+    },
     "status": {
       "skipped": "Preskočené"
     },
     "tours": {
       "chat": {
-        "description": "Čo sa skrýva pod tlačidlom + a kedy siahnuť po ktorej možnosti",
+        "description": "Napíšte požiadavku, pridajte správny súbor alebo spis a bezpečne odošlite",
         "examplePrompt": "Zhrňte kľúčové povinnosti v tejto zmluve",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Odkázať na spis alebo súbor",
             "when": "Použite namiesto priloženia súboru vždy, keď je dokument už založený. Odkážte na spis, ak sa má asistent pozrieť naprieč ním; na jeden súbor, keď presne viete, ktorý má čítať. Napísaním @ v prázdnom editore otvoríte tento zoznam priamo."
           },
+          "plusMenu": {
+            "body": "Tlačidlo + otvorí ponuku editora. Ďalšie kroky ju otvoria a ukážu dve možnosti, ktoré budete používať najčastejšie: priloženie súboru a odkaz na spis.",
+            "title": "Všetko, čo sa dá pridať, je pod +",
+            "when": "Siahnite po +, kedykoľvek odpoveď závisí od niečoho, čo asistent zatiaľ nevidí: od súboru, spisu, interného pravidla alebo živého externého zdroja."
+          },
+          "send": {
+            "body": "Odošle správu so všetkým, čo ste vyššie priložili, na čo ste odkázali alebo čo ste zapli. Editor zostane na mieste, takže nadväzujúcim dopytom doplníte to, čo v prvej odpovedi chýbalo.",
+            "title": "Odošlite správu",
+            "when": "Odosielajte skoro. Krátka prvá odpoveď ukáže, aký kontext ešte chýba, rýchlejšie než dokonale vymyslené prvé zadanie."
+          }
+        },
+        "title": "Pýtajte sa so správnym kontextom"
+      },
+      "chatPower": {
+        "description": "Prepínajte modely, spúšťajte zručnosti a pripájajte servery nástrojov",
+        "steps": {
           "mcp": {
             "body": "Zapína a vypína nástroje pripojeného servera pre vaše chaty: obchodné registre, interné systémy, čokoľvek, čo váš tím pripojil.",
             "title": "Pripojené servery nástrojov",
@@ -2409,14 +2429,8 @@
             "when": "Silnejší model zvoľte na pozorné čítanie, koncipovanie a všade, kde je nesprávna odpoveď drahá. Pri vyhľadávaní, zhrnutiach a rýchlych prepisoch zostaňte pri predvolenom: hĺbka navyše zmení len čas čakania."
           },
           "plusMenu": {
-            "body": "Tlačidlo + otvorí ponuku editora: priložiť súbor, prepnúť model, spustiť zručnosť, odkázať na spis alebo zapnúť pripojený server nástrojov. Nasledujúce kroky ju otvoria a prejdú možnosť po možnosti.",
-            "title": "Všetko, čo sa dá pridať, je pod +",
-            "when": "Siahnite po +, kedykoľvek odpoveď závisí od niečoho, čo asistent zatiaľ nevidí: od súboru, spisu, interného pravidla alebo živého externého zdroja."
-          },
-          "send": {
-            "body": "Odošle správu so všetkým, čo ste vyššie priložili, na čo ste odkázali alebo čo ste zapli. Editor zostane na mieste, takže nadväzujúcim dopytom doplníte to, čo v prvej odpovedi chýbalo.",
-            "title": "Odošlite správu",
-            "when": "Odosielajte skoro. Krátka prvá odpoveď ukáže, aký kontext ešte chýba, rýchlejšie než dokonale vymyslené prvé zadanie."
+            "body": "Rovnaká ponuka obsahuje aj prepínanie modelu, zručnosti a pripojené servery nástrojov. Ďalšie kroky ju otvoria a preberú každú možnosť zvlášť.",
+            "title": "Čo ďalšie skrýva tlačidlo +"
           },
           "skills": {
             "body": "Vloží uložené zadanie alebo zručnosť, ktorú napísal váš tím: schválený súbor pokynov, vďaka ktorému sa tá istá úloha zakaždým spracuje rovnako.",
@@ -2424,7 +2438,7 @@
             "when": "Použite ich, keď sa úloha opakuje a záleží na formulácii, napríklad pri štandardnej revízii zmluvy alebo zhrnutí zadania zákazky. Napísaním / v prázdnom editore otvoríte tento zoznam priamo."
           }
         },
-        "title": "Pýtajte sa so správnym kontextom"
+        "title": "Pokročilé funkcie chatu"
       },
       "documents": {
         "description": "Zaraďte dokument do spisu a neskôr ho znova nájdite",

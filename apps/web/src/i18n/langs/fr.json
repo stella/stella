@@ -2371,12 +2371,16 @@
     },
     "leave": "Quitter le guide",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Ouvrir les guides",
+      "body": "Nouveau ici ? Quelques visites rapides vous font découvrir l’espace."
+    },
     "status": {
       "skipped": "Ignoré"
     },
     "tours": {
       "chat": {
-        "description": "Ce que contient le bouton + et quand choisir chaque option",
+        "description": "Rédigez une demande, ajoutez le bon fichier ou dossier et envoyez-la en toute sécurité",
         "examplePrompt": "Résumez les principales obligations de ce contrat",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Référencer un dossier ou un fichier",
             "when": "À utiliser au lieu d'une pièce jointe dès que le document est déjà classé. Référencez le dossier pour que l'assistant le parcoure en entier ; un seul fichier quand vous savez précisément lequel lire. Taper @ dans un éditeur vide ouvre directement cette liste."
           },
+          "plusMenu": {
+            "body": "Le bouton + ouvre le menu de l’éditeur. Les étapes suivantes l’ouvrent et montrent les deux options que vous utiliserez le plus : joindre un fichier et référencer un dossier.",
+            "title": "Tout ce que vous pouvez ajouter est sous +",
+            "when": "Utilisez + dès que la réponse dépend de quelque chose que l'assistant ne voit pas encore : un fichier, un dossier, une règle interne ou une source externe à jour."
+          },
+          "send": {
+            "body": "Envoie le message avec tout ce que vous avez joint, référencé ou activé ci-dessus. L'éditeur reste en place, si bien qu'une question de suivi peut ajouter ce qui manquait à la première réponse.",
+            "title": "Envoyer la demande",
+            "when": "Envoyez tôt. Une première réponse courte montre plus vite quel contexte manque encore qu'un premier prompt parfait."
+          }
+        },
+        "title": "Poser la question avec le bon contexte"
+      },
+      "chatPower": {
+        "description": "Changez de modèle, lancez des compétences et connectez des serveurs d’outils",
+        "steps": {
           "mcp": {
             "body": "Active ou désactive les outils d'un serveur connecté pour vos discussions : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
             "title": "Serveurs d'outils connectés",
@@ -2409,14 +2429,8 @@
             "when": "Passez à un modèle plus puissant pour la lecture attentive, la rédaction et tout ce dont une erreur coûte cher. Restez sur le modèle par défaut pour les recherches, les résumés et les reformulations rapides : la profondeur supplémentaire n'y change que le temps d'attente."
           },
           "plusMenu": {
-            "body": "Le bouton + ouvre le menu de l'éditeur : joindre un fichier, changer de modèle, lancer une compétence, référencer un dossier ou activer un serveur d'outils connecté. Les étapes suivantes l'ouvrent et passent chaque option en revue.",
-            "title": "Tout ce que vous pouvez ajouter est sous +",
-            "when": "Utilisez + dès que la réponse dépend de quelque chose que l'assistant ne voit pas encore : un fichier, un dossier, une règle interne ou une source externe à jour."
-          },
-          "send": {
-            "body": "Envoie le message avec tout ce que vous avez joint, référencé ou activé ci-dessus. L'éditeur reste en place, si bien qu'une question de suivi peut ajouter ce qui manquait à la première réponse.",
-            "title": "Envoyer la demande",
-            "when": "Envoyez tôt. Une première réponse courte montre plus vite quel contexte manque encore qu'un premier prompt parfait."
+            "body": "Le même menu contient aussi le changement de modèle, les compétences et les serveurs d’outils connectés. Les étapes suivantes l’ouvrent et passent chaque option en revue.",
+            "title": "Encore plus derrière le bouton +"
           },
           "skills": {
             "body": "Insère un prompt enregistré ou une compétence rédigée par votre équipe : un jeu d'instructions validé qui traite la même tâche de la même façon à chaque fois.",
@@ -2424,7 +2438,7 @@
             "when": "Utilisez-en une quand la tâche se répète et que la formulation compte, par exemple une revue de contrat standard ou un résumé d'ouverture. Taper / dans un éditeur vide ouvre directement cette liste."
           }
         },
-        "title": "Poser la question avec le bon contexte"
+        "title": "Fonctions avancées du chat"
       },
       "documents": {
         "description": "Classez un document, puis retrouvez-le facilement",

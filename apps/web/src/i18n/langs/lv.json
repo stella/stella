@@ -2371,12 +2371,16 @@
     },
     "leave": "Iziet no ceļveža",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Atvērt ceļvežus",
+      "body": "Jauns šeit? Dažas īsas ekskursijas jums visu parādīs."
+    },
     "status": {
       "skipped": "Izlaists"
     },
     "tours": {
       "chat": {
-        "description": "Kas slēpjas aiz pogas + un kad izvēlēties katru iespēju",
+        "description": "Uzrakstiet pieprasījumu, pievienojiet pareizo failu vai lietu un droši nosūtiet",
         "examplePrompt": "Apkopojiet šī līguma galvenās saistības",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Atsaukties uz lietu vai failu",
             "when": "Izmantojiet to pievienošanas vietā vienmēr, kad dokuments jau ir reģistrēts. Atsaucieties uz lietu, ja asistentam tā jāpārskata visa; uz vienu failu, ja precīzi zināt, kurš jāizlasa. Ierakstot @ tukšā redaktorā, šis saraksts atveras uzreiz."
           },
+          "plusMenu": {
+            "body": "Poga + atver redaktora izvēlni. Nākamie soļi to atvērs un parādīs divas biežāk lietotās iespējas: faila pievienošanu un atsauci uz lietu.",
+            "title": "Viss pievienojamais slēpjas aiz +",
+            "when": "Izmantojiet +, kad atbilde ir atkarīga no kaut kā, ko asistents vēl neredz: no faila, lietas, iekšēja noteikuma vai aktuāla ārēja avota."
+          },
+          "send": {
+            "body": "Nosūta ziņu kopā ar visu, ko iepriekš pievienojāt, uz ko atsaucāties vai ko ieslēdzāt. Redaktors paliek vietā, tāpēc ar nākamo jautājumu varat papildināt to, kā trūka pirmajā atbildē.",
+            "title": "Nosūtiet ziņu",
+            "when": "Sūtiet agri. Īsa pirmā atbilde ātrāk parāda, kāda konteksta vēl trūkst, nekā perfekti noslīpēta pirmā uzvedne."
+          }
+        },
+        "title": "Jautājiet ar pareizo kontekstu"
+      },
+      "chatPower": {
+        "description": "Mainiet modeļus, palaidiet prasmes un pievienojiet rīku serverus",
+        "steps": {
           "mcp": {
             "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu sarunās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
             "title": "Pievienotie rīku serveri",
@@ -2409,14 +2429,8 @@
             "when": "Uz jaudīgāku modeli pārejiet rūpīgai lasīšanai, sagatavošanai un visur, kur nepareiza atbilde dārgi maksā. Meklējumiem, kopsavilkumiem un ātriem pārrakstījumiem palieciet pie noklusējuma: papildu dziļums tur maina vienīgi gaidīšanas laiku."
           },
           "plusMenu": {
-            "body": "Poga + atver redaktora izvēlni: pievienot failu, mainīt modeli, palaist prasmi, atsaukties uz lietu vai ieslēgt pievienotu rīku serveri. Nākamie soļi to atver un pēc kārtas izskata katru iespēju.",
-            "title": "Viss pievienojamais slēpjas aiz +",
-            "when": "Izmantojiet +, kad atbilde ir atkarīga no kaut kā, ko asistents vēl neredz: no faila, lietas, iekšēja noteikuma vai aktuāla ārēja avota."
-          },
-          "send": {
-            "body": "Nosūta ziņu kopā ar visu, ko iepriekš pievienojāt, uz ko atsaucāties vai ko ieslēdzāt. Redaktors paliek vietā, tāpēc ar nākamo jautājumu varat papildināt to, kā trūka pirmajā atbildē.",
-            "title": "Nosūtiet ziņu",
-            "when": "Sūtiet agri. Īsa pirmā atbilde ātrāk parāda, kāda konteksta vēl trūkst, nekā perfekti noslīpēta pirmā uzvedne."
+            "body": "Tajā pašā izvēlnē ir arī modeļa maiņa, prasmes un pievienotie rīku serveri. Nākamie soļi to atvērs un aplūkos katru iespēju.",
+            "title": "Vēl vairāk aiz pogas +"
           },
           "skills": {
             "body": "Ievieto saglabātu uzvedni vai jūsu komandas uzrakstītu prasmi: pārbaudītu norādījumu kopumu, kas vienu un to pašu uzdevumu katru reizi izpilda vienādi.",
@@ -2424,7 +2438,7 @@
             "when": "Izmantojiet, kad uzdevums atkārtojas un formulējums ir svarīgs, piemēram, tipveida līguma pārbaudē vai uzņemšanas kopsavilkumā. Ierakstot / tukšā redaktorā, šis saraksts atveras uzreiz."
           }
         },
-        "title": "Jautājiet ar pareizo kontekstu"
+        "title": "Tērzēšanas papildiespējas"
       },
       "documents": {
         "description": "Pievienojiet dokumentu lietai un vēlāk atrodiet to",

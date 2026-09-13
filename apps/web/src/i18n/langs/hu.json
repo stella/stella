@@ -2371,12 +2371,16 @@
     },
     "leave": "Kilépés az útmutatóból",
     "minutes": "{count} perc",
+    "nudge": {
+      "action": "Útmutatók megnyitása",
+      "body": "Új itt? Néhány rövid bemutató körbevezeti."
+    },
     "status": {
       "skipped": "Kihagyva"
     },
     "tours": {
       "chat": {
-        "description": "Mi rejlik a + gomb mögött, és mikor melyik lehetőséghez nyúljon",
+        "description": "Írja meg a kérést, adja hozzá a megfelelő fájlt vagy ügyet, és küldje el biztonságosan",
         "examplePrompt": "Foglalja össze a szerződés legfontosabb kötelezettségeit",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Hivatkozás ügyre vagy fájlra",
             "when": "Csatolás helyett használja, valahányszor a dokumentum már be van iktatva. Az ügyre hivatkozzon, ha az asszisztensnek végig kell néznie; egyetlen fájlra, ha pontosan tudja, melyiket olvassa. A @ az üres szerkesztőben közvetlenül megnyitja ezt a listát."
           },
+          "plusMenu": {
+            "body": "A + gomb megnyitja a szerkesztő menüjét. A következő lépések megnyitják, és megmutatják a két leggyakrabban használt lehetőséget: fájl csatolását és ügyre hivatkozást.",
+            "title": "Minden hozzáadható elem a + mögött van",
+            "when": "Nyúljon a + gombhoz, valahányszor a válasz olyasmin múlik, amit az asszisztens még nem lát: egy fájlon, egy ügyön, egy belső szabályon vagy egy friss külső forráson."
+          },
+          "send": {
+            "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
+            "title": "Küldje el",
+            "when": "Küldjön korán. Egy rövid első válasz gyorsabban megmutatja, milyen kontextus hiányzik még, mint a tökéletesre csiszolt első prompt."
+          }
+        },
+        "title": "Kérdezzen a megfelelő kontextussal"
+      },
+      "chatPower": {
+        "description": "Váltson modellt, futtasson készségeket és csatlakoztasson eszközkiszolgálókat",
+        "steps": {
           "mcp": {
             "body": "Be- és kikapcsolja egy csatlakoztatott kiszolgáló eszközeit a csevegéseiben: cégnyilvántartások, belső rendszerek, bármi, amit a csapata csatlakoztatott.",
             "title": "Csatlakoztatott eszközkiszolgálók",
@@ -2409,14 +2429,8 @@
             "when": "Erősebb modellre váltson alapos olvasáshoz, fogalmazáshoz és mindenhez, ahol a hibás válasz sokba kerül. Kereséshez, összefoglalókhoz és gyors átfogalmazásokhoz maradjon az alapértelmezettnél: a többletmélység ott csak a várakozási időt növeli."
           },
           "plusMenu": {
-            "body": "A + gomb megnyitja a szerkesztő menüjét: fájl csatolása, modellváltás, skill futtatása, hivatkozás egy ügyre vagy csatlakoztatott eszközkiszolgáló bekapcsolása. A következő lépések megnyitják, és sorra veszik a lehetőségeket.",
-            "title": "Minden hozzáadható elem a + mögött van",
-            "when": "Nyúljon a + gombhoz, valahányszor a válasz olyasmin múlik, amit az asszisztens még nem lát: egy fájlon, egy ügyön, egy belső szabályon vagy egy friss külső forráson."
-          },
-          "send": {
-            "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
-            "title": "Küldje el",
-            "when": "Küldjön korán. Egy rövid első válasz gyorsabban megmutatja, milyen kontextus hiányzik még, mint a tökéletesre csiszolt első prompt."
+            "body": "Ugyanez a menü tartalmazza a modellváltást, a készségeket és a csatlakoztatott eszközkiszolgálókat is. A következő lépések megnyitják, és sorra veszik mindegyiket.",
+            "title": "További lehetőségek a + gomb mögött"
           },
           "skills": {
             "body": "Beilleszt egy mentett promptot vagy a csapata által írt skillt: átnézett utasításkészletet, amely ugyanazt a feladatot mindig ugyanúgy oldja meg.",
@@ -2424,7 +2438,7 @@
             "when": "Akkor használja, ha a feladat ismétlődik és számít a megfogalmazás, például szokásos szerződés-átnézésnél vagy ügyfélfelvételi összefoglalónál. A / az üres szerkesztőben közvetlenül megnyitja ezt a listát."
           }
         },
-        "title": "Kérdezzen a megfelelő kontextussal"
+        "title": "Haladó csevegési funkciók"
       },
       "documents": {
         "description": "Iktasson egy dokumentumot, majd találja meg később",

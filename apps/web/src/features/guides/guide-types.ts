@@ -55,6 +55,7 @@ export type GuideStep = {
 
 export const GUIDE_TOUR_IDS = {
   chat: "chat",
+  chatPower: "chat-power",
   documents: "documents",
   playbooks: "playbooks",
   workflows: "workflows",

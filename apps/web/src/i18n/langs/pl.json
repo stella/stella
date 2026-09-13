@@ -2371,12 +2371,16 @@
     },
     "leave": "Zakończ przewodnik",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Otwórz przewodniki",
+      "body": "Nowy tutaj? Kilka krótkich przewodników pokaże Ci wszystko."
+    },
     "status": {
       "skipped": "Pominięto"
     },
     "tours": {
       "chat": {
-        "description": "Co kryje się pod przyciskiem + i kiedy sięgnąć po którą opcję",
+        "description": "Napisz prośbę, dodaj właściwy plik lub sprawę i bezpiecznie wyślij",
         "examplePrompt": "Podsumuj najważniejsze obowiązki wynikające z tej umowy",
         "steps": {
           "anonymize": {
@@ -2398,6 +2402,22 @@
             "title": "Odwołaj się do sprawy lub pliku",
             "when": "Używaj zamiast załączania pliku zawsze, gdy dokument jest już zapisany. Wskaż sprawę, gdy asystent ma przejrzeć ją w całości; jeden plik, gdy dokładnie wiesz, który ma przeczytać. Wpisanie @ w pustym edytorze otwiera tę listę od razu."
           },
+          "plusMenu": {
+            "body": "Przycisk + otwiera menu edytora. Kolejne kroki je otworzą i pokażą dwie opcje, z których będziesz korzystać najczęściej: załączenie pliku i odwołanie do sprawy.",
+            "title": "Wszystko, co możesz dodać, kryje się pod +",
+            "when": "Sięgaj po +, gdy odpowiedź zależy od czegoś, czego asystent jeszcze nie widzi: pliku, sprawy, wewnętrznej zasady albo aktualnego źródła zewnętrznego."
+          },
+          "send": {
+            "body": "Wysyła wiadomość razem ze wszystkim, co powyżej załączono, wskazano lub włączono. Edytor zostaje na miejscu, więc kolejnym pytaniem uzupełnisz to, czego zabrakło w pierwszej odpowiedzi.",
+            "title": "Wyślij wiadomość",
+            "when": "Wysyłaj wcześnie. Krótka pierwsza odpowiedź szybciej pokaże, jakiego kontekstu brakuje, niż dopracowywanie pierwszego polecenia."
+          }
+        },
+        "title": "Pytaj z właściwym kontekstem"
+      },
+      "chatPower": {
+        "description": "Zmieniaj modele, uruchamiaj umiejętności i podłączaj serwery narzędzi",
+        "steps": {
           "mcp": {
             "body": "Włącza i wyłącza narzędzia podłączonego serwera w twoich czatach: rejestry przedsiębiorców, systemy wewnętrzne, wszystko, co podłączył twój zespół.",
             "title": "Podłączone serwery narzędzi",
@@ -2409,14 +2429,8 @@
             "when": "Mocniejszy model wybierz do uważnej lektury, redagowania i wszędzie tam, gdzie błędna odpowiedź dużo kosztuje. Przy wyszukiwaniu, streszczeniach i szybkich przeróbkach zostań przy domyślnym: dodatkowa głębia zmieni tylko czas oczekiwania."
           },
           "plusMenu": {
-            "body": "Przycisk + otwiera menu edytora: załącz plik, zmień model, uruchom umiejętność, odwołaj się do sprawy albo włącz podłączony serwer narzędzi. Kolejne kroki otwierają je i omawiają opcję po opcji.",
-            "title": "Wszystko, co możesz dodać, kryje się pod +",
-            "when": "Sięgaj po +, gdy odpowiedź zależy od czegoś, czego asystent jeszcze nie widzi: pliku, sprawy, wewnętrznej zasady albo aktualnego źródła zewnętrznego."
-          },
-          "send": {
-            "body": "Wysyła wiadomość razem ze wszystkim, co powyżej załączono, wskazano lub włączono. Edytor zostaje na miejscu, więc kolejnym pytaniem uzupełnisz to, czego zabrakło w pierwszej odpowiedzi.",
-            "title": "Wyślij wiadomość",
-            "when": "Wysyłaj wcześnie. Krótka pierwsza odpowiedź szybciej pokaże, jakiego kontekstu brakuje, niż dopracowywanie pierwszego polecenia."
+            "body": "To samo menu zawiera też zmianę modelu, umiejętności i podłączone serwery narzędzi. Kolejne kroki je otworzą i omówią każdą opcję po kolei.",
+            "title": "Więcej za przyciskiem +"
           },
           "skills": {
             "body": "Wstawia zapisany prompt albo umiejętność napisaną przez twój zespół: zatwierdzony zestaw instrukcji, dzięki któremu to samo zadanie za każdym razem wykonywane jest tak samo.",
@@ -2424,7 +2438,7 @@
             "when": "Użyj, gdy zadanie się powtarza i liczy się sformułowanie, na przykład przy standardowej weryfikacji umowy albo streszczeniu zlecenia. Wpisanie / w pustym edytorze otwiera tę listę od razu."
           }
         },
-        "title": "Pytaj z właściwym kontekstem"
+        "title": "Zaawansowane funkcje czatu"
       },
       "documents": {
         "description": "Dodaj dokument do sprawy i znajdź go później",
