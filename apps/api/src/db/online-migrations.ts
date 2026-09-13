@@ -170,6 +170,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "folio_collab_rooms_workspace_source_version_idx",
     tableName: "folio_collab_rooms",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legislation_documents_country_slug_idx" ON public."legislation_documents" USING btree ("country", "slug") WHERE "slug" IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (country, slug) WHERE (slug IS NOT NULL)",
+    isUnique: false,
+    name: "legislation_documents_country_slug_idx",
+    tableName: "legislation_documents",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
