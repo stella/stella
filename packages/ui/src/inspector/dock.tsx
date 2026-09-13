@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { EllipsisIcon } from "lucide-react";
 
+import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { INSPECTOR_RAIL_WIDTH } from "./pane-width";
 
@@ -42,9 +43,24 @@ type InspectorResizeHandleProps = {
   tabIndex: number;
 };
 
+/**
+ * Where the dock hangs, which decides what its fixed pane has to paint above.
+ * `shell-end` is the shell's own end column: it is a sibling of the content
+ * column and never overlaps the sticky top bar. `content` is a dock a page
+ * mounts inside that column; its pane still spans the full viewport height,
+ * so it crosses the bar and has to cover it.
+ */
+export type InspectorDockMount = "content" | "shell-end";
+
+const PANE_LAYER_CLASS_NAME = {
+  content: SHELL_CHROME_LAYER_CLASS_NAME,
+  "shell-end": "z-10",
+} as const satisfies Record<InspectorDockMount, string>;
+
 type InspectorDockProps = {
   children: ReactNode;
   className?: string | undefined;
+  mount?: InspectorDockMount | undefined;
   /** Permanent rail on the pane's inline-start edge, or by itself when collapsed. */
   rail?: ReactNode | undefined;
   /** Accessible name for the drag handle. */
@@ -62,6 +78,7 @@ type InspectorDockProps = {
 export const InspectorDock = ({
   children,
   className,
+  mount = "shell-end",
   onResetWidth,
   rail,
   resizeHandleLabel,
@@ -92,7 +109,10 @@ export const InspectorDock = ({
         data-slot="inspector-dock-spacer"
       />
       <div
-        className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
+        className={cn(
+          "fixed inset-y-0 end-0 hidden h-svh md:flex",
+          PANE_LAYER_CLASS_NAME[mount],
+        )}
         data-slot="inspector-dock-pane"
         style={{ width: widthPx }}
       >

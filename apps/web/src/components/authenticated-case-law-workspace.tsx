@@ -1,16 +1,26 @@
-import { Suspense, useRef, useState } from "react";
+import { Suspense } from "react";
 import type { ComponentProps } from "react";
 
+import { useTranslations } from "use-intl";
+
+import {
+  InspectorDock,
+  resolveInspectorDockWidth,
+  useInspectorPaneWidth,
+} from "@stll/ui/inspector";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
+import { useViewportWidth } from "@stll/ui/use-viewport-width";
 
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import {
   AIAvailabilityProvider,
   useAIKeyGate,
 } from "@/components/require-ai-key";
+import { useSidebarInlineSize } from "@/components/sidebar";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
@@ -24,9 +34,6 @@ type AuthenticatedCaseLawWorkspaceProps = {
   initialSearchQuery?: string | undefined;
   user: AuthenticatedUser;
 };
-
-const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
-const INSPECTOR_RAIL_WIDTH = 48;
 
 export const AuthenticatedCaseLawWorkspace = ({
   decision,
@@ -78,13 +85,26 @@ const CaseLawInspector = ({
 }: {
   decisionId: SafeId<"caseLawDecision">;
 }) => {
+  const t = useTranslations();
   const tabs = useInspectorTabsStore((s) => s.tabs);
   const minimized = useInspectorTabsStore((s) => s.minimized);
-  const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
-  const isDragging = useRef(false);
+  // The width policy is the shared inspector's, so the case reader's pane
+  // drags, resizes from the keyboard and is remembered exactly as a matter's
+  // does; this view only supplies the sidebar's inline size.
+  const sidebarWidth = useSidebarInlineSize();
+  const viewportWidth = useViewportWidth();
+  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+    sidebarWidth,
+    storageKey: inspectorPaneWidthStorageKey("public-law"),
+    viewportWidth,
+  });
 
   const showPaneContent = tabs.length > 0 && !minimized;
-  const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
+  const dockWidth = resolveInspectorDockWidth({
+    paneWidth: width,
+    showPaneContent,
+  });
+  const widthPx = `${dockWidth}px`;
 
   useExternalSyncEffect(() => {
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
@@ -108,48 +128,23 @@ const CaseLawInspector = ({
   return (
     <>
       <AutoOpenDecisionChat decisionId={decisionId} key={decisionId} />
-      <div
-        className="text-sidebar-foreground hidden md:block"
-        data-side="right"
-        data-slot="inspector-dock"
-        data-state={showPaneContent ? "expanded" : "collapsed"}
+      {/* Mounted inside the content column, so its full-height pane crosses
+          the shell's sticky top bar: the dock's own h-12 header owns the top
+          row for its width, as in the workspace chrome. The bar pads its
+          inline-end by LAW_END_DOCK_WIDTH_VAR so its actions are not
+          covered. */}
+      <InspectorDock
+        mount="content"
+        resizeHandleLabel={t("inspector.resizePane")}
+        resizeHandleProps={resizeHandleProps}
+        showPaneContent={showPaneContent}
+        width={dockWidth}
+        onResetWidth={resetWidth}
       >
-        <div className="bg-sidebar relative" style={{ width: widthPx }} />
-        {/* Full-height, above the shell top bar (sticky z-20): the dock's own
-            h-12 header owns the top row for its width, as in the workspace
-            chrome. The bar pads its inline-end by LAW_END_DOCK_WIDTH_VAR so
-            its actions are not covered. */}
-        <div
-          className="fixed inset-y-0 end-0 z-30 hidden h-svh md:flex"
-          style={{ width: widthPx }}
-        >
-          {showPaneContent && (
-            <div
-              className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                isDragging.current = true;
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }}
-              onPointerMove={(event) => {
-                if (!isDragging.current) {
-                  return;
-                }
-                const nextWidth = globalThis.innerWidth - event.clientX;
-                setWidth(Math.min(800, Math.max(320, nextWidth)));
-              }}
-              onPointerUp={() => {
-                isDragging.current = false;
-              }}
-            />
-          )}
-          <div className="bg-sidebar flex h-full w-full flex-col">
-            <Suspense fallback={null}>
-              <InspectorPanel />
-            </Suspense>
-          </div>
-        </div>
-      </div>
+        <Suspense fallback={null}>
+          <InspectorPanel />
+        </Suspense>
+      </InspectorDock>
     </>
   );
 };

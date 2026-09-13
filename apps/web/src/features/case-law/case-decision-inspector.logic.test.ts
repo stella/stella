@@ -24,7 +24,7 @@ describe("case decision inspector", () => {
     ).toEqual({
       type: CASE_DECISION_VIEW,
       id: "case-law-decision:d4f1bfe6-f7e4-42a2-9d4f-fd121ea90b34",
-      label: "4 As 3/2008",
+      label: "4 As 3/2008 · Nejvyšší správní soud",
       payload: {
         caseNumber: "4 As 3/2008",
         country: "cz",

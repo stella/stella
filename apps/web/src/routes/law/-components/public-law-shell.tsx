@@ -18,6 +18,7 @@ import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
+import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import {
   resolveStatuteDisplayStatus,
@@ -226,12 +227,12 @@ function PublicLawTopBar() {
                   // Dropped on a narrow screen: the case number identifies the
                   // decision on its own, the court only qualifies it.
                   <span className="text-muted-foreground min-w-0 truncate max-sm:hidden">
-                    · <BidiText>{court}</BidiText>
+                    {DECISION_TITLE_SEPARATOR} <BidiText>{court}</BidiText>
                   </span>
                 )}
                 {legalArea !== null && (
                   <span className="text-muted-foreground min-w-0 truncate">
-                    · {legalArea}
+                    {DECISION_TITLE_SEPARATOR} {legalArea}
                   </span>
                 )}
               </BreadcrumbItem>

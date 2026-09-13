@@ -4,6 +4,7 @@ import type {
   GenericTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
+import { decisionTitle } from "@/features/case-law/decision-title";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 
 /** Registered inspector view kind for one public case-law decision. */
@@ -129,7 +130,9 @@ export const createCaseDecisionViewTab = ({
   return {
     type: CASE_DECISION_VIEW,
     id: caseDecisionTabId(decisionId),
-    label: caseNumber,
+    // The court comes from the decision record, not from `route.court`: that
+    // one is the slugified path segment.
+    label: decisionTitle({ caseNumber, court }),
     payload: {
       caseNumber,
       country: route.country,

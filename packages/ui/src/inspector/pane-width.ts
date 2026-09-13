@@ -101,6 +101,18 @@ export const resolveInspectorPaneMaxWidth = ({
   );
 };
 
+/**
+ * A width inside the pane's own bounds, independent of any viewport.
+ *
+ * Every width the pane keeps goes through this, because the kept width is
+ * also the persisted one and {@link parsePersistedPaneWidth} *rejects* —
+ * and so resets — anything outside these bounds. A raw cursor position is
+ * routinely outside them, so a drag past the edge has to be remembered as
+ * the bound it stopped at rather than as the pixel the pointer reached.
+ */
+export const clampInspectorPaneWidth = (width: number): number =>
+  Math.min(Math.max(width, INSPECTOR_PANE_MIN_WIDTH), INSPECTOR_PANE_MAX_WIDTH);
+
 /** Width the pane renders at, given the width the user asked for. */
 export const resolveInspectorPaneWidth = ({
   desiredWidth,
@@ -108,7 +120,7 @@ export const resolveInspectorPaneWidth = ({
   viewportWidth,
 }: InspectorPaneWidthInput) =>
   Math.min(
-    Math.max(desiredWidth, INSPECTOR_PANE_MIN_WIDTH),
+    clampInspectorPaneWidth(desiredWidth),
     resolveInspectorPaneMaxWidth({ sidebarWidth, viewportWidth }),
   );
 
