@@ -1327,6 +1327,7 @@
     "convertTo": "Konvertieren zu",
     "copied": "Kopiert",
     "copy": "Kopieren",
+    "copyDocumentReference": "Aktenzeichen des Dokuments kopieren",
     "copyLink": "Link kopieren",
     "country": "Land",
     "court": "Gericht",
@@ -1345,6 +1346,7 @@
     "disconnect": "Trennen",
     "displayName": "Anzeigename",
     "document": "Dokument",
+    "documentReference": "Aktenzeichen des Dokuments",
     "documentTitle": "Dokumenttitel",
     "documentation": "Dokumentation",
     "done": "Fertig",
@@ -2234,7 +2236,6 @@
       "replaceText": "Ersatztext",
       "wholeWords": "Ganze Wörter"
     },
-    "finishEditing": "Bearbeitung beenden",
     "fontColor": "Schriftfarbe",
     "fontGroup": "Schriftart",
     "fontSize": "Schriftgröße",
@@ -4659,6 +4660,11 @@
     "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",
     "slugRequired": "Slug ist erforderlich"
   },
+  "verify": {
+    "notFound": "In Ihrer Organisation ist kein Dokument mit diesem Aktenzeichen verfügbar.",
+    "opened": "Über das Aktenzeichen <bdi>{reference}</bdi> geöffnet.",
+    "superseded": "Dieses Aktenzeichen verweist auf Version {version, number}; die aktuelle Version ist {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4758,6 +4764,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",
+      "attachedTemplateUpload": {
+        "confirm": "Verknüpfung entfernen und hochladen",
+        "description": "{count, plural, one {Diese Datei enthält eine Verknüpfung zu einer Word-Vorlage außerhalb des Dokuments.} other {Diese Dateien enthalten Verknüpfungen zu Word-Vorlagen außerhalb der Dokumente.}} stella lädt sie nicht unverändert hoch, da Word über diese Verknüpfungen Inhalte oder Makros laden kann.",
+        "effect": "Beim Fortfahren wird nur die Vorlagenverknüpfung aus der hochgeladenen Kopie entfernt. Die Originaldatei auf Ihrem Gerät bleibt unverändert.",
+        "localLocation": "Vorlagenspeicherort: ein lokaler Dateipfad außerhalb dieses Dokuments",
+        "mixedLocation": "Vorlagenspeicherorte: mehrere Arten externer Pfade",
+        "networkLocation": "Vorlagenspeicherort: eine Netzwerk- oder Internetadresse",
+        "ruleLabel": "Sicherheitsregel:",
+        "title": "Word-Vorlagenverknüpfungen entfernen?",
+        "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
+      },
       "defaultPropertyName": "Dokumente",
       "desktopEdit": {
         "action": "Im Desktop bearbeiten",
@@ -4782,19 +4799,28 @@
         "updateRequiredDescription": "stella desktop muss aktualisiert werden. Die Aktualisierung erfolgt automatisch, sobald aktive Desktop-Bearbeitungen abgeschlossen sind; versuchen Sie es nach dem Neustart erneut.",
         "updateRequiredTitle": "stella desktop aktualisieren"
       },
+      "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
       "downloadExtractedText": "Extrahierter Text (.txt)",
-      "downloadOriginal": "Originaldatei",
-      "downloadPdf": "PDF",
+      "downloadFailed": "Download fehlgeschlagen",
+      "downloadPdf": "Als PDF herunterladen",
       "downloadScrubbed": "Ohne Metadaten herunterladen",
       "downloadScrubbedHint": "Entfernt Autor, Firma und Bearbeitungsverlauf aus der Datei. Die Kopie in der Akte behält sie.",
       "downloadSearchablePdf": "Durchsuchbare PDF",
+      "downloadWithReference": "Mit Aktenzeichen herunterladen",
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",
+      "referencedUpload": {
+        "choiceLabel": "Was mit {fileName} geschehen soll",
+        "description": "{count, plural, one {# Datei trägt das Aktenzeichen eines Dokuments, das Sie bereits haben.} other {# Dateien tragen Aktenzeichen von Dokumenten, die Sie bereits haben.}} Wählen Sie für jede aus, was geschehen soll.",
+        "matchedDocument": "Version {version, number} von <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) in der Akte <bdi>{matterName}</bdi>",
+        "title": "Als neue Versionen ablegen?",
+        "uploadAsNewDocument": "Als neues Dokument hochladen"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
       "runOcr": "OCR einreihen",
@@ -4805,13 +4831,23 @@
       "uploadingDescription": "Schließen Sie diese Seite nicht, bis die Dateien hochgeladen sind",
       "uploadingProgress": "{completed, number} von {total, number} hochgeladen",
       "versionOrNewFile": {
+        "addAsVersion": "Als Version {version, number} hinzufügen",
+        "addAsVersionThere": "Dort als Version {version, number} hinzufügen",
+        "checkingReference": "Aktenzeichen der Datei wird geprüft...",
         "createNewOption": "Neue Datei erstellen",
         "description": "Sie haben \"{fileName}\" auf ein bestehendes Dokument gezogen.",
         "extensionMismatch": "Erweiterung stimmt nicht überein: erwartet {expected}, erhalten {actual}",
         "extensionMismatchError": "Die Dateierweiterung stimmt nicht mit dem bestehenden Dokument überein",
+        "newDocumentDropsReference": "Das alte Aktenzeichen wird aus der Datei entfernt.",
         "noExtension": "keine Erweiterung",
+        "referenceElsewhere": "Diese Datei ist Version {version, number} von <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) in der Akte <bdi>{matterName}</bdi>.",
+        "referenceHere": "Diese Datei ist Version {version, number} von <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>).",
+        "referenceLineRemoved": "Die Zeile mit dem Aktenzeichen wurde aus dieser Datei entfernt, daher gilt sie als neues Dokument, sofern Sie nichts anderes wählen.",
+        "referenceSuperseded": "Sie beruht auf Version {basedOn, number}; aktuell ist Version {current, number}.",
         "replaceOption": "Als neue Version hochladen",
-        "title": "Neue Version hochladen oder neu erstellen?"
+        "title": "Neue Version hochladen oder neu erstellen?",
+        "unnamedDocument": "einem Dokument ohne Titel",
+        "uploadAsNewDocumentHere": "Hier als neues Dokument hochladen"
       },
       "versionUploadFailed": "Version-Upload fehlgeschlagen",
       "versionUploaded": "Neue Version hochgeladen",
@@ -5288,6 +5324,8 @@
     "reference": "Aktenzeichen",
     "referenceConventionHint": "Bevorzugtes Format: {example}",
     "referenceFormatWarning": "Entspricht nicht dem bevorzugten Format.",
+    "referenceNumberingEmptyHint": "Vergeben Sie eine Referenznummer, damit die Dokumente in dieser Akte nummeriert werden.",
+    "referenceNumberingHint": "Dokumente in dieser Akte werden mit <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> und so weiter nummeriert; jede Version ergänzt <bdi>.v1</bdi>, <bdi>.v2</bdi>.",
     "referencePlaceholder": "z. B. 2024/001",
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {

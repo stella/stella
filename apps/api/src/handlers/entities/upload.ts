@@ -38,12 +38,14 @@ import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import {
   allocateFileObject,
@@ -52,6 +54,7 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -864,16 +867,14 @@ const uploadEntityHandler = async function* ({
   }
 
   if (scanResult.value.verdict === "reject") {
-    const reasons: string[] = [];
-    for (const f of scanResult.value.findings) {
-      if (f.severity === "reject") {
-        reasons.push(f.message);
-      }
+    const rejection = fileSecurityRejection(scanResult.value);
+    if (rejection === null) {
+      panic("Rejecting scan had no rejecting findings");
     }
     return Result.err(
       new HandlerError({
+        ...rejection,
         status: 422,
-        message: `File rejected: ${reasons.join("; ")}`,
       }),
     );
   }
@@ -887,6 +888,17 @@ const uploadEntityHandler = async function* ({
       }
     }
   }
+
+  // Scanning and the draft-content check above judge what the client sent, so
+  // they run on the submitted bytes. Everything from here describes the stored
+  // ones, which never carry a document reference.
+  const { bytes: storedBytes, strippedArchive } =
+    await storedDocumentBytes(fileBuffer);
+  const storedSizeBytes = storedBytes.byteLength;
+  const storedSha256Hex =
+    strippedArchive === null
+      ? sha256Hex
+      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
 
   let encrypted = false;
   if (file.type === PDF_MIME_TYPE) {
@@ -920,7 +932,7 @@ const uploadEntityHandler = async function* ({
 
   await writeS3ObjectWithRetry({
     contentType: file.type,
-    data: new Uint8Array(fileBuffer),
+    data: storedBytes,
     key: sourceKey,
   });
 
@@ -1038,13 +1050,12 @@ const uploadEntityHandler = async function* ({
           docSequence: entityStamp.docSequence,
         });
 
-        await tx.insert(entityVersions).values({
+        await insertEntityVersion(tx, {
           id: entityVersionId,
           workspaceId,
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
-          verificationCode: entityStamp.verificationCode,
         });
 
         await tx
@@ -1063,9 +1074,9 @@ const uploadEntityHandler = async function* ({
             id: fileId,
             fileName: resolvedName.value,
             mimeType: file.type,
-            sizeBytes: file.size,
+            sizeBytes: storedSizeBytes,
             encrypted,
-            sha256Hex,
+            sha256Hex: storedSha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
               encrypted,
@@ -1172,7 +1183,7 @@ const uploadEntityHandler = async function* ({
                 kind: "document",
                 fileName: resolvedName.value,
                 mimeType: file.type,
-                sizeBytes: file.size,
+                sizeBytes: storedSizeBytes,
                 propertyId,
               },
             },

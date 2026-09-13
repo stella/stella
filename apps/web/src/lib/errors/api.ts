@@ -3,8 +3,8 @@ import { TaggedError } from "better-result";
 import {
   API_VERSION_CONFLICT_ERROR_CODE,
   normalizeApiError,
+  parseApiErrorValue,
 } from "@stll/api-contract";
-import type { ApiErrorInput } from "@stll/api-contract";
 
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
@@ -34,11 +34,14 @@ export const shouldRetryAPIRequest = (
     error.status === TOO_MANY_REQUESTS_STATUS ||
     error.status >= 500);
 
-export type ToAPIErrorProps = ApiErrorInput;
+export type ToAPIErrorProps = {
+  status: number;
+  value: unknown;
+};
 
 export type EdenResponse<T> =
   | { data: T; error: null }
-  | { data: null; error: ToAPIErrorProps };
+  | { data: null; error: { status: number; value: unknown } };
 
 /**
  * Unwraps an Eden treaty response: throws a localized {@link APIError} when the
@@ -55,14 +58,18 @@ export function unwrapEden<T>(response: EdenResponse<T>): T {
   return response.data;
 }
 
-export const toAPIError = (input: ToAPIErrorProps) => {
-  const { code, details, rawMessage, status } = normalizeApiError(input);
+export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+  const normalized = normalizeApiError({
+    status,
+    value: parseApiErrorValue(value),
+  });
+  const { code, details, rawMessage } = normalized;
   return new APIError({
     ...(code === undefined ? {} : { code }),
     ...(details === undefined ? {} : { details }),
     ...(rawMessage === undefined ? {} : { rawMessage }),
-    status,
-    message: localizeAPIError({ code, details, status }),
+    status: normalized.status,
+    message: localizeAPIError({ code, details, status: normalized.status }),
   });
 };
 

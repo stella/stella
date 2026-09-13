@@ -4,6 +4,8 @@
 // creation, import, restore, deletion, and durable edit sessions receive narrow,
 // reviewable capabilities for the physical mutations their lifecycles require.
 // File-source writers must also request extraction in the source transaction.
+// The version row itself is inserted in one place (insertEntityVersion), which
+// is what makes a verification-code collision recoverable at every writer.
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
@@ -129,7 +131,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unownedVersionWrite:
-            "Direct entity-version mutation is not owned here. Use writeFileVersion for replacements or add a narrowly reviewed lifecycle capability.",
+            "Direct entity-version mutation is not owned here. Insert rows through insertEntityVersion(s), use writeFileVersion for replacements, or add a narrowly reviewed lifecycle capability.",
           unusedOwnerCapability:
             "The reviewed entity-version capability '{{capability}}' is no longer exercised. Remove the stale ownership grant.",
         },
@@ -365,9 +367,6 @@ export default eslintCompatPlugin({
                 if (isIdentifier(property.argument)) {
                   entityBindings.namespaces.add(property.argument.name);
                 }
-                continue;
-              }
-              if (property.type !== "Property") {
                 continue;
               }
               const tableName = getPropertyName(property.key);

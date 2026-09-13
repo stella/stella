@@ -1,10 +1,5 @@
 import { panic } from "better-result";
 
-import {
-  DOCUMENT_PROPERTIES_MAX_BYTES,
-  hasDocumentProperties,
-} from "@stll/api-contract";
-
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -23,15 +18,6 @@ export type OcrSource = {
 
 export type RowActionContext = "bulk" | "cell" | "row";
 export type OcrExportFormat = "searchable-pdf" | "text";
-
-export const canDownloadScrubbed = (file: {
-  encrypted: boolean;
-  mimeType: string;
-  sizeBytes: number;
-}): boolean =>
-  !file.encrypted &&
-  file.sizeBytes <= DOCUMENT_PROPERTIES_MAX_BYTES &&
-  hasDocumentProperties(file.mimeType);
 
 /**
  * The searchable PDF is a stored derivative that can lag or fail behind the
@@ -119,16 +105,6 @@ export const canRunManualOcr = ({
   ocrSource !== undefined &&
   !ocrSource.encrypted &&
   ocrSource.mimeType === PDF_MIME_TYPE;
-
-export const getPdfDownloadFileName = (fileName: string): string => {
-  const dotIndex = fileName.lastIndexOf(".");
-
-  if (dotIndex <= 0) {
-    return `${fileName}.pdf`;
-  }
-
-  return `${fileName.slice(0, dotIndex)}.pdf`;
-};
 
 export const getOcrExportFileName = (
   fileName: string,

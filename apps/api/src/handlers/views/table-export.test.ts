@@ -123,6 +123,7 @@ const entity = (
   createdByImage: null,
   createdByDeletedAt: null,
   version: 3,
+  currentVersionReference: null,
   updatedAt: "2026-01-02T00:00:00.000Z",
   status: null,
   priority: null,

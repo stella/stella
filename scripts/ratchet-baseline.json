@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1089,
+    "count": 1086,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 1,
@@ -353,11 +353,10 @@
       "apps/web/src/routes/_protected.settings/organization.members.tsx": 1,
       "apps/web/src/routes/_protected.settings/organization.route.tsx": 1,
       "apps/web/src/routes/_protected.tsx": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr.ts": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-actions.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx": 1,
@@ -366,7 +365,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx": 1,
       "apps/web/src/routes/agent-claim.tsx": 2,
       "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 14,
       "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx": 6,
@@ -426,7 +424,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 431,
+    "count": 429,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -495,7 +493,7 @@
       "apps/api/src/lib/document-translation/docx-review.ts": 1,
       "apps/api/src/lib/document-translation/segments.ts": 3,
       "apps/api/src/lib/docx-archive.ts": 1,
-      "apps/api/src/lib/docx-stamp.ts": 3,
+      "apps/api/src/lib/docx-stamp.ts": 2,
       "apps/api/src/lib/docx/ai-field-generator.ts": 3,
       "apps/api/src/lib/docx/resolve-ai-fields.ts": 1,
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,
@@ -627,7 +625,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx": 1,
       "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts": 3,
       "apps/web/src/routes/auth/organization.tsx": 1,
       "apps/web/src/routes/law/-case-detail.logic.ts": 1,

@@ -22,6 +22,9 @@ import type { Err } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
@@ -38,8 +41,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
@@ -78,6 +83,23 @@ const config = {
 } satisfies HandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
+
+const fileSecurityRejectionDetails = (
+  error: UploadFinalizeError,
+): ApiFileSecurityRejectionDetails | null => {
+  if (
+    error.code !== API_FILE_SECURITY_REJECTED_ERROR_CODE ||
+    error.hint === undefined ||
+    error.issues === undefined
+  ) {
+    return null;
+  }
+  return {
+    code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+    hint: error.hint,
+    issues: error.issues,
+  };
+};
 
 const finalizeUpload = createSafeHandler(
   config,
@@ -181,6 +203,7 @@ const finalizeUpload = createSafeHandler(
           new HandlerError({
             status: 422,
             message: existing.rejectReason ?? "Upload was previously rejected",
+            ...existing.rejectionDetails,
           }),
         );
       }
@@ -253,6 +276,10 @@ const finalizeUpload = createSafeHandler(
             .set({
               status: terminalStatus,
               rejectReason: error.rejectReason ?? error.message,
+              rejectionDetails:
+                terminalStatus === "rejected"
+                  ? fileSecurityRejectionDetails(error)
+                  : null,
               finalizedAt: terminalStatus === "rejected" ? new Date() : null,
             })
             .where(
@@ -281,7 +308,13 @@ const finalizeUpload = createSafeHandler(
         });
       }
       return Result.err(
-        new HandlerError({ status: error.status, message: error.message }),
+        new HandlerError({
+          status: error.status,
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          issues: error.issues,
+        }),
       );
     }
 
@@ -448,17 +481,15 @@ const runFinalize = async function* ({
     );
   }
   if (scanResult.value.verdict === "reject") {
-    const reasons: string[] = [];
-    for (const finding of scanResult.value.findings) {
-      if (finding.severity === "reject") {
-        reasons.push(finding.message);
-      }
+    const rejection = fileSecurityRejection(scanResult.value);
+    if (rejection === null) {
+      panic("Rejecting scan had no rejecting findings");
     }
     return Result.err(
       new UploadFinalizeError({
+        ...rejection,
         status: 422,
-        message: `File rejected: ${reasons.join("; ")}`,
-        rejectReason: reasons.join("; "),
+        rejectReason: rejection.message,
       }),
     );
   }
@@ -472,14 +503,38 @@ const runFinalize = async function* ({
     }
   }
 
+  // 4b. Reference removal, after the scan judged what the client actually
+  //     sent. Every presigned purpose promotes through the same object and
+  //     records the same size and hash, so this is where a stamped download
+  //     coming back stops being version N's bytes carrying version N-1's code.
+  const { bytes: storedBytes, strippedArchive } =
+    await storedDocumentBytes(fileBuffer);
+  const storedSha256Hex =
+    strippedArchive === null
+      ? claimed.declaredSha256
+      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+
+  // A server-side copy is the cheap promotion, but it would publish the bytes
+  // the client staged. Stripped bytes exist only here, so they are written.
   const promoteTmpObject = async (finalKey: string) => {
-    const copyResult = await copyObject(tmpKey, finalKey);
-    if (Result.isError(copyResult)) {
+    const promoted =
+      strippedArchive === null
+        ? await copyObject(tmpKey, finalKey)
+        : await Result.tryPromise(
+            async () =>
+              await writeS3ObjectWithRetry({
+                contentType: claimed.declaredMime,
+                data: storedBytes,
+                key: finalKey,
+              }),
+          );
+    if (promoted.status === "error") {
       return Result.err(
         new UploadFinalizeError({
           status: 500,
           message: "Failed to promote tmp object",
-          rejectReason: "copy-failed",
+          rejectReason:
+            strippedArchive === null ? "copy-failed" : "write-failed",
         }),
       );
     }
@@ -495,11 +550,11 @@ const runFinalize = async function* ({
     organizationId,
     workspaceId,
     userId,
-    fileBuffer,
+    fileBuffer: strippedArchive ?? fileBuffer,
     declaredName: claimed.declaredName,
     declaredMime: claimed.declaredMime,
-    declaredSize: claimed.declaredSize,
-    declaredSha256Hex: claimed.declaredSha256,
+    declaredSize: storedBytes.byteLength,
+    declaredSha256Hex: storedSha256Hex,
     scanWarnings,
     promoteTmpObject,
     uploadId,

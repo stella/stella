@@ -82,6 +82,7 @@ describe("follow-up (b): read_document propertyId path", () => {
             currentVersion: {
               createdAt: new Date("2026-01-01T00:00:00.000Z"),
               id: "ver_current",
+              stamp: null,
               fields: [
                 {
                   id: FIELD_UUID,

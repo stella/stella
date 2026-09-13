@@ -20,9 +20,9 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
+  CheckIcon,
   EyeIcon,
   GitCommitHorizontalIcon,
-  LockOpenIcon,
   PenLineIcon,
   RefreshCwIcon,
   XIcon,
@@ -162,7 +162,6 @@ type DocxBrowserEditorBaseProps = {
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
   onSaved?: ((fieldId: string) => void) | undefined;
-  onReadonlyEditAttempt?: (() => void) | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   collaboration?: DocxEditorCollaboration | undefined;
   scaleOffset?: number | undefined;
@@ -244,7 +243,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onBlockedUnlock,
     onUnlockedChange,
     onSaved,
-    onReadonlyEditAttempt,
     onScrollTopChange,
     scaleOffset = 0,
     showActionBar = true,
@@ -1594,9 +1592,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (isUnlocked) {
       return;
     }
-    onReadonlyEditAttempt?.();
     handleUnlock();
-  }, [handleUnlock, isUnlocked, onReadonlyEditAttempt]);
+  }, [handleUnlock, isUnlocked]);
 
   const handleToggleLock = useCallback(() => {
     if (!isUnlocked) {
@@ -1681,7 +1678,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     state,
   });
   /* eslint-enable react/refs */
-  const finishEditingLabel = t("folio.finishEditing");
   const createVersionLabel = t("folio.createVersion");
 
   const toolbarExtra = (() => {
@@ -1741,7 +1737,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           {showActionBar && isUnlocked && !isCollaborativeEditing && (
             <>
               <Button
-                aria-label={finishEditingLabel}
+                aria-label={t("common.save")}
                 className="px-2"
                 disabled={
                   state.status === "opening" ||
@@ -1750,11 +1746,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 }
                 onClick={handleToggleLock}
                 size="sm"
-                tooltip={finishEditingLabel}
+                tooltip={t("common.save")}
                 variant="ghost"
               >
-                <LockOpenIcon />
-                <span>{finishEditingLabel}</span>
+                <CheckIcon />
+                <span>{t("common.save")}</span>
               </Button>
               <AutosaveIndicator status={autosaveStatus} />
             </>

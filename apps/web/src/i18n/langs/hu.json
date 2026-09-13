@@ -1327,6 +1327,7 @@
     "convertTo": "Konvertálás",
     "copied": "Másolva",
     "copy": "Másolás",
+    "copyDocumentReference": "A dokumentum hivatkozási számának másolása",
     "copyLink": "Hivatkozás másolása",
     "country": "Ország",
     "court": "Bíróság",
@@ -1345,6 +1346,7 @@
     "disconnect": "Leválasztás",
     "displayName": "Megjelenítendő név",
     "document": "Dokumentum",
+    "documentReference": "A dokumentum hivatkozási száma",
     "documentTitle": "Dokumentum címe",
     "documentation": "Dokumentáció",
     "done": "Kész",
@@ -2234,7 +2236,6 @@
       "replaceText": "Csereszöveg",
       "wholeWords": "Csak ép szavak"
     },
-    "finishEditing": "Szerkesztés befejezése",
     "fontColor": "Betűszín",
     "fontGroup": "Betűtípus",
     "fontSize": "Betűméret",
@@ -4659,6 +4660,11 @@
     "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",
     "slugRequired": "A slug kötelező"
   },
+  "verify": {
+    "notFound": "A szervezetében nincs ilyen hivatkozási számú dokumentum.",
+    "opened": "Megnyitva a(z) <bdi>{reference}</bdi> hivatkozási szám alapján.",
+    "superseded": "Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}."
+  },
   "webSearch": {
     "settings": {
       "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
@@ -4758,6 +4764,17 @@
     },
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
+      "attachedTemplateUpload": {
+        "confirm": "Hivatkozás eltávolítása és feltöltés",
+        "description": "{count, plural, one {Ez a fájl a dokumentumon kívüli Word-sablonra mutató hivatkozást tartalmaz.} other {Ezek a fájlok a dokumentumokon kívüli Word-sablonokra mutató hivatkozásokat tartalmaznak.}} A stella nem tölti fel őket változatlanul, mert a Word ezeken keresztül tartalmat vagy makrókat tölthet be.",
+        "effect": "Folytatáskor csak a feltöltött példányból távolítjuk el a sablonhivatkozást. Az eszközön lévő eredeti fájl nem változik.",
+        "localLocation": "A sablon helye: helyi fájlútvonal ezen a dokumentumon kívül",
+        "mixedLocation": "A sablonok helye: többféle külső útvonal",
+        "networkLocation": "A sablon helye: hálózati vagy internetes cím",
+        "ruleLabel": "Biztonsági szabály:",
+        "title": "Eltávolítja a Word-sablonok hivatkozásait?",
+        "unknownLocation": "A sablon helye: a stella által nem ellenőrizhető cím"
+      },
       "defaultPropertyName": "Dokumentumok",
       "desktopEdit": {
         "action": "Szerkesztés az asztali alkalmazásban",
@@ -4782,19 +4799,28 @@
         "updateRequiredDescription": "A stella desktop frissítést igényel. Automatikusan frissül, amikor az aktív asztali szerkesztések befejeződtek; próbálja újra az újraindítás után.",
         "updateRequiredTitle": "stella desktop frissítése"
       },
+      "downloadAs": "Letöltés másként…",
       "downloadAsZip": ".zip fájl letöltése",
       "downloadExtractedText": "Kinyert szöveg (.txt)",
-      "downloadOriginal": "Eredeti fájl",
-      "downloadPdf": "PDF",
+      "downloadFailed": "A letöltés sikertelen",
+      "downloadPdf": "Letöltés PDF-ként",
       "downloadScrubbed": "Letöltés metaadatok nélkül",
       "downloadScrubbedHint": "Eltávolítja a fájlban tárolt szerzőt, céget és szerkesztési előzményeket. Az ügyben lévő példány megtartja őket.",
       "downloadSearchablePdf": "Kereshető PDF",
+      "downloadWithReference": "Letöltés hivatkozási számmal",
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",
       "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
       "ocrQueued": "A szövegfelismerés bekerült a következő OCR-kötegbe",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
+      "referencedUpload": {
+        "choiceLabel": "Mi történjen a(z) {fileName} fájllal",
+        "description": "{count, plural, one {# fájl olyan dokumentum hivatkozási számát viseli, amely már megvan.} other {# fájl olyan dokumentumok hivatkozási számát viseli, amelyek már megvannak.}} Válassza ki, mi történjen mindegyikkel.",
+        "matchedDocument": "A(z) <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. verziója a(z) <bdi>{matterName}</bdi> ügyben",
+        "title": "Új verzióként iktatja őket?",
+        "uploadAsNewDocument": "Feltöltés új dokumentumként"
+      },
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "retryFailed": "{count, plural, one {# fájl} other {# fájl}} újrapróbálása",
       "runOcr": "OCR sorba állítása",
@@ -4805,13 +4831,23 @@
       "uploadingDescription": "Ne zárja be ezt az oldalt, amíg a fájlok feltöltése be nem fejeződik",
       "uploadingProgress": "{completed, number}/{total, number} feltöltve",
       "versionOrNewFile": {
+        "addAsVersion": "Hozzáadás {version, number}. verzióként",
+        "addAsVersionThere": "Hozzáadás ott {version, number}. verzióként",
+        "checkingReference": "A fájl hivatkozási számának ellenőrzése...",
         "createNewOption": "Új fájl létrehozása",
         "description": "A \"{fileName}\" fájlt egy meglévő dokumentumra ejtette.",
         "extensionMismatch": "A kiterjesztés nem egyezik: várt {expected}, kapott {actual}",
         "extensionMismatchError": "A fájl kiterjesztése nem egyezik a meglévő dokumentummal",
+        "newDocumentDropsReference": "A régi hivatkozási szám törlődik a fájlból.",
         "noExtension": "nincs kiterjesztés",
+        "referenceElsewhere": "Ez a fájl a(z) <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. verziója a(z) <bdi>{matterName}</bdi> ügyben.",
+        "referenceHere": "Ez a fájl a(z) <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) {version, number}. verziója.",
+        "referenceLineRemoved": "A hivatkozási számot tartalmazó sort eltávolították ebből a fájlból, ezért új dokumentumként kezeljük, hacsak nem választ mást.",
+        "referenceSuperseded": "A(z) {basedOn, number}. verzión alapul; a jelenlegi a(z) {current, number}. verzió.",
         "replaceOption": "Feltöltés új verzióként",
-        "title": "Új verzió feltöltése vagy új fájl létrehozása?"
+        "title": "Új verzió feltöltése vagy új fájl létrehozása?",
+        "unnamedDocument": "cím nélküli dokumentum",
+        "uploadAsNewDocumentHere": "Feltöltés ide új dokumentumként"
       },
       "versionUploadFailed": "Verzió feltöltése sikertelen",
       "versionUploaded": "Új verzió feltöltve",
@@ -5288,6 +5324,8 @@
     "reference": "Hivatkozási szám",
     "referenceConventionHint": "Előnyben részesített formátum: {example}",
     "referenceFormatWarning": "Nem egyezik az előnyben részesített formátummal.",
+    "referenceNumberingEmptyHint": "Adjon meg hivatkozási számot, hogy az ügy dokumentumai számozást kapjanak.",
+    "referenceNumberingHint": "Az ügy dokumentumai a következő számozást kapják: <bdi>{firstDocument}</bdi>, <bdi>{secondDocument}</bdi> és így tovább; minden verzió <bdi>.v1</bdi>, <bdi>.v2</bdi> végződést kap.",
     "referencePlaceholder": "pl. 2024/001",
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {

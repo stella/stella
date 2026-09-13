@@ -249,12 +249,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // -- Inline rename --
   const {
     docxActionsRef,
-    docxCompatibilityByTab,
     docxScrollTopByTab,
     editingDocxTabId,
-    flashingDocxEditTabId,
-    flashDocxEditButton,
-    handleStartDocxEdit,
     setDocxCompatibilityByTab,
     setDocxScrollTopByTab,
     setEditingDocxTabId,
@@ -619,20 +615,16 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             closeAll={closeAll}
             commitRename={commitRename}
             docxActionsRef={docxActionsRef}
-            docxCompatibilityByTab={docxCompatibilityByTab}
             docxScrollTopByTab={docxScrollTopByTab}
             editingDocxTabId={editingDocxTabId}
             editingTabId={editingTabId}
             editValue={editValue}
-            flashDocxEditButton={flashDocxEditButton}
             flashMinimizeButton={flashMinimizeButton}
-            flashingDocxEditTabId={flashingDocxEditTabId}
             flashingMinimizeTabId={flashingMinimizeTabId}
             handleCloseTab={handleCloseTab}
             handleMinimizeFromFullView={handleMinimizeFromFullView}
             handleOpenFullView={handleOpenFullView}
             handleResetZoom={handleResetZoom}
-            handleStartDocxEdit={handleStartDocxEdit}
             handleWheelZoom={handleWheelZoom}
             handleZoom={handleZoom}
             key={tab.renderId ?? tab.id}

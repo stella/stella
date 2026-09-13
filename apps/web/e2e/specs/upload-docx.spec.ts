@@ -247,10 +247,11 @@ test.describe("DOCX upload + inspector", () => {
       { waitUntil: "domcontentloaded" },
     );
 
-    const finishEditingButton = page.getByRole("button", {
-      name: "Finish editing",
+    const saveButton = page.getByRole("button", {
+      exact: true,
+      name: "Save",
     });
-    await expect(finishEditingButton).toBeEnabled({ timeout: 45_000 });
+    await expect(saveButton).toBeEnabled({ timeout: 45_000 });
 
     const firstParagraphText = page.locator(".layout-run-text", {
       hasText: "Stella E2E test document.",
@@ -270,7 +271,7 @@ test.describe("DOCX upload + inspector", () => {
         response.url().endsWith("/finalize"),
       { timeout: 45_000 },
     );
-    await finishEditingButton.click();
+    await saveButton.click();
     expect((await finalizeResponse).ok()).toBe(true);
 
     await expect

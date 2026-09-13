@@ -268,6 +268,20 @@ describe("unwrapEden", () => {
       }
     }
   });
+
+  test("normalizes an untyped transport error at the client boundary", () => {
+    expect(() =>
+      unwrapEden({
+        data: null,
+        error: { status: 401, value: { private: "discard me" } },
+      }),
+    ).toThrow(
+      new APIError({
+        status: 401,
+        message: "Please sign in again.",
+      }),
+    );
+  });
 });
 
 describe("userErrorMessage", () => {

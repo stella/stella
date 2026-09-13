@@ -99,14 +99,21 @@ export type EntityNavigationRoute =
       params: { workspaceId: string; viewId: "all" };
     };
 
-const getEntityDocumentRoute = ({
+/** What a caller must know to open an entity: search hits satisfy it, and so
+ *  does any other resolution of an entity to its current file field. */
+type EntityDocumentRouteInput = {
+  entityId: string;
+  fileFieldId: string | null;
+  workspaceId: string;
+};
+
+/** Where an entity opens: its document view when a file field carries the
+ *  document, otherwise the matter it lives in. */
+export const getEntityDocumentRoute = ({
   entityId,
   fileFieldId,
   workspaceId,
-}: Pick<
-  EntityGlobalSearchHit,
-  "entityId" | "fileFieldId" | "workspaceId"
->): EntityNavigationRoute => {
+}: EntityDocumentRouteInput): EntityNavigationRoute => {
   if (fileFieldId === null) {
     return {
       to: "/workspaces/$workspaceId/$viewId",

@@ -1,4 +1,5 @@
 import { createArchiveContentScanner } from "@/api/lib/file-scan/archive";
+import { attachedTemplateScanner } from "@/api/lib/file-scan/attached-template";
 import {
   composeScanners,
   createZipBombGuard,
@@ -29,6 +30,7 @@ const archiveContentScanner = createArchiveContentScanner({
 
 export const scanner = composeScanners(
   zipBombGuard,
+  attachedTemplateScanner,
   yaraScanner,
   archiveContentScanner,
 );

@@ -45,8 +45,6 @@ type ReadFileHandlerProps = {
   recordAuditEvent: AuditRecorder;
 };
 
-const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-
 const fileFieldQuery = async (
   scopedDb: ScopedDb,
   fieldId: SafeId<"field">,
@@ -466,10 +464,10 @@ export const printPdfHandler = async ({
 };
 
 /**
- * Download a DOCX with Stella stamps injected. Returns the
- * modified file as a streamed `Response`. Only called when
- * the user explicitly requests stamping via a dedicated
- * action (right-click → "Download with stamp").
+ * Download a DOCX with the stella document reference injected. Returns the
+ * modified file as a streamed `Response`. Only called when the user
+ * explicitly asks for it: the download menu offers it as
+ * "Download with reference".
  */
 export const stampedDownloadHandler = async ({
   scopedDb,
@@ -523,7 +521,7 @@ export const stampedDownloadHandler = async ({
     buffer,
     row.versionStamp,
     row.verificationCode,
-    BASE_URL,
+    env.FRONTEND_URL,
   );
 
   // Record the access only once the stamped bytes exist, matching the

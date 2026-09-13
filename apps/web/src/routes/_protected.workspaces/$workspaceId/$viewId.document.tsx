@@ -21,6 +21,7 @@ import {
   createFileRoute,
   stripSearchParams,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -56,6 +57,7 @@ import {
   DOCUMENT_PANE_SEARCH_VALUES,
 } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
+import { getEntityFileDownloadRenditions } from "@/components/inspector/file-download-service.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -68,7 +70,6 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import {
   DOCX_MIME,
   getNativeOfficeViewerFormat,
@@ -78,9 +79,13 @@ import {
   XLSX_MIME,
 } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { documentPropertiesOptions, fileOptions } from "@/lib/files/queries";
+import {
+  ENTITY_VERSION_UPLOAD_RESULT,
+  uploadEntityVersion,
+} from "@/lib/files/upload-entity-version";
 import { PDF_COLOR_MODES } from "@/lib/pdf/pdf-color-mode";
 import {
   PDFProvider,
@@ -89,7 +94,6 @@ import {
 } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
@@ -712,6 +716,10 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  const downloadRenditions = getEntityFileDownloadRenditions({
+    entityData: entity,
+    fieldId,
+  });
   // The panes have traded places: the findings get this column's full width
   // and the document moves to the inspector's preview. Only a DOCX has a
   // review to show, so anything else reads as the default arrangement.
@@ -850,6 +858,7 @@ function RouteComponentInner({
               >
                 <PdfViewerControls
                   currentPage={pageNumber}
+                  downloadRenditions={downloadRenditions}
                   extraControls={
                     <TranslateDocumentDialog
                       disabled={!canCreateEntity}
@@ -922,6 +931,7 @@ function RouteComponentInner({
                         actionBarControls={
                           <PdfViewerControls
                             currentPage={pageNumber}
+                            downloadRenditions={downloadRenditions}
                             extraControls={
                               <TranslateDocumentDialog
                                 disabled={!canCreateEntity}
@@ -1408,18 +1418,26 @@ const VersionDropZone = ({
           (async () => {
             setIsUploading(true);
             try {
-              const response = await api
-                .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-                ["upload-version"].post({
-                  entityId: toSafeId<"entity">(entityId),
-                  file,
-                });
-              if (response.error) {
-                throw toAPIError(response.error);
-              }
-              await queryClient.invalidateQueries({
-                queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+              const result = await uploadEntityVersion({
+                workspaceId,
+                entityId,
+                file,
               });
+              switch (result.type) {
+                case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
+                  return;
+                case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
+                  await queryClient.invalidateQueries({
+                    queryKey: entityVersionsKeys.all({
+                      workspaceId,
+                      entityId,
+                    }),
+                  });
+                  return;
+                default:
+                  result satisfies never;
+                  panic(`Unhandled entity version upload: ${String(result)}`);
+              }
             } finally {
               setIsUploading(false);
             }

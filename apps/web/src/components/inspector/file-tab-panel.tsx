@@ -11,9 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
-  DownloadIcon,
   GitCommitHorizontalIcon,
-  LockOpenIcon,
   Maximize2Icon,
   Minimize2Icon,
   XIcon,
@@ -32,10 +30,10 @@ import {
 } from "@/components/ai-suggestions/review-store";
 import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
-import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
+import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { EmailAttachmentsFacet } from "@/components/inspector/email-attachments-facet";
 import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
 import {
@@ -51,7 +49,11 @@ import {
   shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
-import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
+import { downloadTabFile } from "@/components/inspector/file-download-service";
+import {
+  getEntityFileDownloadRenditions,
+  type DownloadVariant,
+} from "@/components/inspector/file-download-service.logic";
 import {
   FullViewPreviewGuard,
   MetadataPanelSkeleton,
@@ -65,7 +67,6 @@ import {
   getMarkdownDraftSyncDecision,
   shouldSurfaceEmailResolutionAlert,
 } from "@/components/inspector/file-tab-panel.logic";
-import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import {
   InspectorTabHeader,
@@ -121,20 +122,16 @@ type FileTabPanelProps = {
   closeAll: () => void;
   commitRename: (tab: FileTab) => void;
   docxActionsRef: RefObject<Map<string, DocxBrowserEditorActions>>;
-  docxCompatibilityByTab: ReadonlyMap<string, DocxCompatibility>;
   docxScrollTopByTab: ReadonlyMap<string, number>;
   editingDocxTabId: string | null;
   editingTabId: string | null;
   editValue: string;
-  flashDocxEditButton: (tabId: string) => void;
   flashMinimizeButton: (tabId: string) => void;
-  flashingDocxEditTabId: string | null;
   flashingMinimizeTabId: string | null;
   handleCloseTab: (tabId: string) => void;
   handleMinimizeFromFullView: (tab: FileTab) => void;
   handleOpenFullView: () => Promise<void>;
   handleResetZoom: (tabId: string) => void;
-  handleStartDocxEdit: (tabId: string) => Promise<void>;
   handleWheelZoom: (tabId: string, deltaY: number) => void;
   handleZoom: (tabId: string, direction: "in" | "out") => void;
   matterColor: string | null;
@@ -334,7 +331,6 @@ const getFileTabEditorState = ({
   editingDocxTabId,
   entityData,
   filePropertyId,
-  flashingDocxEditTabId,
   isNativeDocxDisplay,
   tab,
 }: {
@@ -345,7 +341,6 @@ const getFileTabEditorState = ({
     | { fields: { id: string; propertyId?: string | undefined }[] }
     | undefined;
   filePropertyId: string | undefined;
-  flashingDocxEditTabId: string | null;
   isNativeDocxDisplay: boolean;
   tab: FileTabPanelProps["tab"];
 }) => {
@@ -359,11 +354,6 @@ const getFileTabEditorState = ({
       (field) => field.id === tab.id && field.propertyId === filePropertyId,
     ) === true;
   return {
-    canUnlockNativeDocx:
-      canUpdateEntity &&
-      isNativeDocxDisplay &&
-      filePropertyId !== undefined &&
-      !isEditingNativeDocx,
     desktopEditTarget:
       canUpdateEntity &&
       desktopEditFileType !== null &&
@@ -373,7 +363,6 @@ const getFileTabEditorState = ({
         : null,
     isEditingNativeDocx,
     isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
-    isPromptingDocxUnlock: flashingDocxEditTabId === tab.id,
   };
 };
 
@@ -448,20 +437,16 @@ export const FileTabPanel = ({
   closeAll,
   commitRename,
   docxActionsRef,
-  docxCompatibilityByTab,
   docxScrollTopByTab,
   editingDocxTabId,
   editingTabId,
   editValue,
-  flashDocxEditButton,
   flashMinimizeButton,
-  flashingDocxEditTabId,
   flashingMinimizeTabId,
   handleCloseTab,
   handleMinimizeFromFullView,
   handleOpenFullView,
   handleResetZoom,
-  handleStartDocxEdit,
   handleWheelZoom,
   handleZoom,
   matterColor,
@@ -495,7 +480,6 @@ export const FileTabPanel = ({
   const openFile = useInspectorTabsStore((s) => s.openFile);
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
-  const requestDocxEdit = useInspectorCommandStore((s) => s.requestDocxEdit);
   const {
     canResetZoom,
     desktopEditFileType,
@@ -540,6 +524,10 @@ export const FileTabPanel = ({
     entityQueryError: entityQuery.isError,
     needsPropertyResolution,
     tab,
+  });
+  const downloadRenditions = getEntityFileDownloadRenditions({
+    entityData: entityQuery.data,
+    fieldId: tab.id,
   });
   const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
     string | null
@@ -598,6 +586,8 @@ export const FileTabPanel = ({
       text: string;
       workspaceId: string;
     }) => {
+      // This path serializes editor text into a fixed Markdown file; it cannot
+      // carry user-supplied DOCX bytes that require attached-template preflight.
       const file = new File([text], fileName, { type: MARKDOWN_MIME });
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -679,22 +669,16 @@ export const FileTabPanel = ({
   // Justification bbox highlighting on Folio is a separate
   // follow-up; until then the bbox overlay is omitted on
   // DOCX, but the doc itself remains editable.
-  const {
-    canUnlockNativeDocx,
-    desktopEditTarget,
-    isEditingNativeDocx,
-    isMetadataLaneExpanded,
-    isPromptingDocxUnlock,
-  } = getFileTabEditorState({
-    canUpdateEntity,
-    desktopEditFileType,
-    editingDocxTabId,
-    entityData: entityQuery.data,
-    filePropertyId,
-    flashingDocxEditTabId,
-    isNativeDocxDisplay,
-    tab,
-  });
+  const { desktopEditTarget, isEditingNativeDocx, isMetadataLaneExpanded } =
+    getFileTabEditorState({
+      canUpdateEntity,
+      desktopEditFileType,
+      editingDocxTabId,
+      entityData: entityQuery.data,
+      filePropertyId,
+      isNativeDocxDisplay,
+      tab,
+    });
   const isCollaboratingNativeDocx =
     isEditingNativeDocx &&
     env.VITE_FEATURE_FOLIO_COLLAB &&
@@ -716,69 +700,33 @@ export const FileTabPanel = ({
       />
     ) : null;
 
+  const startDownload = (variant: DownloadVariant) => {
+    detached(
+      downloadTabFile({
+        fieldId: tab.id,
+        fileName: tab.fileName,
+        variant,
+        workspaceId: tab.workspaceId,
+        onError: (message) => {
+          stellaToast.add({ title: message, type: "error" });
+        },
+      }),
+      "file-tab-panel.download-tab-file",
+    );
+  };
+  // One element, rendered by both the peek header and the full-view header, so
+  // the two cannot drift apart.
   const downloadButton = (
-    <Tooltip
-      content={t("common.download")}
-      render={
-        <Button
-          aria-label={t("common.download")}
-          onClick={() => {
-            detached(
-              downloadTabOriginalFile({
-                fieldId: tab.id,
-                fileName: tab.fileName,
-                workspaceId: tab.workspaceId,
-                onError: (message) => {
-                  stellaToast.add({ title: message, type: "error" });
-                },
-              }),
-              "file-tab-panel.download-tab-original-file",
-            );
-          }}
-          size="xs"
-          variant="ghost"
-        >
-          <DownloadIcon className="size-3.5" />
-        </Button>
-      }
-      side="bottom"
+    <DownloadSplitButton
+      onDownload={startDownload}
+      renditions={downloadRenditions}
     />
   );
 
-  const promptDocxUnlock = () => {
-    const compatibility = docxCompatibilityByTab.get(tab.id);
-    const blockReason = getDocxEditBlockReason({
-      canSafelyEdit: compatibility?.canSafelyEdit,
-    });
-    if (blockReason === "pendingCompatibility") {
-      // Queue the unlock via the inspector's pending-edit slot;
-      // `use-docx-tab-edit-session` re-runs once canSafelyEdit
-      // resolves and enters edit mode silently. Avoids a
-      // "still verifying…" toast on what reads as a non-action.
-      requestDocxEdit(tab.id);
-      return;
-    }
-
-    if (blockReason === "unsafe") {
-      // Editing is blocked because Folio can't safely rewrite this DOCX. The
-      // block is surfaced quietly on the composer's edit-mode control (a "View
-      // only" chip) instead of a disruptive toast; just stay locked.
-      return;
-    }
-    if (canUnlockNativeDocx) {
-      flashDocxEditButton(tab.id);
-    }
-  };
-
-  // Edit ↔ Save is a single mode toggle, so it lives in
-  // exactly one place — the tab header — alongside Full
-  // view. Both buttons use the same labelled-text shape so
-  // the row reads consistently. The floating overlay below
-  // is for ephemeral preview controls only (zoom). The
-  // toggle is gated on the Preview facet because switching
-  // facets unmounts the editor; if the user is on a non-
-  // preview facet, we hide the toggle entirely (Full view
-  // alone) rather than show a button that would no-op.
+  // Entering edit mode happens in the document itself: clicking or typing
+  // into a locked DOCX unlocks it. The header carries only the exit — Save
+  // or Create version — while editing. It is gated on the Preview facet
+  // because switching facets unmounts the editor.
   const { canOpenFullView, isPreviewFacet, isPreviewOverlayVisible } =
     getFileTabChromeState({
       isEditingNativeDocx,
@@ -853,28 +801,6 @@ export const FileTabPanel = ({
         </Button>
       );
     }
-    if (canUnlockNativeDocx) {
-      return (
-        <Button
-          className={cn(
-            "transition-[color,background-color,box-shadow]",
-            isPromptingDocxUnlock &&
-              "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-          )}
-          onClick={() => {
-            detached(
-              handleStartDocxEdit(tab.id),
-              "file-tab-panel.start-docx-edit",
-            );
-          }}
-          size="xs"
-          variant="ghost"
-        >
-          <LockOpenIcon className="size-3.5" />
-          {t("common.edit")}
-        </Button>
-      );
-    }
     return null;
   })();
 
@@ -901,9 +827,9 @@ export const FileTabPanel = ({
   );
 
   // Floating preview-only toolbar mounted on top of the
-  // viewer body — zoom controls only. The Edit / Save mode
-  // toggle lives in the tab header (`fileActions` above) so
-  // primary state changes have one stable location.
+  // viewer body — zoom controls only. The edit-mode exit
+  // (Save / Create version) lives in the tab header
+  // (`fileActions` above).
   const previewOverlay = isPreviewOverlayVisible ? (
     <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
       <PeekPdfControls
@@ -1082,9 +1008,9 @@ export const FileTabPanel = ({
             // Don't touch docxActionsRef here. The editor stays
             // mounted across error → idle transitions; only its
             // own cleanup effect should release the slot, otherwise
-            // the next "Edit file" click finds no entry and silently
-            // no-ops. setEditingDocxTabId(null) is enough to flip
-            // the UI back out of edit mode.
+            // the next unlock finds no entry and silently no-ops.
+            // setEditingDocxTabId(null) is enough to flip the UI
+            // back out of edit mode.
             setEditingDocxTabId(null);
           }}
           onCollaborationPublishableChange={setIsCollaborationPublishable}
@@ -1099,7 +1025,6 @@ export const FileTabPanel = ({
             });
           }}
           onError={handleViewerError}
-          onReadonlyEditAttempt={promptDocxUnlock}
           onSaved={(fieldId) => {
             if (fieldId !== tab.id) {
               setDocxScrollTopByTab((prev) => {

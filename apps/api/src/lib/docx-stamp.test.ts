@@ -1,10 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import {
   extractStamp,
   injectStamp,
   isStampableDocx,
+  stripStamp,
 } from "@/api/lib/docx-stamp";
 
 // ── Helpers ─────────────────────────────────────────────
@@ -15,12 +18,14 @@ const DOCX_MIME =
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const R_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const DOCX_CONFIG = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx;
 
 const CONTENT_TYPES_XML = [
   '<?xml version="1.0" encoding="UTF-8"?>',
   '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
   '  <Default Extension="xml" ContentType="application/xml"/>',
   '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+  `  <Override PartName="/${DOCX_CONFIG.mainPartPath}" ContentType="${DOCX_CONFIG.mainPartContentType}"/>`,
   "</Types>",
 ].join("\n");
 
@@ -137,7 +142,7 @@ describe("injectStamp", () => {
 
     const rels = await readZipFile(stamped, "word/_rels/footer1.xml.rels");
     expect(rels).not.toBeNull();
-    expect(rels).toContain(`https://stella.legal/v/${code}`);
+    expect(rels).toContain(`https://stella.legal/verify/${code}`);
   });
 
   test("updates Content_Types for custom properties", async () => {
@@ -229,84 +234,6 @@ describe("injectStamp", () => {
   });
 });
 
-describe("placeholder replacement", () => {
-  const stamp = "2026/001/015.v3";
-  const code = "kx8mq2n4p3";
-  const baseUrl = "https://stella.legal";
-
-  test("replaces {{STELLA_ID}} with stamp + code", async () => {
-    const docx = await makeDocx({
-      documentXml: [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-        "<w:body>",
-        "<w:p><w:r><w:t>Ref: {{STELLA_ID}}</w:t></w:r></w:p>",
-        "<w:sectPr></w:sectPr>",
-        "</w:body>",
-        "</w:document>",
-      ].join("\n"),
-    });
-
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-    const docXml = await readZipFile(stamped, "word/document.xml");
-    expect(docXml).toContain(stamp);
-    expect(docXml).toContain(`stl:${code}`);
-    expect(docXml).not.toContain("{{STELLA_ID}}");
-  });
-
-  test("replaces {{STELLA_REF}} and {{STELLA_CODE}} separately", async () => {
-    const docx = await makeDocx({
-      documentXml: [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-        "<w:body>",
-        "<w:p><w:r><w:t>Doc: {{STELLA_REF}}</w:t></w:r></w:p>",
-        "<w:p><w:r><w:t>Code: {{STELLA_CODE}}</w:t></w:r></w:p>",
-        "<w:sectPr></w:sectPr>",
-        "</w:body>",
-        "</w:document>",
-      ].join("\n"),
-    });
-
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-    const docXml = await readZipFile(stamped, "word/document.xml");
-    expect(docXml).toContain(`Doc: ${stamp}`);
-    expect(docXml).toContain(`Code: stl:${code}`);
-  });
-
-  test("skips auto-footer when placeholders are present", async () => {
-    const docx = await makeDocx({
-      documentXml: [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-        "<w:body>",
-        "<w:p><w:r><w:t>{{STELLA_ID}}</w:t></w:r></w:p>",
-        "<w:sectPr></w:sectPr>",
-        "</w:body>",
-        "</w:document>",
-      ].join("\n"),
-    });
-
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-
-    // No auto-generated footer file
-    const footer = await readZipFile(stamped, "word/footer1.xml");
-    expect(footer).toBeNull();
-
-    // But custom properties are still injected
-    const customXml = await readZipFile(stamped, "docProps/custom.xml");
-    expect(customXml).toContain("stella-ref");
-  });
-
-  test("injects footer when no placeholders found", async () => {
-    const docx = await makeDocx();
-    const stamped = await injectStamp(docx, stamp, code, baseUrl);
-    const footer = await readZipFile(stamped, "word/footer1.xml");
-    expect(footer).not.toBeNull();
-    expect(footer).toContain("stella_dms_ref");
-  });
-});
-
 describe("special replacement patterns in dynamic values", () => {
   // Workspace `reference` (the source of `stamp`) is free-form user text
   // (see apps/api/src/handlers/workspaces/update-by-id.ts), so it can contain
@@ -315,8 +242,7 @@ describe("special replacement patterns in dynamic values", () => {
   // etc. A naive `.replace(needle, dynamicString)` call would silently splice
   // in matched/surrounding XML instead of the literal stamp text. These
   // cases exercise every dynamic-value splice site (custom property upsert,
-  // footer paragraph creation and update, and placeholder substitution) with
-  // both patterns.
+  // footer paragraph creation and update) with both patterns.
   const baseUrl = "https://stella.legal";
   const specialPatterns = ["$&", "$'"];
 
@@ -362,27 +288,6 @@ describe("special replacement patterns in dynamic values", () => {
       const footer = await readZipFile(second, "word/footer1.xml");
       expect(footer).toContain(expectedEscape(stamp));
       expect(footer?.match(/<\/w:ftr>/gu)).toHaveLength(1);
-    });
-
-    test(`stamp containing "${pattern}" survives {{STELLA_REF}} placeholder replacement`, async () => {
-      const stamp = `2026/003/007${pattern}.v2`;
-      const code = "mnpqrstuvw";
-      const docx = await makeDocx({
-        documentXml: [
-          '<?xml version="1.0" encoding="UTF-8"?>',
-          `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
-          "<w:body>",
-          "<w:p><w:r><w:t>Doc: {{STELLA_REF}}</w:t></w:r></w:p>",
-          "<w:sectPr></w:sectPr>",
-          "</w:body>",
-          "</w:document>",
-        ].join("\n"),
-      });
-
-      const stamped = await injectStamp(docx, stamp, code, baseUrl);
-      const docXml = await readZipFile(stamped, "word/document.xml");
-      expect(docXml).toContain(`Doc: ${expectedEscape(stamp)}`);
-      expect(docXml?.match(/<\/w:body>/gu)).toHaveLength(1);
     });
   }
 });
@@ -489,5 +394,266 @@ describe("extractStamp", () => {
 
     const result = await extractStamp(docx);
     expect(result.verificationCode).toBe("propscode99");
+  });
+});
+
+describe("stripStamp", () => {
+  const stamp = "2026/001/015.v3";
+  const code = "kx8mq2n4p3";
+  const baseUrl = "https://stella.legal";
+  const fmtid = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
+  const propsNs =
+    "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+  const vtNs =
+    "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+  const stampedDocx = async (): Promise<ArrayBuffer> =>
+    await injectStamp(await makeDocx(), stamp, code, baseUrl);
+
+  const stripped = async (docx: ArrayBuffer): Promise<ArrayBuffer> =>
+    (await stripStamp(docx)) ??
+    panic("the stamped fixture carried no reference to strip");
+
+  test("round trip: a stamped DOCX comes back carrying nothing", async () => {
+    const result = await stripped(await stampedDocx());
+
+    expect(await extractStamp(result)).toEqual({
+      stamp: null,
+      verificationCode: null,
+    });
+    expect(await readZipFile(result, "docProps/custom.xml")).toBeNull();
+    expect(await readZipFile(result, "word/footer1.xml")).not.toContain(
+      "stella_dms_ref",
+    );
+    expect(await stripStamp(result)).toBeNull();
+  });
+
+  test("drops the part declarations with the last custom property", async () => {
+    const result = await stripped(await stampedDocx());
+
+    expect(await readZipFile(result, "[Content_Types].xml")).not.toContain(
+      "custom.xml",
+    );
+    expect(await readZipFile(result, "_rels/.rels")).not.toContain(
+      "custom.xml",
+    );
+  });
+
+  test("drops the verification hyperlink relationship", async () => {
+    const result = await stripped(await stampedDocx());
+
+    expect(
+      await readZipFile(result, "word/_rels/footer1.xml.rels"),
+    ).not.toContain("rId_stella_vcode");
+  });
+
+  test("keeps custom properties the author set", async () => {
+    const docx = await makeDocx({
+      customXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Properties xmlns="${propsNs}" xmlns:vt="${vtNs}">`,
+        `  <property fmtid="${fmtid}" pid="2" name="Matter partner">`,
+        '    <vt:lpwstr>Nováková kept name="stella-ref" as text</vt:lpwstr>',
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="3" name="stella-ref">`,
+        `    <vt:lpwstr>${stamp}</vt:lpwstr>`,
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="4" name="stella-code">`,
+        `    <vt:lpwstr>${code}</vt:lpwstr>`,
+        "  </property>",
+        "</Properties>",
+      ].join("\n"),
+    });
+
+    const customXml = await readZipFile(
+      await stripped(docx),
+      "docProps/custom.xml",
+    );
+    expect(customXml).toContain("Matter partner");
+    expect(customXml).toContain('Nováková kept name="stella-ref" as text');
+    expect(customXml?.split('name="stella-ref"')).toHaveLength(2);
+    expect(customXml).not.toContain('name="stella-code"');
+  });
+
+  test("removes every duplicate stella custom property", async () => {
+    const docx = await makeDocx({
+      customXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Properties xmlns="${propsNs}" xmlns:vt="${vtNs}">`,
+        `  <property fmtid="${fmtid}" pid="2" name="Matter partner">`,
+        "    <vt:lpwstr>Nováková</vt:lpwstr>",
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="3" name="stella-ref">`,
+        `    <vt:lpwstr>${stamp}</vt:lpwstr>`,
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="4" name="stella-code">`,
+        `    <vt:lpwstr>${code}</vt:lpwstr>`,
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="5" name="stella-ref">`,
+        "    <vt:lpwstr>2025/900/001.v1</vt:lpwstr>",
+        "  </property>",
+        `  <property fmtid="${fmtid}" pid="6" name="stella-code">`,
+        "    <vt:lpwstr>mnpqrstuvw</vt:lpwstr>",
+        "  </property>",
+        "</Properties>",
+      ].join("\n"),
+    });
+
+    const result = await stripped(docx);
+    const customXml = await readZipFile(result, "docProps/custom.xml");
+
+    expect(customXml).toContain("Matter partner");
+    expect(customXml).not.toContain("stella-ref");
+    expect(customXml).not.toContain("stella-code");
+    expect(await extractStamp(result)).toEqual({
+      stamp: null,
+      verificationCode: null,
+    });
+  });
+
+  test("removes every duplicated stamped footer paragraph", async () => {
+    const stampedParagraph = (bookmarkId: number): string =>
+      [
+        "<w:p>",
+        `  <w:bookmarkStart w:id="${String(bookmarkId)}" w:name="stella_dms_ref"/>`,
+        `  <w:r><w:t xml:space="preserve">${stamp}  </w:t></w:r>`,
+        '  <w:hyperlink r:id="rId_stella_vcode">',
+        `    <w:r><w:t>stl:${code}</w:t></w:r>`,
+        "  </w:hyperlink>",
+        `  <w:bookmarkEnd w:id="${String(bookmarkId)}"/>`,
+        "</w:p>",
+      ].join("\n");
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        stampedParagraph(0),
+        stampedParagraph(1),
+        "</w:ftr>",
+      ].join("\n"),
+      footerRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '  <Relationship Id="rId_stella_vcode" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://stella.legal/v/kx8mq2n4p3" TargetMode="External"/>',
+        "</Relationships>",
+      ].join("\n"),
+    });
+
+    const result = await stripped(docx);
+    const footer = await readZipFile(result, "word/footer1.xml");
+
+    expect(footer).not.toContain("stella_dms_ref");
+    expect(footer).not.toContain(`stl:${code}`);
+    expect(
+      await readZipFile(result, "word/_rels/footer1.xml.rels"),
+    ).not.toContain("rId_stella_vcode");
+    expect(await extractStamp(result)).toEqual({
+      stamp: null,
+      verificationCode: null,
+    });
+  });
+
+  test("keeps edited footer text without stella's machine metadata", async () => {
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        "<w:p>",
+        '  <w:bookmarkStart w:id="0" w:name="stella_dms_ref"/>',
+        '  <w:bookmarkStart w:id="1" w:name="stella_dms_ref"/>',
+        `  <w:r><w:t xml:space="preserve">Draft — ${stamp}  </w:t></w:r>`,
+        '  <w:hyperlink r:id="rId_stella_vcode">',
+        `    <w:r><w:t>stl:${code.slice(0, 5)}</w:t></w:r>`,
+        `    <w:r><w:t>${code.slice(5)} (do not send)</w:t></w:r>`,
+        "  </w:hyperlink>",
+        "  <w:r><w:t> and </w:t></w:r>",
+        "  <w:r><w:t>author token stl:abcdefghjk </w:t></w:r>",
+        '  <w:hyperlink r:id="rId_stella_vcode">',
+        "    <w:r><w:t>stl:mnpqrstuvw (keep this note)</w:t></w:r>",
+        "  </w:hyperlink>",
+        '  <w:bookmarkEnd w:id="1"/>',
+        '  <w:bookmarkEnd w:id="0"/>',
+        "</w:p>",
+        "</w:ftr>",
+      ].join("\n"),
+      footerRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '  <Relationship Id="rId_stella_vcode" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://stella.legal/v/kx8mq2n4p3" TargetMode="External"/>',
+        "</Relationships>",
+      ].join("\n"),
+    });
+
+    const result = await stripped(docx);
+    const footer = await readZipFile(result, "word/footer1.xml");
+
+    expect(footer).toContain(`Draft — ${stamp}`);
+    expect(footer).toContain("(do not send)");
+    expect(footer).toContain("(keep this note)");
+    expect(footer).toContain("author token stl:abcdefghjk");
+    expect(footer).not.toContain("stella_dms_ref");
+    expect(footer).not.toContain("<w:hyperlink");
+    expect(
+      [...(footer?.matchAll(/<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu) ?? [])]
+        .map((match) => match.groups?.["text"] ?? "")
+        .join(""),
+    ).not.toContain(`stl:${code}`);
+    expect(footer).not.toContain("stl:mnpqrstuvw");
+    expect(
+      await readZipFile(result, "word/_rels/footer1.xml.rels"),
+    ).not.toContain("rId_stella_vcode");
+    expect(await extractStamp(result)).toEqual({
+      stamp: null,
+      verificationCode: null,
+    });
+  });
+
+  test("returns null for a DOCX that carries no reference", async () => {
+    expect(await stripStamp(await makeDocx())).toBeNull();
+  });
+
+  test("does not rewrite a non-DOCX OOXML archive", async () => {
+    const { mainPartContentType, mainPartPath } =
+      DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
+    const zip = new JSZip();
+    zip.file(
+      "[Content_Types].xml",
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+        `  <Override PartName="/${mainPartPath}" ContentType="${mainPartContentType}"/>`,
+        "</Types>",
+      ].join("\n"),
+    );
+    zip.file(mainPartPath, "<workbook/>");
+    zip.file(
+      "docProps/custom.xml",
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Properties xmlns="${propsNs}" xmlns:vt="${vtNs}">`,
+        `  <property fmtid="${fmtid}" pid="2" name="stella-code">`,
+        `    <vt:lpwstr>${code}</vt:lpwstr>`,
+        "  </property>",
+        "</Properties>",
+      ].join("\n"),
+    );
+
+    expect(
+      await stripStamp(await zip.generateAsync({ type: "arraybuffer" })),
+    ).toBeNull();
+  });
+
+  test("returns null for a corrupt archive", async () => {
+    expect(await stripStamp(new TextEncoder().encode("not a zip"))).toBeNull();
+  });
+
+  test("re-stamping a stripped file yields the same reference again", async () => {
+    const result = await stripped(await stampedDocx());
+    const restamped = await injectStamp(result, stamp, code, baseUrl);
+
+    expect(await extractStamp(restamped)).toEqual({
+      stamp,
+      verificationCode: code,
+    });
   });
 });

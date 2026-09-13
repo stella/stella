@@ -5,15 +5,11 @@ import type { Transaction } from "@/api/db/root";
 import { documentCounters } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  generateVerificationCode,
-  toDocumentReference,
-} from "@/api/lib/document-reference";
+import { toDocumentReference } from "@/api/lib/document-reference";
 
 type EntityStamp = {
   docSequence: number;
   stamp: string | null;
-  verificationCode: string | null;
 };
 
 type AllocateEntityStampsOptions = {
@@ -25,11 +21,12 @@ type AllocateEntityStampsOptions = {
 
 /**
  * Allocate a whole run of document sequence numbers and their frozen
- * stamps + verification codes in two statements: one counter upsert that
- * advances `lastValue` by `count`, and one workspace reference read.
- * Sequence numbers are the block ending at the returned high-water mark,
- * handed back in ascending order. Stamps and codes are null when the
- * workspace has no reference pattern.
+ * stamps in two statements: one counter upsert that advances `lastValue` by
+ * `count`, and one workspace reference read. Sequence numbers are the block
+ * ending at the returned high-water mark, handed back in ascending order.
+ * Stamps are null when the workspace has no reference pattern; the matching
+ * verification code is minted by `insertEntityVersions`, which owns the
+ * uniqueness of that column.
  */
 export const allocateEntityStamps = async ({
   tx,
@@ -78,7 +75,6 @@ export const allocateEntityStamps = async ({
     return Array.from({ length: count }, (_, index) => ({
       docSequence: firstDocSequence + index,
       stamp: null,
-      verificationCode: null,
     }));
   }
 
@@ -91,15 +87,13 @@ export const allocateEntityStamps = async ({
         docSequence,
         versionNumber: 1,
       }),
-      verificationCode: generateVerificationCode(),
     };
   });
 };
 
 /**
- * Allocate a document sequence number and generate a frozen
- * stamp + verification code for a new entity. Returns null
- * stamp/code if the workspace has no reference pattern.
+ * Allocate a document sequence number and generate a frozen stamp for a new
+ * entity. Returns a null stamp if the workspace has no reference pattern.
  */
 export const allocateEntityStamp = async (
   tx: Transaction,

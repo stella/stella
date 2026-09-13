@@ -483,8 +483,8 @@ describe("delete-version chain-of-custody guard", () => {
     // Class guard: "allocator derived from a pointer that can move backwards".
     // Deriving the next number from current/base version + 1 reuses a
     // tombstoned latest version's number after a delete promotes
-    // currentVersionId backward (no unique index on (entityId, versionNumber),
-    // so the collision is a silent duplicate). Every writer must allocate via
+    // currentVersionId backward, and entity_versions_entity_number_uidx then
+    // rejects the duplicate number. Every writer must allocate via
     // nextEntityVersionNumber (MAX over ALL versions, including tombstoned).
     const utils = readFileSync(
       nodePath.join(API_SRC, "lib/entity-versions/version-utils.ts"),

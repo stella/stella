@@ -356,6 +356,7 @@ const mockTask = ({
   createdByDeletedAt: null,
   updatedAt: null,
   version: 1,
+  currentVersionReference: null,
   status,
   priority: priority ?? null,
   listItemType: "task",

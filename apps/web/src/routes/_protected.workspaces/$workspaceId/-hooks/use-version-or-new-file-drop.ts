@@ -1,11 +1,28 @@
 import type React from "react";
 import { useState } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
+
 import { getFirstFile } from "@/components/workspaces/entity-utils";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
-import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
+import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
+import { resolveFileDocumentReference } from "@/lib/files/document-reference-queries";
+import {
+  REFERENCE_CHECK,
+  useCreateFileEntities,
+} from "@/lib/workspaces/mutations/use-create-file-entities";
+import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
+import type { VersionOrNewFileDialogProps } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
+import type { VersionOrNewFileChoice } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
+import {
+  resolveVersionOrNewFileDecision,
+  VERSION_OR_NEW_FILE_CHOICE,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
 
 type UseVersionOrNewFileDropOptions = {
   entity: TableTreeNode;
@@ -13,39 +30,50 @@ type UseVersionOrNewFileDropOptions = {
   rowRef: React.RefObject<HTMLDivElement | null>;
 };
 
-type PendingVersionDrop = {
-  open: boolean;
-  droppedFile: File;
-  entityFileName: string;
-  isReplacePending: boolean;
-  onReplaceVersion: () => void;
-  onCreateNewFile: () => void;
-  onOpenChange: (open: boolean) => void;
-  onOpenChangeComplete: (open: boolean) => void;
+type DroppedFileResolution =
+  | { status: "resolving" }
+  | { status: "resolved"; reference: ResolvedDocumentReference | null };
+
+type PendingDrop = {
+  file: File;
+  resolution: DroppedFileResolution;
 };
 
 type UseVersionOrNewFileDropResult = {
   isDropTarget: boolean;
-  /** Non-null when a file has been dropped and is awaiting the user's choice. */
-  pendingDrop: PendingVersionDrop | null;
+  /**
+   * Non-null when a file has been dropped and is awaiting the user's choice.
+   * Spread straight onto `<VersionOrNewFileDialog>`; deriving it from that
+   * component's own props keeps the two from drifting.
+   */
+  pendingDrop: VersionOrNewFileDialogProps | null;
 };
 
 /**
- * Wires external file drops on a file row to the version-or-new
- * resolution flow. Returns the drop session state; the caller renders
+ * Wires external file drops on a file row to the version-or-new resolution
+ * flow. Returns the drop session state; the caller renders
  * `<VersionOrNewFileDialog>` from it. Disabled for folders, tasks, and
- * entities without a file. Single-file drops open the dialog (which
- * decides replace-vs-new via extension match); multi-file drops bypass
- * the dialog and create new file entities directly, since a row
- * represents one file and cannot be replaced by many.
+ * documents without a file.
+ *
+ * A dropped DOCX that left stella carries its own reference, so the dialog
+ * asks the file which document it belongs to before falling back to comparing
+ * extensions — including when it belongs to a document other than the row it
+ * landed on, which no filename heuristic could ever have noticed.
+ *
+ * Multi-file drops bypass the dialog and go to `useCreateFileEntities`, which
+ * runs its own reference check: a row represents one file and cannot be
+ * replaced by many.
  */
 export const useVersionOrNewFileDrop = ({
   entity,
   workspaceId,
   rowRef,
 }: UseVersionOrNewFileDropOptions): UseVersionOrNewFileDropResult => {
-  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [drop, setDrop] = useState<PendingDrop | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const analytics = useAnalytics();
+  const { activeOrganizationId } = useAuthenticatedUser();
   const uploadVersion = useUploadVersion();
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
 
@@ -55,6 +83,46 @@ export const useVersionOrNewFileDrop = ({
     entity.kind !== "task" &&
     !entity.readOnly &&
     file !== null;
+
+  const resolveReference = async (dropped: File): Promise<void> => {
+    const result = await Result.tryPromise(
+      async () =>
+        await resolveFileDocumentReference({
+          queryClient,
+          file: dropped,
+          organizationId: activeOrganizationId,
+        }),
+    );
+    if (Result.isError(result)) {
+      // A failed lookup costs the offer to file this as a version, not the
+      // upload: the dialog falls back to comparing extensions.
+      analytics.captureError(result.error);
+    }
+
+    setDrop((current) =>
+      // The user may have dropped another file while this was in flight; that
+      // drop owns the dialog now, and this answer is about a file nobody is
+      // looking at.
+      current?.file === dropped
+        ? {
+            file: dropped,
+            resolution: {
+              status: "resolved",
+              reference: Result.isError(result) ? null : result.value,
+            },
+          }
+        : current,
+    );
+  };
+
+  const openDialogFor = (dropped: File) => {
+    setDrop({ file: dropped, resolution: { status: "resolving" } });
+    setIsOpen(true);
+    detached(
+      resolveReference(dropped),
+      "use-version-or-new-file-drop.resolve-reference",
+    );
+  };
 
   const { isDropTarget } = useExternalFileDrop({
     enabled: canAcceptDrop,
@@ -66,8 +134,7 @@ export const useVersionOrNewFileDrop = ({
       if (tree.directoryPaths.length === 0 && tree.files.length === 1) {
         const next = tree.files.at(0)?.file;
         if (next) {
-          setDroppedFile(next);
-          setIsOpen(true);
+          openDialogFor(next);
         }
         return;
       }
@@ -75,41 +142,85 @@ export const useVersionOrNewFileDrop = ({
     },
   });
 
-  const closeDialog = () => setIsOpen(false);
+  if (drop === null || file === null) {
+    return { isDropTarget, pendingDrop: null };
+  }
 
-  const pendingDrop: PendingVersionDrop | null =
-    droppedFile && file
-      ? {
-          open: isOpen,
-          droppedFile,
+  const closeDialog = () => setIsOpen(false);
+  const decision =
+    drop.resolution.status === "resolved"
+      ? resolveVersionOrNewFileDecision({
+          reference: drop.resolution.reference,
+          droppedOnEntityId: entity.entityId,
           entityFileName: file.fileName,
-          isReplacePending: uploadVersion.isPending,
-          onReplaceVersion: () => {
-            uploadVersion.mutate(
-              {
-                workspaceId,
-                entityId: entity.entityId,
-                entityFileName: file.fileName,
-                file: droppedFile,
-              },
-              { onSettled: closeDialog },
-            );
-          },
-          onCreateNewFile: () => {
-            createFileEntities({
-              files: [droppedFile],
-              parentId: entity.parentId ?? null,
-            });
-            closeDialog();
-          },
-          onOpenChange: setIsOpen,
-          onOpenChangeComplete: (open) => {
-            if (!open) {
-              setDroppedFile(null);
-            }
-          },
-        }
+          droppedFileName: drop.file.name,
+        })
       : null;
 
-  return { isDropTarget, pendingDrop };
+  const choose = (choice: VersionOrNewFileChoice): void => {
+    switch (choice) {
+      case VERSION_OR_NEW_FILE_CHOICE.newDocument: {
+        createFileEntities({
+          files: [drop.file],
+          parentId: entity.parentId ?? null,
+          // This dialog just asked; the batch prompt must not ask again.
+          referenceCheck: REFERENCE_CHECK.skip,
+        });
+        closeDialog();
+        return;
+      }
+      case VERSION_OR_NEW_FILE_CHOICE.versionHere: {
+        uploadVersion.mutate(
+          {
+            workspaceId,
+            entityId: entity.entityId,
+            entityFileName: file.fileName,
+            file: drop.file,
+          },
+          { onSettled: closeDialog },
+        );
+        return;
+      }
+      case VERSION_OR_NEW_FILE_CHOICE.versionElsewhere: {
+        if (decision?.type !== "reference-elsewhere") {
+          return panic(
+            "Chose to file a version elsewhere with no other document resolved",
+          );
+        }
+        const { document } = decision;
+        uploadVersion.mutate(
+          {
+            workspaceId: document.workspaceId,
+            entityId: document.entityId,
+            // For a file entity the document's name is its filename, which is
+            // all the extension pre-check reads.
+            entityFileName: document.documentName,
+            file: drop.file,
+          },
+          { onSettled: closeDialog },
+        );
+        return;
+      }
+      default: {
+        return panic(`Unhandled choice: ${String(choice satisfies never)}`);
+      }
+    }
+  };
+
+  return {
+    isDropTarget,
+    pendingDrop: {
+      open: isOpen,
+      droppedFileName: drop.file.name,
+      decision,
+      isUploadPending: uploadVersion.isPending,
+      onChoose: choose,
+      onOpenChange: setIsOpen,
+      onOpenChangeComplete: (open) => {
+        if (!open) {
+          setDrop(null);
+        }
+      },
+    },
+  };
 };

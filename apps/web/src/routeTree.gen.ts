@@ -56,6 +56,7 @@ import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected
 import { Route as ProtectedKnowledgeWorkflowsRouteImport } from './routes/_protected.knowledge/workflows'
 import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.settings/index'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
+import { Route as ProtectedVerifyCodeRouteImport } from './routes/_protected.verify.$code'
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
@@ -343,6 +344,11 @@ const ProtectedSettingsOrganizationRouteRoute =
     path: '/organization',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
+const ProtectedVerifyCodeRoute = ProtectedVerifyCodeRouteImport.update({
+  id: '/verify/$code',
+  path: '/verify/$code',
+  getParentRoute: () => ProtectedRoute,
+} as any)
 const ProtectedWorkspacesIndexRoute =
   ProtectedWorkspacesIndexRouteImport.update({
     id: '/workspaces/',
@@ -634,6 +640,7 @@ export interface FileRoutesByFullPath {
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/knowledge/workflows': typeof ProtectedKnowledgeWorkflowsRoute
+  '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat/': typeof ProtectedChatIndexRoute
@@ -716,6 +723,7 @@ export interface FileRoutesByTo {
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/knowledge/workflows': typeof ProtectedKnowledgeWorkflowsRoute
+  '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat': typeof ProtectedChatIndexRoute
@@ -807,6 +815,7 @@ export interface FileRoutesById {
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/_protected/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/_protected/knowledge/workflows': typeof ProtectedKnowledgeWorkflowsRoute
+  '/_protected/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/tools/$slug_/download': typeof ToolsSlugDownloadRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
@@ -899,6 +908,7 @@ export interface FileRouteTypes {
     | '/knowledge/templates'
     | '/knowledge/tools'
     | '/knowledge/workflows'
+    | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/tools/$slug/download'
     | '/chat/'
@@ -981,6 +991,7 @@ export interface FileRouteTypes {
     | '/knowledge/templates'
     | '/knowledge/tools'
     | '/knowledge/workflows'
+    | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/tools/$slug/download'
     | '/chat'
@@ -1071,6 +1082,7 @@ export interface FileRouteTypes {
     | '/_protected/knowledge/templates'
     | '/_protected/knowledge/tools'
     | '/_protected/knowledge/workflows'
+    | '/_protected/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/tools/$slug_/download'
     | '/_protected/chat/'
@@ -1469,6 +1481,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/organization'
       preLoaderRoute: typeof ProtectedSettingsOrganizationRouteRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
+    }
+    '/_protected/verify/$code': {
+      id: '/_protected/verify/$code'
+      path: '/verify/$code'
+      fullPath: '/verify/$code'
+      preLoaderRoute: typeof ProtectedVerifyCodeRouteImport
+      parentRoute: typeof ProtectedRoute
     }
     '/_protected/workspaces/': {
       id: '/_protected/workspaces/'
@@ -2033,6 +2052,7 @@ interface ProtectedRouteChildren {
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
   ProtectedContactsImportRoute: typeof ProtectedContactsImportRoute
   ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
+  ProtectedVerifyCodeRoute: typeof ProtectedVerifyCodeRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
   ProtectedInboxIndexRoute: typeof ProtectedInboxIndexRoute
   ProtectedWorkspacesIndexRoute: typeof ProtectedWorkspacesIndexRoute
@@ -2048,6 +2068,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
   ProtectedContactsImportRoute: ProtectedContactsImportRoute,
   ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,
+  ProtectedVerifyCodeRoute: ProtectedVerifyCodeRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
   ProtectedInboxIndexRoute: ProtectedInboxIndexRoute,
   ProtectedWorkspacesIndexRoute: ProtectedWorkspacesIndexRoute,

@@ -112,6 +112,10 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
+    "file": "apps/api/src/handlers/entities/copy-utils.ts",
+    "reason": "not a projection: copies version rows between matters and returns only the new ids; the row type names the columns a move carries, nothing is sent to a client"
+  },
+  {
     "file": "apps/api/src/handlers/entities/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

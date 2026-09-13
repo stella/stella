@@ -5,13 +5,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import {
-  entities,
-  entityVersions,
-  fields,
-  pendingUploads,
-  workspaces,
-} from "@/api/db/schema";
+import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -28,6 +22,7 @@ import {
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -38,6 +33,7 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -158,14 +154,20 @@ export const createEntityFromBuffer = async ({
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
-  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+  const submittedBytes =
+    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (submittedBytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
     return Result.err(
       new DocumentTooLargeError({
         message: `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
       }),
     );
   }
+
+  // A generated document can be built from a stamped download; the new
+  // document must not inherit the reference of the one it came from. Size and
+  // hash below are taken from the bytes this returns, never the submitted ones.
+  const { bytes } = await storedDocumentBytes(submittedBytes);
 
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = allocateFileObject();
@@ -315,13 +317,12 @@ export const createEntityFromBuffer = async ({
           docSequence: entityStamp.docSequence,
         });
 
-        await tx.insert(entityVersions).values({
+        await insertEntityVersion(tx, {
           id: entityVersionId,
           workspaceId,
           entityId,
           versionNumber: 1,
           stamp: entityStamp.stamp,
-          verificationCode: entityStamp.verificationCode,
         });
 
         await tx

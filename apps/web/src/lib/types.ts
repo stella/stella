@@ -240,6 +240,13 @@ export type WorkspaceEntity = {
   createdByDeletedAt: string | null;
   updatedAt: string | null;
   version: number;
+  /**
+   * The document reference frozen onto the current version, or null when that
+   * version predates the matter's reference. The matter's own reference is not
+   * a substitute: a version created before it carries none, and only a
+   * referenced version can be downloaded as a reference copy.
+   */
+  currentVersionReference: string | null;
   /** Task workflow status; malformed legacy wire values are normalized to null. */
   status: TaskStatus | null;
   /** Task priority; malformed legacy wire values are normalized to null. */

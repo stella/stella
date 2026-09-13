@@ -13,6 +13,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -98,7 +99,6 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
   const rejection: unknown = await copyFileObject({
     sourceEntityId: documentId,
     sourceFileId: fileContent.id,
-    sourcePropertyId: propertyId,
     sourceKey,
     mimeType: fileContent.mimeType,
     organizationId,
@@ -151,7 +151,10 @@ const sourceEntities = [
     kind: "folder" as const,
     name: "Root",
     parentId: null,
-    currentVersion: { fields: [] },
+    currentVersion: {
+      id: toSafeId<"entityVersion">("version_root"),
+      fields: [],
+    },
   },
   {
     id: documentId,
@@ -159,6 +162,7 @@ const sourceEntities = [
     name: "Child.docx",
     parentId: rootFolderId,
     currentVersion: {
+      id: toSafeId<"entityVersion">("version_child"),
       fields: [{ propertyId, content: fileContent }],
     },
   },
@@ -167,7 +171,10 @@ const sourceEntities = [
     kind: "folder" as const,
     name: "Nested",
     parentId: rootFolderId,
-    currentVersion: { fields: [] },
+    currentVersion: {
+      id: toSafeId<"entityVersion">("version_nested"),
+      fields: [],
+    },
   },
 ];
 
@@ -249,6 +256,7 @@ describe("duplicate entity", () => {
             insertedEntities.push(value);
           } else if (table === entityVersions) {
             insertedVersions.push(value);
+            return entityVersionInsertResult(value);
           } else if (table === fields) {
             insertedFields.push(value);
           } else if (table === auditLogs) {
@@ -380,14 +388,18 @@ describe("duplicate entity", () => {
         }),
       }),
       insert: (table: unknown) => ({
-        values: () =>
-          table === documentCounters
-            ? {
-                onConflictDoUpdate: () => ({
-                  returning: async () => [{ lastValue: 1 }],
-                }),
-              }
-            : undefined,
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+          return table === entityVersions
+            ? entityVersionInsertResult(value)
+            : undefined;
+        },
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
