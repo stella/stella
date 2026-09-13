@@ -166,7 +166,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
                 return (
                   <TabsTab
                     className={cn(
-                      "h-full sm:h-full",
+                      "h-full pt-2 sm:h-full",
                       reserveActionSpace ? "pe-6.5" : undefined,
                     )}
                     key={view.id}
@@ -202,7 +202,9 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
           </TabsList>
         </Tabs>
       </div>
-      {addControl}
+      {addControl === null || addControl === undefined ? null : (
+        <div className="mt-1 flex shrink-0 items-center">{addControl}</div>
+      )}
     </div>
   );
 };
@@ -337,7 +339,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
       )}
       <TabsTab
         className={cn(
-          "h-full sm:h-full",
+          "h-full pt-2 sm:h-full",
           reserveActionSpace ? "pe-6.5" : undefined,
         )}
         onContextMenu={(event) => onContextMenu?.(view, event)}
@@ -348,7 +350,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         <span className="max-w-36 truncate">{view.name}</span>
       </TabsTab>
       {actions === null || actions === undefined ? null : (
-        <div className="absolute inset-e-0 top-1/2 -translate-y-1/2">
+        <div className="absolute inset-e-0 top-1/2 mt-1 -translate-y-1/2">
           {actions}
         </div>
       )}
