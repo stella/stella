@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { entityVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { recordEntityStamp } from "@/api/lib/document-counter";
 import { generateVerificationCode } from "@/api/lib/document-reference";
 
 /**
@@ -63,6 +64,18 @@ export const insertEntityVersions = async (
 ): Promise<void> => {
   if (values.length === 0) {
     return;
+  }
+
+  for (const value of values) {
+    if (value.stamp === null || value.stamp === undefined) {
+      continue;
+    }
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction connection must serialize ledger row locks
+    await recordEntityStamp({
+      tx,
+      workspaceId: value.workspaceId,
+      stamp: value.stamp,
+    });
   }
 
   await insertPendingEntityVersions(tx, values.map(withVerificationCode), 1);
