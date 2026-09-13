@@ -118,7 +118,7 @@ const fillMatterToCap = async (): Promise<SafeId<"caseLawDecision">[]> => {
     .from(caseLawMatterLinks)
     .where(eq(caseLawMatterLinks.workspaceId, ids.wsA1));
   const decisionIds = mintDecisionIds(
-    LIMITS.caseLawMatterLinksPerWorkspace - Number(held?.value ?? 0),
+    LIMITS.caseLawMatterLinksPerWorkspace - (held?.value ?? 0),
   );
   await insertDecisions(decisionIds);
   await testDb.insert(caseLawMatterLinks).values(
@@ -328,7 +328,7 @@ describe("pinning a selection into a matter", () => {
       .where(eq(caseLawMatterLinks.workspaceId, ids.wsA1));
     // Both calls saw two free slots if the cap were counted outside a lock;
     // under the lock the second one finds none and says so.
-    expect(Number(held?.value ?? 0)).toBe(cap);
+    expect(held?.value ?? 0).toBe(cap);
     const refused = [outcomeA, outcomeB].flatMap((outcome) =>
       typeof outcome === "object" &&
       outcome !== null &&
