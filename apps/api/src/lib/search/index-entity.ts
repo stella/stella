@@ -80,7 +80,6 @@ const versionSetToken = (entityId: SQL, workspaceId: SQL) => sql<string>`(
   ) v
 )`;
 
-
 const linkMetadataSearchText = (metadata: LinkMetadata | null): string => {
   if (!metadata) {
     return "";

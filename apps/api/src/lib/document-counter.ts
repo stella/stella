@@ -242,9 +242,10 @@ export const recordEntityStamps = async ({
   const rows = await tx
     .insert(documentReferenceCounters)
     .values(
-      [...ledgerValues.values()].toSorted((a, b) =>
-        compareCodeUnit(a.organizationId, b.organizationId) ||
-        compareCodeUnit(a.reference, b.reference),
+      [...ledgerValues.values()].toSorted(
+        (a, b) =>
+          compareCodeUnit(a.organizationId, b.organizationId) ||
+          compareCodeUnit(a.reference, b.reference),
       ),
     )
     .onConflictDoUpdate({
