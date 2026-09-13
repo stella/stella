@@ -88,17 +88,20 @@ export const navigateToCaseDecisionMain = async (
 ): Promise<void> => {
   const hash = anchorId === undefined ? {} : { hash: anchorId };
 
-  return language === undefined
-    ? await navigate({
-        to: "/law/$country/cases/$court/$slug",
-        params: { country, court, slug },
-        ...hash,
-      })
-    : await navigate({
-        to: "/law/$country/cases/$court/$language/$slug",
-        params: { country, court, language, slug },
-        ...hash,
-      });
+  if (language === undefined) {
+    await navigate({
+      to: "/law/$country/cases/$court/$slug",
+      params: { country, court, slug },
+      ...hash,
+    });
+    return;
+  }
+
+  await navigate({
+    to: "/law/$country/cases/$court/$language/$slug",
+    params: { country, court, language, slug },
+    ...hash,
+  });
 };
 
 export type CaseDecisionViewTab = {
