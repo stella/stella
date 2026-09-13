@@ -1,5 +1,6 @@
 import {
   AGENT_SKILLS_CHAT_METADATA_MAX,
+  CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CHAT_RICH_PART_LIMITS,
   ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
@@ -393,10 +394,24 @@ export const LIMITS = {
   caseLawResearchTablesPageSizeMax: 100,
   /** Pinned plus excluded decisions per research table. */
   caseLawResearchTableDecisionsMax: 500,
-  /** Question columns one organization may keep; every search shows them all. */
+  /**
+   * Question columns one organization may ADD. Enforced on create alone: the
+   * columns that predate the organization-owned model were capped per research
+   * table, and one member could own many tables, so an organization can arrive
+   * holding more than this.
+   */
   caseLawResearchColumnsPerOrganization: 20,
+  /**
+   * Question columns one organization may HOLD: the ceiling every read,
+   * reorder and run covers, sized for the grandfathered sets the cap above
+   * never applied to. Truncating a read here would hide a column from the
+   * results table and make a reorder, which must name every column once,
+   * impossible to satisfy. Creation is refused past the cap, so the held set
+   * only ever shrinks towards it.
+   */
+  caseLawResearchColumnsPerOrganizationMax: 500,
   /** Decisions one run request may queue; the client batches beyond it. */
-  caseLawResearchRunDecisionsMax: 100,
+  caseLawResearchRunDecisionsMax: CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   /** Decisions answered concurrently inside one run. */
   caseLawResearchRunConcurrency: 3,
   /** Decisions one answers lookup may name; the client asks for what it shows. */

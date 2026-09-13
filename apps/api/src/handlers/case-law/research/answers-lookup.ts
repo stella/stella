@@ -14,7 +14,7 @@ const config = {
   description:
     "The organization's answer cells for the decisions a client has on " +
     "screen, every question column at once. Bounded by the decisions named " +
-    "and the per-organization column cap; the client polls this while any " +
+    "and the columns the organization holds; the client polls this while any " +
     "cell is pending.",
   permissions: { workspace: ["read"] },
   access: "read",
@@ -41,10 +41,13 @@ const lookupResearchAnswers = createSafeRootHandler(
               ),
             ),
           )
-          // At most one cell per (column, decision): the product of the two
-          // caps bounds the read.
+          // At most one cell per (column, decision): the decisions named times
+          // the columns an organization may hold bounds the read. The held
+          // ceiling, not the create cap, so a grandfathered organization sees
+          // every cell rather than a silently cut rectangle.
           .limit(
-            decisionIds.length * LIMITS.caseLawResearchColumnsPerOrganization,
+            decisionIds.length *
+              LIMITS.caseLawResearchColumnsPerOrganizationMax,
           );
         const now = new Date();
         return rows.map((row) => toResearchAnswerResponse(row, now));

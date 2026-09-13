@@ -5896,13 +5896,95 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "matter-links-batch-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "case-law",
+                  "matter-links-batch-create",
+                ],
+                capabilityId: "case-law.matter-links.batch.create",
+                description:
+                  "Link a selection of case-law decisions to the current matter in one call, each with an optional note. Best effort and idempotent: the response reports every decision asked for, under `linked` (newly pinned), `existing` (already pinned, returned unchanged with the note recorded earlier) or `rejected` with a reason — `not_found` for a decision that is not in the corpus, `limit` for one that would push the matter past its maximum number of links. A decision already pinned never counts against that maximum. The whole call is one transaction: either every link it reports lands, or none does. Repeat the call with the same items safely; the second call reports them as `existing`. At most as many items as the matter may hold links.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: ["body.items"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["items"],
+                      properties: {
+                        items: {
+                          minItems: 1,
+                          maxItems: 1000,
+                          type: "array",
+                          items: {
+                            additionalProperties: false,
+                            type: "object",
+                            required: ["decisionId"],
+                            properties: {
+                              decisionId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              note: {
+                                nullable: true,
+                                anyOf: [
+                                  {
+                                    maxLength: 2000,
+                                    type: "string",
+                                  },
+                                  {
+                                    type: "null",
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
             "matter-links-create": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "case-law", "matter-links-create"],
                 capabilityId: "case-law.matter-links.create",
                 description:
-                  "Link one case-law decision from the corpus to the current matter, with an optional note. A decision that is not in the corpus is a 404; a decision already linked to this matter returns the existing link unchanged, note included. The call is refused once the matter holds its maximum number of links.",
+                  "Link one case-law decision from the corpus to the current matter, with an optional note. A decision that is not in the corpus is a 404; a decision already linked to this matter returns the existing link unchanged, note included, even when the matter is full, because re-linking adds nothing. The call is refused only when it would add a link past the matter's maximum. To link a selection at once, use the batch call instead of repeating this one.",
                 access: "write",
                 flags: [
                   {
@@ -6045,7 +6127,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "case-law", "matter-links-list"],
                 capabilityId: "case-law.matter-links.list",
                 description:
-                  "List the case-law decisions linked to the current matter, newest link first, each with its note and the decision's row facts: case number, slug, ECLI, court, country, language, date, type, citation count and headnote preview. Returns the whole set up to the per-matter link cap; there is no pagination.",
+                  "List the case-law decisions linked to the current matter, newest link first, each with its note and the decision's row facts: case number, slug, ECLI, court, country, language, the decision's other language versions, date, type, citation count and headnote preview. Returns the whole set up to the per-matter link cap; there is no pagination.",
                 access: "read",
                 flags: [
                   {

@@ -22,6 +22,10 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import type {
+  ResearchAnswerClaim,
+  ResearchAnswerCell,
+} from "@/api/lib/case-law/research-answer-queue";
 import {
   buildResearchUserMessage,
   parseResearchAnswers,
@@ -66,7 +70,12 @@ export type RunResearchAnswersInput = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   columns: readonly ResearchRunColumn[];
-  decisionIds: readonly SafeId<"caseLawDecision">[];
+  /**
+   * The cells this run claimed, and the id stamped on each of them. The run
+   * works this set alone, never the whole column-by-decision rectangle: a cell
+   * another run is working on was not claimed here and is not touched.
+   */
+  claim: ResearchAnswerClaim;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
 };
@@ -78,24 +87,50 @@ export type RunResearchAnswersDeps = {
   caseLawDb: CaseLawPublicReadDb;
 };
 
+/** The claimed cells regrouped into the unit of work: one decision's questions. */
+const claimedColumnsByDecision = (
+  cells: readonly ResearchAnswerCell[],
+): Map<SafeId<"caseLawDecision">, SafeId<"caseLawResearchColumn">[]> => {
+  const byDecision = new Map<
+    SafeId<"caseLawDecision">,
+    SafeId<"caseLawResearchColumn">[]
+  >();
+  for (const { columnId, decisionId } of cells) {
+    const columnIds = byDecision.get(decisionId);
+    if (columnIds === undefined) {
+      byDecision.set(decisionId, [columnId]);
+      continue;
+    }
+    columnIds.push(columnId);
+  }
+  return byDecision;
+};
+
 /**
- * Answer every pending cell of the given columns for the given decisions, a
- * bounded number of decisions at a time. Each decision's text is read once and
- * all of its pending questions go to the model in one call. Runs detached
- * from the request that queued it; every failure lands in the cell's state.
+ * Answer the cells this run claimed, a bounded number of decisions at a time.
+ * Each decision's text is read once and all of its claimed questions go to the
+ * model in one call. Runs detached from the request that queued it; every
+ * failure lands in the cell's state.
  */
 export const runResearchAnswers = async (
   input: RunResearchAnswersInput,
   deps: RunResearchAnswersDeps,
 ): Promise<void> => {
-  const queue = [...input.decisionIds];
+  const byDecision = claimedColumnsByDecision(input.claim.cells);
+  const queue = [...byDecision.entries()];
   const worker = async (): Promise<void> => {
     for (;;) {
-      const decisionId = queue.shift();
-      if (decisionId === undefined) {
+      const next = queue.shift();
+      if (next === undefined) {
         return;
       }
-      const failure = await answerDecision(decisionId, input, deps).then(
+      const [decisionId, claimedColumnIds] = next;
+      const failure = await answerDecision(
+        decisionId,
+        claimedColumnIds,
+        input,
+        deps,
+      ).then(
         () => null,
         (error: unknown) => error ?? new Error("research answer run failed"),
       );
@@ -106,14 +141,15 @@ export const runResearchAnswers = async (
         source: "case-law-research-answers",
         decisionId,
       });
-      // Whatever this decision still had pending is not coming: say so rather
-      // than leave the cells to age out.
+      // Whatever this run still held for this decision is not coming: say so
+      // rather than leave the cells to age out. Only the claimed columns, so a
+      // cell that belongs to another run is untouched.
       await writeOutcomes(
         deps.safeDb,
         input,
         decisionId,
-        input.columns.map((column) => ({
-          columnId: column.columnId,
+        claimedColumnIds.map((columnId) => ({
+          columnId,
           outcome: { state: "failed", failureReason: "run_error" },
         })),
       ).catch((writeError: unknown) => {
@@ -153,10 +189,16 @@ type ResearchDecisionRow = {
 
 const answerDecision = async (
   decisionId: SafeId<"caseLawDecision">,
+  claimedColumnIds: readonly SafeId<"caseLawResearchColumn">[],
   input: RunResearchAnswersInput,
   { caseLawDb, safeDb }: RunResearchAnswersDeps,
 ): Promise<void> => {
-  const pendingColumnIds = await pendingColumnsFor(decisionId, input, safeDb);
+  const pendingColumnIds = await stillClaimedColumnsFor(
+    decisionId,
+    claimedColumnIds,
+    input,
+    safeDb,
+  );
   if (pendingColumnIds.length === 0) {
     return;
   }
@@ -321,7 +363,6 @@ const answerDecision = async (
       outcome: {
         state: "answered",
         answer: entry.outcome.answer,
-        confidence: entry.outcome.confidence,
         run,
       },
     });
@@ -329,13 +370,18 @@ const answerDecision = async (
   await writeOutcomes(safeDb, input, decisionId, outcomes);
 };
 
-const pendingColumnsFor = async (
+/**
+ * The claimed cells this run still owns: pending, and still stamped with this
+ * run's claim id. A cell re-queued by a newer run carries that run's id and is
+ * left to it, so a run that stalled and woke up answers nothing.
+ */
+const stillClaimedColumnsFor = async (
   decisionId: SafeId<"caseLawDecision">,
+  claimedColumnIds: readonly SafeId<"caseLawResearchColumn">[],
   input: RunResearchAnswersInput,
   safeDb: SafeDb,
 ): Promise<SafeId<"caseLawResearchColumn">[]> => {
-  const columnIds = input.columns.map((column) => column.columnId);
-  if (columnIds.length === 0) {
+  if (claimedColumnIds.length === 0) {
     return [];
   }
   const rows = await safeDb(
@@ -345,10 +391,11 @@ const pendingColumnsFor = async (
         .from(caseLawResearchAnswers)
         .where(
           and(
-            inArray(caseLawResearchAnswers.columnId, columnIds),
+            inArray(caseLawResearchAnswers.columnId, [...claimedColumnIds]),
             eq(caseLawResearchAnswers.decisionId, decisionId),
             eq(caseLawResearchAnswers.organizationId, input.organizationId),
             eq(caseLawResearchAnswers.state, "pending"),
+            eq(caseLawResearchAnswers.claimId, input.claim.claimId),
           ),
         ),
   );
@@ -527,7 +574,6 @@ type AnswerOutcome =
   | {
       state: "answered";
       answer: CaseLawResearchAnswerValue;
-      confidence: number;
       run: CaseLawResearchAnswerRun;
     }
   | { state: "not_allowed" }
@@ -539,14 +585,16 @@ type ColumnOutcome = {
 };
 
 /**
- * Persist one decision's outcomes. Only cells still pending are touched, and
- * only while the column still asks the question this run answered: a question
- * reworded mid-run drops its old answers, and this write must not put an
- * answer to the old wording under the new heading.
+ * Persist one decision's outcomes. A row is written only while this run still
+ * owns it — pending, and stamped with this run's claim id — and only while the
+ * column still asks the question this run answered: a question reworded
+ * mid-run drops its old answers, and this write must not put an answer to the
+ * old wording under the new heading. A run that stalled past the stale window
+ * and woke up writes nothing, because a newer run has restamped its cells.
  */
 const writeOutcomes = async (
   safeDb: SafeDb,
-  input: Pick<RunResearchAnswersInput, "columns" | "organizationId">,
+  input: Pick<RunResearchAnswersInput, "claim" | "columns" | "organizationId">,
   decisionId: SafeId<"caseLawDecision">,
   outcomes: readonly ColumnOutcome[],
 ): Promise<void> => {
@@ -566,31 +614,30 @@ const writeOutcomes = async (
           ? {
               state: outcome.state,
               answer: outcome.answer,
-              confidence: outcome.confidence,
               run: outcome.run,
               failureReason: null,
             }
           : {
               state: outcome.state,
               answer: null,
-              confidence: null,
               run: null,
               failureReason:
                 outcome.state === "failed" ? outcome.failureReason : null,
             };
-      // SAFETY: bounded by LIMITS.caseLawResearchColumnsPerOrganization, inside one
+      // SAFETY: bounded by the columns an organization may hold, inside one
       // transaction; each cell is its own row so a batch would be a VALUES join
       // of the same size.
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the column cap
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the columns an organization may hold
       await tx
         .update(caseLawResearchAnswers)
-        .set({ ...values, updatedAt: now })
+        .set({ ...values, claimId: null, updatedAt: now })
         .where(
           and(
             eq(caseLawResearchAnswers.columnId, columnId),
             eq(caseLawResearchAnswers.decisionId, decisionId),
             eq(caseLawResearchAnswers.organizationId, organizationId),
             eq(caseLawResearchAnswers.state, "pending"),
+            eq(caseLawResearchAnswers.claimId, input.claim.claimId),
             exists(
               tx
                 .select({ one: sql`1` })

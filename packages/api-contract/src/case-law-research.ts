@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { SafeId } from "./safe-id";
 import type { SearchSort } from "./search";
 
@@ -69,6 +71,49 @@ export const CASE_LAW_RESEARCH_ANSWER_STATES = [
 
 export type CaseLawResearchAnswerState =
   (typeof CASE_LAW_RESEARCH_ANSWER_STATES)[number];
+
+/** A cell as the run policy reads it. */
+export type ResearchAnswerRunCheck = {
+  /** The state stored for the cell, or null when no cell exists yet. */
+  state: CaseLawResearchAnswerState | null;
+  /**
+   * A `pending` cell whose run went quiet past the stale window, decided on
+   * the server's clock. Meaningless for every other state.
+   */
+  stale: boolean;
+};
+
+/**
+ * Whether a run has to produce this cell, before an explicit re-answer.
+ *
+ * One policy for both sides: the queue skips the cells this refuses, and the
+ * client counts the cells it accepts, so the number a lawyer confirms is the
+ * number that runs. A live `pending` cell belongs to another run; a stale one
+ * is a run that died and may be claimed. `not_allowed` is the source's terms,
+ * which a re-run cannot change, and `answered` is the cache that makes paging
+ * back to an answered page free — only `force` reopens that one, which is the
+ * caller's decision rather than the cell's state.
+ */
+export const answerNeedsRun = ({
+  state,
+  stale,
+}: ResearchAnswerRunCheck): boolean => {
+  switch (state) {
+    case null:
+      return true;
+    case "pending":
+      return stale;
+    case "failed":
+      return true;
+    case "answered":
+    case "not_allowed":
+      return false;
+    default: {
+      state satisfies never;
+      return panic(`Unhandled answer state: ${String(state)}`);
+    }
+  }
+};
 
 /** A yes/no question may honestly be undecidable from the text. */
 export const CASE_LAW_RESEARCH_YES_NO_VALUES = [

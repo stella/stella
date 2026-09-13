@@ -26,6 +26,7 @@ export type SafeIdType =
   | "caseLawPolarityRule"
   | "caseLawProvisionCitation"
   | "caseLawReconciliationItem"
+  | "caseLawResearchAnswerClaim"
   | "caseLawResearchColumn"
   | "caseLawResearchTable"
   | "caseLawSource"

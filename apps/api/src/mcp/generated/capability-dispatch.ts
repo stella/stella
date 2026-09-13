@@ -36,6 +36,10 @@ export const CAPABILITY_DISPATCH = {
   "case-law.ingestion.status": {
     load: async () => await import("@/api/handlers/case-law/ingestion/status"),
   },
+  "case-law.matter-links.batch.create": {
+    load: async () =>
+      await import("@/api/handlers/case-law/matter-links/batch/create"),
+  },
   "case-law.matter-links.create": {
     load: async () =>
       await import("@/api/handlers/case-law/matter-links/create"),
