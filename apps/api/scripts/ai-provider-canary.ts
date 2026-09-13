@@ -1372,6 +1372,13 @@ export const canaryToolProbeModelOptions = ({
   };
 };
 
+export const canaryToolProbeIterationLimit = (
+  requiredToolName: string | undefined,
+): number =>
+  // A forced choice applies to every agent iteration. Stop after execution or
+  // Anthropic must call the same tool again instead of returning final text.
+  requiredToolName === undefined ? 2 : 1;
+
 // Every tool-execution probe gets the reasoning budget here, not at the call
 // site, so a caller cannot hand a reasoning-capable model a short-reply budget
 // and turn a truncated stream into a false provider failure.
@@ -1400,7 +1407,9 @@ const runToolProbe = async ({
   const stream = streamChatChunks({
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
-    agentLoopStrategy: maxIterations(2),
+    agentLoopStrategy: maxIterations(
+      canaryToolProbeIterationLimit(requiredToolName),
+    ),
     messages: [{ role: "user", content: prompt }],
     modelOptions: canaryToolProbeModelOptions({ model, requiredToolName }),
     tools: [projectedTool],

@@ -19,6 +19,7 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
+  canaryToolProbeIterationLimit,
   canaryToolProbeModelOptions,
   CanaryCredentialRejectedError,
   CanaryProviderUnavailableError,
@@ -389,6 +390,8 @@ describe("AI provider canary tool contract", () => {
     ).toMatchObject({
       tool_choice: { name: "canary_round_trip", type: "tool" },
     });
+    expect(canaryToolProbeIterationLimit("canary_round_trip")).toBe(1);
+    expect(canaryToolProbeIterationLimit(undefined)).toBe(2);
   });
 });
 
