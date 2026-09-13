@@ -490,6 +490,62 @@ for (const {
       });
     }
 
+    test("a vertical wheel advances the timeline toward its end", async ({
+      page,
+    }) => {
+      await openClipboard(page, language);
+      const rail = page.getByRole("list");
+      await rail.hover();
+      for (let step = 0; step < 12; step += 1) {
+        await page.mouse.wheel(0, 200);
+      }
+      await expect(
+        page.locator('[data-clipboard-id="clip-14"]'),
+      ).toBeInViewport();
+      const offset = await rail.evaluate((node) => node.scrollLeft);
+      expect(language === "ar" ? -offset : offset).toBeGreaterThan(0);
+    });
+
+    test("a scroll the rail never observed is reconciled by the next commit", async ({
+      page,
+    }) => {
+      await openClipboard(page, language);
+      const rail = page.getByRole("list");
+      const visibleCards = async () =>
+        rail.evaluate((node) => {
+          const bounds = node.getBoundingClientRect();
+          return Array.from(
+            node.querySelectorAll("[data-clipboard-id]"),
+          ).filter((card) => {
+            const { left, right } = card.getBoundingClientRect();
+            return right > bounds.left && left < bounds.right;
+          }).length;
+        });
+      // Swallow the rail's scroll events, then scroll it: the card window is
+      // now computed for the old offset, which is the blank rail a scroll the
+      // listeners missed (one applied while the window was parked) leaves
+      // behind.
+      await rail.evaluate(
+        (node, toward) => {
+          node.addEventListener(
+            "scroll",
+            (event) => event.stopImmediatePropagation(),
+            { capture: true },
+          );
+          node.scrollTo({ behavior: "instant", left: toward * 2400 });
+        },
+        language === "ar" ? -1 : 1,
+      );
+      await page.waitForTimeout(100);
+      expect(await visibleCards()).toBe(0);
+      // Any commit re-reads the rail; typing a query every clip matches is one
+      // that neither scrolls nor changes the list.
+      await page.getByRole("searchbox").fill("Clipboard item");
+      await expect(
+        page.locator('[data-clipboard-id="clip-14"]'),
+      ).toBeInViewport();
+    });
+
     test("color swatches and selection rings fit without scrollbars", async ({
       page,
     }) => {

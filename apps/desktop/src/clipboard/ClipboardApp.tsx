@@ -12,6 +12,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
+  WheelEvent as ReactWheelEvent,
 } from "react";
 import { flushSync } from "react-dom";
 
@@ -111,6 +112,7 @@ import {
   clipboardItemLink,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
+  clipboardRailWheelDelta,
   clipboardRailWindow,
   clipboardSearchPreviewText,
   clipboardSourceIdentity,
@@ -257,10 +259,27 @@ const focusTimeline = (node: HTMLDivElement | null) => {
 
 /**
  * The shared input carries `dir="auto"` once it holds text, so only the
- * computed style says which side of the field its caret offsets sit on.
+ * computed style says which side of the field its caret offsets sit on; the
+ * rails inherit the document direction the same way.
  */
-const clipboardInputDirection = (input: HTMLInputElement) =>
-  getComputedStyle(input).direction === "rtl" ? "rtl" : "ltr";
+const clipboardElementDirection = (element: HTMLElement) =>
+  getComputedStyle(element).direction === "rtl" ? "rtl" : "ltr";
+
+/** Mouse-wheel motion on a rail that only scrolls horizontally. */
+const handleRailWheel = (event: ReactWheelEvent<HTMLElement>) => {
+  const rail = event.currentTarget;
+  const left = clipboardRailWheelDelta({
+    deltaMode: event.deltaMode,
+    deltaX: event.deltaX,
+    deltaY: event.deltaY,
+    direction: clipboardElementDirection(rail),
+    pageWidth: rail.clientWidth,
+  });
+  if (left === 0) {
+    return;
+  }
+  rail.scrollBy({ behavior: "auto", left });
+};
 
 type CardRevealOptions = {
   rail: HTMLDivElement | null;
@@ -1383,6 +1402,15 @@ const ClipboardApp = () => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLElement>(null);
   const timelineRailRef = useRef<HTMLDivElement>(null);
+  const { railRef: observeTimelineRail, viewport: railViewport } =
+    useRailViewport();
+  const attachTimelineRail = useCallback(
+    (node: HTMLDivElement | null) => {
+      timelineRailRef.current = node;
+      observeTimelineRail(node);
+    },
+    [observeTimelineRail],
+  );
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
@@ -1524,10 +1552,6 @@ const ClipboardApp = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
   };
-  const railViewport = useRailViewport(
-    timelineRailRef,
-    filteredItems.length > 0,
-  );
   const railWindow = clipboardRailWindow({
     activeIndex,
     itemCount: filteredItems.length,
@@ -2071,7 +2095,7 @@ const ClipboardApp = () => {
         shouldLeaveClipboardSearch({
           ...inputKey,
           ...modifiers,
-          direction: clipboardInputDirection(event.target),
+          direction: clipboardElementDirection(event.target),
           selectionEnd: event.target.selectionEnd,
           selectionStart: event.target.selectionStart,
           shiftKey: event.shiftKey,
@@ -2344,7 +2368,8 @@ const ClipboardApp = () => {
                     aria-label={t("timeline")}
                     className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
                     onPointerMove={handleRailPointerMove}
-                    ref={timelineRailRef}
+                    onWheel={handleRailWheel}
+                    ref={attachTimelineRail}
                     role="list"
                   >
                     {railWindow.start > 0 ? (
@@ -2548,6 +2573,7 @@ const ClipboardApp = () => {
                     "clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2",
                     searchSource === "registry" && "hidden",
                   )}
+                  onWheel={handleRailWheel}
                 >
                   <Button
                     aria-pressed={activeGroupId === null}
