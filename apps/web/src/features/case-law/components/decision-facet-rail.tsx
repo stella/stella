@@ -14,7 +14,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/sheet";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -26,6 +25,7 @@ import {
   dateRangeYear,
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
+import type { DecisionFacetRailState } from "@/features/case-law/decision-column-preferences.logic";
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
@@ -39,7 +39,6 @@ import type {
   FacetSourceBucket,
 } from "@/features/case-law/facet-rail.logic";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
@@ -50,6 +49,8 @@ type DecisionFacetRailProps = {
   facets: DecisionRailFacets;
   onDateRangeChange: (range: DecisionDateRange) => void;
   onSelect: (key: CaseLawFilterKey, value: string | undefined) => void;
+  /** Folded away, the column is gone and only the narrow-viewport sheet is left. */
+  railState: DecisionFacetRailState;
   selection: DecisionFacetSelection;
 };
 
@@ -60,35 +61,40 @@ type DecisionFacetRailProps = {
  * the counts stop reporting it.
  *
  * One column on a wide screen, a sheet behind a button on a narrow one; both
- * draw the same sections from the same facets.
+ * draw the same sections from the same facets. The column is what the toolbar
+ * folds away for the results' sake; the sheet is the only rail a narrow
+ * viewport ever had, so it stays either way.
  */
 export const DecisionFacetRail = ({
   dateRange,
   facets,
   onDateRangeChange,
   onSelect,
+  railState,
   selection,
 }: DecisionFacetRailProps) => {
   const t = useTranslations();
 
   return (
     <>
-      <aside
-        aria-label={t("common.filter")}
-        // Bounded inside the sticky context, so the rail scrolls on its own
-        // instead of stranding its lower sections below the fold: the page's
-        // scrollport is the results `main` under the 3rem top bar, and the
-        // extra rem is the gap the rail keeps above `main`'s bottom padding.
-        className="sticky top-0 hidden max-h-[calc(100dvh-4rem)] w-60 shrink-0 self-start overflow-y-auto pe-2 lg:block"
-      >
-        <FacetSections
-          dateRange={dateRange}
-          facets={facets}
-          onDateRangeChange={onDateRangeChange}
-          onSelect={onSelect}
-          selection={selection}
-        />
-      </aside>
+      {railState === "open" && (
+        <aside
+          aria-label={t("common.filter")}
+          // Bounded inside the sticky context, so the rail scrolls on its own
+          // instead of stranding its lower sections below the fold: the page's
+          // scrollport is the results `main` under the 3rem top bar, and the
+          // extra rem is the gap the rail keeps above `main`'s bottom padding.
+          className="sticky top-0 hidden max-h-[calc(100dvh-4rem)] w-60 shrink-0 self-start overflow-y-auto pe-2 lg:block"
+        >
+          <FacetSections
+            dateRange={dateRange}
+            facets={facets}
+            onDateRangeChange={onDateRangeChange}
+            onSelect={onSelect}
+            selection={selection}
+          />
+        </aside>
+      )}
       <Sheet>
         <SheetTrigger
           render={<Button className="lg:hidden" size="sm" variant="outline" />}
@@ -115,43 +121,13 @@ export const DecisionFacetRail = ({
   );
 };
 
-/** Sections the rail always has something to say about, for the pending shape. */
-const SKELETON_SECTION_KEYS = [
-  "common.court",
-  "workspaces.views.calendar.year",
-  "common.type",
-] as const satisfies readonly TranslationKey[];
-
-/** The rail's shape while the results are still loading. */
-export const DecisionFacetRailSkeleton = () => {
-  const t = useTranslations();
-
-  return (
-    <aside
-      aria-label={t("common.filter")}
-      className="hidden w-60 shrink-0 flex-col gap-5 self-start pe-2 lg:flex"
-    >
-      {SKELETON_SECTION_KEYS.map((key) => (
-        <section key={key}>
-          <SectionHeading>{t(key)}</SectionHeading>
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="h-4 w-3/5" />
-          </div>
-        </section>
-      ))}
-    </aside>
-  );
-};
-
 const FacetSections = ({
   dateRange,
   facets,
   onDateRangeChange,
   onSelect,
   selection,
-}: DecisionFacetRailProps) => {
+}: Omit<DecisionFacetRailProps, "railState">) => {
   const t = useTranslations();
 
   return (

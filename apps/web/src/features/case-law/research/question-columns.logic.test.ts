@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  answerNeedsRun,
+  CASE_LAW_RESEARCH_ANSWER_STATES,
+  CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
+} from "@stll/api-contract";
+import type { ResearchAnswerRunCheck } from "@stll/api-contract";
+
+import {
   answerKey,
   questionColumnSurface,
   questionEditDiscardsAnswers,
   questionRunSet,
+  researchRunBatches,
 } from "./question-columns.logic";
 import type { QuestionAnswer, QuestionColumn } from "./question-columns.logic";
 
@@ -18,14 +26,15 @@ const answer = (
   columnId: string,
   decisionId: string,
   state: QuestionAnswer["state"],
+  stale = false,
 ): [string, QuestionAnswer] => [
   answerKey(columnId, decisionId),
   {
     columnId,
     decisionId,
     state,
+    stale,
     answer: state === "answered" ? { type: "yes_no", value: "yes" } : null,
-    confidence: null,
   },
 ];
 
@@ -73,29 +82,41 @@ describe("what a run covers", () => {
     expect(runSet.cells).toBe(4);
   });
 
-  test("a refusal and a failure are finished answers, a pending cell is not", () => {
-    const runSet = questionRunSet({
-      answersByKey: new Map([
-        answer("c1", "d1", "failed"),
-        answer("c2", "d1", "pending"),
-      ]),
-      columnId: "c1",
-      columns,
-      pageDecisionIds: ["d1"],
-      selectedDecisionIds: [],
-    });
+  /**
+   * The count the reader confirms and the count the queue produces are one
+   * policy, so a cell the server would skip is never billed in the estimate
+   * and a cell it would retry is never left out of it.
+   */
+  test("a cell runs exactly when the queue's own policy says it does", () => {
+    const cases = [
+      // A failure is retried; a refusal is the source's terms, which a re-run
+      // cannot change; an answer is the cache that makes paging back free.
+      { state: "failed", stale: false },
+      { state: "not_allowed", stale: false },
+      { state: "answered", stale: false },
+      // A live pending cell belongs to another run; a quiet one is a run that
+      // died and may be claimed.
+      { state: "pending", stale: false },
+      { state: "pending", stale: true },
+    ] as const satisfies readonly ResearchAnswerRunCheck[];
 
-    expect(runSet.cells).toBe(0);
+    expect(
+      CASE_LAW_RESEARCH_ANSWER_STATES.every((state) =>
+        cases.some((entry) => entry.state === state),
+      ),
+    ).toBe(true);
 
-    const pending = questionRunSet({
-      answersByKey: new Map([answer("c2", "d1", "pending")]),
-      columnId: "c2",
-      columns,
-      pageDecisionIds: ["d1"],
-      selectedDecisionIds: [],
-    });
+    for (const { stale, state } of cases) {
+      const runSet = questionRunSet({
+        answersByKey: new Map([answer("c1", "d1", state, stale)]),
+        columnId: "c1",
+        columns,
+        pageDecisionIds: ["d1"],
+        selectedDecisionIds: [],
+      });
 
-    expect(pending.cells).toBe(1);
+      expect(runSet.cells).toBe(answerNeedsRun({ state, stale }) ? 1 : 0);
+    }
   });
 
   test("one column runs only its own cells", () => {
@@ -128,11 +149,41 @@ describe("what a run covers", () => {
       answersByKey: new Map(),
       columns,
       pageDecisionIds: page,
+      selectedDecisionIds: ["d2", "elsewhere"],
+    });
+
+    expect(runSet.decisionIds).toEqual(["d2"]);
+    expect(runSet.cells).toBe(2);
+  });
+
+  /**
+   * A selection outlives the rows it named: changing the query or a facet
+   * redraws the page without clearing it. A selection none of whose rows
+   * survived is not an empty run, it is no selection.
+   */
+  test("a selection the page no longer holds falls back to the page", () => {
+    const runSet = questionRunSet({
+      answersByKey: new Map(),
+      columns,
+      pageDecisionIds: page,
       selectedDecisionIds: ["elsewhere"],
     });
 
-    expect(runSet.decisionIds).toEqual([]);
-    expect(runSet.cells).toBe(0);
+    expect(runSet.decisionIds).toEqual(page);
+    expect(runSet.cells).toBe(6);
+  });
+
+  test("an empty page has nothing to run, selection or not", () => {
+    for (const selectedDecisionIds of [[], ["d1"]]) {
+      expect(
+        questionRunSet({
+          answersByKey: new Map(),
+          columns,
+          pageDecisionIds: [],
+          selectedDecisionIds,
+        }),
+      ).toEqual({ columnIds: ["c1", "c2"], decisionIds: [], cells: 0 });
+    }
   });
 
   test("forcing asks every cell again", () => {
@@ -179,6 +230,37 @@ describe("what a run covers", () => {
     });
 
     expect(runSet).toEqual({ columnIds: [], decisionIds: [], cells: 0 });
+  });
+});
+
+describe("how a run reaches the endpoint", () => {
+  const ids = (count: number): string[] =>
+    Array.from({ length: count }, (_, index) => `d${index}`);
+
+  test("a page fits in one request", () => {
+    expect(researchRunBatches([])).toEqual([]);
+    expect(
+      researchRunBatches(ids(CASE_LAW_RESEARCH_RUN_DECISIONS_MAX)),
+    ).toHaveLength(1);
+  });
+
+  test("no batch is longer than the endpoint accepts", () => {
+    for (const count of [1, 99, 100, 101, 250, 1000]) {
+      for (const batch of researchRunBatches(ids(count))) {
+        expect(batch.length).toBeGreaterThan(0);
+        expect(batch.length).toBeLessThanOrEqual(
+          CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
+        );
+      }
+    }
+  });
+
+  test("the batches are the run set, in order and whole", () => {
+    for (const count of [0, 1, 100, 101, 349]) {
+      const decisionIds = ids(count);
+
+      expect(researchRunBatches(decisionIds).flat()).toEqual(decisionIds);
+    }
   });
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { SEARCH_SORTS } from "@stll/api-contract/search";
 
 import {
+  activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   createCaseLawIndexPath,
@@ -110,6 +111,56 @@ describe("the filters the URL carries", () => {
 
   test("a query alone is not a filter", () => {
     expect(hasActiveCaseLawFilter({ country: "cz", q: "nájem" })).toBe(false);
+  });
+});
+
+describe("how many filters the badge reports", () => {
+  test("nothing narrowing the results counts as nothing", () => {
+    expect(activeCaseLawFilterCount({ country: "cz", q: "nájem" })).toBe(0);
+  });
+
+  test("each facet adds exactly one", () => {
+    for (const key of CASE_LAW_FILTER_KEYS) {
+      expect(activeCaseLawFilterCount({ country: "cz", [key]: "x" })).toBe(1);
+    }
+    expect(
+      activeCaseLawFilterCount({
+        country: "cz",
+        ...Object.fromEntries(CASE_LAW_FILTER_KEYS.map((key) => [key, "x"])),
+      }),
+    ).toBe(CASE_LAW_FILTER_KEYS.length);
+  });
+
+  // One chip, one row on the rail, so one count whichever ends it names.
+  test("the date span counts once, however it is spelled", () => {
+    expect(
+      activeCaseLawFilterCount({ country: "cz", from: "2024-01-01" }),
+    ).toBe(1);
+    expect(activeCaseLawFilterCount({ country: "cz", to: "2024-12-31" })).toBe(
+      1,
+    );
+    expect(
+      activeCaseLawFilterCount({
+        country: "cz",
+        from: "2024-01-01",
+        to: "2024-12-31",
+      }),
+    ).toBe(1);
+    expect(activeCaseLawFilterCount({ country: "cz", year: "2024" })).toBe(1);
+  });
+
+  test("the count and the yes/no answer never disagree", () => {
+    for (const search of [
+      { country: "cz" },
+      { country: "cz", q: "nájem" },
+      { country: "cz", court: "NS" },
+      { country: "cz", from: "2024-01-01" },
+      { country: "cz", court: "NS", lang: "cs", year: "2024" },
+    ]) {
+      expect(activeCaseLawFilterCount(search) > 0).toBe(
+        hasActiveCaseLawFilter(search),
+      );
+    }
   });
 });
 

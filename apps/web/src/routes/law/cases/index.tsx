@@ -33,6 +33,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import {
+  activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   createCaseLawIndexPath,
@@ -51,10 +52,7 @@ import {
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
-import {
-  DecisionFacetRail,
-  DecisionFacetRailSkeleton,
-} from "@/features/case-law/components/decision-facet-rail";
+import { DecisionFacetRail } from "@/features/case-law/components/decision-facet-rail";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { DecisionPager } from "@/features/case-law/components/decision-pager";
 import {
@@ -65,7 +63,10 @@ import type { DecisionFilterChip } from "@/features/case-law/components/decision
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
-import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
+import {
+  DEFAULT_DECISION_TABLE_LAYOUT,
+  toggledFacetRail,
+} from "@/features/case-law/decision-column-preferences.logic";
 import {
   decisionPageIndex,
   decisionPageNumber,
@@ -73,6 +74,7 @@ import {
   decisionPageSearchValue,
   decisionPageSize,
   decisionPageSizeSearchValue,
+  decisionPagesToWalk,
   reachableDecisionPage,
 } from "@/features/case-law/decision-pagination.logic";
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
@@ -343,7 +345,7 @@ export const Route = createFileRoute("/law/cases/")({
   // HTTP redirect for crawlers and no-JS clients. The blank-page race that
   // no-beforeload-redirect guards against is specific to the client-only
   // _protected subtree.
-  beforeLoad: ({ context: { queryClient }, search }) => {
+  beforeLoad: async ({ context: { queryClient }, search }) => {
     const country = resolveCaseLawRouteCountry({
       country: search.country,
       locale: getMessageLocale(),
@@ -370,22 +372,39 @@ export const Route = createFileRoute("/law/cases/")({
     }
 
     // What this URL can actually serve: the jurisdiction spelled the way the
-    // links spell it, and a page whose cursor this browser has walked to. A
-    // page exists for a reader only once the page before it has been fetched,
-    // so a link to a deeper one — a reload, a shared URL, a crawler — resolves
-    // to the deepest page the chain can show rather than to an empty table.
-    // One redirect for both, so the reader is corrected once.
+    // links spell it, and a page the chain of cursors reaches. The corpus
+    // answers with cursors, so page N exists only once the pages before it
+    // have been fetched — but a reload, a shared URL, a new tab and a crawler
+    // all arrive with no chain at all, and correcting them to the first page
+    // would make the pager's real links unshareable. So a deep link walks the
+    // chain to the page it names, and only a page the results themselves do
+    // not reach falls back to the deepest one that does. One redirect for
+    // both, so the reader is corrected once.
     const filters = createDecisionFiltersFromSearch({
       ...search,
       country: countryParam,
     });
+    const decisionsOptions = decisionsInfiniteOptions(
+      filters,
+      decisionPageSize(search.pageSize),
+    );
     const walked =
-      queryClient.getQueryData(
-        decisionsInfiniteOptions(filters, decisionPageSize(search.pageSize))
-          .queryKey,
-      )?.pages.length ?? 0;
+      queryClient.getQueryData(decisionsOptions.queryKey)?.pages.length ?? 0;
+    const wanted = decisionPageNumber(search.page);
+    // Only a deep arrival pays for the walk. A first page, and a page the
+    // chain already holds, leave the fetching to the loader, which decides
+    // whether this navigation is worth awaiting at all.
+    const reached =
+      wanted > 1 && wanted > walked
+        ? (
+            await ensureRouteInfiniteQueryData(queryClient, {
+              ...decisionsOptions,
+              pages: decisionPagesToWalk(wanted, walked),
+            })
+          ).pages.length
+        : walked;
     const page = decisionPageSearchValue(
-      reachableDecisionPage(search.page ?? 1, walked),
+      reachableDecisionPage(wanted, reached),
     );
     if (search.country !== countryParam || search.page !== page) {
       throw redirect({
@@ -422,6 +441,8 @@ export const Route = createFileRoute("/law/cases/")({
       };
     }
 
+    // `beforeLoad` has already walked the chain to the page a deep link named,
+    // so this is a cache read for that case and the first fetch otherwise.
     const [decisionPages] = await Promise.all([
       ensureRouteInfiniteQueryData(queryClient, decisionsOptions),
       ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
@@ -484,8 +505,11 @@ function PublicCaseLawIndexPending() {
         <Skeleton className="h-9 w-40 rounded-md" />
         <Skeleton className="h-9 w-full max-w-md flex-1 rounded-md" />
       </div>
+      {/*
+        No rail column: the defaults fold it away, and storage — which is what
+        could say otherwise — is not readable here.
+      */}
       <div className="flex min-w-0 flex-1 items-start gap-6">
-        <DecisionFacetRailSkeleton />
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <Skeleton className="h-7 w-full max-w-sm" />
           {/*
@@ -854,6 +878,7 @@ function PublicCaseLawIndex() {
           facets={facets}
           onDateRangeChange={setDateRange}
           onSelect={selectFacet}
+          railState={layout.facetRail}
           selection={{
             court: search.court,
             lang: search.lang,
@@ -864,6 +889,7 @@ function PublicCaseLawIndex() {
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <DecisionResultsToolbar
+            activeFilterCount={activeCaseLawFilterCount(search)}
             actions={
               <>
                 <QuestionColumnControls controller={questions} />
@@ -884,6 +910,12 @@ function PublicCaseLawIndex() {
                 "cases.refine-navigate",
               );
             }}
+            onRailToggle={() =>
+              setLayout({
+                ...layout,
+                facetRail: toggledFacetRail(layout.facetRail),
+              })
+            }
             onSortChange={(next) => {
               detached(
                 searchNavigation((previous) => ({ ...previous, sort: next })),
@@ -895,6 +927,7 @@ function PublicCaseLawIndex() {
                 ? NO_QUESTION_COLUMNS
                 : questions.surface.columns
             }
+            railState={layout.facetRail}
             sort={sort}
             summary={
               <ListHeading

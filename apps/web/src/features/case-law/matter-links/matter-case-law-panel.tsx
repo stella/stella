@@ -188,7 +188,9 @@ const MATTER_SCOPE = "matter";
 /**
  * A link's decision as the shared row model draws it. The list endpoint
  * carries the row facts and nothing borrowed: no snippet, because nothing was
- * searched for, and no alternates, because a link names one version.
+ * searched for. The alternates it does carry, because they decide whether the
+ * route to the decision names a language at all, and a multilingual decision
+ * reached without one resolves to whichever translation the slug lookup picks.
  */
 const toDecision = (link: MatterDecisionLink): Decision => ({
   id: link.decision.id,
@@ -198,7 +200,7 @@ const toDecision = (link: MatterDecisionLink): Decision => ({
   court: link.decision.court,
   country: link.decision.country,
   language: link.decision.language,
-  languageAlternates: [],
+  languageAlternates: link.decision.languageAlternates,
   decisionDate: link.decision.decisionDate,
   decisionType: link.decision.decisionType,
   headnote: link.decision.headnote,

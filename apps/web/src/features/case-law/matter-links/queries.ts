@@ -1,7 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { mapWithConcurrency } from "@stll/concurrency";
-
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -45,9 +43,6 @@ export type MatterDecisionLink = Awaited<
   ReturnType<NonNullable<ReturnType<typeof matterLinksOptions>["queryFn"]>>
 >[number];
 
-/** How many links are created at once; the rest wait rather than flood. */
-const LINK_CONCURRENCY = 4;
-
 type LinkDecisionsInput = {
   workspaceId: string;
   decisionIds: readonly string[];
@@ -56,28 +51,35 @@ type LinkDecisionsInput = {
 };
 
 /**
- * Pin decisions into a matter, a few requests at a time.
+ * Pin decisions into a matter, in one request.
  *
- * A decision already linked comes back as its existing link, so re-pinning is
- * a no-op rather than an error the reader has to read: the count reported is
- * what the matter holds from this action, not how many rows were new.
+ * One request rather than one per decision, because a save is one action: a
+ * request per decision fails in the middle, leaving links the caller never
+ * hears about and a reader who is told nothing was saved. The endpoint answers
+ * with the three outcomes instead — newly linked, already linked, and refused
+ * with a reason — so the toast can report what actually happened.
  */
 export const linkDecisionsToMatter = async ({
   decisionIds,
   note,
   workspaceId,
 }: LinkDecisionsInput) =>
-  await mapWithConcurrency({
-    items: decisionIds,
-    limit: LINK_CONCURRENCY,
-    operation: async (decisionId) =>
-      unwrapEden(
-        await matterLinksApi(workspaceId).post({
-          decisionId: toSafeId<"caseLawDecision">(decisionId),
-          note,
-        }),
-      ),
-  });
+  unwrapEden(
+    await matterLinksApi(workspaceId).batch.post({
+      items: decisionIds.map((decisionId) => ({
+        decisionId: toSafeId<"caseLawDecision">(decisionId),
+        note,
+      })),
+    }),
+  );
+
+export type MatterLinkBatchResult = Awaited<
+  ReturnType<typeof linkDecisionsToMatter>
+>;
+
+/** Why one decision of a batch was refused; the toast names each reason. */
+export type MatterLinkRejectionReason =
+  MatterLinkBatchResult["rejected"][number]["reason"];
 
 export const unlinkDecisionFromMatter = async ({
   linkId,
