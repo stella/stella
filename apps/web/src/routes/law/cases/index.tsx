@@ -82,7 +82,6 @@ import {
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
-import { SaveIntoMatterAction } from "@/features/case-law/matter-links/save-into-matter";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -886,15 +885,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           <DecisionResultsToolbar
             activeFilterCount={activeCaseLawFilterCount(search)}
             find={<TableFindBar {...find.bar} />}
-            actions={
-              <>
-                <QuestionColumnControls controller={questions} />
-                <SaveIntoMatterAction
-                  pageDecisionIds={pageDecisionIds}
-                  selectedDecisionIds={selectedIds}
-                />
-              </>
-            }
+            actions={<QuestionColumnControls controller={questions} />}
             layout={layout}
             onLayoutChange={setLayout}
             onRefine={(entry) => {
