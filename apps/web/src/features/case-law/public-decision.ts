@@ -25,6 +25,7 @@ export type PublicCaseLawDecision = {
   metadata: Record<string, unknown>;
   slug?: string | null;
   source: { name: string | null } | null;
+  sourceAttributionUrl: string | null;
   sourceUrl: string | null;
   textFields: ReadDecisionTextFields;
   updatedAt: Date | string | null;

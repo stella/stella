@@ -652,7 +652,8 @@
       "subsection": "par. {value}"
     },
     "reader": {
-      "headMatter": "Cabeçalho"
+      "headMatter": "Cabeçalho",
+      "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
     "refineWithinResults": "Refinar resultados",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Juiz relator",
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
-      "nalusDisclaimer": "Fonte: NALUS, Tribunal Constitucional da República Checa. Gratuito. Esta versão eletrônica não é autêntica; somente os originais com o emblema do estado e assinatura da pessoa autorizada são autênticos.",
       "popularName": "Nome popular",
       "provisionsCited": "Dispositivos citados",
       "sourceFields": {

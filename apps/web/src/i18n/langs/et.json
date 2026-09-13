@@ -652,7 +652,8 @@
       "subsection": "lg {value}"
     },
     "reader": {
-      "headMatter": "Päis"
+      "headMatter": "Päis",
+      "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "refineWithinResults": "Kitsenda tulemusi",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Ettekandja-kohtunik",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
       "provisionsCited": "Viidatud sätted",
       "sourceFields": {

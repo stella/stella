@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -58,6 +59,7 @@ import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 type Decision = {
   caseNumber: string;
@@ -65,6 +67,8 @@ type Decision = {
   language: string;
   fulltext: string | null;
   documentAst?: unknown;
+  /** Where the publisher offers this decision's data, from the read API. */
+  sourceAttributionUrl: string | null;
   textFields: ReadDecisionTextFields;
 };
 
@@ -91,6 +95,50 @@ const DECISION_REFERENCE_ID = "decision-reference";
 
 const supplementBlockAnchorId = (pieceId: string, start: number): string =>
   `${pieceId}:${String(start)}`;
+
+/** The host a reader recognises, rather than a permalink nobody reads. */
+const attributionLabel = (href: string): string =>
+  URL.canParse(href) ? new URL(href).host.replace(/^www\./u, "") : href;
+
+/**
+ * Where the decision's data is freely available, as the reader's last line.
+ *
+ * Part of the decision rather than page chrome: some courts make the
+ * attribution a condition of republishing, so every surface that renders a
+ * decision renders it. It is not part of the *text*, though — it sits outside
+ * the `<article>`, so it carries no `data-anchor` to highlight or cite, and
+ * `data-reader-chrome` keeps it out of a quotation taken from the last
+ * paragraph. Find matches come from the search pieces, which it is not in.
+ */
+const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
+  const t = useTranslations();
+  const href = sanitizeHref(url);
+
+  if (href === undefined) {
+    return null;
+  }
+
+  return (
+    <footer
+      className="text-muted-foreground border-border/50 mt-10 border-t pt-3 font-sans text-[0.6875rem] leading-snug"
+      data-reader-chrome=""
+    >
+      {t.rich("caseLaw.reader.sourceAttribution", {
+        link: (chunks) => (
+          <a
+            className="hover:text-foreground underline underline-offset-2"
+            href={sanitizeHref(href)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <BidiText>{chunks}</BidiText>
+          </a>
+        ),
+        source: attributionLabel(href),
+      })}
+    </footer>
+  );
+};
 
 const DecisionReference = ({
   activeMatchIndex,
@@ -741,112 +789,126 @@ export const DecisionText = ({
     });
   }, [activeMatchIndex, searchQuery, searchResults.matchCount]);
 
-  if (visibleBlocks.length > 0) {
-    return (
-      <article
-        className="text-card-foreground text-start"
-        lang={decision.language}
-        ref={articleRef}
-        style={{
-          fontFamily: "var(--reader-body-font)",
-          fontSize: "var(--reader-body-size)",
-          lineHeight: "var(--reader-body-line-height)",
-        }}
-      >
-        {hydrated && onAnnotationActivate !== undefined && (
-          <div className="sr-only">
-            {annotationAnchors.map((annotation) => (
-              <button
-                key={annotation.id}
-                onClick={() => onAnnotationActivate(annotation.id)}
-                type="button"
-              >
-                {annotation.kind === "comment"
-                  ? t("folio.comment")
-                  : t("legalReader.annotations.highlight")}
-              </button>
-            ))}
-          </div>
-        )}
-        <DecisionReference
-          activeMatchIndex={activeMatchIndex}
-          ranges={rangesForPiece(
-            searchResults.rangesByPieceId,
-            DECISION_REFERENCE_ID,
+  // One return, so the attribution line cannot be forgotten on the branch
+  // somebody adds next: it is required wherever a decision is rendered,
+  // including the states where the text itself did not resolve.
+  const body = ((): ReactElement => {
+    if (visibleBlocks.length > 0) {
+      return (
+        <article
+          className="text-card-foreground text-start"
+          lang={decision.language}
+          ref={articleRef}
+          style={{
+            fontFamily: "var(--reader-body-font)",
+            fontSize: "var(--reader-body-size)",
+            lineHeight: "var(--reader-body-line-height)",
+          }}
+        >
+          {hydrated && onAnnotationActivate !== undefined && (
+            <div className="sr-only">
+              {annotationAnchors.map((annotation) => (
+                <button
+                  key={annotation.id}
+                  onClick={() => onAnnotationActivate(annotation.id)}
+                  type="button"
+                >
+                  {annotation.kind === "comment"
+                    ? t("folio.comment")
+                    : t("legalReader.annotations.highlight")}
+                </button>
+              ))}
+            </div>
           )}
-          text={`${decision.court}, ${displayRef}`}
-        />
-        <EditorialSupplement
-          activeMatchIndex={activeMatchIndex}
-          annotationAnchors={
-            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
-          }
-          rangesByPieceId={searchResults.rangesByPieceId}
-          textFields={decision.textFields}
-        />
-        {renderBlocksWithHoldingZone({
-          activeMatchIndex,
-          apparatusLabel: t("caseLaw.reader.headMatter"),
-          anchorsByPieceId: buildAnchorsByPieceId({
-            annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
+          <DecisionReference
+            activeMatchIndex={activeMatchIndex}
+            ranges={rangesForPiece(
+              searchResults.rangesByPieceId,
+              DECISION_REFERENCE_ID,
+            )}
+            text={`${decision.court}, ${displayRef}`}
+          />
+          <EditorialSupplement
+            activeMatchIndex={activeMatchIndex}
+            annotationAnchors={
+              hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
+            }
+            rangesByPieceId={searchResults.rangesByPieceId}
+            textFields={decision.textFields}
+          />
+          {renderBlocksWithHoldingZone({
+            activeMatchIndex,
+            apparatusLabel: t("caseLaw.reader.headMatter"),
+            anchorsByPieceId: buildAnchorsByPieceId({
+              annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
+              blocks: visibleBlocks,
+              citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
+              provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
+              statutes: hydrated
+                ? statuteCitationAnchors
+                : NO_STATUTE_CITATION_ANCHORS,
+            }),
             blocks: visibleBlocks,
-            citations: hydrated ? citationAnchors : NO_CITATION_ANCHORS,
-            provisions: hydrated ? provisionAnchors : NO_PROVISION_ANCHORS,
-            statutes: hydrated
-              ? statuteCitationAnchors
-              : NO_STATUTE_CITATION_ANCHORS,
-          }),
-          blocks: visibleBlocks,
-          rangesByPieceId: searchResults.rangesByPieceId,
-          sectionMap,
-        })}
-      </article>
-    );
-  }
+            rangesByPieceId: searchResults.rangesByPieceId,
+            sectionMap,
+          })}
+        </article>
+      );
+    }
 
-  if (decision.fulltext) {
+    if (decision.fulltext) {
+      return (
+        <article
+          className="text-card-foreground text-start"
+          lang={decision.language}
+          ref={articleRef}
+          style={{
+            fontFamily: "var(--reader-body-font)",
+            fontSize: "var(--reader-body-size)",
+            lineHeight: "var(--reader-body-line-height)",
+          }}
+        >
+          <DecisionReference
+            activeMatchIndex={activeMatchIndex}
+            ranges={rangesForPiece(
+              searchResults.rangesByPieceId,
+              DECISION_REFERENCE_ID,
+            )}
+            text={`${decision.court}, ${displayRef}`}
+          />
+          <EditorialSupplement
+            activeMatchIndex={activeMatchIndex}
+            annotationAnchors={
+              hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
+            }
+            rangesByPieceId={searchResults.rangesByPieceId}
+            textFields={decision.textFields}
+          />
+          <FulltextFallback
+            activeMatchIndex={activeMatchIndex}
+            anchorsByPieceId={buildAnnotationAnchors(
+              hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
+            )}
+            rangesByPieceId={searchResults.rangesByPieceId}
+            text={decision.fulltext}
+          />
+        </article>
+      );
+    }
+
     return (
-      <article
-        className="text-card-foreground text-start"
-        lang={decision.language}
-        ref={articleRef}
-        style={{
-          fontFamily: "var(--reader-body-font)",
-          fontSize: "var(--reader-body-size)",
-          lineHeight: "var(--reader-body-line-height)",
-        }}
-      >
-        <DecisionReference
-          activeMatchIndex={activeMatchIndex}
-          ranges={rangesForPiece(
-            searchResults.rangesByPieceId,
-            DECISION_REFERENCE_ID,
-          )}
-          text={`${decision.court}, ${displayRef}`}
-        />
-        <EditorialSupplement
-          activeMatchIndex={activeMatchIndex}
-          annotationAnchors={
-            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
-          }
-          rangesByPieceId={searchResults.rangesByPieceId}
-          textFields={decision.textFields}
-        />
-        <FulltextFallback
-          activeMatchIndex={activeMatchIndex}
-          anchorsByPieceId={buildAnnotationAnchors(
-            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
-          )}
-          rangesByPieceId={searchResults.rangesByPieceId}
-          text={decision.fulltext}
-        />
-      </article>
+      <div className="flex items-center justify-center py-16">
+        <p className="text-muted-foreground text-sm">
+          {t("caseLaw.emptyState")}
+        </p>
+      </div>
     );
-  }
+  })();
 
   return (
-    <div className="flex items-center justify-center py-16">
-      <p className="text-muted-foreground text-sm">{t("caseLaw.emptyState")}</p>
-    </div>
+    <>
+      {body}
+      <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
+    </>
   );
 };

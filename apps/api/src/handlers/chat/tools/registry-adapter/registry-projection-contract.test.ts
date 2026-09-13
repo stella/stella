@@ -1264,6 +1264,7 @@ const CONTRACT_CORPUS = {
             allowsDerivedAi: true,
           },
           sourceUrl: "https://example.test/decision",
+          sourceAttributionUrl: "https://example.test/decision",
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);

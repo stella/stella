@@ -652,7 +652,8 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
-      "headMatter": "Fejrész"
+      "headMatter": "Fejrész",
+      "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
     },
     "refineWithinResults": "Találatok szűkítése",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Előadó bíró",
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Népszerű név",
       "provisionsCited": "Hivatkozott rendelkezések",
       "sourceFields": {

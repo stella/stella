@@ -652,7 +652,8 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
-      "headMatter": "Rubrum"
+      "headMatter": "Rubrum",
+      "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
     "refineWithinResults": "Ergebnisse eingrenzen",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Berichterstatter",
       "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populärer Name",
       "provisionsCited": "Angeführte Vorschriften",
       "sourceFields": {

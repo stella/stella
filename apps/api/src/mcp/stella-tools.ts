@@ -1850,6 +1850,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       textFields: result.textFields,
       source: result.source,
       sourceUrl: result.sourceUrl,
+      sourceAttributionUrl: result.sourceAttributionUrl,
       text:
         plainText === null || textBounds.start >= textBounds.end
           ? null

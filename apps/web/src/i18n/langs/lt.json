@@ -652,7 +652,8 @@
       "subsection": "{value} d."
     },
     "reader": {
-      "headMatter": "Antraštinė dalis"
+      "headMatter": "Antraštinė dalis",
+      "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
     "refineWithinResults": "Susiaurinti rezultatus",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Teisėjas pranešėjas",
       "legalArea": "Teisės sritis",
       "legalSentence": "Teisinė tezė",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
       "provisionsCited": "Cituojamos nuostatos",
       "sourceFields": {

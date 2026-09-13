@@ -652,7 +652,8 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
-      "headMatter": "Ievaddaļa"
+      "headMatter": "Ievaddaļa",
+      "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
     },
     "refineWithinResults": "Sašaurināt rezultātus",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Tiesnesis referents",
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populārais nosaukums",
       "provisionsCited": "Citētās normas",
       "sourceFields": {

@@ -652,7 +652,8 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
-      "headMatter": "الديباجة"
+      "headMatter": "الديباجة",
+      "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
     "refineWithinResults": "تضييق النتائج",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "القاضي المقرر",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
-      "nalusDisclaimer": "المصدر: NALUS، المحكمة الدستورية للجمهورية التشيكية. مجانًا. هذه النسخة الإلكترونية غير رسمية؛ النسخ الأصلية المحمَّلة بشعار الدولة وتوقيع الشخص المخوَّل هي وحدها الرسمية.",
       "popularName": "الاسم الشائع",
       "provisionsCited": "الأحكام المستشهد بها",
       "sourceFields": {
