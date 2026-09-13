@@ -189,11 +189,16 @@ const suggestChangesOperationTypeEnum = (
     "operations schema",
   );
   const items = requireRecord(operations["items"], "operations.items schema");
-  const type = requireRecord(
-    requireRecord(items["properties"], "operations.items.properties")["type"],
-    "operations.items.properties.type",
-  );
-  return requireArray(type["enum"], "operations.items.properties.type.enum");
+  const variants = requireArray(items["anyOf"], "operation schema variants");
+  const operationTypes = variants.flatMap((variant) => {
+    const properties = requireRecord(
+      requireRecord(variant, "operation variant")["properties"],
+      "operation variant properties",
+    );
+    const type = requireRecord(properties["type"], "operation type");
+    return requireArray(type["enum"], "operation type enum");
+  });
+  return [...new Set(operationTypes)];
 };
 
 // Construct args so every conditional tool group registers: owner role

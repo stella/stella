@@ -728,9 +728,9 @@ const normalizeAnyOfKeyword = ({
 
   if (Object.keys(branchSiblings).length > 0) {
     return {
-      anyOf: nonNullBranches.map((branch, index) =>
+      anyOf: nonNullBranches.map((entry, index) =>
         withBranchSiblings({
-          branch,
+          branch: entry,
           siblings: branchSiblings,
           context,
           path: `${joinPath(path, "anyOf")}[${index}]`,
