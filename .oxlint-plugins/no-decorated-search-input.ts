@@ -218,16 +218,19 @@ export default eslintCompatPlugin({
             }
 
             const className = attributeNamed(node, "className");
-            const classes = staticStringValue(className?.value);
-            if (
-              className !== null &&
-              classes !== null &&
-              classes.split(/\s+/u).some((token) => LEADING_PADDING.test(token))
-            ) {
-              context.report({
-                node: className,
-                messageId: "decoratedPadding",
-              });
+            if (className !== null) {
+              const classes = staticStringValue(className.value);
+              if (
+                classes !== null &&
+                classes
+                  .split(/\s+/u)
+                  .some((token) => LEADING_PADDING.test(token))
+              ) {
+                context.report({
+                  node: className,
+                  messageId: "decoratedPadding",
+                });
+              }
             }
 
             for (const icon of duplicatedIcons(node)) {
