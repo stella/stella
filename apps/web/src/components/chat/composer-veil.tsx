@@ -1,5 +1,8 @@
 import { cn } from "@stll/ui/utils";
 
+const PANE_MASK_IMAGE =
+  "linear-gradient(to right, transparent, black clamp(0.75rem, calc((100% - 35rem) / 2), 12.5rem), black calc(100% - clamp(0.75rem, calc((100% - 35rem) / 2), 12.5rem)), transparent), linear-gradient(to bottom, transparent, black 3rem)";
+
 /**
  * The one glass veil rendered behind a chat composer stack (input +
  * status row) wherever the composer floats over live content — the
@@ -40,9 +43,17 @@ export const ComposerVeil = ({
         variant === "rounded" &&
           "bg-background/75 supports-[backdrop-filter]:bg-background/40 inset-0 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
         variant === "pane" &&
-          "via-background/45 to-background/75 supports-[backdrop-filter]:via-background/15 supports-[backdrop-filter]:to-background/30 inset-x-0 -top-12 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_right,transparent,black_21%,black_79%,transparent),linear-gradient(to_bottom,transparent,black_3rem)] [mask-composite:intersect] backdrop-blur-md backdrop-saturate-50",
+          "via-background/45 to-background/75 supports-[backdrop-filter]:via-background/15 supports-[backdrop-filter]:to-background/30 inset-x-0 -top-12 -bottom-3.5 bg-linear-to-b from-transparent [mask-composite:intersect] backdrop-blur-md backdrop-saturate-50",
         className,
       )}
+      style={
+        variant === "pane"
+          ? {
+              maskImage: PANE_MASK_IMAGE,
+              WebkitMaskImage: PANE_MASK_IMAGE,
+            }
+          : undefined
+      }
     />
   );
 };
