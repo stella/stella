@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -19,6 +20,8 @@ import {
   MatterColorContextPicker,
   MatterColorPicker,
 } from "@/components/workspaces/matter-color-picker";
+import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
+import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -31,6 +34,15 @@ const breadcrumbInputClassName =
   "border-input bg-background text-foreground inline-flex rounded-md border text-sm shadow-xs/5 transition-colors has-focus-visible:border-ring";
 
 const matterNameInputClassName = `${breadcrumbInputClassName} font-semibold`;
+
+type ReferenceConfirmation =
+  | { status: "closed" }
+  | {
+      status: "confirming";
+      newReference: string;
+      setError: (message: string) => void;
+      workspaceId: string;
+    };
 
 export const WorkspaceBreadcrumb = ({
   workspaceId,
@@ -45,6 +57,8 @@ export const WorkspaceBreadcrumb = ({
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
   const referenceConflictMessage = useReferenceConflictMessage();
+  const [referenceConfirmation, setReferenceConfirmation] =
+    useState<ReferenceConfirmation>({ status: "closed" });
 
   const nameRename = useInlineRename({
     initial: workspace?.name ?? "",
@@ -59,30 +73,98 @@ export const WorkspaceBreadcrumb = ({
   const refRename = useInlineRename({
     initial: workspace?.reference ?? "",
     onCommit: (value, { setError }) => {
-      updateWorkspace.mutate(
-        {
-          workspaceId,
-          update: { type: "reference", value },
-        },
-        {
-          onError: (error) => {
-            const conflict = referenceConflictMessage(error, value);
-            if (conflict !== null) {
-              setError(conflict);
-              refInputEl?.focus();
-              return;
-            }
+      if (!workspace) {
+        return;
+      }
+      const edit = resolveReferenceEdit({
+        currentReference: workspace.reference,
+        nextReference: value,
+        stampedVersionCount: workspace.stampedVersionCount,
+      });
+      switch (edit.type) {
+        case "discard":
+          refRename.cancel();
+          return;
+        case "confirm":
+          setReferenceConfirmation({
+            status: "confirming",
+            newReference: edit.reference,
+            setError,
+            workspaceId,
+          });
+          return;
+        case "save":
+          updateWorkspace.mutate(
+            {
+              workspaceId,
+              update: { type: "reference", value: edit.reference },
+            },
+            {
+              onError: (error) => {
+                const conflict = referenceConflictMessage(
+                  error,
+                  edit.reference,
+                );
+                if (conflict !== null) {
+                  setError(conflict);
+                  refInputEl?.focus();
+                  return;
+                }
 
-            const message = userErrorFromThrown(
-              error,
-              t("errors.actionFailed"),
-            );
-            stellaToast.add({ title: message, type: "error" });
-          },
-        },
-      );
+                const message = userErrorFromThrown(
+                  error,
+                  t("errors.actionFailed"),
+                );
+                stellaToast.add({ title: message, type: "error" });
+              },
+            },
+          );
+          return;
+        default:
+          edit satisfies never;
+          panic(`Unhandled reference edit: ${String(edit)}`);
+      }
     },
   });
+
+  const cancelReferenceChange = () => {
+    setReferenceConfirmation({ status: "closed" });
+    refRename.cancel();
+  };
+
+  const confirmReferenceChange = () => {
+    if (
+      referenceConfirmation.status !== "confirming" ||
+      referenceConfirmation.workspaceId !== workspaceId
+    ) {
+      return;
+    }
+    const { newReference, setError } = referenceConfirmation;
+    setReferenceConfirmation({ status: "closed" });
+    updateWorkspace.mutate(
+      {
+        workspaceId,
+        update: {
+          type: "reference",
+          value: newReference,
+        },
+      },
+      {
+        onError: (error) => {
+          const conflict = referenceConflictMessage(error, newReference);
+          if (conflict !== null) {
+            setError(conflict);
+            refInputEl?.focus();
+            return;
+          }
+          stellaToast.add({
+            title: userErrorFromThrown(error, t("errors.actionFailed")),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
 
   if (!workspace) {
     return (
@@ -224,6 +306,17 @@ export const WorkspaceBreadcrumb = ({
       variant="popover"
     />
   );
+  const referenceConfirmationDialog =
+    referenceConfirmation.status === "confirming" &&
+    referenceConfirmation.workspaceId === workspaceId ? (
+      <ReferenceChangeConfirmation
+        newReference={referenceConfirmation.newReference}
+        oldReference={workspace.reference}
+        onCancel={cancelReferenceChange}
+        onConfirm={confirmReferenceChange}
+        stampedVersionCount={workspace.stampedVersionCount}
+      />
+    ) : null;
 
   if (!match) {
     return (
@@ -321,6 +414,7 @@ export const WorkspaceBreadcrumb = ({
           })()}
           {isEditingRef ? referenceSegment : null}
           {referenceHint}
+          {referenceConfirmationDialog}
         </BreadcrumbItem>
       </>
     );
@@ -355,6 +449,7 @@ export const WorkspaceBreadcrumb = ({
           />
           {referenceSegment}
           {referenceHint}
+          {referenceConfirmationDialog}
         </BreadcrumbItem>
       </>
     );
@@ -385,6 +480,7 @@ export const WorkspaceBreadcrumb = ({
         </Link>
         {referenceSegment}
         {referenceHint}
+        {referenceConfirmationDialog}
       </BreadcrumbItem>
     </>
   );

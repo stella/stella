@@ -7,14 +7,6 @@ import { panic } from "better-result";
 import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  AlertDialog,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -39,6 +31,7 @@ import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info
 import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
+import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -520,42 +513,15 @@ export const MatterMetadataPanel = ({
         </DialogPopup>
       </Dialog>
       {referenceConfirmation.status === "confirming" && (
-        <AlertDialog
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) {
-              cancelReferenceChange();
-            }
-          }}
-          open
-        >
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t("workspaces.referenceChangeConfirmTitle")}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {t.rich("workspaces.referenceChangeConfirmDescription", {
-                  bdi: (chunks: ReactNode) => <BidiText>{chunks}</BidiText>,
-                  count: workspace.stampedVersionCount,
-                  newReference: referenceConfirmation.newReference,
-                  oldReference: workspace.reference,
-                })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <Button onClick={cancelReferenceChange} variant="ghost">
-                {t("common.cancel")}
-              </Button>
-              <Button
-                onClick={() =>
-                  confirmReferenceChange(referenceConfirmation.newReference)
-                }
-              >
-                {t("common.confirm")}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+        <ReferenceChangeConfirmation
+          newReference={referenceConfirmation.newReference}
+          oldReference={workspace.reference}
+          onCancel={cancelReferenceChange}
+          onConfirm={() =>
+            confirmReferenceChange(referenceConfirmation.newReference)
+          }
+          stampedVersionCount={workspace.stampedVersionCount}
+        />
       )}
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
