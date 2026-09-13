@@ -1,64 +1,49 @@
 ---
 title: Connect your AI assistant
-description: Connect Claude or another MCP client to your stella workspace.
+description: Connect an MCP-compatible AI assistant to your stella workspace.
 sidebar:
   order: 1
 ---
 
-Connect Claude to stella's remote MCP server to work with the matters and
-documents you can access. This is a remote connection: there is no local
-installer or plugin to download.
+stella exposes a remote MCP server. Any assistant that supports Streamable HTTP
+with OAuth can connect to the matters and documents you can access.
 
 ## Before you begin
 
 You need a stella account and membership in the organization you plan to use.
-Your Claude account must allow custom connectors. The connection is authorized
-for each person, so it only reaches the stella organization and documents that
-person can access.
+Your assistant must support adding a remote MCP server. On managed accounts,
+an administrator may need to make the connection available first; each person
+then signs in with their own stella account.
 
-## Connect a personal Claude account
+## Server address
 
-In Claude on the web or desktop app:
+```text
+https://api.stll.app/mcp
+```
 
-1. Open **Customize → Connectors**.
-2. Select the **+** button, then choose **Add custom connector**.
-3. Enter **stella** as the name and this remote MCP address:
+Self-hosted instances serve `/mcp` on their own API host.
 
-   ```text
-   https://api.stll.app/mcp
-   ```
+## Connect your assistant
 
-4. Select **Add**. Leave advanced OAuth settings empty unless your stella
-   administrator gave you different values.
-5. Select **Connect**, then complete the stella sign-in in the browser.
+1. Open your assistant's integration settings. Depending on the client, these
+   may be called connectors, apps, tools, or MCP servers.
+2. Add a remote server named **stella** using the address above.
+3. Start the connection and complete the stella sign-in in your browser.
+4. Review the organization and requested permissions, then approve or reject
+   the connection. The client chooses which permissions to request.
 
-## Connect a Claude organization
+The connection grants access within the organization you select and the
+permissions you approve. To request fewer permissions, adjust the client's
+scope configuration before authorizing it. You can disconnect from stella's
+**Settings → Connections**.
 
-On managed plans, an Owner or Primary Owner first makes the connector available
-to the organization:
+For exact menu labels and account requirements, follow your assistant's remote
+MCP setup instructions.
 
-1. Open **Organization settings → Connectors**.
-2. Select **Add → Custom → Web**.
-3. Add `https://api.stll.app/mcp`, then select **Add**.
+## Check the connection
 
-Each member then opens **Customize → Connectors**, finds the custom stella
-connector, and selects **Connect** to complete their own stella sign-in.
-
-## Sign in to stella
-
-The stella page asks for your email and one-time code, then shows the
-organization and requested permissions. Check both before approving the
-connection. A connection grants access only within the organization you select.
-
-You can remove the connector or reconnect it later from **Customize →
-Connectors**. See [Claude's current custom connector instructions](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)
-if the labels in Claude have changed.
-
-## Start a chat
-
-Connectors are enabled per conversation. In a new chat, select the **+** button
-beside the message field, choose **Connectors**, and turn on **stella**. Ask a
-small read-only question first to confirm the organization in use:
+Start a conversation and make sure stella's tools are available. Some clients
+require you to enable the connection separately for each conversation. Ask:
 
 ```text
 Show the matters I can access and do not make any changes.
@@ -76,7 +61,7 @@ List its available versions, including the version date and author. Do not
 compare or save anything yet.
 ```
 
-After checking the returned versions, ask Claude for a preview:
+After checking the returned versions, ask your assistant for a preview:
 
 ```text
 Create a word-level tracked-changes comparison between version [base version]
@@ -108,12 +93,6 @@ in one matter. Choose the base and target versions explicitly, or compare a
 target version with its immediate predecessor. It can preview a comparison or
 save it as a derived version. It does not compare separate local files or
 versions from different documents.
-
-## Other MCP clients
-
-Any client that supports a remote HTTP MCP server with OAuth can connect to
-`https://api.stll.app/mcp`. Add that address in the client's remote connector
-settings, then complete the same stella sign-in and permission review.
 
 ## Next steps
 
