@@ -9,6 +9,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { recordEntityStamp } from "@/api/lib/document-counter";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
@@ -143,6 +144,9 @@ export default createSafeHandler(
           versionNumber: nextVersionNumber,
           workspaceReference: workspace?.reference ?? null,
         });
+        if (nextVersionStamp.stamp !== null && entity?.docSequence !== null) {
+          await recordEntityStamp(tx, workspaceId, entity.docSequence);
+        }
 
         await insertEntityVersion(tx, {
           createdBy: userId,
