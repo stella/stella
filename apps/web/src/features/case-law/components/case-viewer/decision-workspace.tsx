@@ -548,7 +548,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             className="grid max-lg:!grid-cols-[1fr]"
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
-            <aside className="relative max-lg:hidden">
+            <aside className="relative flex flex-col max-lg:hidden">
               {completeAnalysis !== null && showAiNotes && (
                 <AnalysisLayers
                   analysis={completeAnalysis}
@@ -564,12 +564,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     scrollContainerRef={mainRef}
                   />
                 )}
-              {visibleMarginItems.length > 0 && (
-                <MarginNotes
-                  items={visibleMarginItems}
-                  scrollContainerRef={mainRef}
-                />
-              )}
               {showAiNotes && isAnalyzing && (
                 <div className="px-2 pt-8">
                   <AnalysisLoader />
@@ -596,6 +590,18 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   </Button>
                 </div>
               )}
+
+              {/* The notes are painted absolutely inside this region, so they
+                  are measured against the space the layers above them leave
+                  free instead of against the whole column. */}
+              <div className="relative flex-1">
+                {visibleMarginItems.length > 0 && (
+                  <MarginNotes
+                    items={visibleMarginItems}
+                    scrollContainerRef={mainRef}
+                  />
+                )}
+              </div>
 
               <div
                 className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
