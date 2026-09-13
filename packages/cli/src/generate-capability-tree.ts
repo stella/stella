@@ -65,6 +65,8 @@ export type CapabilityCatalogEntry = {
   destructive: boolean;
   scope: string;
   additionalScopes?: readonly string[];
+  /** API-owned finite transport deadline for this generated capability command. */
+  requestTimeoutMs?: number;
   transport: CapabilityTransport;
   /**
    * The handler's input schema as the catalog carries it: `$defs`-compacted.
@@ -590,6 +592,9 @@ export const deriveCapabilityLeaf = (
     spec: {
       commandPath,
       capabilityId: entry.id,
+      ...(entry.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: entry.requestTimeoutMs }),
       ...(entry.description === undefined
         ? {}
         : { description: entry.description }),

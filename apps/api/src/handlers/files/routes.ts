@@ -9,7 +9,6 @@ import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/c
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
-  readFileHandler,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
 import {
@@ -23,6 +22,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { readFileHandler } from "@/api/lib/files/read-file";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const readFileEndpoint = createSafeHandler(

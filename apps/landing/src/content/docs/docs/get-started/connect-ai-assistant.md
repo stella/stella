@@ -1,14 +1,19 @@
 ---
 title: Connect your AI assistant
-description: Give Claude, ChatGPT, or any MCP client access to your stella workspace.
+description: Connect an MCP-compatible AI assistant to your stella workspace.
 sidebar:
   order: 1
 ---
 
-stella exposes a remote [MCP](https://modelcontextprotocol.io) server. Any
-assistant that supports remote MCP servers with OAuth can connect to your
-workspace. The client chooses which permissions to request; stella shows that
-set for you to approve or reject as a whole.
+stella exposes a remote MCP server. Any assistant that supports Streamable HTTP
+with OAuth can connect to the matters and documents you can access.
+
+## Before you begin
+
+You need a stella account and membership in the organization you plan to use.
+Your assistant must support adding a remote MCP server. On managed accounts,
+an administrator may need to make the connection available first; each person
+then signs in with their own stella account.
 
 ## Server address
 
@@ -16,34 +21,46 @@ set for you to approve or reject as a whole.
 https://api.stll.app/mcp
 ```
 
-Self-hosted instances serve the same endpoint on their own API host.
+Self-hosted instances serve `/mcp` on their own API host.
 
-## Claude
+## Connect your assistant
 
-1. In Claude, open **Settings → Connectors → Add custom connector**.
-2. Paste the server address above and confirm.
-3. Claude opens stella's sign-in page: enter your email and the one-time code
-   you receive.
-4. Review the requested permissions and approve or reject the complete set. To
-   request fewer permissions, change the connector's scope configuration in
-   Claude before authorizing it. Grants are per organization; you can
-   disconnect at any time from stella's
-   **Settings → Connections**.
+1. Open your assistant's integration settings. Depending on the client, these
+   may be called connectors, apps, tools, or MCP servers.
+2. Add a remote server named **stella** using the address above.
+3. Start the connection and complete the stella sign-in in your browser.
+4. Review the organization and requested permissions, then approve or reject
+   the connection. The client chooses which permissions to request.
 
-## ChatGPT
+The connection grants access within the organization you select and the
+permissions you approve. To request fewer permissions, adjust the client's
+scope configuration before authorizing it. You can disconnect from stella's
+**Settings → Connections**.
 
-1. In ChatGPT, open **Settings → Connectors** (or enable developer mode if
-   your plan requires it for custom connectors).
-2. Add a connector with the server address above.
-3. Complete the same sign-in and permission review in the stella window that
-   opens.
+For exact menu labels and account requirements, follow your assistant's remote
+MCP setup instructions.
 
-## Other MCP clients
+## Check the connection
 
-Any client speaking Streamable HTTP with OAuth 2.0 works the same way: point
-it at the server address and complete the browser sign-in. The server
-advertises its scopes. Check the client's requested set before approving it,
-and configure the client to request only what it should be able to do.
+Start a conversation and make sure stella's tools are available. Some clients
+require you to enable the connection separately for each conversation. Ask:
+
+```text
+Show the matters I can access and do not make any changes.
+```
+
+## Discover available tools
+
+Ask your assistant what it can do with the connected stella tools:
+
+```text
+What stella tools are available through this connection, and what can I use
+them for?
+```
+
+Available actions depend on your permissions and the features enabled on your
+stella instance. Browse the [tools reference](/docs/reference/tools/) to explore
+the supported capabilities.
 
 ## Next steps
 

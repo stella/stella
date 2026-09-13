@@ -8,9 +8,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   loadEntityVersionDocxBuffer,
   loadEntityVersionFileBuffer,
+  readEntityVersionFile,
   resolveEntityVersionFile,
 } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -39,6 +41,7 @@ type StoredField = {
         fileName: string;
         mimeType: string;
         encrypted: boolean;
+        sizeBytes: number;
       }
     | { type: "text"; value: string };
 };
@@ -58,6 +61,7 @@ const pdfField = (
     fileName: "brief.pdf",
     mimeType: PDF_MIME_TYPE,
     encrypted: false,
+    sizeBytes: 1024,
     ...overrides,
   },
 });
@@ -107,6 +111,7 @@ describe("resolveEntityVersionFile", () => {
       fileId: toSafeId<"userFile">(fileId),
       fileName: "brief.pdf",
       mimeType: PDF_MIME_TYPE,
+      sizeBytes: 1024,
       filePropertyId: toSafeId<"property">("prop_1"),
     });
   });
@@ -193,6 +198,22 @@ describe("loadEntityVersionFileBuffer", () => {
         await loadEntityVersionDocxBuffer({ ...baseOptions, organizationId }),
       ),
     ).toBe(400);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  test("refuses an oversized version before object storage is read", async () => {
+    const file = Result.unwrap(
+      await resolveEntityVersionFile({ ...baseOptions, allowReadOnly: true }),
+    );
+
+    const result = await readEntityVersionFile(
+      { ...file, sizeBytes: FILE_SIZE_LIMIT_BYTES.document + 1 },
+      organizationId,
+    );
+
+    expect(Result.isError(result) ? result.error.code : null).toBe(
+      "document_too_large",
+    );
     expect(fake.requests).toHaveLength(0);
   });
 });

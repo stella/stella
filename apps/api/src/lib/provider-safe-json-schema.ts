@@ -214,7 +214,19 @@ type ProjectNodeParams = {
   seenRefs: ReadonlySet<string>;
 };
 
-const withBranchSiblings = (branch: unknown, siblings: JsonObject): unknown => {
+type MergeBranchSiblingsOptions = {
+  branch: unknown;
+  siblings: JsonObject;
+  context: ProjectionContext;
+  path: string;
+};
+
+const withBranchSiblings = ({
+  branch,
+  siblings,
+  context,
+  path,
+}: MergeBranchSiblingsOptions): unknown => {
   if (!isJsonObject(branch)) {
     return branch;
   }
@@ -224,7 +236,11 @@ const withBranchSiblings = (branch: unknown, siblings: JsonObject): unknown => {
     return candidate;
   }
 
-  return { ...siblings, ...branch };
+  // The provider-safe dialect cannot represent this refinement alongside its
+  // parent. Keep the parent constraints, which bound every source branch, and
+  // record the omitted refinement rather than overwriting the parent.
+  context.dropped.push(path);
+  return siblings;
 };
 
 const branchesForTypes = (
@@ -665,16 +681,25 @@ const normalizeAnyOfKeyword = ({
     const branchSiblings = { ...next };
     delete branchSiblings["anyOf"];
     return {
-      anyOf: anyOf.map((branch) => withBranchSiblings(branch, branchSiblings)),
+      anyOf: anyOf.map((branch, index) =>
+        withBranchSiblings({
+          branch,
+          siblings: branchSiblings,
+          context,
+          path: `${joinPath(path, "anyOf")}[${index}]`,
+        }),
+      ),
     };
   }
 
-  const nonNullBranches = anyOf.filter((entry) => {
-    if (!isJsonObject(entry)) {
-      return true;
-    }
-    return !isNullOnlySchema(entry);
-  });
+  const nonNullBranches = anyOf
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => {
+      if (!isJsonObject(entry)) {
+        return true;
+      }
+      return !isNullOnlySchema(entry);
+    });
 
   if (nonNullBranches.length !== anyOf.length && !("nullable" in next)) {
     next["nullable"] = true;
@@ -687,9 +712,19 @@ const normalizeAnyOfKeyword = ({
 
   const branchSiblings = { ...next };
   delete branchSiblings["anyOf"];
-  const branch = nonNullBranches.at(0);
-  if (nonNullBranches.length === 1 && isJsonObject(branch)) {
-    const mergedBranch = withBranchSiblings(branch, branchSiblings);
+  const firstBranch = nonNullBranches.at(0);
+  const branch = firstBranch?.entry;
+  if (
+    nonNullBranches.length === 1 &&
+    firstBranch !== undefined &&
+    isJsonObject(branch)
+  ) {
+    const mergedBranch = withBranchSiblings({
+      branch,
+      siblings: branchSiblings,
+      context,
+      path: `${joinPath(path, "anyOf")}[${firstBranch.index}]`,
+    });
     return normalizeSchemaDialect({
       node: isJsonObject(mergedBranch) ? mergedBranch : branch,
       path,
@@ -700,13 +735,18 @@ const normalizeAnyOfKeyword = ({
 
   if (Object.keys(branchSiblings).length > 0) {
     return {
-      anyOf: nonNullBranches.map((entry) =>
-        withBranchSiblings(entry, branchSiblings),
+      anyOf: nonNullBranches.map(({ entry, index }) =>
+        withBranchSiblings({
+          branch: entry,
+          siblings: branchSiblings,
+          context,
+          path: `${joinPath(path, "anyOf")}[${index}]`,
+        }),
       ),
     };
   }
 
-  next["anyOf"] = nonNullBranches;
+  next["anyOf"] = nonNullBranches.map(({ entry }) => entry);
   return next;
 };
 

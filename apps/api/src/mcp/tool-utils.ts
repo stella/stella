@@ -1044,16 +1044,7 @@ export const ensureActiveWorkspace = ({
 export const buildMatterUrl = (workspaceId: string) =>
   `${getAppBaseUrl()}/workspaces/${workspaceId}`;
 
-export const buildDocumentUrl = ({
-  entityId,
-  fieldId,
-  workspaceId,
-}: {
-  entityId: string;
-  fieldId: string;
-  workspaceId: string;
-}) =>
-  `${getAppBaseUrl()}/workspaces/${workspaceId}/all/pdf?entity=${encodeURIComponent(entityId)}&field=${encodeURIComponent(fieldId)}`;
+export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
 const slugifyCaseNumber = (caseNumber: string) =>
   slugifyCaseLawPathSegment(caseNumber);

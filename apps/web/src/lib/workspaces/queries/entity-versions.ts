@@ -1,12 +1,25 @@
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
 
 import { entitiesKeys } from "./entities";
 
 type EntityVersionsKey = {
   workspaceId: string;
   entityId: string;
+  filePropertyId?: string | undefined;
 };
+
+type EntityVersionsResponse = Awaited<
+  ReturnType<
+    ReturnType<ReturnType<typeof api.entities>["entity"]>["versions"]["get"]
+  >
+>;
+
+type EntityVersionsResponseData = NonNullable<EntityVersionsResponse["data"]>;
+
+type EntityVersionSourceKind =
+  EntityVersionsResponseData["versions"][number]["sourceKind"];
 
 export type EntityVersion = {
   id: string;
@@ -16,6 +29,7 @@ export type EntityVersion = {
   description: string | null;
   diffWordsAdded: number | null;
   diffWordsRemoved: number | null;
+  sourceKind: EntityVersionSourceKind;
   createdAt: string;
   author: { id: string; name: string; image: string | null } | null;
   file: {
@@ -34,16 +48,19 @@ type EntityVersionsData = {
 };
 
 export const entityVersionsKeys = {
-  all: ({ workspaceId, entityId }: EntityVersionsKey) =>
-    entitiesKeys.versions(workspaceId, entityId),
+  all: ({ workspaceId, entityId, filePropertyId }: EntityVersionsKey) =>
+    filePropertyId === undefined
+      ? entitiesKeys.versions(workspaceId, entityId)
+      : [...entitiesKeys.versions(workspaceId, entityId), { filePropertyId }],
 };
 
 export const entityVersionsOptions = ({
   workspaceId,
   entityId,
+  filePropertyId,
 }: EntityVersionsKey) =>
   ({
-    queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+    queryKey: entityVersionsKeys.all({ workspaceId, entityId, filePropertyId }),
     retry: shouldRetryAPIRequest,
     queryFn: async ({
       signal,
@@ -53,7 +70,16 @@ export const entityVersionsOptions = ({
       const response = await api
         .entities({ workspaceId })
         .entity({ entityId })
-        .versions.get({ fetch: { signal } });
+        .versions.get({
+          ...(filePropertyId === undefined
+            ? {}
+            : {
+                query: {
+                  filePropertyId: toSafeId<"property">(filePropertyId),
+                },
+              }),
+          fetch: { signal },
+        });
 
       const data = unwrapEden(response);
       return {
@@ -68,11 +94,17 @@ export const fetchOlderVersions = async ({
   workspaceId,
   entityId,
   before,
+  filePropertyId,
 }: EntityVersionsKey & { before: string }): Promise<EntityVersionsData> => {
   const response = await api
     .entities({ workspaceId })
     .entity({ entityId })
-    .versions.get({ query: { before } });
+    .versions.get({
+      query:
+        filePropertyId === undefined
+          ? { before }
+          : { before, filePropertyId: toSafeId<"property">(filePropertyId) },
+    });
 
   const data = unwrapEden(response);
 

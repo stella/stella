@@ -32,6 +32,20 @@ describe("partitionRunnerArguments", () => {
     expect(patterns).toEqual([]);
   });
 
+  test("keeps a TypeScript config override out of positional test selection", () => {
+    const { bunArguments, patterns } = partitionRunnerArguments([
+      "--tsconfig-override",
+      "apps/api/tsconfig.test.json",
+      "redis-outage",
+    ]);
+
+    expect(bunArguments).toEqual([
+      "--tsconfig-override",
+      "apps/api/tsconfig.test.json",
+    ]);
+    expect(patterns).toEqual(["redis-outage"]);
+  });
+
   test("treats a bare positional as a pattern, as bun does", () => {
     // `bun test redis-outage` is the ordinary way to run one file. Leaving it
     // to bun would append it to every batch and defeat the isolation.

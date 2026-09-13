@@ -51,6 +51,7 @@ class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
     | "entity-not-found"
     | "entity-read-only"
     | "missing-file-field"
+    | "source-version-not-found"
     | "target-file-not-found"
     | "workspace-not-active";
   message: string;
@@ -129,6 +130,7 @@ const ENTITY_VERSION_TARGET_MESSAGES = {
   "edit-session-open":
     "The document has an active edit session; close it before automatic edits",
   "missing-file-field": "Entity has no file field",
+  "source-version-not-found": "Source version not found",
   "target-file-not-found": "The document file changed while edits were applied",
   "workspace-not-active": "The document's matter is archived or unavailable",
 } satisfies Record<EntityVersionTargetErrorCode, string>;
@@ -177,7 +179,10 @@ export const createEntityVersionFromBuffer = async ({
 
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = dependencies.allocateFileObject();
-  const entityVersionId = createSafeId<"entityVersion">();
+  const entityVersionId =
+    writePolicy.type === "append-derived-file-from-version"
+      ? writePolicy.comparisonVersionId
+      : createSafeId<"entityVersion">();
   const fieldId = createSafeId<"field">();
   const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
   const objectKey = dependencies.createFileKey({
@@ -351,6 +356,15 @@ export const createEntityVersionFromBuffer = async ({
           intent,
           reason: `Server-generated version rejected: ${writeOutcome.status}`,
           telemetry: VERSION_BUFFER_INTENT_TELEMETRY,
+        });
+      }
+      if (writeOutcome.status === "replayed") {
+        return Result.ok({
+          entityId,
+          entityVersionId: writeOutcome.entityVersionId,
+          fieldId: writeOutcome.fieldId,
+          fileName: writeOutcome.fileName,
+          versionNumber: writeOutcome.versionNumber,
         });
       }
       return Result.err(

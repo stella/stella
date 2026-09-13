@@ -38,6 +38,7 @@ const VALUE_FLAGS = new Set([
   "-t",
   "--test-name-pattern",
   "--timeout",
+  "--tsconfig-override",
 ]);
 
 /**

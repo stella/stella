@@ -13,7 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
@@ -38,6 +38,13 @@ export type FileVersionWritePolicy =
       expectedCurrentVersionId: SafeId<"entityVersion">;
     }
   | {
+      type: "append-derived-file-from-version";
+      comparisonVersionId: SafeId<"entityVersion">;
+      expectedCurrentVersionId: SafeId<"entityVersion">;
+      sourceVersionId: SafeId<"entityVersion">;
+      filePropertyId: SafeId<"property">;
+    }
+  | {
       type: "automatic-docx-edit";
       expectedCurrentVersionId: SafeId<"entityVersion">;
       filePropertyId: SafeId<"property">;
@@ -50,6 +57,14 @@ export type FileVersionWritePolicy =
     };
 
 export type WriteFileVersionResult =
+  | {
+      status: "replayed";
+      entityVersionId: SafeId<"entityVersion">;
+      fieldId: SafeId<"field">;
+      filePropertyId: SafeId<"property">;
+      fileName: string;
+      versionNumber: number;
+    }
   | {
       status: "ok";
       entityVersionId: SafeId<"entityVersion">;
@@ -65,6 +80,7 @@ export type WriteFileVersionResult =
         | "entity-not-found"
         | "entity-read-only"
         | "missing-file-field"
+        | "source-version-not-found"
         | "target-file-not-found"
         | "workspace-not-active";
     };
@@ -164,8 +180,65 @@ const hasOpenDocxEditSession = async ({
   return activeCollabRooms.at(0) !== undefined;
 };
 
+type ComparisonReplayResult =
+  | Extract<WriteFileVersionResult, { status: "replayed" }>
+  | { status: "target-file-not-found" };
+
+type ComparisonReplayOptions = {
+  tx: Transaction;
+  entityId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: SafeId<"entityVersion">;
+  writePolicy: Extract<
+    FileVersionWritePolicy,
+    { type: "append-derived-file-from-version" }
+  >;
+};
+
+const replayExistingComparisonVersion = async ({
+  tx,
+  entityId,
+  workspaceId,
+  entityVersionId,
+  writePolicy,
+}: ComparisonReplayOptions): Promise<ComparisonReplayResult | undefined> => {
+  if (entityVersionId !== writePolicy.comparisonVersionId) {
+    panic("Derived comparison must use its deterministic version identity");
+  }
+  const existing = await tx.query.entityVersions.findFirst({
+    where: {
+      id: { eq: entityVersionId },
+      entityId: { eq: entityId },
+      workspaceId: { eq: workspaceId },
+    },
+    columns: { id: true, versionNumber: true, deletedAt: true },
+    with: {
+      fields: {
+        where: { propertyId: { eq: writePolicy.filePropertyId } },
+        columns: { id: true, content: true },
+        limit: 1,
+      },
+    },
+  });
+  if (!existing) {
+    return undefined;
+  }
+  const existingField = existing.fields.at(0);
+  if (existing.deletedAt !== null || existingField?.content.type !== "file") {
+    return { status: "target-file-not-found" };
+  }
+  return {
+    status: "replayed",
+    entityVersionId: existing.id,
+    fieldId: existingField.id,
+    filePropertyId: writePolicy.filePropertyId,
+    fileName: existingField.content.fileName,
+    versionNumber: existing.versionNumber,
+  };
+};
+
 /**
- * Canonical transaction for replacing an entity's file with a new version.
+ * Canonical transaction for writing an entity file version.
  *
  * Ordinary transports and automatic DOCX edits delegate here, so row locking,
  * version numbering, field/cell cloning, edit-session exclusion, and audit
@@ -197,6 +270,9 @@ export const writeFileVersion = async ({
       break;
     }
     case "replace-current-file-from-version": {
+      break;
+    }
+    case "append-derived-file-from-version": {
       break;
     }
     case "automatic-docx-edit": {
@@ -243,10 +319,13 @@ export const writeFileVersion = async ({
     }
   }
 
-  const targetsFileProperty =
+  const locksFileProperty =
     writePolicy.type === "automatic-docx-edit" ||
     writePolicy.type === "collaboration-room-publish";
-  const lockedWorkspace = targetsFileProperty
+  const targetsFileProperty =
+    locksFileProperty ||
+    writePolicy.type === "append-derived-file-from-version";
+  const lockedWorkspace = locksFileProperty
     ? await tx
         .select({ reference: workspaces.reference, status: workspaces.status })
         .from(workspaces)
@@ -255,7 +334,7 @@ export const writeFileVersion = async ({
         .for("update")
         .then((rows) => rows.at(0))
     : null;
-  if (targetsFileProperty && lockedWorkspace?.status !== "active") {
+  if (locksFileProperty && lockedWorkspace?.status !== "active") {
     return { status: "workspace-not-active" };
   }
 
@@ -284,6 +363,20 @@ export const writeFileVersion = async ({
     return { status: "missing-file-field" };
   }
 
+  if (writePolicy.type === "append-derived-file-from-version") {
+    // The entity lock serializes creation and replay, including concurrent retries.
+    const replay = await replayExistingComparisonVersion({
+      tx,
+      entityId,
+      workspaceId,
+      entityVersionId,
+      writePolicy,
+    });
+    if (replay) {
+      return replay;
+    }
+  }
+
   const currentVersionId = lockedEntity.currentVersionId;
   if (
     writePolicy.type !== "replace-current-file" &&
@@ -291,9 +384,13 @@ export const writeFileVersion = async ({
   ) {
     return { status: "current-version-changed" };
   }
-  const currentVersion = await tx.query.entityVersions.findFirst({
+  const fieldSourceVersionId =
+    writePolicy.type === "append-derived-file-from-version"
+      ? writePolicy.sourceVersionId
+      : currentVersionId;
+  const fieldSourceVersion = await tx.query.entityVersions.findFirst({
     where: {
-      id: { eq: currentVersionId },
+      id: { eq: fieldSourceVersionId },
       entityId: { eq: entityId },
       workspaceId: { eq: workspaceId },
       deletedAt: { isNull: true },
@@ -303,20 +400,26 @@ export const writeFileVersion = async ({
       fields: { columns: { id: true, content: true, propertyId: true } },
     },
   });
-  if (!currentVersion) {
-    return { status: "current-version-not-found" };
+  if (!fieldSourceVersion) {
+    return {
+      status:
+        writePolicy.type === "append-derived-file-from-version"
+          ? "source-version-not-found"
+          : "current-version-not-found",
+    };
   }
 
   const fileField = targetsFileProperty
-    ? currentVersion.fields.find(
+    ? fieldSourceVersion.fields.find(
         (candidate) =>
           candidate.propertyId === writePolicy.filePropertyId &&
           (writePolicy.type !== "automatic-docx-edit" ||
             candidate.id === writePolicy.replacedFileFieldId) &&
           candidate.content.type === "file" &&
-          candidate.content.mimeType === DOCX_MIME_TYPE,
+          (writePolicy.type !== "append-derived-file-from-version" ||
+            candidate.content.mimeType === DOCX_MIME_TYPE),
       )
-    : currentVersion.fields.find(
+    : fieldSourceVersion.fields.find(
         (candidate) => candidate.content.type === "file",
       );
   if (targetsFileProperty && !fileField) {
@@ -348,7 +451,7 @@ export const writeFileVersion = async ({
   // the per-version property uniqueness constraint below.
   if (
     !fileField &&
-    currentVersion.fields.some(
+    fieldSourceVersion.fields.some(
       (candidate) => candidate.propertyId === filePropertyId,
     )
   ) {
@@ -407,7 +510,7 @@ export const writeFileVersion = async ({
     ...(scanWarnings !== undefined && { scanWarnings }),
   });
   const revisionFields = cloneFieldsForRevision({
-    currentFields: currentVersion.fields,
+    currentFields: fieldSourceVersion.fields,
     entityVersionId,
     propertyId: filePropertyId,
     replacementFieldId: fieldId,
@@ -438,7 +541,7 @@ export const writeFileVersion = async ({
     .where(
       and(
         eq(cellMetadata.workspaceId, workspaceId),
-        eq(cellMetadata.entityVersionId, currentVersionId),
+        eq(cellMetadata.entityVersionId, fieldSourceVersionId),
       ),
     )
     .for("update");
@@ -460,16 +563,18 @@ export const writeFileVersion = async ({
     );
   }
 
-  await tx
-    .update(entities)
-    .set({
-      currentVersionId: entityVersionId,
-      lastEditedBy: userId,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-    );
+  if (writePolicy.type !== "append-derived-file-from-version") {
+    await tx
+      .update(entities)
+      .set({
+        currentVersionId: entityVersionId,
+        lastEditedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+      );
+  }
   if (writePolicy.type === "automatic-docx-edit") {
     // File-chat identity follows the logical document across automatic edits.
     // Move every user's exact field mapping atomically with the version write.
@@ -490,37 +595,42 @@ export const writeFileVersion = async ({
     .set({ lastActivityAt: new Date() })
     .where(eq(workspaces.id, workspaceId));
 
-  await recordAuditEvent(tx, [
-    {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-      resourceId: entityVersionId,
-      workspaceId,
-      changes: {
-        created: {
-          old: null,
-          new: {
-            entityId,
-            versionNumber,
-            fileName,
-            mimeType,
-            sizeBytes,
-            sha256Hex,
-          },
+  const createdVersionAuditEvent = {
+    action: AUDIT_ACTION.CREATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+    resourceId: entityVersionId,
+    workspaceId,
+    changes: {
+      created: {
+        old: null,
+        new: {
+          entityId,
+          versionNumber,
+          fileName,
+          mimeType,
+          sizeBytes,
+          sha256Hex,
         },
       },
-      metadata: { fileName, mimeType, sizeBytes, sha256Hex },
     },
-    {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: entityId,
-      workspaceId,
-      changes: {
-        currentVersionId: { old: currentVersionId, new: entityVersionId },
+    metadata: { fileName, mimeType, sizeBytes, sha256Hex },
+  } satisfies AuditEvent;
+  if (writePolicy.type === "append-derived-file-from-version") {
+    await recordAuditEvent(tx, createdVersionAuditEvent);
+  } else {
+    await recordAuditEvent(tx, [
+      createdVersionAuditEvent,
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: entityId,
+        workspaceId,
+        changes: {
+          currentVersionId: { old: currentVersionId, new: entityVersionId },
+        },
       },
-    },
-  ]);
+    ]);
+  }
 
   const result = {
     status: "ok",

@@ -48,6 +48,7 @@ describe("chat tool activity", () => {
     expect(getChatToolActivityCategory("edit_workspace_document")).toBe(
       "artifact",
     );
+    expect(getChatToolActivityCategory("compare_versions")).toBe("research");
   });
 
   test("does not animate tools awaiting user input", () => {

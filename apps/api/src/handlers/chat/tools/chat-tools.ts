@@ -61,7 +61,6 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
-import { createVersionCompareTools } from "@/api/handlers/chat/tools/version-compare-tools";
 import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
@@ -238,7 +237,6 @@ type CurrentSkillEditTools = Partial<
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
-type VersionCompareTools = ReturnType<typeof createVersionCompareTools>;
 type FolderConsistencyReviewTools = ReturnType<
   typeof createFolderConsistencyReviewTools
 >;
@@ -262,7 +260,6 @@ type BuiltInChatTools = OrgTools &
   ChatHistoryTools &
   TemplateTools &
   TemplateAuthoringTools &
-  VersionCompareTools &
   FolderConsistencyReviewTools &
   RegistryWriteTools &
   SubagentTools &
@@ -739,9 +736,8 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //   - `editApplyMode === "auto"`: the session opted into headless apply
   //     (see `editApplyMode`'s doc comment on `GetChatToolsProps`).
   //   - An editable active DOCX file is present
-  //     (`activeFile.supportsDocxEdits === true`), the same precondition
-  //     `compare_versions` uses, with its current version id to pin the
-  //     batch to.
+  //     (`activeFile.supportsDocxEdits === true`), with its current version
+  //     id used to pin the batch.
   //   - `entity: ["update"]` permission -- this tool overwrites the active
   //     document's content, the same grant `docx-suggestions/create.ts`,
   //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
@@ -936,25 +932,6 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // anonymous/public surfaces with no accessible workspace never receive write
   // tools. Real per-workspace statuses are threaded through so the handlers'
   // `ensureActiveWorkspace` gate keeps archived matters read-only.
-  // Server-executed version-diff tool. Gated on a non-empty workspace set and
-  // an active DOCX file field: it resolves version ids against
-  // `toolWorkspaceIds` and pins the compared DOCX by the active field's
-  // property id.
-  const versionCompareTools =
-    toolWorkspaceIds.length === 0 ||
-    activeFile?.supportsDocxEdits !== true ||
-    activeFile.fileFieldId === undefined
-      ? {}
-      : createVersionCompareTools({
-          safeDb,
-          organizationId,
-          activeFileContext: {
-            entityId: activeFile.entityId,
-            fileFieldId: activeFile.fileFieldId,
-          },
-          toolWorkspaceIds,
-        });
-
   const registryWriteTools =
     toolWorkspaceIds.length === 0
       ? {}
@@ -1018,7 +995,6 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...createWorkspaceDocumentTools,
       ...suggestChangesTools,
       ...folioAgentDocTools,
-      ...versionCompareTools,
       ...folderConsistencyReviewTools,
       ...webSearchTools,
       ...registryWriteTools,

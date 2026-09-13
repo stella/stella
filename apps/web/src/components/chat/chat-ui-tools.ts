@@ -216,7 +216,6 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
-  compare_versions: "chat.tool.compare_versions",
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
   create_matter_document: "chat.tool.create_matter_document",
@@ -286,6 +285,9 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   // The automatic DOCX edit tool the server-executed `suggest_changes`
   // variant replaced; persisted threads still carry its calls.
   edit_workspace_document: "chat.tool.suggest_changes",
+  // The generic documents.compare capability replaced the chat-only tool;
+  // persisted threads still carry its calls.
+  compare_versions: "chat.tool.compare_versions",
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   // Split into create_template and configure_template_fields; persisted
@@ -511,6 +513,7 @@ const RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "apply-active-docx-edits": false,
   ares_lookup_company: false,
   ares_search_companies: false,
+  compare_versions: false,
   "describe-stella-api": false,
   "describe-stella-function": false,
   edit_workspace_document: false,

@@ -644,6 +644,82 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(droppedKeywords).toEqual([]);
   });
 
+  test("preserves parent operation constraints when an anyOf refinement is disjoint", () => {
+    const { schema, droppedKeywords } = projectToProviderSafeJsonSchema(
+      {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: ["replaceBlock", "deleteBlock"],
+          },
+        },
+        required: ["type"],
+        additionalProperties: false,
+        anyOf: [
+          {
+            properties: {
+              type: { enum: ["insertAfterBlock", "insertBeforeBlock"] },
+            },
+          },
+          {
+            properties: {
+              type: { enum: ["replaceBlock"] },
+            },
+          },
+        ],
+      },
+      { nullUnionStrategy: "json-schema" },
+    );
+
+    expect(schema).toEqual({
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            type: {
+              type: "string",
+              enum: ["replaceBlock", "deleteBlock"],
+            },
+          },
+          required: ["type"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: ["replaceBlock"] },
+          },
+          required: ["type"],
+          additionalProperties: false,
+        },
+      ],
+    });
+    expect(droppedKeywords).toEqual(["anyOf[0]"]);
+  });
+
+  test.each([1, 2])(
+    "reports source indices after filtering null branches (%i refinements)",
+    (count) => {
+      const { droppedKeywords } = projectToProviderSafeJsonSchema(
+        {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["allowed"] } },
+          anyOf: [
+            { type: "null" },
+            ...Array.from({ length: count }, () => ({
+              properties: { kind: { enum: ["excluded"] } },
+            })),
+          ],
+        },
+        { nullUnionStrategy: "openapi" },
+      );
+      expect(droppedKeywords).toEqual(
+        Array.from({ length: count }, (_, index) => `anyOf[${index + 1}]`),
+      );
+    },
+  );
+
   test("merges parent object constraints before collapsing nullable OpenAPI anyOf branches", () => {
     const { schema, droppedKeywords } = projectToProviderSafeJsonSchema(
       {

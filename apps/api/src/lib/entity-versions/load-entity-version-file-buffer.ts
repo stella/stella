@@ -8,10 +8,9 @@
  * read: `resolveEntityVersionFile` answers from the database alone, and
  * `readEntityVersionFile` fetches the bytes for a resolved file.
  *
- * Every function here always reads the entity's live `currentVersionId`:
- * the callers act on the document as it is now, not on a historical
- * version. `loadEntityVersionDocxText` in `version-diff-sources.ts` is the
- * loader for an arbitrary version id.
+ * The resolver and combined loader read the entity's live `currentVersionId`.
+ * `readEntityVersionFile` may also read a separately authorized historical
+ * version descriptor; callers own that authorization and identity check.
  *
  * The file field is selected by a server-validated field id rather than by
  * "the first DOCX": an entity can hold several file properties, and picking
@@ -24,7 +23,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -51,6 +50,7 @@ export type EntityVersionFile = {
   fileId: SafeId<"userFile">;
   fileName: string;
   mimeType: string;
+  sizeBytes: number;
   /** The property id of the file field, for `cloneFieldsForRevision`. */
   filePropertyId: SafeId<"property">;
 };
@@ -160,6 +160,7 @@ export const resolveEntityVersionFile = async ({
     fileId: brandPersistedUserFileId(fileContent.id),
     fileName: fileContent.fileName,
     mimeType: fileContent.mimeType,
+    sizeBytes: fileContent.sizeBytes,
     filePropertyId: fileField.propertyId,
   });
 };
@@ -167,8 +168,19 @@ export const resolveEntityVersionFile = async ({
 export const readEntityVersionFile = async (
   file: EntityVersionFile,
   organizationId: SafeId<"organization">,
-): Promise<Result<ArrayBuffer, HandlerError>> =>
-  await Result.tryPromise({
+  signal?: AbortSignal,
+): Promise<Result<ArrayBuffer, HandlerError>> => {
+  if (file.sizeBytes > FILE_SIZE_LIMIT_BYTES.document) {
+    return Result.err(
+      new HandlerError({
+        code: "document_too_large",
+        status: 413,
+        message: `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
+      }),
+    );
+  }
+
+  return await Result.tryPromise({
     try: async () =>
       await readS3ArrayBuffer(
         createFileKey({
@@ -177,6 +189,7 @@ export const readEntityVersionFile = async (
           fileId: file.fileId,
           mimeType: file.mimeType,
         }),
+        signal,
       ),
     catch: (cause) =>
       new HandlerError({
@@ -185,6 +198,7 @@ export const readEntityVersionFile = async (
         cause,
       }),
   });
+};
 
 type LoadEntityVersionFileBufferOptions = ResolveEntityVersionFileOptions & {
   organizationId: SafeId<"organization">;

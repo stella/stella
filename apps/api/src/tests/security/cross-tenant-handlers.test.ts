@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -20,6 +21,8 @@ import {
   caseLawResearchColumns,
   documentTranslationRuns,
   entities,
+  entityVersions,
+  fields,
   legalLists,
   legalReaderAnnotations,
   notifications,
@@ -35,15 +38,13 @@ import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-look
 import readContactById from "@/api/handlers/contacts/get";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
+import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
 import readExpenses from "@/api/handlers/expenses/list";
-import {
-  readEmailHtmlPreviewHandler,
-  readFileHandler,
-} from "@/api/handlers/files/get";
+import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
 import listLegalLists from "@/api/handlers/lists/list";
@@ -61,7 +62,9 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readFileHandler } from "@/api/lib/files/read-file";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -153,6 +156,59 @@ const notificationB = toSafeId<"notification">(
 );
 const readerAnnotationB = toSafeId<"legalReaderAnnotation">(
   "22222222-2222-4222-8222-222222222254",
+);
+const compareTargetVersionB = toSafeId<"entityVersion">(
+  "22222222-2222-4222-8222-222222222253",
+);
+const compareTargetFieldB = toSafeId<"field">(
+  "22222222-2222-4222-8222-222222222254",
+);
+const compareTargetFileB = toSafeId<"userFile">(
+  "22222222-2222-4222-8222-222222222255",
+);
+const compareRedlineVersionB = toSafeId<"entityVersion">(
+  "22222222-2222-4222-8222-222222222256",
+);
+
+type CompareDocumentDependencies = NonNullable<
+  Parameters<typeof createDocumentCompareHandler>[0]
+>;
+
+const compareDocumentDependencies = {
+  applyDisposition: async (buffer) => buffer,
+  compareDocx: async () =>
+    Result.ok({
+      buffer: new ArrayBuffer(1),
+      changes: [],
+      verification: { status: "verified" },
+      unsupported: [],
+      compatibility: { status: "standard-ooxml" },
+    }),
+  createEntityVersionFromBuffer: async ({ entityId }) =>
+    Result.ok({
+      entityId,
+      entityVersionId: compareRedlineVersionB,
+      fieldId: compareTargetFieldB,
+      fileName: "comparison.docx",
+      versionNumber: 3,
+    }),
+  readEntityVersionFile: async () => Result.ok(new ArrayBuffer(1)),
+  readFileHandler: async () => ({
+    fileId: compareTargetFileB,
+    mimeType: DOCX_MIME_TYPE,
+    originalMimeType: DOCX_MIME_TYPE,
+    fileName: "comparison.docx",
+    encrypted: false,
+    presignedUrl: "https://files.example/comparison.docx",
+    stampable: false,
+  }),
+  resolveDocxEditAuthorName: async () => "Cross-tenant test user",
+  withTimeout: async (operation) =>
+    await operation(new AbortController().signal),
+} satisfies CompareDocumentDependencies;
+
+const compareDocumentVersions = createDocumentCompareHandler(
+  compareDocumentDependencies,
 );
 
 const savedSearchCriteria = (
@@ -260,6 +316,57 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.entityVersionB1),
+  },
+  {
+    name: "document version comparison",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(compareDocumentVersions, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          documentId: testIds.entityB1,
+        },
+        body: {
+          filePropertyId: testIds.filePropertyB1,
+          selection: {
+            type: "versions",
+            baseVersionId: testIds.entityVersionB1,
+            targetVersionIds: [compareTargetVersionB],
+          },
+          baseTrackedChanges: "keep",
+          targetTrackedChanges: "keep",
+          output: { type: "version" },
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(compareDocumentVersions, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          documentId: testIds.entityB1,
+        },
+        body: {
+          filePropertyId: testIds.filePropertyB1,
+          selection: {
+            type: "versions",
+            baseVersionId: testIds.entityVersionB1,
+            targetVersionIds: [compareTargetVersionB],
+          },
+          baseTrackedChanges: "keep",
+          targetTrackedChanges: "keep",
+          output: { type: "version" },
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expect(result).toMatchObject({
+        results: [
+          {
+            status: "created",
+            targetVersionId: compareTargetVersionB,
+            redlineVersionId: compareRedlineVersionB,
+          },
+        ],
+      });
+    },
   },
   {
     name: "file field download metadata",
@@ -646,6 +753,29 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(entityVersions).values({
+    id: compareTargetVersionB,
+    workspaceId: ids.wsB1,
+    entityId: ids.entityB1,
+    versionNumber: 2,
+  });
+  await testDb.insert(fields).values({
+    id: compareTargetFieldB,
+    workspaceId: ids.wsB1,
+    propertyId: ids.filePropertyB1,
+    entityVersionId: compareTargetVersionB,
+    content: {
+      version: 1,
+      type: "file",
+      id: compareTargetFileB,
+      fileName: "agreement-v2.docx",
+      mimeType: DOCX_MIME_TYPE,
+      sizeBytes: 1,
+      encrypted: false,
+      sha256Hex: "a".repeat(64),
+      pdfFileId: null,
+    },
+  });
   await testDb.insert(legalLists).values([
     {
       id: legalListA,

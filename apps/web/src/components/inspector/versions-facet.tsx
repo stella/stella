@@ -5,7 +5,8 @@
  * or push a new tab. When the user is on the document route,
  * the route URL is also updated so the URL stays in sync with the
  * version actually being viewed (back/forward + reload preserve
- * the selection). Compare is owned by the document route.
+ * the selection). Document comparison opens as a subview here so
+ * version operations stay owned by one inspector facet.
  */
 
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
@@ -13,15 +14,21 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Result } from "better-result";
+import { ArrowLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
+import { CompareVersionsPanel } from "@/components/inspector/compare-versions-panel";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { VersionsSidebar } from "@/components/pdf/versions-sidebar";
 import type { Version } from "@/components/pdf/versions-sidebar";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
@@ -34,12 +41,14 @@ type VersionsFacetProps = {
   workspaceId: string;
   entityId: string;
   currentFieldId: string;
+  currentFilePropertyId?: string | undefined;
 };
 
 export const VersionsFacet = ({
   workspaceId,
   entityId,
   currentFieldId,
+  currentFilePropertyId,
 }: VersionsFacetProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -47,7 +56,13 @@ export const VersionsFacet = ({
     select: (state) => state.location.pathname,
   });
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
-  const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
+  const { data } = useQuery(
+    entityVersionsOptions({
+      workspaceId,
+      entityId,
+      filePropertyId: currentFilePropertyId,
+    }),
+  );
 
   // Accumulated list seeded from the query's newest page and extended
   // by each older page. Re-seed whenever a fresh `data` object arrives:
@@ -69,6 +84,7 @@ export const VersionsFacet = ({
   );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [loadOlderError, setLoadOlderError] = useState(false);
+  const [view, setView] = useState<"history" | "compare">("history");
   const [seededData, setSeededData] = useState(data);
   const olderCursorRef = useRef<string | null>(data?.olderCursor ?? null);
   const isLoadingOlderRef = useRef(false);
@@ -103,7 +119,13 @@ export const VersionsFacet = ({
     setLoadOlderError(false);
 
     const result = await Result.tryPromise(
-      async () => await fetchOlderVersions({ workspaceId, entityId, before }),
+      async () =>
+        await fetchOlderVersions({
+          workspaceId,
+          entityId,
+          before,
+          filePropertyId: currentFilePropertyId,
+        }),
     );
 
     // Discard a response that resolved after the page was rehydrated (entity
@@ -147,7 +169,7 @@ export const VersionsFacet = ({
     });
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [entityId, t, workspaceId]);
+  }, [currentFilePropertyId, entityId, t, workspaceId]);
 
   // When the document viewer deep-links to a field from a version older than
   // the newest page (switch to an old version, then reload), the preview
@@ -223,6 +245,38 @@ export const VersionsFacet = ({
     }
   };
 
+  const canCompare =
+    currentFilePropertyId !== undefined &&
+    accumulated.filter(({ file }) => file?.mimeType === DOCX_MIME).length >= 2;
+
+  if (view === "compare" && currentFilePropertyId !== undefined) {
+    return (
+      <div className="bg-background flex h-full min-h-0 flex-col">
+        {shouldLoadDeepLinkedVersion && olderCursor !== null && (
+          <LoadOlderVersionLifecycle key={olderCursor} loadOlder={loadOlder} />
+        )}
+        <div className={cn("flex shrink-0 border-b", TOOLBAR_ROW_HEIGHT)}>
+          <Button
+            className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+            onClick={() => setView("history")}
+            type="button"
+            variant="ghost"
+          >
+            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+            <span className="truncate">{t("fileDetail.versionHistory")}</span>
+          </Button>
+        </div>
+        <CompareVersionsPanel
+          currentFieldId={currentFieldId}
+          entityId={entityId}
+          filePropertyId={currentFilePropertyId}
+          versions={accumulated}
+          workspaceId={workspaceId}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="bg-background h-full overflow-y-auto">
       {shouldLoadDeepLinkedVersion && olderCursor !== null && (
@@ -233,15 +287,12 @@ export const VersionsFacet = ({
         currentVersionId={data.currentVersionId}
         entityId={entityId}
         hasOlderVersions={olderCursor !== null}
-        isComparing={false}
         isLoadingOlder={isLoadingOlder}
         loadOlderError={loadOlderError}
         versions={accumulated}
         workspaceId={workspaceId}
+        onCompareVersions={canCompare ? () => setView("compare") : undefined}
         onLoadOlder={loadOlder}
-        onClearCompare={() => {
-          // No-op; compare flow is owned by the document route.
-        }}
         onSwitchVersion={handleSwitchVersion}
       />
     </div>

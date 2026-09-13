@@ -235,9 +235,12 @@ describe("chat tool titles", () => {
       "chat.tool.read-content-across-matters",
     );
     expect(getChatToolTitleKey("read-contact")).toBe("chat.tool.read-contact");
+    expect(getChatToolTitleKey("compare_versions")).toBe(
+      "chat.tool.compare_versions",
+    );
   });
 
-  test("maps the folio-agents comment/changes and version-compare tools", () => {
+  test("maps the folio-agents comment and changes tools", () => {
     expect(getChatToolTitleKey("read_changes")).toBe("chat.tool.read_changes");
     expect(getChatToolTitleKey("read_comments")).toBe(
       "chat.tool.read_comments",
@@ -248,9 +251,6 @@ describe("chat tool titles", () => {
     );
     expect(getChatToolTitleKey("resolve_comment")).toBe(
       "chat.tool.resolve_comment",
-    );
-    expect(getChatToolTitleKey("compare_versions")).toBe(
-      "chat.tool.compare_versions",
     );
   });
 

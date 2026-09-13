@@ -205,7 +205,6 @@ export const getDocxEditSafety = ({
 type ShouldUseDocxBrowserEditorOptions = {
   isDocxFile: boolean;
   hasFilePropertyId: boolean;
-  isComparing: boolean;
 };
 
 /**
@@ -216,14 +215,8 @@ type ShouldUseDocxBrowserEditorOptions = {
  * block ids to target. Read-only Folio still parses the doc, so
  * version browsing keeps full block structure.
  *
- * Comparison mode swaps the live DocxBrowserEditor for a
- * separate Folio surface (the redline overlay) that renders the
- * server-merged DOCX buffer — also Folio, not PDF — so this gate
- * is purely "live editor vs redline overlay", not Folio vs PDF.
  */
 export const shouldUseDocxBrowserEditor = ({
   isDocxFile,
   hasFilePropertyId,
-  isComparing,
-}: ShouldUseDocxBrowserEditorOptions) =>
-  isDocxFile && hasFilePropertyId && !isComparing;
+}: ShouldUseDocxBrowserEditorOptions) => isDocxFile && hasFilePropertyId;

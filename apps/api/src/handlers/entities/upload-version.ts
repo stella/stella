@@ -154,6 +154,7 @@ export default createSafeHandler(
           status = 400;
           break;
         }
+        case "source-version-not-found":
         case "target-file-not-found": {
           status = 409;
           break;

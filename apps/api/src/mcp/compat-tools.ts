@@ -4,9 +4,13 @@ import * as v from "valibot";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
+import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
-import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedEntityId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -39,7 +43,7 @@ type CompatToolName = "fetch" | "search";
 type FetchableEntity = {
   entityId: string;
   fieldId: string | null;
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
 };
 
 type CompatFetchPayload = {
@@ -47,7 +51,7 @@ type CompatFetchPayload = {
   text: string;
   title: string;
   truncated: boolean;
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
 };
 
 const COMPAT_FETCH_CONTENT_MAX_CHARS = 8000;
@@ -103,7 +107,11 @@ const getFetchableEntityMap = async ({
       continue;
     }
 
-    fetchableEntityMap.set(row.entityId, row);
+    fetchableEntityMap.set(row.entityId, {
+      entityId: row.entityId,
+      fieldId: row.fieldId,
+      workspaceId: brandPersistedWorkspaceId(row.workspaceId),
+    });
   }
 
   return fetchableEntityMap;
@@ -158,11 +166,11 @@ const mapCompatSearchResults = ({
 
     const url =
       fetchableEntity.fieldId === null
-        ? buildMatterUrl(workspaceId)
+        ? buildMatterUrl(fetchableEntity.workspaceId)
         : buildDocumentUrl({
             entityId,
             fieldId: fetchableEntity.fieldId,
-            workspaceId,
+            workspaceId: fetchableEntity.workspaceId,
           });
 
     return [
@@ -170,7 +178,7 @@ const mapCompatSearchResults = ({
         id: entityId,
         title,
         url,
-        workspaceId,
+        workspaceId: fetchableEntity.workspaceId,
       },
     ];
   });
@@ -187,7 +195,7 @@ const getCompatFetchPayload = ({
     result !== null &&
     "workspaceId" in result &&
     typeof result.workspaceId === "string"
-      ? result.workspaceId
+      ? brandPersistedWorkspaceId(result.workspaceId)
       : null;
   const title =
     typeof result === "object" &&
@@ -490,7 +498,7 @@ const handleCompatFetchTool: McpToolHandler<
       url = buildDocumentUrl({
         entityId: rawEntityId,
         fieldId: fileField.id,
-        workspaceId: fetchPayload.workspaceId,
+        workspaceId: workspaceAccess,
       });
     }
   }

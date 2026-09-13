@@ -81,6 +81,7 @@ import type {
   RegistryToolListing,
   RouteNode,
 } from "../../../packages/cli/src/route-types";
+import { sameCliFlagValue } from "./lib/cli-flag-score";
 import { runEvalModelTurn } from "./lib/model-turn";
 
 // A bare id resolves through whichever configured provider rates it (GPT
@@ -155,10 +156,7 @@ const parseRegistryListings = (raw: unknown): RegistryToolListing[] => {
   return listings;
 };
 
-const buildCliSchemaTree = (): RouteNode => {
-  const listings = parseRegistryListings(
-    JSON.parse(readFileSync(REGISTRY_SNAPSHOT_PATH, "utf-8")),
-  );
+const loadCapabilityCatalog = () => {
   const catalogRaw: unknown = JSON.parse(
     readFileSync(CAPABILITY_CATALOG_PATH, "utf-8"),
   );
@@ -168,10 +166,19 @@ const buildCliSchemaTree = (): RouteNode => {
       "agent-orientation eval: capability-catalog.json failed parseCapabilityCatalog",
     );
   }
+  return entries;
+};
+
+const CAPABILITY_CATALOG = loadCapabilityCatalog();
+
+const buildCliSchemaTree = (): RouteNode => {
+  const listings = parseRegistryListings(
+    JSON.parse(readFileSync(REGISTRY_SNAPSHOT_PATH, "utf-8")),
+  );
   return buildCliRouteTree({
     listings,
     annotations: TOOL_ANNOTATIONS,
-    entries,
+    entries: CAPABILITY_CATALOG,
   }).tree;
 };
 
@@ -350,6 +357,8 @@ const schemaCheck = (
 
 type McpTaskSpec = {
   toolName: string;
+  /** The eval starts after a read-only capability description, not at discovery. */
+  preflight?: { type: "capability-described" };
   destructive?: true;
   /**
    * One call that passes: it must parse through the tool's own input schema
@@ -648,6 +657,88 @@ const TASKS: readonly Task[] = [
         "target-lang": "de",
         engine: "deepl",
         output: "translated",
+      },
+    },
+  },
+  {
+    id: "compare-document-versions",
+    request:
+      "Use documents.compare to create a strict word-level tracked-changes comparison in matter " +
+      "11111111-1111-4111-8111-111111111111 for file property 55555555-5555-4555-8555-555555555555 on document " +
+      "22222222-2222-4222-8222-222222222222, comparing target version " +
+      "44444444-4444-4444-8444-444444444444 with its immediate predecessor. " +
+      "Keep tracked changes in the base, accept tracked changes in the target, " +
+      "and save the comparison as a derived version.",
+    mcp: {
+      toolName: "invoke_capability",
+      preflight: { type: "capability-described" },
+      exampleArgs: {
+        capability: "documents.compare",
+        input: {
+          params: {
+            matterId: "11111111-1111-4111-8111-111111111111",
+            documentId: "22222222-2222-4222-8222-222222222222",
+          },
+          body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
+            selection: {
+              type: "previous",
+              targetVersionId: "44444444-4444-4444-8444-444444444444",
+            },
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "accept",
+            output: { type: "version" },
+          },
+        },
+      },
+      checkArgs: (args) => [
+        ...field(args, "capability", "documents.compare"),
+        ...nestedField(
+          args,
+          ["input", "params", "matterId"],
+          "11111111-1111-4111-8111-111111111111",
+        ),
+        ...nestedField(
+          args,
+          ["input", "params", "documentId"],
+          "22222222-2222-4222-8222-222222222222",
+        ),
+        ...nestedField(
+          args,
+          ["input", "body", "selection", "type"],
+          "previous",
+        ),
+        ...nestedField(
+          args,
+          ["input", "body", "selection", "targetVersionId"],
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        ...nestedField(
+          args,
+          ["input", "body", "filePropertyId"],
+          "55555555-5555-4555-8555-555555555555",
+        ),
+        ...nestedField(args, ["input", "body", "mode"], "strict"),
+        ...nestedField(args, ["input", "body", "granularity"], "word"),
+        ...nestedField(args, ["input", "body", "baseTrackedChanges"], "keep"),
+        ...nestedField(
+          args,
+          ["input", "body", "targetTrackedChanges"],
+          "accept",
+        ),
+        ...nestedField(args, ["input", "body", "output", "type"], "version"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "documents", "compare"],
+      flags: {
+        "matter-id": "11111111-1111-4111-8111-111111111111",
+        "document-id": "22222222-2222-4222-8222-222222222222",
+        input:
+          '{"body":{"filePropertyId":"55555555-5555-4555-8555-555555555555","selection":{"type":"previous","targetVersionId":"44444444-4444-4444-8444-444444444444"},"mode":"strict","granularity":"word","baseTrackedChanges":"keep","targetTrackedChanges":"accept","output":{"type":"version"}}}',
       },
     },
   },
@@ -1197,10 +1288,13 @@ type Outcome =
   | "no-call"
   | "error";
 
+type WorkflowScope = "first-call" | "post-discovery-first-call";
+
 type RunRecord = {
   modelId: string;
   taskId: string;
   surface: Surface;
+  workflowScope: WorkflowScope;
   repeat: number;
   outcome: Outcome;
   toolOrCommand: string;
@@ -1349,7 +1443,13 @@ const scoreCliRun = ({
   }
   for (const [flagName, expectedValue] of Object.entries(expected.flags)) {
     const actual = resolveFlagValue(parsed, flagName);
-    if (actual !== expectedValue) {
+    if (
+      !sameCliFlagValue({
+        actual,
+        expected: expectedValue,
+        flagName,
+      })
+    ) {
       issues.push(
         `--${flagName}: expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actual)}`,
       );
@@ -1369,6 +1469,37 @@ const scoreCliRun = ({
   };
 };
 
+const mcpPreflightContext = (task: Task): string => {
+  if (task.mcp.preflight?.type !== "capability-described") {
+    return "";
+  }
+  const capabilityId = task.mcp.exampleArgs["capability"];
+  if (typeof capabilityId !== "string") {
+    return panic(
+      `agent-orientation eval: ${task.id} preflight requires exampleArgs.capability`,
+    );
+  }
+  const capability = CAPABILITY_CATALOG.find(({ id }) => id === capabilityId);
+  if (capability === undefined) {
+    return panic(
+      `agent-orientation eval: ${task.id} references unknown capability ${capabilityId}`,
+    );
+  }
+  return [
+    "Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one invoke_capability call that would perform the requested action. This eval captures the call but never executes it.",
+    JSON.stringify({
+      id: capability.id,
+      description: capability.description,
+      inputSchema: capability.inputSchema,
+    }),
+  ].join("\n");
+};
+
+const mcpWorkflowScope = (task: Task): WorkflowScope =>
+  task.mcp.preflight?.type === "capability-described"
+    ? "post-discovery-first-call"
+    : "first-call";
+
 // --- run orchestration -------------------------------------------------------
 
 const runMcpTask = async ({
@@ -1386,7 +1517,9 @@ const runMcpTask = async ({
 }): Promise<RunRecord> => {
   const turn = await runModelTurn({
     model,
-    system: MCP_SYSTEM_PROMPT,
+    system: [MCP_SYSTEM_PROMPT, mcpPreflightContext(task)]
+      .filter((prompt) => prompt.length > 0)
+      .join("\n\n"),
     request: task.request,
     tools,
   });
@@ -1395,6 +1528,7 @@ const runMcpTask = async ({
     modelId,
     taskId: task.id,
     surface: "mcp",
+    workflowScope: mcpWorkflowScope(task),
     repeat,
     ...score,
     latencyMs: turn.latencyMs,
@@ -1427,6 +1561,7 @@ const runCliTask = async ({
     modelId,
     taskId: task.id,
     surface: "cli",
+    workflowScope: "first-call",
     repeat,
     ...score,
     argsCheck: "n/a",
@@ -1458,13 +1593,14 @@ const renderReport = (runs: readonly RunRecord[]): string => {
     const modelRuns = runs.filter((run) => run.modelId === modelId);
     lines.push(`\n### ${modelId}\n`);
     lines.push(
-      "| surface | task | run | outcome | tool/command | args | issues | ms |",
-      "| --- | --- | ---: | --- | --- | --- | --- | ---: |",
+      "| surface | scope | task | run | outcome | tool/command | args | issues | ms |",
+      "| --- | --- | --- | ---: | --- | --- | --- | --- | ---: |",
     );
     for (const run of modelRuns) {
       lines.push(
         [
           `| ${run.surface}`,
+          run.workflowScope,
           run.taskId,
           String(run.repeat),
           run.outcome,

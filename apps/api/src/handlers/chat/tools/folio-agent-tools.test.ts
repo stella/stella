@@ -112,7 +112,7 @@ const isStringArray = (value: unknown): value is string[] =>
 
 type OperationItemSchema = {
   typeEnum: string[];
-  required: string[];
+  requiredByVariant: string[][];
 };
 
 const readOperationItemSchema = (
@@ -126,16 +126,30 @@ const readOperationItemSchema = (
   if (!isRecord(operations) || !isRecord(operations.items)) {
     throw new Error("Expected an `operations` array schema with `items`");
   }
-  const items = operations.items;
-  if (!isRecord(items.properties) || !isRecord(items.properties["type"])) {
-    throw new Error("Expected `operations.items.properties.type`");
+  const variants = operations.items.anyOf;
+  if (!Array.isArray(variants) || variants.length === 0) {
+    throw new Error("Expected operation schema variants");
   }
-  const typeEnum = items.properties["type"].enum;
-  const required = items.required;
-  if (!isStringArray(typeEnum) || !isStringArray(required)) {
-    throw new Error("Expected string arrays for `type.enum` and `required`");
+  const typeEnum = new Set<string>();
+  const requiredByVariant: string[][] = [];
+  for (const variant of variants) {
+    if (
+      !isRecord(variant) ||
+      !isRecord(variant.properties) ||
+      !isRecord(variant.properties["type"])
+    ) {
+      throw new Error("Expected an operation variant with a type property");
+    }
+    const operationTypes = variant.properties["type"].enum;
+    if (!isStringArray(operationTypes) || !isStringArray(variant.required)) {
+      throw new Error("Expected operation types and required properties");
+    }
+    for (const operationType of operationTypes) {
+      typeEnum.add(operationType);
+    }
+    requiredByVariant.push(variant.required);
   }
-  return { typeEnum, required };
+  return { typeEnum: [...typeEnum], requiredByVariant };
 };
 
 describe("createSuggestChangesTools", () => {
@@ -145,7 +159,7 @@ describe("createSuggestChangesTools", () => {
     );
     expect(Object.keys(tools)).toEqual([SUGGEST_CHANGES_TOOL_NAME]);
 
-    const { typeEnum, required } = readOperationItemSchema(
+    const { typeEnum, requiredByVariant } = readOperationItemSchema(
       tools[SUGGEST_CHANGES_TOOL_NAME].inputSchema,
     );
     expect(typeEnum).toEqual([
@@ -166,7 +180,11 @@ describe("createSuggestChangesTools", () => {
       "splitTableCell",
     ]);
     expect(typeEnum).not.toContain("formatRange");
-    expect(required).toEqual(["type", "severity", "area"]);
+    for (const required of requiredByVariant) {
+      expect(required).toEqual(
+        expect.arrayContaining(["type", "severity", "area"]),
+      );
+    }
   });
 
   test("template-studio surface exposes only the text-replacement operation types", () => {
@@ -175,10 +193,14 @@ describe("createSuggestChangesTools", () => {
     );
     expect(Object.keys(tools)).toEqual([SUGGEST_CHANGES_TOOL_NAME]);
 
-    const { typeEnum, required } = readOperationItemSchema(
+    const { typeEnum, requiredByVariant } = readOperationItemSchema(
       tools[SUGGEST_CHANGES_TOOL_NAME].inputSchema,
     );
     expect(typeEnum).toEqual(["replaceInBlock", "replaceBlock", "deleteBlock"]);
-    expect(required).toEqual(["type", "severity", "area"]);
+    for (const required of requiredByVariant) {
+      expect(required).toEqual(
+        expect.arrayContaining(["type", "severity", "area"]),
+      );
+    }
   });
 });
