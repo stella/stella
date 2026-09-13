@@ -619,9 +619,9 @@ describe("a run answers only the cells that need it", () => {
             (column_id, organization_id, decision_id, state, answer)
             VALUES (${columnId}, ${ids.orgA}, ${decisionOne}, 'answered', ${answer}::text::jsonb)`,
         )
-        .then<"stored" | "refused">(
-          () => "stored",
-          () => "refused",
+        .then(
+          (): "stored" => "stored",
+          (): "refused" => "refused",
         );
 
     // A document without `type` leaves the kind test unknown, and a CHECK that

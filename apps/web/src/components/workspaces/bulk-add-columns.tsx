@@ -490,9 +490,9 @@ const useColumnsSubmit = (onClose: () => void) => {
     run,
   }: {
     count: number;
-    run: () => Promise<void>;
+    run: () => Promise<Result<void, Error>>;
   }) => {
-    const created = await Result.tryPromise(run);
+    const created = await run();
     if (Result.isError(created)) {
       getAnalytics().captureError(created.error);
       stellaToast.add({
@@ -607,15 +607,20 @@ const PropertyColumnsBody = ({
     });
     await submit({
       count: items.length,
-      run: async () => {
-        await batch.mutateAsync({ items });
-        // Created columns with AI prompts need a workflow run for the
-        // extraction to actually populate cells; manual columns don't.
-        // Same convention the single-column dialog uses.
-        if (items.some((item) => item.toolType === "ai-model")) {
-          detached(startWorkflow(), "bulk-add-columns.start-workflow");
-        }
-      },
+      run: async () =>
+        await Result.tryPromise({
+          try: async () => {
+            await batch.mutateAsync({ items });
+            // Created columns with AI prompts need a workflow run for the
+            // extraction to actually populate cells; manual columns don't.
+            // Same convention the single-column dialog uses.
+            if (items.some((item) => item.toolType === "ai-model")) {
+              detached(startWorkflow(), "bulk-add-columns.start-workflow");
+            }
+          },
+          catch: (cause) =>
+            cause instanceof Error ? cause : new Error(String(cause)),
+        }),
     });
   };
 
@@ -707,7 +712,7 @@ const QuestionColumnsBody = ({
     );
 
   const save = useMutation({
-    mutationFn: async (inputs: readonly QuestionColumnInput[]) => {
+    mutationFn: async (inputs: readonly QuestionColumnInput[]) => 
       // The requests name disjoint columns, so they go together rather than
       // one round trip after another; they settle, so whatever committed is
       // read back before the failure is reported.
@@ -723,8 +728,8 @@ const QuestionColumnsBody = ({
             queryKey: questionColumnKeys.all,
           });
         },
-      });
-    },
+      })
+    ,
   });
   const canSubmit = validDrafts.length > 0 && !save.isPending;
 

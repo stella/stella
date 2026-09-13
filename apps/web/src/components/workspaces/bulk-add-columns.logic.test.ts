@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
@@ -122,7 +123,7 @@ describe("what a partly refused batch leaves behind", () => {
     let refreshes = 0;
     const refused = new Error("Question column limit reached");
 
-    const failure = await settleColumnWrites({
+    const settled = await settleColumnWrites({
       writes: [
         async () => {
           committed.push("first");
@@ -134,9 +135,9 @@ describe("what a partly refused batch leaves behind", () => {
       refresh: async () => {
         refreshes += 1;
       },
-    }).catch((error: unknown) => error);
+    });
 
-    expect(failure).toBe(refused);
+    expect(Result.isError(settled) ? settled.error : null).toBe(refused);
     expect(committed).toEqual(["first"]);
     expect(refreshes).toBe(1);
   });

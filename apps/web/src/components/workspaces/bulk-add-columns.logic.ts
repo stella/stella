@@ -119,7 +119,7 @@ type SettleColumnWritesOptions = {
 export const settleColumnWrites = async ({
   writes,
   refresh,
-}: SettleColumnWritesOptions): Promise<void> => {
+}: SettleColumnWritesOptions): Promise<Result<void, Error>> => {
   const [, failures] = await Result.partitionAsync(
     writes.map(
       async (write) =>
@@ -134,7 +134,5 @@ export const settleColumnWrites = async ({
   );
   await refresh();
   const failure = failures.at(0);
-  if (failure !== undefined) {
-    throw failure;
-  }
+  return failure === undefined ? Result.ok(undefined) : Result.err(failure);
 };
