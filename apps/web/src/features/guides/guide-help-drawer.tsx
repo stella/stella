@@ -33,6 +33,7 @@ import { useGuideRunner } from "@/features/guides/use-guide-runner";
 import { useOnboardingProgress } from "@/features/guides/use-onboarding-progress";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
+import { roleOptions } from "@/lib/auth-queries";
 import { COMMUNITY_FORUM_URL, CONTACT_EMAIL } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -45,20 +46,32 @@ const HELP_TABS = {
   community: "community",
 } as const;
 
+// The sidebar's matter list decides which matter the matter tours run in.
+// Until it has loaded the checklist cannot be final; when it has failed the
+// matter tours are missing for a reason the user must be able to retry.
+export type GuideWorkspaceListState =
+  | { status: "pending" }
+  | { status: "ready" }
+  | { status: "failed"; isRetrying: boolean; retry: () => void };
+
 type GuideHelpDrawerProps = {
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  workspaceSelectionPending: boolean;
+  workspaceList: GuideWorkspaceListState;
   workspaceId: string | undefined;
 };
 
 export const GuideHelpDrawer = ({
   onOpenChange,
   open,
-  workspaceSelectionPending,
+  workspaceList,
   workspaceId,
 }: GuideHelpDrawerProps) => {
   const t = useTranslations();
+  // `usePermissions` fails closed while the role loads; without this the
+  // drawer would briefly render a checklist missing every permission-gated
+  // tour instead of the skeleton.
+  const { isPending: rolePending } = useQuery(roleOptions);
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canUseChat = usePermissions({ chat: ["create"] });
   const canCreateDocument = usePermissions({ entity: ["create"] });
@@ -91,14 +104,18 @@ export const GuideHelpDrawer = ({
   ].filter((query) => query.isEnabled);
   const availabilityPending =
     open &&
-    (workspaceSelectionPending ||
+    (rolePending ||
+      workspaceList.status === "pending" ||
       availabilityQueries.some((query) => query.isPending));
   const failedAvailabilityQueries = availabilityQueries.filter(
     (query) => query.isError,
   );
-  const availabilityRetrying = failedAvailabilityQueries.some(
-    (query) => query.isFetching,
-  );
+  const workspaceListFailed = workspaceList.status === "failed";
+  const availabilityFailed =
+    workspaceListFailed || failedAvailabilityQueries.length > 0;
+  const availabilityRetrying =
+    (workspaceList.status === "failed" && workspaceList.isRetrying) ||
+    failedAvailabilityQueries.some((query) => query.isFetching);
   const tours = GUIDE_TOURS.filter((tour) =>
     isGuideTourAvailable(tour.id, {
       canUseChat,
@@ -167,7 +184,7 @@ export const GuideHelpDrawer = ({
               </TabsTab>
             </TabsList>
             <TabsPanel className="pt-2" value={HELP_TABS.guides}>
-              {failedAvailabilityQueries.length > 0 && (
+              {availabilityFailed && (
                 <div
                   className="mb-3 flex flex-col items-start gap-1"
                   role="alert"
@@ -178,6 +195,9 @@ export const GuideHelpDrawer = ({
                   <Button
                     disabled={availabilityRetrying}
                     onClick={() => {
+                      if (workspaceList.status === "failed") {
+                        workspaceList.retry();
+                      }
                       detached(
                         Promise.all(
                           failedAvailabilityQueries.map(async (query) =>

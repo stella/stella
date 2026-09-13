@@ -120,6 +120,7 @@ import {
   GUIDE_DRAWER_STATES,
   useGuideDrawerStore,
 } from "@/features/guides/guide-drawer-store";
+import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -198,9 +199,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
       reorderPinned: s.reorder,
     })),
   );
-  const { data: workspacesData, isPending: workspacesPending } = useChromeQuery(
-    workspacesNavigationOptions(user.activeOrganizationId),
-  );
+  const {
+    data: workspacesData,
+    isPending: workspacesPending,
+    isError: workspacesFailed,
+    isFetching: workspacesFetching,
+    refetch: refetchWorkspaces,
+  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
   const { data: inboxCount } = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId),
     enabled: inboxPreviewEnabled,
@@ -223,6 +228,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }),
   );
   const workspaces = workspacesData?.workspaces;
+  const guideWorkspaceList = ((): GuideWorkspaceListState => {
+    if (workspacesPending) {
+      return { status: "pending" };
+    }
+    if (workspacesFailed) {
+      return {
+        status: "failed",
+        isRetrying: workspacesFetching,
+        retry: () => {
+          detached(refetchWorkspaces(), "app-sidebar.retry-workspaces");
+        },
+      };
+    }
+    return { status: "ready" };
+  })();
 
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
@@ -758,7 +778,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   onOpenChange={setGuideDrawerOpen}
                   open={guideDrawerState === GUIDE_DRAWER_STATES.open}
                   workspaceId={activeWorkspaceId ?? workspaces?.at(0)?.id}
-                  workspaceSelectionPending={workspacesPending}
+                  workspaceList={guideWorkspaceList}
                 />
               </Suspense>
             )}

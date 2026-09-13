@@ -28,35 +28,40 @@ export const GuideChecklistSkeleton = ({
   tourCount,
 }: {
   tourCount: number;
-}) => (
-  <div aria-busy="true" className="flex flex-col gap-4">
-    <div aria-hidden="true" className="flex flex-col gap-2">
-      <Skeleton className="h-5 w-20" />
-      <Skeleton className="h-1.5 w-full rounded-full" />
-    </div>
-    <div aria-hidden="true" className="flex flex-col gap-2">
-      {Array.from({ length: tourCount }, (_, index) => (
-        <div
-          className="border-border flex gap-3 rounded-lg border p-3"
-          key={`guide-checklist-skeleton-${index}`}
-        >
-          <div className="flex shrink-0 flex-col items-center gap-1.5">
-            <Skeleton className="h-16 w-20 rounded-md" />
-            <Skeleton className="h-3 w-12" />
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-3 w-full" />
-            <div className="flex gap-2">
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-8 w-14" />
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div aria-busy="true" className="flex flex-col gap-4" role="status">
+      <span className="sr-only">{t("common.loading")}</span>
+      <div aria-hidden="true" className="flex flex-col gap-2">
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-1.5 w-full rounded-full" />
+      </div>
+      <div aria-hidden="true" className="flex flex-col gap-2">
+        {Array.from({ length: tourCount }, (_, index) => (
+          <div
+            className="border-border flex gap-3 rounded-lg border p-3"
+            key={`guide-checklist-skeleton-${index}`}
+          >
+            <div className="flex shrink-0 flex-col items-center gap-1.5">
+              <Skeleton className="h-16 w-20 rounded-md" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-full" />
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-8 w-14" />
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const GuideChecklist = ({
   tours,

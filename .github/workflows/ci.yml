@@ -2141,8 +2141,12 @@ jobs:
 
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
+      # continue-on-error keeps the shard and the diagnostic uploads running
+      # after a regression; the step's outcome fails the job at the end.
       - name: Check route network baseline
+        id: network-baseline
         if: steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
+        continue-on-error: true
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
@@ -2159,7 +2163,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
-        if: ${{ !cancelled() && steps.e2e-stack.outputs.status == 'ready' }}
+        if: steps.e2e-stack.outputs.status == 'ready'
         env:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
@@ -2208,6 +2212,12 @@ jobs:
             /tmp/api.log
             /tmp/web-production.log
           retention-days: 7
+
+      - name: Fail on route network baseline regression
+        if: steps.network-baseline.outcome == 'failure'
+        run: |
+          echo "Route network baseline regressed; see the playwright-blob-network-baseline artifact."
+          exit 1
 
   stack-redaction-browsers:
     needs: ci-plan

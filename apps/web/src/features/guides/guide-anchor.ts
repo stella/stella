@@ -20,3 +20,18 @@ export const guideAnchor = (
 
 export const guideAnchorSelector = (id: GuideAnchorId): string =>
   `[${GUIDE_ANCHOR_ATTRIBUTE}="${id}"]`;
+
+export const GUIDE_REVERSE_BLOCKED_ATTRIBUTE = "data-guide-reverse-blocked";
+
+export type GuideReverseBlockedProps = {
+  readonly "data-guide-reverse-blocked"?: "";
+};
+
+// Marks a transition's reversing control (an editor's Back) as unsafe for the
+// runner to press right now: with unsaved edits the control opens a
+// leave-confirm dialog instead of restoring the list, and a modal under the
+// spotlight is worse than staying put. Spread next to `guideAnchor(...)`.
+export const guideReverseBlocked = (
+  blocked: boolean,
+): GuideReverseBlockedProps =>
+  blocked ? { "data-guide-reverse-blocked": "" } : {};

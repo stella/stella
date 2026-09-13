@@ -43,7 +43,10 @@ import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import Tooltip from "@/components/tooltip";
-import { guideAnchor } from "@/features/guides/guide-anchor";
+import {
+  guideAnchor,
+  guideReverseBlocked,
+} from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -767,6 +770,7 @@ const PlaybookEditorForm = ({
               type="button"
               variant="ghost"
               {...guideAnchor(GUIDE_ANCHORS.playbooksBack)}
+              {...guideReverseBlocked(isDirty)}
             >
               <ArrowLeftIcon />
               {t("common.back")}

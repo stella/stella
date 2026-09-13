@@ -3,12 +3,15 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
-import { guideAnchorSelector } from "@/features/guides/guide-anchor";
+import {
+  GUIDE_REVERSE_BLOCKED_ATTRIBUTE,
+  guideAnchorSelector,
+} from "@/features/guides/guide-anchor";
 import {
   type GuideAnchorId,
   PENDING_GUIDE_ANCHOR_IDS,
@@ -24,6 +27,7 @@ import type {
   GuideTourId,
 } from "@/features/guides/guide-types";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { transformUnknownError } from "@/lib/errors/utils";
@@ -62,6 +66,28 @@ const delay = async (ms: number, signal: AbortSignal): Promise<boolean> =>
     }, ms);
     signal.addEventListener("abort", handleAbort, { once: true });
   });
+
+// Races this consumer's await against the run's abort signal. The query
+// itself is left alone: `viewsOptions` is shared with `useQuery` readers, so
+// cancelling it would disturb them.
+const raceWithAbort = async <T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T | null> => {
+  if (signal.aborted) {
+    return null;
+  }
+  let handleAbort = (): void => undefined;
+  const aborted = new Promise<null>((resolve) => {
+    handleAbort = () => resolve(null);
+  });
+  signal.addEventListener("abort", handleAbort, { once: true });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", handleAbort);
+  }
+};
 
 const waitForAnchor = async (
   anchorId: GuideAnchorId,
@@ -231,10 +257,16 @@ export const useGuideRunner = ({
           if (!workspaceId) {
             return false;
           }
-          const views = await queryClient.query({
-            ...viewsOptions(workspaceId),
-            staleTime: "static",
-          });
+          const views = await raceWithAbort(
+            queryClient.query({
+              ...viewsOptions(workspaceId),
+              staleTime: "static",
+            }),
+            signal,
+          );
+          if (views === null) {
+            return false;
+          }
           const viewId = resolveGuideWorkspaceViewId(views);
           if (!viewId) {
             return false;
@@ -439,6 +471,22 @@ export const useGuideRunner = ({
     // them.
     let entryIndex = 0;
 
+    // A transition step whose editor has unsaved edits: its Back control
+    // carries the blocked marker, so walking back onto the trigger would open
+    // a leave-confirm dialog under the spotlight.
+    const isReverseBlocked = (step: GuideStep): boolean => {
+      if (step.interaction?.kind !== "transition") {
+        return false;
+      }
+      const reverse = document.querySelector(
+        guideAnchorSelector(step.interaction.reverseAnchor),
+      );
+      return (
+        reverse instanceof HTMLElement &&
+        reverse.hasAttribute(GUIDE_REVERSE_BLOCKED_ATTRIBUTE)
+      );
+    };
+
     const resolveFrom = async (
       from: number,
       direction: GuideDirection,
@@ -462,6 +510,11 @@ export const useGuideRunner = ({
         const step = tour.steps.at(index);
         if (!step) {
           continue;
+        }
+        if (direction === -1 && isReverseBlocked(step)) {
+          // Stop the walk here rather than skipping past the editor: the
+          // caller keeps the current step, and the user's draft stays put.
+          return null;
         }
         if (isPendingAnchor(step.anchor)) {
           // Declared unwired in the registry: skipping it costs nothing, so
