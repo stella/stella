@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.10.3
+
+### Patch Changes
+
+- [#3279](https://github.com/stella/stella/pull/3279) [`e9d51b4`](https://github.com/stella/stella/commit/e9d51b4a88c55eebfb441614372b1e0edcde5b06) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A pending field value shows a skeleton shaped to its kind instead of a spinner.
+- Updated dependencies [[`7da4d12`](https://github.com/stella/stella/commit/7da4d12d1e4b5b518fb9d28ee12c28fb5b47eecc)]:
+  - @stll/ui@0.26.4
+
 ## 0.10.2
 
 ### Patch Changes
