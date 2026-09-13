@@ -185,14 +185,20 @@ const SetupPanel = ({
   </div>
 );
 
-const AssistantBadge = ({
+/** Brand tile that opens the setup guide for that assistant. */
+const AssistantTile = ({
   name,
   children,
 }: React.PropsWithChildren<{ name: string }>) => (
-  <span className="bg-muted/60 text-foreground flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium">
+  <a
+    className="bg-muted/60 text-foreground hover:bg-muted flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium transition-colors"
+    href={sanitizeHref(ASSISTANT_DOCS_URL)}
+    rel="noreferrer"
+    target="_blank"
+  >
     {children}
     {name}
-  </span>
+  </a>
 );
 
 type DocsLinkProps = React.PropsWithChildren<{
@@ -227,12 +233,12 @@ const AssistantPanel = () => {
   return (
     <SetupPanel title={t("onboarding.mcpCardTitle")}>
       <div className="flex gap-3">
-        <AssistantBadge name="Claude">
+        <AssistantTile name="Claude">
           <AIProviderIcon className="size-6" provider="anthropic" />
-        </AssistantBadge>
-        <AssistantBadge name="ChatGPT">
+        </AssistantTile>
+        <AssistantTile name="ChatGPT">
           <AIProviderIcon className="size-6" provider="openai" />
-        </AssistantBadge>
+        </AssistantTile>
       </div>
       <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
         {t("onboarding.mcpCardDescription")}
