@@ -763,32 +763,50 @@ export const linkDesktopAccount = async ({
       ) satisfies DesktopRegistryGrant,
     postLink: async (body) =>
       await retryAmbiguousAccountLink(body, postAccountLinkOnce),
-    revoke: async (key) => {
-      const response = await fetchWithTimeout(
-        `${apiBaseUrl}/v1/desktop-registry/request`,
-        {
-          body: JSON.stringify({ type: "revoke" }),
-          headers: {
-            Authorization: `Bearer ${key}`,
-            "Content-Type": "application/json",
-          },
-          method: "POST",
-          timeoutMs: 10_000,
-        },
-      );
-      if (!response.ok && response.status !== 401) {
-        return Result.err(
-          new FetchBoundaryError({
-            message: "Desktop account credential cleanup failed",
-            status: response.status,
-            statusText: response.statusText,
-            url: response.url,
-          }),
-        );
-      }
-      return Result.ok(undefined);
-    },
+    revoke: async (key) => await revokeDesktopCredential({ apiBaseUrl, key }),
   });
+};
+
+type RevokeDesktopCredentialOptions = {
+  apiBaseUrl: string;
+  key: string;
+};
+
+// Transport failures are returned, not thrown: the caller pairs them with the
+// link failure that made cleanup necessary. A 401 means the credential is
+// already unusable, which is the outcome cleanup wants.
+export const revokeDesktopCredential = async ({
+  apiBaseUrl,
+  key,
+}: RevokeDesktopCredentialOptions): Promise<Result<void, unknown>> => {
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(`${apiBaseUrl}/v1/desktop-registry/request`, {
+        body: JSON.stringify({ type: "revoke" }),
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        timeoutMs: 10_000,
+      }),
+    catch: (cause) => cause,
+  });
+  if (fetched.isErr()) {
+    return fetched;
+  }
+  const response = fetched.value;
+  if (!response.ok && response.status !== 401) {
+    return Result.err(
+      new FetchBoundaryError({
+        message: "Desktop account credential cleanup failed",
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };
 
 const openFileViaBridge = async ({

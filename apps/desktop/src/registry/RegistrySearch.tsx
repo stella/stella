@@ -655,6 +655,14 @@ export const RegistrySearch = ({
               {t("registryConnect")}
             </Button>
           ) : null}
+          {connection?.status === "unavailable" ? (
+            <Button
+              className="min-h-11"
+              onClick={() => connectionRefresh.current()}
+            >
+              {t("registryRetry")}
+            </Button>
+          ) : null}
         </div>
       )}
     </main>

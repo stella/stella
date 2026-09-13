@@ -813,6 +813,7 @@ const App = () => {
                         void invoke("account_disconnect")
                           .then(() => {
                             setAccountState({ status: "disconnected" });
+                            setError(null);
                             return;
                           })
                           .catch((disconnectError: unknown) => {

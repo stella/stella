@@ -70,7 +70,11 @@ type Connection =
       expiresAt: string;
     } & DesktopRegistryConfig);
 type Invocation = { args: Record<string, unknown>; command: string };
-type BoundaryMode = "normal" | "reject-first-search" | "defer-first-search";
+type BoundaryMode =
+  | "normal"
+  | "reject-first-search"
+  | "defer-first-search"
+  | "reject-first-state";
 type Audit = {
   consoleErrors: string[];
   external: string[];
@@ -149,6 +153,7 @@ const installNativeBoundary = async (
       const callbacks = new Map<number, (data: unknown) => unknown>();
       let callbackId = 0;
       let searchCount = 0;
+      let stateCount = 0;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
         | ((value: DesktopRegistrySearchResponse) => void)
@@ -187,8 +192,13 @@ const installNativeBoundary = async (
             case "registry_copy":
             case "registry_open_company_format":
               return undefined;
-            case "registry_get_state":
+            case "registry_get_state": {
+              stateCount += 1;
+              if (initialMode === "reject-first-state" && stateCount === 1) {
+                throw new TypeError("Deliberate connection failure");
+              }
               return currentConnection;
+            }
             case "registry_search": {
               searchCount += 1;
               if (initialMode === "reject-first-search" && searchCount === 1) {
@@ -201,7 +211,10 @@ const installNativeBoundary = async (
                   },
                 );
               }
-              return initialMode === "normal" ? searchResponse : secondResponse;
+              return initialMode === "normal" ||
+                initialMode === "reject-first-state"
+                ? searchResponse
+                : secondResponse;
             }
             case "registry_format":
               return { text: "Saved detailed registry output" };
@@ -483,6 +496,28 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
       payload: null,
     });
   });
+  await expect
+    .poll(async () => await searches(page))
+    .toContainEqual({
+      command: "registry_search",
+      args: { query: "Requested company", registry: "ares" },
+    });
+  await expect(
+    page.getByRole("heading", { name: "Stella Example s.r.o." }),
+  ).toBeVisible();
+});
+
+test("retries an unavailable connection from the empty state", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "reject-first-state");
+  await activateRegistry(page, "Requested company");
+  await page
+    .getByRole("button", {
+      name: enMessages.clipboard.registryRetry,
+      exact: true,
+    })
+    .click();
   await expect
     .poll(async () => await searches(page))
     .toContainEqual({

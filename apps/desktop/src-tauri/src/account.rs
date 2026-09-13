@@ -44,12 +44,21 @@ fn policy() -> AccountPolicy {
   .expect("the committed desktop account policy must be valid")
 }
 
+/// The API stamps `expiresAt` from its own clock. A desktop clock behind the
+/// API sees a fresh credential as longer-lived than the policy allows, so the
+/// upper bound tolerates this much skew. The lower bound stays strict: a
+/// credential past its own timestamp is not live, whatever the local clock.
+const CLOCK_SKEW_SECONDS: i64 = 5 * 60;
+
 pub fn is_live_expiry(value: &str) -> bool {
+  is_live_expiry_at(value, chrono::Utc::now())
+}
+
+fn is_live_expiry_at(value: &str, now: chrono::DateTime<chrono::Utc>) -> bool {
   chrono::DateTime::parse_from_rfc3339(value).is_ok_and(|expires| {
-    let remaining = expires
-      .signed_duration_since(chrono::Utc::now())
-      .num_seconds();
-    remaining > 0 && remaining <= policy().credential_lifetime_seconds
+    let remaining = expires.signed_duration_since(now).num_seconds();
+    remaining > 0
+      && remaining <= policy().credential_lifetime_seconds + CLOCK_SKEW_SECONDS
   })
 }
 
@@ -362,7 +371,7 @@ mod tests {
 
   #[tokio::test]
   async fn a_profile_is_connected_only_while_its_shared_credential_is_live() {
-    let max_lifetime = policy().credential_lifetime_seconds;
+    let max_lifetime = policy().credential_lifetime_seconds + CLOCK_SKEW_SECONDS;
     for lifetime in [-60, 0, 60, max_lifetime, max_lifetime + 60] {
       let state = Arc::new(Mutex::new(AccountStore::Memory(Some(fixture(
         "stella_dr_fixture",
@@ -377,6 +386,32 @@ mod tests {
       }
     }
     assert!(!is_live_expiry("not-a-date"));
+  }
+
+  #[test]
+  fn a_fresh_credential_survives_bounded_clock_skew_in_either_direction() {
+    let api_now = chrono::Utc::now();
+    let expires_at = (api_now
+      + chrono::Duration::seconds(policy().credential_lifetime_seconds))
+    .to_rfc3339();
+    let local = |offset: i64| api_now + chrono::Duration::seconds(offset);
+
+    assert!(is_live_expiry_at(&expires_at, local(0)));
+    assert!(is_live_expiry_at(&expires_at, local(-1)));
+    assert!(is_live_expiry_at(&expires_at, local(-CLOCK_SKEW_SECONDS)));
+    assert!(!is_live_expiry_at(
+      &expires_at,
+      local(-CLOCK_SKEW_SECONDS - 1)
+    ));
+    assert!(is_live_expiry_at(&expires_at, local(CLOCK_SKEW_SECONDS)));
+    assert!(is_live_expiry_at(
+      &expires_at,
+      local(policy().credential_lifetime_seconds - 1)
+    ));
+    assert!(!is_live_expiry_at(
+      &expires_at,
+      local(policy().credential_lifetime_seconds)
+    ));
   }
 
   #[tokio::test]

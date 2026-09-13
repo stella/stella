@@ -42,8 +42,12 @@ fn delete_account_keys(
   failure.map_or(Ok(()), Err)
 }
 
-fn delete_legacy_registry_account() -> Result<(), String> {
-  delete_named_credential(LEGACY_REGISTRY_ACCOUNT_KEY)
+// Migration cleanup only: a failure here must never block the current
+// account record from being read or written.
+fn delete_legacy_registry_account() {
+  if let Err(error) = delete_named_credential(LEGACY_REGISTRY_ACCOUNT_KEY) {
+    tracing::warn!(error = %error, "legacy registry account cleanup failed");
+  }
 }
 
 pub async fn delete_account_connection() -> Result<(), String> {
@@ -54,7 +58,7 @@ pub async fn delete_account_connection() -> Result<(), String> {
 
 pub async fn store_account_connection(value: String) -> Result<(), String> {
   tokio::task::spawn_blocking(move || {
-    delete_legacy_registry_account()?;
+    delete_legacy_registry_account();
     named_entry(ACCOUNT_CONNECTION_KEY)?
       .set_password(&value)
       .map_err(|_| "Could not save desktop account in Keychain".to_string())
@@ -65,7 +69,7 @@ pub async fn store_account_connection(value: String) -> Result<(), String> {
 
 pub async fn get_account_connection() -> Result<Option<String>, String> {
   let read = tokio::task::spawn_blocking(|| {
-    delete_legacy_registry_account()?;
+    delete_legacy_registry_account();
     match named_entry(ACCOUNT_CONNECTION_KEY)?.get_password() {
       Ok(value) => Ok(Some(value)),
       Err(Error::NoEntry) => Ok(None),

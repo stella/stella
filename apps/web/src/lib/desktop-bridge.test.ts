@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
   DesktopAccountConflictError,
@@ -9,8 +9,56 @@ import {
   isDesktopAccountLink,
   resolveDesktopAccountLink,
   retryAmbiguousAccountLink,
+  revokeDesktopCredential,
 } from "@/lib/desktop-bridge";
 import type { AccountLinkPostError } from "@/lib/desktop-bridge";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+const setFetch = (
+  handler: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>,
+) => {
+  const fetchMock = mock(handler);
+  globalThis.fetch = Object.assign(fetchMock, {
+    preconnect: originalFetch.preconnect,
+  });
+  return fetchMock;
+};
+
+describe("desktop credential revocation", () => {
+  const options = {
+    apiBaseUrl: "https://api.example.com",
+    key: "stella_dr_fixture",
+  };
+
+  test("returns a transport failure instead of throwing", async () => {
+    const transportError = new TypeError("network down");
+    setFetch(async () => {
+      throw transportError;
+    });
+    const outcome = await revokeDesktopCredential(options);
+    if (outcome.status !== "error") {
+      panic("Expected revocation to report the transport failure");
+    }
+    expect(outcome.error).toBe(transportError);
+  });
+
+  test("treats success and an already unusable credential as revoked", async () => {
+    for (const status of [200, 401]) {
+      setFetch(async () => new Response(null, { status }));
+      expect((await revokeDesktopCredential(options)).isOk()).toBe(true);
+    }
+  });
+
+  test("reports any other rejection", async () => {
+    setFetch(async () => new Response(null, { status: 500 }));
+    expect((await revokeDesktopCredential(options)).isErr()).toBe(true);
+  });
+});
 
 describe("desktop account-link hash", () => {
   test("accepts only the exact nonsecret account-link marker", () => {

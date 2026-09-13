@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -8,6 +9,20 @@ use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+// One client keeps the connection pool alive across interactive searches.
+fn registry_client() -> Result<&'static DesktopHttpClient, String> {
+  static CLIENT: OnceLock<DesktopHttpClient> = OnceLock::new();
+  if let Some(client) = CLIENT.get() {
+    return Ok(client);
+  }
+  let client = DesktopHttpClient::new(HttpClientOptions {
+    redirect: reqwest::redirect::Policy::none(),
+    timeout: Some(REQUEST_TIMEOUT),
+  })
+  .map_err(|_| "Registry search is unavailable")?;
+  Ok(CLIENT.get_or_init(|| client))
+}
+
 fn company_format_url(
   web_origin: &str,
   registry: &str,
@@ -63,11 +78,7 @@ pub async fn request(
   auth: RegistryRequestAuth<'_>,
   body: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-  let client = DesktopHttpClient::new(HttpClientOptions {
-    redirect: reqwest::redirect::Policy::none(),
-    timeout: Some(REQUEST_TIMEOUT),
-  })
-  .map_err(|_| "Registry search is unavailable")?;
+  let client = registry_client()?;
   let mut response = client
     .post(format!("{}/v1/desktop-registry/request", auth.api_base_url))
     .bearer_auth(auth.credential_key)

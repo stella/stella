@@ -390,6 +390,17 @@ async fn open_file_request(
   }
 }
 
+fn is_trusted_static_api_base_url(api_base_url: &str) -> bool {
+  let Ok(requested) = crate::config::normalize_self_host_api_base_url(api_base_url)
+  else {
+    return false;
+  };
+  crate::config::resolve_trusted_api_base_urls()
+    .iter()
+    .filter_map(|url| crate::config::normalize_self_host_api_base_url(url).ok())
+    .any(|trusted| trusted == requested)
+}
+
 async fn link_account(
   State(state): State<BridgeState>,
   headers: HeaderMap,
@@ -443,11 +454,11 @@ async fn link_account(
     .into_response();
   }
 
+  // The trusted set and the request are canonicalised by the same strict
+  // normaliser that `account::link` later applies, so membership here and the
+  // saved value cannot disagree.
   let trusted_api = trusted_self_host_connection
-    || is_static_origin
-      && crate::config::resolve_trusted_api_base_urls().contains(
-        &crate::config::normalize_api_base_url(&request.api_base_url),
-      );
+    || is_static_origin && is_trusted_static_api_base_url(&request.api_base_url);
   if !trusted_api {
     return json_response(
       StatusCode::FORBIDDEN,
