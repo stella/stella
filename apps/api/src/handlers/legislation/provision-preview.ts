@@ -91,7 +91,11 @@ export const readProvisionPreviewHandler = async ({
   }
 
   // Outside the transaction above: the AST lives in object storage.
-  const blocks = await readVersionBlocks(version, PREVIEW_READ_STEP);
+  const blocks = await readVersionBlocks({
+    row: version,
+    legislationDb,
+    step: PREVIEW_READ_STEP,
+  });
   const preview = buildProvisionPreview({
     version,
     blocks,

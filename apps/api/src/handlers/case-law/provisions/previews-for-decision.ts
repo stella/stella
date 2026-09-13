@@ -242,7 +242,11 @@ export const attachDecisionProvisionPreviews = async <
         async (version) =>
           [
             version,
-            await readVersionBlocks(version, PREVIEWS_READ_STEP),
+            await readVersionBlocks({
+              row: version,
+              legislationDb,
+              step: PREVIEWS_READ_STEP,
+            }),
           ] as const,
       ),
     ),
