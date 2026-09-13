@@ -1,39 +1,51 @@
 import type * as React from "react";
 
-import { MonitorIcon, PlugIcon, TerminalIcon } from "lucide-react";
+import { panic } from "better-result";
+import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { AIProviderIcon } from "@/components/ai-provider-icons";
 import { CopyField } from "@/components/copy-field";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import { env } from "@/env";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
-import type { TranslationKey } from "@/i18n/types";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { detached } from "@/lib/detached";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
+
+const ASSISTANT_DOCS_URL =
+  "https://stll.app/docs/get-started/connect-ai-assistant/";
+const CLI_DOCS_URL = "https://stll.app/docs/get-started/cli/";
 
 /**
  * Single source of truth for the card order: drives the rendered card
  * list, the footer button's next-card lookup, and the last-card check,
  * so reordering cards can never desync the walkthrough flow.
  */
-const DOWNLOAD_TARGETS = ["desktop", "assistant", "terminal"] as const;
+const DOWNLOAD_TARGETS = ["desktop", "assistant"] as const;
 
 export type DownloadTarget = (typeof DOWNLOAD_TARGETS)[number];
 
 type DownloadStepProps = {
   onNext: () => void;
   onSkip: () => void;
-  /** Which setup target is shown in the right-hand preview panel. */
+  /** Which target is highlighted and shown in the right-hand preview panel. */
   selected: DownloadTarget;
   onSelect: (target: DownloadTarget) => void;
 };
 
+/**
+ * Last wizard step. The desktop app is the one thing set up here; the
+ * assistant card only announces the plugin and hands the walkthrough to
+ * the docs.
+ */
 export const DownloadStep = ({
   onNext,
   onSkip,
@@ -42,7 +54,7 @@ export const DownloadStep = ({
 }: DownloadStepProps) => {
   const t = useTranslations();
   // Footer walkthrough: while a next card exists the primary button
-  // advances the selection; on the last card it starts the setup.
+  // advances the highlight; on the last card it lands the user in the app.
   const nextTarget = DOWNLOAD_TARGETS.at(
     DOWNLOAD_TARGETS.indexOf(selected) + 1,
   );
@@ -57,23 +69,24 @@ export const DownloadStep = ({
       </p>
 
       <div className="mt-8 flex flex-col gap-3">
-        {DOWNLOAD_TARGETS.map((target) => {
-          const meta = TARGET_CARD_META[target];
-          return (
-            <TargetCard
-              description={t(meta.descriptionKey)}
-              icon={meta.icon}
-              key={target}
-              onSelect={() => onSelect(target)}
-              selected={selected === target}
-              title={t(meta.titleKey)}
-            />
-          );
-        })}
+        <TargetCard
+          description={t("settings.account.desktopAppDescription")}
+          icon={<MonitorIcon className="text-muted-foreground size-4" />}
+          onSelect={() => onSelect("desktop")}
+          selected={selected === "desktop"}
+          title={t("settings.account.desktop")}
+        />
+        <TargetCard
+          description={t("onboarding.mcpCardDescription")}
+          icon={<AssistantIconPair />}
+          onSelect={() => onSelect("assistant")}
+          selected={selected === "assistant"}
+          title={t("onboarding.mcpCardTitle")}
+        />
       </div>
 
       {/* Below md the wizard hides the whole preview column, which is the
-          only other place the download buttons and copy commands render;
+          only other place the download buttons and docs links render;
           without this inline fallback the step would be action-less on
           phones. */}
       <div className="mt-4 md:hidden">
@@ -106,48 +119,26 @@ type DownloadSetupPreviewProps = {
 };
 
 /**
- * Right-panel setup instructions for the selected target on the
- * onboarding download step, following the wizard's per-step preview
- * mechanism (globe for jurisdictions, stack for the catalogue).
+ * Right-panel content for the highlighted target, following the wizard's
+ * per-step preview mechanism (globe for jurisdictions, stack for the
+ * catalogue).
  */
 export const DownloadSetupPreview = ({ target }: DownloadSetupPreviewProps) => {
-  if (target === "desktop") {
-    return <DesktopSetupPanel />;
+  switch (target) {
+    case "desktop":
+      return <DesktopSetupPanel />;
+    case "assistant":
+      return <AssistantPanel />;
+    default:
+      target satisfies never;
+      return panic(`Unknown download target: ${String(target)}`);
   }
-  if (target === "terminal") {
-    return <TerminalSetupPanel />;
-  }
-  return <AssistantSetupPanel />;
 };
-
-type TargetCardMeta = {
-  icon: typeof MonitorIcon;
-  titleKey: TranslationKey;
-  descriptionKey: TranslationKey;
-};
-
-const TARGET_CARD_META = {
-  desktop: {
-    icon: MonitorIcon,
-    titleKey: "settings.account.desktop",
-    descriptionKey: "settings.account.desktopAppDescription",
-  },
-  assistant: {
-    icon: PlugIcon,
-    titleKey: "onboarding.mcpCardTitle",
-    descriptionKey: "onboarding.mcpCardDescription",
-  },
-  terminal: {
-    icon: TerminalIcon,
-    titleKey: "onboarding.cliCardTitle",
-    descriptionKey: "onboarding.cliCardDescription",
-  },
-} as const satisfies Record<DownloadTarget, TargetCardMeta>;
 
 type TargetCardProps = {
   title: string;
   description: string;
-  icon: typeof MonitorIcon;
+  icon: React.ReactNode;
   selected: boolean;
   onSelect: () => void;
 };
@@ -155,7 +146,7 @@ type TargetCardProps = {
 const TargetCard = ({
   title,
   description,
-  icon: Icon,
+  icon,
   selected,
   onSelect,
 }: TargetCardProps) => (
@@ -171,7 +162,7 @@ const TargetCard = ({
     )}
   >
     <div className="flex items-start gap-3">
-      <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+      <span className="mt-0.5 flex shrink-0 items-center">{icon}</span>
       <div className="min-w-0 flex-1">
         <h2 className="text-foreground text-sm font-medium">{title}</h2>
         <p className="text-muted-foreground mt-1 text-sm">{description}</p>
@@ -180,9 +171,13 @@ const TargetCard = ({
   </button>
 );
 
-const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
-
-const apiOrigin = () => externalApiOrigin().replace(/\/$/u, "");
+/** Compact Claude and ChatGPT marks for the assistant card's icon slot. */
+const AssistantIconPair = () => (
+  <span className="flex items-center -space-x-1">
+    <AIProviderIcon className="size-4" provider="anthropic" />
+    <AIProviderIcon className="size-4" provider="openai" />
+  </span>
+);
 
 const SetupPanel = ({
   title,
@@ -194,48 +189,83 @@ const SetupPanel = ({
   </div>
 );
 
-const AssistantGuide = ({
+/** Brand tile that opens the setup guide for that assistant. */
+const AssistantTile = ({
   name,
-  steps,
-}: {
-  name: string;
-  steps: readonly string[];
-}) => (
-  <section className="flex flex-col gap-1.5">
-    <h4 className="text-foreground text-xs font-medium">{name}</h4>
-    <ol className="text-muted-foreground list-decimal space-y-1 ps-4 text-sm">
-      {steps.map((step) => (
-        <li key={step}>{step}</li>
-      ))}
-    </ol>
-  </section>
+  children,
+}: React.PropsWithChildren<{ name: string }>) => (
+  <a
+    className="bg-muted/60 text-foreground hover:bg-muted flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium transition-colors"
+    href={sanitizeHref(ASSISTANT_DOCS_URL)}
+    rel="noreferrer"
+    target="_blank"
+  >
+    {children}
+    {name}
+  </a>
 );
 
-const AssistantSetupPanel = () => {
+type DocsLinkProps = React.PropsWithChildren<{
+  href: string;
+  className?: string;
+  icon?: typeof ExternalLinkIcon;
+}>;
+
+const DocsLink = ({
+  href,
+  className,
+  icon: Icon = ExternalLinkIcon,
+  children,
+}: DocsLinkProps) => (
+  <a
+    className={cn(
+      "inline-flex min-h-11 items-center gap-1.5 text-sm underline-offset-4 hover:underline",
+      className,
+    )}
+    href={sanitizeHref(href)}
+    rel="noreferrer"
+    target="_blank"
+  >
+    <Icon className="size-3.5 shrink-0" />
+    {children}
+  </a>
+);
+
+const AssistantPanel = () => {
   const t = useTranslations();
-  const serverUrl = `${apiOrigin()}${MCP_HTTP_PATH}`;
 
   return (
     <SetupPanel title={t("onboarding.mcpCardTitle")}>
-      <CopyField
-        label={t("onboarding.setupServerAddressLabel")}
-        value={serverUrl}
-      />
-      <AssistantGuide
-        name="Claude"
-        steps={[
-          t("onboarding.setupClaudeStep1"),
-          t("onboarding.setupPasteAddressStep"),
-          t("onboarding.setupClaudeStep3"),
-        ]}
-      />
-      <AssistantGuide
-        name="ChatGPT"
-        steps={[
-          t("onboarding.setupChatgptStep1"),
-          t("onboarding.setupPasteAddressStep"),
-        ]}
-      />
+      <div className="flex gap-3">
+        <AssistantTile name="Claude">
+          <AIProviderIcon className="size-6" provider="anthropic" />
+        </AssistantTile>
+        <AssistantTile name="ChatGPT">
+          <AIProviderIcon className="size-6" provider="openai" />
+        </AssistantTile>
+      </div>
+      <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
+        {t("onboarding.mcpCardDescription")}
+      </p>
+      {/* The guide names the hosted server; a self-hosted deployment has to
+          hand its own address over here or the reader connects to the wrong
+          stella. */}
+      {env.VITE_SELFHOST && (
+        <CopyField
+          label={t("settings.connections.mcpUrlLabel")}
+          value={`${externalApiOrigin().replace(/\/$/u, "")}${MCP_HTTP_PATH}`}
+        />
+      )}
+      <DocsLink href={ASSISTANT_DOCS_URL}>
+        {t("onboarding.assistantDocsLink")}
+      </DocsLink>
+      <DocsLink
+        className="text-muted-foreground text-xs"
+        href={CLI_DOCS_URL}
+        icon={TerminalIcon}
+      >
+        {t("onboarding.cliDocsLink")}
+      </DocsLink>
     </SetupPanel>
   );
 };
@@ -271,27 +301,6 @@ const DesktopSetupPanel = () => {
           detached(connect(), "onboarding-download-step.connect-desktop");
         }}
         state={state}
-      />
-    </SetupPanel>
-  );
-};
-
-const TerminalSetupPanel = () => {
-  const t = useTranslations();
-  const loginCommand = `stella auth login --server ${apiOrigin()}`;
-
-  return (
-    <SetupPanel title={t("onboarding.cliCardTitle")}>
-      <p className="text-muted-foreground text-sm">
-        {t("onboarding.setupTerminalHint")}
-      </p>
-      <CopyField
-        label={t("settings.connections.cliInstallLabel")}
-        value={CLI_INSTALL_COMMAND}
-      />
-      <CopyField
-        label={t("settings.connections.cliLoginLabel")}
-        value={loginCommand}
       />
     </SetupPanel>
   );
