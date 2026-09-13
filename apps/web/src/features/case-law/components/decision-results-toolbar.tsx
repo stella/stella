@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import {
   AlignJustifyIcon,
+  FunnelIcon,
   PanelLeftIcon,
   WrapTextIcon,
   XIcon,
@@ -14,7 +15,11 @@ import type { SearchSort } from "@stll/api-contract/search";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { Input } from "@stll/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/input-group";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
@@ -253,7 +258,10 @@ true satisfies DecisionContentMode extends OfferedContentMode ? true : never;
  *
  * Its neighbour in the toolbar is find-in-table, which looks only at the rows
  * already on screen. Both say so: the label names what this one does to the
- * result set, and the tooltip says it in a clause.
+ * result set, the tooltip says it in a clause, and the glyphs differ — a
+ * funnel for narrowing the set, the magnifier reserved for the find beside it.
+ * The funnel rides in the group's addon rather than on the field, because a
+ * `type="search"` field draws the magnifier itself.
  */
 const NarrowResults = ({ onRefine }: { onRefine: (entry: string) => void }) => {
   const t = useTranslations();
@@ -261,7 +269,6 @@ const NarrowResults = ({ onRefine }: { onRefine: (entry: string) => void }) => {
 
   return (
     <form
-      className="relative"
       onSubmit={(event) => {
         event.preventDefault();
         onRefine(entry);
@@ -270,17 +277,21 @@ const NarrowResults = ({ onRefine }: { onRefine: (entry: string) => void }) => {
     >
       <Tooltip
         content={t("caseLaw.narrowResultsHint")}
-        render={
-          <Input
-            aria-label={t("caseLaw.refineWithinResults")}
-            className="h-7 min-h-0 w-40 text-xs sm:w-52"
-            onChange={(event) => setEntry(event.target.value)}
-            placeholder={t("caseLaw.refineWithinResults")}
-            type="search"
-            value={entry}
-          />
-        }
-      />
+        render={<InputGroup className="w-40 sm:w-52" />}
+      >
+        <InputGroupInput
+          aria-label={t("caseLaw.refineWithinResults")}
+          onChange={(event) => setEntry(event.target.value)}
+          placeholder={t("caseLaw.refineWithinResults")}
+          size="sm"
+          value={entry}
+        />
+        <InputGroupAddon>
+          {/* The toolbar's glyph scale, which the addon's own default is a
+              step above. */}
+          <FunnelIcon className="size-3.5" />
+        </InputGroupAddon>
+      </Tooltip>
     </form>
   );
 };

@@ -10,6 +10,9 @@ describe("Input", () => {
 
     expect(markup).toContain("pointer-coarse:min-h-11");
     expect(markup).toContain("pointer-coarse:h-full");
+    // The control centres its field, so the field only reaches the reserved
+    // target height if it is told to stretch to it.
+    expect(markup).toContain("pointer-coarse:self-stretch");
   });
 
   test("search inputs always render their search affordance", () => {
