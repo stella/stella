@@ -97,14 +97,15 @@ values starting with formula characters execute in Excel/LibreOffice.
 
 ### Multi-entry-point validation
 
-Validate untrusted inputs at each entry boundary using the owning shared schema.
-Generated MCP capabilities already validate the live endpoint's body, params,
-and query schemas in `apps/api/src/mcp/capability-tools.ts`; do not repeat that
-parsing inside the handler. Native MCP tools, chat tools, cron jobs, and other
-callers that bypass this gateway must enforce the same input contract before
-calling the operation. Keep business invariants and related-resource
-authorization in the owning operation: an ID's valid shape does not establish
-its ownership.
+Validate untrusted input at each entry boundary with the owning shared schema.
+Generated MCP capabilities validate the live endpoint's body, params, and query
+schemas in `apps/api/src/mcp/capability-tools.ts`; do not repeat that parsing
+inside the handler. Native MCP tools and chat registry tools normalize input
+through `normalizeObjectInputAtBoundary` before dispatch; any other caller that
+bypasses the HTTP route (cron jobs, workers) must apply the same normalizer and
+schema before calling the operation. Keep business invariants and
+related-resource authorization in the owning operation: an ID's valid shape
+does not establish its ownership.
 
 ### Filename sanitization
 
