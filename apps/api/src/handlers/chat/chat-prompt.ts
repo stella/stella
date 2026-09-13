@@ -16,24 +16,25 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type {
+  ReaderAnnotationTargetType,
+  ReaderAnnotationVisibility,
+} from "@stll/api-contract/legal-reader-annotations";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
-  caseLawDecisionAnnotations,
   caseLawDecisions,
+  legalReaderAnnotations,
   entities,
   entityVersions,
   fields,
   properties,
   workspaces,
 } from "@/api/db/schema";
-import type {
-  CaseLawAnnotationVisibility,
-  PracticeJurisdiction,
-} from "@/api/db/schema";
+import type { PracticeJurisdiction } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -1510,7 +1511,9 @@ const buildActiveDecisionPrompt = ({
 
 /** Enough marks to describe a reader's reading; more is a runaway client. */
 const ACTIVE_DECISION_ANNOTATIONS_LIMIT = 200;
-const SHARED_ANNOTATION: CaseLawAnnotationVisibility = "shared";
+const SHARED_ANNOTATION: ReaderAnnotationVisibility = "shared";
+/** The chat's active document is a decision; a statute's marks are not it. */
+const DECISION_ANNOTATION_TARGET: ReaderAnnotationTargetType = "decision";
 const ANNOTATION_QUOTE_MAX_CHARS = 1200;
 const ANNOTATION_BODY_MAX_CHARS = 2000;
 
@@ -1592,37 +1595,35 @@ const buildActiveDecisionSection = async ({
             safeDb((tx) =>
               tx
                 .select({
-                  body: caseLawDecisionAnnotations.body,
-                  color: caseLawDecisionAnnotations.color,
-                  groupId: caseLawDecisionAnnotations.groupId,
-                  id: caseLawDecisionAnnotations.id,
-                  kind: caseLawDecisionAnnotations.kind,
-                  mine: sql<boolean>`${caseLawDecisionAnnotations.userId} = ${userId}`,
-                  quote: caseLawDecisionAnnotations.quote,
+                  body: legalReaderAnnotations.body,
+                  color: legalReaderAnnotations.color,
+                  groupId: legalReaderAnnotations.groupId,
+                  id: legalReaderAnnotations.id,
+                  kind: legalReaderAnnotations.kind,
+                  mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
+                  quote: legalReaderAnnotations.quote,
                 })
-                .from(caseLawDecisionAnnotations)
+                .from(legalReaderAnnotations)
                 .where(
                   and(
+                    eq(legalReaderAnnotations.organizationId, organizationId),
                     eq(
-                      caseLawDecisionAnnotations.organizationId,
-                      organizationId,
+                      legalReaderAnnotations.targetType,
+                      DECISION_ANNOTATION_TARGET,
                     ),
                     eq(
-                      caseLawDecisionAnnotations.decisionId,
+                      legalReaderAnnotations.targetId,
                       activeDecision.decisionId,
                     ),
                     or(
-                      eq(caseLawDecisionAnnotations.userId, userId),
-                      eq(
-                        caseLawDecisionAnnotations.visibility,
-                        SHARED_ANNOTATION,
-                      ),
+                      eq(legalReaderAnnotations.userId, userId),
+                      eq(legalReaderAnnotations.visibility, SHARED_ANNOTATION),
                     ),
                   ),
                 )
                 .orderBy(
-                  asc(caseLawDecisionAnnotations.createdAt),
-                  asc(caseLawDecisionAnnotations.id),
+                  asc(legalReaderAnnotations.createdAt),
+                  asc(legalReaderAnnotations.id),
                 )
                 .limit(ACTIVE_DECISION_ANNOTATIONS_LIMIT),
             ),

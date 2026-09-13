@@ -571,28 +571,6 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
-    "annotations": {
-      "colorGreen": "Zöld",
-      "colorRed": "Piros",
-      "colorSky": "Kék",
-      "colorViolet": "Lila",
-      "colorYellow": "Sárga",
-      "commentPlaceholder": "Írj megjegyzést…",
-      "createFreeAccount": "Ingyenes fiók létrehozása",
-      "guestAuthor": "Ön",
-      "guestLimitReached": "Ez a lap legfeljebb {count} kiemelést és jegyzetet tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
-      "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
-      "guestMigrationFailed": "Néhány kiemelést és jegyzetet nem sikerült menteni. Egy újabb próbálkozásig ezen a lapon maradnak.",
-      "guestSavePrompt": "A kiemelések és jegyzetek mentésre kerülnek, amikor létrehoz egy ingyenes fiókot.",
-      "guestStorageUnavailable": "A kiemeléseket és jegyzeteket nem sikerült menteni ezen a lapon.",
-      "highlight": "Kiemelés",
-      "removeHighlight": "Kiemelés eltávolítása",
-      "sharedBadge": "Megosztva",
-      "styleHighlight": "Kiemelés",
-      "styleSquiggly": "Hullámos vonal",
-      "styleStrikethrough": "Áthúzás",
-      "visibilityShared": "Megosztva a szervezettel"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
@@ -619,13 +597,6 @@
       "citedBy": "Hivatkozások",
       "headnote": "Jogi tétel",
       "summary": "Jogtétel / találat"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Blokkidézet hivatkozással",
-      "citationOnly": "Csak hivatkozás",
-      "citationWithQuote": "Hivatkozás idézettel",
-      "quoteWithCitation": "Idézet hivatkozással",
-      "textOnly": "Csak szöveg"
     },
     "courtTiers": {
       "constitutional": "Alkotmánybíróságok",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "A legfelsőbb bíróságoktól",
     "tryIdentifier": "Próbáljon ki egy azonosítót"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "A(z) {citation} alábbi részletéről:\n\n„{quote}”\n\n",
+      "colorGreen": "Zöld",
+      "colorRed": "Piros",
+      "colorSky": "Kék",
+      "colorViolet": "Lila",
+      "colorYellow": "Sárga",
+      "commentPlaceholder": "Írj megjegyzést…",
+      "createFreeAccount": "Ingyenes fiók létrehozása",
+      "guestAuthor": "Ön",
+      "guestLimitReached": "Ez a lap legfeljebb {count} kiemelést és jegyzetet tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
+      "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
+      "guestMigrationFailed": "Néhány kiemelést és jegyzetet nem sikerült menteni. Egy újabb próbálkozásig ezen a lapon maradnak.",
+      "guestSavePrompt": "A kiemelések és jegyzetek mentésre kerülnek, amikor létrehoz egy ingyenes fiókot.",
+      "guestStorageUnavailable": "A kiemeléseket és jegyzeteket nem sikerült menteni ezen a lapon.",
+      "highlight": "Kiemelés",
+      "removeHighlight": "Kiemelés eltávolítása",
+      "sharedBadge": "Megosztva",
+      "styleHighlight": "Kiemelés",
+      "styleSquiggly": "Hullámos vonal",
+      "styleStrikethrough": "Áthúzás",
+      "visibilityShared": "Megosztva a szervezettel"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokkidézet hivatkozással",
+      "citationOnly": "Csak hivatkozás",
+      "citationWithQuote": "Hivatkozás idézettel",
+      "quoteWithCitation": "Idézet hivatkozással",
+      "textOnly": "Csak szöveg"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Markdown-forrás"

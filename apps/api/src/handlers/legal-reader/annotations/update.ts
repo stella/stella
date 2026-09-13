@@ -1,22 +1,24 @@
 import { panic, Result } from "better-result";
 
-import { caseLawDecisionAnnotations } from "@/api/db/schema";
-import { wholeAnnotationSql } from "@/api/handlers/case-law/annotations/group";
+import { legalReaderAnnotations } from "@/api/db/schema";
+import { wholeAnnotationSql } from "@/api/handlers/legal-reader/annotations/group";
 import {
   annotationParamsSchema,
   requireAnnotationColor,
   requireAnnotationStyle,
+  requireAnnotationTargetType,
   requireAnnotationVisibility,
   updateAnnotationBodySchema,
-} from "@/api/handlers/case-law/annotations/schema";
-import type { UpdateAnnotationBody } from "@/api/handlers/case-law/annotations/schema";
+} from "@/api/handlers/legal-reader/annotations/schema";
+import type { UpdateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
+import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  permissions: { caseLawAnnotation: ["update"] },
+  permissions: { legalReaderAnnotation: ["update"] },
   mcp: { type: "internal", reason: "reader_annotations" },
   params: annotationParamsSchema,
   body: updateAnnotationBodySchema,
@@ -29,7 +31,7 @@ const config = {
  */
 const changesFor = (
   body: UpdateAnnotationBody,
-): Partial<typeof caseLawDecisionAnnotations.$inferInsert> => {
+): Partial<typeof legalReaderAnnotations.$inferInsert> => {
   switch (body.change) {
     case "body": {
       return { body: body.body };
@@ -56,7 +58,7 @@ const changesFor = (
  * the query as well as in the row policy, so a colleague's shared note is
  * never touched even if a policy were to loosen.
  */
-const updateDecisionAnnotation = createSafeRootHandler(
+const updateReaderAnnotation = createSafeRootHandler(
   config,
   async function* ({
     body,
@@ -69,7 +71,7 @@ const updateDecisionAnnotation = createSafeRootHandler(
     const rows = yield* Result.await(
       safeDb(async (tx) => {
         const mutatedRows = await tx
-          .update(caseLawDecisionAnnotations)
+          .update(legalReaderAnnotations)
           .set({ ...changesFor(body), updatedAt: new Date() })
           .where(
             wholeAnnotationSql({
@@ -78,11 +80,17 @@ const updateDecisionAnnotation = createSafeRootHandler(
               userId: user.id,
             }),
           )
-          .returning({ id: caseLawDecisionAnnotations.id });
-        if (mutatedRows.length > 0) {
+          .returning({
+            id: legalReaderAnnotations.id,
+            targetType: legalReaderAnnotations.targetType,
+          });
+        const first = mutatedRows.at(0);
+        if (first !== undefined) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION,
+            resourceType: annotationAuditResourceType(
+              requireAnnotationTargetType(first.targetType),
+            ),
             resourceId: annotationId,
             metadata: { change: body.change },
           });
@@ -101,4 +109,4 @@ const updateDecisionAnnotation = createSafeRootHandler(
   },
 );
 
-export default updateDecisionAnnotation;
+export default updateReaderAnnotation;

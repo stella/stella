@@ -17,7 +17,6 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import Tooltip from "@/components/tooltip";
-import { useGuestDecisionAnnotations } from "@/features/case-law/annotations/use-guest-decision-annotations";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -175,52 +174,22 @@ const GuestDecisionWorkspace = ({
   decisionId: ReturnType<typeof extractId>;
   initialSearchQuery?: string | undefined;
 }) => {
-  const t = useTranslations();
   const requestSignIn = usePublicSignInRequest();
   const currentHref = useRouterState({
     select: (state) => state.location.href,
   });
-  const { annotations, count, create, remove, update } =
-    useGuestDecisionAnnotations(decisionId);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {count > 0 && (
-        <div
-          className="bg-muted text-muted-foreground flex min-h-11 items-center justify-center gap-3 border-b px-4 py-2 text-center text-xs"
-          role="status"
-        >
-          <span>{t("caseLaw.annotations.guestSavePrompt")}</span>
-          {requestSignIn !== null && (
-            <Button
-              className="shrink-0"
-              onClick={() => requestSignIn(currentHref)}
-              size="sm"
-              variant="outline"
-            >
-              {t("caseLaw.annotations.createFreeAccount")}
-            </Button>
-          )}
-        </div>
-      )}
-      <div className="min-h-0 flex-1">
-        <DecisionWorkspace
-          aiMode="locked"
-          annotations={{
-            annotations,
-            controller: { create, remove, update },
-            mode: "guest",
-          }}
-          decision={decision}
-          decisionId={decisionId}
-          initialSearchQuery={initialSearchQuery}
-          onRequestAI={
-            requestSignIn === null
-              ? undefined
-              : () => requestSignIn(currentHref)
-          }
-        />
-      </div>
+      <DecisionWorkspace
+        aiMode="locked"
+        decision={decision}
+        decisionId={decisionId}
+        initialSearchQuery={initialSearchQuery}
+        onRequestAI={
+          requestSignIn === null ? undefined : () => requestSignIn(currentHref)
+        }
+      />
     </div>
   );
 };

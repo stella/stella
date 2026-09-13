@@ -47,7 +47,7 @@ and drives the real handlers as each role: a role without the grant gets
 ### `own-work-permissions.test.ts`
 
 The writes a member makes to their own work — a mark on a decision
-(`caseLawAnnotation`), a stored search (`savedSearch`), a link between
+(`legalReaderAnnotation`), a stored search (`savedSearch`), a link between
 their account and an outside system (`integration`: MCP connections, a
 SharePoint sign-in, an agent client, a desktop registry key). Pins the
 declared grant per endpoint, checks the sibling reads stay on the

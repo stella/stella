@@ -407,7 +407,7 @@ const ComposerNote = ({
   const [visibility, setVisibility] = useState<"private" | "shared">("private");
   const shared = visibility === "shared";
   const visibilityLabel = shared
-    ? t("caseLaw.annotations.visibilityShared")
+    ? t("legalReader.annotations.visibilityShared")
     : t("knowledge.agentSkills.scopePrivate");
   const submit = () => {
     const trimmed = body.trim();
@@ -445,7 +445,7 @@ const ComposerNote = ({
             submit();
           }
         }}
-        placeholder={t("caseLaw.annotations.commentPlaceholder")}
+        placeholder={t("legalReader.annotations.commentPlaceholder")}
         value={body}
       />
       <div className="flex items-center justify-between gap-1">
@@ -534,10 +534,10 @@ const CommentNote = ({
         />
         {shared && (
           <Tooltip
-            content={t("caseLaw.annotations.visibilityShared")}
+            content={t("legalReader.annotations.visibilityShared")}
             render={
               <span
-                aria-label={t("caseLaw.annotations.visibilityShared")}
+                aria-label={t("legalReader.annotations.visibilityShared")}
                 className="text-foreground-disabled"
               />
             }
@@ -564,14 +564,14 @@ const CommentNote = ({
             content={
               shared
                 ? t("knowledge.agentSkills.scopePrivate")
-                : t("caseLaw.annotations.visibilityShared")
+                : t("legalReader.annotations.visibilityShared")
             }
             render={
               <button
                 aria-label={
                   shared
                     ? t("knowledge.agentSkills.scopePrivate")
-                    : t("caseLaw.annotations.visibilityShared")
+                    : t("legalReader.annotations.visibilityShared")
                 }
                 className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
                 onClick={item.onToggleVisibility}

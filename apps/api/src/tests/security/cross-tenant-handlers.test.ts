@@ -21,6 +21,7 @@ import {
   documentTranslationRuns,
   entities,
   legalLists,
+  legalReaderAnnotations,
   notifications,
   savedSearches,
   signals,
@@ -44,6 +45,7 @@ import {
   readFileHandler,
 } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
+import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
@@ -148,6 +150,9 @@ const workObligationEntityB = toSafeId<"entity">(
 );
 const notificationB = toSafeId<"notification">(
   "22222222-2222-4222-8222-222222222251",
+);
+const readerAnnotationB = toSafeId<"legalReaderAnnotation">(
+  "22222222-2222-4222-8222-222222222254",
 );
 
 const savedSearchCriteria = (
@@ -483,6 +488,29 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, savedSearchB),
   },
   {
+    // A shared mark belongs to the organization that made it: a reader in
+    // another firm opens the same public decision and must see none of it.
+    name: "legal reader annotation list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listReaderAnnotations, workspaceA, {
+        query: {
+          limit: 100,
+          targetId: testIds.caseLawDecisionB,
+          targetType: "decision",
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(listReaderAnnotations, workspaceB, {
+        query: {
+          limit: 100,
+          targetId: testIds.caseLawDecisionB,
+          targetType: "decision",
+        },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, readerAnnotationB),
+    expectPositive: (result) => expectPageContainsId(result, readerAnnotationB),
+  },
+  {
     // Answer cells are the organization's. Asking about a decision another
     // organization has answered returns nothing: the cells are keyed by that
     // organization's own question columns.
@@ -671,6 +699,21 @@ beforeAll(async () => {
     decisionId: ids.caseLawDecisionB,
     state: "answered",
     answer: { version: 1, type: "single-select", value: "yes" },
+  });
+  await testDb.insert(legalReaderAnnotations).values({
+    id: readerAnnotationB,
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    targetType: "decision",
+    targetId: ids.caseLawDecisionB,
+    kind: "highlight",
+    visibility: "shared",
+    color: "yellow",
+    style: "highlight",
+    blockAnchorId: "p-1",
+    startOffset: 0,
+    endOffset: 9,
+    quote: "important",
   });
   await testDb.insert(signals).values([
     {

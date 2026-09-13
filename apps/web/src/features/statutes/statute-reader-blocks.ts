@@ -10,7 +10,10 @@ import type {
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
 
-import { statuteOutlineFromHeadings } from "@/components/legal-reader/reader-outline";
+import {
+  parseProvisionDesignation,
+  statuteOutlineFromHeadings,
+} from "@/components/legal-reader/reader-outline";
 
 export type StatuteMasthead = {
   anchorId: string;
@@ -45,6 +48,32 @@ export const provisionCitationCountByBlockAnchor = (
     const resolved = resolveDocumentAnchor(blocks, count.anchor);
     if (resolved !== null) {
       byAnchor.set(resolved.anchorId, count.decisionCount);
+    }
+  }
+  return byAnchor;
+};
+
+/**
+ * The provision each block sits in, by the block's own anchor: the
+ * designation of the nearest preceding provision heading, as the document
+ * prints it. A quotation carries this as its locator, so a citation names the
+ * provision rather than the whole act. Blocks before the first provision (a
+ * masthead, a preamble) sit in none and are absent.
+ */
+export const provisionByBlockAnchor = (
+  blocks: readonly Block[],
+): ReadonlyMap<string, string> => {
+  const byAnchor = new Map<string, string>();
+  let current: string | null = null;
+  for (const block of blocks) {
+    if (block.type === "heading") {
+      const designation = parseProvisionDesignation(block.plainText);
+      if (designation !== null) {
+        current = `${designation.marker} ${designation.number}`.trim();
+      }
+    }
+    if (current !== null) {
+      byAnchor.set(block.anchorId, current);
     }
   }
   return byAnchor;

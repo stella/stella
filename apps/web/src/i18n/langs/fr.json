@@ -571,28 +571,6 @@
       "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
-    "annotations": {
-      "colorGreen": "Vert",
-      "colorRed": "Rouge",
-      "colorSky": "Bleu",
-      "colorViolet": "Pourpre",
-      "colorYellow": "Jaune",
-      "commentPlaceholder": "Écrire un commentaire…",
-      "createFreeAccount": "Créer un compte gratuit",
-      "guestAuthor": "Vous",
-      "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
-      "guestMigrationComplete": "Surlignages et notes enregistrés.",
-      "guestMigrationFailed": "Certains surlignages et notes n’ont pas pu être enregistrés. Ils resteront dans cet onglet pour une nouvelle tentative.",
-      "guestSavePrompt": "Vos surlignages et notes seront enregistrés lorsque vous créerez un compte gratuit.",
-      "guestStorageUnavailable": "Les surlignages et notes n’ont pas pu être enregistrés dans cet onglet.",
-      "highlight": "Surligner",
-      "removeHighlight": "Retirer le surlignage",
-      "sharedBadge": "Partagé",
-      "styleHighlight": "Surlignage",
-      "styleSquiggly": "Ondulé",
-      "styleStrikethrough": "Barré",
-      "visibilityShared": "Partagé avec l’organisation"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
@@ -619,13 +597,6 @@
       "citedBy": "Citée par",
       "headnote": "Sommaire",
       "summary": "Sommaire / passage trouvé"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Citation en bloc avec référence",
-      "citationOnly": "Référence seule",
-      "citationWithQuote": "Référence avec citation",
-      "quoteWithCitation": "Citation avec référence",
-      "textOnly": "Texte seul"
     },
     "courtTiers": {
       "constitutional": "Juridictions constitutionnelles",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "Des juridictions suprêmes",
     "tryIdentifier": "Essayez un identifiant"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "À propos de ce passage de {citation} :\n\n« {quote} »\n\n",
+      "colorGreen": "Vert",
+      "colorRed": "Rouge",
+      "colorSky": "Bleu",
+      "colorViolet": "Pourpre",
+      "colorYellow": "Jaune",
+      "commentPlaceholder": "Écrire un commentaire…",
+      "createFreeAccount": "Créer un compte gratuit",
+      "guestAuthor": "Vous",
+      "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
+      "guestMigrationComplete": "Surlignages et notes enregistrés.",
+      "guestMigrationFailed": "Certains surlignages et notes n’ont pas pu être enregistrés. Ils resteront dans cet onglet pour une nouvelle tentative.",
+      "guestSavePrompt": "Vos surlignages et notes seront enregistrés lorsque vous créerez un compte gratuit.",
+      "guestStorageUnavailable": "Les surlignages et notes n’ont pas pu être enregistrés dans cet onglet.",
+      "highlight": "Surligner",
+      "removeHighlight": "Retirer le surlignage",
+      "sharedBadge": "Partagé",
+      "styleHighlight": "Surlignage",
+      "styleSquiggly": "Ondulé",
+      "styleStrikethrough": "Barré",
+      "visibilityShared": "Partagé avec l’organisation"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Citation en bloc avec référence",
+      "citationOnly": "Référence seule",
+      "citationWithQuote": "Référence avec citation",
+      "quoteWithCitation": "Citation avec référence",
+      "textOnly": "Texte seul"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Source Markdown"

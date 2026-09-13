@@ -4,6 +4,11 @@ import type { Block } from "@stll/legal-ast/document-ast";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import {
+  buildBlockAnnotationAnchors,
+  buildStandaloneAnnotationAnchors,
+} from "@/components/legal-reader/annotations/annotation-anchors";
+import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import {
   BlockRenderer,
   FulltextFallback,
 } from "@/components/legal-reader/document-ast-text";
@@ -23,6 +28,8 @@ export type StatuteCitationWork = {
 };
 
 type StatuteTextProps = {
+  /** The reader's own marks and what colleagues shared. */
+  annotationAnchors: readonly AnnotationAnchorSource[];
   /** Parsed blocks. The route owns the parse: it also builds the outline. */
   blocks: readonly Block[];
   citationWork: StatuteCitationWork | null;
@@ -49,10 +56,15 @@ const READER_STYLE = {
 const NO_RANGES = {};
 const NO_ACTIVE_MATCH = -1;
 
+/**
+ * The act's own front matter. It carries an `id` so a deep link lands on it,
+ * but no `data-anchor`: that attribute marks a block the renderer can lay
+ * anchors over, and the masthead is lifted out of the block list, so a
+ * highlight left here would have nowhere to be drawn.
+ */
 const StatuteMasthead = ({ masthead }: { masthead: StatuteMastheadData }) => (
   <header
     className="group relative mx-auto mb-12 max-w-5xl scroll-mt-[var(--reader-anchor-offset)] text-center"
-    data-anchor={masthead.anchorId}
     id={masthead.anchorId}
   >
     <p className="mb-4 font-sans text-[1.55rem] leading-tight font-bold">
@@ -83,6 +95,7 @@ const StatuteMasthead = ({ masthead }: { masthead: StatuteMastheadData }) => (
  * is a stable deep-link target (`#<anchorId>`) that the router scrolls to.
  */
 export const StatuteText = ({
+  annotationAnchors,
   blocks,
   citationWork,
   documentId,
@@ -96,8 +109,11 @@ export const StatuteText = ({
 }: StatuteTextProps) => {
   const t = useTranslations();
   const { open } = useInspectorView();
-
   if (blocks.length > 0) {
+    const anchorsByPieceId = buildBlockAnnotationAnchors(
+      annotationAnchors,
+      blocks,
+    );
     return (
       <article
         className="reader-statute text-card-foreground text-start"
@@ -135,6 +151,7 @@ export const StatuteText = ({
           return (
             <BlockRenderer
               activeMatchIndex={NO_ACTIVE_MATCH}
+              anchorsByPieceId={anchorsByPieceId}
               block={block}
               headingPresentation={
                 provision === null
@@ -172,6 +189,7 @@ export const StatuteText = ({
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
+          anchorsByPieceId={buildStandaloneAnnotationAnchors(annotationAnchors)}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />

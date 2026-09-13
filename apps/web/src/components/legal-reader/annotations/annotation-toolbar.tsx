@@ -24,67 +24,54 @@ import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { writeDecisionPassage } from "@/components/chat-decision-passage";
-import Tooltip from "@/components/tooltip";
 import {
   ANNOTATION_COLORS,
   ANNOTATION_STYLES,
-} from "@/features/case-law/annotations/annotation-types";
+} from "@/components/legal-reader/annotations/annotation-types";
 import type {
   AnnotationColor,
   AnnotationStyle,
   AnnotationVisibility,
-  CreateAnnotationInput,
-  UpdateAnnotationInput,
-} from "@/features/case-law/annotations/annotation-types";
-import { askAboutSelection } from "@/features/case-law/annotations/ask-about-selection";
+} from "@/components/legal-reader/annotations/annotation-types";
+import {
+  askAboutReaderPassage,
+  readerSelectionLocator,
+  readerTargetCitation,
+  writeReaderPassage,
+} from "@/components/legal-reader/annotations/reader-annotation-target";
+import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
+import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import {
   readerAnnotationActivationAction,
   readerSelectionContainmentAction,
   selectionAnchorsFrom,
-} from "@/features/case-law/annotations/selection-anchor";
-import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
-import { formatDecisionCitation } from "@/features/case-law/citation-format";
-import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
+} from "@/components/legal-reader/annotations/selection-anchor";
+import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
+import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 
 /** Room above the words for the bar, so it never covers what was selected. */
 const BAR_OFFSET_PX = 44;
 
-type AnnotationToolbarDecision = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Date | string | null;
-  decisionType: string | null;
-  ecli: string | null;
-  id: string;
-  /** Citable case name ("Brown v. Board of Education"); null when the
-   * document does not state one. */
-  name: string | null;
-};
-
-export type AnnotationToolbarController = {
-  create: (input: CreateAnnotationInput) => unknown;
-  remove: (id: string) => unknown;
-  update: (input: UpdateAnnotationInput) => unknown;
-};
-
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
-  activeAnnotation: DecisionAnnotation | null;
+  activeAnnotation: ReaderAnnotation | null;
   /** Every paragraph the clicked mark covers, for a comment on the passage. */
   activeSpans: readonly SelectionAnchor[];
-  controller: AnnotationToolbarController;
-  decision: AnnotationToolbarDecision;
+  controller: ReaderAnnotationController;
   mode: "authenticated" | "guest";
   onClearActive: () => void;
   /** The reader clicked a mark in the text. */
   onActivateAnnotation: (id: string) => void;
-  /** Opens the margin composer on these paragraphs. */
-  onCompose: (spans: SelectionAnchor[]) => void;
+  /** Opens the margin composer on these paragraphs. Absent on a reader with
+   * no notes margin, where the bar offers no comment at all rather than an
+   * affordance that leads nowhere. */
+  onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
+  /** The document being marked: the only thing that differs by corpus. */
+  target: ReaderAnnotationTarget;
 };
 
 type Selected = {
@@ -95,9 +82,10 @@ type Selected = {
   /** The words alone: reader chrome, note marks and page markers removed —
    * what a quotation of the passage should contain. */
   cleanText: string;
-  /** Reporter page the selection starts on, from the last page marker
-   * before it; null before the first marker or in unpaginated documents. */
-  pincite: string | null;
+  /** Where in the document the quotation sits: a reporter page in a
+   * decision, a provision in a statute. Null where the document offers
+   * neither. */
+  locator: string | null;
 };
 
 type ReaderSelectionSnapshot = {
@@ -131,21 +119,6 @@ const cleanSelectionText = (range: Range): string => {
   return holder.textContent.replaceAll(/\s+/gu, " ").trim();
 };
 
-const pinciteOf = (root: HTMLElement, range: Range): string | null => {
-  let last: string | null = null;
-  for (const marker of root.querySelectorAll(".reader-page-marker")) {
-    // -1: the marker sits before the selection's start.
-    if (range.comparePoint(marker, 0) !== -1) {
-      continue;
-    }
-    const digits = /\d+/u.exec(marker.textContent)?.[0];
-    if (digits !== undefined) {
-      last = digits;
-    }
-  }
-  return last;
-};
-
 const COPY_MODES = [
   "quoteWithCitation",
   "citationWithQuote",
@@ -157,19 +130,13 @@ type CopyMode = (typeof COPY_MODES)[number];
 
 const copyTextFor = (
   mode: CopyMode,
-  selected: Pick<Selected, "cleanText" | "pincite">,
-  decision: AnnotationToolbarDecision,
+  selected: Pick<Selected, "cleanText" | "locator">,
+  target: ReaderAnnotationTarget,
 ): string => {
   const quote = selected.cleanText;
-  const citation = formatDecisionCitation({
-    caseNumber: decision.caseNumber,
-    country: decision.country,
-    court: decision.court,
-    decisionDate: decision.decisionDate,
-    decisionType: decision.decisionType,
-    ecli: decision.ecli,
-    name: decision.name,
-    pincite: selected.pincite,
+  const citation = readerTargetCitation({
+    locator: selected.locator,
+    target,
   });
   switch (mode) {
     case "quoteWithCitation": {
@@ -202,8 +169,9 @@ const STYLE_ICONS = {
 } as const satisfies Record<AnnotationStyle, unknown>;
 
 /**
- * What a reader can do with selected words: send them to the AI with the
- * decision attached, mark them in a colour and style, or comment on them.
+ * What a reader can do with selected words in a decision or a statute: send
+ * them to the AI with the document attached, mark them in a colour and style,
+ * or comment on them.
  * Floats over the selection the way a PDF reader's mark-up bar does, and
  * over a clicked mark to change or remove it.
  *
@@ -214,12 +182,12 @@ export const AnnotationToolbar = ({
   activeAnnotation,
   activeSpans,
   controller,
-  decision,
   mode,
   onActivateAnnotation,
   onClearActive,
   onCompose,
   scrollContainerRef,
+  target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
   const barRef = useRef<HTMLDivElement>(null);
@@ -339,11 +307,12 @@ export const AnnotationToolbar = ({
         setCopyOpen(false);
         const range = selection.getRangeAt(0);
         const cleanText = cleanSelectionText(range);
+        const spans = selectionAnchorsFrom(selection, root);
         setSelected({
           cleanText: cleanText === "" ? text : cleanText,
-          pincite: pinciteOf(root, range),
+          locator: readerSelectionLocator({ range, root, spans, target }),
           rect: range.getBoundingClientRect(),
-          spans: selectionAnchorsFrom(selection, root),
+          spans,
           text,
         });
       });
@@ -369,25 +338,25 @@ export const AnnotationToolbar = ({
       }
     };
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
+      const pressed = event.target;
       readerDragActive =
-        event.button === 0 && target instanceof Node && root.contains(target);
+        event.button === 0 && pressed instanceof Node && root.contains(pressed);
       readerSelectionSnapshot = null;
-      if (!(target instanceof Node) || barRef.current?.contains(target)) {
+      if (!(pressed instanceof Node) || barRef.current?.contains(pressed)) {
         return;
       }
       onClearActive();
     };
     const onClick = (event: MouseEvent) => {
-      const target = event.target;
+      const clicked = event.target;
       let element: Element | null = null;
-      if (target instanceof Element) {
-        element = target;
+      if (clicked instanceof Element) {
+        element = clicked;
       } else if (
-        target instanceof Node &&
-        target.parentElement instanceof Element
+        clicked instanceof Node &&
+        clicked.parentElement instanceof Element
       ) {
-        element = target.parentElement;
+        element = clicked.parentElement;
       }
       const mark =
         element?.closest<HTMLElement>("[data-annotation-id]") ?? null;
@@ -409,8 +378,9 @@ export const AnnotationToolbar = ({
       readerDragActive = false;
       readerSelectionSnapshot = null;
     };
-    // Dragging selected words carries the passage with its decision, so a
-    // drop on the chat composer lands as chips rather than loose text.
+    // Dragging selected words carries the passage with the document it came
+    // from, so a drop on the chat composer lands as chips where the corpus
+    // offers a reference for it.
     const onDragStart = (event: DragEvent) => {
       const selection = ownerDoc.getSelection();
       const quote = selection?.toString().replace(/\s+/gu, " ").trim() ?? "";
@@ -422,12 +392,7 @@ export const AnnotationToolbar = ({
       ) {
         return;
       }
-      writeDecisionPassage(event.dataTransfer, {
-        caseNumber: decision.caseNumber,
-        court: decision.court,
-        decisionId: decision.id,
-        quote,
-      });
+      writeReaderPassage({ dataTransfer: event.dataTransfer, quote, target });
     };
     ownerDoc.addEventListener("selectionchange", readSelection);
     ownerDoc.addEventListener("keydown", onKeyDown);
@@ -467,6 +432,19 @@ export const AnnotationToolbar = ({
     setSelected(null);
   };
 
+  // A statute consolidation is not a reference the chat's corpus tools take,
+  // so the passage reaches them as a question naming the provision instead.
+  const askAboutPassage = (quote: string) => {
+    askAboutReaderPassage({
+      prompt: t("legalReader.annotations.askPassagePrompt", {
+        citation: readerTargetCitation({ locator: null, target }),
+        quote,
+      }),
+      quote,
+      target,
+    });
+  };
+
   const createHighlight = (
     spans: SelectionAnchor[],
     color: AnnotationColor,
@@ -479,7 +457,7 @@ export const AnnotationToolbar = ({
         style,
         visibility,
       }),
-      "case-law.annotation-highlight",
+      "legal-reader.annotation-highlight",
     );
     clearSelection();
   };
@@ -544,12 +522,7 @@ export const AnnotationToolbar = ({
         <div className="flex items-center gap-1">
           <Button
             onClick={() => {
-              askAboutSelection({
-                caseNumber: decision.caseNumber,
-                court: decision.court,
-                decisionId: decision.id,
-                quote: activeSpans.map((span) => span.quote).join(" "),
-              });
+              askAboutPassage(activeSpans.map((span) => span.quote).join(" "));
               onClearActive();
             }}
             size="sm"
@@ -563,7 +536,7 @@ export const AnnotationToolbar = ({
     } else {
       const removeLabel =
         activeAnnotation.kind === "highlight"
-          ? t("caseLaw.annotations.removeHighlight")
+          ? t("legalReader.annotations.removeHighlight")
           : t("common.delete");
       content = (
         <div className="flex items-center gap-1">
@@ -576,7 +549,7 @@ export const AnnotationToolbar = ({
                     id: activeAnnotation.id,
                     style: next,
                   }),
-                  "case-law.annotation-restyle",
+                  "legal-reader.annotation-restyle",
                 );
               })}
               <span className="bg-border mx-1 h-4 w-px" />
@@ -588,14 +561,14 @@ export const AnnotationToolbar = ({
                       color,
                       id: activeAnnotation.id,
                     }),
-                    "case-law.annotation-recolor",
+                    "legal-reader.annotation-recolor",
                   );
                 })}
               </div>
               <span className="bg-border mx-1 h-4 w-px" />
             </>
           )}
-          {activeAnnotation.kind === "highlight" && (
+          {activeAnnotation.kind === "highlight" && onCompose !== undefined && (
             <>
               <Button
                 onClick={() => {
@@ -627,7 +600,7 @@ export const AnnotationToolbar = ({
                     id: activeAnnotation.id,
                     visibility: next,
                   }),
-                  "case-law.annotation-visibility",
+                  "legal-reader.annotation-visibility",
                 );
               }}
               value={activeAnnotation.visibility}
@@ -642,7 +615,7 @@ export const AnnotationToolbar = ({
                 onClick={() => {
                   detached(
                     controller.remove(activeAnnotation.id),
-                    "case-law.annotation-remove",
+                    "legal-reader.annotation-remove",
                   );
                   onClearActive();
                 }}
@@ -700,9 +673,9 @@ export const AnnotationToolbar = ({
                               selected.cleanText.length > 220
                                 ? `${selected.cleanText.slice(0, 220)}…`
                                 : selected.cleanText,
-                            pincite: selected.pincite,
+                            locator: selected.locator,
                           },
-                          decision,
+                          target,
                         )}
                       </p>
                     )}
@@ -714,7 +687,7 @@ export const AnnotationToolbar = ({
                     className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
                     key={copyMode}
                     onClick={() => {
-                      const text = copyTextFor(copyMode, selected, decision);
+                      const text = copyTextFor(copyMode, selected, target);
                       detached(
                         (async () => {
                           const copied = await copyToClipboard(text);
@@ -730,7 +703,7 @@ export const AnnotationToolbar = ({
                             type: "success",
                           });
                         })(),
-                        "case-law.selection-copy",
+                        "legal-reader.selection-copy",
                       );
                       setCopyOpen(false);
                       clearSelection();
@@ -740,7 +713,7 @@ export const AnnotationToolbar = ({
                     onMouseEnter={() => setCopyPreviewMode(copyMode)}
                     type="button"
                   >
-                    {t(`caseLaw.copyMenu.${copyMode}`)}
+                    {t(`legalReader.copyMenu.${copyMode}`)}
                   </button>
                 ))}
               </MenuPreviewLayout>
@@ -752,12 +725,7 @@ export const AnnotationToolbar = ({
             <span className="bg-border mx-1 h-4 w-px" />
             <Button
               onClick={() => {
-                askAboutSelection({
-                  caseNumber: decision.caseNumber,
-                  court: decision.court,
-                  decisionId: decision.id,
-                  quote: selected.text,
-                });
+                askAboutPassage(selected.text);
                 clearSelection();
               }}
               size="sm"
@@ -775,18 +743,22 @@ export const AnnotationToolbar = ({
             <div className="flex items-center gap-1.5 px-1">
               {colorSwatches((color) => createHighlight(spans, color))}
             </div>
-            <span className="bg-border mx-1 h-4 w-px" />
-            <Button
-              onClick={() => {
-                onCompose(spans);
-                clearSelection();
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <MessageSquarePlusIcon className="size-3.5" />
-              {t("folio.comment")}
-            </Button>
+            {onCompose !== undefined && (
+              <>
+                <span className="bg-border mx-1 h-4 w-px" />
+                <Button
+                  onClick={() => {
+                    onCompose(spans);
+                    clearSelection();
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <MessageSquarePlusIcon className="size-3.5" />
+                  {t("folio.comment")}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -822,7 +794,7 @@ const VisibilityToggle = ({
   const t = useTranslations();
   const shared = value === "shared";
   const label = shared
-    ? t("caseLaw.annotations.visibilityShared")
+    ? t("legalReader.annotations.visibilityShared")
     : t("knowledge.agentSkills.scopePrivate");
 
   return (
@@ -852,19 +824,19 @@ const VisibilityToggle = ({
 const colorLabelKey = (color: AnnotationColor) => {
   switch (color) {
     case "yellow": {
-      return "caseLaw.annotations.colorYellow" as const;
+      return "legalReader.annotations.colorYellow" as const;
     }
     case "green": {
-      return "caseLaw.annotations.colorGreen" as const;
+      return "legalReader.annotations.colorGreen" as const;
     }
     case "sky": {
-      return "caseLaw.annotations.colorSky" as const;
+      return "legalReader.annotations.colorSky" as const;
     }
     case "violet": {
-      return "caseLaw.annotations.colorViolet" as const;
+      return "legalReader.annotations.colorViolet" as const;
     }
     case "red": {
-      return "caseLaw.annotations.colorRed" as const;
+      return "legalReader.annotations.colorRed" as const;
     }
     default: {
       color satisfies never;
@@ -876,16 +848,16 @@ const colorLabelKey = (color: AnnotationColor) => {
 const styleLabelKey = (style: AnnotationStyle) => {
   switch (style) {
     case "highlight": {
-      return "caseLaw.annotations.styleHighlight" as const;
+      return "legalReader.annotations.styleHighlight" as const;
     }
     case "underline": {
       return "folio.underline" as const;
     }
     case "squiggly": {
-      return "caseLaw.annotations.styleSquiggly" as const;
+      return "legalReader.annotations.styleSquiggly" as const;
     }
     case "strikethrough": {
-      return "caseLaw.annotations.styleStrikethrough" as const;
+      return "legalReader.annotations.styleStrikethrough" as const;
     }
     default: {
       style satisfies never;

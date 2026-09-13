@@ -571,28 +571,6 @@
       "treatment": "Tratamento posterior"
     },
     "analyzing": "Analisando...",
-    "annotations": {
-      "colorGreen": "Verde",
-      "colorRed": "Vermelho",
-      "colorSky": "Azul",
-      "colorViolet": "Violeta",
-      "colorYellow": "Amarelo",
-      "commentPlaceholder": "Escreva um comentário…",
-      "createFreeAccount": "Criar conta gratuita",
-      "guestAuthor": "Você",
-      "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
-      "guestMigrationComplete": "Destaques e notas salvos.",
-      "guestMigrationFailed": "Não foi possível salvar alguns destaques e notas. Eles permanecerão nesta aba para uma nova tentativa.",
-      "guestSavePrompt": "Seus destaques e notas serão salvos quando você criar uma conta gratuita.",
-      "guestStorageUnavailable": "Não foi possível salvar destaques e notas nesta aba.",
-      "highlight": "Destacar",
-      "removeHighlight": "Remover destaque",
-      "sharedBadge": "Compartilhado",
-      "styleHighlight": "Destaque",
-      "styleSquiggly": "Ondulado",
-      "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartilhado com a organização"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
@@ -619,13 +597,6 @@
       "citedBy": "Citada por",
       "headnote": "Ementa",
       "summary": "Ementa / trecho encontrado"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Citação em bloco com referência",
-      "citationOnly": "Somente referência",
-      "citationWithQuote": "Referência com citação",
-      "quoteWithCitation": "Citação com referência",
-      "textOnly": "Somente texto"
     },
     "courtTiers": {
       "constitutional": "Tribunais constitucionais",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "Dos tribunais superiores",
     "tryIdentifier": "Experimente um identificador"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "Sobre esta passagem de {citation}:\n\n“{quote}”\n\n",
+      "colorGreen": "Verde",
+      "colorRed": "Vermelho",
+      "colorSky": "Azul",
+      "colorViolet": "Violeta",
+      "colorYellow": "Amarelo",
+      "commentPlaceholder": "Escreva um comentário…",
+      "createFreeAccount": "Criar conta gratuita",
+      "guestAuthor": "Você",
+      "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
+      "guestMigrationComplete": "Destaques e notas salvos.",
+      "guestMigrationFailed": "Não foi possível salvar alguns destaques e notas. Eles permanecerão nesta aba para uma nova tentativa.",
+      "guestSavePrompt": "Seus destaques e notas serão salvos quando você criar uma conta gratuita.",
+      "guestStorageUnavailable": "Não foi possível salvar destaques e notas nesta aba.",
+      "highlight": "Destacar",
+      "removeHighlight": "Remover destaque",
+      "sharedBadge": "Compartilhado",
+      "styleHighlight": "Destaque",
+      "styleSquiggly": "Ondulado",
+      "styleStrikethrough": "Tachado",
+      "visibilityShared": "Compartilhado com a organização"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Citação em bloco com referência",
+      "citationOnly": "Somente referência",
+      "citationWithQuote": "Referência com citação",
+      "quoteWithCitation": "Citação com referência",
+      "textOnly": "Somente texto"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Código-fonte Markdown"

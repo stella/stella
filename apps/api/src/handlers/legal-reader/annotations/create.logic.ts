@@ -1,16 +1,17 @@
-import type { CreateAnnotationBody } from "@/api/handlers/case-law/annotations/schema";
+import type { CreateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
 
 type StoredAnnotation = {
   blockAnchorId: string;
   body: string | null;
   color: string | null;
-  decisionId: string;
   endOffset: number;
   groupId: string | null;
   kind: string;
   quote: string;
   startOffset: number;
   style: string | null;
+  targetId: string;
+  targetType: string;
   visibility: string;
 };
 
@@ -33,11 +34,9 @@ const spanKey = ({
  */
 export const storedAnnotationMatchesRequest = ({
   body,
-  decisionId,
   rows,
 }: {
   body: CreateAnnotationBody;
-  decisionId: string;
   rows: readonly StoredAnnotation[];
 }): boolean => {
   if (rows.length !== body.spans.length) {
@@ -49,7 +48,8 @@ export const storedAnnotationMatchesRequest = ({
   if (
     rows.some(
       (row) =>
-        row.decisionId !== decisionId ||
+        row.targetType !== body.targetType ||
+        row.targetId !== body.targetId ||
         row.kind !== body.kind ||
         row.visibility !== expectedVisibility ||
         row.color !== expectedColor ||

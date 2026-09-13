@@ -4,7 +4,7 @@ import {
   isReaderChromeParent,
   readerAnnotationActivationAction,
   readerSelectionContainmentAction,
-} from "@/features/case-law/annotations/selection-anchor";
+} from "@/components/legal-reader/annotations/selection-anchor";
 
 test("detached selection text remains document content", () => {
   expect(isReaderChromeParent(null)).toBe(false);

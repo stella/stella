@@ -1,21 +1,25 @@
 import { Result } from "better-result";
 
-import { caseLawDecisionAnnotations } from "@/api/db/schema";
-import { wholeAnnotationSql } from "@/api/handlers/case-law/annotations/group";
-import { annotationParamsSchema } from "@/api/handlers/case-law/annotations/schema";
+import { legalReaderAnnotations } from "@/api/db/schema";
+import { wholeAnnotationSql } from "@/api/handlers/legal-reader/annotations/group";
+import {
+  annotationParamsSchema,
+  requireAnnotationTargetType,
+} from "@/api/handlers/legal-reader/annotations/schema";
+import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  permissions: { caseLawAnnotation: ["delete"] },
+  permissions: { legalReaderAnnotation: ["delete"] },
   mcp: { type: "internal", reason: "reader_annotations" },
   params: annotationParamsSchema,
 } satisfies HandlerConfig;
 
 /** Removes the author's own annotation; anyone else's is not found. */
-const deleteDecisionAnnotation = createSafeRootHandler(
+const deleteReaderAnnotation = createSafeRootHandler(
   config,
   async function* ({
     params: { annotationId },
@@ -27,7 +31,7 @@ const deleteDecisionAnnotation = createSafeRootHandler(
     const rows = yield* Result.await(
       safeDb(async (tx) => {
         const mutatedRows = await tx
-          .delete(caseLawDecisionAnnotations)
+          .delete(legalReaderAnnotations)
           .where(
             wholeAnnotationSql({
               annotationId,
@@ -35,11 +39,17 @@ const deleteDecisionAnnotation = createSafeRootHandler(
               userId: user.id,
             }),
           )
-          .returning({ id: caseLawDecisionAnnotations.id });
-        if (mutatedRows.length > 0) {
+          .returning({
+            id: legalReaderAnnotations.id,
+            targetType: legalReaderAnnotations.targetType,
+          });
+        const first = mutatedRows.at(0);
+        if (first !== undefined) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION,
+            resourceType: annotationAuditResourceType(
+              requireAnnotationTargetType(first.targetType),
+            ),
             resourceId: annotationId,
           });
         }
@@ -57,4 +67,4 @@ const deleteDecisionAnnotation = createSafeRootHandler(
   },
 );
 
-export default deleteDecisionAnnotation;
+export default deleteReaderAnnotation;

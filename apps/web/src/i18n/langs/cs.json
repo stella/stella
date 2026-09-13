@@ -571,28 +571,6 @@
       "treatment": "Pozdější judikatura"
     },
     "analyzing": "Analyzuji...",
-    "annotations": {
-      "colorGreen": "Zelená",
-      "colorRed": "Červená",
-      "colorSky": "Modrá",
-      "colorViolet": "Fialová",
-      "colorYellow": "Žlutá",
-      "commentPlaceholder": "Napište komentář…",
-      "createFreeAccount": "Vytvořit bezplatný účet",
-      "guestAuthor": "Vy",
-      "guestLimitReached": "Tato karta může obsahovat nejvýše {count} zvýraznění a poznámek. Vytvořte si účet a uložte další.",
-      "guestMigrationComplete": "Zvýraznění a poznámky byly uloženy.",
-      "guestMigrationFailed": "Některá zvýraznění a poznámky se nepodařilo uložit. Zůstanou na této kartě pro další pokus.",
-      "guestSavePrompt": "Vaše zvýraznění a poznámky se uloží, až si vytvoříte bezplatný účet.",
-      "guestStorageUnavailable": "Zvýraznění a poznámky se na této kartě nepodařilo uložit.",
-      "highlight": "Zvýraznit",
-      "removeHighlight": "Odebrat zvýraznění",
-      "sharedBadge": "Sdíleno",
-      "styleHighlight": "Zvýraznění",
-      "styleSquiggly": "Vlnovka",
-      "styleStrikethrough": "Přeškrtnutí",
-      "visibilityShared": "Sdíleno s organizací"
-    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
@@ -619,13 +597,6 @@
       "citedBy": "Citováno",
       "headnote": "Právní věta",
       "summary": "Právní věta / shoda"
-    },
-    "copyMenu": {
-      "blockQuoteWithCitation": "Blokový citát s citací",
-      "citationOnly": "Pouze citace",
-      "citationWithQuote": "Citace s citátem",
-      "quoteWithCitation": "Citát s citací",
-      "textOnly": "Pouze text"
     },
     "courtTiers": {
       "constitutional": "Ústavní soudy",
@@ -3220,6 +3191,38 @@
     },
     "topCourts": "Z vrcholných soudů",
     "tryIdentifier": "Vyzkoušejte identifikátor"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "K této pasáži z {citation}:\n\n„{quote}“\n\n",
+      "colorGreen": "Zelená",
+      "colorRed": "Červená",
+      "colorSky": "Modrá",
+      "colorViolet": "Fialová",
+      "colorYellow": "Žlutá",
+      "commentPlaceholder": "Napište komentář…",
+      "createFreeAccount": "Vytvořit bezplatný účet",
+      "guestAuthor": "Vy",
+      "guestLimitReached": "Tato karta může obsahovat nejvýše {count} zvýraznění a poznámek. Vytvořte si účet a uložte další.",
+      "guestMigrationComplete": "Zvýraznění a poznámky byly uloženy.",
+      "guestMigrationFailed": "Některá zvýraznění a poznámky se nepodařilo uložit. Zůstanou na této kartě pro další pokus.",
+      "guestSavePrompt": "Vaše zvýraznění a poznámky se uloží, až si vytvoříte bezplatný účet.",
+      "guestStorageUnavailable": "Zvýraznění a poznámky se na této kartě nepodařilo uložit.",
+      "highlight": "Zvýraznit",
+      "removeHighlight": "Odebrat zvýraznění",
+      "sharedBadge": "Sdíleno",
+      "styleHighlight": "Zvýraznění",
+      "styleSquiggly": "Vlnovka",
+      "styleStrikethrough": "Přeškrtnutí",
+      "visibilityShared": "Sdíleno s organizací"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokový citát s citací",
+      "citationOnly": "Pouze citace",
+      "citationWithQuote": "Citace s citátem",
+      "quoteWithCitation": "Citát s citací",
+      "textOnly": "Pouze text"
+    }
   },
   "markdownEditor": {
     "rawLabel": "Zdroj Markdownu"

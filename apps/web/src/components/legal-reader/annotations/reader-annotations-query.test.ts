@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { collectAnnotationPages } from "@/features/case-law/queries/annotations";
+import { collectAnnotationPages } from "@/components/legal-reader/annotations/reader-annotations-query";
 
 describe("collectAnnotationPages", () => {
   test("returns every cursor page before the reader receives annotations", async () => {

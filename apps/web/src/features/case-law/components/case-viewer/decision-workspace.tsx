@@ -16,10 +16,16 @@ import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
+import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
+import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
+import { useActiveReaderAnnotation } from "@/components/legal-reader/annotations/use-active-reader-annotation";
+import { useReaderAnnotations } from "@/components/legal-reader/annotations/use-reader-annotations";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
-import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
-import { isPendingAnnotationId } from "@/features/case-law/annotations/use-decision-annotations";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
@@ -34,15 +40,11 @@ import {
   getCategoryVar,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
-import { AnnotationToolbar } from "@/features/case-law/components/case-viewer/annotation-toolbar";
-import type { AnnotationToolbarController } from "@/features/case-law/components/case-viewer/annotation-toolbar";
-import type { AnnotationAnchorSource } from "@/features/case-law/components/case-viewer/decision-text";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
-import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
@@ -64,16 +66,7 @@ type DecisionWorkspaceDecision = {
   textFields: ReadDecisionTextFields;
 };
 
-/** A reader's marks on the decision and the means to change them. */
-export type DecisionWorkspaceAnnotations = {
-  annotations: readonly DecisionAnnotation[];
-  controller: AnnotationToolbarController;
-  mode: "authenticated" | "guest";
-};
-
 type DecisionWorkspaceBaseProps = {
-  /** Absent only while the reader surface has no annotation controller. */
-  annotations?: DecisionWorkspaceAnnotations | undefined;
   decision: DecisionWorkspaceDecision;
   decisionId: SafeId<"caseLawDecision">;
   initialSearchQuery?: string | undefined;
@@ -105,9 +98,9 @@ const getHeadingDisplayAnchorId = ({
 type NotesFilter = "all" | "ai" | "mine";
 
 const annotationsForFilter = (
-  annotations: readonly DecisionAnnotation[],
+  annotations: readonly ReaderAnnotation[],
   filter: NotesFilter,
-): readonly DecisionAnnotation[] => {
+): readonly ReaderAnnotation[] => {
   switch (filter) {
     case "all":
       return annotations;
@@ -126,11 +119,36 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { annotations, decision, decisionId, initialSearchQuery } = props;
+  const { decision, decisionId, initialSearchQuery } = props;
   const t = useTranslations();
-  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(
-    null,
-  );
+  const ast = parseDocumentAst(decision.documentAst);
+  // The case's citable name and year, for the legal copy modes. The title
+  // heading carries "Name, Cite"; the cite suffix is stripped when present.
+  const decisionTitle =
+    ast?.blocks.find(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    )?.plainText ?? null;
+  // Only a title of the "Name, Cite" shape yields a citable name; a
+  // generic heading ("JUDGMENT OF THE COURT (Grand Chamber)", a bare case
+  // number) must not masquerade as one.
+  const citeSuffix = `, ${decision.caseNumber}`;
+  const caseName =
+    (decisionTitle?.endsWith(citeSuffix) ?? false)
+      ? (decisionTitle ?? "").slice(0, -citeSuffix.length)
+      : null;
+  const annotationTarget = {
+    type: "decision",
+    caseNumber: decision.caseNumber,
+    country: decision.country,
+    court: decision.court,
+    decisionDate: decision.decisionDate,
+    decisionType: decision.decisionType ?? null,
+    ecli: decision.ecli ?? null,
+    id: decisionId,
+    name: caseName,
+  } as const satisfies ReaderAnnotationTarget;
+  const annotations = useReaderAnnotations(annotationTarget);
+  const mainRef = useRef<HTMLDivElement>(null);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = notesFilter === "all" || notesFilter === "ai";
   // The comment being written: its paragraphs, so the margin can sit the
@@ -146,69 +164,28 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             onCancel: () => setComposing(null),
             onSubmit: (body, visibility) => {
               detached(
-                annotations?.controller.create({
+                annotations.controller.create({
                   body,
                   kind: "comment",
                   spans: composing,
                   visibility,
-                }) ?? Promise.resolve(),
-                "case-law.annotation-comment",
+                }),
+                "legal-reader.annotation-comment",
               );
               setComposing(null);
             },
             startAnchorId: composing[0].blockAnchorId,
           },
         ];
-  // A mark the server has not stored yet has no id to act on, so it is not
-  // active even if clicked.
-  const annotationRows =
-    annotations === undefined ? [] : annotations.annotations;
   const visibleAnnotationRows = annotationsForFilter(
-    annotationRows,
+    annotations.annotations,
     notesFilter,
   );
-  const activeAnnotation =
-    visibleAnnotationRows.find(
-      (item) =>
-        item.id === activeAnnotationId && !isPendingAnnotationId(item.id),
-    ) ?? null;
-  // A mark over several paragraphs is several rows under one group; the bar
-  // acts on all of them, and a comment left from the mark covers them all.
-  const rowsOf = (item: DecisionAnnotation): DecisionAnnotation[] =>
-    item.groupId === null
-      ? [item]
-      : annotationRows.filter((row) => row.groupId === item.groupId);
-  const activeSpans = activeAnnotation === null ? [] : rowsOf(activeAnnotation);
-  // Select the words the mark covers, exactly as if the reader had dragged
-  // over them, so the bar reads as acting on that selection. Runs from the
-  // id in state, so the toolbar's once-installed document listener never
-  // holds a stale list.
-  const activeRowIds = activeSpans.map((row) => row.id).join(" ");
-  useExternalSyncEffect(() => {
-    const container = mainRef.current;
-    if (!container || activeRowIds === "") {
-      return;
-    }
-    const pieces: HTMLElement[] = [];
-    for (const id of activeRowIds.split(" ")) {
-      pieces.push(
-        ...container.querySelectorAll<HTMLElement>(
-          `[data-annotation-id="${CSS.escape(id)}"]`,
-        ),
-      );
-    }
-    const first = pieces.at(0);
-    const last = pieces.at(-1);
-    if (first === undefined || last === undefined) {
-      return;
-    }
-    const range = container.ownerDocument.createRange();
-    range.setStartBefore(first);
-    range.setEndAfter(last);
-    const selection = container.ownerDocument.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }, [activeRowIds]);
+  const { activeAnnotation, activeSpans, clearActive, setActiveAnnotationId } =
+    useActiveReaderAnnotation({
+      annotations: visibleAnnotationRows,
+      scrollContainerRef: mainRef,
+    });
   const annotationAnchors: AnnotationAnchorSource[] = visibleAnnotationRows.map(
     (item) => ({
       blockAnchorId: item.blockAnchorId,
@@ -231,18 +208,18 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       mine: item.mine,
       onDelete: () => {
         detached(
-          annotations?.controller.remove(item.id) ?? Promise.resolve(),
-          "case-law.annotation-remove",
+          annotations.controller.remove(item.id),
+          "legal-reader.annotation-remove",
         );
       },
       onToggleVisibility: () => {
         detached(
-          annotations?.controller.update({
+          annotations.controller.update({
             change: "visibility",
             id: item.id,
             visibility: item.visibility === "shared" ? "private" : "shared",
-          }) ?? Promise.resolve(),
-          "case-law.annotation-visibility",
+          }),
+          "legal-reader.annotation-visibility",
         );
       },
       startAnchorId: item.blockAnchorId,
@@ -252,23 +229,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const aiEnabled = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
-  const ast = parseDocumentAst(decision.documentAst);
-  // The case's citable name and year, for the legal copy modes. The title
-  // heading carries "Name, Cite"; the cite suffix is stripped when present.
-  const decisionTitle =
-    ast?.blocks.find(
-      (block) => block.type === "heading" && block.role === "decision-title",
-    )?.plainText ?? null;
-  // Only a title of the "Name, Cite" shape yields a citable name; a
-  // generic heading ("JUDGMENT OF THE COURT (Grand Chamber)", a bare case
-  // number) must not masquerade as one.
-  const citeSuffix = `, ${decision.caseNumber}`;
-  const caseName =
-    (decisionTitle?.endsWith(citeSuffix) ?? false)
-      ? (decisionTitle ?? "").slice(0, -citeSuffix.length)
-      : null;
 
-  const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);
   const isDragging = useRef(false);
   const {
@@ -456,6 +417,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
@@ -483,7 +445,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                       isActive && "bg-muted text-foreground",
                     )}
                     onClick={() => {
-                      setActiveAnnotationId(null);
+                      clearActive();
                       setNotesFilter(option.value);
                     }}
                   />
@@ -655,28 +617,17 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             </main>
           </div>
         </div>
-        {annotations !== undefined && (
-          <AnnotationToolbar
-            activeAnnotation={activeAnnotation}
-            activeSpans={activeSpans}
-            controller={annotations.controller}
-            decision={{
-              caseNumber: decision.caseNumber,
-              country: decision.country,
-              court: decision.court,
-              decisionDate: decision.decisionDate,
-              decisionType: decision.decisionType ?? null,
-              ecli: decision.ecli ?? null,
-              id: decisionId,
-              name: caseName,
-            }}
-            onActivateAnnotation={setActiveAnnotationId}
-            onClearActive={() => setActiveAnnotationId(null)}
-            onCompose={setComposing}
-            mode={annotations.mode}
-            scrollContainerRef={mainRef}
-          />
-        )}
+        <AnnotationToolbar
+          activeAnnotation={activeAnnotation}
+          activeSpans={activeSpans}
+          controller={annotations.controller}
+          mode={annotations.mode}
+          onActivateAnnotation={setActiveAnnotationId}
+          onClearActive={clearActive}
+          onCompose={setComposing}
+          scrollContainerRef={mainRef}
+          target={annotationTarget}
+        />
       </div>
     </div>
   );
@@ -752,7 +703,7 @@ const LockedAnalysisPreview = ({
         ) : (
           <Button className="shadow-sm" onClick={onRequest} size="sm">
             <SparklesIcon className="size-3.5" />
-            {t("caseLaw.annotations.createFreeAccount")}
+            {t("legalReader.annotations.createFreeAccount")}
           </Button>
         )}
       </div>
