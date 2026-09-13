@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# Zitat} other {# Zitate}}"
     },
     "columns": {
+      "arrange": "Spalte {column} anordnen",
       "caseNumber": "Aktenzeichen",
       "citedBy": "Zitiert von",
       "headnote": "Leitsatz",
+      "hide": "Diese Spalte ausblenden",
+      "moveEarlier": "Nach vorne verschieben",
+      "moveLater": "Nach hinten verschieben",
+      "pin": "Vorne anheften",
+      "reset": "Spalten zurücksetzen",
       "summary": "Leitsatz / Fundstelle"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# Entscheidung war hier bereits gespeichert} other {# Entscheidungen waren hier bereits gespeichert}}",
+      "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",
+      "emptyAction": "Rechtsprechung durchsuchen",
+      "note": "Notiz",
+      "notePlaceholder": "Warum diese Entscheidungen hier relevant sind…",
+      "rejectedLimit": "{count, plural, one {# Entscheidung wurde nicht gespeichert: die Akte ist voll} other {# Entscheidungen wurden nicht gespeichert: die Akte ist voll}}",
+      "rejectedMissing": "{count, plural, one {# Entscheidung wurde nicht gefunden} other {# Entscheidungen wurden nicht gefunden}}",
+      "remove": "Aus der Akte entfernen",
+      "save": "In Akte speichern",
+      "savePage": "{count, plural, one {# Entscheidung auf dieser Seite wird gespeichert.} other {# Entscheidungen auf dieser Seite werden gespeichert.}}",
+      "saveSelection": "{count, plural, one {# ausgewählte Entscheidung wird gespeichert.} other {# ausgewählte Entscheidungen werden gespeichert.}}",
+      "saveTitle": "In Akte speichern",
+      "saved": "{count, plural, one {# Entscheidung} other {# Entscheidungen}} in {matter} gespeichert"
+    },
     "newestDecisions": "Neueste Entscheidungen",
     "notesFilter": {
       "ai": "KI",
       "human": "Mensch"
+    },
+    "pagination": {
+      "goToPage": "Zu Seite {page} wechseln",
+      "label": "Ergebnisseiten",
+      "page": "Seite {page}",
+      "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "perPage": "Pro Seite"
     },
     "provision": {
       "article": "Artikel {value}",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "In den Ergebnissen suchen",
     "research": {
+      "addColumn": "Spalte hinzufügen",
       "addQuestion": "Frage hinzufügen",
       "addQuestionHint": "Die Frage wird jeder Entscheidung der Tabelle gestellt; Antworten entstehen, wenn Sie die Spalte ausführen.",
-      "answerType": "Art der Antwort",
-      "answerTypeText": "Kurzer Text",
-      "answerTypeYesNo": "Ja / nein",
       "answering": "{count, plural, one {# Zelle wird beantwortet…} other {# Zellen werden beantwortet…}}",
       "answers": {
-        "confidence": "{percent} % Konfidenz",
         "failed": "Nicht beantwortet",
         "no": "Nein",
         "notAllowed": "Von den Nutzungsbedingungen der Quelle nicht erlaubt",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# Entscheidung} other {# Entscheidungen}}",
       "runAll": "Alle beantworten",
       "runColumn": "Diese Spalte beantworten",
+      "runConfirm": "Jetzt beantworten",
+      "runEstimate": "{rows, plural, one {# Entscheidung} other {# Entscheidungen}} × {columns, plural, one {# Frage} other {# Fragen}} auf dieser Seite: {cells, plural, one {# Antwort wird erzeugt} other {# Antworten werden erzeugt}}.",
+      "runTitle": "Diese Seite beantworten",
       "save": "Als Recherchetabelle speichern",
       "saved": "Recherchetabelle erstellt",
       "savedQuery": "Gespeicherte Suche",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
     "openCitation": "Fundstelle {label} öffnen",
     "openThread": "Konversation öffnen",
-    "pageNumber": "Seite {page}",
     "pastedChars": "Eingefügt · {count} Zeichen",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
@@ -1390,6 +1418,7 @@
     "goBack": "Zurück",
     "goBackToEditing": "Zurück zur Bearbeitung",
     "hideDetails": "Details ausblenden",
+    "hideFilters": "Filter ausblenden",
     "hideSecretValue": "Geheimen Wert ausblenden",
     "history": "Verlauf",
     "import": "Importieren",
@@ -1497,11 +1526,13 @@
     "searchIn": "Suchen in",
     "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
+    "selectAll": "Alle auswählen",
     "selectDate": "Datum wählen…",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
     "showDetails": "Details anzeigen",
+    "showFilters": "Filter anzeigen",
     "showLess": "Weniger anzeigen",
     "showMore": "Mehr anzeigen",
     "showSecretValue": "Geheimen Wert anzeigen",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "Folio konnte aus der aktuellen Bearbeitung keine sichere DOCX-Datei erstellen. Ihre Sitzung ist weiterhin geöffnet.",
     "saveSerializeFailedTitle": "DOCX-Datei konnte nicht erstellt werden",
     "savingDocument": "Speichern...",
-    "selectAll": "Alle auswählen",
     "showDetails": "Details anzeigen",
     "somethingWentWrong": "Etwas ist schiefgelaufen",
     "synced": "Synchronisiert",

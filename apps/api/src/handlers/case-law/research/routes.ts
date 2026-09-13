@@ -4,6 +4,7 @@ import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-look
 import runResearchAnswers from "@/api/handlers/case-law/research/answers-run";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
+import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
 import createResearchTable from "@/api/handlers/case-law/research/create";
@@ -15,11 +16,46 @@ import listResearchTables from "@/api/handlers/case-law/research/list";
 import updateResearchTable from "@/api/handlers/case-law/research/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
-/** Organization-scoped: a research table belongs to a member, not a matter. */
+/**
+ * Organization-scoped. Question columns and their answers belong to the
+ * organization: one answer serves every search that surfaces the decision.
+ * The `/:tableId` routes below are the retiring research tables.
+ *
+ * The column and answer paths are registered before `/:tableId` so the static
+ * segment wins the match, whichever way the router orders its tree.
+ */
 export const caseLawResearchRoute = new Elysia({ prefix: "/case/research" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
+  .get("/columns", listResearchColumns.handler, {
+    permissions: listResearchColumns.config.permissions,
+  })
+  .post("/columns", createResearchColumn.handler, {
+    body: createResearchColumn.config.body,
+    permissions: createResearchColumn.config.permissions,
+  })
+  .put("/columns/order", reorderResearchColumns.handler, {
+    body: reorderResearchColumns.config.body,
+    permissions: reorderResearchColumns.config.permissions,
+  })
+  .patch("/columns/:columnId", updateResearchColumn.handler, {
+    body: updateResearchColumn.config.body,
+    params: updateResearchColumn.config.params,
+    permissions: updateResearchColumn.config.permissions,
+  })
+  .delete("/columns/:columnId", deleteResearchColumn.handler, {
+    params: deleteResearchColumn.config.params,
+    permissions: deleteResearchColumn.config.permissions,
+  })
+  .post("/answers/lookup", lookupResearchAnswers.handler, {
+    body: lookupResearchAnswers.config.body,
+    permissions: lookupResearchAnswers.config.permissions,
+  })
+  .post("/answers/run", runResearchAnswers.handler, {
+    body: runResearchAnswers.config.body,
+    permissions: runResearchAnswers.config.permissions,
+  })
   .get("/", listResearchTables.handler, {
     query: listResearchTables.config.query,
     permissions: listResearchTables.config.permissions,
@@ -53,33 +89,4 @@ export const caseLawResearchRoute = new Elysia({ prefix: "/case/research" })
       params: deleteResearchTableDecision.config.params,
       permissions: deleteResearchTableDecision.config.permissions,
     },
-  )
-  .post("/:tableId/columns", createResearchColumn.handler, {
-    body: createResearchColumn.config.body,
-    params: createResearchColumn.config.params,
-    permissions: createResearchColumn.config.permissions,
-  })
-  .put("/:tableId/columns/order", reorderResearchColumns.handler, {
-    body: reorderResearchColumns.config.body,
-    params: reorderResearchColumns.config.params,
-    permissions: reorderResearchColumns.config.permissions,
-  })
-  .patch("/:tableId/columns/:columnId", updateResearchColumn.handler, {
-    body: updateResearchColumn.config.body,
-    params: updateResearchColumn.config.params,
-    permissions: updateResearchColumn.config.permissions,
-  })
-  .delete("/:tableId/columns/:columnId", deleteResearchColumn.handler, {
-    params: deleteResearchColumn.config.params,
-    permissions: deleteResearchColumn.config.permissions,
-  })
-  .post("/:tableId/answers/lookup", lookupResearchAnswers.handler, {
-    body: lookupResearchAnswers.config.body,
-    params: lookupResearchAnswers.config.params,
-    permissions: lookupResearchAnswers.config.permissions,
-  })
-  .post("/:tableId/answers/run", runResearchAnswers.handler, {
-    body: runResearchAnswers.config.body,
-    params: runResearchAnswers.config.params,
-    permissions: runResearchAnswers.config.permissions,
-  });
+  );

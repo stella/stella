@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citação} other {# citações}}"
     },
     "columns": {
+      "arrange": "Organizar a coluna {column}",
       "caseNumber": "Número do processo",
       "citedBy": "Citada por",
       "headnote": "Ementa",
+      "hide": "Ocultar esta coluna",
+      "moveEarlier": "Mover antes",
+      "moveLater": "Mover depois",
+      "pin": "Manter no início",
+      "reset": "Redefinir colunas",
       "summary": "Ementa / trecho encontrado"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Correspondência em {language}"
     },
     "loadingMore": "Carregando mais...",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# decisão já estava salva aqui} other {# decisões já estavam salvas aqui}}",
+      "empty": "Ainda não há jurisprudência salva neste caso.",
+      "emptyAction": "Pesquisar jurisprudência",
+      "note": "Nota",
+      "notePlaceholder": "Por que estas decisões importam aqui…",
+      "rejectedLimit": "{count, plural, one {# decisão não foi salva: o caso está cheio} other {# decisões não foram salvas: o caso está cheio}}",
+      "rejectedMissing": "{count, plural, one {# decisão não foi encontrada} other {# decisões não foram encontradas}}",
+      "remove": "Remover do caso",
+      "save": "Salvar em um caso",
+      "savePage": "{count, plural, one {# decisão desta página será salva.} many {# decisões desta página serão salvas.} other {# decisões desta página serão salvas.}}",
+      "saveSelection": "{count, plural, one {# decisão selecionada será salva.} many {# decisões selecionadas serão salvas.} other {# decisões selecionadas serão salvas.}}",
+      "saveTitle": "Salvar em um caso",
+      "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
+    },
     "newestDecisions": "Decisões mais recentes",
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
+    },
+    "pagination": {
+      "goToPage": "Ir para a página {page}",
+      "label": "Páginas de resultados",
+      "page": "Página {page}",
+      "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "perPage": "Por página"
     },
     "provision": {
       "article": "art. {value}",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "Pesquisar nos resultados",
     "research": {
+      "addColumn": "Adicionar coluna",
       "addQuestion": "Adicionar pergunta",
       "addQuestionHint": "A pergunta é feita a cada decisão da tabela; as respostas são geradas ao executar a coluna.",
-      "answerType": "Natureza da resposta",
-      "answerTypeText": "Texto curto",
-      "answerTypeYesNo": "Sim / não",
       "answering": "{count, plural, one {Respondendo # célula…} other {Respondendo # células…}}",
       "answers": {
-        "confidence": "{percent}% de confiança",
         "failed": "Não respondida",
         "no": "Não",
         "notAllowed": "Não permitido pelos termos da fonte",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# decisão} other {# decisões}}",
       "runAll": "Responder tudo",
       "runColumn": "Responder esta coluna",
+      "runConfirm": "Responder agora",
+      "runEstimate": "{rows, plural, one {# decisão} other {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas}}.",
+      "runTitle": "Responder esta página",
       "save": "Salvar como tabela de pesquisa",
       "saved": "Tabela de pesquisa criada",
       "savedQuery": "Busca salva",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
     "openCitation": "Abrir citação {label}",
     "openThread": "Abrir conversa",
-    "pageNumber": "Página {page}",
     "pastedChars": "Colado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",
@@ -1390,6 +1418,7 @@
     "goBack": "Voltar",
     "goBackToEditing": "Voltar a editar",
     "hideDetails": "Ocultar detalhes",
+    "hideFilters": "Ocultar filtros",
     "hideSecretValue": "Ocultar valor secreto",
     "history": "Histórico",
     "import": "Importar",
@@ -1497,11 +1526,13 @@
     "searchIn": "Pesquisar em",
     "selectAMatter": "Selecione um caso",
     "selectARole": "Selecione uma função",
+    "selectAll": "Selecionar tudo",
     "selectDate": "Selecionar data…",
     "sessions": "Sessões",
     "settings": "Configurações",
     "showAll": "Mostrar tudo",
     "showDetails": "Mostrar detalhes",
+    "showFilters": "Mostrar filtros",
     "showLess": "Mostrar menos",
     "showMore": "Mostrar mais",
     "showSecretValue": "Mostrar valor secreto",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "O Folio não conseguiu produzir um arquivo DOCX seguro a partir da edição atual. Sua sessão ainda está aberta.",
     "saveSerializeFailedTitle": "Não foi possível criar DOCX",
     "savingDocument": "Salvando...",
-    "selectAll": "Selecionar tudo",
     "showDetails": "Mostrar detalhes",
     "somethingWentWrong": "Algo deu errado",
     "synced": "Sincronizado",

@@ -27,13 +27,14 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## case-law
 
-| Capability                     | Access             | Scope                | Feature            | Reachable via                                                     |
-| ------------------------------ | ------------------ | -------------------- | ------------------ | ----------------------------------------------------------------- |
-| `case-law.analysis.generate`   | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law analysis-generate`   |
-| `case-law.ingestion.status`    | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law ingestion-status`    |
-| `case-law.matter-links.create` | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-create` |
-| `case-law.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-delete` |
-| `case-law.matter-links.list`   | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-list`   |
+| Capability                           | Access             | Scope                | Feature            | Reachable via                                                           |
+| ------------------------------------ | ------------------ | -------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `case-law.analysis.generate`         | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law analysis-generate`         |
+| `case-law.ingestion.status`          | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law ingestion-status`          |
+| `case-law.matter-links.batch.create` | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-batch-create` |
+| `case-law.matter-links.create`       | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-create`       |
+| `case-law.matter-links.delete`       | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-delete`       |
+| `case-law.matter-links.list`         | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-list`         |
 
 ## catalogue
 
@@ -556,13 +557,13 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport          | 11    |
 | native_tool_ui         | 8     |
 | provider_secret        | 24    |
-| public_indexing        | 4     |
+| public_indexing        | 5     |
 | reader_annotations     | 4     |
 | realtime_stream        | 3     |
-| search_ui              | 18    |
+| search_ui              | 19    |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 173
+Total: 175

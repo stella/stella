@@ -1,42 +1,32 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
-
-import { Temporal } from "@stll/time";
 
 import {
-  caseLawResearchAnswers,
-  caseLawResearchColumns,
-} from "@/api/db/schema";
-import {
-  researchTableParamsSchema,
-  runResearchAnswersBodySchema,
-} from "@/api/handlers/case-law/research/schema";
-import {
-  findResearchTable,
-  touchResearchTable,
-} from "@/api/handlers/case-law/research/table-access";
+  readNamedResearchColumns,
+  readOrganizationResearchColumns,
+} from "@/api/handlers/case-law/research/column-access";
+import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summaries";
+import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
 import type { ResearchRunColumn } from "@/api/lib/case-law/research-answer-runner";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   description:
-    "Queue answers for the given decisions in the given columns (every " +
-    "column when none is named). Cells that already hold an answer are kept " +
-    "unless `force` is set; cells another run is still working on are " +
-    "skipped. Answering continues after the response; poll the answers.",
+    "Queue answers for the given decisions in the given question columns " +
+    "(every column the organization keeps, when none is named). Cells that " +
+    "already hold an answer are kept unless `force` is set; cells another " +
+    "run is still working on are skipped. Answering continues after the " +
+    "response; poll the answers.",
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "search_ui" },
-  params: researchTableParamsSchema,
   body: runResearchAnswersBodySchema,
 } satisfies HandlerConfig;
 
@@ -46,7 +36,6 @@ const runResearchAnswersHandler = createSafeRootHandler(
     body,
     orgAIConfig,
     orgAIConfigStatus,
-    params: { tableId },
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
@@ -85,139 +74,53 @@ const runResearchAnswersHandler = createSafeRootHandler(
 
     const queued = yield* Result.await(
       safeDb(async (tx) => {
-        const table = await findResearchTable({
-          tx,
-          tableId,
-          organizationId: session.activeOrganizationId,
-        });
-        if (table === null) {
-          return null;
-        }
-        const columnConditions = [
-          eq(caseLawResearchColumns.tableId, tableId),
-          eq(
-            caseLawResearchColumns.organizationId,
-            session.activeOrganizationId,
-          ),
-        ];
-        if (body.columnIds !== undefined) {
-          columnConditions.push(
-            inArray(caseLawResearchColumns.id, body.columnIds),
-          );
-        }
+        const requestedColumnIds = body.columnIds;
         // Locked until the pending cells are written, so a question edited in
         // between cannot have the old wording answered under the new heading.
-        const columns = await tx
-          .select({
-            id: caseLawResearchColumns.id,
-            question: caseLawResearchColumns.question,
-            answerType: caseLawResearchColumns.answerType,
-          })
-          .from(caseLawResearchColumns)
-          .where(and(...columnConditions))
-          .orderBy(asc(caseLawResearchColumns.position))
-          .limit(LIMITS.caseLawResearchColumnsPerTable)
-          .for("update");
-        if (columns.length === 0) {
-          return { columns: [], pairs: 0 };
+        const columns =
+          requestedColumnIds === undefined
+            ? await readOrganizationResearchColumns({
+                tx,
+                organizationId: session.activeOrganizationId,
+                lock: true,
+              })
+            : await readNamedResearchColumns({
+                tx,
+                columnIds: requestedColumnIds,
+                organizationId: session.activeOrganizationId,
+                lock: true,
+              });
+        if (columns === null) {
+          return null;
         }
-
-        const columnIds = columns.map((column) => column.id);
-        const existing = await tx
-          .select({
-            columnId: caseLawResearchAnswers.columnId,
-            decisionId: caseLawResearchAnswers.decisionId,
-            state: caseLawResearchAnswers.state,
-            updatedAt: caseLawResearchAnswers.updatedAt,
-          })
-          .from(caseLawResearchAnswers)
-          .where(
-            and(
-              inArray(caseLawResearchAnswers.columnId, columnIds),
-              inArray(caseLawResearchAnswers.decisionId, decisionIds),
-              eq(
-                caseLawResearchAnswers.organizationId,
-                session.activeOrganizationId,
-              ),
-            ),
-          );
-        const existingByKey = new Map(
-          existing.map((row) => [`${row.columnId}:${row.decisionId}`, row]),
-        );
-        const staleBefore =
-          Temporal.Now.instant().epochMilliseconds -
-          LIMITS.caseLawResearchPendingStaleMs;
-        const now = new Date();
-        const toQueue: (typeof caseLawResearchAnswers.$inferInsert)[] = [];
-        for (const column of columns) {
-          for (const decisionId of decisionIds) {
-            const current = existingByKey.get(`${column.id}:${decisionId}`);
-            // A live pending cell belongs to another run; a stale one is a run
-            // that died. An answered cell is kept unless the caller forces.
-            const skip =
-              current !== undefined &&
-              (current.state === "pending"
-                ? current.updatedAt.getTime() >= staleBefore
-                : current.state === "answered" && body.force !== true);
-            if (skip) {
-              continue;
-            }
-            toQueue.push({
-              columnId: column.id,
-              organizationId: session.activeOrganizationId,
-              decisionId,
-              state: "pending",
-              answer: null,
-              confidence: null,
-              run: null,
-              failureReason: null,
-              updatedAt: now,
-            });
-          }
-        }
-        if (toQueue.length > 0) {
-          await tx
-            .insert(caseLawResearchAnswers)
-            .values(toQueue)
-            .onConflictDoUpdate({
-              target: [
-                caseLawResearchAnswers.columnId,
-                caseLawResearchAnswers.decisionId,
-              ],
-              set: {
-                state: "pending",
-                answer: null,
-                confidence: null,
-                run: null,
-                failureReason: null,
-                updatedAt: now,
-              },
-            });
-          await touchResearchTable({
+        const claim = await queueResearchAnswerCells({
+          tx,
+          organizationId: session.activeOrganizationId,
+          columnIds: columns.map((column) => column.id),
+          decisionIds,
+          force: body.force === true,
+          now: new Date(),
+        });
+        if (claim.cells.length > 0) {
+          await recordAuditEvent(
             tx,
-            tableId,
-            organizationId: session.activeOrganizationId,
-          });
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_TABLE,
-            resourceId: tableId,
-            metadata: {
-              answersQueued: toQueue.length,
-              columnCount: columns.length,
-              decisionCount: decisionIds.length,
-            },
-          });
+            columns.map((column) => ({
+              action: AUDIT_ACTION.EXECUTE,
+              resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_COLUMN,
+              resourceId: column.id,
+              metadata: { decisionCount: decisionIds.length },
+            })),
+          );
         }
-        return { columns, pairs: toQueue.length };
+        return { columns, claim };
       }),
     );
     if (queued === null) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Research table not found" }),
+        new HandlerError({ status: 404, message: "Question column not found" }),
       );
     }
-    if (queued.pairs === 0) {
+    if (queued.claim.cells.length === 0) {
       return Result.ok({ queued: 0 });
     }
 
@@ -232,7 +135,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
           organizationId: session.activeOrganizationId,
           userId: user.id,
           columns: runColumns,
-          decisionIds,
+          claim: queued.claim,
           orgAIConfig,
           promptCachingEnabled,
         },
@@ -250,7 +153,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
       "case-law-research.run-answers",
     );
 
-    return Result.ok({ queued: queued.pairs });
+    return Result.ok({ queued: queued.claim.cells.length });
   },
 );
 

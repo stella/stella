@@ -15,7 +15,6 @@ import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,6 +26,7 @@ import {
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,

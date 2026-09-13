@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
     },
     "columns": {
+      "arrange": "Tvarkyti stulpelį {column}",
       "caseNumber": "Bylos numeris",
       "citedBy": "Cituojama",
       "headnote": "Santrauka",
+      "hide": "Slėpti šį stulpelį",
+      "moveEarlier": "Perkelti pirmyn",
+      "moveLater": "Perkelti atgal",
+      "pin": "Prisegti priekyje",
+      "reset": "Atstatyti stulpelius",
       "summary": "Teisės taisyklė / atitiktis"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "loadingMore": "Kraunama daugiau...",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
+      "empty": "Šioje byloje kol kas neišsaugota jokios teismų praktikos.",
+      "emptyAction": "Ieškoti teismų praktikoje",
+      "note": "Pastaba",
+      "notePlaceholder": "Kodėl šie sprendimai čia svarbūs…",
+      "rejectedLimit": "{count, plural, one {# sprendimas neišsaugotas: byla pilna} few {# sprendimai neišsaugoti: byla pilna} many {# sprendimo neišsaugota: byla pilna} other {# sprendimų neišsaugota: byla pilna}}",
+      "rejectedMissing": "{count, plural, one {# sprendimas nerastas} few {# sprendimai nerasti} many {# sprendimo nerasta} other {# sprendimų nerasta}}",
+      "remove": "Pašalinti iš bylos",
+      "save": "Išsaugoti byloje",
+      "savePage": "Iš šio puslapio {count, plural, one {bus išsaugotas # sprendimas} few {bus išsaugoti # sprendimai} many {bus išsaugota # sprendimo} other {bus išsaugota # sprendimų}}.",
+      "saveSelection": "{count, plural, one {Bus išsaugotas # pasirinktas sprendimas} few {Bus išsaugoti # pasirinkti sprendimai} many {Bus išsaugota # pasirinkto sprendimo} other {Bus išsaugota # pasirinktų sprendimų}}.",
+      "saveTitle": "Išsaugoti byloje",
+      "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
+    },
     "newestDecisions": "Naujausi sprendimai",
     "notesFilter": {
       "ai": "DI",
       "human": "Žmonių"
+    },
+    "pagination": {
+      "goToPage": "Eiti į {page} psl.",
+      "label": "Rezultatų puslapiai",
+      "page": "{page} psl.",
+      "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "perPage": "Viename puslapyje"
     },
     "provision": {
       "article": "{value} str.",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "Ieškoti rezultatuose",
     "research": {
+      "addColumn": "Pridėti stulpelį",
       "addQuestion": "Pridėti klausimą",
       "addQuestionHint": "Klausimas užduodamas kiekvienam lentelės sprendimui; atsakymai sukuriami paleidus stulpelį.",
-      "answerType": "Atsakymo rūšis",
-      "answerTypeText": "Trumpas tekstas",
-      "answerTypeYesNo": "Taip / ne",
       "answering": "{count, plural, one {Atsakoma į # langelį…} few {Atsakoma į # langelius…} many {Atsakoma į # langelio…} other {Atsakoma į # langelių…}}",
       "answers": {
-        "confidence": "{percent} % patikimumas",
         "failed": "Neatsakyta",
         "no": "Ne",
         "notAllowed": "Neleidžia šaltinio sąlygos",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "runAll": "Atsakyti į visus",
       "runColumn": "Atsakyti šiame stulpelyje",
+      "runConfirm": "Atsakyti dabar",
+      "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
+      "runTitle": "Atsakyti šiame puslapyje",
       "save": "Išsaugoti kaip tyrimo lentelę",
       "saved": "Tyrimo lentelė sukurta",
       "savedQuery": "Išsaugota paieška",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
     "openCitation": "Atidaryti citatą {label}",
     "openThread": "Atidaryti pokalbį",
-    "pageNumber": "{page} psl.",
     "pastedChars": "Įklijuota · {count} simb.",
     "pastedText": {
       "expand": "Rodyti visą tekstą",
@@ -1390,6 +1418,7 @@
     "goBack": "Grįžti atgal",
     "goBackToEditing": "Grįžti į redagavimą",
     "hideDetails": "Slėpti detales",
+    "hideFilters": "Slėpti filtrus",
     "hideSecretValue": "Slėpti slaptą reikšmę",
     "history": "Istorija",
     "import": "Importuoti",
@@ -1497,11 +1526,13 @@
     "searchIn": "Ieškoti",
     "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
+    "selectAll": "Pasirinkti visus",
     "selectDate": "Pasirinkti datą…",
     "sessions": "Sesijos",
     "settings": "Nustatymai",
     "showAll": "Rodyti viską",
     "showDetails": "Rodyti detales",
+    "showFilters": "Rodyti filtrus",
     "showLess": "Rodyti mažiau",
     "showMore": "Rodyti daugiau",
     "showSecretValue": "Rodyti slaptą reikšmę",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "Folio nepavyko sukurti saugaus DOCX failo iš dabartinio keitimo. Jūsų sesija vis dar atidaryta.",
     "saveSerializeFailedTitle": "Nepavyko sukurti DOCX",
     "savingDocument": "Įrašoma...",
-    "selectAll": "Pasirinkti visus",
     "showDetails": "Rodyti detales",
     "somethingWentWrong": "Kažkas nepavyko",
     "synced": "Sinchronizuota",

@@ -1370,7 +1370,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 121,
+    "count": 119,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1442,7 +1442,7 @@
       "apps/web/src/components/document-icon.tsx": 4,
       "apps/web/src/components/inspector/chat-tab-panel.tsx": 1,
       "apps/web/src/components/require-ai-key.tsx": 1,
-      "apps/web/src/components/workspaces/field-value.tsx": 2,
+      "apps/web/src/components/workspaces/field-value.tsx": 1,
       "apps/web/src/components/workspaces/matter-context-menu.tsx": 1,
       "apps/web/src/components/workspaces/members-section.tsx": 1,
       "apps/web/src/lib/types.ts": 1,
@@ -1454,7 +1454,7 @@
       "apps/web/src/routes/law/$country/cases/$court/$slug.tsx": 1,
       "packages/locales/src/languages.ts": 7,
       "packages/ui/src/index.ts": 1,
-      "packages/workspace-ui/src/field-value.tsx": 2,
+      "packages/workspace-ui/src/field-value.tsx": 1,
       "scripts/result-boundary-globs.ts": 2
     }
   },

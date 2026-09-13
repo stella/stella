@@ -89,7 +89,6 @@ const modelAnswer = (columnIds: readonly string[], anchorIds: string[]) =>
       nil: undefined,
     }),
     text: fc.option(fc.string({ maxLength: 60 }), { nil: undefined }),
-    confidence: fc.double({ min: 0, max: 1, noNaN: true }),
     rationale: fc.string({ maxLength: 800 }),
     anchorIds: fc.array(
       fc.oneof(
@@ -162,7 +161,6 @@ describe("parsing the model's answers", () => {
           {
             columnId: "c1",
             text: "The court allowed it.",
-            confidence: 0.9,
             rationale: "see §12",
             anchorIds: [],
           },

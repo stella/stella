@@ -67,7 +67,7 @@ export type ShortcutLabelKey = Extract<
   | "common.previous"
   | "common.next"
   | "chat.newChat"
-  | "folio.selectAll"
+  | "common.selectAll"
   | "docxReview.reject"
 >;
 
@@ -133,7 +133,7 @@ export const SHORTCUT_GROUPS = [
       {
         id: "selectAll",
         binding: { type: "hotkey", hotkey: HOTKEYS.SELECT_ALL },
-        labelKey: "folio.selectAll",
+        labelKey: "common.selectAll",
         contexts: ["workspace"],
       },
       {

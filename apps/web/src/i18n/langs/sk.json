@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citácia} few {# citácie} other {# citácií}}"
     },
     "columns": {
+      "arrange": "Usporiadať stĺpec {column}",
       "caseNumber": "Spisová značka",
       "citedBy": "Citované",
       "headnote": "Právna veta",
+      "hide": "Skryť tento stĺpec",
+      "moveEarlier": "Posunúť dopredu",
+      "moveLater": "Posunúť dozadu",
+      "pin": "Pripnúť na začiatok",
+      "reset": "Obnoviť stĺpce",
       "summary": "Právna veta / zhoda"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Zhoda v jazyku {language}"
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# rozhodnutie tu už bolo uložené} few {# rozhodnutia tu už boli uložené} other {# rozhodnutí tu už bolo uložených}}",
+      "empty": "V tomto spise zatiaľ nie je uložená žiadna judikatúra.",
+      "emptyAction": "Hľadať v judikatúre",
+      "note": "Poznámka",
+      "notePlaceholder": "Prečo sú tieto rozhodnutia dôležité práve tu…",
+      "rejectedLimit": "{count, plural, one {# rozhodnutie sa neuložilo: spis je plný} few {# rozhodnutia sa neuložili: spis je plný} other {# rozhodnutí sa neuložilo: spis je plný}}",
+      "rejectedMissing": "{count, plural, one {# rozhodnutie sa nepodarilo nájsť} few {# rozhodnutia sa nepodarilo nájsť} other {# rozhodnutí sa nepodarilo nájsť}}",
+      "remove": "Odstrániť zo spisu",
+      "save": "Uložiť do spisu",
+      "savePage": "Z tejto stránky {count, plural, one {sa uloží # rozhodnutie} few {sa uložia # rozhodnutia} other {sa uloží # rozhodnutí}}.",
+      "saveSelection": "{count, plural, one {Uloží sa # vybrané rozhodnutie} few {Uložia sa # vybrané rozhodnutia} other {Uloží sa # vybraných rozhodnutí}}.",
+      "saveTitle": "Uložiť do spisu",
+      "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí}}"
+    },
     "newestDecisions": "Najnovšie rozhodnutia",
     "notesFilter": {
       "ai": "AI",
       "human": "Ľudské"
+    },
+    "pagination": {
+      "goToPage": "Prejsť na stránku {page}",
+      "label": "Stránky výsledkov",
+      "page": "Stránka {page}",
+      "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
+      "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
+      "perPage": "Na stránku"
     },
     "provision": {
       "article": "čl. {value}",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "Hľadať vo výsledkoch",
     "research": {
+      "addColumn": "Pridať stĺpec",
       "addQuestion": "Pridať otázku",
       "addQuestionHint": "Otázka sa položí každému rozhodnutiu v tabuľke; odpovede vzniknú, keď stĺpec spustíte.",
-      "answerType": "Druh odpovede",
-      "answerTypeText": "Krátky text",
-      "answerTypeYesNo": "Áno / nie",
       "answering": "{count, plural, one {Odpovedám na # bunku…} few {Odpovedám na # bunky…} many {Odpovedám na # bunky…} other {Odpovedám na # buniek…}}",
       "answers": {
-        "confidence": "Istota {percent} %",
         "failed": "Nezodpovedané",
         "no": "Nie",
         "notAllowed": "Podmienky zdroja to nedovoľujú",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# rozhodnutie} few {# rozhodnutia} many {# rozhodnutia} other {# rozhodnutí}}",
       "runAll": "Odpovedať na všetko",
       "runColumn": "Odpovedať v tomto stĺpci",
+      "runConfirm": "Odpovedať teraz",
+      "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí}}.",
+      "runTitle": "Odpovedať na tejto stránke",
       "save": "Uložiť ako rešeršnú tabuľku",
       "saved": "Rešeršná tabuľka vytvorená",
       "savedQuery": "Uložené hľadanie",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
     "openCitation": "Otvoriť citáciu {label}",
     "openThread": "Otvoriť konverzáciu",
-    "pageNumber": "Strana {page}",
     "pastedChars": "Vložené · {count} znakov",
     "pastedText": {
       "expand": "Zobraziť celý text",
@@ -1390,6 +1418,7 @@
     "goBack": "Späť",
     "goBackToEditing": "Späť k úpravám",
     "hideDetails": "Skryť detaily",
+    "hideFilters": "Skryť filtre",
     "hideSecretValue": "Skryť tajnú hodnotu",
     "history": "História",
     "import": "Importovať",
@@ -1497,11 +1526,13 @@
     "searchIn": "Hľadať v",
     "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte rolu",
+    "selectAll": "Vybrať všetko",
     "selectDate": "Vybrať dátum…",
     "sessions": "Relácie",
     "settings": "Nastavenia",
     "showAll": "Zobraziť všetko",
     "showDetails": "Zobraziť detaily",
+    "showFilters": "Zobraziť filtre",
     "showLess": "Zobraziť menej",
     "showMore": "Zobraziť viac",
     "showSecretValue": "Zobraziť tajnú hodnotu",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "Folio nedokázalo z aktuálnej úpravy bezpečne vytvoriť DOCX. Relácia ostáva otvorená.",
     "saveSerializeFailedTitle": "Nepodarilo sa vytvoriť DOCX",
     "savingDocument": "Ukladá sa...",
-    "selectAll": "Vybrať všetko",
     "showDetails": "Zobraziť detaily",
     "somethingWentWrong": "Niečo sa pokazilo",
     "synced": "Synchronizované",

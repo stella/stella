@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# viide} other {# viidet}}"
     },
     "columns": {
+      "arrange": "Korralda veergu {column}",
       "caseNumber": "Kohtuasja number",
       "citedBy": "Viidatud",
       "headnote": "Lühikokkuvõte",
+      "hide": "Peida see veerg",
+      "moveEarlier": "Liiguta ettepoole",
+      "moveLater": "Liiguta tahapoole",
+      "pin": "Kinnita ette",
+      "reset": "Lähtesta veerud",
       "summary": "Õiguslik seisukoht / vaste"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Vaste keeles: {language}"
     },
     "loadingMore": "Laadib rohkem...",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# lahend oli siia juba salvestatud} other {# lahendit oli siia juba salvestatud}}",
+      "empty": "Sellesse toimikusse pole veel kohtupraktikat salvestatud.",
+      "emptyAction": "Otsi kohtupraktikat",
+      "note": "Märkus",
+      "notePlaceholder": "Miks need lahendid siin olulised on…",
+      "rejectedLimit": "{count, plural, one {# lahendit ei salvestatud: toimik on täis} other {# lahendit ei salvestatud: toimik on täis}}",
+      "rejectedMissing": "{count, plural, one {# lahendit ei leitud} other {# lahendit ei leitud}}",
+      "remove": "Eemalda toimikust",
+      "save": "Salvesta toimikusse",
+      "savePage": "Sellelt lehelt salvestatakse {count, plural, one {# lahend} other {# lahendit}}.",
+      "saveSelection": "Salvestatakse {count, plural, one {# valitud lahend} other {# valitud lahendit}}.",
+      "saveTitle": "Salvesta toimikusse",
+      "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
+    },
     "newestDecisions": "Uusimad lahendid",
     "notesFilter": {
       "ai": "AI",
       "human": "Inimeste"
+    },
+    "pagination": {
+      "goToPage": "Mine leheküljele {page}",
+      "label": "Tulemuste leheküljed",
+      "page": "Lehekülg {page}",
+      "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
+      "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
+      "perPage": "Lehekülje kohta"
     },
     "provision": {
       "article": "art {value}",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "Otsi tulemuste seast",
     "research": {
+      "addColumn": "Lisa veerg",
       "addQuestion": "Lisa küsimus",
       "addQuestionHint": "Küsimus esitatakse tabeli igale lahendile; vastused luuakse veeru käivitamisel.",
-      "answerType": "Vastuse liik",
-      "answerTypeText": "Lühike tekst",
-      "answerTypeYesNo": "Jah / ei",
       "answering": "{count, plural, one {Vastan # lahtrile…} other {Vastan # lahtrile…}}",
       "answers": {
-        "confidence": "{percent}% kindlus",
         "failed": "Vastamata",
         "no": "Ei",
         "notAllowed": "Allika tingimused ei luba",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# lahend} other {# lahendit}}",
       "runAll": "Vasta kõigile",
       "runColumn": "Vasta selles veerus",
+      "runConfirm": "Vasta nüüd",
+      "runEstimate": "{rows, plural, one {# lahend} other {# lahendit}} × {columns, plural, one {# küsimus} other {# küsimust}} sellel leheküljel: luuakse {cells, plural, one {# vastus} other {# vastust}}.",
+      "runTitle": "Vasta sellel leheküljel",
       "save": "Salvesta uurimistabelina",
       "saved": "Uurimistabel loodud",
       "savedQuery": "Salvestatud otsing",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "See viide pole enam saadaval.",
     "openCitation": "Ava viide {label}",
     "openThread": "Ava vestlus",
-    "pageNumber": "Lehekülg {page}",
     "pastedChars": "Kleebitud · {count} märki",
     "pastedText": {
       "expand": "Näita kogu teksti",
@@ -1390,6 +1418,7 @@
     "goBack": "Mine tagasi",
     "goBackToEditing": "Tagasi muutma",
     "hideDetails": "Peida üksikasjad",
+    "hideFilters": "Peida filtrid",
     "hideSecretValue": "Peida salajane väärtus",
     "history": "Ajalugu",
     "import": "Impordi",
@@ -1497,11 +1526,13 @@
     "searchIn": "Otsi",
     "selectAMatter": "Vali toimik",
     "selectARole": "Valige roll",
+    "selectAll": "Vali kõik",
     "selectDate": "Vali kuupäev…",
     "sessions": "Seansid",
     "settings": "Seaded",
     "showAll": "Näita kõiki",
     "showDetails": "Näita üksikasju",
+    "showFilters": "Näita filtreid",
     "showLess": "Näita vähem",
     "showMore": "Näita rohkem",
     "showSecretValue": "Kuva salajane väärtus",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "Folio ei suutnud praegusest muudatusest turvalist DOCX-faili luua. Sinu seanss on endiselt avatud.",
     "saveSerializeFailedTitle": "DOCX-i ei saanud luua",
     "savingDocument": "Salvestamine...",
-    "selectAll": "Vali kõik",
     "showDetails": "Näita üksikasju",
     "somethingWentWrong": "Midagi läks valesti",
     "synced": "Sünkroonitud",

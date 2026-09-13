@@ -7,10 +7,10 @@ import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
+import { provisionBlocks } from "@stll/legal-ast/provision-preview";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { BlockRenderer } from "@/components/legal-reader/document-ast-text";
-import { provisionBlocks } from "@/features/statutes/provision-preview";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";

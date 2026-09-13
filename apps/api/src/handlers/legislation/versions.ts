@@ -5,10 +5,6 @@ import type { Static } from "elysia";
 
 import { legislationDocuments } from "@/api/db/schema";
 import {
-  UNVERSIONED_SORT_DATE,
-  versionSortKey,
-} from "@/api/handlers/legislation/validity-window";
-import {
   selectWorkKey,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
@@ -18,6 +14,10 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import {
+  UNVERSIONED_SORT_DATE,
+  versionSortKey,
+} from "@/api/lib/legal-search/legislation-validity-window";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {

@@ -5,11 +5,11 @@ import type { Static } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   versionSortKey,
-} from "@/api/handlers/legislation/validity-window";
+} from "@/api/lib/legal-search/legislation-validity-window";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 export const readStatuteByEliQuerySchema = t.Object({

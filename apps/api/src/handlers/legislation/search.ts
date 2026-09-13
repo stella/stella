@@ -8,7 +8,6 @@ import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import {
   searchLegislationResponseSchema,
   type searchLegislationSuccessResponseSchema,
@@ -50,6 +49,7 @@ import {
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {

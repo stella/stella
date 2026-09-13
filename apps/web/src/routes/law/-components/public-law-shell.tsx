@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -79,6 +80,12 @@ function PublicLawTopBar() {
         readStringField(loaderData, "title")
       );
     },
+  });
+  // A case number names the case; the court says whose it is, and only a
+  // decision carries one.
+  const court = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "court"),
   });
   const documentStatus = useRouterState({
     select: (state) =>
@@ -205,8 +212,15 @@ function PublicLawTopBar() {
                   </span>
                 )}
                 <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
-                  {documentLabel}
+                  <BidiText>{documentLabel}</BidiText>
                 </BreadcrumbPage>
+                {court !== null && (
+                  // Dropped on a narrow screen: the case number identifies the
+                  // decision on its own, the court only qualifies it.
+                  <span className="text-muted-foreground min-w-0 truncate max-sm:hidden">
+                    · <BidiText>{court}</BidiText>
+                  </span>
+                )}
                 {legalArea !== null && (
                   <span className="text-muted-foreground min-w-0 truncate">
                     · {legalArea}

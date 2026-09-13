@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
     },
     "columns": {
+      "arrange": "Uporządkuj kolumnę {column}",
       "caseNumber": "Sygnatura akt",
       "citedBy": "Cytowane przez",
       "headnote": "Teza",
+      "hide": "Ukryj tę kolumnę",
+      "moveEarlier": "Przesuń do przodu",
+      "moveLater": "Przesuń do tyłu",
+      "pin": "Przypnij na początku",
+      "reset": "Resetuj kolumny",
       "summary": "Teza / trafienie"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Dopasowanie w języku {language}"
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# orzeczenie było już tutaj zapisane} few {# orzeczenia były już tutaj zapisane} many {# orzeczeń było już tutaj zapisanych} other {# orzeczeń było już tutaj zapisanych}}",
+      "empty": "W tej sprawie nie zapisano jeszcze żadnego orzeczenia.",
+      "emptyAction": "Szukaj w orzecznictwie",
+      "note": "Notatka",
+      "notePlaceholder": "Dlaczego te orzeczenia są tu istotne…",
+      "rejectedLimit": "{count, plural, one {# orzeczenie nie zostało zapisane: sprawa jest pełna} few {# orzeczenia nie zostały zapisane: sprawa jest pełna} many {# orzeczeń nie zostało zapisanych: sprawa jest pełna} other {# orzeczeń nie zostało zapisanych: sprawa jest pełna}}",
+      "rejectedMissing": "{count, plural, one {# orzeczenia nie znaleziono} few {# orzeczeń nie znaleziono} many {# orzeczeń nie znaleziono} other {# orzeczeń nie znaleziono}}",
+      "remove": "Usuń ze sprawy",
+      "save": "Zapisz do sprawy",
+      "savePage": "Z tej strony {count, plural, one {zostanie zapisane # orzeczenie} few {zostaną zapisane # orzeczenia} many {zostanie zapisanych # orzeczeń} other {zostanie zapisanych # orzeczeń}}.",
+      "saveSelection": "{count, plural, one {Zostanie zapisane # wybrane orzeczenie} few {Zostaną zapisane # wybrane orzeczenia} many {Zostanie zapisanych # wybranych orzeczeń} other {Zostanie zapisanych # wybranych orzeczeń}}.",
+      "saveTitle": "Zapisz do sprawy",
+      "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
+    },
     "newestDecisions": "Najnowsze orzeczenia",
     "notesFilter": {
       "ai": "AI",
       "human": "Ludzkie"
+    },
+    "pagination": {
+      "goToPage": "Przejdź do strony {page}",
+      "label": "Strony wyników",
+      "page": "Strona {page}",
+      "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "perPage": "Na stronę"
     },
     "provision": {
       "article": "art. {value}",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "Szukaj w wynikach",
     "research": {
+      "addColumn": "Dodaj kolumnę",
       "addQuestion": "Dodaj pytanie",
       "addQuestionHint": "Pytanie jest zadawane każdemu orzeczeniu w tabeli; odpowiedzi powstają po uruchomieniu kolumny.",
-      "answerType": "Rodzaj odpowiedzi",
-      "answerTypeText": "Krótki tekst",
-      "answerTypeYesNo": "Tak / nie",
       "answering": "{count, plural, one {Odpowiadam na # komórkę…} few {Odpowiadam na # komórki…} many {Odpowiadam na # komórek…} other {Odpowiadam na # komórki…}}",
       "answers": {
-        "confidence": "Pewność {percent}%",
         "failed": "Bez odpowiedzi",
         "no": "Nie",
         "notAllowed": "Niedozwolone przez warunki źródła",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "runAll": "Odpowiedz na wszystko",
       "runColumn": "Odpowiedz w tej kolumnie",
+      "runConfirm": "Odpowiedz teraz",
+      "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
+      "runTitle": "Odpowiedz na tej stronie",
       "save": "Zapisz jako tabelę badawczą",
       "saved": "Utworzono tabelę badawczą",
       "savedQuery": "Zapisane wyszukiwanie",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
     "openCitation": "Otwórz cytowanie {label}",
     "openThread": "Otwórz konwersację",
-    "pageNumber": "Strona {page}",
     "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
@@ -1390,6 +1418,7 @@
     "goBack": "Wróć",
     "goBackToEditing": "Wróć do edycji",
     "hideDetails": "Ukryj szczegóły",
+    "hideFilters": "Ukryj filtry",
     "hideSecretValue": "Ukryj tajną wartość",
     "history": "Historia",
     "import": "Importuj",
@@ -1497,11 +1526,13 @@
     "searchIn": "Szukaj w",
     "selectAMatter": "Wybierz sprawę",
     "selectARole": "Wybierz rolę",
+    "selectAll": "Zaznacz wszystkie",
     "selectDate": "Wybierz datę…",
     "sessions": "Sesje",
     "settings": "Ustawienia",
     "showAll": "Pokaż wszystko",
     "showDetails": "Pokaż szczegóły",
+    "showFilters": "Pokaż filtry",
     "showLess": "Pokaż mniej",
     "showMore": "Pokaż więcej",
     "showSecretValue": "Pokaż tajną wartość",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "Folio nie mogło utworzyć bezpiecznego pliku DOCX z bieżącej edycji. Twoja sesja jest nadal otwarta.",
     "saveSerializeFailedTitle": "Nie udało się utworzyć pliku DOCX",
     "savingDocument": "Zapisywanie...",
-    "selectAll": "Zaznacz wszystkie",
     "showDetails": "Pokaż szczegóły",
     "somethingWentWrong": "Coś poszło nie tak",
     "synced": "Zsynchronizowano",

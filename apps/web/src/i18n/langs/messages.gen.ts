@@ -618,9 +618,15 @@ type Messages = {
       "yearTitle": "{year}: {count, plural, one {# citation} other {# citations}}";
     };
     "columns": {
+      "arrange": "Arrange column {column}";
       "caseNumber": "Case number";
       "citedBy": "Cited by";
       "headnote": "Headnote";
+      "hide": "Hide this column";
+      "moveEarlier": "Move earlier";
+      "moveLater": "Move later";
+      "pin": "Keep in front";
+      "reset": "Reset columns";
       "summary": "Headnote / match";
     };
     "copyMenu": {
@@ -646,10 +652,33 @@ type Messages = {
       "matchedIn": "Matched in {language}";
     };
     "loadingMore": "Loading more...";
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}";
+      "empty": "No case law is kept in this matter yet.";
+      "emptyAction": "Search case law";
+      "note": "Note";
+      "notePlaceholder": "Why these decisions matter here…";
+      "rejectedLimit": "{count, plural, one {# decision was not saved: the matter is full} other {# decisions were not saved: the matter is full}}";
+      "rejectedMissing": "{count, plural, one {# decision could not be found} other {# decisions could not be found}}";
+      "remove": "Remove from the matter";
+      "save": "Save into a matter";
+      "savePage": "{count, plural, one {# decision on this page} other {# decisions on this page}} will be saved.";
+      "saveSelection": "{count, plural, one {# selected decision} other {# selected decisions}} will be saved.";
+      "saveTitle": "Save into a matter";
+      "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}";
+    };
     "newestDecisions": "Newest decisions";
     "notesFilter": {
       "ai": "AI";
       "human": "Human";
+    };
+    "pagination": {
+      "goToPage": "Go to page {page}";
+      "label": "Result pages";
+      "page": "Page {page}";
+      "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}";
+      "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}";
+      "perPage": "Per page";
     };
     "provision": {
       "article": "Art. {value}";
@@ -664,14 +693,11 @@ type Messages = {
     };
     "refineWithinResults": "Search within results";
     "research": {
+      "addColumn": "Add column";
       "addQuestion": "Add question";
       "addQuestionHint": "The question is asked of every decision in the table; answers are produced when you run the column.";
-      "answerType": "Kind of answer";
-      "answerTypeText": "Short text";
-      "answerTypeYesNo": "Yes / no";
       "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}";
       "answers": {
-        "confidence": "{percent}% confidence";
         "failed": "Not answered";
         "no": "No";
         "notAllowed": "Not allowed by the source's terms";
@@ -706,6 +732,9 @@ type Messages = {
       "rows": "{count, plural, one {# decision} other {# decisions}}";
       "runAll": "Answer all";
       "runColumn": "Answer this column";
+      "runConfirm": "Answer now";
+      "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.";
+      "runTitle": "Answer this page";
       "save": "Save as research table";
       "saved": "Research table created";
       "savedQuery": "Saved search";
@@ -969,7 +998,6 @@ type Messages = {
     "officeCitationUnavailable": "This citation is no longer available.";
     "openCitation": "Open citation {label}";
     "openThread": "Open conversation";
-    "pageNumber": "Page {page}";
     "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
@@ -1393,6 +1421,7 @@ type Messages = {
     "goBack": "Go back";
     "goBackToEditing": "Go back to editing";
     "hideDetails": "Hide details";
+    "hideFilters": "Hide filters";
     "hideSecretValue": "Hide secret value";
     "history": "History";
     "import": "Import";
@@ -1500,11 +1529,13 @@ type Messages = {
     "searchIn": "Search in";
     "selectAMatter": "Select a matter";
     "selectARole": "Select a role";
+    "selectAll": "Select all";
     "selectDate": "Select date…";
     "sessions": "Sessions";
     "settings": "Settings";
     "showAll": "Show all";
     "showDetails": "Show details";
+    "showFilters": "Show filters";
     "showLess": "Show less";
     "showMore": "Show more";
     "showSecretValue": "Show secret value";
@@ -2286,7 +2317,6 @@ type Messages = {
     "saveSerializeFailedDescription": "Folio could not produce a safe DOCX file from the current edit. Your session is still open.";
     "saveSerializeFailedTitle": "Could not create DOCX";
     "savingDocument": "Saving...";
-    "selectAll": "Select all";
     "showDetails": "Show details";
     "somethingWentWrong": "Something went wrong";
     "synced": "Synced";

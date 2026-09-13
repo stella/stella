@@ -615,9 +615,15 @@
       "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
     },
     "columns": {
+      "arrange": "Uspořádat sloupec {column}",
       "caseNumber": "Spisová značka",
       "citedBy": "Citováno",
       "headnote": "Právní věta",
+      "hide": "Skrýt tento sloupec",
+      "moveEarlier": "Posunout dopředu",
+      "moveLater": "Posunout dozadu",
+      "pin": "Připnout na začátek",
+      "reset": "Resetovat sloupce",
       "summary": "Právní věta / shoda"
     },
     "copyMenu": {
@@ -643,10 +649,33 @@
       "matchedIn": "Shoda v jazyce {language}"
     },
     "loadingMore": "Načítání dalších...",
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# rozhodnutí zde už bylo uloženo} few {# rozhodnutí zde už byla uložena} other {# rozhodnutí zde už bylo uloženo}}",
+      "empty": "V tomto spisu zatím není uložena žádná judikatura.",
+      "emptyAction": "Hledat v judikatuře",
+      "note": "Poznámka",
+      "notePlaceholder": "Proč jsou tato rozhodnutí důležitá právě zde…",
+      "rejectedLimit": "{count, plural, one {# rozhodnutí nebylo uloženo: spis je plný} few {# rozhodnutí nebyla uložena: spis je plný} other {# rozhodnutí nebylo uloženo: spis je plný}}",
+      "rejectedMissing": "{count, plural, one {# rozhodnutí se nepodařilo najít} few {# rozhodnutí se nepodařilo najít} other {# rozhodnutí se nepodařilo najít}}",
+      "remove": "Odebrat ze spisu",
+      "save": "Uložit do spisu",
+      "savePage": "Z této stránky se uloží {count, plural, one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}.",
+      "saveSelection": "Uloží se {count, plural, one {# vybrané rozhodnutí} few {# vybraná rozhodnutí} other {# vybraných rozhodnutí}}.",
+      "saveTitle": "Uložit do spisu",
+      "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
+    },
     "newestDecisions": "Nejnovější rozhodnutí",
     "notesFilter": {
       "ai": "AI",
       "human": "Lidské"
+    },
+    "pagination": {
+      "goToPage": "Přejít na stránku {page}",
+      "label": "Stránky výsledků",
+      "page": "Stránka {page}",
+      "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "perPage": "Na stránku"
     },
     "provision": {
       "article": "čl. {value}",
@@ -661,14 +690,11 @@
     },
     "refineWithinResults": "Hledat ve výsledcích",
     "research": {
+      "addColumn": "Přidat sloupec",
       "addQuestion": "Přidat otázku",
       "addQuestionHint": "Otázka se položí každému rozhodnutí v tabulce; odpovědi vzniknou, když sloupec spustíte.",
-      "answerType": "Druh odpovědi",
-      "answerTypeText": "Krátký text",
-      "answerTypeYesNo": "Ano / ne",
       "answering": "{count, plural, one {Odpovídám na # buňku…} few {Odpovídám na # buňky…} many {Odpovídám na # buňky…} other {Odpovídám na # buněk…}}",
       "answers": {
-        "confidence": "Jistota {percent} %",
         "failed": "Nezodpovězeno",
         "no": "Ne",
         "notAllowed": "Podmínky zdroje to nedovolují",
@@ -703,6 +729,9 @@
       "rows": "{count, plural, one {# rozhodnutí} few {# rozhodnutí} many {# rozhodnutí} other {# rozhodnutí}}",
       "runAll": "Odpovědět na vše",
       "runColumn": "Odpovědět v tomto sloupci",
+      "runConfirm": "Odpovědět nyní",
+      "runEstimate": "{rows, plural, one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázek}} na této stránce: {cells, plural, one {vznikne # odpověď} few {vzniknou # odpovědi} other {vznikne # odpovědí}}.",
+      "runTitle": "Odpovědět na této stránce",
       "save": "Uložit jako rešeršní tabulku",
       "saved": "Rešeršní tabulka vytvořena",
       "savedQuery": "Uložené hledání",
@@ -966,7 +995,6 @@
     "officeCitationUnavailable": "Tato citace už není dostupná.",
     "openCitation": "Otevřít citaci {label}",
     "openThread": "Otevřít konverzaci",
-    "pageNumber": "Strana {page}",
     "pastedChars": "Vloženo · {count} znaků",
     "pastedText": {
       "expand": "Zobrazit celý text",
@@ -1390,6 +1418,7 @@
     "goBack": "Zpět",
     "goBackToEditing": "Zpět k úpravám",
     "hideDetails": "Skrýt podrobnosti",
+    "hideFilters": "Skrýt filtry",
     "hideSecretValue": "Skrýt tajnou hodnotu",
     "history": "Historie",
     "import": "Importovat",
@@ -1497,11 +1526,13 @@
     "searchIn": "Hledat v",
     "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte roli",
+    "selectAll": "Vybrat vše",
     "selectDate": "Vybrat datum…",
     "sessions": "Sezení",
     "settings": "Nastavení",
     "showAll": "Zobrazit vše",
     "showDetails": "Zobrazit podrobnosti",
+    "showFilters": "Zobrazit filtry",
     "showLess": "Zobrazit méně",
     "showMore": "Zobrazit více",
     "showSecretValue": "Zobrazit tajnou hodnotu",
@@ -2283,7 +2314,6 @@
     "saveSerializeFailedDescription": "Folio nedokázalo z aktuální úpravy bezpečně vytvořit DOCX. Relace zůstává otevřená.",
     "saveSerializeFailedTitle": "DOCX se nepodařilo vytvořit",
     "savingDocument": "Ukládání...",
-    "selectAll": "Vybrat vše",
     "showDetails": "Zobrazit podrobnosti",
     "somethingWentWrong": "Něco se pokazilo",
     "synced": "Synchronizováno",

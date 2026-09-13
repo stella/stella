@@ -18,13 +18,13 @@ import {
   legislationSearchDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { logger } from "@/api/lib/observability/logger";
 
 /**

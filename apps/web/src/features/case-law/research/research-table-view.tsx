@@ -32,10 +32,9 @@ import {
   decisionIdentityLineFields,
 } from "@/features/case-law/decision-columns.logic";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
-import type {
-  ResearchAnswer,
-  ResearchColumn,
-} from "@/features/case-law/research/queries";
+import type { ResearchColumn } from "@/features/case-law/research/queries";
+import { answerKey } from "@/features/case-law/research/question-columns.logic";
+import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
 import {
   ResearchAnswerCell,
   YES_NO_LABEL_KEYS,
@@ -60,21 +59,21 @@ export const answerGroupColumnId = (groupBy: ResearchGroupBy): string | null =>
     ? groupBy.slice(ANSWER_GROUP_PREFIX.length)
     : null;
 
-/** Cells are keyed by column and decision, the way the server stores them. */
-export const answerKey = (columnId: string, decisionId: string): string =>
-  `${columnId}:${decisionId}`;
+export { answerKey };
 
 export type ResearchColumnAction = "run" | "edit" | "delete";
 
 type ResearchTableViewProps = {
   answerColumns: readonly ResearchColumn[];
-  answersByKey: ReadonlyMap<string, ResearchAnswer>;
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
   groupBy: ResearchGroupBy;
   isLoading: boolean;
   onColumnAction: (
     column: ResearchColumn,
     action: ResearchColumnAction,
   ) => void;
+  /** Asks one failed cell again, from the cell itself. */
+  onRetryAnswer: (column: ResearchColumn, decisionId: string) => void;
   onSetDisposition: (
     decision: Decision,
     disposition: CaseLawResearchDisposition | null,
@@ -101,6 +100,7 @@ export const ResearchTableView = ({
   groupBy,
   isLoading,
   onColumnAction,
+  onRetryAnswer,
   onSetDisposition,
   onSetYesNoFilter,
   onShowSource,
@@ -125,6 +125,7 @@ export const ResearchTableView = ({
       citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
       language: t(DECISION_COLUMN_LABEL_KEYS.language),
     },
+    onRetryAnswer,
     onShowSource,
     renderActions: (row) => (
       <RowActions onSetDisposition={onSetDisposition} row={row} />
@@ -189,7 +190,7 @@ export const ResearchTableView = ({
 };
 
 /** The group key of a cell: its yes/no answer, or the state that stands in for one. */
-const answerGroupKeyFor = (answer: ResearchAnswer | undefined): string => {
+const answerGroupKeyFor = (answer: QuestionAnswer | undefined): string => {
   if (answer === undefined) {
     return "";
   }
@@ -238,8 +239,9 @@ type ColumnLabels = Record<DecisionColumnId, string>;
 
 type BuildColumnsOptions = {
   answerColumns: readonly ResearchColumn[];
-  answersByKey: ReadonlyMap<string, ResearchAnswer>;
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
   labels: ColumnLabels;
+  onRetryAnswer: (column: ResearchColumn, decisionId: string) => void;
   onShowSource: (decision: Decision, anchorId: string) => void;
   renderActions: (row: ResearchRow<Decision>) => React.ReactNode;
   renderAnswerHeader: (column: ResearchColumn) => React.ReactNode;
@@ -258,6 +260,7 @@ const buildColumns = ({
   answerColumns,
   answersByKey,
   labels,
+  onRetryAnswer,
   onShowSource,
   renderActions,
   renderAnswerHeader,
@@ -268,6 +271,7 @@ const buildColumns = ({
 ] => {
   const decisionColumns: DataTableColumn<ResearchRow<Decision>>[] = [];
   const context = {
+    contentMode: "tight" as const,
     identityLineFields: decisionIdentityLineFields([...visibleColumns]),
     // A saved research table is not a live query, so nothing is marked.
     queryTokens: [],
@@ -299,6 +303,8 @@ const buildColumns = ({
       render: (row) => (
         <ResearchAnswerCell
           answer={answersByKey.get(answerKey(column.id, row.decision.id))}
+          answerType={column.answerType}
+          onRetry={() => onRetryAnswer(column, row.decision.id)}
           onShowSource={(anchorId) => onShowSource(row.decision, anchorId)}
         />
       ),
@@ -322,7 +328,7 @@ type RowGroup = { key: string | null; rows: ResearchRow<Decision>[] };
 const groupRows = (
   rows: readonly ResearchRow<Decision>[],
   groupBy: ResearchGroupBy,
-  answersByKey: ReadonlyMap<string, ResearchAnswer>,
+  answersByKey: ReadonlyMap<string, QuestionAnswer>,
 ): RowGroup[] => {
   if (groupBy === "none") {
     return [{ key: null, rows: [...rows] }];

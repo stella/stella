@@ -140,7 +140,9 @@ runtime validation, or integration tests.
 
 ### Internationalization, accessibility, and design-system consistency
 
+- [`dialog-footer-owns-actions`](./dialog-footer-owns-actions.ts) (`dialog-footer-owns-actions`): rejects a hand-rolled `div`/`footer`/`section` action row inside a dialog, alert-dialog, or sheet popup; only `DialogFooter` and its siblings paint the full-bleed band with its border and narrow-viewport stacking. Footer, `Field`, and list-rendered buttons are exempt, and only the innermost row is reported.
 - [`icon-button-requires-tooltip`](./icon-button-requires-tooltip.ts) (`icon-button-requires-tooltip`): requires icon-only buttons to expose an accessible label through the owned tooltip contract.
+- [`no-decorated-search-input`](./no-decorated-search-input.ts) (`no-decorated-search-input`): rejects a second search icon or a leading `ps-`/`pl-` utility beside an `@stll/ui` `Input`/`InputGroupInput` with `type="search"`, which already draws the icon and reserves its space.
 - [`require-in-flow-viewport-popup`](./require-in-flow-viewport-popup.ts) (`require-in-flow-viewport-popup`): requires a Base UI positioner that renders a `Viewport` to size itself and keep its popup in flow through the shared `positioner-sizing` constants, so collision handling measures the real popup on every side.
 - [`no-adhoc-loader`](./no-adhoc-loader.ts) (`no-adhoc-loader`): requires the owned `Loader` primitive for indeterminate loading states instead of ad hoc spinners; a ratchet over the files that still carry one.
 - [`no-ad-hoc-find-shortcut`](./no-ad-hoc-find-shortcut.ts) (`no-ad-hoc-find-shortcut`): keeps the find shortcut on its single registry listener, so no surface recognises the press itself and reopens the two-bar bug.

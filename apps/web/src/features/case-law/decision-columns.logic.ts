@@ -98,6 +98,24 @@ export const decisionColumnWidthClassNames = (
   DECISION_COLUMN_WIDTH_CLASS_NAMES[DECISION_COLUMN_WIDTHS[columnId]];
 
 /**
+ * How much of a prose cell a row shows: two lines, so a page of rows can be
+ * scanned, or all of it, so one row can be read. The same two modes the
+ * workspace table's density control offers, under the same words.
+ */
+export const DECISION_CONTENT_MODES = ["tight", "fit-content"] as const;
+
+export type DecisionContentMode = (typeof DECISION_CONTENT_MODES)[number];
+
+const DECISION_CLAMP_CLASS_NAMES = {
+  tight: "line-clamp-2",
+  "fit-content": "",
+} as const satisfies Record<DecisionContentMode, string>;
+
+/** The clamp a prose cell carries in this mode; empty when it carries none. */
+export const decisionClampClassName = (mode: DecisionContentMode): string =>
+  DECISION_CLAMP_CLASS_NAMES[mode];
+
+/**
  * Facts the case-number cell repeats under the case number when, and only
  * when, no column of its own is showing them. Order is the reading order of
  * the line.
