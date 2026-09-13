@@ -11,6 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { DecisionListFilters } from "@/features/case-law/queries/decisions";
+import { researchRunBatches } from "@/features/case-law/research/question-columns.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -299,26 +300,35 @@ type RunAnswersInput = {
 };
 
 /**
- * Queue the cells of one page, in one request. The largest page the search
- * offers is exactly the largest run the endpoint accepts, so a page is never
- * split; anything larger is the caller's mistake and the server says so,
- * rather than being silently cut here.
+ * Queue the cells of a run set. One request for a page, whose largest size is
+ * exactly the largest run the endpoint accepts; a saved table that has loaded
+ * several pages is split, because the endpoint refuses a longer list outright.
+ *
+ * The batches name disjoint sets of decisions, so they are independent
+ * requests and go together, the way the answer lookup above splits its own.
  */
 export const runAnswers = async ({
   columnIds,
   decisionIds,
   force,
-}: RunAnswersInput): Promise<{ queued: number }> =>
-  unwrapEden(
-    await api.case.research.answers.run.post({
-      decisionIds: decisionIds.map((decisionId) =>
-        toSafeId<"caseLawDecision">(decisionId),
-      ),
-      ...(columnIds !== undefined && {
-        columnIds: columnIds.map((columnId) =>
-          toSafeId<"caseLawResearchColumn">(columnId),
-        ),
-      }),
-      ...(force !== undefined && { force }),
-    }),
+}: RunAnswersInput): Promise<{ queued: number }> => {
+  const results = await Promise.all(
+    researchRunBatches(decisionIds).map(
+      async (batch) =>
+        unwrapEden(
+          await api.case.research.answers.run.post({
+            decisionIds: batch.map((decisionId) =>
+              toSafeId<"caseLawDecision">(decisionId),
+            ),
+            ...(columnIds !== undefined && {
+              columnIds: columnIds.map((columnId) =>
+                toSafeId<"caseLawResearchColumn">(columnId),
+              ),
+            }),
+            ...(force !== undefined && { force }),
+          }),
+        ).queued,
+    ),
   );
+  return { queued: results.reduce((total, queued) => total + queued, 0) };
+};

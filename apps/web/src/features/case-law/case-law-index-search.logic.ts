@@ -157,9 +157,17 @@ export const withPendingQuery = (
   };
 };
 
+/**
+ * How many of the rail's own filters are on. The date span counts as one
+ * whichever ends it names, because that is the one chip it becomes and the one
+ * row it occupies on the rail.
+ */
+export const activeCaseLawFilterCount = (search: CaseLawIndexSearch): number =>
+  CASE_LAW_FILTER_KEYS.filter((key) => search[key] !== undefined).length +
+  (hasDecisionDateRange(search) ? 1 : 0);
+
 export const hasActiveCaseLawFilter = (search: CaseLawIndexSearch): boolean =>
-  CASE_LAW_FILTER_KEYS.some((key) => search[key] !== undefined) ||
-  hasDecisionDateRange(search);
+  activeCaseLawFilterCount(search) > 0;
 
 /**
  * The sort as the URL carries it: absent while it is the default, so the same

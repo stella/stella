@@ -3,10 +3,11 @@
  *
  * The corpus answers with a cursor, not an offset: page N is only reachable by
  * walking there, and the cursor of a page nobody has visited does not exist.
- * So the URL carries a page number, the browser keeps the chain of cursors it
- * has walked (the infinite query's own page list), and a page beyond that
- * chain is not a page this browser can show — it falls back to the deepest one
- * it can.
+ * So the URL carries a page number and the browser keeps the chain of cursors
+ * it has walked (the infinite query's own page list). A load that arrives
+ * without that chain walks one to the page the URL names, up to the depth
+ * limit; only where the results themselves run out first does the page fall
+ * back to the deepest one the chain reached.
  *
  * All of that is arithmetic over three numbers, which is why it lives here and
  * not in the route.
@@ -54,6 +55,21 @@ export const decisionPageSizeSearchValue = (
   pageSize: DecisionPageSize,
 ): DecisionPageSize | undefined =>
   pageSize === DEFAULT_DECISION_PAGE_SIZE ? undefined : pageSize;
+
+/**
+ * How many pages of the chain the loader asks for.
+ *
+ * A shared link, a reload, a new tab and a crawler all arrive with no chain at
+ * all, so the loader walks one to the page the URL names instead of dropping
+ * the reader on the first: the pager's links are real addresses, which is the
+ * whole reason they are links. The walk is bounded by the depth limit, which
+ * `decisionPageNumber` has already applied. A browser that walked further on
+ * its own keeps what it holds, so a refresh never shortens the chain.
+ */
+export const decisionPagesToWalk = (
+  page: number,
+  walkedPageCount: number,
+): number => Math.max(decisionPageNumber(page), walkedPageCount, 1);
 
 /**
  * The deepest page this browser can show, given the cursors it has walked. A

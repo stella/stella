@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  DECISION_FACET_RAIL_STATES,
   DEFAULT_DECISION_TABLE_LAYOUT,
   StoredDecisionLayoutSchema,
   decisionColumnOrder,
   decisionColumnPins,
   decisionTableLayouts,
   layoutForCountry,
+  toggledFacetRail,
   withDecisionColumnMoved,
   withDecisionColumnPinned,
 } from "./decision-column-preferences.logic";
@@ -43,6 +45,7 @@ describe("what a stored arrangement means", () => {
       order: ["summary", "caseNumber"],
       pinned: ["summary"],
       contentMode: "fit-content" as const,
+      facetRail: "open" as const,
     };
 
     expect(layoutOf({ cz: layout })).toEqual(layout);
@@ -80,8 +83,29 @@ describe("what a stored arrangement means", () => {
     for (const raw of [
       { cz: { hidden: "summary" } },
       { cz: { contentMode: "huge" } },
+      { cz: { facetRail: "peek" } },
     ]) {
       expect(v.safeParse(StoredDecisionLayoutSchema, raw).success).toBe(false);
+    }
+  });
+});
+
+describe("whether the facet rail takes a column", () => {
+  test("a browser that never touched the rail keeps it folded away", () => {
+    expect(DEFAULT_DECISION_TABLE_LAYOUT.facetRail).toBe("collapsed");
+    expect(layoutOf({ cz: { pinned: ["caseNumber"] } }).facetRail).toBe(
+      "collapsed",
+    );
+  });
+
+  test("a rail the reader opened is read back open", () => {
+    expect(layoutOf({ cz: { facetRail: "open" } }).facetRail).toBe("open");
+  });
+
+  test("the toggle is its own undo, from either state", () => {
+    for (const state of DECISION_FACET_RAIL_STATES) {
+      expect(toggledFacetRail(state)).not.toBe(state);
+      expect(toggledFacetRail(toggledFacetRail(state))).toBe(state);
     }
   });
 });

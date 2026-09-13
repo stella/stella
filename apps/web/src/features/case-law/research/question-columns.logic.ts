@@ -1,3 +1,7 @@
+import {
+  answerNeedsRun,
+  CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
+} from "@stll/api-contract";
 import type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
@@ -28,8 +32,9 @@ export type QuestionAnswer = {
   columnId: string;
   decisionId: string;
   state: CaseLawResearchAnswerState;
+  /** A pending cell whose run went quiet; the server decides, on its clock. */
+  stale: boolean;
   answer: CaseLawResearchAnswerValue | null;
-  confidence: number | null;
   run?: {
     rationale: string;
     passages: readonly CaseLawResearchAnswerPassage[];
@@ -45,19 +50,22 @@ export const answerKey = (columnId: string, decisionId: string): string =>
   `${columnId}:${decisionId}`;
 
 /**
- * Whether a cell already holds something a run would not improve. A failed or
- * refused cell is a finished answer: running it again asks the same model the
- * same question about the same text, and a `not_allowed` decision will never
- * be allowed by a retry.
+ * Whether a run would produce this cell. The contract's policy, which is also
+ * what the queue applies, so the count the reader confirms is the count that
+ * runs rather than a second opinion that drifts from it.
  */
-const isAnswered = (answer: QuestionAnswer | undefined): boolean =>
-  answer !== undefined && answer.state !== "pending";
+const needsRun = (answer: QuestionAnswer | undefined): boolean =>
+  answerNeedsRun(
+    answer === undefined
+      ? { state: null, stale: false }
+      : { state: answer.state, stale: answer.stale },
+  );
 
 type RunSetInput = {
   columns: readonly QuestionColumn[];
   /** Every decision on the page, in the order it is drawn. */
   pageDecisionIds: readonly string[];
-  /** The rows the reader picked; empty means the whole page. */
+  /** The rows the reader picked; none of them still on the page means the page. */
   selectedDecisionIds: readonly string[];
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
   /** One column, or every column when absent. */
@@ -93,11 +101,16 @@ export const questionRunSet = ({
     columnId === undefined
       ? columns
       : columns.filter((column) => column.id === columnId);
+  // A selection outlives the rows it named: a query or facet change redraws
+  // the page without clearing it. So the mode is decided from what the
+  // selection still reaches on this page, and a selection that reaches nothing
+  // is no selection at all — the run covers the page the reader is looking at
+  // rather than reporting that there is nothing to answer.
   const selected = new Set(selectedDecisionIds);
-  const visible =
-    selected.size === 0
-      ? pageDecisionIds
-      : pageDecisionIds.filter((decisionId) => selected.has(decisionId));
+  const picked = pageDecisionIds.filter((decisionId) =>
+    selected.has(decisionId),
+  );
+  const visible = picked.length === 0 ? pageDecisionIds : picked;
 
   const decisionIds: string[] = [];
   let cells = 0;
@@ -106,7 +119,7 @@ export const questionRunSet = ({
     for (const column of chosen) {
       if (
         force ||
-        !isAnswered(answersByKey.get(answerKey(column.id, decisionId)))
+        needsRun(answersByKey.get(answerKey(column.id, decisionId)))
       ) {
         missing += 1;
       }
@@ -118,6 +131,29 @@ export const questionRunSet = ({
   }
 
   return { columnIds: chosen.map((column) => column.id), decisionIds, cells };
+};
+
+/**
+ * A run set as the endpoint will take it: one request per batch of decisions,
+ * because the server refuses a longer list outright. A surface whose rows are
+ * a page never has more than one; a saved table that has loaded several pages
+ * does, and without the split the whole run would fail validation instead of
+ * answering anything.
+ */
+export const researchRunBatches = (
+  decisionIds: readonly string[],
+): readonly string[][] => {
+  const batches: string[][] = [];
+  for (
+    let start = 0;
+    start < decisionIds.length;
+    start += CASE_LAW_RESEARCH_RUN_DECISIONS_MAX
+  ) {
+    batches.push(
+      decisionIds.slice(start, start + CASE_LAW_RESEARCH_RUN_DECISIONS_MAX),
+    );
+  }
+  return batches;
 };
 
 /**

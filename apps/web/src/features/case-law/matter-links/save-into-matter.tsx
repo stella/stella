@@ -25,12 +25,20 @@ import {
   linkDecisionsToMatter,
   matterLinkKeys,
 } from "@/features/case-law/matter-links/queries";
+import type { MatterLinkRejectionReason } from "@/features/case-law/matter-links/queries";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
 /** As long a note as the link will hold. */
 const MATTER_LINK_NOTE_MAX_LENGTH = 2000;
+
+/** Total over the endpoint's reasons, so a new one cannot land unreported. */
+const REJECTION_LABEL_KEYS = {
+  limit: "caseLaw.matterLinks.rejectedLimit",
+  not_found: "caseLaw.matterLinks.rejectedMissing",
+} as const satisfies Record<MatterLinkRejectionReason, TranslationKey>;
 
 type SaveIntoMatterActionProps = {
   /** Every decision on the page, in the order it is drawn. */
@@ -69,30 +77,48 @@ export const SaveIntoMatterAction = ({
       workspaceId: string;
     }) => {
       const trimmed = note.trim();
-      const links = await linkDecisionsToMatter({
+      return await linkDecisionsToMatter({
         decisionIds,
         note: trimmed.length > 0 ? trimmed : null,
         workspaceId,
       });
-      return links.length;
     },
-    onSuccess: async (count, { workspaceId }) => {
+    onSuccess: ({ existing, linked, rejected }) => {
       setIsOpen(false);
       setNote("");
+      // "Not saved" is never a bare number: the matter being full and a
+      // decision having gone are different problems with different answers.
+      const detail = [
+        ...(existing.length > 0
+          ? [t("caseLaw.matterLinks.alreadySaved", { count: existing.length })]
+          : []),
+        ...Object.entries(REJECTION_LABEL_KEYS).flatMap(([reason, key]) => {
+          const count = rejected.filter(
+            (entry) => entry.reason === reason,
+          ).length;
+          return count === 0 ? [] : [t(key, { count })];
+        }),
+      ];
       stellaToast.add({
         title: t("caseLaw.matterLinks.saved", {
-          count,
+          count: linked.length,
           matter: matter?.name ?? "",
         }),
-        type: "success",
-      });
-      await queryClient.invalidateQueries({
-        queryKey: matterLinkKeys.list({ workspaceId }),
+        ...(detail.length > 0 && { description: detail.join(" · ") }),
+        type: rejected.length > 0 ? "warning" : "success",
       });
     },
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+    },
+    // On settle, not on success: a request that failed after the server wrote
+    // some of the batch would otherwise leave the matter's list stale, showing
+    // none of what did land.
+    onSettled: async (_result, _error, { workspaceId }) => {
+      await queryClient.invalidateQueries({
+        queryKey: matterLinkKeys.list({ workspaceId }),
+      });
     },
   });
 

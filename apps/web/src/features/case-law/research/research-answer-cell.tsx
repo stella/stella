@@ -11,7 +11,6 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
-import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
 export const YES_NO_LABEL_KEYS = {
@@ -50,7 +49,6 @@ export const ResearchAnswerCell = ({
   onShowSource,
 }: ResearchAnswerCellProps) => {
   const t = useTranslations();
-  const format = useFormatter();
 
   if (answer === undefined) {
     return (
@@ -101,12 +99,6 @@ export const ResearchAnswerCell = ({
         return null;
       }
       const source = answer.run?.passages.at(0);
-      const confidence =
-        answer.confidence === null
-          ? null
-          : t("caseLaw.research.answers.confidence", {
-              percent: format.number(Math.round(answer.confidence * 100)),
-            });
       return (
         <div className="flex flex-col items-start gap-1">
           {value.type === "yes_no" ? (
@@ -121,20 +113,17 @@ export const ResearchAnswerCell = ({
           ) : (
             <span className="text-foreground text-sm">{value.value}</span>
           )}
-          <span className="text-muted-foreground flex items-center gap-2 text-xs">
-            {confidence !== null && <span>{confidence}</span>}
-            {source !== undefined && (
-              <Button
-                className="h-auto px-0 py-0 text-xs"
-                onClick={() => onShowSource(source.anchorId)}
-                size="sm"
-                title={answer.run?.rationale}
-                variant="link"
-              >
-                {t("caseLaw.research.answers.showSource")}
-              </Button>
-            )}
-          </span>
+          {source !== undefined && (
+            <Button
+              className="text-muted-foreground h-auto px-0 py-0 text-xs"
+              onClick={() => onShowSource(source.anchorId)}
+              size="sm"
+              title={answer.run?.rationale}
+              variant="link"
+            >
+              {t("caseLaw.research.answers.showSource")}
+            </Button>
+          )}
         </div>
       );
     }

@@ -653,10 +653,13 @@ type Messages = {
     };
     "loadingMore": "Loading more...";
     "matterLinks": {
+      "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}";
       "empty": "No case law is kept in this matter yet.";
       "emptyAction": "Search case law";
       "note": "Note";
       "notePlaceholder": "Why these decisions matter here…";
+      "rejectedLimit": "{count, plural, one {# decision was not saved: the matter is full} other {# decisions were not saved: the matter is full}}";
+      "rejectedMissing": "{count, plural, one {# decision could not be found} other {# decisions could not be found}}";
       "remove": "Remove from the matter";
       "save": "Save into a matter";
       "savePage": "{count, plural, one {# decision on this page} other {# decisions on this page}} will be saved.";
@@ -695,7 +698,6 @@ type Messages = {
       "addQuestionHint": "The question is asked of every decision in the table; answers are produced when you run the column.";
       "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}";
       "answers": {
-        "confidence": "{percent}% confidence";
         "failed": "Not answered";
         "no": "No";
         "notAllowed": "Not allowed by the source's terms";
@@ -1419,6 +1421,7 @@ type Messages = {
     "goBack": "Go back";
     "goBackToEditing": "Go back to editing";
     "hideDetails": "Hide details";
+    "hideFilters": "Hide filters";
     "hideSecretValue": "Hide secret value";
     "history": "History";
     "import": "Import";
@@ -1532,6 +1535,7 @@ type Messages = {
     "settings": "Settings";
     "showAll": "Show all";
     "showDetails": "Show details";
+    "showFilters": "Show filters";
     "showLess": "Show less";
     "showMore": "Show more";
     "showSecretValue": "Show secret value";

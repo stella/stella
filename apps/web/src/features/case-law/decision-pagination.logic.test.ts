@@ -6,6 +6,7 @@ import {
   DEFAULT_DECISION_PAGE_SIZE,
   decisionPageIndex,
   decisionPageNumber,
+  decisionPagesToWalk,
   decisionPageSearchValue,
   decisionPageSize,
   decisionPageSizeSearchValue,
@@ -57,6 +58,39 @@ describe("what the URL is allowed to ask for", () => {
     for (const page of [2, 7, DECISION_MAX_PAGE]) {
       expect(decisionPageNumber(decisionPageSearchValue(page))).toBe(page);
     }
+  });
+});
+
+describe("how deep a load walks the chain", () => {
+  /**
+   * A shared link, a reload, a new tab and a crawler all arrive cold. Walking
+   * only the first page would make every page but the first unshareable, which
+   * is the opposite of what the pager's real links promise.
+   */
+  test("a cold load walks to the page the link names", () => {
+    expect(decisionPagesToWalk(5, 0)).toBe(5);
+    expect(decisionPagesToWalk(DECISION_MAX_PAGE, 0)).toBe(DECISION_MAX_PAGE);
+  });
+
+  test("a link with no page walks one page", () => {
+    expect(decisionPagesToWalk(1, 0)).toBe(1);
+  });
+
+  test("no link walks past the depth limit", () => {
+    for (const page of [DECISION_MAX_PAGE + 1, 10_000, Number.NaN]) {
+      expect(decisionPagesToWalk(page, 0)).toBe(1);
+    }
+    for (let page = 1; page <= DECISION_MAX_PAGE + 5; page += 1) {
+      expect(decisionPagesToWalk(page, 0)).toBeLessThanOrEqual(
+        DECISION_MAX_PAGE,
+      );
+    }
+  });
+
+  test("a chain the browser already walked is never shortened", () => {
+    expect(decisionPagesToWalk(1, 7)).toBe(7);
+    expect(decisionPagesToWalk(3, 7)).toBe(7);
+    expect(decisionPagesToWalk(9, 7)).toBe(9);
   });
 });
 
