@@ -480,6 +480,31 @@ export const clipboardRailScrollDelta = ({
   return 0;
 };
 
+type ClipboardRailWheelDeltaOptions = {
+  deltaX: number;
+  deltaY: number;
+  direction: "ltr" | "rtl";
+};
+
+/**
+ * Horizontal distance a wheel event moves a rail that only scrolls
+ * horizontally. A mouse wheel reports vertical motion, which the browser has
+ * nowhere to apply on such a rail; mapping it onto the rail's axis lets the
+ * wheel advance toward the rail's end (a negative `scrollLeft` in RTL). A
+ * gesture that already carries horizontal motion (trackpad, shift-wheel) is
+ * left to the browser.
+ */
+export const clipboardRailWheelDelta = ({
+  deltaX,
+  deltaY,
+  direction,
+}: ClipboardRailWheelDeltaOptions) => {
+  if (deltaX !== 0) {
+    return 0;
+  }
+  return direction === "rtl" ? -deltaY : deltaY;
+};
+
 const UNMEASURED_VISIBLE_CARDS = 8;
 
 /**

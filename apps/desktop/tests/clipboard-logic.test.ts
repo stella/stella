@@ -12,6 +12,7 @@ import {
   clipboardScopeKeyAction,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
+  clipboardRailWheelDelta,
   clipboardRailWindow,
   clipboardSearchPreviewText,
   clipboardSourceTintIndex,
@@ -817,6 +818,31 @@ describe("clipboardRailScrollDelta", () => {
         viewportStart: 0,
       }),
     ).toBe(50);
+  });
+});
+
+describe("clipboardRailWheelDelta", () => {
+  test("maps a vertical wheel onto the rail's axis toward its end", () => {
+    expect(
+      clipboardRailWheelDelta({ deltaX: 0, deltaY: 120, direction: "ltr" }),
+    ).toBe(120);
+    expect(
+      clipboardRailWheelDelta({ deltaX: 0, deltaY: 120, direction: "rtl" }),
+    ).toBe(-120);
+    expect(
+      clipboardRailWheelDelta({ deltaX: 0, deltaY: -120, direction: "ltr" }),
+    ).toBe(-120);
+  });
+
+  test("leaves a gesture with horizontal motion to the browser", () => {
+    for (const direction of ["ltr", "rtl"] as const) {
+      expect(
+        clipboardRailWheelDelta({ deltaX: 40, deltaY: 120, direction }),
+      ).toBe(0);
+      expect(
+        clipboardRailWheelDelta({ deltaX: -1, deltaY: 0, direction }),
+      ).toBe(0);
+    }
   });
 });
 
