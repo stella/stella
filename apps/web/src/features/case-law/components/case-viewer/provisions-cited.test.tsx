@@ -46,6 +46,7 @@ const provision = (
   workSource: "number",
   workYear: 1961,
   versionValidFrom: null,
+  previewKey: null,
   ...overrides,
 });
 
@@ -63,7 +64,7 @@ const seed = (items: ReturnType<typeof provision>[]) => {
     decisionProvisionsInfiniteOptions(decisionId).queryKey,
     {
       pageParams: [null],
-      pages: [{ items, limit: 50, nextCursor: null }],
+      pages: [{ items, limit: 50, nextCursor: null, previews: [] }],
     },
   );
 

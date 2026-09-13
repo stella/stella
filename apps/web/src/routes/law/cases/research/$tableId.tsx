@@ -58,26 +58,26 @@ import {
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
 import { decisionsInfiniteOptions } from "@/features/case-law/queries/decisions";
 import {
-  createResearchColumn,
-  deleteResearchColumn,
+  createQuestionColumn,
+  deleteQuestionColumn,
   deleteResearchTable,
+  questionAnswersOptions,
+  questionColumnKeys,
   renameResearchTable,
-  researchAnswersOptions,
   researchTableKeys,
   researchTableOptions,
-  runResearchAnswers,
+  runAnswers,
   savedQueryToDecisionFilters,
   setResearchTableDecision,
-  updateResearchColumn,
+  updateQuestionColumn,
 } from "@/features/case-law/research/queries";
 import type {
   ResearchColumn,
   ResearchTableDetail,
-  RunResearchAnswersScope,
   SavedQueryDecisionFilters,
 } from "@/features/case-law/research/queries";
+import type { QuestionDraft } from "@/features/case-law/research/question-columns.logic";
 import { ResearchQuestionDialog } from "@/features/case-law/research/research-question-dialog";
-import type { ResearchQuestionDraft } from "@/features/case-law/research/research-question-dialog";
 import {
   answerGroupBy,
   answerKey,
@@ -187,6 +187,15 @@ const isResearchGroupBy = (
 ): value is ResearchGroupBy =>
   isDecisionGroupBy(value) ||
   columns.some((column) => answerGroupBy(column.id) === value);
+
+/**
+ * Every question of the table, one of them answered again from scratch, or a
+ * single failed cell retried from the cell itself.
+ */
+type RunScope =
+  | { scope: "table" }
+  | { scope: "column"; columnId: string }
+  | { scope: "cell"; columnId: string; decisionId: string };
 
 /** Which question column a dialog edits, or that it adds one. */
 type QuestionDialogState =
@@ -315,7 +324,7 @@ function ResearchTablePage() {
 
   const invalidateAnswers = async () =>
     await queryClient.invalidateQueries({
-      queryKey: researchTableKeys.answers({ activeOrganizationId, tableId }),
+      queryKey: questionColumnKeys.all,
     });
 
   const saveQuestion = useMutation({
@@ -324,15 +333,11 @@ function ResearchTablePage() {
       draft,
     }: {
       column: ResearchColumn | null;
-      draft: ResearchQuestionDraft;
+      draft: QuestionDraft;
     }) =>
       column === null
-        ? await createResearchColumn({ tableId, ...draft })
-        : await updateResearchColumn({
-            tableId,
-            columnId: column.id,
-            ...draft,
-          }),
+        ? await createQuestionColumn(draft)
+        : await updateQuestionColumn({ columnId: column.id, ...draft }),
     onSuccess: async () => {
       setQuestionDialog({ mode: "closed" });
       await Promise.all([invalidateTable(), invalidateAnswers()]);
@@ -342,7 +347,7 @@ function ResearchTablePage() {
 
   const removeColumn = useMutation({
     mutationFn: async (column: ResearchColumn) =>
-      await deleteResearchColumn({ tableId, columnId: column.id }),
+      await deleteQuestionColumn(column.id),
     onSuccess: async () => {
       setColumnToDelete(null);
       await Promise.all([invalidateTable(), invalidateAnswers()]);
@@ -362,9 +367,8 @@ function ResearchTablePage() {
   // Cells are fetched for the decisions on screen, separately from the rows:
   // they change while a run works, and the poll must not refetch the rows.
   const { data: answerCells = [] } = useQuery(
-    researchAnswersOptions({
+    questionAnswersOptions({
       activeOrganizationId,
-      tableId,
       decisionIds: mergedRows.map((row) => row.decision.id).toSorted(),
     }),
   );
@@ -398,13 +402,18 @@ function ResearchTablePage() {
   ).length;
 
   const run = useMutation({
-    mutationFn: async (scope: RunResearchAnswersScope) =>
-      await runResearchAnswers({
-        ...scope,
-        tableId,
-        decisionIds: mergedRows
-          .filter((row) => row.disposition !== "excluded")
-          .map((row) => row.decision.id),
+    mutationFn: async (scope: RunScope) =>
+      await runAnswers({
+        ...(scope.scope !== "table" && {
+          columnIds: [scope.columnId],
+          force: true,
+        }),
+        decisionIds:
+          scope.scope === "cell"
+            ? [scope.decisionId]
+            : mergedRows
+                .filter((row) => row.disposition !== "excluded")
+                .map((row) => row.decision.id),
       }),
     onSuccess: async ({ queued }) => {
       if (queued === 0) {
@@ -603,6 +612,9 @@ function ResearchTablePage() {
         groupBy={effectiveGroupBy}
         isLoading={decisionsQuery.isLoading}
         onColumnAction={onColumnAction}
+        onRetryAnswer={(column, decisionId) => {
+          run.mutate({ scope: "cell", columnId: column.id, decisionId });
+        }}
         onSetDisposition={(decision, disposition) => {
           detached(
             setDisposition.mutateAsync({ decision, disposition }),

@@ -4,7 +4,6 @@ import type { MouseEvent, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   PreviewCard,
@@ -20,14 +19,19 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
-import { provisionPreviewBlocks } from "@/features/statutes/provision-preview";
-import { statuteOptions } from "@/features/statutes/queries/statutes";
+import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
+import type { ProvisionPreviewData } from "@/features/statutes/queries/provision-preview";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 
 export type CitedProvisionTarget = {
   /** The consolidation the reference was made against, in the statute reader. */
   document: { country: string; id: string };
   payload: ProvisionViewPayload;
+  /**
+   * The wording the reference's own list already carried, when it did. A
+   * target without one reads its provision when the card opens.
+   */
+  preview: ProvisionPreviewData | null;
 };
 
 type CitedProvisionLinkProps = {
@@ -39,28 +43,25 @@ type CitedProvisionLinkProps = {
 const CitedProvisionPreview = ({
   documentId,
   open,
+  preview,
   provision,
 }: {
   documentId: string;
   open: boolean;
+  preview: ProvisionPreviewData | null;
   provision: ProvisionViewPayload;
 }) => {
-  const { data: statute, isPending } = useQuery({
-    ...statuteOptions(documentId),
-    enabled: open,
+  const { data: read, isPending } = useQuery({
+    ...provisionPreviewOptions({
+      anchor: provision.anchorId,
+      citedAnchor: provision.highlightAnchorId,
+      documentId,
+    }),
+    enabled: open && preview === null,
   });
-  const ast =
-    statute === undefined ? null : parseDocumentAst(statute.documentAst);
-  const blocks =
-    ast === null
-      ? null
-      : provisionPreviewBlocks(
-          ast.blocks,
-          provision.anchorId,
-          provision.highlightAnchorId,
-        );
+  const wording = preview ?? read;
 
-  if (isPending) {
+  if (wording === undefined && isPending) {
     return (
       <span className="mt-2 flex flex-col gap-1.5 border-t pt-2">
         <Skeleton className="h-3 w-full" />
@@ -68,18 +69,29 @@ const CitedProvisionPreview = ({
       </span>
     );
   }
-  if (blocks === null || blocks.length === 0) {
+  if (wording === undefined || wording.blocks.length === 0) {
     return null;
   }
 
   return (
-    <span
-      className="text-foreground mt-2 flex max-h-64 flex-col gap-2 overflow-y-auto border-t pt-2 font-serif text-sm leading-relaxed text-pretty"
-      lang={statute?.language}
-    >
-      {blocks.map((block) => (
-        <span key={block.id}>{block.plainText}</span>
-      ))}
+    <span className="mt-2 flex flex-col gap-1 border-t pt-2">
+      {wording.headings.length > 0 && (
+        <BidiText
+          as="span"
+          className="text-muted-foreground truncate text-xs"
+          lang={wording.language}
+        >
+          {wording.headings.map(({ text }) => text).join(" › ")}
+        </BidiText>
+      )}
+      <span
+        className="text-foreground flex max-h-64 flex-col gap-2 overflow-y-auto font-serif text-sm leading-relaxed text-pretty"
+        lang={wording.language}
+      >
+        {wording.blocks.map((block) => (
+          <span key={block.id}>{block.text}</span>
+        ))}
+      </span>
     </span>
   );
 };
@@ -138,6 +150,7 @@ export const CitedProvisionLink = ({
         <CitedProvisionPreview
           documentId={provision.document.id}
           open={previewOpen}
+          preview={provision.preview}
           provision={provision.payload}
         />
       </PreviewCardPopup>

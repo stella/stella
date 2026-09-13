@@ -1,19 +1,11 @@
-import { useDeferredValue, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { SearchIcon, UploadIcon } from "lucide-react";
+import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stll/ui/combobox";
 import {
   Dialog,
   DialogFooter,
@@ -25,6 +17,8 @@ import {
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
+import { MatterCombobox } from "@/components/workspaces/matter-combobox";
+import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -37,26 +31,17 @@ type UploadDocumentDialogProps = {
   workspaceId?: string | undefined;
 };
 
-type MatterOption = {
-  id: string;
-  name: string;
-  clientName: string | null;
-};
-
-const EMPTY_MATTERS: MatterOption[] = [];
-
 export const UploadDocumentDialog = ({
   onClose,
   workspaceId,
 }: UploadDocumentDialogProps) => {
   const t = useTranslations();
   const { activeOrganizationId } = useAuthenticatedUser();
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(workspaceId);
-  const [matterSearch, setMatterSearch] = useState("");
-  const deferredMatterSearch = useDeferredValue(matterSearch);
+  // The picked matter, or the one the caller opened the dialog for, resolved
+  // from the same list the picker offers so both paths show the same name.
+  const [picked, setPicked] = useState<MatterOption | null>(null);
   const {
-    data: matters = EMPTY_MATTERS,
-    error,
+    data: matters,
     isPending,
     refetch,
   } = useQuery({
@@ -67,19 +52,12 @@ export const UploadDocumentDialog = ({
         id: matter.id,
         name: matter.name,
       })),
+    enabled: workspaceId !== undefined,
   });
-
-  const filteredMatters = matters.filter((matter) => {
-    const search = deferredMatterSearch.trim().toLocaleLowerCase();
-    return (
-      search.length === 0 ||
-      matter.name.toLocaleLowerCase().includes(search) ||
-      matter.clientName?.toLocaleLowerCase().includes(search)
-    );
-  });
-  const selectedMatter = matters.find(
-    (matter) => matter.id === selectedWorkspaceId,
-  );
+  const selectedMatter =
+    workspaceId === undefined
+      ? picked
+      : (matters?.find((matter) => matter.id === workspaceId) ?? null);
 
   return (
     <Dialog
@@ -106,61 +84,41 @@ export const UploadDocumentDialog = ({
               <label className="text-sm font-medium" htmlFor="upload-matter">
                 {t("common.selectAMatter")}
               </label>
-              <Combobox
-                itemToStringLabel={(matter) => matter.name}
-                onInputValueChange={setMatterSearch}
-                onValueChange={(matter) => setSelectedWorkspaceId(matter?.id)}
-                value={selectedMatter ?? null}
-              >
-                <ComboboxInput
-                  id="upload-matter"
-                  placeholder={t("common.selectAMatter")}
-                  showClear={matterSearch.length > 0}
-                  startAddon={<SearchIcon />}
-                  value={matterSearch}
-                />
-                <ComboboxPopup>
-                  <ComboboxList>
-                    {filteredMatters.map((matter) => (
-                      <ComboboxItem key={matter.id} value={matter}>
-                        <BidiText className="truncate">{matter.name}</BidiText>
-                        {matter.clientName && (
-                          <span className="text-muted-foreground ms-2 truncate text-xs">
-                            <BidiText>{matter.clientName}</BidiText>
-                          </span>
-                        )}
-                      </ComboboxItem>
-                    ))}
-                  </ComboboxList>
-                  <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
-                </ComboboxPopup>
-              </Combobox>
+              <MatterCombobox
+                activeOrganizationId={activeOrganizationId}
+                id="upload-matter"
+                onChange={setPicked}
+                value={picked}
+              />
             </div>
           )}
-          {isPending && (
+          {workspaceId !== undefined && isPending && (
             <p className="text-muted-foreground text-sm">
               {t("common.loading")}
             </p>
           )}
-          {(error !== null ||
-            (workspaceId !== undefined &&
-              !isPending &&
-              selectedMatter === undefined)) && (
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="text-destructive">
-                {t("errors.actionFailed")}
-              </span>
-              <Button
-                onClick={() =>
-                  detached(refetch(), "upload-document.retry-matters")
-                }
-                size="xs"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
+          {workspaceId !== undefined &&
+            !isPending &&
+            selectedMatter === null && (
+              // The caller named a matter the navigation list does not carry —
+              // a failed read, or a list that arrived without it. Reading it
+              // again is the whole recovery, so offer that rather than leaving
+              // the reader an upload they cannot start.
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-destructive">
+                  {t("errors.actionFailed")}
+                </span>
+                <Button
+                  onClick={() =>
+                    detached(refetch(), "upload-document.retry-matters")
+                  }
+                  size="xs"
+                  variant="ghost"
+                >
+                  {t("common.retry")}
+                </Button>
+              </div>
+            )}
           {selectedMatter && (
             <QuerySuspenseBoundary
               area="command-palette.upload-document"

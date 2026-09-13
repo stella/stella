@@ -10,6 +10,7 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
+  DialogFooter,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -790,7 +791,7 @@ const PropertyComposerBody = ({
         )}
       </div>
 
-      <div className="bg-muted/64 flex items-center justify-end gap-2 border-t px-5 py-3">
+      <DialogFooter className="px-5 py-3">
         <DialogClose render={<Button size="sm" variant="ghost" />}>
           {t("common.cancel")}
         </DialogClose>
@@ -804,7 +805,7 @@ const PropertyComposerBody = ({
             ? t("common.saveChanges")
             : t("workspaces.properties.createColumn")}
         </Button>
-      </div>
+      </DialogFooter>
     </>
   );
 };

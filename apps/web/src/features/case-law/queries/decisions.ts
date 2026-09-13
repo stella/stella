@@ -7,14 +7,16 @@ import {
   type SearchSort,
 } from "@stll/api-contract/search";
 
+import {
+  DEFAULT_DECISION_PAGE_SIZE,
+  type DecisionPageSize,
+} from "@/features/case-law/decision-pagination.logic";
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-
-const DEFAULT_PAGE_SIZE = 50;
 
 export type DecisionListFilters = {
   court?: string;
@@ -46,7 +48,7 @@ const caseLawDecisionKeys = {
     "status",
     { country },
   ],
-  list: (key: DecisionListFilters) => [
+  list: (key: DecisionListKey) => [
     ...caseLawDecisionKeys.all,
     "list",
     {
@@ -56,6 +58,7 @@ const caseLawDecisionKeys = {
       dateTo: key.dateTo,
       decisionType: key.decisionType,
       language: key.language,
+      pageSize: key.pageSize,
       search: key.search,
       sort: key.sort,
       sourceId: key.sourceId,
@@ -68,6 +71,13 @@ const caseLawDecisionKeys = {
     { country: key.country, language: key.language, slug: key.slug },
   ],
 };
+
+/**
+ * The cache identity of one result set. The page size belongs in it because it
+ * is what the cursors in the chain were cut at: the same filters read 25 at a
+ * time are a different chain from the same filters read 100 at a time.
+ */
+type DecisionListKey = DecisionListFilters & { pageSize: DecisionPageSize };
 
 type DecisionBySlugKey = {
   country: PublicCaseLawCountry;
@@ -158,9 +168,12 @@ export type LatestDecisionsCourt = Awaited<
   ReturnType<NonNullable<ReturnType<typeof latestDecisionsOptions>["queryFn"]>>
 >["courts"][number];
 
-export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
+export const decisionsInfiniteOptions = (
+  filters: DecisionListFilters,
+  pageSize: DecisionPageSize = DEFAULT_DECISION_PAGE_SIZE,
+) =>
   infiniteQueryOptions({
-    queryKey: caseLawDecisionKeys.list(filters),
+    queryKey: caseLawDecisionKeys.list({ ...filters, pageSize }),
     queryFn: async ({ pageParam, signal }) => {
       const { search, ...listFilters } = filters;
 
@@ -169,7 +182,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
         const response = await api.case.decisions.search.post(
           {
             query: search,
-            limit: DEFAULT_PAGE_SIZE,
+            limit: pageSize,
             ...(cursor !== undefined && { cursor }),
             ...(listFilters.court !== undefined && {
               court: listFilters.court,
@@ -230,7 +243,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters) =>
 
       const response = await api.case.decisions.get({
         query: {
-          limit: DEFAULT_PAGE_SIZE,
+          limit: pageSize,
           ...(pageParam !== null && { cursor: pageParam }),
           ...(listFilters.court !== undefined && {
             court: listFilters.court,

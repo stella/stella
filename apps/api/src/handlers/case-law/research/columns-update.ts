@@ -6,14 +6,13 @@ import {
   caseLawResearchColumns,
 } from "@/api/db/schema";
 import {
-  researchColumnParamsSchema,
+  readNamedResearchColumns,
   toResearchColumnResponse,
+} from "@/api/handlers/case-law/research/column-access";
+import {
+  researchColumnParamsSchema,
   updateResearchColumnBodySchema,
 } from "@/api/handlers/case-law/research/schema";
-import {
-  findResearchTable,
-  touchResearchTable,
-} from "@/api/handlers/case-law/research/table-access";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -21,9 +20,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description:
-    "Reword or retype a research-table question. A changed question or " +
-    "answer type invalidates every answer the column holds; the cells " +
-    "empty until the next run.",
+    "Reword or retype one of the organization's questions. A changed " +
+    "question or answer type invalidates every answer the column holds; the " +
+    "cells empty until the next run.",
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
@@ -34,7 +33,7 @@ const updateResearchColumn = createSafeRootHandler(
   config,
   async function* ({
     body,
-    params: { columnId, tableId },
+    params: { columnId },
     recordAuditEvent,
     safeDb,
     session,
@@ -53,28 +52,13 @@ const updateResearchColumn = createSafeRootHandler(
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
-        const table = await findResearchTable({
+        const columns = await readNamedResearchColumns({
           tx,
-          tableId,
+          columnIds: [columnId],
           organizationId: session.activeOrganizationId,
+          lock: true,
         });
-        if (table === null) {
-          return null;
-        }
-        const [current] = await tx
-          .select()
-          .from(caseLawResearchColumns)
-          .where(
-            and(
-              eq(caseLawResearchColumns.id, columnId),
-              eq(caseLawResearchColumns.tableId, tableId),
-              eq(
-                caseLawResearchColumns.organizationId,
-                session.activeOrganizationId,
-              ),
-            ),
-          )
-          .limit(1);
+        const current = columns?.at(0);
         if (current === undefined) {
           return null;
         }
@@ -114,23 +98,18 @@ const updateResearchColumn = createSafeRootHandler(
               ),
             ),
           );
-        await touchResearchTable({
-          tx,
-          tableId,
-          organizationId: session.activeOrganizationId,
-        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_TABLE,
-          resourceId: tableId,
-          metadata: { columnId, columnChanged: true, answersInvalidated: true },
+          resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_COLUMN,
+          resourceId: columnId,
+          metadata: { answersInvalidated: true },
         });
         return row;
       }),
     );
     if (updated === null) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Research column not found" }),
+        new HandlerError({ status: 404, message: "Question column not found" }),
       );
     }
 

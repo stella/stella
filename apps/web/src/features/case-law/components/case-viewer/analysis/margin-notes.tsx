@@ -23,6 +23,12 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
+import type { AnchoredNote } from "./margin-notes.logic";
+import {
+  gutterIsAvailable,
+  placeGutterNotes,
+  UNMEASURED_NOTE_HEIGHT_PX,
+} from "./margin-notes.logic";
 import { getCategoryVar } from "./types";
 
 const capitalize = (s: string): string =>
@@ -73,7 +79,8 @@ type MarginNotesProps = {
 type PositionedItem = MarginItem & {
   top: number;
   /** Where the note's text anchor actually is; `top` may sit lower when
-   * earlier notes pushed it down. The gap is bridged by a leader line. */
+   * earlier notes pushed it down, or when the anchor sits above the region
+   * the notes own. The gap is bridged by a leader line. */
   anchorTop: number;
 };
 
@@ -115,32 +122,37 @@ export const MarginNotes = ({
     }
 
     const wrapperRect = wrapper.getBoundingClientRect();
-    // Notes stack downwards from where their selected text is, so they are laid
-    // out in reading order regardless of the order they were handed in;
-    // otherwise a later item (a comment being written) lands below every
-    // earlier one instead of beside its own paragraph.
-    const anchored: { item: MarginItem; anchorTop: number }[] = [];
+    const region = { width: wrapperRect.width };
+    // The stylesheet collapses the gutter on narrow viewports; measuring it
+    // rather than repeating the breakpoint keeps one owner for the decision.
+    if (!gutterIsAvailable(region)) {
+      // Already empty stays the same array: the scroll listener still runs
+      // while the gutter is collapsed, and a fresh `[]` would re-render on
+      // every frame of it.
+      setPositioned((previous) => (previous.length === 0 ? previous : []));
+      return;
+    }
+
+    const anchored: AnchoredNote<MarginItem>[] = [];
     for (const item of items) {
       const el = resolveItemAnchor(sc, item);
       if (!el) {
         continue;
       }
       anchored.push({
-        item,
         anchorTop: el.getBoundingClientRect().top - wrapperRect.top,
+        height: heights.get(item.id) ?? UNMEASURED_NOTE_HEIGHT_PX,
+        note: item,
       });
     }
-    anchored.sort((a, b) => a.anchorTop - b.anchorTop);
 
     const result: PositionedItem[] = [];
-    let lastBottom = 0;
-    for (const { item, anchorTop } of anchored) {
-      const h = heights.get(item.id) ?? 48;
-      const top = Math.max(anchorTop, lastBottom + 8);
-      result.push({ ...item, anchorTop, top });
-      lastBottom = top + h;
+    for (const { anchorTop, note, top } of placeGutterNotes({
+      notes: anchored,
+      region,
+    })) {
+      result.push({ ...note, anchorTop, top });
     }
-
     setPositioned(result);
   }, [scrollContainerRef, items, heights]);
 
@@ -239,7 +251,10 @@ export const MarginNotes = ({
         // gap while the note is hovered: along the gutter from the
         // paragraph's edge down to the note's own top. Invisible otherwise —
         // a resting line in empty space reads as a stray glyph, not a link.
-        const drift = item.top - item.anchorTop;
+        // Clamped to the region: an anchor beside the layers above it would
+        // otherwise draw the bracket straight across them.
+        const from = Math.max(item.anchorTop, 0);
+        const drift = item.top - from;
         if (drift < 16 || item.kind === "composer") {
           return null;
         }
@@ -254,7 +269,7 @@ export const MarginNotes = ({
           <div
             className="pointer-events-none absolute end-0 opacity-90"
             key={`leader-${item.id}`}
-            style={{ top: item.anchorTop + 8 }}
+            style={{ top: from + 8 }}
           >
             <div
               className="absolute end-0 top-0 h-0.5 w-3 rounded-full"

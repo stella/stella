@@ -30,8 +30,14 @@ const CREATABLE_CONTENT_TYPES = [
 
 export type CreatableContentType = (typeof CREATABLE_CONTENT_TYPES)[number];
 
-export type ChipDefinition = {
-  type: CreatableContentType;
+/**
+ * One chip: the value it stands for, and how it reads. Parameterised because
+ * the same row names matter-property content types and, on the case-law
+ * results table, the kind of answer a question column takes — one chip row so
+ * the two surfaces cannot drift apart.
+ */
+export type ChipDefinition<TType extends string = CreatableContentType> = {
+  type: TType;
   icon: LucideIcon;
   label: string;
 };
@@ -56,10 +62,10 @@ export type ManualChipOption = {
   label: string;
 };
 
-type TypeChipsRowProps = {
-  chipDefs: readonly ChipDefinition[];
-  contentType: CreatableContentType;
-  onContentTypeChange: (next: CreatableContentType) => void;
+type TypeChipsRowProps<TType extends string> = {
+  chipDefs: readonly ChipDefinition<TType>[];
+  contentType: TType;
+  onContentTypeChange: (next: TType) => void;
   showSeparator?: boolean;
   typeChanged: boolean;
   manualChip?: ManualChipOption;
@@ -72,14 +78,14 @@ const CHIP_ACTIVE_CLASS =
 const CHIP_IDLE_CLASS =
   "text-muted-foreground hover:text-foreground hover:bg-muted/64 border-border";
 
-export const TypeChipsRow = ({
+export const TypeChipsRow = <TType extends string>({
   chipDefs,
   contentType,
   onContentTypeChange,
   showSeparator = false,
   typeChanged,
   manualChip,
-}: TypeChipsRowProps) => {
+}: TypeChipsRowProps<TType>) => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-1.5">

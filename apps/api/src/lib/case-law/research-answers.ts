@@ -142,7 +142,6 @@ export const researchAnswersOutputSchema = v.strictObject({
       columnId: v.string(),
       yesNo: v.optional(v.picklist(CASE_LAW_RESEARCH_YES_NO_VALUES)),
       text: v.optional(v.string()),
-      confidence: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
       rationale: v.string(),
       anchorIds: v.array(v.string()),
     }),
@@ -159,7 +158,6 @@ export type ParsedResearchAnswer = {
     | {
         state: "answered";
         answer: CaseLawResearchAnswerValue;
-        confidence: number;
         rationale: string;
         anchorIds: string[];
       }
@@ -222,7 +220,6 @@ export const parseResearchAnswers = ({
       outcome: {
         state: "answered",
         answer: value,
-        confidence: answer.confidence,
         rationale: answer.rationale
           .trim()
           .slice(0, LIMITS.caseLawResearchAnswerRationaleChars),

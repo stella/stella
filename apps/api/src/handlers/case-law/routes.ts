@@ -6,6 +6,7 @@ import deleteDecisionAnnotation from "@/api/handlers/case-law/annotations/delete
 import listDecisionAnnotations from "@/api/handlers/case-law/annotations/list";
 import updateDecisionAnnotation from "@/api/handlers/case-law/annotations/update";
 import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/status";
+import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
 import deleteMatterLink from "@/api/handlers/case-law/matter-links/delete";
 import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
@@ -66,6 +67,10 @@ const caseLawMatterLinksRoute = new Elysia({
   .post("/", createMatterLink.handler, {
     body: createMatterLink.config.body,
     permissions: createMatterLink.config.permissions,
+  })
+  .post("/batch", createMatterLinksBatch.handler, {
+    body: createMatterLinksBatch.config.body,
+    permissions: createMatterLinksBatch.config.permissions,
   })
   .delete("/:linkId", deleteMatterLink.handler, {
     params: deleteMatterLink.config.params,

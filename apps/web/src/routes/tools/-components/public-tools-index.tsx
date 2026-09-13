@@ -11,7 +11,6 @@ import {
   FileSearchIcon,
   GavelIcon,
   PlusIcon,
-  SearchIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   XIcon,
@@ -197,9 +196,6 @@ export function PublicToolsIndex({
           </div>
 
           <InputGroup className="mt-6 min-h-12 max-w-3xl shadow-xs">
-            <InputGroupAddon>
-              <SearchIcon className="text-muted-foreground" />
-            </InputGroupAddon>
             <InputGroupInput
               aria-label={t("publicTools.discovery.searchPlaceholder")}
               className="text-base"

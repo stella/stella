@@ -15,7 +15,11 @@ import { cn } from "@stll/ui/utils";
 
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
-import type { DecisionIdentityLineField } from "@/features/case-law/decision-columns.logic";
+import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
+import type {
+  DecisionContentMode,
+  DecisionIdentityLineField,
+} from "@/features/case-law/decision-columns.logic";
 import {
   hasHighlight,
   highlightSegments,
@@ -74,6 +78,8 @@ export type DecisionRenderContext = {
   identityLineFields: readonly DecisionIdentityLineField[];
   /** The query's words, so the summary cell can show why the row matched. */
   queryTokens: readonly string[];
+  /** Whether a prose cell is clamped to two lines or shown whole. */
+  contentMode: DecisionContentMode;
 };
 
 /**
@@ -246,7 +252,13 @@ export const SummaryCell = ({
 
   if (headnoteAnswers) {
     return (
-      <BidiText as="p" className={SUMMARY_TEXT_CLASS_NAME}>
+      <BidiText
+        as="p"
+        className={cn(
+          SUMMARY_TEXT_CLASS_NAME,
+          decisionClampClassName(context.contentMode),
+        )}
+      >
         {headnoteSegments.map((segment) =>
           segment.match ? (
             <mark className={MARK_CLASS_NAME} key={segment.start}>
@@ -264,7 +276,9 @@ export const SummaryCell = ({
     return EMPTY_VALUE;
   }
 
-  const passage = <HighlightedPassage html={headline} />;
+  const passage = (
+    <HighlightedPassage contentMode={context.contentMode} html={headline} />
+  );
   const anchorId = decision.anchorId ?? null;
   if (anchorId === null) {
     return passage;
@@ -277,8 +291,12 @@ export const SummaryCell = ({
   });
 };
 
-/** Two lines: enough of a headnote to judge it, short enough to scan a page of them. */
-const SUMMARY_TEXT_CLASS_NAME = "text-muted-foreground line-clamp-2 text-xs";
+/**
+ * Enough of a headnote to judge the row; the density control decides how much.
+ * Two lines while the reader is scanning a page of them, all of it once they
+ * ask to read one.
+ */
+const SUMMARY_TEXT_CLASS_NAME = "text-muted-foreground text-xs";
 
 /** The same mark the server's own highlighting draws, so one row reads as one thing. */
 const MARK_CLASS_NAME =
@@ -304,10 +322,17 @@ const headnotePreviewSegments = (
  * A server-escaped, `<mark>`-highlighted snippet. The escaping is the API's:
  * see `escapeAndHighlight()` in the case-law decisions search handler.
  */
-const HighlightedPassage = ({ html }: { html: string }) => (
+const HighlightedPassage = ({
+  contentMode,
+  html,
+}: {
+  contentMode: DecisionContentMode;
+  html: string;
+}) => (
   <p
     className={cn(
       SUMMARY_TEXT_CLASS_NAME,
+      decisionClampClassName(contentMode),
       "[&_mark]:text-foreground [&_mark]:bg-warning/30 dark:[&_mark]:bg-warning/20 [&_mark]:font-medium",
     )}
     dangerouslySetInnerHTML={{
@@ -452,13 +477,25 @@ export const DecisionDateCell = ({ decision }: { decision: Decision }) => {
  * keyword chain or area of law), so a row is recognisable before it is
  * opened. Empty when the source supplies none.
  */
-export const HeadnoteCell = ({ decision }: { decision: Decision }) => {
+export const HeadnoteCell = ({
+  contentMode,
+  decision,
+}: {
+  contentMode: DecisionContentMode;
+  decision: Decision;
+}) => {
   switch (decision.headnote.type) {
     case TEXT_FIELD_TYPE.ABSENT:
       return EMPTY_VALUE;
     case TEXT_FIELD_TYPE.PRESENT: {
       return (
-        <BidiText as="p" className="text-muted-foreground line-clamp-2 text-xs">
+        <BidiText
+          as="p"
+          className={cn(
+            SUMMARY_TEXT_CLASS_NAME,
+            decisionClampClassName(contentMode),
+          )}
+        >
           {decision.headnote.text}
         </BidiText>
       );

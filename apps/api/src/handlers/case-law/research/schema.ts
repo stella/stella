@@ -11,7 +11,6 @@ import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import type {
   caseLawResearchAnswers,
-  caseLawResearchColumns,
   caseLawResearchTables,
 } from "@/api/db/schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
@@ -86,7 +85,6 @@ export const setResearchTableDecisionBodySchema = t.Object(
 );
 
 export const researchColumnParamsSchema = t.Object({
-  tableId: tSafeId("caseLawResearchTable"),
   columnId: tSafeId("caseLawResearchColumn"),
 });
 
@@ -127,11 +125,13 @@ export const updateResearchColumnBodySchema = t.Object(
   { additionalProperties: false },
 );
 
+// The held ceiling, not the create cap: the order must name every column the
+// organization keeps, and a grandfathered set is larger than what may be added.
 export const reorderResearchColumnsBodySchema = t.Object(
   {
     columnIds: t.Array(tSafeId("caseLawResearchColumn"), {
       minItems: 1,
-      maxItems: LIMITS.caseLawResearchColumnsPerTable,
+      maxItems: LIMITS.caseLawResearchColumnsPerOrganizationMax,
     }),
   },
   { additionalProperties: false },
@@ -139,11 +139,11 @@ export const reorderResearchColumnsBodySchema = t.Object(
 
 export const runResearchAnswersBodySchema = t.Object(
   {
-    /** Absent: every column of the table. */
+    /** Absent: every column the organization keeps. */
     columnIds: t.Optional(
       t.Array(tSafeId("caseLawResearchColumn"), {
         minItems: 1,
-        maxItems: LIMITS.caseLawResearchColumnsPerTable,
+        maxItems: LIMITS.caseLawResearchColumnsPerOrganizationMax,
       }),
     ),
     decisionIds: t.Array(tSafeId("caseLawDecision"), {
@@ -166,18 +166,6 @@ export const lookupResearchAnswersBodySchema = t.Object(
   { additionalProperties: false },
 );
 
-export const toResearchColumnResponse = (
-  row: typeof caseLawResearchColumns.$inferSelect,
-) => ({
-  id: row.id,
-  tableId: row.tableId,
-  position: row.position,
-  question: row.question,
-  answerType: row.answerType,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-});
-
 export const toResearchAnswerResponse = (
   row: typeof caseLawResearchAnswers.$inferSelect,
   now: Date,
@@ -186,7 +174,6 @@ export const toResearchAnswerResponse = (
   decisionId: row.decisionId,
   state: row.state,
   answer: row.answer,
-  confidence: row.confidence,
   run: row.run,
   failureReason: row.failureReason,
   updatedAt: row.updatedAt.toISOString(),

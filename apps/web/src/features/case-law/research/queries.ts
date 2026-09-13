@@ -11,6 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { DecisionListFilters } from "@/features/case-law/queries/decisions";
+import { researchRunBatches } from "@/features/case-law/research/question-columns.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -35,24 +36,6 @@ export const researchTableKeys = {
     "detail",
     { activeOrganizationId, tableId },
   ],
-  answers: ({ activeOrganizationId, tableId }: ResearchTableKey) => [
-    ...researchTableKeys.all,
-    "answers",
-    { activeOrganizationId, tableId },
-  ],
-  answersFor: ({
-    activeOrganizationId,
-    decisionIds,
-    tableId,
-  }: ResearchAnswersKey) => [
-    ...researchTableKeys.answers({ activeOrganizationId, tableId }),
-    { decisionIds },
-  ],
-};
-
-type ResearchAnswersKey = ResearchTableKey & {
-  /** The decisions on screen, sorted, so the same set is the same key. */
-  decisionIds: readonly string[];
 };
 
 /** How often the cells are re-read while any of them is still pending. */
@@ -60,9 +43,6 @@ const ANSWERS_POLL_INTERVAL_MS = 2500;
 
 /** Decisions per lookup request; the server caps the same way. */
 const ANSWERS_LOOKUP_CHUNK = 200;
-
-/** Decisions per run request; the server caps the same way. */
-const RUN_CHUNK = 100;
 
 const chunk = <T>(items: readonly T[], size: number): T[][] => {
   const chunks: T[][] = [];
@@ -104,131 +84,6 @@ export const researchTableOptions = (key: ResearchTableKey) =>
 
 const researchTableApi = (tableId: string) =>
   api.case.research({ tableId: toSafeId<"caseLawResearchTable">(tableId) });
-
-/**
- * The cells for the decisions on screen, every column at once. Bounded by what
- * the table shows rather than by everything it ever answered; polls while any
- * of those cells is pending, so a run's progress shows as it lands.
- */
-export const researchAnswersOptions = (key: ResearchAnswersKey) =>
-  queryOptions({
-    queryKey: researchTableKeys.answersFor(key),
-    queryFn: async ({ signal }) => {
-      const pages = await Promise.all(
-        chunk(key.decisionIds, ANSWERS_LOOKUP_CHUNK).map(
-          async (decisionIds) =>
-            await lookupResearchAnswers(key.tableId, decisionIds, signal),
-        ),
-      );
-      return pages.flatMap((page) => page.items);
-    },
-    enabled: key.decisionIds.length > 0,
-    refetchInterval: (query) =>
-      query.state.data?.some((answer) => answer.state === "pending")
-        ? ANSWERS_POLL_INTERVAL_MS
-        : false,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
-
-const lookupResearchAnswers = async (
-  tableId: string,
-  decisionIds: readonly string[],
-  signal: AbortSignal,
-) =>
-  unwrapEden(
-    await researchTableApi(tableId).answers.lookup.post(
-      {
-        decisionIds: decisionIds.map((decisionId) =>
-          toSafeId<"caseLawDecision">(decisionId),
-        ),
-      },
-      { fetch: { signal } },
-    ),
-  );
-
-export type ResearchAnswer = Awaited<
-  ReturnType<typeof lookupResearchAnswers>
->["items"][number];
-
-type ResearchColumnInput = {
-  tableId: string;
-  question: string;
-  answerType: CaseLawResearchAnswerType;
-};
-
-export const createResearchColumn = async ({
-  answerType,
-  question,
-  tableId,
-}: ResearchColumnInput) =>
-  unwrapEden(
-    await researchTableApi(tableId).columns.post({ answerType, question }),
-  );
-
-export const updateResearchColumn = async ({
-  answerType,
-  columnId,
-  question,
-  tableId,
-}: ResearchColumnInput & { columnId: string }) =>
-  unwrapEden(
-    await researchTableApi(tableId)
-      .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
-      .patch({ answerType, question }),
-  );
-
-export const deleteResearchColumn = async ({
-  columnId,
-  tableId,
-}: {
-  columnId: string;
-  tableId: string;
-}) =>
-  unwrapEden(
-    await researchTableApi(tableId)
-      .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
-      .delete(),
-  );
-
-/**
- * What a run covers: every column, filling only the cells that have no
- * answer yet, or one column, answered again from scratch.
- */
-export type RunResearchAnswersScope =
-  | { scope: "table" }
-  | { scope: "column"; columnId: string };
-
-type RunResearchAnswersInput = RunResearchAnswersScope & {
-  tableId: string;
-  decisionIds: readonly string[];
-};
-
-/**
- * Queue answers for every decision given, in server-sized batches submitted
- * one after another so a large table is never silently cut at the first batch.
- */
-export const runResearchAnswers = async (
-  input: RunResearchAnswersInput,
-): Promise<{ queued: number }> => {
-  let queued = 0;
-  for (const batch of chunk(input.decisionIds, RUN_CHUNK)) {
-    const decisionIds = batch.map((decisionId) =>
-      toSafeId<"caseLawDecision">(decisionId),
-    );
-    const body =
-      input.scope === "table"
-        ? { decisionIds }
-        : {
-            decisionIds,
-            columnIds: [toSafeId<"caseLawResearchColumn">(input.columnId)],
-            force: true,
-          };
-    const table = researchTableApi(input.tableId);
-    const response = await table.answers.run.post(body);
-    queued += unwrapEden(response).queued;
-  }
-  return { queued };
-};
 
 export const renameResearchTable = async (tableId: string, name: string) =>
   unwrapEden(await researchTableApi(tableId).patch({ name }));
@@ -329,3 +184,151 @@ export const decisionFiltersToSavedQuery = (
   }),
   ...(filters.sort !== undefined && { sort: filters.sort }),
 });
+
+// -- Organization question columns and their answers --
+//
+// A question column belongs to the organization, not to a table or a search:
+// an answer is keyed by column and decision, so one answer serves every search
+// that surfaces that decision. The table-scoped calls above belong to the
+// retiring research tables and go with them.
+
+type QuestionColumnsKey = { activeOrganizationId: string };
+
+type QuestionAnswersKey = QuestionColumnsKey & {
+  /** The decisions on the page, sorted, so the same page is the same key. */
+  decisionIds: readonly string[];
+};
+
+export const questionColumnKeys = {
+  all: ["case-law", "question-columns"],
+  list: ({ activeOrganizationId }: QuestionColumnsKey) => [
+    ...questionColumnKeys.all,
+    "list",
+    { activeOrganizationId },
+  ],
+  answers: ({ activeOrganizationId }: QuestionColumnsKey) => [
+    ...questionColumnKeys.all,
+    "answers",
+    { activeOrganizationId },
+  ],
+  answersFor: ({ activeOrganizationId, decisionIds }: QuestionAnswersKey) => [
+    ...questionColumnKeys.answers({ activeOrganizationId }),
+    { decisionIds },
+  ],
+};
+
+const listQuestionColumns = async (signal: AbortSignal) =>
+  unwrapEden(await api.case.research.columns.get({ fetch: { signal } }));
+
+/** Every question the organization asks, in the order the server keeps them. */
+export const questionColumnsOptions = (key: QuestionColumnsKey) =>
+  queryOptions({
+    queryKey: questionColumnKeys.list(key),
+    queryFn: async ({ signal }) => (await listQuestionColumns(signal)).items,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+const lookupAnswers = async (
+  decisionIds: readonly string[],
+  signal: AbortSignal,
+) =>
+  unwrapEden(
+    await api.case.research.answers.lookup.post(
+      {
+        decisionIds: decisionIds.map((decisionId) =>
+          toSafeId<"caseLawDecision">(decisionId),
+        ),
+      },
+      { fetch: { signal } },
+    ),
+  );
+
+/**
+ * The cells for the decisions on the page, every column at once. Polls while
+ * any of them is pending, so a run's progress lands cell by cell.
+ */
+export const questionAnswersOptions = (key: QuestionAnswersKey) =>
+  queryOptions({
+    queryKey: questionColumnKeys.answersFor(key),
+    queryFn: async ({ signal }) => {
+      const pages = await Promise.all(
+        chunk(key.decisionIds, ANSWERS_LOOKUP_CHUNK).map(
+          async (decisionIds) => await lookupAnswers(decisionIds, signal),
+        ),
+      );
+      return pages.flatMap((page) => page.items);
+    },
+    enabled: key.decisionIds.length > 0,
+    refetchInterval: (query) =>
+      query.state.data?.some((answer) => answer.state === "pending")
+        ? ANSWERS_POLL_INTERVAL_MS
+        : false,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+type QuestionColumnInput = {
+  question: string;
+  answerType: CaseLawResearchAnswerType;
+};
+
+export const createQuestionColumn = async (input: QuestionColumnInput) =>
+  unwrapEden(await api.case.research.columns.post(input));
+
+export const updateQuestionColumn = async ({
+  columnId,
+  ...input
+}: QuestionColumnInput & { columnId: string }) =>
+  unwrapEden(
+    await api.case.research
+      .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
+      .patch(input),
+  );
+
+export const deleteQuestionColumn = async (columnId: string) =>
+  unwrapEden(
+    await api.case.research
+      .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
+      .delete(),
+  );
+
+type RunAnswersInput = {
+  /** Absent: every question the organization asks. */
+  columnIds?: readonly string[] | undefined;
+  decisionIds: readonly string[];
+  /** Answer again where an answer already stands. */
+  force?: boolean | undefined;
+};
+
+/**
+ * Queue the cells of a run set. One request for a page, whose largest size is
+ * exactly the largest run the endpoint accepts; a saved table that has loaded
+ * several pages is split, because the endpoint refuses a longer list outright.
+ *
+ * The batches name disjoint sets of decisions, so they are independent
+ * requests and go together, the way the answer lookup above splits its own.
+ */
+export const runAnswers = async ({
+  columnIds,
+  decisionIds,
+  force,
+}: RunAnswersInput): Promise<{ queued: number }> => {
+  const results = await Promise.all(
+    researchRunBatches(decisionIds).map(
+      async (batch) =>
+        unwrapEden(
+          await api.case.research.answers.run.post({
+            decisionIds: batch.map((decisionId) =>
+              toSafeId<"caseLawDecision">(decisionId),
+            ),
+            ...(columnIds !== undefined && {
+              columnIds: columnIds.map((columnId) =>
+                toSafeId<"caseLawResearchColumn">(columnId),
+              ),
+            }),
+            ...(force !== undefined && { force }),
+          }),
+        ).queued,
+    ),
+  );
+  return { queued: results.reduce((total, queued) => total + queued, 0) };
+};

@@ -3,15 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-
 import { legislationDocuments } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
-import {
-  UNVERSIONED_SORT_DATE,
-  versionSortKey,
-} from "@/api/handlers/legislation/validity-window";
 import {
   selectWorkKey,
   workKeyConditions,
@@ -23,10 +16,13 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import {
-  parsePersistedCorpusAst,
-  readCorpusAst,
-  readCorpusPayloadOrFallback,
-} from "@/api/lib/legal-search/corpus-storage";
+  UNVERSIONED_SORT_DATE,
+  versionSortKey,
+} from "@/api/lib/legal-search/legislation-validity-window";
+import {
+  readVersionBlocks,
+  versionAstColumns,
+} from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -37,6 +33,8 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+
+const HISTORY_READ_STEP = "provisionHistory.corpusAst";
 
 export const provisionHistoryParamsSchema = t.Object({
   documentId: tSafeId("legislationDocument"),
@@ -64,14 +62,6 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-type VersionRow = {
-  id: SafeId<"legislationDocument">;
-  versionValidFrom: string | null;
-  versionValidTo: string | null;
-  astS3Key: string | null;
-  documentAst: unknown;
-};
-
 const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
@@ -92,35 +82,9 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 };
 
 const versionColumns = {
-  id: legislationDocuments.id,
+  ...versionAstColumns,
   versionValidFrom: legislationDocuments.versionValidFrom,
   versionValidTo: legislationDocuments.versionValidTo,
-  astS3Key: legislationDocuments.astS3Key,
-  documentAst: legislationDocuments.documentAst,
-};
-
-/**
- * One version's parsed blocks, from object storage when the corpus keeps them
- * there and from the Postgres copy otherwise (the same order the document
- * read uses).
- */
-const readVersionBlocks = async (
-  row: VersionRow,
-): Promise<readonly Block[]> => {
-  const { astS3Key } = row;
-
-  const ast =
-    corpusStorageMode !== "off" && astS3Key !== null
-      ? await readCorpusPayloadOrFallback({
-          documentId: row.id,
-          key: astS3Key,
-          step: "provisionHistory.corpusAst",
-          read: async () => await readCorpusAst(astS3Key),
-          fallback: () => parsePersistedCorpusAst(row.documentAst),
-        })
-      : parsePersistedCorpusAst(row.documentAst);
-
-  return ast !== null && "blocks" in ast ? ast.blocks : [];
 };
 
 /**
@@ -189,7 +153,7 @@ export const readProvisionHistoryHandler = async ({
 
   const { origin, versions } = resolved;
   const originText = extractProvisionText(
-    await readVersionBlocks(origin),
+    await readVersionBlocks(origin, HISTORY_READ_STEP),
     anchor,
   );
 
@@ -201,7 +165,10 @@ export const readProvisionHistoryHandler = async ({
     versions.map(async (version) =>
       version.id === origin.id
         ? originText
-        : extractProvisionText(await readVersionBlocks(version), anchor),
+        : extractProvisionText(
+            await readVersionBlocks(version, HISTORY_READ_STEP),
+            anchor,
+          ),
     ),
   );
 

@@ -16,6 +16,7 @@ import {
   provisionHistoryQuerySchema,
   readProvisionHistoryHandler,
 } from "@/api/handlers/legislation/provision-history";
+import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
 import {
   legislationShelfQuerySchema,
   readLegislationShelfHandler,
@@ -178,6 +179,14 @@ export const publicLegislationRoute = new Elysia({
     params: listStatuteVersions.config.params,
     query: listStatuteVersions.config.query,
   })
+  .get(
+    "/statutes/:documentId/provisions/:anchor/preview",
+    readProvisionPreview.handler,
+    {
+      params: readProvisionPreview.config.params,
+      query: readProvisionPreview.config.query,
+    },
+  )
   .get(
     "/statutes/:documentId/provisions/:anchor/history",
     readProvisionHistory.handler,

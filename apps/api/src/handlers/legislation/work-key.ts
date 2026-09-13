@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 
 /**
