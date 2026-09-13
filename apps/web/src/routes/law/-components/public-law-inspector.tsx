@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -7,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
+import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 
 import {
   isGenericInspectorTab,
@@ -62,7 +64,12 @@ export const PublicLawInspector = () => {
         // The pane widens only for a tab; with none the rail stands alone and
         // the inspector draws its own empty state behind the toggle.
         <PublicInspectorDock expanded={!minimized && tabs.length > 0}>
-          <Suspense fallback={null}>
+          {/*
+            The fallback is the rail, never nothing: the toggle is the only way
+            into the pane, and a dock that drops it while the inspector's chunk
+            (or anything it opens) loads leaves the reader with a blank column.
+          */}
+          <Suspense fallback={<SessionRailPlaceholder />}>
             <LazySessionInspector />
           </Suspense>
         </PublicInspectorDock>
@@ -76,6 +83,81 @@ export const PublicLawInspector = () => {
 };
 
 type GenericTab = Extract<InspectorTab, { type: "view" }>;
+
+type PublicLawRailProps = {
+  chatAction: WorkspaceEndRailChatAction;
+  /** The tabs the dock draws, if it has any of its own to draw. */
+  children?: ReactNode;
+  minimized: boolean;
+  onToggle: () => void;
+};
+
+/**
+ * The rail every public law dock stands on: one definition, so the toggle
+ * reads and behaves the same whether the pane behind it is the workspace
+ * inspector, the registry views, or still loading.
+ */
+const PublicLawRail = ({
+  chatAction,
+  children,
+  minimized,
+  onToggle,
+}: PublicLawRailProps) => {
+  const t = useTranslations();
+  const toggleLabel = minimized
+    ? t("inspector.showPane")
+    : t("inspector.hidePane");
+
+  return (
+    <WorkspaceEndRail
+      chatAction={chatAction}
+      className="h-full"
+      label={t("inspector.title")}
+      topAction={
+        <Tooltip
+          content={toggleLabel}
+          render={
+            <InspectorRailIconButton
+              aria-label={toggleLabel}
+              onClick={onToggle}
+            />
+          }
+        >
+          <PanelRightIcon className="size-4" />
+        </Tooltip>
+      }
+    >
+      {children}
+    </WorkspaceEndRail>
+  );
+};
+
+/**
+ * What stands in for the workspace inspector while its chunk loads. Both of
+ * its affordances are the tab store's, which needs none of that chunk, so the
+ * reader can fold the pane or start a chat before it arrives; the tabs are the
+ * inspector's own to draw, and it draws them a frame later.
+ */
+const SessionRailPlaceholder = () => {
+  const t = useTranslations();
+  const minimized = useInspectorTabsStore((state) => state.minimized);
+  const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
+  const openChat = useInspectorTabsStore((state) => state.openChat);
+
+  return (
+    <div className="bg-background flex h-full shadow-lg">
+      <PublicLawRail
+        chatAction={{
+          label: t("chat.newChat"),
+          onActivate: () => openChat(),
+          status: "enabled",
+        }}
+        minimized={minimized}
+        onToggle={() => setMinimized(!minimized)}
+      />
+    </div>
+  );
+};
 
 /**
  * What a reader without a session gets: the registry views themselves, on the
@@ -99,7 +181,7 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
   return (
     <PublicInspectorDock expanded={expanded}>
       <div className="bg-background flex h-full shadow-lg">
-        <WorkspaceEndRail
+        <PublicLawRail
           chatAction={
             requestSignIn === null
               ? {
@@ -113,27 +195,8 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
                   status: "enabled",
                 }
           }
-          className="h-full"
-          label={t("inspector.title")}
-          topAction={
-            <Tooltip
-              content={
-                minimized ? t("inspector.showPane") : t("inspector.hidePane")
-              }
-              render={
-                <InspectorRailIconButton
-                  aria-label={
-                    minimized
-                      ? t("inspector.showPane")
-                      : t("inspector.hidePane")
-                  }
-                  onClick={() => setMinimized(!minimized)}
-                />
-              }
-            >
-              <PanelRightIcon className="size-4" />
-            </Tooltip>
-          }
+          minimized={minimized}
+          onToggle={() => setMinimized(!minimized)}
         >
           <div className="flex flex-col">
             {tabs.map((tab) => (
@@ -148,9 +211,15 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
               />
             ))}
           </div>
-        </WorkspaceEndRail>
+        </PublicLawRail>
+        {/*
+          The view's own chunk may still be loading; the rail above is outside
+          this boundary, so the toggle stays whatever the pane is doing.
+        */}
         {expanded && (
-          <RegisteredView onClose={() => closeTab(active.id)} tab={active} />
+          <Suspense fallback={<div className="bg-background flex-1" />}>
+            <RegisteredView onClose={() => closeTab(active.id)} tab={active} />
+          </Suspense>
         )}
       </div>
     </PublicInspectorDock>
