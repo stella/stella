@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   keepPreviousData,
@@ -32,6 +32,7 @@ import { Temporal } from "@stll/time";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import {
   activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
@@ -105,6 +106,7 @@ import {
   refineTermsOfQuery,
   removeRefineTerm,
 } from "@/features/case-law/search-refine.logic";
+import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -613,6 +615,9 @@ function PublicCaseLawIndex() {
   }
 
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
+  // The results column — toolbar, chips and grid: what a Cmd/Ctrl+F inside
+  // belongs to, so a press with a cell focused opens this table's find.
+  const paneRef = useRef<HTMLDivElement>(null);
 
   const pageSize = decisionPageSize(search.pageSize);
   // Read, not suspended on: the loader primes this only on a cold arrival, and
@@ -743,6 +748,15 @@ function PublicCaseLawIndex() {
       },
     },
     selectedDecisionIds: selectedIds,
+  });
+  // Find-in-table over the page on screen, beside the control that narrows the
+  // search itself. Kept per jurisdiction, the way the arrangement is.
+  const find = useDecisionFind({
+    decisions: ordered,
+    layout,
+    paneRef,
+    questions: questions.surface,
+    surfaceKey: countryParam,
   });
 
   const setPageSize = (next: DecisionPageSize) => {
@@ -895,9 +909,10 @@ function PublicCaseLawIndex() {
           }}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
           <DecisionResultsToolbar
             activeFilterCount={activeCaseLawFilterCount(search)}
+            find={<TableFindBar {...find.bar} />}
             actions={
               <>
                 <QuestionColumnControls controller={questions} />
@@ -962,7 +977,8 @@ function PublicCaseLawIndex() {
           />
 
           <DecisionTable
-            decisions={ordered}
+            decisions={find.decisions}
+            findHighlight={find.highlight}
             isLoading={isLoading}
             isRefreshing={isRefreshing}
             layout={layout}

@@ -196,11 +196,11 @@ describe("a view's find bar", () => {
     openFind(v1);
     setFindTyped(v1, "lease");
     submitFind(v1);
-    setFindScope(v1, { propertyIds: ["p1"], type: "columns" });
+    setFindScope(v1, { columnIds: ["p1"], type: "columns" });
 
     closeFind(v1);
     expect(findOf(v1)).toEqual({
-      scope: { propertyIds: ["p1"], type: "columns" },
+      scope: { columnIds: ["p1"], type: "columns" },
       status: "closed",
       submitted: "lease",
       typed: "lease",
@@ -227,7 +227,7 @@ describe("a view's find bar", () => {
     const { setFindTyped, submitFind, setFindScope } = useTableStore.getState();
     setFindTyped(v1, "lease");
     submitFind(v1);
-    setFindScope(v1, { propertyIds: ["p1"], type: "columns" });
+    setFindScope(v1, { columnIds: ["p1"], type: "columns" });
 
     expect(useTableStore.getState().find).toEqual({});
   });

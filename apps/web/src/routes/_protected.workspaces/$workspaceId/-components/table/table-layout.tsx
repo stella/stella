@@ -17,6 +17,7 @@ import { FindHighlightScope } from "@/components/workspaces/table/find-highlight
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
+import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -37,7 +38,6 @@ import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
-import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
 import { useViewTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
@@ -111,7 +111,12 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   // marks and the empty state describe the rows on screen, not the term whose
   // fetch is still in flight.
   const find = useDeferredValue(
-    useTableFind({ properties, view, workspaceId }),
+    useEntityTableFind({
+      hasNameColumn: showListItems,
+      hiddenProperties: view.layout.hiddenProperties,
+      properties,
+      view: { workspaceId, viewId: view.id },
+    }),
   );
   const fieldIds = useMemo(
     () =>

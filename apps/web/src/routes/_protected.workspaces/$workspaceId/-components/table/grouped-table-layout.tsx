@@ -50,6 +50,7 @@ import type {
   TableColumnDef,
   TableTreeNode,
 } from "@/components/workspaces/table/types";
+import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
 import {
   WorkspaceGridCell,
   WorkspaceGridHead,
@@ -93,8 +94,8 @@ import {
   GROUP_TABLE_PAGE_SIZE,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
+import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
-import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
 import { useViewTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-table-state";
 
@@ -162,7 +163,12 @@ export const GroupedTableLayout = ({
   // Deferred alongside the group keys (each section defers its own), so the
   // marks describe the rows on screen, not a term still being fetched.
   const find = useDeferredValue(
-    useTableFind({ properties, view, workspaceId }),
+    useEntityTableFind({
+      hasNameColumn: includesListItems(view.layout.filters),
+      hiddenProperties: view.layout.hiddenProperties,
+      properties,
+      view: { workspaceId, viewId: view.id },
+    }),
   );
   // One shared scroller for the whole grouped view: every group's table flows
   // inside it (no nested scroll boxes), so the sticky group headers stack

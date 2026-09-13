@@ -1,21 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
-import { ENTITY_FIND_TERM_MIN_LENGTH } from "@stll/api-contract";
-import type { ConditionNode } from "@stll/conditions";
-
+import {
+  entityPickerColumns,
+  resolveEntityFind,
+  toEntityFindColumns,
+} from "@/components/workspaces/table/entity-find.logic";
+import {
+  effectiveFindSelection,
+  resolveTableFind,
+  searchableColumnIds,
+  TABLE_FIND_TERM_MIN_LENGTH,
+  toggleFindColumn,
+} from "@/components/workspaces/table/table-find.logic";
+import type { TableFindSelection } from "@/components/workspaces/table/table-find.logic";
 import type { WorkspaceColumnDescriptor } from "@/components/workspaces/table/table-schema";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty } from "@/lib/types";
-import type { TableFindSelection } from "@/lib/workspaces/table-store";
-import {
-  effectiveFindSelection,
-  resolveFindScope,
-  resolveTableFind,
-  searchableColumnIds,
-  toFindColumns,
-  toggleFindColumn,
-  toPickerFindColumns,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 
 const property = (
   id: string,
@@ -48,16 +48,24 @@ const properties = [
 
 const hiddenProperties = ["hidden"];
 
-const findColumns = () => toFindColumns({ hiddenProperties, properties });
+const findColumns = () => toEntityFindColumns({ hiddenProperties, properties });
 
-// A view admitting tasks renders a name column; one of documents alone does
-// not.
-const LIST_ITEMS_FILTER: ConditionNode = {
-  type: "predicate",
-  operand: { type: "kind" },
-  op: "in",
-  value: ["task"],
-};
+const resolve = ({
+  hasNameColumn = true,
+  selection,
+  term,
+}: {
+  hasNameColumn?: boolean;
+  selection: TableFindSelection;
+  term: string;
+}) =>
+  resolveEntityFind({
+    hasNameColumn,
+    hiddenProperties,
+    properties,
+    selection,
+    term,
+  });
 
 describe("the columns a find offers", () => {
   test("lists property columns in grid order", () => {
@@ -76,15 +84,15 @@ describe("the columns a find offers", () => {
   });
 
   test("keeps types that cannot be searched, marked", () => {
-    const bySupport = Object.fromEntries(
-      findColumns().map((column) => [column.id, column.support]),
+    const bySearchable = Object.fromEntries(
+      findColumns().map((column) => [column.id, column.searchable]),
     );
 
-    expect(bySupport).toEqual({
-      fee: "excluded",
-      signed: "excluded",
-      tags: "searchable",
-      text: "searchable",
+    expect(bySearchable).toEqual({
+      fee: false,
+      signed: false,
+      tags: true,
+      text: true,
     });
   });
 
@@ -117,7 +125,7 @@ describe("the rows the picker shows", () => {
   ];
 
   const pickerColumns = () =>
-    toPickerFindColumns({ findColumns: findColumns(), schemaColumns });
+    entityPickerColumns({ findColumns: findColumns(), schemaColumns });
 
   test("appends the metadata columns after the property ones", () => {
     expect(pickerColumns().map((column) => column.id)).toEqual([
@@ -135,7 +143,14 @@ describe("the rows the picker shows", () => {
     // think to search.
     expect(
       pickerColumns().filter((column) => column.kind === "metadata"),
-    ).toEqual([{ id: "_created-by", kind: "metadata", label: "Author" }]);
+    ).toEqual([
+      {
+        id: "_created-by",
+        kind: "metadata",
+        label: "Author",
+        searchable: false,
+      },
+    ]);
   });
 
   test("leaves a metadata column out of reach of a find", () => {
@@ -151,11 +166,11 @@ describe("the selection the picker shows", () => {
       effectiveFindSelection({
         columns: findColumns(),
         selection: {
-          propertyIds: ["tags", "hidden", "signed"],
+          columnIds: ["tags", "hidden", "signed"],
           type: "columns",
         },
       }),
-    ).toEqual({ propertyIds: ["tags"], type: "columns" });
+    ).toEqual({ columnIds: ["tags"], type: "columns" });
   });
 
   test("losing the last chosen column widens back to unrestricted", () => {
@@ -164,20 +179,17 @@ describe("the selection the picker shows", () => {
     expect(
       effectiveFindSelection({
         columns: findColumns(),
-        selection: { propertyIds: ["hidden"], type: "columns" },
+        selection: { columnIds: ["hidden"], type: "columns" },
       }),
     ).toEqual({ type: "all" });
   });
 });
 
-describe("the scope a find is sent with", () => {
+describe("the scope an entity find is sent with", () => {
   test("unrestricted carries every searchable visible column", () => {
     expect(
-      resolveFindScope({
-        columns: findColumns(),
-        hasNameColumn: true,
-        selection: { type: "all" },
-      }),
+      resolve({ selection: { type: "all" }, term: "lease" }).request.find
+        ?.scope,
     ).toEqual({ propertyIds: ["text", "tags"], type: "all" });
   });
 
@@ -185,76 +197,58 @@ describe("the scope a find is sent with", () => {
     // A documents-only view shows no name cell, so a row matched on its name
     // alone would arrive with nothing to mark.
     expect(
-      resolveFindScope({
-        columns: findColumns(),
+      resolve({
         hasNameColumn: false,
         selection: { type: "all" },
-      }),
+        term: "lease",
+      }).request.find?.scope,
     ).toEqual({ propertyIds: ["text", "tags"], type: "columns" });
   });
 
   test("a narrowed scope carries only what was chosen", () => {
     expect(
-      resolveFindScope({
-        columns: findColumns(),
-        hasNameColumn: true,
-        selection: { propertyIds: ["tags"], type: "columns" },
-      }),
+      resolve({
+        selection: { columnIds: ["tags"], type: "columns" },
+        term: "lease",
+      }).request.find?.scope,
     ).toEqual({ propertyIds: ["tags"], type: "columns" });
   });
 
   test("a narrowed scope that lost every column is sent unrestricted", () => {
     expect(
-      resolveFindScope({
-        columns: findColumns(),
-        hasNameColumn: true,
-        selection: { propertyIds: ["hidden"], type: "columns" },
-      }),
+      resolve({
+        selection: { columnIds: ["hidden"], type: "columns" },
+        term: "lease",
+      }).request.find?.scope,
     ).toEqual({ propertyIds: ["text", "tags"], type: "all" });
   });
 });
 
 describe("resolving a view's find", () => {
-  const layout = (filters: ConditionNode[]) => ({ filters, hiddenProperties });
-
   test("a blank term is no find at all", () => {
-    expect(
-      resolveTableFind({
-        layout: layout([]),
-        properties,
-        selection: { type: "all" },
-        term: "   ",
-      }),
-    ).toMatchObject({
+    expect(resolve({ selection: { type: "all" }, term: "   " })).toMatchObject({
       highlight: null,
       request: {},
       selection: { type: "all" },
+      term: null,
     });
   });
 
   test("a term under the floor is no find either", () => {
-    const resolve = (term: string) =>
-      resolveTableFind({
-        layout: layout([]),
-        properties,
-        selection: { type: "all" },
-        term,
-      });
-    const floor = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH);
+    const floor = "a".repeat(TABLE_FIND_TERM_MIN_LENGTH);
 
     // Trimmed first: padding does not count towards the floor.
-    expect(resolve(` ${floor.slice(1)} `)).toMatchObject({
-      highlight: null,
-      request: {},
-    });
-    expect(resolve(floor).request.find?.term).toBe(floor);
+    expect(
+      resolve({ selection: { type: "all" }, term: ` ${floor.slice(1)} ` }),
+    ).toMatchObject({ highlight: null, request: {} });
+    expect(
+      resolve({ selection: { type: "all" }, term: floor }).request.find?.term,
+    ).toBe(floor);
   });
 
   test("the request, the marks and the picker come from one pass", () => {
-    const resolved = resolveTableFind({
-      layout: layout([LIST_ITEMS_FILTER]),
-      properties,
-      selection: { propertyIds: ["tags", "hidden"], type: "columns" },
+    const resolved = resolve({
+      selection: { columnIds: ["tags", "hidden"], type: "columns" },
       term: " lease ",
     });
 
@@ -265,26 +259,20 @@ describe("resolving a view's find", () => {
       },
     });
     expect(resolved.highlight).toEqual({
+      columnIds: new Set(["tags"]),
       matchesName: false,
-      propertyIds: new Set(["tags"]),
       term: "lease",
     });
     expect(resolved.selection).toEqual({
-      propertyIds: ["tags"],
+      columnIds: ["tags"],
       type: "columns",
     });
   });
 
   test("the name is marked only where a name column renders", () => {
-    const withName = resolveTableFind({
-      layout: layout([LIST_ITEMS_FILTER]),
-      properties,
-      selection: { type: "all" },
-      term: "lease",
-    });
-    const withoutName = resolveTableFind({
-      layout: layout([]),
-      properties,
+    const withName = resolve({ selection: { type: "all" }, term: "lease" });
+    const withoutName = resolve({
+      hasNameColumn: false,
       selection: { type: "all" },
       term: "lease",
     });
@@ -292,6 +280,20 @@ describe("resolving a view's find", () => {
     expect(withName.highlight?.matchesName).toBe(true);
     expect(withoutName.highlight?.matchesName).toBe(false);
     expect(withoutName.request.find?.scope.type).toBe("columns");
+  });
+
+  test("a row kind with no name column never matches one", () => {
+    // Decision rows pass `hasNameColumn: false`: every string such a row shows
+    // belongs to a column of its own.
+    const resolved = resolveTableFind({
+      columns: [{ id: "caseNumber", label: "Case number", searchable: true }],
+      hasNameColumn: false,
+      selection: { type: "all" },
+      term: "lease",
+    });
+
+    expect(resolved.matchesName).toBe(false);
+    expect(resolved.columnIds).toEqual(["caseNumber"]);
   });
 });
 
@@ -304,14 +306,14 @@ describe("clicking a column in the picker", () => {
     // Not "every column except this one": under `all` nothing is ticked, so
     // the click is what the reader means by it.
     expect(toggle("tags", { type: "all" })).toEqual({
-      propertyIds: ["tags"],
+      columnIds: ["tags"],
       type: "columns",
     });
   });
 
   test("a further click adds, in column order", () => {
-    expect(toggle("text", { propertyIds: ["tags"], type: "columns" })).toEqual({
-      propertyIds: ["text", "tags"],
+    expect(toggle("text", { columnIds: ["tags"], type: "columns" })).toEqual({
+      columnIds: ["text", "tags"],
       type: "columns",
     });
   });
@@ -319,15 +321,15 @@ describe("clicking a column in the picker", () => {
   test("ticking every column is still a narrowed scope", () => {
     // `all` also matches the row's name, so "every cell and nothing else" is a
     // scope of its own, and the only one a single-column view can narrow to.
-    expect(toggle("tags", { propertyIds: ["text"], type: "columns" })).toEqual({
-      propertyIds: ["text", "tags"],
+    expect(toggle("tags", { columnIds: ["text"], type: "columns" })).toEqual({
+      columnIds: ["text", "tags"],
       type: "columns",
     });
   });
 
   test("clearing the last tick returns to unrestricted", () => {
     // A search of no columns is one nothing can satisfy.
-    expect(toggle("tags", { propertyIds: ["tags"], type: "columns" })).toEqual({
+    expect(toggle("tags", { columnIds: ["tags"], type: "columns" })).toEqual({
       type: "all",
     });
   });

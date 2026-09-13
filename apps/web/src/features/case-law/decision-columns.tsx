@@ -2,6 +2,7 @@ import type { JSX } from "react";
 
 import { panic } from "better-result";
 
+import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import {
   CaseNumberCell,
   CitedByCell,
@@ -46,13 +47,17 @@ export const renderDecisionCell = ({
     case "summary":
       return <SummaryCell context={context} decision={decision} />;
     case "court":
-      return decision.court;
+      return <HighlightedText columnId="court" text={decision.court} />;
     case "country":
       return <CountryPill country={decision.country} />;
     case "date":
       return <DecisionDateCell decision={decision} />;
     case "type":
-      return decision.decisionType ?? EMPTY_DECISION_VALUE;
+      return decision.decisionType === null ? (
+        EMPTY_DECISION_VALUE
+      ) : (
+        <HighlightedText columnId="type" text={decision.decisionType} />
+      );
     case "headnote":
       return (
         <HeadnoteCell contentMode={context.contentMode} decision={decision} />

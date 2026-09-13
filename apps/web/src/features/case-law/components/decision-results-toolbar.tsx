@@ -52,6 +52,12 @@ type DecisionResultsToolbarProps = {
   actions?: ReactNode;
   /** How many rail filters are on; drawn on the toggle while the rail is folded. */
   activeFilterCount: number;
+  /**
+   * Find-in-table: the shared bar, in the place a matter's toolbar keeps it —
+   * at the head of the reading controls, beside the control that narrows the
+   * search itself.
+   */
+  find: ReactNode;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   /** Drawn in the column chooser too, so a question can be hidden like any column. */
@@ -78,6 +84,7 @@ type DecisionResultsToolbarProps = {
 export const DecisionResultsToolbar = ({
   actions,
   activeFilterCount,
+  find,
   layout,
   onLayoutChange,
   onRailToggle,
@@ -101,7 +108,8 @@ export const DecisionResultsToolbar = ({
         {summary}
       </div>
       <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        <RefineWithinResults onRefine={onRefine} />
+        {find}
+        <NarrowResults onRefine={onRefine} />
         {sort !== null && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
@@ -242,12 +250,12 @@ true satisfies DecisionContentMode extends OfferedContentMode ? true : never;
  * One more word every hit has to carry. It is written into the query itself,
  * because the query is the only text the search reads; the chips below say
  * which words came from here, and take them back out.
+ *
+ * Its neighbour in the toolbar is find-in-table, which looks only at the rows
+ * already on screen. Both say so: the label names what this one does to the
+ * result set, and the tooltip says it in a clause.
  */
-const RefineWithinResults = ({
-  onRefine,
-}: {
-  onRefine: (entry: string) => void;
-}) => {
+const NarrowResults = ({ onRefine }: { onRefine: (entry: string) => void }) => {
   const t = useTranslations();
   const [entry, setEntry] = useState("");
 
@@ -260,13 +268,18 @@ const RefineWithinResults = ({
         setEntry("");
       }}
     >
-      <Input
-        aria-label={t("caseLaw.refineWithinResults")}
-        className="h-7 min-h-0 w-40 text-xs sm:w-52"
-        onChange={(event) => setEntry(event.target.value)}
-        placeholder={t("caseLaw.refineWithinResults")}
-        type="search"
-        value={entry}
+      <Tooltip
+        content={t("caseLaw.narrowResultsHint")}
+        render={
+          <Input
+            aria-label={t("caseLaw.refineWithinResults")}
+            className="h-7 min-h-0 w-40 text-xs sm:w-52"
+            onChange={(event) => setEntry(event.target.value)}
+            placeholder={t("caseLaw.refineWithinResults")}
+            type="search"
+            value={entry}
+          />
+        }
       />
     </form>
   );

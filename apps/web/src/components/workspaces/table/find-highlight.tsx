@@ -15,8 +15,8 @@ import { splitByMatch } from "@/components/workspaces/table/find-highlight.logic
  * highlighting along with the name half of the query.
  */
 export type TableFindHighlight = {
+  columnIds: ReadonlySet<string>;
   matchesName: boolean;
-  propertyIds: ReadonlySet<string>;
   term: string;
 };
 
@@ -25,21 +25,21 @@ const FindHighlightContext = createContext<TableFindHighlight | null>(null);
 /**
  * Mark the runs of `text` the find term produced.
  *
- * With a `propertyId` the text is a cell, marked only when that column is one
- * the server actually searched; without one it is the row's name or a column
+ * With a `columnId` the text is a cell, marked only when that column is one
+ * the find actually reached; without one it is the row's name or a column
  * header, marked only while the scope is unrestricted. A row can be on screen
  * because a different column matched, so marking every occurrence would claim
  * a match that never happened.
  */
 export const HighlightedText = ({
-  propertyId,
+  columnId,
   text,
 }: {
-  propertyId?: string | undefined;
+  columnId?: string | undefined;
   text: string;
 }): ReactNode => {
   const highlight = use(FindHighlightContext);
-  if (!highlight || !isSearched(highlight, propertyId)) {
+  if (!highlight || !isSearched(highlight, columnId)) {
     return text;
   }
 
@@ -72,8 +72,8 @@ export const FindHighlightScope = ({
 
 const isSearched = (
   highlight: TableFindHighlight,
-  propertyId: string | undefined,
+  columnId: string | undefined,
 ): boolean =>
-  propertyId === undefined
+  columnId === undefined
     ? highlight.matchesName
-    : highlight.propertyIds.has(propertyId);
+    : highlight.columnIds.has(columnId);

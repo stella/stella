@@ -10,6 +10,10 @@ import { persist } from "zustand/middleware";
 import type { PersistStorage } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
+import type {
+  TableFindSelection,
+  TableFindState,
+} from "@/components/workspaces/table/table-find.logic";
 import { writeStoredJson } from "@/lib/stored-json";
 import type { WorkspaceEntity } from "@/lib/types";
 import { viewsQueryWorkspaceId } from "@/lib/workspaces/queries/views.logic";
@@ -29,39 +33,6 @@ export type {
   TableContentMode,
   TableViewRef,
 } from "@/lib/workspaces/table-store.logic";
-
-/**
- * How wide a find reaches. `all` is the state the bar opens in: no
- * column chosen, so the row's name counts too. Narrowing to columns is a
- * different question, not a shorter list, which is why it is a branch rather
- * than an empty array.
- */
-export type TableFindSelection =
-  | { type: "all" }
-  | { propertyIds: string[]; type: "columns" };
-
-/**
- * A view's find. Absent from the record means there is no find at all; the
- * bar's own visibility is `status` alone, because a find outlives its editor.
- * Closing the popover leaves the rows narrowed and the toolbar chip explaining
- * why, and `clearFind` is the only thing that ends it.
- *
- * `typed` is what the input holds this keystroke. `submitted` is what the row
- * readers have actually been asked for, and so what the rows on screen and
- * their marks reflect. They are separate because the bar debounces: keeping
- * one field would either lag the input by a quarter second or refetch on every
- * keystroke, and "search now" (Enter) needs something to submit early into.
- *
- * Only `submitted` may reach a query key or a highlight. Highlighting against
- * `typed` would mark runs the server has not answered for, so the marks would
- * run ahead of the rows they are meant to explain.
- */
-type TableFind = {
-  scope: TableFindSelection;
-  status: "closed" | "open";
-  submitted: string;
-  typed: string;
-};
 
 const getViewRecord = <T>(
   record: TableViewRecord<T>,
@@ -141,7 +112,7 @@ type TableViewRecords = PersistedTableState & {
    * front of you, not a saved view setting, so it does not survive a reload
    * the way column widths do.
    */
-  find: TableViewRecord<TableFind>;
+  find: TableViewRecord<TableFindState>;
 };
 
 type TableStore = TableViewRecords & {

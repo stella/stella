@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
+import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
@@ -24,6 +25,7 @@ import {
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
 import { UNSEARCHED_SCOPE } from "@/features/case-law/research/question-columns.logic";
+import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -69,6 +71,8 @@ export const MatterCaseLawPanel = ({
   const openDecision = useOpenDecisionInspector();
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
+  // The panel's own heading row and grid: what a Cmd/Ctrl+F inside belongs to.
+  const paneRef = useRef<HTMLElement>(null);
 
   // Keyed by the row's own id rather than the link's, so the lookup a cell
   // makes is the key the row was built with and the two cannot drift apart.
@@ -88,6 +92,14 @@ export const MatterCaseLawPanel = ({
     // suggestion is grounded in the linked decisions alone.
     search: UNSEARCHED_SCOPE,
     selectedDecisionIds: selectedIds,
+  });
+  // The same find as the public results, over the decisions this matter kept.
+  const find = useDecisionFind({
+    decisions,
+    layout,
+    paneRef,
+    questions: questions.surface,
+    surfaceKey: MATTER_SCOPE,
   });
 
   const unlink = useMutation({
@@ -138,11 +150,12 @@ export const MatterCaseLawPanel = ({
   ];
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3" ref={paneRef}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium">{t("common.caseLaw")}</h2>
         {hasLinks && (
           <div className="flex items-center gap-1">
+            <TableFindBar {...find.bar} />
             <QuestionColumnControls controller={questions} />
           </div>
         )}
@@ -162,8 +175,9 @@ export const MatterCaseLawPanel = ({
         </p>
       ) : (
         <DecisionTable
-          decisions={decisions}
+          decisions={find.decisions}
           extraColumns={extraColumns}
+          findHighlight={find.highlight}
           isLoading={isLoading}
           layout={layout}
           onLayoutChange={setLayout}

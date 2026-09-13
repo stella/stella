@@ -19,6 +19,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
+import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
@@ -42,6 +44,8 @@ type DecisionTableProps = {
   decisions: readonly Decision[];
   /** Columns this screen adds to the shared model; none on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
+  /** The find's marks, or null when no term is applied. */
+  findHighlight?: TableFindHighlight | null | undefined;
   isLoading: boolean;
   /**
    * The rows on screen answer the previous search while a new one is in
@@ -61,6 +65,7 @@ type DecisionTableProps = {
 export const DecisionTable = ({
   decisions,
   extraColumns,
+  findHighlight = null,
   isLoading,
   isRefreshing = false,
   layout,
@@ -167,11 +172,13 @@ export const DecisionTable = ({
         )}
       >
         <DecisionRenderScope value={renderScope}>
-          <WorkspaceTable
-            contentMode={layout.contentMode}
-            rowHost={rowHost}
-            table={table}
-          />
+          <FindHighlightScope highlight={findHighlight}>
+            <WorkspaceTable
+              contentMode={layout.contentMode}
+              rowHost={rowHost}
+              table={table}
+            />
+          </FindHighlightScope>
         </DecisionRenderScope>
         {rows.length === 0 && (
           <div className="text-muted-foreground flex flex-col gap-2 p-4 text-sm">
