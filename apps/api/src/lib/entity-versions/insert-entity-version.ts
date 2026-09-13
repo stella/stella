@@ -5,7 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { entityVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { recordEntityStamp } from "@/api/lib/document-counter";
+import { recordEntityStamps } from "@/api/lib/document-counter";
 import { generateVerificationCode } from "@/api/lib/document-reference";
 
 /**
@@ -58,37 +58,32 @@ const withVerificationCode = (values: EntityVersionValues) => ({
  * re-inserts only the missing rows with fresh codes. The code the caller never
  * saw is the code that is stored; readers take it from the row.
  */
+type StampOrigin = "issued" | "copied";
+
 type InsertEntityVersionsOptions = {
-  reserveStamps?: boolean;
+  tx: Transaction;
+  values: EntityVersionValues[];
+  stampOrigin: StampOrigin;
 };
 
-export const insertEntityVersions = async (
-  tx: Transaction,
-  values: EntityVersionValues[],
-  { reserveStamps = true }: InsertEntityVersionsOptions = {},
-): Promise<void> => {
+export const insertEntityVersions = async ({
+  tx,
+  values,
+  stampOrigin,
+}: InsertEntityVersionsOptions): Promise<void> => {
   if (values.length === 0) {
     return;
   }
 
-  if (reserveStamps) {
-    const stamps = new Map<string, (typeof values)[number]>();
-    for (const value of values) {
-      if (value.stamp !== null && value.stamp !== undefined) {
-        stamps.set(value.stamp, value);
-      }
-    }
-    for (const value of stamps.values()) {
-      if (value.stamp === null || value.stamp === undefined) {
-        continue;
-      }
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction connection must serialize ledger row locks
-      await recordEntityStamp({
-        tx,
-        workspaceId: value.workspaceId,
-        stamp: value.stamp,
-      });
-    }
+  if (stampOrigin === "issued") {
+    await recordEntityStamps({
+      tx,
+      stamps: values.flatMap((value) =>
+        value.stamp === null || value.stamp === undefined
+          ? []
+          : [{ workspaceId: value.workspaceId, stamp: value.stamp }],
+      ),
+    });
   }
 
   await insertPendingEntityVersions(tx, values.map(withVerificationCode), 1);
@@ -132,7 +127,8 @@ const insertPendingEntityVersions = async (
 export const insertEntityVersion = async (
   tx: Transaction,
   values: EntityVersionValues,
-): Promise<void> => await insertEntityVersions(tx, [values]);
+): Promise<void> =>
+  await insertEntityVersions({ tx, values: [values], stampOrigin: "issued" });
 
 /** One source version and the row that replaces it. */
 type VerificationCodeTransfer = {
