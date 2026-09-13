@@ -1,5 +1,6 @@
 import { createElement } from "react";
 
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useTranslations } from "use-intl";
 
 import type { FolioUIComponents } from "@stll/folio-react";
@@ -11,7 +12,6 @@ import {
   Dialog,
   DialogBackdrop,
   DialogClose,
-  DialogPopup,
   DialogPortal,
   DialogTitle,
 } from "@stll/ui/dialog";
@@ -53,6 +53,14 @@ const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
 };
 
 /**
+ * Folio owns the dialog portal and backdrop around this part. The app's
+ * composite DialogPopup cannot be injected here because it creates another
+ * portal, backdrop, and z-index stacking context around the popup.
+ */
+const FolioDialogPopup = (props: DialogPrimitive.Popup.Props) =>
+  createElement(DialogPrimitive.Popup, props);
+
+/**
  * Chrome UI primitives injected into folio's `DocxEditor` so the editor keeps
  * the app's design system while folio itself stays UI-agnostic. The object
  * grows as folio decouples more primitives; render sites pass it once and need
@@ -74,7 +82,7 @@ export const folioUIComponents: Partial<FolioUIComponents> = {
     Root: Dialog,
     Portal: DialogPortal,
     Backdrop: DialogBackdrop,
-    Popup: DialogPopup,
+    Popup: FolioDialogPopup,
     Title: DialogTitle,
     Close: DialogClose,
   },
