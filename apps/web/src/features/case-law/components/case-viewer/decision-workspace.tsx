@@ -63,6 +63,7 @@ type DecisionWorkspaceDecision = {
   fulltext: string | null;
   language: string;
   metadata: Record<string, unknown>;
+  sourceAttributionUrl: string | null;
   textFields: ReadDecisionTextFields;
 };
 

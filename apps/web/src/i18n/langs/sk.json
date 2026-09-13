@@ -652,7 +652,8 @@
       "subsection": "ods. {value}"
     },
     "reader": {
-      "headMatter": "Úvodná časť"
+      "headMatter": "Úvodná časť",
+      "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
     "refineWithinResults": "Zúžiť výsledky",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Sudca spravodajca",
       "legalArea": "Oblasť práva",
       "legalSentence": "Právna veta",
-      "nalusDisclaimer": "Zdroj: NALUS, Ústavný súd Českej republiky. Bezplatne. Táto elektronická verzia nie je autentická; autentické sú iba originály so štátnym znakom a podpisom oprávnenej osoby.",
       "popularName": "Populárny názov",
       "provisionsCited": "Dotknuté ustanovenia",
       "sourceFields": {

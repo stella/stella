@@ -47,6 +47,7 @@ const renderDecision = (abstract: string): string =>
           documentAst: ast,
           fulltext: null,
           language: "cs",
+          sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
           textFields: {
             abstract: { text: abstract, type: TEXT_FIELD_TYPE.PRESENT },
             headnote: {
@@ -81,5 +82,27 @@ describe("editorial legal text annotations", () => {
     }
     expect(markup).toContain('href="http://example.test/source"');
     expect(markup).not.toContain(messages.caseLaw.viewer.provisionsCited);
+  });
+});
+
+describe("source attribution", () => {
+  const markup = renderDecision("Analytická právní věta");
+
+  test("closes the decision with a link to the publisher", () => {
+    expect(markup).toContain('href="https://rozhodnuti.nsoud.cz/detail/1"');
+    expect(markup).toContain("rozhodnuti.nsoud.cz");
+    expect(markup.indexOf("Court text.")).toBeLessThan(
+      markup.indexOf("rozhodnuti.nsoud.cz"),
+    );
+  });
+
+  // Annotations anchor on `data-anchor` and quotations drop
+  // `data-reader-chrome`, so the line can be neither highlighted, cited, nor
+  // pulled into a passage copied from the end of the decision.
+  test("stays out of the annotatable text", () => {
+    const footer = markup.slice(markup.indexOf("<footer"));
+
+    expect(footer).toContain("data-reader-chrome");
+    expect(footer).not.toContain("data-anchor");
   });
 });

@@ -656,6 +656,7 @@ type Messages = {
     };
     "reader": {
       "headMatter": "Head matter";
+      "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
     };
     "refineWithinResults": "Narrow results";
     "research": {
@@ -695,7 +696,6 @@ type Messages = {
       "judgeRapporteur": "Judge rapporteur";
       "legalArea": "Legal area";
       "legalSentence": "Legal sentence";
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
       "provisionsCited": "Provisions cited";
       "sourceFields": {

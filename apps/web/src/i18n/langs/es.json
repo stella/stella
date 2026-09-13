@@ -652,7 +652,8 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
-      "headMatter": "Encabezamiento"
+      "headMatter": "Encabezamiento",
+      "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
     "refineWithinResults": "Acotar resultados",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Juez ponente",
       "legalArea": "Área jurídica",
       "legalSentence": "Fundamento jurídico",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nombre popular",
       "provisionsCited": "Disposiciones citadas",
       "sourceFields": {

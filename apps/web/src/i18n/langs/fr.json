@@ -652,7 +652,8 @@
       "subsection": "al. {value}"
     },
     "reader": {
-      "headMatter": "En-tête"
+      "headMatter": "En-tête",
+      "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
     "refineWithinResults": "Affiner les résultats",
     "research": {
@@ -692,7 +693,6 @@
       "judgeRapporteur": "Juge rapporteur",
       "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
-      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nom courant",
       "provisionsCited": "Dispositions citées",
       "sourceFields": {

@@ -25,6 +25,7 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
+import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
@@ -379,6 +380,13 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       documentAst,
       sections: decision.sections,
       sourceUrl: decision.sourceUrl,
+      // Where this decision's data is freely available, resolved once here:
+      // the reader ends every decision with it, and some courts require the
+      // line, so no surface may be left to work it out for itself.
+      sourceAttributionUrl: decisionSourceAttributionUrl({
+        adapterKey: source.adapterKey,
+        sourceUrl: decision.sourceUrl,
+      }),
       documentUrl: decision.documentUrl,
       metadata,
       textFields,
