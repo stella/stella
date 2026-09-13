@@ -1,3 +1,5 @@
+import { captureError } from "@/api/lib/analytics/capture";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -38,16 +40,29 @@ const browsableUrl = (value: string | null): string | null => {
  * the text against. A row without one falls back to the publisher's landing
  * page, which the adapter manifest makes every source declare.
  *
- * Null only for a decision ingested under an adapter key no longer in the
- * registry: source rows are history and a retired adapter leaves its rows
- * behind, so a key with no manifest is reported as no attribution rather
- * than attributed to whichever publisher happens to be first in the map.
+ * Null means the row names an adapter key the manifest map does not hold,
+ * which is a defect rather than a state to render around: a decision loses
+ * its attribution line, and some courts make that line a condition of reuse.
+ * The manifest is what a retired adapter leaves behind (see `publicHomeUrl`),
+ * so the miss is reported rather than swallowed, and never answered with
+ * whichever publisher happens to be first in the map.
  */
 export const decisionSourceAttributionUrl = ({
   adapterKey,
   sourceUrl,
-}: DecisionSourceAttributionInput): string | null =>
-  browsableUrl(sourceUrl) ??
-  (isAdapterKey(adapterKey)
-    ? ADAPTER_MANIFESTS[adapterKey].publicHomeUrl
-    : null);
+}: DecisionSourceAttributionInput): string | null => {
+  const ownPage = browsableUrl(sourceUrl);
+  if (ownPage !== null) {
+    return ownPage;
+  }
+  if (isAdapterKey(adapterKey)) {
+    return ADAPTER_MANIFESTS[adapterKey].publicHomeUrl;
+  }
+  captureError(
+    new DatabaseError({
+      message: "Case-law source names an unregistered adapter key",
+    }),
+    { source: "case-law-source-attribution", adapterKey },
+  );
+  return null;
+};

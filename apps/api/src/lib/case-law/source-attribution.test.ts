@@ -1,8 +1,23 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+
+const isHttpsUrl = (value: string): boolean =>
+  URL.canParse(value) && new URL(value).protocol === "https:";
+
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
 
 describe("decisionSourceAttributionUrl", () => {
   test("attributes a decision to its own source page", () => {
@@ -37,35 +52,43 @@ describe("decisionSourceAttributionUrl", () => {
     ).toBe(ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].publicHomeUrl);
   });
 
-  // A source row outlives the adapter that wrote it, so the miss has to be
-  // reported rather than answered with some other publisher's page.
-  test("has no attribution for a retired adapter key", () => {
-    expect(
-      decisionSourceAttributionUrl({
-        adapterKey: "cz-retired",
-        sourceUrl: null,
-      }),
-    ).toBeNull();
-  });
-
-  test("every registered source resolves to a browsable attribution", () => {
-    const unattributed = Object.values(ADAPTER_KEYS).filter(
-      (adapterKey) =>
-        decisionSourceAttributionUrl({ adapterKey, sourceUrl: null }) === null,
-    );
+  test("every registered source resolves to an https landing page", () => {
+    const unattributed = Object.values(ADAPTER_KEYS).filter((adapterKey) => {
+      const url = decisionSourceAttributionUrl({ adapterKey, sourceUrl: null });
+      return url === null || !isHttpsUrl(url);
+    });
 
     expect(unattributed).toEqual([]);
   });
 
-  test("every declared landing page is an https URL", () => {
-    const notHttps = Object.values(ADAPTER_MANIFESTS)
-      .filter(
-        ({ publicHomeUrl }) =>
-          !URL.canParse(publicHomeUrl) ||
-          new URL(publicHomeUrl).protocol !== "https:",
-      )
-      .map(({ key }) => key);
+  // A key the manifest map does not hold costs the decision its attribution
+  // line, so the miss is reported rather than rendered around: the row and the
+  // registry have drifted, and nothing downstream can tell from a null.
+  test("reports a source that names an unregistered adapter key", () => {
+    expect(
+      decisionSourceAttributionUrl({
+        adapterKey: "cz-unregistered",
+        sourceUrl: null,
+      }),
+    ).toBeNull();
 
-    expect(notHttps).toEqual([]);
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "DatabaseError",
+        source: "case-law-source-attribution",
+        adapterKey: "cz-unregistered",
+      },
+    ]);
+  });
+
+  test("reports nothing when the manifest answers", () => {
+    decisionSourceAttributionUrl({
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      sourceUrl: null,
+    });
+
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

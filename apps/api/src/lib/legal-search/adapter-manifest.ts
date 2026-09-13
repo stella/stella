@@ -62,6 +62,13 @@ type AdapterManifest<TKey extends AdapterKey> = {
    * The publisher's own landing page for the corpus, not a decision's
    * permalink: a decision carrying its own source page is attributed to that
    * page, and this answers for the rows that do not.
+   *
+   * Retiring an adapter means deleting its ingestion code and keeping its
+   * manifest entry. `case_law_sources` rows outlive the adapter that wrote
+   * them, so an entry dropped from this map un-attributes every decision
+   * ingested under that key. Keeping the entry is what lets attribution stay
+   * a single lookup against one total map instead of a second map of
+   * historical keys.
    */
   readonly publicHomeUrl: string;
   readonly ecliCourtCodes: Readonly<Record<string, string>>;
