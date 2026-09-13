@@ -14,10 +14,6 @@ import type {
 
 type MatterLinkRow = typeof caseLawMatterLinks.$inferSelect;
 
-/** Every column of the link is the caller's own: nothing is withheld. */
-const UNPROJECTED_MATTER_LINK_COLUMNS =
-  [] as const satisfies readonly (keyof MatterLinkRow)[];
-
 /** One link as a client reads it. */
 const toMatterLinkResponse = (row: MatterLinkRow) => ({
   id: row.id,
@@ -30,17 +26,16 @@ const toMatterLinkResponse = (row: MatterLinkRow) => ({
 
 type MatterLinkResponse = ReturnType<typeof toMatterLinkResponse>;
 
-// Totality guard, bidirectional: a column added to the table must be projected
-// or excused above, and the projection cannot carry a field no column backs.
+// Totality guard, bidirectional: every column of the link is the caller's own,
+// so a column added to the table must be projected, and the projection cannot
+// carry a field no column backs.
 type MissingProjectedMatterLinkColumn = UnprojectedColumns<
   MatterLinkRow,
-  MatterLinkResponse,
-  (typeof UNPROJECTED_MATTER_LINK_COLUMNS)[number]
+  MatterLinkResponse
 >;
 type UnexpectedProjectedMatterLinkColumn = UnbackedProjectionKeys<
   MatterLinkRow,
-  MatterLinkResponse,
-  (typeof UNPROJECTED_MATTER_LINK_COLUMNS)[number]
+  MatterLinkResponse
 >;
 
 true satisfies MissingProjectedMatterLinkColumn extends never ? true : never;
