@@ -168,3 +168,37 @@ export const allocateEntityStamp = async (
   const stamps = await allocateEntityStamps({ tx, workspaceId, count: 1 });
   return stamps.at(0) ?? panic("Entity stamp allocation returned no stamp");
 };
+
+/** Keep the reference high-water mark current when a later version is stamped. */
+export const recordEntityStamp = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+  docSequence: number,
+): Promise<void> => {
+  const workspace = await tx.query.workspaces.findFirst({
+    where: { id: { eq: workspaceId } },
+    columns: { reference: true, organizationId: true },
+  });
+  if (!workspace?.reference) {
+    return;
+  }
+
+  await tx
+    .insert(documentReferenceCounters)
+    .values({
+      id: createSafeId<"documentReferenceCounter">(),
+      organizationId: workspace.organizationId,
+      reference: workspace.reference,
+      workspaceId,
+      lastValue: docSequence,
+    })
+    .onConflictDoUpdate({
+      target: [
+        documentReferenceCounters.organizationId,
+        documentReferenceCounters.reference,
+      ],
+      set: {
+        lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, ${docSequence})`,
+      },
+    });
+};

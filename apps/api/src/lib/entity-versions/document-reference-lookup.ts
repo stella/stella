@@ -14,7 +14,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, isNull, max } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { DocumentReferenceMatch } from "@stll/api-contract";
@@ -43,6 +43,7 @@ const MATCH_COLUMNS = {
   stamp: entityVersions.stamp,
   versionNumber: entityVersions.versionNumber,
   currentStamp: currentVersions.stamp,
+  currentVersionNumber: currentVersions.versionNumber,
 };
 
 /** What {@link completeMatch} reads off a matched row, structurally, so the
@@ -55,31 +56,14 @@ type MatchedVersion = {
   stamp: string | null;
   versionNumber: number;
   currentStamp: string | null;
+  currentVersionNumber: number | null;
 };
 
-/**
- * Second and last query of a lookup: the document's current version number.
- * One aggregate over the entity's versions, never a read per version.
- */
-const completeMatch = async (
-  tx: Transaction,
-  row: MatchedVersion,
-): Promise<DocumentReferenceMatch | null> => {
+const completeMatch = (row: MatchedVersion): DocumentReferenceMatch | null => {
   // A version carrying no reference cannot be what a reference resolved to.
   if (!row.stamp) {
     return null;
   }
-
-  const rows = await tx
-    .select({ current: max(entityVersions.versionNumber) })
-    .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.entityId, row.entityId),
-        eq(entityVersions.workspaceId, row.workspaceId),
-        isNull(entityVersions.deletedAt),
-      ),
-    );
 
   return {
     entityId: row.entityId,
@@ -89,11 +73,9 @@ const completeMatch = async (
     stamp: row.stamp,
     versionNumber: row.versionNumber,
     currentStamp: row.currentStamp,
-    // The matched row is itself non-deleted and belongs to this aggregate's
-    // set, so a maximum exists.
     currentVersionNumber:
-      rows.at(0)?.current ??
-      panic("Document reference matched a version its entity has none of"),
+      row.currentVersionNumber ??
+      panic("Document reference matched an entity whose current version is missing"),
   };
 };
 
@@ -133,5 +115,5 @@ export const lookupByVerificationCode = async ({
     .limit(1);
 
   const row = rows.at(0);
-  return row ? await completeMatch(tx, row) : null;
+  return row ? completeMatch(row) : null;
 };
