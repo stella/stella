@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.11
+
+### Patch Changes
+
+- [#3163](https://github.com/stella/stella/pull/3163) [`50a59c1`](https://github.com/stella/stella/commit/50a59c17a22fb018fd93c7608dd3055181d1da2c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe verification-code-only document reference resolution and include document references in entity reads.
+
 ## 1.2.10
 
 ### Patch Changes
