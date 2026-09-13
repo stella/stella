@@ -14,11 +14,13 @@ const version = ({
   versionNumber,
   fieldId,
   mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  sourceKind = null,
 }: {
   id: string;
   versionNumber: number;
   fieldId: string;
   mimeType?: string;
+  sourceKind?: EntityVersion["sourceKind"];
 }): EntityVersion => ({
   id,
   versionNumber,
@@ -27,6 +29,7 @@ const version = ({
   description: null,
   diffWordsAdded: null,
   diffWordsRemoved: null,
+  sourceKind,
   createdAt: "2026-09-09T12:00:00.000Z",
   author: null,
   file: {
@@ -84,6 +87,43 @@ describe("compare version selection", () => {
       }),
     ).toEqual({ baseVersionId: "v1", targetVersionId: "v2" });
   });
+
+  test.each(["field-3", "field-4", "missing-field"])(
+    "excludes derived automatic sources for active field %s while allowing explicit redlines",
+    (currentFieldId) => {
+      const versions = [
+        version({
+          id: "redline-v4",
+          versionNumber: 4,
+          fieldId: "field-4",
+          sourceKind: "comparison",
+        }),
+        version({ id: "v3", versionNumber: 3, fieldId: "field-3" }),
+        version({
+          id: "redline-v2",
+          versionNumber: 2,
+          fieldId: "field-2",
+          sourceKind: "comparison",
+        }),
+        version({ id: "v1", versionNumber: 1, fieldId: "field-1" }),
+      ];
+
+      expect(
+        resolveCompareVersionSelection({
+          currentFieldId,
+          requested: null,
+          versions,
+        }),
+      ).toEqual({ baseVersionId: "v1", targetVersionId: "v3" });
+      expect(
+        resolveCompareVersionSelection({
+          currentFieldId,
+          requested: { baseVersionId: "v1", targetVersionId: "redline-v2" },
+          versions,
+        }),
+      ).toEqual({ baseVersionId: "v1", targetVersionId: "redline-v2" });
+    },
+  );
 
   test("requires two distinct DOCX versions", () => {
     expect(

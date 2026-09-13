@@ -10,6 +10,17 @@ type EntityVersionsKey = {
   filePropertyId?: string | undefined;
 };
 
+type EntityVersionsResponse = Awaited<
+  ReturnType<
+    ReturnType<ReturnType<typeof api.entities>["entity"]>["versions"]["get"]
+  >
+>;
+
+type EntityVersionsResponseData = NonNullable<EntityVersionsResponse["data"]>;
+
+type EntityVersionSourceKind =
+  EntityVersionsResponseData["versions"][number]["sourceKind"];
+
 export type EntityVersion = {
   id: string;
   versionNumber: number;
@@ -18,6 +29,7 @@ export type EntityVersion = {
   description: string | null;
   diffWordsAdded: number | null;
   diffWordsRemoved: number | null;
+  sourceKind: EntityVersionSourceKind;
   createdAt: string;
   author: { id: string; name: string; image: string | null } | null;
   file: {

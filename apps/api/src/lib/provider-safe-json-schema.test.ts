@@ -698,6 +698,28 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(droppedKeywords).toEqual(["anyOf[0]"]);
   });
 
+  test.each([1, 2])(
+    "reports source indices after filtering null branches (%i refinements)",
+    (count) => {
+      const { droppedKeywords } = projectToProviderSafeJsonSchema(
+        {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["allowed"] } },
+          anyOf: [
+            { type: "null" },
+            ...Array.from({ length: count }, () => ({
+              properties: { kind: { enum: ["excluded"] } },
+            })),
+          ],
+        },
+        { nullUnionStrategy: "openapi" },
+      );
+      expect(droppedKeywords).toEqual(
+        Array.from({ length: count }, (_, index) => `anyOf[${index + 1}]`),
+      );
+    },
+  );
+
   test("merges parent object constraints before collapsing nullable OpenAPI anyOf branches", () => {
     const { schema, droppedKeywords } = projectToProviderSafeJsonSchema(
       {

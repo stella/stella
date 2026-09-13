@@ -75,21 +75,24 @@ export const resolveCompareVersionSelection = ({
   requested,
   versions,
 }: ResolveCompareVersionSelectionOptions): CompareVersionSelection | null => {
-  const comparable = versions
-    .filter((version) => version.file?.mimeType === DOCX_MIME)
-    .toSorted((left, right) => left.versionNumber - right.versionNumber);
-  if (comparable.length < 2) {
-    return null;
-  }
-
-  const comparableIds = new Set(comparable.map(({ id }) => id));
+  const docxVersions = versions.filter(
+    (version) => version.file?.mimeType === DOCX_MIME,
+  );
+  const explicitIds = new Set(docxVersions.map(({ id }) => id));
   if (
     requested !== null &&
     requested.baseVersionId !== requested.targetVersionId &&
-    comparableIds.has(requested.baseVersionId) &&
-    comparableIds.has(requested.targetVersionId)
+    explicitIds.has(requested.baseVersionId) &&
+    explicitIds.has(requested.targetVersionId)
   ) {
     return requested;
+  }
+
+  const comparable = docxVersions
+    .filter((version) => version.sourceKind !== "comparison")
+    .toSorted((left, right) => left.versionNumber - right.versionNumber);
+  if (comparable.length < 2) {
+    return null;
   }
 
   const activeIndex = comparable.findIndex(

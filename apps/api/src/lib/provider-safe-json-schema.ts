@@ -692,12 +692,14 @@ const normalizeAnyOfKeyword = ({
     };
   }
 
-  const nonNullBranches = anyOf.filter((entry) => {
-    if (!isJsonObject(entry)) {
-      return true;
-    }
-    return !isNullOnlySchema(entry);
-  });
+  const nonNullBranches = anyOf
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => {
+      if (!isJsonObject(entry)) {
+        return true;
+      }
+      return !isNullOnlySchema(entry);
+    });
 
   if (nonNullBranches.length !== anyOf.length && !("nullable" in next)) {
     next["nullable"] = true;
@@ -710,13 +712,18 @@ const normalizeAnyOfKeyword = ({
 
   const branchSiblings = { ...next };
   delete branchSiblings["anyOf"];
-  const branch = nonNullBranches.at(0);
-  if (nonNullBranches.length === 1 && isJsonObject(branch)) {
+  const firstBranch = nonNullBranches.at(0);
+  const branch = firstBranch?.entry;
+  if (
+    nonNullBranches.length === 1 &&
+    firstBranch !== undefined &&
+    isJsonObject(branch)
+  ) {
     const mergedBranch = withBranchSiblings({
       branch,
       siblings: branchSiblings,
       context,
-      path: `${joinPath(path, "anyOf")}[0]`,
+      path: `${joinPath(path, "anyOf")}[${firstBranch.index}]`,
     });
     return normalizeSchemaDialect({
       node: isJsonObject(mergedBranch) ? mergedBranch : branch,
@@ -728,7 +735,7 @@ const normalizeAnyOfKeyword = ({
 
   if (Object.keys(branchSiblings).length > 0) {
     return {
-      anyOf: nonNullBranches.map((entry, index) =>
+      anyOf: nonNullBranches.map(({ entry, index }) =>
         withBranchSiblings({
           branch: entry,
           siblings: branchSiblings,
@@ -739,7 +746,7 @@ const normalizeAnyOfKeyword = ({
     };
   }
 
-  next["anyOf"] = nonNullBranches;
+  next["anyOf"] = nonNullBranches.map(({ entry }) => entry);
   return next;
 };
 

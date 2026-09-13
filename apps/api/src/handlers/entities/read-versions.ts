@@ -96,6 +96,7 @@ const readVersionsHandler = async function* ({
           description: entityVersions.description,
           diffWordsAdded: entityVersions.diffWordsAdded,
           diffWordsRemoved: entityVersions.diffWordsRemoved,
+          source: entityVersions.source,
           createdBy: entityVersions.createdBy,
           createdAt: entityVersions.createdAt,
         })
@@ -302,6 +303,7 @@ const readVersionsHandler = async function* ({
       description: v.description,
       diffWordsAdded: v.diffWordsAdded,
       diffWordsRemoved: v.diffWordsRemoved,
+      sourceKind: v.source?.kind ?? null,
       createdAt: v.createdAt.toISOString(),
       author: authorUser
         ? { id: authorUser.id, name: authorUser.name, image: authorUser.image }
