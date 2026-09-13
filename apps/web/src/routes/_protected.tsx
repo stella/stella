@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -48,6 +48,7 @@ import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
+import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
@@ -96,7 +97,10 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { workspaceOptions } from "@/lib/workspaces/queries";
+import {
+  workspaceOptions,
+  workspacesNavigationOptions,
+} from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 
@@ -107,6 +111,11 @@ const LazyInspectorPanel = lazy(
     })),
 );
 
+type MatterChromeStyle = CSSProperties & {
+  "--matter-background-tint": string;
+  "--matter-sidebar-tint": string;
+};
+
 // Visual shell for the inspector rail while the panel chunk is
 // loading. Mirrors the real rail's chrome (top toggle, bottom
 // "new chat") so the rail doesn't render as an empty strip during
@@ -116,14 +125,14 @@ const InspectorRailFallback = () => {
   const t = useTranslations();
 
   return (
-    <div className="bg-background flex h-full border-s shadow-lg">
+    <div className="flex h-full border-s bg-(--matter-background-tint) shadow-lg">
       <WorkspaceEndRail
         chatAction={{
           label: t("chat.newChat"),
           reason: t("common.loading"),
           status: "unavailable",
         }}
-        className="h-full"
+        className="h-full bg-(--matter-sidebar-tint)"
         label={t("inspector.title")}
         topAction={
           <span
@@ -330,7 +339,31 @@ function ProtectedComponent() {
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const workspaceChatMatch = useMatch({
+    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
+    shouldThrow: false,
+  });
+  const activeWorkspaceId = resolveSidebarWorkspaceId({
+    chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
+    workspaceId: workspaceMatch?.params.workspaceId,
+  });
+  const { data: workspaceNavigation } = useChromeQuery(
+    workspacesNavigationOptions(inspectorBroadcastOrganizationId),
+  );
+  const activeWorkspace = workspaceNavigation?.workspaces.find(
+    ({ id }) => id === activeWorkspaceId,
+  );
+  const activeMatterColor = activeWorkspaceId
+    ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
+    : null;
+  const matterChromeStyle: MatterChromeStyle = {
+    "--matter-background-tint": activeMatterColor
+      ? `color-mix(in srgb, ${activeMatterColor} 2%, var(--background))`
+      : "var(--background)",
+    "--matter-sidebar-tint": activeMatterColor
+      ? `color-mix(in srgb, ${activeMatterColor} 2%, var(--sidebar))`
+      : "var(--sidebar)",
+  };
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );
@@ -386,30 +419,36 @@ function ProtectedComponent() {
       key={`${inspectorBroadcastOrganizationId}:${inspectorBroadcastUserId}`}
       user={analyticsUser}
     >
-      <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
-        <SidebarToggleHotkey />
-        <ChatMentionProviders>
-          <AIAvailabilityProvider>
-            <ChatEditorProvider>
-              <GlobalChatMentionRegistration />
-              <DragAndDropLiveRegion />
-              <WorkspaceFrame
-                composition="host-responsive"
-                endDock={<WorkspaceInspectorSidePanel />}
-                navigation={{ content: <AppSidebar />, mode: "responsive" }}
-                topBar={() => <ProtectedContent />}
-              >
-                <Outlet />
-              </WorkspaceFrame>
-              <CreateMatterDialog />
-              <AttachedTemplateUploadDialog />
-              <DocumentReferenceUploadDialog />
-              <ShortcutEchoHud />
-              <KeyboardShortcutsDialog />
-            </ChatEditorProvider>
-          </AIAvailabilityProvider>
-        </ChatMentionProviders>
-      </SidebarProvider>
+      <div className="contents" style={matterChromeStyle}>
+        <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
+          <SidebarToggleHotkey />
+          <ChatMentionProviders>
+            <AIAvailabilityProvider>
+              <ChatEditorProvider>
+                <GlobalChatMentionRegistration />
+                <DragAndDropLiveRegion />
+                <WorkspaceFrame
+                  composition="host-responsive"
+                  endDock={
+                    <WorkspaceInspectorSidePanel
+                      matterChromeStyle={matterChromeStyle}
+                    />
+                  }
+                  navigation={{ content: <AppSidebar />, mode: "responsive" }}
+                  topBar={() => <ProtectedContent />}
+                >
+                  <Outlet />
+                </WorkspaceFrame>
+                <CreateMatterDialog />
+                <AttachedTemplateUploadDialog />
+                <DocumentReferenceUploadDialog />
+                <ShortcutEchoHud />
+                <KeyboardShortcutsDialog />
+              </ChatEditorProvider>
+            </AIAvailabilityProvider>
+          </ChatMentionProviders>
+        </SidebarProvider>
+      </div>
     </AuthenticatedUserProvider>
   );
 }
@@ -504,9 +543,6 @@ function ProtectedContent() {
     ...workspaceOptions(workspaceId ?? ""),
     enabled: !!workspaceId,
   });
-  const matterColor = workspaceId
-    ? resolveMatterColor(workspaceId, workspace?.color ?? null)
-    : null;
   const chromeActions = (
     <div
       className="ms-auto flex shrink-0 items-center gap-0.5"
@@ -564,19 +600,7 @@ function ProtectedContent() {
     <>
       <ApiVersionMismatchBanner />
       <SelfhostUpdateBanner />
-      <header
-        className={cn(
-          "flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4",
-          !matterColor && "bg-sidebar",
-        )}
-        style={
-          matterColor
-            ? {
-                backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
-              }
-            : undefined
-        }
-      >
+      <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b bg-(--matter-sidebar-tint) px-4">
         {isMobile && (
           <>
             <SidebarTrigger className="-ms-1" />
@@ -684,7 +708,11 @@ const getInspectorTabWorkspaceId = (
  * viewport height and the topbar doesn't need to leave room for
  * inspector chrome.
  */
-function WorkspaceInspectorSidePanel() {
+function WorkspaceInspectorSidePanel({
+  matterChromeStyle,
+}: {
+  matterChromeStyle: MatterChromeStyle;
+}) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
   const projectMatch = useMatch({
@@ -783,6 +811,7 @@ function WorkspaceInspectorSidePanel() {
           className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
           showCloseButton={false}
           side="inline-end"
+          style={matterChromeStyle}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{t("inspector.title")}</SheetTitle>

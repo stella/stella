@@ -1,5 +1,8 @@
 import { cn } from "@stll/ui/utils";
 
+const PANE_MASK_IMAGE =
+  "linear-gradient(to right, transparent, black clamp(0.75rem, calc((100% - 35rem) / 2), 12.5rem), black calc(100% - clamp(0.75rem, calc((100% - 35rem) / 2), 12.5rem)), transparent), linear-gradient(to bottom, transparent, black 3rem)";
+
 /**
  * The one glass veil rendered behind a chat composer stack (input +
  * status row) wherever the composer floats over live content — the
@@ -17,7 +20,11 @@ import { cn } from "@stll/ui/utils";
  * veil absolutely fills that parent at `-z-10`, behind its siblings.
  * `rounded` is the compact tray treatment used by the main chat. `pane`
  * feathers across the full host width for document overlays, avoiding a
- * visible rounded blur band while keeping text beneath the controls quiet.
+ * visible rounded blur band while keeping text beneath the controls quiet. Its
+ * mask feathers across its top and sides; it stays covered through the host's
+ * bottom edge so the page does not return to sharp focus below the controls.
+ * The tint is deliberately light when backdrop-filter works: blur quiets page
+ * text without painting a conspicuous patch over an otherwise empty canvas.
  */
 export const ComposerVeil = ({
   className,
@@ -36,9 +43,17 @@ export const ComposerVeil = ({
         variant === "rounded" &&
           "bg-background/75 supports-[backdrop-filter]:bg-background/40 inset-0 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
         variant === "pane" &&
-          "via-background/65 to-background/95 supports-[backdrop-filter]:via-background/50 supports-[backdrop-filter]:to-background/85 inset-x-0 -top-5 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)] backdrop-blur-sm",
+          "via-background/45 to-background/75 supports-[backdrop-filter]:via-background/15 supports-[backdrop-filter]:to-background/30 inset-x-0 -top-12 -bottom-3.5 bg-linear-to-b from-transparent [mask-composite:intersect] backdrop-blur-md backdrop-saturate-50",
         className,
       )}
+      style={
+        variant === "pane"
+          ? {
+              maskImage: PANE_MASK_IMAGE,
+              WebkitMaskImage: PANE_MASK_IMAGE,
+            }
+          : undefined
+      }
     />
   );
 };

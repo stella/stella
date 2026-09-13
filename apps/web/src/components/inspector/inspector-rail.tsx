@@ -139,7 +139,7 @@ export const InspectorRail = ({
         onActivate: openContextChat,
         status: "enabled",
       }}
-      className="h-full"
+      className="h-full bg-(--matter-sidebar-tint)"
       label={t("inspector.title")}
       overlay={
         <>
