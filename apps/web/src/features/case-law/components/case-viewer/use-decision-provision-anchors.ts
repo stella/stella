@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
 
+import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+
 import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
@@ -34,13 +36,6 @@ const workKeyOf = ({
 }: Pick<WorkKey, "eli" | "jurisdiction">): string => `${jurisdiction}/${eli}`;
 
 /**
- * The heading a cited subdivision belongs to: `par_90-odst_5` is filed, cited
- * and versioned under `par_90`. The subdivision stays the highlight target.
- */
-export const provisionHeadingAnchor = (anchor: string): string =>
-  anchor.split("-")[0] ?? anchor;
-
-/**
  * The provisions a decision applies, each resolved to the consolidation it
  * was made against, ready to be located in the text. A reference whose work
  * the corpus does not hold, or whose cited version is not yet known, is left
@@ -54,7 +49,16 @@ export const useDecisionProvisionAnchors = (
   const { data } = useInfiniteQuery(
     decisionProvisionsInfiniteOptions(decisionId),
   );
-  const rows = optionalArray(data?.pages).flatMap((page) => page.items);
+  const pages = optionalArray(data?.pages);
+  const rows = pages.flatMap((page) => page.items);
+  // The list carries the wording of the provisions it could read, keyed by
+  // the server that resolved them; a row it could not read hovers to its own
+  // preview request.
+  const previewByKey = new Map(
+    pages.flatMap((page) =>
+      page.previews.map((preview) => [preview.key, preview] as const),
+    ),
+  );
 
   const works: WorkKey[] = [];
   const seen = new Set<string>();
@@ -139,6 +143,10 @@ export const useDecisionProvisionAnchors = (
       continue;
     }
     const versionCount = versionsByWork.get(key)?.length ?? 1;
+    // The card quotes the consolidation the link opens, so a preview read
+    // from another one is dropped rather than shown beside the wrong link.
+    const preview =
+      row.previewKey === null ? undefined : previewByKey.get(row.previewKey);
     anchors.push({
       id: `${row.anchor}-${String(row.spanStart)}`,
       reference: row,
@@ -146,6 +154,7 @@ export const useDecisionProvisionAnchors = (
       spanStart: row.spanStart,
       target: {
         document: { country: document.country, id: document.id },
+        preview: preview?.documentId === document.id ? preview : null,
         payload: {
           anchorId: provisionHeadingAnchor(row.anchor),
           highlightAnchorId: row.anchor,

@@ -2,7 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { not } from "drizzle-orm";
 
 import { legislationSources } from "@/api/db/schema";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import {

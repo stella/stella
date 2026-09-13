@@ -21,10 +21,7 @@ import {
   listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
-import {
-  createSafePublicSubjectHandler,
-  createSafePublicSubjectFollowUpHandler,
-} from "@/api/handlers/case-law/decisions/public-subject";
+import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import {
   searchDecisionsBodySchema,
@@ -52,9 +49,14 @@ import {
   listDecisionProvisionsHandler,
   listDecisionProvisionsQuerySchema,
 } from "@/api/handlers/case-law/provisions/list-for-decision";
+import {
+  attachDecisionProvisionPreviews,
+  readDecisionDate,
+} from "@/api/handlers/case-law/provisions/previews-for-decision";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
 const listDecisions = createSafePublicHandler(
   {
@@ -175,8 +177,13 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   followUp: async (read) => await hydrateDeferredDocument(read, false),
 });
 
-/** Provision references of a decision. */
-const listDecisionProvisions = createSafePublicSubjectHandler({
+/**
+ * Provision references of a decision, each with the wording it points at.
+ *
+ * The previews are attached after the gated transaction closes: they are read
+ * from object storage, which must not hold one open.
+ */
+const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   config: {
     mcp: { type: "internal", reason: "public_indexing" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
@@ -184,8 +191,18 @@ const listDecisionProvisions = createSafePublicSubjectHandler({
   },
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
-  read: async (subject, { query }) =>
-    await listDecisionProvisionsHandler({ subject, query }),
+  read: async (subject, { query }) => ({
+    page: await listDecisionProvisionsHandler({ subject, query }),
+    decisionDate: await readDecisionDate(subject),
+  }),
+  followUp: async ({ page, decisionDate }) =>
+    "items" in page
+      ? await attachDecisionProvisionPreviews({
+          page,
+          decisionDate,
+          legislationDb: legislationPublicReadDb,
+        })
+      : page,
 });
 
 /** Decisions citing a provision. */
