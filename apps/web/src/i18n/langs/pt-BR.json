@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Escolha os países onde você atua. A stella adaptará as respostas da IA e apresentará as fontes disponíveis: jurisprudência, legislação e registros comerciais.",
     "jurisdictionSuggested": "Sugerido",
     "jurisdictionTitle": "Escolha suas jurisdições de atuação",
-    "mcpCardDescription": "Adicione a stella como conector e seu assistente poderá pesquisar seus casos e trabalhar com seus documentos. A configuração leva cerca de um minuto.",
+    "mcpCardDescription": "Adicione a stella como plugin e seu assistente poderá pesquisar seus casos e trabalhar com seus documentos. A configuração leva cerca de um minuto.",
     "mcpCardTitle": "Use a stella no Claude ou no ChatGPT",
     "orgNameLabel": "Nome da equipe",
     "orgNamePlaceholder": "Silva & Associados",

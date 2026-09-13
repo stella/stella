@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Válassza ki, mely országokban praktizál. A stella ehhez igazítja az AI-válaszokat, és felkínálja az elérhető forrásokat: ítélkezési gyakorlatot, jogszabályokat és cégnyilvántartásokat.",
     "jurisdictionSuggested": "Javasolt",
     "jurisdictionTitle": "Válassza ki gyakorlati joghatóságait",
-    "mcpCardDescription": "Adja hozzá a stellát csatolóként, és az asszisztense kereshet az ügyei között, és dolgozhat a dokumentumaival. A beállítás körülbelül egy percet vesz igénybe.",
+    "mcpCardDescription": "Adja hozzá a stellát bővítményként, és az asszisztense kereshet az ügyei között, és dolgozhat a dokumentumaival. A beállítás körülbelül egy percet vesz igénybe.",
     "mcpCardTitle": "Használja a stellát a Claude-ból vagy a ChatGPT-ből",
     "orgNameLabel": "Csapat neve",
     "orgNamePlaceholder": "Nagy és Társai",

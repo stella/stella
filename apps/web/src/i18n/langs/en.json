@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Choose where you practice. stella will tailor AI responses and surface available sources: case law, legislation, and company registries.",
     "jurisdictionSuggested": "Suggested",
     "jurisdictionTitle": "Pick your practice jurisdictions",
-    "mcpCardDescription": "Add stella as a connector and your assistant can search your matters and work with your documents. Setup takes about a minute.",
+    "mcpCardDescription": "Add stella as a plugin and your assistant can search your matters and work with your documents. Setup takes about a minute.",
     "mcpCardTitle": "Use stella from Claude or ChatGPT",
     "orgNameLabel": "Team name",
     "orgNamePlaceholder": "Smith & Associates",

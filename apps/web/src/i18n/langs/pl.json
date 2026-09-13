@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Wybierz kraje, w których prowadzisz praktykę. stella dostosuje odpowiedzi AI i pokaże dostępne źródła: orzecznictwo, akty prawne i rejestry przedsiębiorców.",
     "jurisdictionSuggested": "Sugerowane",
     "jurisdictionTitle": "Wybierz jurysdykcje swojej praktyki",
-    "mcpCardDescription": "Dodaj stellę jako konektor, a Twój asystent będzie mógł przeszukiwać Twoje sprawy i pracować z Twoimi dokumentami. Konfiguracja zajmuje około minuty.",
+    "mcpCardDescription": "Dodaj stellę jako wtyczkę, a Twój asystent będzie mógł przeszukiwać Twoje sprawy i pracować z Twoimi dokumentami. Konfiguracja zajmuje około minuty.",
     "mcpCardTitle": "Korzystaj ze stelli w Claude lub ChatGPT",
     "orgNameLabel": "Nazwa zespołu",
     "orgNamePlaceholder": "Kowalski i Wspólnicy",

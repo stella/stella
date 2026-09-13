@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Vyberte krajiny, v ktorých vykonávate prax. stella podľa nich prispôsobí odpovede AI a ponúkne dostupné zdroje: judikatúru, predpisy a obchodné registre.",
     "jurisdictionSuggested": "Odporúčané",
     "jurisdictionTitle": "Vyberte jurisdikcie svojej praxe",
-    "mcpCardDescription": "Pridajte stellu ako konektor a váš asistent bude môcť vyhľadávať vo vašich spisoch a pracovať s vašimi dokumentmi. Nastavenie zaberie približne minútu.",
+    "mcpCardDescription": "Pridajte stellu ako plugin a váš asistent bude môcť vyhľadávať vo vašich spisoch a pracovať s vašimi dokumentmi. Nastavenie zaberie približne minútu.",
     "mcpCardTitle": "Používajte stellu z Claude alebo ChatGPT",
     "orgNameLabel": "Názov tímu",
     "orgNamePlaceholder": "Novák a partneri",

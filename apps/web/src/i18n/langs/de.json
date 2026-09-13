@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Wählen Sie die Länder, in denen Sie tätig sind. stella passt KI-Antworten daran an und zeigt verfügbare Quellen: Rechtsprechung, Rechtsvorschriften und Handelsregister.",
     "jurisdictionSuggested": "Vorgeschlagen",
     "jurisdictionTitle": "Wählen Sie Ihre Praxisjurisdiktionen",
-    "mcpCardDescription": "Fügen Sie stella als Connector hinzu, und Ihr Assistent kann Ihre Akten durchsuchen und mit Ihren Dokumenten arbeiten. Die Einrichtung dauert etwa eine Minute.",
+    "mcpCardDescription": "Fügen Sie stella als Plugin hinzu, und Ihr Assistent kann Ihre Akten durchsuchen und mit Ihren Dokumenten arbeiten. Die Einrichtung dauert etwa eine Minute.",
     "mcpCardTitle": "Nutzen Sie stella aus Claude oder ChatGPT",
     "orgNameLabel": "Teamname",
     "orgNamePlaceholder": "Müller & Partner",

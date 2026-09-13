@@ -3359,7 +3359,7 @@
     "jurisdictionSubtitle": "Elija los países en los que ejerce. stella adaptará las respuestas de la IA y mostrará las fuentes disponibles: jurisprudencia, legislación y registros mercantiles.",
     "jurisdictionSuggested": "Sugerido",
     "jurisdictionTitle": "Elige tus jurisdicciones de práctica",
-    "mcpCardDescription": "Añada stella como conector y su asistente podrá buscar en sus asuntos y trabajar con sus documentos. La configuración lleva alrededor de un minuto.",
+    "mcpCardDescription": "Añada stella como plugin y su asistente podrá buscar en sus asuntos y trabajar con sus documentos. La configuración lleva alrededor de un minuto.",
     "mcpCardTitle": "Use stella desde Claude o ChatGPT",
     "orgNameLabel": "Nombre del equipo",
     "orgNamePlaceholder": "García y Asociados",
