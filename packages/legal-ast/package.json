@@ -47,6 +47,10 @@
       "types": "./src/decision-identifier.ts",
       "import": "./src/decision-identifier.ts"
     },
+    "./provision-preview": {
+      "types": "./src/provision-preview.ts",
+      "import": "./src/provision-preview.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"

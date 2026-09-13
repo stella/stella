@@ -1,5 +1,5 @@
-import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { provisionBlocks } from "@stll/legal-ast/provision-preview";
 
 /**
  * The text one provision owns: its heading, plus every block that follows
@@ -14,28 +14,13 @@ export const extractProvisionText = (
   blocks: readonly Block[],
   anchorId: string,
 ): string | null => {
-  const heading = resolveDocumentHeadingAnchor(blocks, anchorId);
-  if (heading === null) {
+  const owned = provisionBlocks(blocks, anchorId);
+  if (owned === null) {
     return null;
   }
 
-  const start = blocks.indexOf(heading);
-  if (start === -1) {
-    return null;
-  }
-
-  const parts: string[] = [heading.plainText];
-
-  for (const block of blocks.slice(start + 1)) {
-    if (block.type === "heading" && block.level <= heading.level) {
-      break;
-    }
-
-    parts.push(block.plainText);
-  }
-
-  return parts
-    .map((part) => part.trim())
+  return owned
+    .map((block) => block.plainText.trim())
     .filter((part) => part.length > 0)
     .join("\n");
 };

@@ -411,6 +411,13 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /**
+   * Consolidations one page of provision previews may read. Each is a whole
+   * stored AST, so this bounds the memory and the storage round trips one
+   * decision's citations can ask for; references past it are returned with
+   * no preview and read their own when a reader opens them.
+   */
+  caseLawProvisionPreviewVersionsMax: 8,
   caseLawAnnotationsPageSizeDefault: 100,
   caseLawAnnotationsPageSizeMax: 100,
   caseLawSearchPageSizeDefault: 20,

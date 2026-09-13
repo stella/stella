@@ -6,14 +6,14 @@ import type { Static } from "elysia";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { isCurrentVersionOfWork } from "@/api/handlers/legislation/list";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
-import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
-import {
-  inForceToday,
-  versionSortKey,
-} from "@/api/handlers/legislation/validity-window";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
+import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  inForceToday,
+  versionSortKey,
+} from "@/api/lib/legal-search/legislation-validity-window";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
