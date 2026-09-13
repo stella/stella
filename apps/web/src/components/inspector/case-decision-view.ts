@@ -80,21 +80,30 @@ export const isCaseDecisionGenericTab = (
 /**
  * Navigate the main view to the decision an inspector tab holds. The
  * payload's route identity was resolved at tab creation, so this is a
- * pure param mapping onto the two public decision routes.
+ * pure param mapping onto the two public decision routes. A tab opened at a
+ * passage keeps it: the full page lands on the same block.
  */
 export const navigateToCaseDecisionMain = async (
   navigate: ReturnType<typeof useNavigate>,
-  { country, court, language, slug }: CaseDecisionViewPayload,
-): Promise<void> =>
-  language === undefined
-    ? await navigate({
-        to: "/law/$country/cases/$court/$slug",
-        params: { country, court, slug },
-      })
-    : await navigate({
-        to: "/law/$country/cases/$court/$language/$slug",
-        params: { country, court, language, slug },
-      });
+  { anchorId, country, court, language, slug }: CaseDecisionViewPayload,
+): Promise<void> => {
+  const hash = anchorId === undefined ? {} : { hash: anchorId };
+
+  if (language === undefined) {
+    await navigate({
+      to: "/law/$country/cases/$court/$slug",
+      params: { country, court, slug },
+      ...hash,
+    });
+    return;
+  }
+
+  await navigate({
+    to: "/law/$country/cases/$court/$language/$slug",
+    params: { country, court, language, slug },
+    ...hash,
+  });
+};
 
 export type CaseDecisionViewTab = {
   type: typeof CASE_DECISION_VIEW;

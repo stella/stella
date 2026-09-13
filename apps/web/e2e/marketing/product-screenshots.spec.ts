@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
@@ -216,18 +216,7 @@ test("capture landing product screenshots", async ({
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
-      // Each product capture owns its Inspector state. Full navigation below
-      // creates a fresh store, while removing the persisted Inspector state
-      // prevents an editor or minimized layout from leaking into an unrelated
-      // route or the next theme pass.
-      await page.evaluate((storagePrefixes) => {
-        for (let index = localStorage.length - 1; index >= 0; index--) {
-          const key = localStorage.key(index);
-          if (key && storagePrefixes.some((prefix) => key.startsWith(prefix))) {
-            localStorage.removeItem(key);
-          }
-        }
-      }, INSPECTOR_STORAGE_PREFIXES);
+      await clearPersistedInspectorState(page);
       // Anchor the inspector's relative timestamp before navigating, so the
       // caption paints with the pinned clock on its first render. Captures
       // without an anchor run on real time; the clock is only restored when a
@@ -274,13 +263,31 @@ test("capture landing product screenshots", async ({
       if ("prepare" in capture && capture.prepare === "open-decision") {
         // Film a specific national decision deterministically, rather than
         // whatever happens to be newest in the seeded corpus.
-        await page
+        const decisionLink = page
           .locator('main a[href*="/cases/"]')
-          .filter({ hasText: capture.decisionText })
-          .click();
+          .filter({ hasText: capture.decisionText });
+        await expect(decisionLink).toBeVisible({
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
+        // A plain click on a results row opens that decision in the inspector
+        // beside the results; this capture wants the full reader page, which
+        // is what the row's own href names. Take the href rather than a
+        // rebuilt path, so the shot follows the product's link even if the
+        // decision route's shape changes.
+        const decisionPath = await decisionLink.getAttribute("href");
+        if (decisionPath === null) {
+          throw new Error(
+            `${capture.name}: the "${capture.decisionText}" result row has no href to the decision`,
+          );
+        }
+        // The reader carries its own inspector, which must start from the same
+        // clean state as every other capture rather than inheriting whatever
+        // the results page persisted.
+        await clearPersistedInspectorState(page);
+        await page.goto(decisionPath, { waitUntil: "commit" });
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
-        // The case detail is its own code-split chunk, so this click is the
-        // first load of another route: same cold-compile allowance as the
+        // The case detail is its own code-split chunk, so this is the first
+        // load of another route: same cold-compile allowance as the
         // navigations above, not the config's 15s default.
         await expect(page.locator("article").first()).toBeVisible({
           timeout: COLD_COMPILE_TIMEOUT,
@@ -387,6 +394,21 @@ test("capture landing product screenshots", async ({
     }
   }
 });
+
+// Each product capture owns its Inspector state. Full navigation creates a
+// fresh store, while removing the persisted Inspector state prevents an editor
+// or minimized layout from leaking into an unrelated route or the next theme
+// pass.
+const clearPersistedInspectorState = async (page: Page) => {
+  await page.evaluate((storagePrefixes) => {
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index);
+      if (key && storagePrefixes.some((prefix) => key.startsWith(prefix))) {
+        localStorage.removeItem(key);
+      }
+    }
+  }, INSPECTOR_STORAGE_PREFIXES);
+};
 
 // Resolves the seeded agent thread's route by title via the chat threads
 // API (same lookup as record-product-story.ts's

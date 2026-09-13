@@ -64,6 +64,7 @@ import {
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
+import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 
@@ -75,6 +76,10 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   onLoadMore?: () => void;
+  // Placeholder rows for a body with nothing in it yet, drawn in this table's
+  // own grid. 0 leaves the body empty, which is what a table with no rows to
+  // wait for shows.
+  skeletonRowCount?: number;
   // Grouped sections opt out: the group header already sticks to the page,
   // and a second sticky header in each section's own scroll box collides
   // with it on scroll.
@@ -106,6 +111,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   hasNextPage = false,
   isFetchingNextPage = false,
   onLoadMore,
+  skeletonRowCount = 0,
   stickyColumnHeader = true,
   fillHeight = true,
   outerScrollRef,
@@ -347,6 +353,9 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     row: rowModel.rows.at(virtualRow.index),
     index: virtualRow.index,
   }));
+  // Rows that are on their way stand in the grid; rows that are on screen stay
+  // on screen, so a refetch over a drawn result set never draws both.
+  const showsSkeletonRows = skeletonRowCount > 0 && rowModel.rows.length === 0;
   const orderedColumns = getOrderedColumns({
     startColumns: table.getStartLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
@@ -543,6 +552,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         ref={tableWrapperRef}
       >
         <div
+          aria-busy={showsSkeletonRows || undefined}
           aria-colcount={visibleColumnCount}
           aria-rowcount={rowModel.rows.length}
           className={cn(
@@ -633,6 +643,13 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                 </Fragment>
               );
             })}
+            {showsSkeletonRows && (
+              <WorkspaceTableSkeletonRows
+                addPropertyColumn={addPropertyColumn}
+                renderColumns={renderColumns}
+                rowCount={skeletonRowCount}
+              />
+            )}
             {paddingBottom > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell

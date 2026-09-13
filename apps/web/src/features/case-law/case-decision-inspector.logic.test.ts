@@ -107,6 +107,12 @@ describe("case decision inspector", () => {
         slug: "c-400-99-f472865427c41152",
       }).payload,
     );
+    // A tab opened at a passage keeps it: the reader who leaves the inspector
+    // for the full page lands on the block they were reading, not at the top.
+    void navigateToCaseDecisionMain(navigate, {
+      ...base,
+      anchorId: "p-12",
+    });
 
     expect(calls).toEqual([
       {
@@ -125,6 +131,15 @@ describe("case decision inspector", () => {
           language: "es",
           slug: "c-400-99-f472865427c41152",
         },
+      },
+      {
+        to: "/law/$country/cases/$court/$slug",
+        params: {
+          country: "cz",
+          court: "nejvyssi-spravni-soud",
+          slug: "4-as-3-2008",
+        },
+        hash: "p-12",
       },
     ]);
   });

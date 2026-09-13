@@ -37,12 +37,24 @@ export const decisionTabTarget = (
   ...(anchorId === undefined ? {} : { anchorId }),
 });
 
+/** What marking a row as open needs: the version that matched, and its translations. */
+type DecisionRowIdentity = {
+  id: string;
+  languageAlternates: readonly { id: string }[];
+};
+
 /**
- * Whether this row is the one the inspector is showing. Compared on the tab
- * id rather than on a decision id kept beside it, so the row's highlight and
- * the tab that is open can never disagree.
+ * Whether this row is the one the inspector is showing. One row stands for
+ * every language version of its decision, and its links open whichever the
+ * reader is most likely to want, so any of those tabs marks it. Compared on
+ * the tab id rather than on a decision id kept beside it, so the row's
+ * highlight and the tab that is open can never disagree.
  */
 export const isDecisionRowActive = (
   activeTabId: string | null,
-  decisionId: string,
-): boolean => activeTabId === caseDecisionTabId(decisionId);
+  decision: DecisionRowIdentity,
+): boolean =>
+  activeTabId !== null &&
+  [decision.id, ...decision.languageAlternates.map(({ id }) => id)].some(
+    (id) => caseDecisionTabId(id) === activeTabId,
+  );

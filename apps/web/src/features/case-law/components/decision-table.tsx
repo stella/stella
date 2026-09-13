@@ -15,7 +15,6 @@ import { useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
@@ -26,6 +25,7 @@ import { workspaceTableFeatures } from "@/components/workspaces/table/table-feat
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
 import { useTableState } from "@/components/workspaces/table/use-table-state";
+import { tableSkeletonRowCount } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
@@ -42,6 +42,11 @@ export type { Decision } from "@/features/case-law/components/decision-cells";
 
 type DecisionTableProps = {
   decisions: readonly Decision[];
+  /**
+   * How many rows the page being loaded will hold, so the waiting table stands
+   * in at that size. Defaults to a compact stand-in where a screen cannot say.
+   */
+  expectedRowCount?: number | undefined;
   /** Columns this screen adds to the shared model; none on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
   /** The find's marks, or null when no term is applied. */
@@ -64,6 +69,7 @@ type DecisionTableProps = {
 
 export const DecisionTable = ({
   decisions,
+  expectedRowCount,
   extraColumns,
   findHighlight = null,
   isLoading,
@@ -176,21 +182,16 @@ export const DecisionTable = ({
             <WorkspaceTable
               contentMode={layout.contentMode}
               rowHost={rowHost}
+              skeletonRowCount={
+                isLoading ? tableSkeletonRowCount(expectedRowCount) : 0
+              }
               table={table}
             />
           </FindHighlightScope>
         </DecisionRenderScope>
-        {rows.length === 0 && (
-          <div className="text-muted-foreground flex flex-col gap-2 p-4 text-sm">
-            {isLoading ? (
-              <>
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-                <Skeleton className="h-4 w-2/3" />
-              </>
-            ) : (
-              t("common.noResults")
-            )}
+        {rows.length === 0 && !isLoading && (
+          <div className="text-muted-foreground p-4 text-sm">
+            {t("common.noResults")}
           </div>
         )}
       </div>

@@ -942,6 +942,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
 
           <DecisionTable
             decisions={find.decisions}
+            expectedRowCount={pageSize}
             findHighlight={find.highlight}
             isLoading={rows === "skeleton"}
             isRefreshing={isRefreshing}
