@@ -253,7 +253,10 @@ const collectChildElements = (value: unknown, out: AstNode[]): void => {
   }
 };
 
-const childElements = (node: AstNode): AstNode[] => {
+const childElements = (node: unknown): AstNode[] => {
+  if (!isAstNode(node)) {
+    return [];
+  }
   const out: AstNode[] = [];
   collectChildElements(node.children, out);
   return out;
@@ -408,7 +411,7 @@ export default eslintCompatPlugin({
         // action pair and holds nothing but actions, so a wrapper is never
         // reported for the row inside it and a view's root container is never
         // mistaken for one.
-        const ownsTheActionRow = (node: AstNode): boolean => {
+        const ownsTheActionRow = (node: unknown): boolean => {
           const descendants = renderedElements(node).filter(
             (element) => element !== node,
           );
@@ -479,7 +482,10 @@ export default eslintCompatPlugin({
         // or callback boundary in between. A body component the popup renders
         // ends the walk the same way the popup element does; any other
         // function in between is a callback rendering rows of its own items.
-        const isTheDialogsOwnRow = (node: AstNode): boolean => {
+        const isTheDialogsOwnRow = (node: unknown): boolean => {
+          if (!isAstNode(node)) {
+            return false;
+          }
           let current = isAstNode(node.parent) ? node.parent : null;
           while (current !== null) {
             if (FUNCTION_BOUNDARIES.has(current.type)) {
