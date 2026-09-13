@@ -104,11 +104,10 @@ const captures = [
       `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
       `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
     readyText: "Supplier_Agreement.docx",
-    readySelector: ".layout-run-text",
+    readySelector: '.ProseMirror[contenteditable="true"]',
     // `?editing=true` is a request, not a state: without this the shot can
     // land on the read-only viewer while the editor is still unlocking. The
-    // autosave indicator exists only in edit mode.
-    readyControl: { role: "status", name: "Synced" },
+    // editable ProseMirror surface exists only after the request succeeds.
     versionAnchor: {
       workspaceId: AKVIZICE_WORKSPACE_ID,
       entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
@@ -248,17 +247,6 @@ test("capture landing product screenshots", async ({
         await expect(page.locator(capture.readySelector).first()).toBeVisible({
           timeout: COLD_COMPILE_TIMEOUT,
         });
-      }
-      if ("readyControl" in capture) {
-        // A control that only exists in the target mode, so readiness asserts
-        // the mode itself rather than the route that requested it.
-        await expect(
-          page
-            .getByRole(capture.readyControl.role, {
-              name: capture.readyControl.name,
-            })
-            .first(),
-        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
         // Film a specific national decision deterministically, rather than
