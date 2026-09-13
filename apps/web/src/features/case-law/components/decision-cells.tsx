@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Fragment } from "react";
 
 import { Link } from "@tanstack/react-router";
@@ -13,22 +13,26 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
+import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
+import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionContentMode,
   DecisionIdentityLineField,
 } from "@/features/case-law/decision-columns.logic";
+import { decisionTabTarget } from "@/features/case-law/decision-inspector.logic";
+import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import {
   hasHighlight,
   highlightSegments,
 } from "@/features/case-law/headnote-highlight.logic";
 import type { HighlightSegment } from "@/features/case-law/headnote-highlight.logic";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public-decision";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
-import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import {
   type CaseLawDecisionRouteParams,
   createCaseLawDecisionRouteParams,
@@ -84,60 +88,22 @@ export type DecisionRenderContext = {
 };
 
 /**
- * The version of a multilingual decision the reader is most likely to want:
- * their UI language when it exists, otherwise the version that matched.
- */
-const preferredRouteParams = (
-  decision: Decision,
-  uiLocale: string,
-): CaseLawDecisionRouteParams => {
-  const preferred = pickPreferredCaseLawLanguageVariant({
-    alternates: decision.languageAlternates,
-    matchedLanguage: decision.language,
-    uiLocale,
-  });
-  const target =
-    preferred === null
-      ? {
-          caseNumber: decision.caseNumber,
-          country: decision.country,
-          court: decision.court,
-          decisionId: decision.id,
-          language: decision.language,
-          slug: decision.slug,
-        }
-      : {
-          caseNumber: preferred.caseNumber,
-          country: preferred.country,
-          court: preferred.court,
-          decisionId: preferred.id,
-          language: preferred.language,
-          slug: preferred.slug,
-        };
-  return createCaseLawDecisionRouteParams({
-    ...target,
-    languageAlternates: decision.languageAlternates,
-  });
-};
-
-/**
- * The version that actually matched, not the reader's preferred one.
+ * A decision link that stays in context.
  *
- * A block anchor is version-local: the passage the snippet came from exists in
- * the matched text and its identifier means nothing in a translation, so an
- * anchored link has to stay on the version that produced it. The preferred
- * alternate is still one click away through the language control.
+ * A plain left click opens the decision beside the results, at the passage
+ * when the link names one; every browser navigation gesture (middle click,
+ * ⌘/Ctrl click, "open in new tab") is left alone and follows the href to the
+ * full page, which the inspector also offers explicitly.
  */
-const matchedRouteParams = (decision: Decision): CaseLawDecisionRouteParams =>
-  createCaseLawDecisionRouteParams({
-    caseNumber: decision.caseNumber,
-    country: decision.country,
-    court: decision.court,
-    decisionId: decision.id,
-    language: decision.language,
-    languageAlternates: decision.languageAlternates,
-    slug: decision.slug,
-  });
+const openTargetInInspector =
+  (openTab: (target: DecisionTabTarget) => void, target: DecisionTabTarget) =>
+  (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainPrimaryClick(event)) {
+      return;
+    }
+    event.preventDefault();
+    openTab(target);
+  };
 
 /**
  * Identity, and nothing a column of its own is saying. A multilingual
@@ -154,8 +120,10 @@ export const CaseNumberCell = ({
   const t = useTranslations();
   const format = useFormatter();
   const uiLocale = useLocale();
+  const openTab = useOpenDecisionTab();
   const { caseNumber, languageAlternates } = decision;
-  const routeParams = preferredRouteParams(decision, uiLocale);
+  const target = preferredDecisionTarget(decision, uiLocale);
+  const routeParams = createCaseLawDecisionRouteParams(target);
   const displayLanguage = normalizeCaseLawLanguageSegment(
     routeParams.language ?? decision.language,
   );
@@ -170,6 +138,7 @@ export const CaseNumberCell = ({
       <div className="flex flex-wrap items-center gap-x-2">
         <DecisionLink
           className="text-foreground font-medium hover:underline"
+          onClick={openTargetInInspector(openTab, target)}
           params={routeParams}
         >
           <BidiText>
@@ -240,6 +209,7 @@ export const SummaryCell = ({
   context: DecisionRenderContext;
   decision: Decision;
 }) => {
+  const openTab = useOpenDecisionTab();
   const headnoteSegments = headnotePreviewSegments(
     decision.headnote,
     context.queryTokens,
@@ -291,11 +261,16 @@ export const SummaryCell = ({
   if (anchorId === null) {
     return passage;
   }
+  // The version that matched, not the reader's preferred one: a block anchor
+  // is version-local, so its identifier means nothing in a translation. The
+  // preferred alternate stays one click away through the language control.
+  const target = decisionTabTarget(decision, anchorId);
   return decisionLinkElement({
     children: passage,
     className: "block hover:underline",
     hash: anchorId,
-    params: matchedRouteParams(decision),
+    onClick: openTargetInInspector(openTab, target),
+    params: createCaseLawDecisionRouteParams(target),
   });
 };
 
@@ -356,6 +331,7 @@ type DecisionLinkOptions = {
   className?: string;
   /** A block anchor in the decision text, so the reader lands on the passage. */
   hash?: string;
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 };
 
 /** The public decision route as a Link element, on whichever of the two routes the params name. */
@@ -363,12 +339,14 @@ export const decisionLinkElement = ({
   children,
   className,
   hash,
+  onClick,
   params,
 }: DecisionLinkOptions) =>
   params.language === undefined ? (
     <Link
       className={className}
       {...(hash === undefined ? {} : { hash })}
+      {...(onClick === undefined ? {} : { onClick })}
       params={{
         country: params.country,
         court: params.court,
@@ -382,6 +360,7 @@ export const decisionLinkElement = ({
     <Link
       className={className}
       {...(hash === undefined ? {} : { hash })}
+      {...(onClick === undefined ? {} : { onClick })}
       params={{
         country: params.country,
         court: params.court,
@@ -397,12 +376,14 @@ export const decisionLinkElement = ({
 const DecisionLink = ({
   children,
   className,
+  onClick,
   params,
 }: {
   children: ReactNode;
   className: string;
+  onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
   params: CaseLawDecisionRouteParams;
-}) => decisionLinkElement({ children, className, params });
+}) => decisionLinkElement({ children, className, onClick, params });
 
 const DecisionLanguageMenu = ({
   alternates,
@@ -413,6 +394,7 @@ const DecisionLanguageMenu = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const openTab = useOpenDecisionTab();
 
   return (
     <Menu>
@@ -429,26 +411,30 @@ const DecisionLanguageMenu = ({
         </span>
       </MenuTrigger>
       <MenuPopup>
-        {alternates.map((alternate) => (
-          <MenuItem
-            key={alternate.id}
-            // A bare Link element: the menu item merges its role, ref and
-            // keyboard handlers into it, which a wrapper component would drop.
-            render={decisionLinkElement({
-              params: createCaseLawDecisionRouteParams({
-                caseNumber: alternate.caseNumber,
-                country: alternate.country,
-                court: alternate.court,
-                decisionId: alternate.id,
-                language: alternate.language,
-                languageAlternates: alternates,
-                slug: alternate.slug,
-              }),
-            })}
-          >
-            {languageLabel(format, alternate.language)}
-          </MenuItem>
-        ))}
+        {alternates.map((alternate) => {
+          const target: DecisionTabTarget = {
+            caseNumber: alternate.caseNumber,
+            country: alternate.country,
+            court: alternate.court,
+            decisionId: alternate.id,
+            language: alternate.language,
+            languageAlternates: alternates,
+            slug: alternate.slug,
+          };
+          return (
+            <MenuItem
+              key={alternate.id}
+              // A bare Link element: the menu item merges its role, ref and
+              // keyboard handlers into it, which a wrapper component would drop.
+              render={decisionLinkElement({
+                onClick: openTargetInInspector(openTab, target),
+                params: createCaseLawDecisionRouteParams(target),
+              })}
+            >
+              {languageLabel(format, alternate.language)}
+            </MenuItem>
+          );
+        })}
       </MenuPopup>
     </Menu>
   );

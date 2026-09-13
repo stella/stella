@@ -11,20 +11,20 @@
 
 import type { ReactNode } from "react";
 
-import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { decisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import { DecisionRow } from "@/features/case-law/decision-row";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 
 /** Opens a decision beside the results, at a passage when one is named. */
 export const useOpenDecisionInspector = () => {
-  const openView = useInspectorTabsStore((s) => s.openView);
+  const openTab = useOpenDecisionTab();
 
   return (decision: Decision, anchorId?: string) => {
-    openView(createCaseDecisionViewTab(decisionTabTarget(decision, anchorId)));
+    openTab(decisionTabTarget(decision, anchorId));
   };
 };
 
