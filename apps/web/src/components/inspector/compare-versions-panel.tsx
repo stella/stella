@@ -5,11 +5,6 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
-import type {
-  CompareChange,
-  CompareUnsupportedPart,
-  CompareVerification,
-} from "@stll/folio-core";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Loader } from "@stll/ui/loader";
@@ -34,7 +29,6 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   type EntityVersion,
   entityVersionsKeys,
-  entityVersionsOptions,
 } from "@/lib/workspaces/queries/entity-versions";
 
 import {
@@ -45,35 +39,25 @@ import {
 } from "./compare-facet.logic";
 import type { CompareVersionSelection } from "./compare-facet.logic";
 
-type CompareCreatedResult = {
-  status: "created";
-  baseVersionId: string;
-  targetVersionId: string;
-  redlineVersionId: string;
-  changes: readonly CompareChange[];
-  verification: CompareVerification;
-  unsupported: readonly CompareUnsupportedPart[];
-};
+type DocumentsResource = ReturnType<typeof api.documents>;
+type DocumentResource = ReturnType<DocumentsResource["document"]>;
+type CompareResponse = Awaited<ReturnType<DocumentResource["compare"]["post"]>>;
 
-type ComparePreviewedResult = {
-  status: "previewed";
-  baseVersionId: string;
-  targetVersionId: string;
-  changes: readonly CompareChange[];
-  verification: CompareVerification;
-  unsupported: readonly CompareUnsupportedPart[];
-};
+type CompareData = Exclude<
+  NonNullable<Extract<CompareResponse, { data: unknown }>["data"]>,
+  Response
+>;
 
-type CompareFailedResult = {
-  status: "failed";
-  baseVersionId: string;
-  targetVersionId: string;
-  error: {
-    code: string;
-    message: string;
-    hint: string;
-  };
-};
+type DocumentCompareResult = CompareData["results"][number];
+type CompareCreatedResult = Extract<
+  DocumentCompareResult,
+  { status: "created" }
+>;
+type ComparePreviewedResult = Extract<
+  DocumentCompareResult,
+  { status: "previewed" }
+>;
+type CompareFailedResult = Extract<DocumentCompareResult, { status: "failed" }>;
 
 type CompareOutcome =
   | {
@@ -176,21 +160,7 @@ export const CompareVersionsPanel = ({
       queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
       refetchType: "none",
     });
-    const refreshed = await queryClient.query(
-      entityVersionsOptions({ workspaceId, entityId }),
-    );
-    const redline = refreshed.versions.find(
-      ({ id }) => id === result.redlineVersionId,
-    );
-    const redlineFile = redline?.file;
-    if (redlineFile === null || redlineFile === undefined) {
-      setOutcome({
-        type: "created",
-        result,
-        redlineStatus: "unavailable",
-      });
-      return;
-    }
+    const { file } = result;
 
     setOutcome({
       type: "created",
@@ -198,13 +168,12 @@ export const CompareVersionsPanel = ({
       redlineStatus: "opened",
     });
     openFileForEntity({
-      id: redlineFile.fieldId,
+      id: file.fieldId,
       entityId,
-      label: redlineFile.fileName,
-      fileName: redlineFile.fileName,
-      mimeType: redlineFile.mimeType,
+      label: file.fileName,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
       pdfFileId: null,
-      propertyId: redlineFile.propertyId,
       workspaceId,
       facet: "preview",
     });
@@ -225,7 +194,7 @@ export const CompareVersionsPanel = ({
         ...previous,
         editing: undefined,
         entity: entityId,
-        field: redlineFile.fieldId,
+        field: file.fieldId,
         pdfPage: undefined,
       }),
     });
@@ -626,7 +595,10 @@ const CompareResultView = ({
   const format = useFormatter();
   const { result } = outcome;
   const changeCounts = countCompareChanges(result.changes);
-  const unsupportedCounts = new Map<CompareUnsupportedPart["reason"], number>();
+  const unsupportedCounts = new Map<
+    CompareCreatedResult["unsupported"][number]["reason"],
+    number
+  >();
   for (const { reason } of result.unsupported) {
     unsupportedCounts.set(reason, (unsupportedCounts.get(reason) ?? 0) + 1);
   }

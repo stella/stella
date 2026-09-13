@@ -32,7 +32,7 @@ import {
 } from "@/api/lib/secure-document-response";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
+export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 
 type FilePurpose = "download" | "display" | "native-display";
 

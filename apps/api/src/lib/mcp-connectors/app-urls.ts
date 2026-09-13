@@ -13,3 +13,14 @@ import { env } from "@/api/env";
 
 /** The deployment's frontend origin, without a trailing slash. */
 export const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
+
+export const buildDocumentUrl = ({
+  entityId,
+  fieldId,
+  workspaceId,
+}: {
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+}) =>
+  `${getAppBaseUrl()}/workspaces/${workspaceId}/all/pdf?entity=${encodeURIComponent(entityId)}&field=${encodeURIComponent(fieldId)}`;

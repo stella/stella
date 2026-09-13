@@ -93,7 +93,6 @@ import {
 } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {

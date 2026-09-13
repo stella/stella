@@ -1,7 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import type { CompareDocxError, CompareResult } from "@stll/folio-core";
+import {
+  compareDocx,
+  createDocx,
+  createEmptyDocument,
+  type CompareDocxError,
+  type CompareResult,
+} from "@stll/folio-core";
+import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
 
 import {
   createDocumentCompareHandler,
@@ -85,6 +92,7 @@ const verifiedComparison: CompareResult = {
   changes: [],
   verification: { status: "verified" },
   unsupported: [],
+  compatibility: { status: "standard-ooxml" },
 };
 
 type Dependencies = NonNullable<
@@ -92,19 +100,25 @@ type Dependencies = NonNullable<
 >;
 
 type HarnessOptions = {
+  compareDocx?: Dependencies["compareDocx"];
   compareResults?: Result<CompareResult, CompareDocxError>[];
   documentFound?: boolean;
   previous?: boolean;
+  readBuffers?: ReadonlyMap<string, ArrayBuffer>;
   rows?: ReturnType<typeof versionRow>[];
   timeoutLabel?: string;
+  downloadFails?: boolean;
 };
 
 const createHarness = ({
+  compareDocx: realCompareDocx,
   compareResults = [Result.ok(verifiedComparison)],
   documentFound = true,
   previous = false,
+  readBuffers,
   rows = [baseRow, firstTargetRow],
   timeoutLabel,
+  downloadFails = false,
 }: HarnessOptions = {}) => {
   let previousRead = 0;
   const tx = {
@@ -137,10 +151,13 @@ const createHarness = ({
   let comparisonIndex = 0;
   const compareDocxMock = mock(
     async (
-      _base: ArrayBuffer,
-      _target: ArrayBuffer,
-      _options: Parameters<Dependencies["compareDocx"]>[2],
+      base: ArrayBuffer,
+      target: ArrayBuffer,
+      options: Parameters<Dependencies["compareDocx"]>[2],
     ) => {
+      if (realCompareDocx !== undefined) {
+        return await realCompareDocx(base, target, options);
+      }
       const result = compareResults.at(comparisonIndex);
       comparisonIndex += 1;
       return result ?? Result.ok(verifiedComparison);
@@ -164,8 +181,11 @@ const createHarness = ({
       });
     },
   );
-  const readEntityVersionFileMock = mock(async () =>
-    Result.ok(new Uint8Array([1, 2, 3]).buffer),
+  const readEntityVersionFileMock = mock(
+    async (file: Parameters<Dependencies["readEntityVersionFile"]>[0]) =>
+      Result.ok(
+        readBuffers?.get(file.fileName) ?? new Uint8Array([1, 2, 3]).buffer,
+      ),
   );
   const withTimeoutMock = mock(
     async (
@@ -182,11 +202,31 @@ const createHarness = ({
       return await operation(new AbortController().signal);
     },
   );
+  const readFileHandlerMock = mock(
+    async (_options: Parameters<Dependencies["readFileHandler"]>[0]) => {
+      if (downloadFails)
+        throw new TimeoutError({
+          message: "delivery failed",
+          label: "download",
+          timeoutMs: 1,
+        });
+      return {
+        fileId: "file",
+        mimeType: DOCX_MIME_TYPE,
+        originalMimeType: DOCX_MIME_TYPE,
+        fileName: "Agreement redline.docx",
+        encrypted: false,
+        presignedUrl: "https://files.example/redline.docx",
+        stampable: false,
+      };
+    },
+  );
   const dependencies = asTestRaw<Dependencies>({
     applyDisposition: applyDispositionMock,
     compareDocx: compareDocxMock,
     createEntityVersionFromBuffer: createEntityVersionFromBufferMock,
     readEntityVersionFile: readEntityVersionFileMock,
+    readFileHandler: readFileHandlerMock,
     resolveDocxEditAuthorName: async () => "Ada Lovelace",
     withTimeout: withTimeoutMock,
   });
@@ -233,11 +273,100 @@ const createHarness = ({
     createEntityVersionFromBufferMock,
     definition,
     readEntityVersionFileMock,
+    readFileHandlerMock,
     withTimeoutMock,
   };
 };
 
+const documentWithBodyText = (text: string): Promise<ArrayBuffer> => {
+  const document = createEmptyDocument();
+  document.package.document.content = [
+    {
+      type: "paragraph",
+      paraId: "10000001",
+      textId: "10000001",
+      content: [
+        {
+          type: "run",
+          content: [{ type: "text", text }],
+        },
+      ],
+    },
+  ];
+  return createDocx(document);
+};
+
+const bodyText = async (buffer: ArrayBuffer): Promise<string> => {
+  const document = await parseDocx(buffer, {
+    detectVariables: false,
+    preloadFonts: false,
+  });
+  const paragraphs: string[] = [];
+  for (const block of document.package.document.content) {
+    if (block.type !== "paragraph") continue;
+    let text = "";
+    for (const run of block.content) {
+      if (run.type !== "run") continue;
+      for (const content of run.content) {
+        if (content.type === "text") text += content.text;
+      }
+    }
+    paragraphs.push(text);
+  }
+  return paragraphs.join("\n");
+};
+
 describe("documents.compare", () => {
+  test.each([
+    {
+      direction: "forward",
+      baseText: "Draft terms",
+      targetText: "Final terms",
+    },
+    {
+      direction: "reverse",
+      baseText: "Final terms",
+      targetText: "Draft terms",
+    },
+  ])(
+    "persists a Folio-exact redline whose resolutions recover $direction endpoints",
+    async ({ baseText, targetText }) => {
+      const [baseBuffer, targetBuffer] = await Promise.all([
+        documentWithBodyText(baseText),
+        documentWithBodyText(targetText),
+      ]);
+      expect(await bodyText(baseBuffer)).toBe(baseText);
+      expect(await bodyText(targetBuffer)).toBe(targetText);
+      expect(baseText).not.toBe(targetText);
+
+      const harness = createHarness({
+        compareDocx,
+        readBuffers: new Map([
+          ["Agreement v1.docx", baseBuffer],
+          ["Agreement v2.docx", targetBuffer],
+        ]),
+      });
+
+      const result = await harness.definition.handler(harness.context);
+      expect(result).toMatchObject({
+        results: [{ status: "created", verification: { status: "verified" } }],
+      });
+      const persisted =
+        harness.createEntityVersionFromBufferMock.mock.calls.at(0)?.[0];
+      if (persisted === undefined) {
+        throw new Error("comparison did not persist a redline buffer");
+      }
+
+      const accepting = await FolioDocxReviewer.fromBuffer(persisted.buffer);
+      expect(accepting.acceptAll()).toBeGreaterThan(0);
+      expect(await bodyText(await accepting.toBuffer())).toBe(targetText);
+
+      const rejecting = await FolioDocxReviewer.fromBuffer(persisted.buffer);
+      expect(rejecting.rejectAll()).toBeGreaterThan(0);
+      expect(await bodyText(await rejecting.toBuffer())).toBe(baseText);
+    },
+  );
+
   test("creates a strict verified derived redline with server-derived metadata and provenance", async () => {
     const harness = createHarness();
 
@@ -250,9 +379,24 @@ describe("documents.compare", () => {
           baseVersionId,
           targetVersionId: firstTargetId,
           redlineVersionId,
+          file: {
+            fieldId,
+            fileName: "Agreement redline.docx",
+            mimeType: DOCX_MIME_TYPE,
+            versionNumber: 5,
+            openUrl: expect.stringContaining(
+              `/workspaces/${workspaceId}/all/pdf?entity=${documentId}&field=${fieldId}`,
+            ),
+            download: {
+              status: "available",
+              downloadUrl: "https://files.example/redline.docx",
+              expiresAt: expect.any(String),
+            },
+          },
           changes: [],
           verification: { status: "verified" },
           unsupported: [],
+          compatibility: { status: "standard-ooxml" },
         },
       ],
     });
@@ -261,6 +405,7 @@ describe("documents.compare", () => {
     ).toEqual(["accept", "reject"]);
     expect(harness.compareDocxMock.mock.calls.at(0)?.[2]).toEqual({
       author: "Ada Lovelace",
+      revisionFormat: "folio-exact",
       timestamp: "2026-09-02T09:30:00.000Z",
       granularity: "word",
       onUnverified: "refuse",
@@ -292,6 +437,48 @@ describe("documents.compare", () => {
     });
   });
 
+  test("keeps the saved artifact recoverable when download delivery fails", async () => {
+    const harness = createHarness({
+      downloadFails: true,
+      compareResults: [
+        Result.ok({
+          ...verifiedComparison,
+          compatibility: {
+            status: "requires-folio",
+            reasons: ["section-reference-history"],
+          },
+        }),
+      ],
+    });
+    const result = await harness.definition.handler(harness.context);
+    expect(result).toMatchObject({
+      results: [
+        {
+          status: "created",
+          redlineVersionId,
+          compatibility: {
+            status: "requires-folio",
+            reasons: ["section-reference-history"],
+          },
+          file: {
+            fieldId,
+            openUrl: expect.any(String),
+            download: { status: "unavailable" },
+          },
+        },
+      ],
+    });
+    expect(harness.createEntityVersionFromBufferMock).toHaveBeenCalledTimes(1);
+    expect(harness.readFileHandlerMock).toHaveBeenCalledWith({
+      scopedDb: harness.context.scopedDb,
+      fieldId,
+      organizationId,
+      workspaceId,
+      purpose: "download",
+      recordAuditEvent: harness.auditRecorder,
+    });
+  });
+
   test("previews a comparison without writing a document version", async () => {
     const harness = createHarness();
 
@@ -312,10 +499,12 @@ describe("documents.compare", () => {
           changes: [],
           verification: { status: "verified" },
           unsupported: [],
+          compatibility: { status: "standard-ooxml" },
         },
       ],
     });
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 
   test("applies the opposite tracked-change dispositions independently", async () => {
@@ -452,6 +641,7 @@ describe("documents.compare", () => {
     });
     expect(harness.readEntityVersionFileMock).not.toHaveBeenCalled();
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 
   test("rejects inaccessible versions as a closed per-target failure", async () => {
@@ -469,6 +659,7 @@ describe("documents.compare", () => {
     });
     expect(harness.readEntityVersionFileMock).not.toHaveBeenCalled();
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 
   test("returns a named timeout failure without persisting", async () => {
@@ -480,6 +671,7 @@ describe("documents.compare", () => {
       results: [{ status: "failed", error: { code: "timeout" } }],
     });
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 });
 

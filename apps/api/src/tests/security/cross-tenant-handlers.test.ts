@@ -184,6 +184,7 @@ const compareDocumentDependencies = {
       changes: [],
       verification: { status: "verified" },
       unsupported: [],
+      compatibility: { status: "standard-ooxml" },
     }),
   createEntityVersionFromBuffer: async ({ entityId }) =>
     Result.ok({
@@ -194,6 +195,15 @@ const compareDocumentDependencies = {
       versionNumber: 3,
     }),
   readEntityVersionFile: async () => Result.ok(new ArrayBuffer(1)),
+  readFileHandler: async () => ({
+    fileId: compareTargetFileB,
+    mimeType: DOCX_MIME_TYPE,
+    originalMimeType: DOCX_MIME_TYPE,
+    fileName: "comparison.docx",
+    encrypted: false,
+    presignedUrl: "https://files.example/comparison.docx",
+    stampable: false,
+  }),
   resolveDocxEditAuthorName: async () => "Cross-tenant test user",
   withTimeout: async (operation) =>
     await operation(new AbortController().signal),

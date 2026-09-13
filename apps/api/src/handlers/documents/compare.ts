@@ -9,9 +9,14 @@ import {
   type CompareResult,
 } from "@stll/folio-core";
 import { FolioDocxReviewer } from "@stll/folio-core/server";
+import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
+import {
+  FILE_READ_URL_EXPIRY_SECONDS,
+  readFileHandler,
+} from "@/api/handlers/files/get";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -27,6 +32,7 @@ import { readEntityVersionFile } from "@/api/lib/entity-versions/load-entity-ver
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -83,7 +89,12 @@ const config = {
     "verification failures. Output preview compares without writing; output " +
     "version explicitly saves each successful redline as a derived document " +
     "version without replacing the current version. The operation may " +
-    "partially succeed across multiple targets, so inspect every result status.",
+    "partially succeed across multiple targets, so inspect every result status. " +
+    "Folio-exact review preserves both document endpoints; compatibility reports " +
+    "when pending history requires Folio and may be discarded by Word on save. " +
+    "Created results include an openUrl and a temporary DOCX download URL. " +
+    "Show these links to the user; if download delivery is unavailable, the " +
+    "redline is already saved: open it in Stella instead of creating it again.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
@@ -135,9 +146,20 @@ type CreatedComparison = {
   baseVersionId: SafeId<"entityVersion">;
   targetVersionId: SafeId<"entityVersion">;
   redlineVersionId: SafeId<"entityVersion">;
+  file: {
+    fieldId: SafeId<"field">;
+    fileName: string;
+    mimeType: typeof DOCX_MIME_TYPE;
+    versionNumber: number;
+    openUrl: string;
+    download:
+      | { status: "available"; downloadUrl: string; expiresAt: string }
+      | { status: "unavailable"; message: string; hint: string };
+  };
   changes: readonly CompareChange[];
   verification: CompareResult["verification"];
   unsupported: CompareResult["unsupported"];
+  compatibility: CompareResult["compatibility"];
 };
 
 type PreviewedComparison = {
@@ -147,6 +169,7 @@ type PreviewedComparison = {
   changes: readonly CompareChange[];
   verification: CompareResult["verification"];
   unsupported: CompareResult["unsupported"];
+  compatibility: CompareResult["compatibility"];
 };
 
 type FailedComparison = {
@@ -162,6 +185,7 @@ type DocumentCompareResponse = {
 
 type CompareHandlerProps = {
   safeDb: SafeDb;
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   params: Static<typeof config.params>;
   body: Static<typeof config.body>;
@@ -279,6 +303,7 @@ type DocumentCompareDependencies = {
   compareDocx: typeof compareDocx;
   createEntityVersionFromBuffer: typeof createEntityVersionFromBuffer;
   readEntityVersionFile: typeof readEntityVersionFile;
+  readFileHandler: typeof readFileHandler;
   resolveDocxEditAuthorName: typeof resolveDocxEditAuthorName;
   withTimeout: typeof withTimeout;
 };
@@ -288,6 +313,7 @@ const DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES: DocumentCompareDependencies = {
   compareDocx,
   createEntityVersionFromBuffer,
   readEntityVersionFile,
+  readFileHandler,
   resolveDocxEditAuthorName,
   withTimeout,
 };
@@ -353,6 +379,7 @@ const comparisonSource = ({
 const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
   async function* ({
     safeDb,
+    scopedDb,
     workspaceId,
     params,
     body,
@@ -708,6 +735,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
                 preparedTarget,
                 {
                   author,
+                  revisionFormat: "folio-exact",
                   timestamp: target.createdAt.toISOString(),
                   granularity,
                   onUnverified: mode === "best-effort" ? "emit" : "refuse",
@@ -762,6 +790,7 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
           changes: compared.value.changes,
           verification: compared.value.verification,
           unsupported: compared.value.unsupported,
+          compatibility: compared.value.compatibility,
         });
         continue;
       }
@@ -798,14 +827,64 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
         continue;
       }
 
+      const saved = persisted.value.value;
+      const openUrl = buildDocumentUrl({
+        entityId: documentId,
+        fieldId: saved.fieldId,
+        workspaceId,
+      });
+      const expiresAt = Temporal.Now.instant()
+        .add({ seconds: FILE_READ_URL_EXPIRY_SECONDS })
+        .toString();
+      const delivery = await Result.tryPromise(
+        async () =>
+          await dependencies.withTimeout(
+            async () =>
+              await dependencies.readFileHandler({
+                scopedDb,
+                fieldId: saved.fieldId,
+                organizationId: session.activeOrganizationId,
+                workspaceId,
+                purpose: "download",
+                recordAuditEvent,
+              }),
+            {
+              label: "documents.compare.download",
+              signal: request.signal,
+              timeoutMs: DOCUMENT_COMPARE_READ_TIMEOUT_MS,
+            },
+          ),
+      );
+      const download: CreatedComparison["file"]["download"] =
+        Result.isOk(delivery) && "presignedUrl" in delivery.value
+          ? {
+              status: "available",
+              downloadUrl: delivery.value.presignedUrl,
+              expiresAt,
+            }
+          : {
+              status: "unavailable",
+              message:
+                "The redline was saved, but its download link could not be prepared.",
+              hint: "Open the saved redline in Stella and download it there; do not repeat the comparison to retry delivery.",
+            };
       results.push({
         status: "created",
         baseVersionId: base.id,
         targetVersionId: target.id,
-        redlineVersionId: persisted.value.value.entityVersionId,
+        redlineVersionId: saved.entityVersionId,
+        file: {
+          fieldId: saved.fieldId,
+          fileName: saved.fileName,
+          mimeType: DOCX_MIME_TYPE,
+          versionNumber: saved.versionNumber,
+          openUrl,
+          download,
+        },
         changes: compared.value.changes,
         verification: compared.value.verification,
         unsupported: compared.value.unsupported,
+        compatibility: compared.value.compatibility,
       });
     }
 
