@@ -1160,6 +1160,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
+    "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/no-throw-outside-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
     "./.oxlint-plugins/no-try-catch-outside-boundary.ts",
@@ -2268,6 +2269,19 @@ export default defineConfig({
       ],
       rules: {
         "dialog-footer-owns-actions/dialog-footer-owns-actions": "error",
+      },
+    },
+    {
+      // `react/jsx-key` owns missing and array-produced keys, but does not
+      // compare explicit keys on static siblings. Equal sibling identities
+      // make React reconciliation ambiguous across navigation and refreshes.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-duplicate-jsx-sibling-key.fixture.tsx",
+      ],
+      rules: {
+        "no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key": "error",
       },
     },
     {
