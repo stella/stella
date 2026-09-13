@@ -59,7 +59,6 @@ import {
   STATUS_ICONS,
   TASK_STATUSES,
 } from "@/components/workspaces/tasks/task-detail-constants";
-import { MatterCaseLawPanel } from "@/features/case-law/matter-links/matter-case-law-panel";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
@@ -987,7 +986,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         </div>
       )}
 
-      <MatterCaseLawPanel key={workspaceId} workspaceId={workspaceId} />
       <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
       <input
         className="hidden"
