@@ -1693,6 +1693,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           <EvidenceReferences
             workspaceId={workspaceId}
             entityId={entityId}
+            fieldId={fieldId}
             view={editorViewForAnonymization}
             document={evidence.document}
             editable={isUnlocked && editorMode !== "viewing"}

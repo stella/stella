@@ -41,6 +41,7 @@ import type { EvidenceReference } from "./evidence-reference";
 type EvidenceReferencesProps = {
   workspaceId: string;
   entityId: string;
+  fieldId: string;
   view: EditorView | null;
   document: ProseMirrorNode | null;
   editable: boolean;
@@ -50,6 +51,7 @@ type EvidenceReferencesProps = {
 export const EvidenceReferences = ({
   workspaceId,
   entityId,
+  fieldId,
   view,
   document,
   editable,
@@ -132,6 +134,7 @@ export const EvidenceReferences = ({
           {open && editable && view !== null && (
             <EvidenceFilePicker
               entityId={entityId}
+              fieldId={fieldId}
               onInserted={() => setOpen(false)}
               view={view}
               workspaceId={workspaceId}
@@ -150,6 +153,7 @@ class EvidenceSourceUnavailableError extends TaggedError(
 type EvidenceFilePickerProps = {
   workspaceId: string;
   entityId: string;
+  fieldId: string;
   view: EditorView;
   onInserted: () => void;
 };
@@ -157,6 +161,7 @@ type EvidenceFilePickerProps = {
 const EvidenceFilePicker = ({
   workspaceId,
   entityId,
+  fieldId: currentFieldId,
   view,
   onInserted,
 }: EvidenceFilePickerProps) => {
@@ -182,13 +187,11 @@ const EvidenceFilePicker = ({
   const files =
     query.data?.pages.flatMap((page) =>
       page.entities.flatMap((entity) => {
-        if (entity.entityId === entityId) {
-          return [];
-        }
         return Object.values(entity.fields).flatMap((field) => {
           if (
             field?.content.type !== "file" ||
-            !isFileDisplayable(field.content)
+            !isFileDisplayable(field.content) ||
+            (entity.entityId === entityId && field.id === currentFieldId)
           ) {
             return [];
           }
