@@ -74,3 +74,10 @@ export const ENTITIES_PER_WORKSPACE_MAX = 10_000;
  * this span, so an old decision does not stretch the strip back to its date.
  */
 export const CASE_LAW_CITATION_TIMELINE_MAX_YEARS = 60;
+
+/**
+ * Decisions one research-answer run request may queue. The server rejects a
+ * longer list, so a client with more rows on screen than this has to send them
+ * in batches rather than lose the whole run to a validation error.
+ */
+export const CASE_LAW_RESEARCH_RUN_DECISIONS_MAX = 100;

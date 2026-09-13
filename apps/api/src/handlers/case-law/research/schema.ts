@@ -125,11 +125,13 @@ export const updateResearchColumnBodySchema = t.Object(
   { additionalProperties: false },
 );
 
+// The held ceiling, not the create cap: the order must name every column the
+// organization keeps, and a grandfathered set is larger than what may be added.
 export const reorderResearchColumnsBodySchema = t.Object(
   {
     columnIds: t.Array(tSafeId("caseLawResearchColumn"), {
       minItems: 1,
-      maxItems: LIMITS.caseLawResearchColumnsPerOrganization,
+      maxItems: LIMITS.caseLawResearchColumnsPerOrganizationMax,
     }),
   },
   { additionalProperties: false },
@@ -141,7 +143,7 @@ export const runResearchAnswersBodySchema = t.Object(
     columnIds: t.Optional(
       t.Array(tSafeId("caseLawResearchColumn"), {
         minItems: 1,
-        maxItems: LIMITS.caseLawResearchColumnsPerOrganization,
+        maxItems: LIMITS.caseLawResearchColumnsPerOrganizationMax,
       }),
     ),
     decisionIds: t.Array(tSafeId("caseLawDecision"), {
@@ -172,7 +174,6 @@ export const toResearchAnswerResponse = (
   decisionId: row.decisionId,
   state: row.state,
   answer: row.answer,
-  confidence: row.confidence,
   run: row.run,
   failureReason: row.failureReason,
   updatedAt: row.updatedAt.toISOString(),

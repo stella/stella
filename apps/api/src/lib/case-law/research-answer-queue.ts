@@ -1,8 +1,10 @@
-import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
+
+import { answerNeedsRun } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawResearchAnswers } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -23,6 +25,18 @@ type QueueResearchAnswerCellsOptions = {
   now: Date;
 };
 
+/** One cell a run owns: the question and the decision it is asked of. */
+export type ResearchAnswerCell = {
+  columnId: SafeId<"caseLawResearchColumn">;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+/** What one run may answer, and the id that proves the cells are still its own. */
+export type ResearchAnswerClaim = {
+  claimId: SafeId<"caseLawResearchAnswerClaim">;
+  cells: ResearchAnswerCell[];
+};
+
 const cellKey = (
   columnId: SafeId<"caseLawResearchColumn">,
   decisionId: SafeId<"caseLawDecision">,
@@ -31,10 +45,10 @@ const cellKey = (
 /**
  * Whether a cell has to be answered again.
  *
- * A live pending cell belongs to another run; a pending cell that has gone
- * quiet past the stale window is a run that died, so it may be claimed. An
- * answered cell is kept unless the caller forces: that is what makes paging
- * back to a page already answered free.
+ * The state policy is `answerNeedsRun`, shared with the client so the cells a
+ * lawyer confirms are the cells that run. `force` is the caller's decision
+ * rather than the cell's state: it reopens an answered cell, which is the one
+ * the policy keeps for the sake of paging back to an answered page free.
  */
 const needsAnswer = ({
   cell,
@@ -46,26 +60,24 @@ const needsAnswer = ({
   staleBefore: number;
 }): boolean => {
   if (cell === undefined) {
+    return answerNeedsRun({ state: null, stale: false });
+  }
+  if (force && cell.state === "answered") {
     return true;
   }
-  switch (cell.state) {
-    case "pending":
-      return cell.updatedAt.getTime() < staleBefore;
-    case "answered":
-      return force;
-    case "not_allowed":
-    case "failed":
-      return true;
-    default:
-      cell.state satisfies never;
-      return panic(`Unhandled answer state: ${String(cell.state)}`);
-  }
+  return answerNeedsRun({
+    state: cell.state,
+    stale: cell.updatedAt.getTime() < staleBefore,
+  });
 };
 
 /**
- * Mark every (column, decision) cell the run has to produce as pending, and
- * report how many. Cells already answered, or already being worked on, are
- * left exactly as they are.
+ * Claim every (column, decision) cell the run has to produce: mark it pending
+ * under a fresh claim id and report the cells claimed. Cells already answered,
+ * or already being worked on, are left exactly as they are and are NOT
+ * returned, so the runner works its own claim rather than the whole rectangle.
+ * The claim id is what a later write is checked against: a run that stalled
+ * past the stale window and woke up holds an id no row carries any more.
  */
 export const queueResearchAnswerCells = async ({
   columnIds,
@@ -74,9 +86,10 @@ export const queueResearchAnswerCells = async ({
   now,
   organizationId,
   tx,
-}: QueueResearchAnswerCellsOptions): Promise<number> => {
+}: QueueResearchAnswerCellsOptions): Promise<ResearchAnswerClaim> => {
+  const claimId = createSafeId<"caseLawResearchAnswerClaim">();
   if (columnIds.length === 0 || decisionIds.length === 0) {
-    return 0;
+    return { claimId, cells: [] };
   }
   const existing = await tx
     .select({
@@ -98,33 +111,35 @@ export const queueResearchAnswerCells = async ({
   );
   const staleBefore = now.getTime() - LIMITS.caseLawResearchPendingStaleMs;
 
-  const toQueue: (typeof caseLawResearchAnswers.$inferInsert)[] = [];
+  const cells: ResearchAnswerCell[] = [];
   for (const columnId of columnIds) {
     for (const decisionId of decisionIds) {
       const cell = existingByKey.get(cellKey(columnId, decisionId));
       if (!needsAnswer({ cell, force, staleBefore })) {
         continue;
       }
-      toQueue.push({
-        columnId,
-        organizationId,
-        decisionId,
-        state: "pending",
-        answer: null,
-        confidence: null,
-        run: null,
-        failureReason: null,
-        updatedAt: now,
-      });
+      cells.push({ columnId, decisionId });
     }
   }
-  if (toQueue.length === 0) {
-    return 0;
+  if (cells.length === 0) {
+    return { claimId, cells };
   }
 
   await tx
     .insert(caseLawResearchAnswers)
-    .values(toQueue)
+    .values(
+      cells.map((cell) => ({
+        columnId: cell.columnId,
+        organizationId,
+        decisionId: cell.decisionId,
+        state: "pending" as const,
+        claimId,
+        answer: null,
+        run: null,
+        failureReason: null,
+        updatedAt: now,
+      })),
+    )
     .onConflictDoUpdate({
       target: [
         caseLawResearchAnswers.columnId,
@@ -132,12 +147,12 @@ export const queueResearchAnswerCells = async ({
       ],
       set: {
         state: "pending",
+        claimId,
         answer: null,
-        confidence: null,
         run: null,
         failureReason: null,
         updatedAt: now,
       },
     });
-  return toQueue.length;
+  return { claimId, cells };
 };

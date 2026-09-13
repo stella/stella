@@ -93,7 +93,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
         if (columns === null) {
           return null;
         }
-        const pairs = await queueResearchAnswerCells({
+        const claim = await queueResearchAnswerCells({
           tx,
           organizationId: session.activeOrganizationId,
           columnIds: columns.map((column) => column.id),
@@ -101,7 +101,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
           force: body.force === true,
           now: new Date(),
         });
-        if (pairs > 0) {
+        if (claim.cells.length > 0) {
           await recordAuditEvent(
             tx,
             columns.map((column) => ({
@@ -112,7 +112,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
             })),
           );
         }
-        return { columns, pairs };
+        return { columns, claim };
       }),
     );
     if (queued === null) {
@@ -120,7 +120,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Question column not found" }),
       );
     }
-    if (queued.pairs === 0) {
+    if (queued.claim.cells.length === 0) {
       return Result.ok({ queued: 0 });
     }
 
@@ -135,7 +135,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
           organizationId: session.activeOrganizationId,
           userId: user.id,
           columns: runColumns,
-          decisionIds,
+          claim: queued.claim,
           orgAIConfig,
           promptCachingEnabled,
         },
@@ -153,7 +153,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
       "case-law-research.run-answers",
     );
 
-    return Result.ok({ queued: queued.pairs });
+    return Result.ok({ queued: queued.claim.cells.length });
   },
 );
 

@@ -10,7 +10,10 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
+import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,9 +21,12 @@ import { LIMITS } from "@/api/lib/limits";
 type ListMatterLinksProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
+  /** The public corpus gate the language versions are read through. */
+  caseLawDb: CaseLawPublicReadDb;
 };
 
 export const listMatterLinksHandler = async ({
+  caseLawDb,
   scopedDb,
   workspaceId,
 }: ListMatterLinksProps) => {
@@ -38,6 +44,7 @@ export const listMatterLinksHandler = async ({
         court: caseLawDecisions.court,
         country: caseLawDecisions.country,
         language: caseLawDecisions.language,
+        languageGroupKey: caseLawDecisions.languageGroupKey,
         decisionDate: caseLawDecisions.decisionDate,
         decisionType: caseLawDecisions.decisionType,
         citationCount: caseLawDecisions.citationCount,
@@ -62,6 +69,22 @@ export const listMatterLinksHandler = async ({
       .limit(LIMITS.caseLawMatterLinksPerWorkspace),
   );
 
+  // The versions of each linked decision, through the same helper the search
+  // hit uses: a multilingual decision the client cannot tell apart from a
+  // monolingual one loses the language segment of its route, and the slug
+  // lookup then resolves whichever translation matches.
+  const alternatesByGroupKey =
+    await readPublicDecisionLanguageAlternatesByGroup({
+      caseLawDb,
+      languageGroupKeys: [
+        ...new Set(
+          rows
+            .map((row) => row.languageGroupKey)
+            .filter((value): value is string => value !== null),
+        ),
+      ],
+    });
+
   return {
     links: rows.map((row) => ({
       id: row.id,
@@ -77,6 +100,9 @@ export const listMatterLinksHandler = async ({
         court: row.court,
         country: row.country,
         language: row.language,
+        languageAlternates: alternatesByGroupKey.alternatesFor(
+          row.languageGroupKey,
+        ),
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         citationCount: row.citationCount,
@@ -92,9 +118,9 @@ const config = {
   description:
     "List the case-law decisions linked to the current matter, newest link " +
     "first, each with its note and the decision's row facts: case number, " +
-    "slug, ECLI, court, country, language, date, type, citation count and " +
-    "headnote preview. Returns the whole set up to the per-matter link cap; " +
-    "there is no pagination.",
+    "slug, ECLI, court, country, language, the decision's other language " +
+    "versions, date, type, citation count and headnote preview. Returns the " +
+    "whole set up to the per-matter link cap; there is no pagination.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   access: "read",
@@ -109,6 +135,7 @@ const listMatterLinks = createSafeHandler(
           await listMatterLinksHandler({
             workspaceId,
             scopedDb,
+            caseLawDb: caseLawPublicReadDb,
           }),
       ),
     );

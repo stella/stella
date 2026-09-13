@@ -11,7 +11,7 @@ const config = {
   description:
     "The organization's case-law question columns, in the order they are " +
     "shown. Every member sees the same set, and the whole set fits one " +
-    "response because the per-organization column cap bounds it.",
+    "response: the columns an organization may hold are bounded.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },

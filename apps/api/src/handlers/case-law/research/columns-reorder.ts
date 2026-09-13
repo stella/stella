@@ -47,7 +47,7 @@ const reorderResearchColumns = createSafeRootHandler(
           return { status: "mismatch" as const };
         }
         for (const [index, columnId] of columnIds.entries()) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the per-organization column cap (the body schema's maxItems), inside one transaction
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the columns an organization may hold (the body schema's maxItems), inside one transaction
           await tx
             .update(caseLawResearchColumns)
             .set({ position: index + 1 })

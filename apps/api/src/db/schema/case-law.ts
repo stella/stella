@@ -1841,8 +1841,10 @@ const CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES =
  * re-run.
  *
  * The organization is the column's only parent: that is what makes an answer
- * reusable on every search that surfaces the decision. `tableId` is the
- * retiring research-table parent, kept nullable until the tables themselves go.
+ * reusable on every search that surfaces the decision. `tableId` is detached —
+ * every row holds NULL and no foreign key reaches the retiring research
+ * tables, so deleting one can no longer cascade a question the whole
+ * organization asks. The column itself goes with the table retirement.
  */
 export const caseLawResearchColumns = p.pgTable(
   "case_law_research_columns",
@@ -1867,16 +1869,6 @@ export const caseLawResearchColumns = p.pgTable(
   (t) => [
     p
       .foreignKey({
-        name: "clrc_table_org_fk",
-        columns: [t.tableId, t.organizationId],
-        foreignColumns: [
-          caseLawResearchTables.id,
-          caseLawResearchTables.organizationId,
-        ],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
         name: "clrc_created_by_fk",
         columns: [t.createdBy],
         foreignColumns: [user.id],
@@ -1884,7 +1876,6 @@ export const caseLawResearchColumns = p.pgTable(
       .onDelete("set null"),
     // Composite tenant key for the answers table.
     p.unique("case_law_research_columns_id_org_unq").on(t.id, t.organizationId),
-    p.index("clrc_table_position_idx").on(t.tableId, t.position),
     // Access path for the only list there is now: the organization's columns
     // in their display order.
     p.index("clrc_org_position_idx").on(t.organizationId, t.position, t.id),
@@ -1909,7 +1900,15 @@ export const caseLawResearchAnswers = p.pgTable(
     organizationId: safeOrganizationId("organization_id").notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     state: p.text({ enum: CASE_LAW_RESEARCH_ANSWER_STATES }).notNull(),
+    /**
+     * Which run owns this cell while it is `pending`. A run claims the cells
+     * it queued under one id and writes only the rows still holding it, so a
+     * run that stalled past the stale window and woke up again cannot
+     * overwrite the answer the run that reclaimed its cells produced.
+     */
+    claimId: safeUuid<"caseLawResearchAnswerClaim">("claim_id"),
     answer: jsonb().$type<CaseLawResearchAnswerValue>(),
+    /** Written by nothing and read by nothing; dropped with the research-table retirement migration. */
     confidence: p.doublePrecision(),
     run: jsonb().$type<CaseLawResearchAnswerRun>(),
     /** A short reason class for `failed`; never the provider's message. */

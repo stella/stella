@@ -27,13 +27,14 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## case-law
 
-| Capability                     | Access             | Scope                | Feature            | Reachable via                                                     |
-| ------------------------------ | ------------------ | -------------------- | ------------------ | ----------------------------------------------------------------- |
-| `case-law.analysis.generate`   | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law analysis-generate`   |
-| `case-law.ingestion.status`    | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law ingestion-status`    |
-| `case-law.matter-links.create` | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-create` |
-| `case-law.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-delete` |
-| `case-law.matter-links.list`   | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-list`   |
+| Capability                           | Access             | Scope                | Feature            | Reachable via                                                           |
+| ------------------------------------ | ------------------ | -------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `case-law.analysis.generate`         | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law analysis-generate`         |
+| `case-law.ingestion.status`          | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law ingestion-status`          |
+| `case-law.matter-links.batch.create` | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-batch-create` |
+| `case-law.matter-links.create`       | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-create`       |
+| `case-law.matter-links.delete`       | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-delete`       |
+| `case-law.matter-links.list`         | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-list`         |
 
 ## catalogue
 

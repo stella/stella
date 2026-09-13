@@ -97,7 +97,6 @@ beforeAll(
         decisionId: ids.caseLawDecisionA,
         state: "answered",
         answer: { type: "yes_no", value: "yes" },
-        confidence: 0.8,
         run: {
           version: 1,
           model: "test-model",

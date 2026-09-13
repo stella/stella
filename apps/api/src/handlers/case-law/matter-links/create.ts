@@ -1,17 +1,14 @@
-import { Result } from "better-result";
-import { and, count, eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawMatterLinks } from "@/api/db/schema";
+import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { LIMITS } from "@/api/lib/limits";
 
 export const createMatterLinkBodySchema = t.Object({
   decisionId: tSafeId("caseLawDecision"),
@@ -35,88 +32,34 @@ export const createMatterLinkHandler = async ({
   body,
   recordAuditEvent,
 }: CreateMatterLinkProps) => {
-  const decision = await scopedDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: body.decisionId } },
-      columns: { id: true },
-    }),
-  );
-
-  if (!decision) {
-    return status(404, { message: "Decision not found" });
-  }
-
-  const [linkCountRow] = await scopedDb((tx) =>
-    tx
-      .select({ value: count() })
-      .from(caseLawMatterLinks)
-      .where(eq(caseLawMatterLinks.workspaceId, workspaceId)),
-  );
-
-  const linkCount = linkCountRow?.value ?? 0;
-
-  if (linkCount >= LIMITS.caseLawMatterLinksPerWorkspace) {
-    return status(400, {
-      message: "Matter links limit reached",
-    });
-  }
-
-  const link = await scopedDb(async (tx) => {
-    const inserted = await tx
-      .insert(caseLawMatterLinks)
-      .values({
-        decisionId: body.decisionId,
+  const outcome = await scopedDb(
+    async (tx) =>
+      await linkDecisionsToMatter({
+        tx,
         workspaceId,
-        note: body.note ?? null,
-        linkedBy: userId,
-      })
-      .onConflictDoNothing({
-        target: [caseLawMatterLinks.decisionId, caseLawMatterLinks.workspaceId],
-      })
-      .returning();
+        userId,
+        items: [body],
+        recordAuditEvent,
+      }),
+  );
 
-    const insertedLink = inserted.at(0);
-    if (insertedLink === undefined) {
-      // Pinning a decision that is already pinned is what the caller asked
-      // for, so the existing link is the answer. Nothing changed, so nothing
-      // is audited.
-      const [existing] = await tx
-        .select()
-        .from(caseLawMatterLinks)
-        .where(
-          and(
-            eq(caseLawMatterLinks.decisionId, body.decisionId),
-            eq(caseLawMatterLinks.workspaceId, workspaceId),
-          ),
-        )
-        .limit(1);
-      return existing ?? null;
-    }
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
-      resourceId: insertedLink.id,
-      workspaceId,
-      metadata: {
-        decisionId: body.decisionId,
-        hasNote: (body.note ?? null) !== null,
-      },
-    });
-
-    return insertedLink;
-  });
-
-  if (link === null) {
-    // The conflicting row is gone: an unlink landed between the insert and
-    // the read, so the caller is told to ask again rather than handed a link
-    // that no longer exists.
-    return status(409, {
-      message: "Decision link changed during the request",
-    });
+  const link = outcome.linked.at(0) ?? outcome.existing.at(0);
+  if (link !== undefined) {
+    return link;
   }
 
-  return link;
+  const rejection =
+    outcome.rejected.at(0) ?? panic("Matter link had no outcome");
+  switch (rejection.reason) {
+    case "not_found":
+      return status(404, { message: "Decision not found" });
+    case "limit":
+      return status(400, { message: "Matter links limit reached" });
+    default: {
+      rejection.reason satisfies never;
+      return panic(`Unhandled rejection: ${String(rejection.reason)}`);
+    }
+  }
 };
 
 const config = {
@@ -124,8 +67,10 @@ const config = {
     "Link one case-law decision from the corpus to the current matter, with " +
     "an optional note. A decision that is not in the corpus is a 404; a " +
     "decision already linked to this matter returns the existing link " +
-    "unchanged, note included. The call is refused once the matter holds its " +
-    "maximum number of links.",
+    "unchanged, note included, even when the matter is full, because " +
+    "re-linking adds nothing. The call is refused only when it would add a " +
+    "link past the matter's maximum. To link a selection at once, use the " +
+    "batch call instead of repeating this one.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   body: createMatterLinkBodySchema,

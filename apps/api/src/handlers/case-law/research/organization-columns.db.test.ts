@@ -28,6 +28,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
+import type { ResearchAnswerClaim } from "@/api/lib/case-law/research-answer-queue";
+import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
 import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -220,6 +222,98 @@ describe("the column cap counts per organization", () => {
   });
 });
 
+/**
+ * Columns created before the organization owned them were capped per research
+ * table, and one member could own many tables, so an organization can hold
+ * more columns than it may now add. The cap applies to adding alone: every
+ * other verb has to work over the whole held set, or a grandfathered
+ * organization loses columns from its results table and can never reorder.
+ */
+describe("an organization holding more columns than it may add", () => {
+  const HELD = LIMITS.caseLawResearchColumnsPerOrganization + 5;
+  const decisionId = createSafeId<"caseLawDecision">();
+
+  const holdColumns = async (): Promise<SafeId<"caseLawResearchColumn">[]> => {
+    const columnIds = Array.from({ length: HELD }, () =>
+      createSafeId<"caseLawResearchColumn">(),
+    );
+    await testDb.insert(caseLawResearchColumns).values(
+      columnIds.map((id, index) => ({
+        id,
+        organizationId: ids.orgA,
+        createdBy: ids.userA1,
+        position: index + 1,
+        question: `Grandfathered ${index}`,
+        answerType: "yes_no" as const,
+        tool: { version: 1 as const, role: "fast" as const },
+      })),
+    );
+    return columnIds;
+  };
+
+  test("every column lists, looks up, runs and reorders", async () => {
+    const columnIds = await holdColumns();
+
+    const listed = await call(listResearchColumns, ids.orgA, ids.userA1);
+    expect(asTestRaw<{ items: unknown[] }>(listed).items).toHaveLength(HELD);
+
+    // The gate the run endpoint puts every named column through.
+    const named = await readNamedResearchColumns({
+      tx: asTestRaw(testDb),
+      columnIds,
+      organizationId: ids.orgA,
+    });
+    expect(named).toHaveLength(HELD);
+    expect(
+      Value.Check(runResearchAnswersBodySchema, {
+        columnIds,
+        decisionIds: [decisionId],
+      }),
+    ).toBe(true);
+    const claim = await testDb.transaction(
+      async (tx) =>
+        await queueResearchAnswerCells({
+          tx: asTestRaw(tx),
+          organizationId: ids.orgA,
+          columnIds,
+          decisionIds: [decisionId],
+          force: false,
+          now: new Date(),
+        }),
+    );
+    expect(claim.cells).toHaveLength(HELD);
+
+    const looked = await call(lookupResearchAnswers, ids.orgA, ids.userA1, {
+      body: { decisionIds: [decisionId] },
+    });
+    expect(asTestRaw<{ items: unknown[] }>(looked).items).toHaveLength(HELD);
+
+    const reordered = await call(reorderResearchColumns, ids.orgA, ids.userA1, {
+      body: { columnIds: [...columnIds].toReversed() },
+    });
+    expect(statusOf(reordered)).toBeNull();
+    const { columns } = asTestRaw<{ columns: { id: string }[] }>(reordered);
+    expect(columns).toHaveLength(HELD);
+    // The order the request named, not the order the rows were created in.
+    expect(columns.at(0)?.id).toBe(columnIds.at(-1));
+  });
+
+  test("one more column is still refused", async () => {
+    await holdColumns();
+
+    const refused = await call(createResearchColumn, ids.orgA, ids.userA1, {
+      body: { question: "One too many", answerType: "text" },
+    });
+    expect(statusOf(refused)).toBe(400);
+
+    const stored = await testDb
+      .select({ id: caseLawResearchColumns.id })
+      .from(caseLawResearchColumns)
+      .where(eq(caseLawResearchColumns.organizationId, ids.orgA));
+    expect(stored).toHaveLength(HELD);
+  });
+});
+
 describe("a run answers only the cells that need it", () => {
   const decisionOne = createSafeId<"caseLawDecision">();
   const decisionTwo = createSafeId<"caseLawDecision">();
@@ -228,7 +322,7 @@ describe("a run answers only the cells that need it", () => {
     columnId: SafeId<"caseLawResearchColumn">,
     force: boolean,
     now: Date,
-  ): Promise<number> =>
+  ): Promise<ResearchAnswerClaim> =>
     await testDb.transaction(
       async (tx) =>
         await queueResearchAnswerCells({
@@ -253,7 +347,7 @@ describe("a run answers only the cells that need it", () => {
       updatedAt: answeredAt,
     });
 
-    expect(await queue(columnId, false, new Date())).toBe(1);
+    expect((await queue(columnId, false, new Date())).cells).toHaveLength(1);
     const [kept] = await testDb
       .select()
       .from(caseLawResearchAnswers)
@@ -263,7 +357,7 @@ describe("a run answers only the cells that need it", () => {
 
     // The second decision is pending from the run above, so only the answered
     // cell is re-queued.
-    expect(await queue(columnId, true, new Date())).toBe(1);
+    expect((await queue(columnId, true, new Date())).cells).toHaveLength(1);
     const [forced] = await testDb
       .select()
       .from(caseLawResearchAnswers)
@@ -296,17 +390,86 @@ describe("a run answers only the cells that need it", () => {
       },
     ]);
 
-    expect(await queue(columnId, false, now)).toBe(1);
+    const claim = await queue(columnId, false, now);
+    // Only the stale cell is claimed, and the run is handed that cell alone
+    // rather than the whole column-by-decision rectangle.
+    expect(claim.cells).toEqual([{ columnId, decisionId: decisionTwo }]);
     const [untouched] = await testDb
       .select()
       .from(caseLawResearchAnswers)
       .where(eq(caseLawResearchAnswers.decisionId, decisionOne));
     expect(untouched?.updatedAt).toEqual(live);
+    expect(untouched?.claimId).toBeNull();
     const [claimed] = await testDb
       .select()
       .from(caseLawResearchAnswers)
       .where(eq(caseLawResearchAnswers.decisionId, decisionTwo));
     expect(claimed?.updatedAt).toEqual(now);
+    expect(claimed?.claimId).toBe(claim.claimId);
+  });
+
+  test("a run that lost its claim writes nothing", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Stale claim?");
+    const firstQueuedAt = new Date("2026-09-01T12:00:00.000Z");
+    const reclaimedAt = new Date(
+      firstQueuedAt.getTime() + LIMITS.caseLawResearchPendingStaleMs + 1000,
+    );
+    const stalled = await queue(columnId, false, firstQueuedAt);
+    // The stalled run's cells age past the stale window and a newer run
+    // reclaims them under its own id.
+    const newer = await queue(columnId, false, reclaimedAt);
+    expect(newer.cells).toHaveLength(stalled.cells.length);
+
+    const deps = {
+      safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+      // Nothing in the corpus answers these ids, so every cell this run does
+      // own ends `failed`; that is the write the claim has to gate.
+      caseLawDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+        await testDb.transaction(async (tx) => await fn(tx)),
+    };
+    const columns = [
+      { columnId, question: "Stale claim?", answerType: "yes_no" as const },
+    ];
+
+    await runResearchAnswers(
+      asTestRaw({
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        columns,
+        claim: stalled,
+        orgAIConfig: null,
+        promptCachingEnabled: false,
+      }),
+      asTestRaw(deps),
+    );
+    const afterStalled = await testDb
+      .select()
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.columnId, columnId));
+    expect(afterStalled.every((cell) => cell.state === "pending")).toBe(true);
+    expect(afterStalled.every((cell) => cell.claimId === newer.claimId)).toBe(
+      true,
+    );
+
+    // The run that does hold the claim writes, so the no-op above is the
+    // claim check rather than the write path being broken.
+    await runResearchAnswers(
+      asTestRaw({
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        columns,
+        claim: newer,
+        orgAIConfig: null,
+        promptCachingEnabled: false,
+      }),
+      asTestRaw(deps),
+    );
+    const afterNewer = await testDb
+      .select()
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.columnId, columnId));
+    expect(afterNewer.every((cell) => cell.state === "failed")).toBe(true);
+    expect(afterNewer.every((cell) => cell.claimId === null)).toBe(true);
   });
 
   test("a run request is bounded by the page size, and oversize is refused", () => {

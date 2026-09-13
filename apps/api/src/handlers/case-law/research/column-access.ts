@@ -87,7 +87,11 @@ const selectColumns = async ({
       asc(caseLawResearchColumns.position),
       asc(caseLawResearchColumns.id),
     )
-    .limit(LIMITS.caseLawResearchColumnsPerOrganization);
+    // The held ceiling, not the create cap: an organization carrying columns
+    // from the per-table era holds more than it may add, and a read that cut
+    // the set there would hide a column from the results table and leave the
+    // reorder, which must name every column once, impossible to satisfy.
+    .limit(LIMITS.caseLawResearchColumnsPerOrganizationMax);
   return lock === true ? await query.for("update") : await query;
 };
 
