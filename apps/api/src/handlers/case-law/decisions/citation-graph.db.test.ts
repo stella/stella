@@ -10,16 +10,12 @@ import {
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
   CITATION_TIMELINE_MAX_YEARS,
-  CITATION_TREATMENTS,
   listDecisionCitationsHandler,
   listLeadingCitationsHandler,
   summarizeDecisionCitationsHandler,
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
-import type {
-  CitationDirection,
-  DecisionCitationRow,
-} from "@/api/handlers/case-law/decisions/citation-graph";
+import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
@@ -29,6 +25,8 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -309,6 +307,7 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
     expect(item.decision).toEqual({
       id: openRelatedId,
       caseNumber: "open-related",
+      citationAuthority: 0,
       country: "CZE",
       court: "Related court",
       decisionDate: "2020-02-03",

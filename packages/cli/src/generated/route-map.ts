@@ -473,6 +473,16 @@ export const generatedRouteMap: RouteNode = {
                   "Filter decisions up to this ISO date (YYYY-MM-DD)",
                 required: false,
               },
+              {
+                flag: "--sort",
+                prop: "sort",
+                kind: "enum",
+                enum: ["relevance", "newest"],
+                repeatable: false,
+                description:
+                  "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.",
+                required: false,
+              },
             ],
             inputOnly: [],
             paginated: true,
@@ -543,6 +553,12 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Filter decisions up to this ISO date (YYYY-MM-DD)",
                 },
+                sort: {
+                  enum: ["relevance", "newest"],
+                  type: "string",
+                  description:
+                    "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.",
+                },
               },
             },
           },
@@ -552,7 +568,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["case-law", "read"],
             toolName: "read_case_law_decision",
-            description: "Read a single case-law decision by its decision ID.",
+            description:
+              "Read a single case-law decision by its decision ID: its own text.",
             flags: [
               {
                 flag: "--decision-id",
@@ -584,6 +601,73 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous call to read the next window of decision text and citations",
+                },
+              },
+            },
+          },
+        },
+        citations: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["case-law", "citations"],
+            toolName: "read_case_law_citations",
+            description:
+              "Find out what the courts citing a decision said about it (followed, distinguished, overruled), or what a decision relied on.",
+            flags: [
+              {
+                flag: "--decision-id",
+                prop: "decision_id",
+                kind: "string",
+                repeatable: false,
+                description: "Case-law decision ID",
+                required: true,
+              },
+              {
+                flag: "--direction",
+                prop: "direction",
+                kind: "enum",
+                enum: ["cites", "cited_by"],
+                repeatable: false,
+                description:
+                  "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "citations",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["decision_id", "direction"],
+              additionalProperties: false,
+              properties: {
+                decision_id: {
+                  type: "string",
+                  format: "uuid",
+                  description: "Case-law decision ID",
+                },
+                direction: {
+                  enum: ["cites", "cited_by"],
+                  type: "string",
+                  description:
+                    "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+                },
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 50,
+                  description:
+                    "Citations per page; defaults to 20, at most 50.",
+                },
+                cursor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous read_case_law_citations call to read the next page",
                 },
               },
             },

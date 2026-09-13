@@ -142,6 +142,13 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           headline: nullableStringSchema,
           anchorId: nullableStringSchema,
           citationCount: t.Number(),
+          // The stored `ln(1 + weighted citations)` score search ranks by, so
+          // a caller can order or threshold on the same number the blend uses.
+          citationAuthority: t.Number(),
+          // Passages of this decision the query matched, within the scanned
+          // window: breadth, not weight. One on the Postgres branch and on an
+          // identifier lookup, which score whole decisions.
+          matchingPassages: t.Integer({ minimum: 1 }),
           createdAt: t.String(),
         },
         { additionalProperties: false },

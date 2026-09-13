@@ -73,9 +73,15 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // its fields are separate intents with separate permissions, and one tool
 // advertising both branches made every property conditional on the other.
 // Write-only, so the anonymized ceiling is unchanged.
+// default bumped 50 -> 51 and anonymized 21 -> 22 for read_case_law_citations:
+// the citation graph with each citing court's treatment and the paragraph the
+// citation sits in. read_case_law_decision could not absorb it without
+// becoming a tool whose meaning depends on which optional arguments are
+// present, and the orientation eval showed a model reaching for the decision
+// read and never finding the treatment.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 50,
-  anonymized: 21,
+  default: 51,
+  anonymized: 22,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
@@ -126,13 +132,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // Shared agent-input metadata and generated guidance, plus explicit date
 // formats on the case-law range, measure 72_962 default and 23_790 anonymized.
 // Pin those exact sizes so future schema growth remains reviewable.
+// read_case_law_citations and the case-law search filters it sits beside
+// (`sort`, plus the hit fields and facet semantics the search description now
+// states) measure 118_301 default and 54_301 anonymized. Pin those exact
+// sizes so the next schema growth stays reviewable.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  // Output contracts add 40_809 chars across all 50 default tools after the
-  // shared safe-widening compactor; measured full payload: 114_571 chars.
-  default: 116_000,
-  // Output contracts add 26_511 chars across the 21-tool anonymized surface;
-  // measured full payload: 50_637 chars.
-  anonymized: 52_000,
+  default: 118_400,
+  anonymized: 54_400,
 };
 
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {

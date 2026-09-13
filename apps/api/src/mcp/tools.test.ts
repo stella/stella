@@ -11,6 +11,7 @@ import JSZip from "jszip";
 
 import {
   countedSearchTotal,
+  SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 
@@ -25,11 +26,13 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
@@ -105,6 +108,7 @@ const WORKSPACE_ID_2 = "00000000-0000-4000-8000-0000000a0002";
 const WORKSPACE_ID_3 = "00000000-0000-4000-8000-0000000a0003";
 const CONTACT_ID = "00000000-0000-4000-8000-0000000c0001";
 const DECISION_ID = "00000000-0000-4000-8000-0000000d0001";
+const CITING_DECISION_ID = "00000000-0000-4000-8000-0000000d0002";
 /** A document entity, used where a tool is handed one in place of a task. */
 const DOCUMENT_ENTITY_ID = "00000000-0000-4000-8000-0000000e0d01";
 const FOLDER_ENTITY_ID = "00000000-0000-4000-8000-0000000e0f01";
@@ -220,6 +224,7 @@ const searchProviderSearchMock = mock(
   },
 );
 const searchDecisionsHandlerMock = mock();
+const readGatedDecisionCitationsMock = mock();
 const readDecisionHandlerMock = mock();
 /** The gate-and-read the tool calls; null is a denied or missing subject. */
 const readGatedDecisionMock = mock();
@@ -732,6 +737,7 @@ const createContext = ({
     loadAnonymizationAllowlistCanonicalsByWorkspace:
       loadAllowlistByWorkspaceMock,
     loadAnonymizationGazetteerEntriesByWorkspace: loadGazetteerByWorkspaceMock,
+    readGatedDecisionCitations: readGatedDecisionCitationsMock,
     readGatedDecisionWithDocument: readGatedDecisionMock,
     readOverviewHandler: readOverviewHandlerMock,
     readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
@@ -760,6 +766,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
     readGatedDecisionMock.mockReset();
+    readGatedDecisionCitationsMock.mockReset();
     // The gate passes by default and the read answers; a denied subject is
     // set up per test by resolving the gate to null.
     readGatedDecisionMock.mockImplementation(
@@ -877,8 +884,52 @@ describe("OpenAI-compatible MCP tools", () => {
           description: "Filter decisions up to this ISO date (YYYY-MM-DD)",
           maxLength: 10,
         },
+        sort: {
+          type: "string",
+          enum: [...SEARCH_SORTS],
+          description:
+            "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.",
+        },
       },
       required: ["query", "country"],
+      additionalProperties: false,
+    });
+  });
+
+  test("advertises the citation read with one discriminator and the agent-facing directions", async () => {
+    const citationsTool = (await listMcpTools(createContext())).find(
+      (tool) => tool.name === "read_case_law_citations",
+    );
+
+    expect(citationsTool?.inputSchema).toEqual({
+      type: "object",
+      properties: {
+        decision_id: {
+          type: "string",
+          format: "uuid",
+          description: "Case-law decision ID",
+        },
+        direction: {
+          type: "string",
+          enum: [...CITATION_READ_DIRECTIONS],
+          description:
+            "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+        },
+        limit: {
+          type: "integer",
+          description: "Citations per page; defaults to 20, at most 50.",
+          minimum: 1,
+          maximum: LIMITS.caseLawDecisionCitationPageSize,
+        },
+        cursor: {
+          type: "string",
+          description:
+            "Opaque cursor from a previous read_case_law_citations call to read the next page",
+          minLength: 1,
+          maxLength: 512,
+        },
+      },
+      required: ["decision_id", "direction"],
       additionalProperties: false,
     });
   });
@@ -968,6 +1019,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "search_case_law",
       "read_content_across_matters",
       "read_case_law_decision",
+      "read_case_law_citations",
       "read_contact",
       "list_templates",
       "list_documents",
@@ -1254,6 +1306,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
           court: "Nejvyšší soud",
@@ -1265,6 +1318,7 @@ describe("OpenAI-compatible MCP tools", () => {
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
           language: "cs",
+          matchingPassages: 4,
           languageAlternates: [
             {
               caseNumber: "29 Cdo 123/2024",
@@ -1302,12 +1356,15 @@ describe("OpenAI-compatible MCP tools", () => {
         decision_type: "judgment",
         limit: 5,
         query: "shareholder dispute",
+        sort: "newest",
         source_id: "11111111-1111-4111-8111-111111111111",
       },
       context,
       toolName: "search_case_law",
     });
 
+    // snake_case in, the body's camelCase out, and `sort` reaches the handler
+    // as the closed value the public body declares.
     expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
       {
         country: "CZE",
@@ -1316,6 +1373,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionType: "judgment",
         limit: 5,
         query: "shareholder dispute",
+        sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
       },
       caseLawPublicReadDb,
@@ -1339,6 +1397,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
+          citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
           court: "Nejvyšší soud",
@@ -1348,6 +1407,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
+          matchingPassages: 4,
           snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
         },
@@ -1368,6 +1428,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
           court: "Nejvyšší soud",
@@ -1377,6 +1438,7 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
+          matchingPassages: 1,
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
@@ -1405,6 +1467,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
+          citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
           court: "Nejvyšší soud",
@@ -1414,6 +1477,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
+          matchingPassages: 1,
           snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
         },
@@ -1512,6 +1576,7 @@ describe("OpenAI-compatible MCP tools", () => {
         hits: [
           {
             caseNumber: "29 Cdo 123/2024",
+            citationAuthority: 0,
             citationCount: 7,
             country: "CZE",
             court: "Nejvyšší soud",
@@ -1521,6 +1586,7 @@ describe("OpenAI-compatible MCP tools", () => {
             ecli: null,
             headline: null,
             language: "cs",
+            matchingPassages: 1,
             slug: "stable-official-slug",
             sourceUrl: "https://example.test/decision",
           },
@@ -1550,6 +1616,176 @@ describe("OpenAI-compatible MCP tools", () => {
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
       });
     });
+  });
+
+  test("read_case_law_citations maps the direction and returns treatment, decision and passage", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      page: {
+        items: [
+          {
+            id: "00000000-0000-4000-8000-0000000c0001",
+            citationText: "29 Cdo 123/2024",
+            sectionIndex: 3,
+            treatment: "negative",
+            decision: {
+              id: CITING_DECISION_ID,
+              caseNumber: "31 Cdo 900/2025",
+              citationAuthority: 2.5,
+              country: "CZE",
+              court: "Nejvyšší soud",
+              decisionDate: "2025-04-02",
+              decisionType: "judgment",
+              ecli: "ECLI:CZ:NS:2025:31.CDO.900.2025.1",
+              language: "cs",
+              slug: "ns-31-cdo-900-2025",
+            },
+            passage: {
+              anchorId: "b-42",
+              text: "Od závěru rozsudku 29 Cdo 123/2024 se velký senát odchyluje.",
+            },
+          },
+          {
+            id: "00000000-0000-4000-8000-0000000c0002",
+            citationText: "Rozhodnutí, které korpus nedrží",
+            sectionIndex: null,
+            treatment: "unclassified",
+            decision: null,
+            passage: null,
+          },
+        ],
+        nextCursor: "citation_cursor_2",
+      },
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        limit: 5,
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    expect(readGatedDecisionCitationsMock).toHaveBeenCalledWith({
+      caseLawDb: caseLawPublicReadDb,
+      cursor: undefined,
+      decisionId: DECISION_ID,
+      direction: "cited_by",
+      limit: 5,
+    });
+    expect(parseToolPayload(result)).toEqual({
+      decisionId: DECISION_ID,
+      direction: "cited_by",
+      nextCursor: "citation_cursor_2",
+      citations: [
+        {
+          citationId: "00000000-0000-4000-8000-0000000c0001",
+          citationText: "29 Cdo 123/2024",
+          polarity: "negative",
+          decision: {
+            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-900-2025`,
+            caseNumber: "31 Cdo 900/2025",
+            citationAuthority: 2.5,
+            court: "Nejvyšší soud",
+            decisionDate: "2025-04-02",
+            decisionId: CITING_DECISION_ID,
+            decisionType: "judgment",
+            resourceName: `stella://resource/case_law_decision/id=${CITING_DECISION_ID}`,
+          },
+          passage: {
+            anchorId: "b-42",
+            text: "Od závěru rozsudku 29 Cdo 123/2024 se velký senát odchyluje.",
+          },
+        },
+        {
+          citationId: "00000000-0000-4000-8000-0000000c0002",
+          citationText: "Rozhodnutí, které korpus nedrží",
+          polarity: "unclassified",
+          decision: null,
+          passage: null,
+        },
+      ],
+    });
+  });
+
+  test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      page: { items: [], nextCursor: null },
+    });
+
+    await handleMcpToolCall({
+      args: {
+        cursor: "citation_cursor_2",
+        decision_id: DECISION_ID,
+        direction: "cites",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    expect(readGatedDecisionCitationsMock).toHaveBeenCalledWith({
+      caseLawDb: caseLawPublicReadDb,
+      cursor: "citation_cursor_2",
+      decisionId: DECISION_ID,
+      direction: "cites",
+      limit: LIMITS.caseLawAgentCitationPageSizeDefault,
+    });
+  });
+
+  test("read_case_law_citations answers not found for a subject the gate denies", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue(null);
+
+    const result = await handleMcpToolCall({
+      args: { decision_id: DECISION_ID, direction: "cited_by" },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Decision not found",
+      hint: "Find a decision with search_case_law and pass its decisionId as decision_id.",
+    });
+  });
+
+  test("read_case_law_citations names the next call when the cursor is unreadable", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "invalid_cursor",
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        cursor: "not-a-cursor",
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "cursor", message: "Invalid cursor" },
+    ]);
+    expect(error["hint"]).toBe(
+      "Pass the 'cursor' verbatim as returned by a previous read_case_law_citations call, or omit it for the first page.",
+    );
+  });
+
+  test("read_case_law_citations refuses a direction outside the closed set", async () => {
+    const result = await handleMcpToolCall({
+      args: { decision_id: DECISION_ID, direction: "incoming" },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(readGatedDecisionCitationsMock).not.toHaveBeenCalled();
   });
 
   test("search_case_law rejects invalid ISO dates", async () => {

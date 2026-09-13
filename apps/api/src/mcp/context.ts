@@ -13,6 +13,7 @@ import {
   createSafeDb,
   createScopedDb,
 } from "@/api/db/scoped";
+import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
@@ -108,6 +109,7 @@ export type McpRequestContext = {
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     readWorkspaceHandler?: typeof readWorkspaceHandler;
     readOverviewHandler?: typeof readOverviewHandler;

@@ -158,7 +158,7 @@
       "itemsKey": "results"
     },
     "name": "search_case_law",
-    "description": "Search case law within one country. Filters include court, language, dates, and decision type. Results include a route-independent resourceName.",
+    "description": "Search case law within one country. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a `facets.source` bucket carries in `value`). `sort` defaults to 'relevance'. Facets and total are returned on the first page only, and describe the whole result set. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (how many of its passages matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how a decision was treated by the courts citing it.",
     "inputSchema": {
       "type": "object",
       "required": ["query", "country"],
@@ -218,6 +218,11 @@
           "format": "date",
           "maxLength": 10,
           "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
+        },
+        "sort": {
+          "enum": ["relevance", "newest"],
+          "type": "string",
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions."
         }
       }
     },
@@ -268,7 +273,7 @@
       "windowedText": true
     },
     "name": "read_case_law_decision",
-    "description": "Read a single case-law decision by its decision ID. Returns metadata, explicit decision text fields, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read a single case-law decision by its decision ID: its own text. Returns metadata, explicit decision text fields, plain text, source URLs, its route-independent resourceName, and bare citation ids. It does NOT say how other courts have treated this decision, and its citation entries carry no treatment and no surrounding text: to learn what the citing courts said, or what this decision relied on, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }) instead. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id"],
@@ -289,6 +294,50 @@
     },
     "annotations": {
       "title": "Read case-law decision",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["case-law", "citations"],
+      "scope": "read",
+      "itemsKey": "citations"
+    },
+    "name": "read_case_law_citations",
+    "description": "Find out what the courts citing a decision said about it (followed, distinguished, overruled), or what a decision relied on. Returns one page of citations, each with the citing court's treatment and the paragraph the citation sits in. `direction: 'cited_by'` returns the decisions relying on this one; `'cites'` returns what it relied on. `polarity` is the classified reading, or 'unclassified' where there is none. `decision` is null for a citation the corpus holds no decision for; its text is still returned. `passage` is null when the source bars AI use of its text, the document is not parsed, or no paragraph carries the citation. Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor to read more.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["decision_id", "direction"],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Case-law decision ID"
+        },
+        "direction": {
+          "enum": ["cites", "cited_by"],
+          "type": "string",
+          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Citations per page; defaults to 20, at most 50."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_case_law_citations call to read the next page"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read case-law citations",
       "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": false
