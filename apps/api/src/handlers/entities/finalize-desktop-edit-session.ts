@@ -29,7 +29,6 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
-import { recordEntityStamp } from "@/api/lib/document-counter";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
@@ -455,14 +454,6 @@ export const finalizeDesktopEditSessionHandler = async ({
           workspace?.reference ??
           panic("Workspace not found for finalized desktop edit session"),
       });
-      if (nextVersionStamp.stamp !== null && entity.docSequence !== null) {
-        await recordEntityStamp(
-          tx,
-          authorizedSession.value.workspaceId,
-          entity.docSequence,
-        );
-      }
-
       // The file Word opened came from clean stored bytes, so the checkpoint
       // normally carries nothing. It carries a reference when the editor pasted
       // a stamped download over it, and that must not become this version's

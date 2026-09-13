@@ -41,7 +41,7 @@ export const readWorkspaceHandler = async ({
           FROM ${entityVersions}
           WHERE ${entityVersions.workspaceId} = ${table.id}
             AND ${entityVersions.stamp} IS NOT NULL
-            AND ${entityVersions.stamp} LIKE ${table.reference} || '/%'
+            AND substring(${entityVersions.stamp} from '^(.*)/[0-9]+\\.v[0-9]+$') = ${table.reference}
             AND ${entityVersions.deletedAt} IS NULL
         )`,
       },

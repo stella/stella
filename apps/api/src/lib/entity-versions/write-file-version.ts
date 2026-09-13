@@ -29,7 +29,6 @@ import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
-import { recordEntityStamp } from "@/api/lib/document-counter";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export type FileVersionWritePolicy =
@@ -371,10 +370,6 @@ export const writeFileVersion = async ({
     versionNumber,
     workspaceReference: workspace?.reference ?? null,
   });
-  if (stamp.stamp !== null && lockedEntity.docSequence !== null) {
-    await recordEntityStamp(tx, workspaceId, lockedEntity.docSequence);
-  }
-
   await insertEntityVersion(tx, {
     collaborationContributorUserIds:
       versionMetadata?.collaborationContributorUserIds,

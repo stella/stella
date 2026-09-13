@@ -170,17 +170,54 @@ export const allocateEntityStamp = async (
 };
 
 /** Keep the reference high-water mark current when a later version is stamped. */
-export const recordEntityStamp = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-  docSequence: number,
-): Promise<void> => {
+type RecordEntityStampOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  stamp: string;
+};
+
+export const recordEntityStamp = async ({
+  tx,
+  workspaceId,
+  stamp,
+}: RecordEntityStampOptions): Promise<void> => {
   const workspace = await tx.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
-    columns: { reference: true, organizationId: true },
+    columns: { organizationId: true },
   });
-  if (!workspace?.reference) {
-    return;
+  if (!workspace) {
+    panic("Document stamp recorded for a missing workspace");
+  }
+  const match = /^(.*)\/(\d+)\.v\d+$/.exec(stamp);
+  if (!match) {
+    panic("Document stamp has an invalid reference format");
+  }
+  const [, reference, sequence] = match;
+  if (!reference || !sequence) {
+    panic("Document stamp has an invalid reference format");
+  }
+
+  const ledgerRows = await tx
+    .select({
+      id: documentReferenceCounters.id,
+      workspaceId: documentReferenceCounters.workspaceId,
+    })
+    .from(documentReferenceCounters)
+    .where(
+      and(
+        eq(documentReferenceCounters.organizationId, workspace.organizationId),
+        eq(documentReferenceCounters.reference, reference),
+      ),
+    )
+    .for("update");
+  const ledger = ledgerRows.at(0);
+  if (ledger && ledger.workspaceId !== workspaceId) {
+    panic("Document stamp reference belongs to another workspace");
+  }
+
+  const lastValue = Number(sequence);
+  if (!Number.isSafeInteger(lastValue)) {
+    panic("Document stamp sequence is not a safe integer");
   }
 
   await tx
@@ -188,9 +225,9 @@ export const recordEntityStamp = async (
     .values({
       id: createSafeId<"documentReferenceCounter">(),
       organizationId: workspace.organizationId,
-      reference: workspace.reference,
+      reference,
       workspaceId,
-      lastValue: docSequence,
+      lastValue,
     })
     .onConflictDoUpdate({
       target: [
@@ -198,7 +235,7 @@ export const recordEntityStamp = async (
         documentReferenceCounters.reference,
       ],
       set: {
-        lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, ${docSequence})`,
+        lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, ${lastValue})`,
       },
     });
 };
