@@ -8,8 +8,12 @@ import { parsePlainDate } from "@stll/time";
 import {
   publicStatuteOptions,
   statuteBySlugOptions,
+  statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
-import type { PublicStatute } from "@/features/statutes/queries/statutes";
+import type {
+  PublicStatute,
+  PublicStatuteVersion,
+} from "@/features/statutes/queries/statutes";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicLawCanonicalUrl,
@@ -21,6 +25,7 @@ import {
   createStatutePath,
   createStatuteRouteParams,
   isStatuteDocumentId,
+  normalizeStatuteStoredSlug,
   normalizeStatuteVersionSegment,
   type StatuteRouteParams,
   toStatuteCountrySegment,
@@ -75,13 +80,20 @@ type PublicStatuteRouteParams = {
  * What the reader renders. `statute` is null only when the reader asked for a
  * day no consolidation of the Work covers, which is an answer the reader
  * shows against the Work's chrome rather than a failure.
+ *
+ * `versions` is loaded here rather than in the viewer: the canonical address
+ * depends on it, and a component suspending on it after the route resolved
+ * would show the reader a second loading pass.
  */
 export type PublicStatuteRouteData = {
   statute: PublicStatute | null;
+  versions: readonly PublicStatuteVersion[];
   work: PublicStatute;
 };
 
 type LoadPublicStatuteRouteOptions = {
+  /** The provision anchor the incoming URL carried, `#` included. */
+  hash: string;
   params: PublicStatuteRouteParams;
   queryClient: QueryClient;
   search: PublicStatuteSearch;
@@ -104,17 +116,33 @@ const statuteNotFound = (): never => {
 
 /**
  * The address a consolidation is canonical at: the bare slug path for the
- * open-ended latest text, its own `/v/` path for every superseded one. A
- * closed validity window is exactly "a later consolidation opened", so the
- * flag needs no version listing to compute.
+ * Work's latest text, its own `/v/` path for every superseded one.
+ *
+ * Which text is the latest comes from the version listing, whose order the
+ * API owns (newest validity window first, id descending) and which `by-slug`
+ * resolves through as well. It cannot be read off a single row: a publisher
+ * may leave an older consolidation open-ended, so more than one row of a Work
+ * can carry a null `versionValidTo`.
  */
-const canonicalStatuteParams = (statute: PublicStatute): StatuteRouteParams =>
-  createStatuteRouteParams({
+const canonicalStatuteParams = ({
+  statute,
+  versions,
+}: {
+  statute: PublicStatute;
+  versions: readonly PublicStatuteVersion[];
+}): StatuteRouteParams => {
+  const latest = versions.at(0);
+
+  return createStatuteRouteParams({
     country: statute.country,
     documentId: statute.id,
     slug: statute.slug,
-    version: statute.versionValidTo === null ? null : statute.versionValidFrom,
+    version:
+      latest === undefined || latest.id === statute.id
+        ? null
+        : statute.versionValidFrom,
   });
+};
 
 const currentStatutePath = (params: PublicStatuteRouteParams): string =>
   createStatutePath({
@@ -123,17 +151,24 @@ const currentStatutePath = (params: PublicStatuteRouteParams): string =>
     ...(params.version === undefined ? {} : { version: params.version }),
   });
 
+type RedirectToCanonicalStatutePathOptions = {
+  canonicalParams: StatuteRouteParams;
+  hash: string;
+  search: PublicStatuteSearch;
+};
+
 const redirectToCanonicalStatutePath = ({
   canonicalParams,
+  hash,
   search,
-}: {
-  canonicalParams: StatuteRouteParams;
-  search: PublicStatuteSearch;
-}): never => {
+}: RedirectToCanonicalStatutePathOptions): never => {
   // `asOf` is dropped: it has done its work by naming the consolidation, and
   // carrying it on would make the canonical address ambiguous again. `jump`
-  // is where in the text to open, so it survives.
+  // is where in the text to open, so it survives — and so does the anchor,
+  // which is the same instruction spelled as a fragment.
   const redirectSearch = search.jump === undefined ? {} : { jump: search.jump };
+  const redirectHash = hash.startsWith("#") ? hash.slice(1) : hash;
+  const anchor = redirectHash === "" ? {} : { hash: redirectHash };
 
   if (canonicalParams.version) {
     redirect({
@@ -145,6 +180,7 @@ const redirectToCanonicalStatutePath = ({
       },
       replace: true,
       search: redirectSearch,
+      ...anchor,
       throw: true,
     });
   }
@@ -157,117 +193,164 @@ const redirectToCanonicalStatutePath = ({
     },
     replace: true,
     search: redirectSearch,
+    ...anchor,
     throw: true,
   });
 
   return panic("TanStack Router did not throw a redirect response.");
 };
 
-const settleCanonicalPath = ({
+type SettleStatuteRouteOptions = LoadPublicStatuteRouteOptions & {
+  /** Null when no consolidation of the Work covered the requested day. */
+  statute: PublicStatute | null;
+  /** A member of the Work, which carries its chrome while no text resolves. */
+  work: PublicStatute;
+};
+
+/**
+ * Send the reader to the address this text is canonical at, or render it when
+ * they are already there.
+ */
+const settleStatuteRoute = async ({
+  hash,
   params,
+  queryClient,
   search,
   statute,
-}: {
-  params: PublicStatuteRouteParams;
-  search: PublicStatuteSearch;
-  statute: PublicStatute;
-}): void => {
-  const canonicalParams = canonicalStatuteParams(statute);
+  work,
+}: SettleStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
+  const versions = await ensureRouteQueryData(
+    queryClient,
+    statuteVersionsOptions(work.id),
+  );
 
+  if (statute === null) {
+    // A `/v/` opening that names no consolidation is not a page at all, so it
+    // goes back to the act; a day picked in the reader stays on the act and
+    // is answered there.
+    if (params.version !== undefined) {
+      redirectToCanonicalStatutePath({
+        canonicalParams: canonicalStatuteParams({ statute: work, versions }),
+        hash,
+        search,
+      });
+    }
+
+    return { statute: null, versions, work };
+  }
+
+  const canonicalParams = canonicalStatuteParams({ statute, versions });
   if (
     search.asOf !== undefined ||
     currentStatutePath(params) !== createStatutePath(canonicalParams)
   ) {
-    redirectToCanonicalStatutePath({ canonicalParams, search });
+    redirectToCanonicalStatutePath({ canonicalParams, hash, search });
   }
+
+  return { statute, versions, work: statute };
 };
 
 /**
  * Resolve the statute a public URL names.
  *
  * Three addresses reach this loader and exactly one of them is canonical for
- * any given text: the readable segment (the latest consolidation), that
- * segment plus a `/v/` opening (a superseded consolidation), and the legacy
- * document id. The first two carry a `?asOf` lookup as well. Everything that
- * is not the canonical address redirects to it, so the corpus never offers a
- * crawler two URLs for one text.
+ * any given text: the readable segment (the Work's latest consolidation),
+ * that segment plus a `/v/` opening (a superseded consolidation), and the
+ * legacy document id. The first two carry a `?asOf` lookup as well.
+ * Everything that is not the canonical address redirects to it, so the corpus
+ * never offers a crawler two URLs for one text.
  */
 export const loadPublicStatuteRoute = async ({
+  hash,
   params,
   queryClient,
   search,
 }: LoadPublicStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
   const country = toStatuteCountrySegment(params.country);
+  const requestedDate =
+    normalizeStatuteVersionSegment(params.version) ?? search.asOf;
+  const readBySlug = async (slug: string, asOf: string | undefined) =>
+    await ensureRouteQueryData(
+      queryClient,
+      statuteBySlugOptions(
+        asOf === undefined ? { country, slug } : { country, slug, asOf },
+      ),
+    );
 
   if (isStatuteDocumentId(params.slug)) {
-    const statute = await ensureRouteQueryData(
+    const addressed = await ensureRouteQueryData(
       queryClient,
       publicStatuteOptions(params.slug),
     );
 
-    if (statute === null) {
+    if (addressed === null) {
       return statuteNotFound();
     }
 
-    // A document the backfill has not reached has no slug, and the id path is
-    // then its canonical address; one with a slug always moves.
-    settleCanonicalPath({ params, search, statute });
+    // A day asked for on a legacy address still means "the text that applied
+    // then", which is a question about the Work rather than about the one
+    // document the id names. Resolving it through the readable segment is
+    // what sends the reader to that consolidation's own address.
+    const slug = normalizeStatuteStoredSlug(addressed.slug);
+    const statute =
+      requestedDate === undefined || slug === null
+        ? addressed
+        : await readBySlug(slug, requestedDate);
 
-    return { statute, work: statute };
+    return await settleStatuteRoute({
+      hash,
+      params,
+      queryClient,
+      search,
+      statute,
+      work: addressed,
+    });
   }
 
-  const version = normalizeStatuteVersionSegment(params.version);
-  const requestedDate = version ?? search.asOf;
-  const slugKey = { country, slug: params.slug };
-  const statute = await ensureRouteQueryData(
-    queryClient,
-    statuteBySlugOptions(
-      requestedDate === undefined
-        ? slugKey
-        : { ...slugKey, asOf: requestedDate },
-    ),
-  );
-
-  if (statute !== null) {
-    settleCanonicalPath({ params, search, statute });
-
-    return { statute, work: statute };
+  const addressed = await readBySlug(params.slug, requestedDate);
+  if (addressed !== null) {
+    return await settleStatuteRoute({
+      hash,
+      params,
+      queryClient,
+      search,
+      statute: addressed,
+      work: addressed,
+    });
   }
 
   if (requestedDate === undefined) {
     return statuteNotFound();
   }
 
-  // Nothing was in force on the requested day. A `/v/` opening that names no
-  // consolidation is not a page at all, so it goes back to the act; a date
-  // picked in the reader stays on the act and is answered there.
-  const work = await ensureRouteQueryData(
-    queryClient,
-    statuteBySlugOptions(slugKey),
-  );
-
+  // Nothing was in force on the requested day; the Work still has chrome to
+  // answer with, so it is read without one.
+  const work = await readBySlug(params.slug, undefined);
   if (work === null) {
     return statuteNotFound();
   }
 
-  if (version !== null) {
-    redirectToCanonicalStatutePath({
-      canonicalParams: canonicalStatuteParams(work),
-      search,
-    });
-  }
-
-  return { statute: null, work };
+  return await settleStatuteRoute({
+    hash,
+    params,
+    queryClient,
+    search,
+    statute: null,
+    work,
+  });
 };
 
 export const createPublicStatuteHead = ({
   statute,
+  versions,
   work,
 }: PublicStatuteRouteData) => {
   const header = statute ?? work;
   // The canonical URL names the consolidation on screen, which a dated
   // request need not be the one the path was entered with.
-  const path = createStatutePath(canonicalStatuteParams(header));
+  const path = createStatutePath(
+    canonicalStatuteParams({ statute: header, versions }),
+  );
   const canonicalUrl = createPublicLawCanonicalUrl(path);
 
   return createPublicLawHead({

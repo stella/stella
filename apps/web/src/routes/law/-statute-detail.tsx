@@ -1,6 +1,6 @@
 import { useCallback, useId, useRef, useState } from "react";
 
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -25,7 +25,6 @@ import {
 import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
-import { statuteVersionsOptions } from "@/features/statutes/queries/statutes";
 import {
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
@@ -56,6 +55,7 @@ export const PublicStatuteViewer = ({
   asOf,
   requestedJump,
   statute,
+  versions,
   work,
 }: PublicStatuteViewerProps) => {
   const t = useTranslations();
@@ -63,7 +63,6 @@ export const PublicStatuteViewer = ({
   const asOfLabelId = useId();
   const routeHash = useRouterState({ select: (state) => state.location.hash });
   const readerRef = useRef<HTMLDivElement>(null);
-  const { data: versions } = useSuspenseQuery(statuteVersionsOptions(work.id));
 
   const header = statute ?? work;
   // Picking a day means going to that day's consolidation, and only the

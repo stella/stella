@@ -15,15 +15,20 @@ import {
 export const Route = createFileRoute("/law/$country/statutes/$slug/")({
   validateSearch: publicStatuteSearchSchema,
   loaderDeps: ({ search: { asOf, jump } }) => ({ asOf, jump }),
-  loader: async ({ context: { queryClient }, deps, params }) =>
-    await loadPublicStatuteRoute({ params, queryClient, search: deps }),
+  loader: async ({ context: { queryClient }, deps, location, params }) =>
+    await loadPublicStatuteRoute({
+      hash: location.hash,
+      params,
+      queryClient,
+      search: deps,
+    }),
   head: ({ loaderData }) =>
     loaderData ? createPublicStatuteHead(loaderData) : { meta: [] },
   component: PublicStatuteRoute,
 });
 
 function PublicStatuteRoute() {
-  const { statute, work } = Route.useLoaderData();
+  const { statute, versions, work } = Route.useLoaderData();
   const asOf = Route.useSearch({ select: (search) => search.asOf });
   const requestedJump = Route.useSearch({ select: (search) => search.jump });
 
@@ -32,6 +37,7 @@ function PublicStatuteRoute() {
       asOf={asOf}
       requestedJump={requestedJump}
       statute={statute}
+      versions={versions}
       work={work}
     />
   );
