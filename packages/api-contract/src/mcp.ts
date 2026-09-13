@@ -80,7 +80,9 @@ const MCP_RESOURCE_SCOPE_ACCESS = {
 >;
 
 export type McpWriteOnlyResourceScope = {
-  [TScope in McpDefaultResourceScope]: (typeof MCP_RESOURCE_SCOPE_ACCESS)[TScope] extends "write-only"
+  [
+    TScope in McpDefaultResourceScope
+  ]: (typeof MCP_RESOURCE_SCOPE_ACCESS)[TScope] extends "write-only"
     ? TScope
     : never;
 }[McpDefaultResourceScope];

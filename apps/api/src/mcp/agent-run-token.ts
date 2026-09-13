@@ -59,7 +59,9 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
 } as const satisfies Record<McpOAuthScope, "default" | "excluded">;
 
 type AgentRunDefaultScope = {
-  [TScope in McpOAuthScope]: (typeof AGENT_RUN_SCOPE_DISPOSITION)[TScope] extends "default"
+  [
+    TScope in McpOAuthScope
+  ]: (typeof AGENT_RUN_SCOPE_DISPOSITION)[TScope] extends "default"
     ? TScope
     : never;
 }[McpOAuthScope];

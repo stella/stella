@@ -60,9 +60,9 @@ export const toAuthClientError = (props: ToAuthClientErrorProps) => {
   });
 };
 
-export const isMemberError = (error: Error) =>
+export const isMemberError = (error: unknown) =>
   AuthClientError.is(error) &&
   error.code === "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION";
 
-export const isUnauthorizedError = (error: Error) =>
+export const isUnauthorizedError = (error: unknown) =>
   (APIError.is(error) || AuthClientError.is(error)) && error.status === 401;

@@ -2840,6 +2840,8 @@ test("a settlement turn asked for one delete task leases one", async () => {
 });
 
 test("settlement proves the lease against the instant its delete task carries", async () => {
+  await setDatabaseClock(new Date("2026-08-25T12:00:00.000Z"));
+  await db.execute(sql`SET search_path = public, pg_catalog`);
   await seedCommittedCleanupPair();
   const leases = await db.transaction(
     async (tx) =>

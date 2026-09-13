@@ -24,6 +24,7 @@ import {
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  providerSafeFolioInputSchema,
   requireFolioToolDefinition,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
@@ -45,9 +46,9 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  * `chat-tools.ts` registers exactly one of the two variants per turn
  * (`editApplyMode`), never both.
  *
- * Everything model-facing is folio's: the JSON Schema comes from
- * `getFolioToolDefinitions`, the lenient parser from `executeFolioToolCall`,
- * and the batch-level `documentVersion` pin from
+ * Everything model-facing is folio's: the provider-safe JSON Schema is
+ * projected from `getFolioToolDefinitions`, the lenient parser comes from
+ * `executeFolioToolCall`, and the batch-level `documentVersion` pin comes from
  * `FolioSuggestChangesOptions`. This module only adds what the host owns:
  * author resolution, the document load, and the version write.
  */
@@ -288,7 +289,9 @@ export const createAutoApplySuggestChangesTools = ({
     [SUGGEST_CHANGES_TOOL_NAME]: toolDefinition({
       name: definition.name,
       description: `${definition.description}${AUTO_APPLY_DESCRIPTION_SUFFIX}`,
-      inputSchema: toStandardJsonSchema(definition.inputSchema),
+      inputSchema: toStandardJsonSchema(
+        providerSafeFolioInputSchema(definition),
+      ),
       outputSchema: toTanStackToolSchema(outputSchema),
     }).server(async (input): Promise<AutoApplySuggestChangesOutput> => {
       const authorName = await resolveDocxEditAuthorName({ safeDb, userId });

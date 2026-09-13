@@ -87,7 +87,9 @@ const AI_PROVIDER_ADAPTER_KIND = {
 } as const satisfies Record<AIProvider, "custom" | "tanstack">;
 
 export type TanStackAIProvider = {
-  [TProvider in AIProvider]: (typeof AI_PROVIDER_ADAPTER_KIND)[TProvider] extends "tanstack"
+  [
+    TProvider in AIProvider
+  ]: (typeof AI_PROVIDER_ADAPTER_KIND)[TProvider] extends "tanstack"
     ? TProvider
     : never;
 }[AIProvider];
@@ -122,7 +124,9 @@ export const MODEL_CATALOG_PROVIDER_KIND = {
 
 /** Providers whose picker IDs map directly to public first-party catalogs. */
 export type FirstPartyModelProvider = {
-  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "first-party"
+  [
+    TProvider in TanStackAIProvider
+  ]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "first-party"
     ? TProvider
     : never;
 }[TanStackAIProvider];
@@ -731,7 +735,9 @@ type OfferedFirstPartyModelId =
  * accounting cannot price it either way.
  */
 type PlatformModelProvider = {
-  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "platform"
+  [
+    TProvider in TanStackAIProvider
+  ]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "platform"
     ? TProvider
     : never;
 }[TanStackAIProvider];
@@ -752,7 +758,9 @@ type NormalizedCatalogId<TId extends string> =
 
 /** Derived, not hand-listed: a new aggregator joins the check by kind. */
 type AggregatorModelProvider = {
-  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "aggregator"
+  [
+    TProvider in TanStackAIProvider
+  ]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "aggregator"
     ? TProvider
     : never;
 }[TanStackAIProvider];

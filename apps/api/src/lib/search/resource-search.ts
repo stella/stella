@@ -60,7 +60,9 @@ export const SEARCH_RESOURCE_DISPOSITION = {
 } as const satisfies Record<ResourceType, SearchDisposition>;
 
 type SearchableResourceType = {
-  [TType in ResourceType]: (typeof SEARCH_RESOURCE_DISPOSITION)[TType]["type"] extends "searchable"
+  [
+    TType in ResourceType
+  ]: (typeof SEARCH_RESOURCE_DISPOSITION)[TType]["type"] extends "searchable"
     ? TType
     : never;
 }[ResourceType];

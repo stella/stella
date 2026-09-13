@@ -11,7 +11,9 @@ const AGENT_SKILL_ORIGIN_EDITABILITY = {
 } as const satisfies Record<AgentSkillOrigin, "editable" | "read-only">;
 
 export type EditableAgentSkillOrigin = {
-  [TOrigin in AgentSkillOrigin]: (typeof AGENT_SKILL_ORIGIN_EDITABILITY)[TOrigin] extends "editable"
+  [
+    TOrigin in AgentSkillOrigin
+  ]: (typeof AGENT_SKILL_ORIGIN_EDITABILITY)[TOrigin] extends "editable"
     ? TOrigin
     : never;
 }[AgentSkillOrigin];
