@@ -5,12 +5,12 @@ import { cn } from "@stll/ui/utils";
 
 import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable } from "@/components/workspaces/table/types";
-import { guideAnchor } from "@/features/guides/guide-anchor";
-import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 
