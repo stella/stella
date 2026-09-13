@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
 import runResearchAnswers from "@/api/handlers/case-law/research/answers-run";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
@@ -165,6 +166,81 @@ describe("case-law research permissions", () => {
           granted: hasMemberPermission({ role }, endpoint.config.permissions),
         }).toEqual({ file, role, granted: true });
       }
+    }
+  });
+});
+
+/**
+ * The run endpoint spends nothing itself: its detached runner meters every
+ * model call under `case_law` at the standard tier. So the framework
+ * pre-flight has to price the request that way and refuse it before the queue
+ * marks cells pending, or an organization with no budget left is charged for
+ * nothing and keeps rows pending against a run that can never answer them.
+ */
+describe("an answer run is priced before it claims cells", () => {
+  /** A ledger holding no entitlement row for the organization. */
+  const noEntitlementTx = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [],
+        }),
+      }),
+    }),
+  };
+
+  test("refuses the run at the case-law price, before the queue is touched", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USAGE_ENFORCEMENT_ENABLED = true;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "sk-test";
+    try {
+      let transactions = 0;
+      const unentitledDb: SafeDb = async <T>(
+        fn: (tx: never) => Promise<T>,
+      ): Promise<Result<T, SafeDbError>> => {
+        transactions += 1;
+        return Result.ok(await fn(asTestRaw(noEntitlementTx)));
+      };
+
+      const result = await runResearchAnswers.handler(
+        asTestRaw({
+          ...asTestRaw<Record<string, unknown>>(contextForRole("owner")),
+          body: {
+            decisionIds: [
+              toSafeId<"caseLawDecision">(
+                "019e7000-0000-7000-8000-0000000000a1",
+              ),
+            ],
+          },
+          safeDb: unentitledDb,
+        }),
+      );
+
+      if (!("code" in result)) {
+        throw new Error("expected the pre-flight to return a status response");
+      }
+      expect({ code: result.code, body: result.response }).toEqual({
+        code: 402,
+        body: {
+          code: "usage_limit_exceeded",
+          message: "Organisation has no active usage entitlement",
+          reason: "no_entitlement",
+          // 8 units for `case_law`, times the 1.5 standard-tier multiplier:
+          // the chat meter the neighbouring endpoints declare would cost 2.
+          required: 12,
+          available: 0,
+        },
+      });
+      // Only the pre-flight read: the handler body, which claims the cells,
+      // never opened a transaction of its own.
+      expect(transactions).toBe(1);
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 });
