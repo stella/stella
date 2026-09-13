@@ -78,11 +78,18 @@ describe("evidence references", () => {
               });
             }
           }
-          const unchanged = state.applyTransaction(
-            state.tr.setSelection(TextSelection.atEnd(state.doc)),
+          const fixedPoint = state.applyTransaction(
+            state.tr
+              .setSelection(TextSelection.atEnd(state.doc))
+              .insertText(" ordinary prose"),
           );
-          expect(unchanged.transactions).toHaveLength(1);
-          expect(unchanged.state.doc.eq(state.doc)).toBe(true);
+          expect(fixedPoint.transactions).toHaveLength(1);
+          expect(
+            fixedPoint.state.doc.textBetween(
+              0,
+              fixedPoint.state.doc.content.size,
+            ),
+          ).toMatch(/ ordinary prose$/);
         },
       ),
     );
@@ -155,26 +162,46 @@ describe("evidence references", () => {
     ]);
   });
 
-  test("different source versions remain distinct exhibits", () => {
+  test("each source identity component distinguishes exhibits", () => {
     const first = source(1);
-    const next = {
-      ...first,
-      entityVersionId: "30000000-0000-4000-8000-000000000002",
-      fieldId: "40000000-0000-4000-8000-000000000002",
-    };
+    const variants = [
+      first,
+      {
+        ...first,
+        workspaceId: "10000000-0000-4000-8000-000000000002",
+      },
+      {
+        ...first,
+        entityId: "20000000-0000-4000-8000-000000000002",
+      },
+      {
+        ...first,
+        entityVersionId: "30000000-0000-4000-8000-000000000002",
+      },
+      {
+        ...first,
+        fieldId: "40000000-0000-4000-8000-000000000002",
+      },
+    ] satisfies EvidenceReference[];
     const doc = schema.node("doc", null, [
-      schema.node("paragraph", null, [
-        createEvidenceField(schema, first),
-        createEvidenceField(schema, next),
-      ]),
+      schema.node(
+        "paragraph",
+        null,
+        variants.flatMap((reference) => [
+          createEvidenceField(schema, reference),
+          schema.text(" "),
+        ]),
+      ),
     ]);
     expect(
       collectEvidenceReferences(doc).references.map(
         ({ reference, number }) => ({ reference, number }),
       ),
-    ).toEqual([
-      { reference: first, number: 1 },
-      { reference: next, number: 2 },
-    ]);
+    ).toEqual(
+      variants.map((reference, index) => ({
+        reference,
+        number: index + 1,
+      })),
+    );
   });
 });

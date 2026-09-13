@@ -2171,7 +2171,7 @@
     "bulletList": "Odrážkový seznam",
     "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
-    "chooseEvidence": "Vyberte soubor, do kterého vložíte číslovaný odkaz na důkaz.",
+    "chooseEvidence": "Vyberte soubor pro vložení číslovaného odkazu na důkaz.",
     "comment": "Komentář",
     "comments": {
       "addPlaceholder": "Přidat komentář...",

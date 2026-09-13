@@ -223,12 +223,6 @@ for (const locale of ["cs", "en", "ar"] as const) {
         `?entity=${pleadingUpload.entityId}&field=${pleadingField!.id}&editing=true`;
       await page.goto(documentUrl, { waitUntil: "domcontentloaded" });
 
-      await expect(page.locator("html")).toHaveAttribute("lang", locale);
-      await expect(page.locator("html")).toHaveAttribute(
-        "dir",
-        locale === "ar" ? "rtl" : "ltr",
-      );
-
       const finishEditingButton = page.getByRole("button", {
         name: messages[locale].folio.finishEditing,
       });
@@ -238,6 +232,12 @@ for (const locale of ["cs", "en", "ar"] as const) {
           hasText: "Stella E2E test document.",
         }),
       ).toBeVisible({ timeout: 45_000 });
+
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.locator("html")).toHaveAttribute(
+        "dir",
+        locale === "ar" ? "rtl" : "ltr",
+      );
 
       const evidenceButton = page.getByRole("button", {
         name: messages[locale].folio.evidenceReferences,
@@ -269,6 +269,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
       await finishEditingButton.click();
       expect((await finalizeResponse).ok()).toBe(true);
+      await expect(finishEditingButton).toBeHidden();
 
       const savedFieldId = await waitForFileFieldId(
         request,
@@ -351,6 +352,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .getByRole("button", { name: messages[locale].folio.finishEditing })
         .click();
       expect((await secondFinalizeResponse).ok()).toBe(true);
+      await expect(finishEditingButton).toBeHidden();
       const finalDocument = await waitForDocumentContaining(
         request,
         testWorkspace.id,

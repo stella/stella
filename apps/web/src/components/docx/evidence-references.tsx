@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { FileCheckIcon, PlusIcon } from "lucide-react";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
@@ -202,6 +202,16 @@ const EvidenceFilePicker = ({
         });
       }),
     ) ?? [];
+  const reportInsertError = (error: unknown) => {
+    if (controller.current?.signal.aborted !== false) {
+      return;
+    }
+    getAnalytics().captureError(error);
+    stellaToast.add({
+      title: userErrorFromThrown(error, t("folio.evidenceUnavailable")),
+      type: "error",
+    });
+  };
   const insert = useMutation({
     mutationFn: async ({
       entityId: sourceEntityId,
@@ -209,7 +219,7 @@ const EvidenceFilePicker = ({
     }: {
       entityId: string;
       fieldId: string;
-    }): Promise<EvidenceReference> => {
+    }) => {
       const data = unwrapEden(
         await api
           .entities({ workspaceId })
@@ -222,20 +232,26 @@ const EvidenceFilePicker = ({
           }),
       );
       if (data.file === null || !isFileDisplayable(data.file)) {
-        throw new EvidenceSourceUnavailableError({
-          message: "The selected evidence source is unavailable",
-        });
+        return Result.err(
+          new EvidenceSourceUnavailableError({
+            message: "The selected evidence source is unavailable",
+          }),
+        );
       }
-      return {
+      return Result.ok({
         profile: "cs-evidence",
         workspaceId,
         entityId: sourceEntityId,
         entityVersionId: data.entityVersionId,
         fieldId,
         title: data.file.fileName,
-      };
+      } satisfies EvidenceReference);
     },
-    onSuccess(reference) {
+    onSuccess(result) {
+      if (Result.isError(result)) {
+        reportInsertError(result.error);
+        return;
+      }
       if (
         controller.current?.signal.aborted !== false ||
         view.isDestroyed ||
@@ -246,7 +262,7 @@ const EvidenceFilePicker = ({
       view.dispatch(
         view.state.tr
           .replaceSelectionWith(
-            createEvidenceField(view.state.schema, reference),
+            createEvidenceField(view.state.schema, result.value),
             false,
           )
           .scrollIntoView(),
@@ -254,16 +270,7 @@ const EvidenceFilePicker = ({
       onInserted();
       view.focus();
     },
-    onError(error) {
-      if (controller.current?.signal.aborted !== false) {
-        return;
-      }
-      getAnalytics().captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("folio.evidenceUnavailable")),
-        type: "error",
-      });
-    },
+    onError: reportInsertError,
   });
 
   return (
