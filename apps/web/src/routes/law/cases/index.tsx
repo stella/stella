@@ -52,7 +52,7 @@ import {
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
-import { DecisionFacetRail } from "@/features/case-law/components/decision-facet-rail";
+import { DecisionFilterPopover } from "@/features/case-law/components/decision-filter-popover";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { DecisionPager } from "@/features/case-law/components/decision-pager";
 import {
@@ -63,7 +63,8 @@ import type { DecisionFilterChip } from "@/features/case-law/components/decision
 import { DecisionTable } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
-import { toggledFacetRail } from "@/features/case-law/decision-column-preferences.logic";
+import { decisionFilterFacets } from "@/features/case-law/decision-filter-facets";
+import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 import {
   decisionPageIndex,
   decisionPageNumber,
@@ -81,7 +82,6 @@ import {
   decisionsLoadMode,
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
-import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -93,18 +93,10 @@ import {
   decisionsInfiniteOptions,
 } from "@/features/case-law/queries/decisions";
 import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
-import { railFacets } from "@/features/case-law/rail-facets";
 import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
-import {
-  addRefineTerm,
-  canonicalRefinements,
-  queryWithRefinements,
-  refineTermsOfQuery,
-  removeRefineTerm,
-} from "@/features/case-law/search-refine.logic";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
@@ -128,7 +120,6 @@ import {
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
-const MAX_REFINEMENT_LENGTH = 240;
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
@@ -148,18 +139,6 @@ const optionalBrowseStringSchema = (maxLength: number) =>
       v.transform((value) => (value.length > 0 ? value : undefined)),
     ),
   );
-
-const optionalRefinementsSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.maxLength(MAX_REFINEMENT_LENGTH),
-      v.transform(canonicalRefinements),
-    ),
-  ),
-  undefined,
-);
 
 /**
  * A calendar date, dropped rather than refused when it is not one: a public
@@ -216,10 +195,8 @@ const searchSchema = v.object({
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
-  source: optionalBrowseStringSchema(128),
   to: optionalDateSchema,
   type: optionalBrowseStringSchema(128),
-  within: optionalRefinementsSchema,
   // Accepted, never written: links made before the range existed still work,
   // and `decisionDateRange` resolves them to that year's whole span.
   year: optionalBrowseStringSchema(4),
@@ -231,7 +208,6 @@ type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;
 const FILTER_KIND_LABEL_KEYS = {
   court: "common.court",
   lang: "common.language",
-  source: "common.source",
   type: "common.type",
 } as const satisfies Record<CaseLawFilterKey, TranslationKey>;
 
@@ -250,8 +226,6 @@ const withFilter = (
       return { ...previous, court: value };
     case "lang":
       return { ...previous, lang: value };
-    case "source":
-      return { ...previous, source: value };
     case "type":
       return { ...previous, type: value };
     default:
@@ -261,25 +235,17 @@ const withFilter = (
 };
 
 /**
- * What a chip shows for a selected value. A source is an opaque id the facets
- * attach a name to, and a language is a code; every other facet's value is
- * already the words the reader picked off the rail.
+ * What a chip shows for a selected value. A language is a code; every other
+ * facet's value is already the words the reader picked in the popover.
  */
 const chipValue = (
   key: CaseLawFilterKey,
   value: string,
-  {
-    facets,
-    format,
-  }: { facets: DecisionRailFacets; format: ReturnType<typeof useFormatter> },
+  format: ReturnType<typeof useFormatter>,
 ): string => {
   switch (key) {
     case "lang":
       return languageLabel(format, value);
-    case "source":
-      return (
-        facets.source.find((bucket) => bucket.value === value)?.label ?? value
-      );
     case "court":
     case "type":
       return value;
@@ -360,7 +326,6 @@ export const Route = createFileRoute("/law/cases/")({
     // the browse slice the home's country links and the crawler follow.
     if (
       search.q === undefined &&
-      search.within === undefined &&
       search.country === undefined &&
       !hasActiveCaseLawFilter(search)
     ) {
@@ -428,9 +393,9 @@ export const Route = createFileRoute("/law/cases/")({
         queryClient.getQueryData(decisionsOptions.queryKey) !== undefined,
     });
 
-    // A filter, a sort or a refinement on a page that is already drawn: the
-    // rail, the toolbar, the headers and the pager are all still correct, so
-    // awaiting the new rows here would replace a live page with a skeleton for
+    // A filter, a sort or a page step on a page that is already drawn: the
+    // toolbar, the headers and the pager are all still correct, so awaiting
+    // the new rows here would replace a live page with a skeleton for
     // nothing. The components hold the previous rows and swap them in place.
     if (mode === "background") {
       return {
@@ -490,8 +455,8 @@ export const Route = createFileRoute("/law/cases/")({
   },
   // One page, two states. Only a cold arrival renders the pending one — a
   // filter, a sort or a page step keeps the page it is already on — and what
-  // waits there is the grid alone: the box, the rail, the toolbar, the chips
-  // and the pager are the URL's own and are already correct.
+  // waits there is the grid alone: the box, the toolbar, the chips and the
+  // pager are the URL's own and are already correct.
   component: () => <PublicCaseLawIndex routeState="loaded" />,
   pendingComponent: () => <PublicCaseLawIndex routeState="pending" />,
 });
@@ -516,10 +481,8 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       pageSize,
       q,
       sort,
-      source,
       to,
       type,
-      within,
       year,
     }) => ({
       country,
@@ -530,10 +493,8 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       pageSize,
       q,
       sort,
-      source,
       to,
       type,
-      within,
       year,
     }),
   });
@@ -550,8 +511,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       locale: getMessageLocale(),
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
-  const effectiveQuery = queryWithRefinements(search.q, search.within);
-  const intent = readDecisionIntent(effectiveQuery, { jurisdiction: scope });
+  const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const filters = createDecisionFiltersFromSearch(search);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
@@ -593,7 +553,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const pageSize = decisionPageSize(search.pageSize);
   // Read, not suspended on: the loader primes this only on a cold arrival, and
   // a jurisdiction switch must not take the whole page down for a list of
-  // court names. The previous rail stays until the new one lands.
+  // court names. The previous facets stay until the new ones land.
   const { data: browseFacets } = useQuery({
     ...decisionFacetsOptions(scope),
     placeholderData: keepPreviousData,
@@ -640,7 +600,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       : [...exact, ...decisions.filter((d) => !exactIds.has(d.id))];
 
   const searchTotal = data?.pages.at(0)?.total ?? SEARCH_TOTAL_NOT_COUNTED;
-  const facets = railFacets({
+  const facets: DecisionFilterFacets = decisionFilterFacets({
     browse: browseFacets ?? NO_BROWSE_FACETS,
     search: data?.pages.at(0)?.facets ?? null,
   });
@@ -762,7 +722,6 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     );
   };
 
-  const refineTerms = refineTermsOfQuery(search.within);
   const dateRange = decisionDateRange(search);
   const chips: DecisionFilterChip[] = [];
   // The same three shapes, and the same strings, the workspace view's own
@@ -801,25 +760,9 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       id: `filter:${key}`,
       kind: t(FILTER_KIND_LABEL_KEYS[key]),
       onRemove: () => selectFacet(key, undefined),
-      value: chipValue(key, value, { facets, format }),
+      value: chipValue(key, value, format),
     });
   }
-  for (const term of refineTerms) {
-    chips.push({
-      id: `refine:${term}`,
-      onRemove: () => {
-        detached(
-          searchNavigation((previous) => ({
-            ...previous,
-            within: removeRefineTerm(previous.within, term),
-          })),
-          "cases.remove-refinement-navigate",
-        );
-      },
-      value: `"${term}"`,
-    });
-  }
-
   // Enter on an identifier opens the decision when exactly one answers to it.
   // Several (the same docket at several courts) stay listed, so the reader
   // picks; nothing is guessed. The field's value is read directly: the
@@ -866,101 +809,80 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         query={queryInput}
       />
 
-      <div className="flex min-w-0 flex-1 items-start gap-6">
-        <DecisionFacetRail
-          dateRange={dateRange}
-          facets={facets}
-          onDateRangeChange={setDateRange}
-          onSelect={selectFacet}
-          railState={layout.facetRail}
-          selection={{
-            court: search.court,
-            lang: search.lang,
-            source: search.source,
-            type: search.type,
+      <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
+        <DecisionResultsToolbar
+          filters={
+            <DecisionFilterPopover
+              activeFilterCount={activeCaseLawFilterCount(search)}
+              dateRange={dateRange}
+              facets={facets}
+              onDateRangeChange={setDateRange}
+              onSelect={selectFacet}
+              selection={{
+                court: search.court,
+                lang: search.lang,
+                type: search.type,
+              }}
+            />
+          }
+          find={<TableFindBar {...find.bar} />}
+          actions={<QuestionColumnControls controller={questions} />}
+          layout={layout}
+          onLayoutChange={setLayout}
+          onSortChange={(next) => {
+            detached(
+              searchNavigation((previous) => ({ ...previous, sort: next })),
+              "cases.sort-navigate",
+            );
+          }}
+          questions={questions.surface}
+          sort={sort}
+          summary={
+            <ListHeading
+              exactCount={exact.length}
+              intent={intent}
+              isRefreshing={isRefreshing}
+              page={pager.currentPage}
+              total={searchTotal}
+            />
+          }
+        />
+
+        <DecisionFilterChips
+          chips={chips}
+          onClearAll={() => {
+            // Clear the filters, not the query the reader typed into the box:
+            // the box is the search, and emptying it is its own gesture.
+            detached(
+              searchNavigation((previous) => ({
+                ...previous,
+                ...clearedCaseLawFilters(),
+              })),
+              "cases.clear-filters",
+            );
           }}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
-          <DecisionResultsToolbar
-            activeFilterCount={activeCaseLawFilterCount(search)}
-            find={<TableFindBar {...find.bar} />}
-            actions={<QuestionColumnControls controller={questions} />}
-            layout={layout}
-            onLayoutChange={setLayout}
-            onRefine={(entry) => {
-              detached(
-                searchNavigation((previous) => ({
-                  ...previous,
-                  within: addRefineTerm(previous.within, entry),
-                })),
-                "cases.refine-navigate",
-              );
-            }}
-            onRailToggle={() =>
-              setLayout({
-                ...layout,
-                facetRail: toggledFacetRail(layout.facetRail),
-              })
-            }
-            onSortChange={(next) => {
-              detached(
-                searchNavigation((previous) => ({ ...previous, sort: next })),
-                "cases.sort-navigate",
-              );
-            }}
-            questions={questions.surface}
-            railState={layout.facetRail}
-            sort={sort}
-            summary={
-              <ListHeading
-                exactCount={exact.length}
-                intent={intent}
-                isRefreshing={isRefreshing}
-                page={pager.currentPage}
-                total={searchTotal}
-              />
-            }
-          />
-
-          <DecisionFilterChips
-            chips={chips}
-            onClearAll={() => {
-              // Clear the chips, not the query the reader typed into the main
-              // field. Refinements have their own URL field, so the visible
-              // query and the result set cannot diverge here.
-              detached(
-                searchNavigation((previous) => ({
-                  ...previous,
-                  ...clearedCaseLawFilters(),
-                  within: undefined,
-                })),
-                "cases.clear-filters",
-              );
-            }}
-          />
-
-          <DecisionTable
-            decisions={find.decisions}
-            expectedRowCount={pageSize}
-            findHighlight={find.highlight}
-            isLoading={rows === "skeleton"}
-            isRefreshing={isRefreshing}
-            layout={layout}
-            onLayoutChange={setLayout}
-            onSelectedIdsChange={setSelectedIds}
-            query={effectiveQuery}
-            questions={questions.surface}
-            selectedIds={selectedIds}
-          />
-          <DecisionPager
-            isWalking={isFetchingNextPage}
-            model={pager}
-            onPageSizeChange={setPageSize}
-            onWalkForward={walkForward}
-            pageSize={pageSize}
-          />
-        </div>
+        <DecisionTable
+          decisions={find.decisions}
+          expectedRowCount={pageSize}
+          findHighlight={find.highlight}
+          isLoading={rows === "skeleton"}
+          isRefreshing={isRefreshing}
+          layout={layout}
+          onLayoutChange={setLayout}
+          onSelectedIdsChange={setSelectedIds}
+          query={search.q}
+          questions={questions.surface}
+          selectedIds={selectedIds}
+        />
+        <DecisionPager
+          isWalking={isFetchingNextPage}
+          model={pager}
+          onPageSizeChange={setPageSize}
+          onWalkForward={walkForward}
+          pageSize={pageSize}
+        />
       </div>
     </main>
   );

@@ -629,7 +629,6 @@
       "saveTitle": "Salvesta toimikusse",
       "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
     },
-    "narrowResultsHint": "Iga tulemus peab seda sisaldama",
     "newestDecisions": "Uusimad lahendid",
     "notesFilter": {
       "ai": "AI",
@@ -654,7 +653,6 @@
     "reader": {
       "headMatter": "Päis"
     },
-    "refineWithinResults": "Kitsenda tulemusi",
     "research": {
       "answering": "{count, plural, one {Vastan # lahtrile…} other {Vastan # lahtrile…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Salvesta sõnum"
     },
     "filter": "Filter",
+    "filters": "Filtrid",
     "find": "Leia",
     "formula": "Valem",
     "goBack": "Mine tagasi",
     "goBackToEditing": "Tagasi muutma",
     "hideDetails": "Peida üksikasjad",
-    "hideFilters": "Peida filtrid",
     "hideSecretValue": "Peida salajane väärtus",
     "history": "Ajalugu",
     "import": "Impordi",
@@ -1472,7 +1470,6 @@
     "settings": "Seaded",
     "showAll": "Näita kõiki",
     "showDetails": "Näita üksikasju",
-    "showFilters": "Näita filtreid",
     "showLess": "Näita vähem",
     "showMore": "Näita rohkem",
     "showSecretValue": "Kuva salajane väärtus",

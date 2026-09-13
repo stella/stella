@@ -629,7 +629,6 @@
       "saveTitle": "Salvar em um caso",
       "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
     },
-    "narrowResultsHint": "Todos os resultados devem conter o termo",
     "newestDecisions": "Decisões mais recentes",
     "notesFilter": {
       "ai": "IA",
@@ -654,7 +653,6 @@
     "reader": {
       "headMatter": "Cabeçalho"
     },
-    "refineWithinResults": "Refinar resultados",
     "research": {
       "answering": "{count, plural, one {Respondendo # célula…} other {Respondendo # células…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Salvar mensagem"
     },
     "filter": "Filtro",
+    "filters": "Filtros",
     "find": "Localizar",
     "formula": "Fórmula",
     "goBack": "Voltar",
     "goBackToEditing": "Voltar a editar",
     "hideDetails": "Ocultar detalhes",
-    "hideFilters": "Ocultar filtros",
     "hideSecretValue": "Ocultar valor secreto",
     "history": "Histórico",
     "import": "Importar",
@@ -1472,7 +1470,6 @@
     "settings": "Configurações",
     "showAll": "Mostrar tudo",
     "showDetails": "Mostrar detalhes",
-    "showFilters": "Mostrar filtros",
     "showLess": "Mostrar menos",
     "showMore": "Mostrar mais",
     "showSecretValue": "Mostrar valor secreto",

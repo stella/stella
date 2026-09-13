@@ -11,10 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import { openPublicLawChat } from "@/components/public-law-ask";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+
+/**
+ * How much of the page the box takes. `inline` is a row among others;
+ * `lead` is the page's own opening move — centred, wider and taller — which
+ * is what a results screen with nothing above the list needs.
+ */
+type PublicLawSearchProminence = "inline" | "lead";
 
 export type PublicLawSearchCountry = {
   /** The pill's value, as the route carries it. */
@@ -40,6 +48,8 @@ type PublicLawSearchProps = {
   /** Submitted: open what the entry names, when it names one thing. */
   onSubmit: () => void;
   placeholder: string;
+  /** How much of the page the box takes; a row among others by default. */
+  prominence?: PublicLawSearchProminence;
   query: string;
   searchLabel: string;
   /**
@@ -62,15 +72,20 @@ export const PublicLawSearch = ({
   onQueryChange,
   onSubmit,
   placeholder,
+  prominence = "inline",
   query,
   searchLabel,
 }: PublicLawSearchProps) => {
   const trimmed = query.trim();
   const prompt = trimmed.length > 0 ? askPrompt(trimmed) : null;
+  const lead = prominence === "lead";
 
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className={cn(
+        "flex flex-wrap items-center gap-2",
+        lead && "mx-auto w-full max-w-2xl justify-center",
+      )}
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -86,7 +101,10 @@ export const PublicLawSearch = ({
       )}
       <Input
         aria-label={searchLabel}
-        className="min-w-64 flex-1 sm:max-w-md"
+        className={cn(
+          "min-w-64 flex-1",
+          lead ? "h-11 min-h-11 text-base" : "sm:max-w-md",
+        )}
         maxLength={maxLength}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         placeholder={placeholder}

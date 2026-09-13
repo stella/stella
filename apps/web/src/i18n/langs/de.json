@@ -629,7 +629,6 @@
       "saveTitle": "In Akte speichern",
       "saved": "{count, plural, one {# Entscheidung} other {# Entscheidungen}} in {matter} gespeichert"
     },
-    "narrowResultsHint": "Jedes Ergebnis muss es enthalten",
     "newestDecisions": "Neueste Entscheidungen",
     "notesFilter": {
       "ai": "KI",
@@ -654,7 +653,6 @@
     "reader": {
       "headMatter": "Rubrum"
     },
-    "refineWithinResults": "Ergebnisse eingrenzen",
     "research": {
       "answering": "{count, plural, one {# Zelle wird beantwortet…} other {# Zellen werden beantwortet…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Nachricht speichern"
     },
     "filter": "Filtern",
+    "filters": "Filter",
     "find": "Suchen",
     "formula": "Formel",
     "goBack": "Zurück",
     "goBackToEditing": "Zurück zur Bearbeitung",
     "hideDetails": "Details ausblenden",
-    "hideFilters": "Filter ausblenden",
     "hideSecretValue": "Geheimen Wert ausblenden",
     "history": "Verlauf",
     "import": "Importieren",
@@ -1472,7 +1470,6 @@
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
     "showDetails": "Details anzeigen",
-    "showFilters": "Filter anzeigen",
     "showLess": "Weniger anzeigen",
     "showMore": "Mehr anzeigen",
     "showSecretValue": "Geheimen Wert anzeigen",

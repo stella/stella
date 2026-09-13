@@ -629,7 +629,6 @@
       "saveTitle": "Enregistrer dans un dossier",
       "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
     },
-    "narrowResultsHint": "Chaque résultat doit le contenir",
     "newestDecisions": "Décisions les plus récentes",
     "notesFilter": {
       "ai": "IA",
@@ -654,7 +653,6 @@
     "reader": {
       "headMatter": "En-tête"
     },
-    "refineWithinResults": "Affiner les résultats",
     "research": {
       "answering": "{count, plural, one {Réponse en cours pour # cellule…} other {Réponse en cours pour # cellules…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Enregistrer le message"
     },
     "filter": "Filtrer",
+    "filters": "Filtres",
     "find": "Rechercher",
     "formula": "Formule",
     "goBack": "Retour",
     "goBackToEditing": "Revenir à l’édition",
     "hideDetails": "Masquer les détails",
-    "hideFilters": "Masquer les filtres",
     "hideSecretValue": "Masquer la valeur secrète",
     "history": "Historique",
     "import": "Importer",
@@ -1472,7 +1470,6 @@
     "settings": "Paramètres",
     "showAll": "Tout afficher",
     "showDetails": "Afficher les détails",
-    "showFilters": "Afficher les filtres",
     "showLess": "Afficher moins",
     "showMore": "Afficher plus",
     "showSecretValue": "Afficher la valeur secrète",

@@ -7,13 +7,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  Sheet,
-  SheetPanel,
-  SheetPopup,
-  SheetTitle,
-  SheetTrigger,
-} from "@stll/ui/sheet";
+import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -25,99 +19,82 @@ import {
   dateRangeYear,
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
-import type { DecisionFacetRailState } from "@/features/case-law/decision-column-preferences.logic";
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
   FACET_SECTION_LIMIT,
   facetSectionView,
   YEAR_SECTION_LIMIT,
-} from "@/features/case-law/facet-rail.logic";
+} from "@/features/case-law/decision-filter-facets.logic";
 import type {
-  DecisionRailFacets,
+  DecisionFilterFacets,
   FacetItem,
   FacetSourceBucket,
-} from "@/features/case-law/facet-rail.logic";
+} from "@/features/case-law/decision-filter-facets.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
 
-type DecisionFacetRailProps = {
+type DecisionFilterPopoverProps = {
+  /** How many filters are on; drawn on the button, so a short list is explained. */
+  activeFilterCount: number;
   /** The decision-date span the URL asks for; either end may be open. */
   dateRange: DecisionDateRange;
-  facets: DecisionRailFacets;
+  facets: DecisionFilterFacets;
   onDateRangeChange: (range: DecisionDateRange) => void;
   onSelect: (key: CaseLawFilterKey, value: string | undefined) => void;
-  /** Folded away, the column is gone and only the narrow-viewport sheet is left. */
-  railState: DecisionFacetRailState;
   selection: DecisionFacetSelection;
 };
 
 /**
- * Refinement beside the results rather than in front of them: every section
- * shows what the current result set actually holds, so a filter can never
- * lead to an empty page, and the reader's own choice stays visible even once
- * the counts stop reporting it.
+ * Refinement behind one button, so the results keep the width and the search
+ * box keeps the page. Every section shows what the current result set
+ * actually holds, so a filter can never lead to an empty page, and the
+ * reader's own choice stays visible even once the counts stop reporting it.
  *
- * One column on a wide screen, a sheet behind a button on a narrow one; both
- * draw the same sections from the same facets. The column is what the toolbar
- * folds away for the results' sake; the sheet is the only rail a narrow
- * viewport ever had, so it stays either way.
+ * Nothing here is only in the popover: the button carries the count and the
+ * chips under the box name each filter and take it back out, so a reader who
+ * never opens this still knows what narrows the list.
  */
-export const DecisionFacetRail = ({
+export const DecisionFilterPopover = ({
+  activeFilterCount,
   dateRange,
   facets,
   onDateRangeChange,
   onSelect,
-  railState,
   selection,
-}: DecisionFacetRailProps) => {
+}: DecisionFilterPopoverProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   return (
-    <>
-      {railState === "open" && (
-        <aside
-          aria-label={t("common.filter")}
-          // Bounded inside the sticky context, so the rail scrolls on its own
-          // instead of stranding its lower sections below the fold: the page's
-          // scrollport is the results `main` under the 3rem top bar, and the
-          // extra rem is the gap the rail keeps above `main`'s bottom padding.
-          className="sticky top-0 hidden max-h-[calc(100dvh-4rem)] w-60 shrink-0 self-start overflow-y-auto pe-2 lg:block"
-        >
-          <FacetSections
-            dateRange={dateRange}
-            facets={facets}
-            onDateRangeChange={onDateRangeChange}
-            onSelect={onSelect}
-            selection={selection}
-          />
-        </aside>
-      )}
-      <Sheet>
-        <SheetTrigger
-          render={<Button className="lg:hidden" size="sm" variant="outline" />}
-        >
-          <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
-          {t("common.filter")}
-        </SheetTrigger>
-        <SheetPopup side="inline-start">
-          <SheetTitle className="p-6 pb-0 text-base">
-            {t("common.filter")}
-          </SheetTitle>
-          <SheetPanel>
-            <FacetSections
-              dateRange={dateRange}
-              facets={facets}
-              onDateRangeChange={onDateRangeChange}
-              onSelect={onSelect}
-              selection={selection}
-            />
-          </SheetPanel>
-        </SheetPopup>
-      </Sheet>
-    </>
+    <Popover>
+      <PopoverTrigger
+        render={<Button className="shrink-0" size="sm" variant="outline" />}
+      >
+        <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
+        {t("common.filters")}
+        {activeFilterCount > 0 && (
+          <span className="bg-primary text-primary-foreground inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-medium tabular-nums">
+            {format.number(activeFilterCount)}
+          </span>
+        )}
+      </PopoverTrigger>
+      <PopoverPanel
+        align="start"
+        className="w-72 max-w-[calc(100vw-2rem)]"
+        contentClassName="gap-5"
+      >
+        <FacetSections
+          dateRange={dateRange}
+          facets={facets}
+          onDateRangeChange={onDateRangeChange}
+          onSelect={onSelect}
+          selection={selection}
+        />
+      </PopoverPanel>
+    </Popover>
   );
 };
 
@@ -127,11 +104,11 @@ const FacetSections = ({
   onDateRangeChange,
   onSelect,
   selection,
-}: Omit<DecisionFacetRailProps, "railState">) => {
+}: Omit<DecisionFilterPopoverProps, "activeFilterCount">) => {
   const t = useTranslations();
 
   return (
-    <div className="flex flex-col gap-5">
+    <>
       {facets.courtTiers.length > 0 && (
         <section>
           <SectionHeading>{t("common.court")}</SectionHeading>
@@ -148,7 +125,7 @@ const FacetSections = ({
           </div>
         </section>
       )}
-      <YearSection
+      <DateSection
         buckets={facets.year}
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
@@ -161,14 +138,6 @@ const FacetSections = ({
         onSelect={onSelect}
         selectedValue={selection.type}
       />
-      <FacetSection
-        buckets={facets.source}
-        filterKey="source"
-        heading={t("common.source")}
-        limit={FACET_SECTION_LIMIT}
-        onSelect={onSelect}
-        selectedValue={selection.source}
-      />
       {/* One language is the corpus's language, not a choice. */}
       {facets.language.length > 1 && (
         <FacetSection
@@ -180,17 +149,18 @@ const FacetSections = ({
           selectedValue={selection.lang}
         />
       )}
-    </div>
+    </>
   );
 };
 
 /**
- * A year is the span a reader asks for most, so the list stays — but it is a
- * quick pick for the range below it rather than a filter of its own. The radio
- * shows selected exactly while the range is that year whole, so narrowing
- * either end visibly stops being "2024" and becomes the dates it now is.
+ * When the decision was handed down. A year is the span a reader asks for
+ * most, so the list stays — but it is a quick pick for the range below it
+ * rather than a filter of its own. The radio shows selected exactly while the
+ * range is that year whole, so narrowing either end visibly stops being
+ * "2024" and becomes the dates it now is.
  */
-const YearSection = ({
+const DateSection = ({
   buckets,
   dateRange,
   onDateRangeChange,
@@ -211,7 +181,7 @@ const YearSection = ({
 
   return (
     <section>
-      <SectionHeading>{t("workspaces.views.calendar.year")}</SectionHeading>
+      <SectionHeading>{t("common.date")}</SectionHeading>
       {items.length > 0 && (
         <FacetOptions
           groupLabel={t("workspaces.views.calendar.year")}
@@ -418,7 +388,7 @@ const CourtTierSection = ({
   );
 };
 
-type CourtTierBucketsTier = DecisionRailFacets["courtTiers"][number]["tier"];
+type CourtTierBucketsTier = DecisionFilterFacets["courtTiers"][number]["tier"];
 
 const ShowAllButton = ({
   children,

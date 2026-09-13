@@ -1,9 +1,9 @@
 /**
  * Whether the results route holds a navigation until its rows arrive.
  *
- * Only the rows are unknown when a reader adds a filter, sorts, or refines:
- * the rail, the toolbar, the column headers and the pager are all on screen
- * and all still correct. A loader that awaits the new rows takes the whole
+ * Only the rows are unknown when a reader adds a filter, sorts, or steps a
+ * page: the box, the toolbar, the column headers and the pager are all on
+ * screen and all still correct. A loader that awaits the new rows takes the whole
  * shell away and gives back a skeleton, so it awaits only when there is
  * nothing to take away.
  */

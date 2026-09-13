@@ -21,6 +21,10 @@ type CaseLawSearchProps = {
  * number, an ECLI or words. Dockets repeat across countries, so the chat
  * prompt carries the scope even though the row no longer shows it — the
  * jurisdiction is chosen once, in the top bar.
+ *
+ * It leads the results screen: there is nothing above the list but this, so
+ * the box is what the reader lands on and everything that narrows the list
+ * sits below it.
  */
 export const CaseLawSearch = ({
   country,
@@ -44,6 +48,7 @@ export const CaseLawSearch = ({
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
       placeholder={t("caseLaw.searchPlaceholder")}
+      prominence="lead"
       query={query}
       searchLabel={t("caseLaw.searchLabel")}
     />

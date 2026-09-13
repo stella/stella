@@ -28,7 +28,6 @@ export type DecisionListFilters = {
   search?: string;
   /** How a search orders its hits; absent while there is nothing to rank. */
   sort?: SearchSort;
-  sourceId?: string;
 };
 
 const caseLawDecisionKeys = {
@@ -61,7 +60,6 @@ const caseLawDecisionKeys = {
       pageSize: key.pageSize,
       search: key.search,
       sort: key.sort,
-      sourceId: key.sourceId,
     },
   ],
   byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
@@ -200,9 +198,6 @@ export const decisionsInfiniteOptions = (
             ...(listFilters.language !== undefined && {
               language: listFilters.language,
             }),
-            ...(listFilters.sourceId !== undefined && {
-              sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
-            }),
             ...(listFilters.sort !== undefined && { sort: listFilters.sort }),
           },
           { fetch: { signal } },
@@ -260,9 +255,6 @@ export const decisionsInfiniteOptions = (
           }),
           ...(listFilters.language !== undefined && {
             language: listFilters.language,
-          }),
-          ...(listFilters.sourceId !== undefined && {
-            sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
           }),
         },
         fetch: { signal },

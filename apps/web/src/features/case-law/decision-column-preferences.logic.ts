@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -7,16 +6,10 @@ import {
 } from "@/features/case-law/decision-columns.logic";
 import type { DecisionContentMode } from "@/features/case-law/decision-columns.logic";
 
-/** Whether the facet rail takes a column beside the results, or folds away. */
-export const DECISION_FACET_RAIL_STATES = ["collapsed", "open"] as const;
-
-export type DecisionFacetRailState =
-  (typeof DECISION_FACET_RAIL_STATES)[number];
-
 /**
  * How this browser draws the results table in one jurisdiction: which columns
- * it hides, in what order it puts them, which it keeps in front, how much of a
- * prose cell it shows, and whether the facet rail takes its column.
+ * it hides, in what order it puts them, which it keeps in front, and how much
+ * of a prose cell it shows.
  *
  * Rules, not storage: the hook next door owns the `Storage` and this module
  * owns what a stored value means, so every rule here is testable without a
@@ -31,7 +24,6 @@ export type DecisionTableLayout = {
   /** Widths the reader dragged, by column id; the schema's own otherwise. */
   sizing: Readonly<Record<string, number>>;
   contentMode: DecisionContentMode;
-  facetRail: DecisionFacetRailState;
 };
 
 /** One empty sizing map, so an untouched layout keeps one identity. */
@@ -43,9 +35,6 @@ export const DEFAULT_DECISION_TABLE_LAYOUT: DecisionTableLayout = {
   pinned: [],
   sizing: NO_COLUMN_SIZING,
   contentMode: "tight",
-  // The results need the width more than the rail does, and nothing is hidden
-  // by folding it: the chips row still names every filter that is on.
-  facetRail: "collapsed",
 };
 
 const columnIdList = v.array(v.string());
@@ -68,7 +57,6 @@ export const StoredDecisionLayoutSchema = v.record(
       pinned: v.optional(columnIdList),
       sizing: v.optional(v.record(v.string(), v.number())),
       contentMode: v.optional(v.picklist(DECISION_CONTENT_MODES)),
-      facetRail: v.optional(v.picklist(DECISION_FACET_RAIL_STATES)),
     }),
   ]),
 );
@@ -125,26 +113,7 @@ const decisionTableLayout = (
     sizing: stored.sizing ?? DEFAULT_DECISION_TABLE_LAYOUT.sizing,
     contentMode:
       stored.contentMode ?? DEFAULT_DECISION_TABLE_LAYOUT.contentMode,
-    facetRail: stored.facetRail ?? DEFAULT_DECISION_TABLE_LAYOUT.facetRail,
   };
-};
-
-/**
- * The rail's other state. A switch rather than a negation, so a third state
- * would fail here instead of silently meaning "collapsed".
- */
-export const toggledFacetRail = (
-  state: DecisionFacetRailState,
-): DecisionFacetRailState => {
-  switch (state) {
-    case "collapsed":
-      return "open";
-    case "open":
-      return "collapsed";
-    default:
-      state satisfies never;
-      return panic(`Unhandled facet rail state: ${String(state)}`);
-  }
 };
 
 /**
