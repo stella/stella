@@ -114,21 +114,6 @@ const statementsIn = (node: unknown): readonly AstNode[] =>
     ? node.body.filter(isAstNode)
     : [];
 
-const isPublicLawDatabaseUrlCheck = (node: unknown): boolean => {
-  if (!isAstNode(node) || node.type !== "BinaryExpression") {
-    return false;
-  }
-  const left = unwrapExpression(node.left);
-  return (
-    node.operator === "!==" &&
-    left?.type === "MemberExpression" &&
-    left.computed === false &&
-    isIdentifier(left.object, "envBase") &&
-    isIdentifier(left.property, "PUBLIC_LAW_DATABASE_URL") &&
-    isIdentifier(unwrapExpression(node.right), "undefined")
-  );
-};
-
 const callsConfiguration = (node: unknown, name: string): boolean => {
   if (!isAstNode(node)) {
     return false;
@@ -161,17 +146,6 @@ const directAwaitedCall = (statement: unknown): AstNode | undefined => {
   return call?.type === "CallExpression" ? call : undefined;
 };
 
-const isUnconditionalConfigurationBranch = (
-  branch: unknown,
-  name: string,
-): boolean => {
-  const statements = statementsIn(branch);
-  return (
-    statements.length === 1 &&
-    callsConfiguration(directAwaitedCall(statements.at(0)), name)
-  );
-};
-
 const directlyReturnsSharedCallback = (statement: unknown): boolean => {
   if (!isAstNode(statement) || statement.type !== "ReturnStatement") {
     return false;
@@ -201,18 +175,14 @@ const transactionCallbackIsConfigured = (functionNode: AstNode): boolean => {
   }
 
   const statements = statementsIn(callback.body);
-  const configurationIndex = statements.findIndex(
-    (statement) =>
-      statement.type === "IfStatement" &&
-      isPublicLawDatabaseUrlCheck(statement.test) &&
-      isUnconditionalConfigurationBranch(
-        statement.consequent,
-        "configureExternalReadTransaction",
-      ) &&
-      isUnconditionalConfigurationBranch(
-        statement.alternate,
-        "configureReadTransaction",
-      ),
+  // Unconditional on purpose: which guards a read gets is the guard set's
+  // decision, but that a read is configured at all must not depend on a branch
+  // the reader could take the other way.
+  const configurationIndex = statements.findIndex((statement) =>
+    callsConfiguration(
+      directAwaitedCall(statement),
+      "configureReadTransaction",
+    ),
   );
   if (configurationIndex === -1) {
     return false;
@@ -281,7 +251,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unconfiguredReadTransaction:
-            "publicLawReadDb must configure both public-reader transaction branches before invoking fn(tx).",
+            "publicLawReadDb must configure the read transaction unconditionally before invoking fn(tx).",
         },
       },
       createOnce(context) {

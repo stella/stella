@@ -326,36 +326,81 @@ const validateExternalPublicLawDatabase = async (
   assertPublicLawDatabaseRolePermissions(permissions);
 };
 
-/**
- * The isolation statement, first in the transaction so it binds the snapshot
- * before any read takes one.
- */
-const configureReadTransaction = async (
-  tx: Pick<Transaction, "execute">,
-  isolation: PublicLawReadIsolation,
-): Promise<void> => {
-  await tx.execute(
-    isolation === "repeatable-read"
-      ? sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`
-      : sql`SET TRANSACTION READ ONLY`,
-  );
-  await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
+type PublicLawReadGuard = readonly [setting: string, value: string];
+
+/** Any handle that can run the setup statements, including a test's own. */
+type ConfigurableReadTransaction = {
+  execute: (query: SqlFragment) => Promise<unknown>;
 };
 
-const configureExternalReadTransaction = async (
-  tx: Transaction,
-  isolation: PublicLawReadIsolation = "read-committed",
+/**
+ * What every public read runs under.
+ *
+ * Read-only is set here rather than with `SET TRANSACTION` so the whole guard
+ * set fits in one statement. Postgres accepts the switch to read-only at any
+ * point in a transaction, and this is the transaction's first statement, so
+ * nothing that could write ever runs outside it.
+ */
+export const PUBLIC_LAW_READ_GUARDS = [
+  ["transaction_read_only", "on"],
+  ["statement_timeout", "30s"],
+] as const satisfies readonly PublicLawReadGuard[];
+
+/** What a read against the separate public-law database adds. */
+export const EXTERNAL_PUBLIC_LAW_READ_GUARDS = [
+  ...PUBLIC_LAW_READ_GUARDS,
+  ["lock_timeout", "1s"],
+  ["idle_in_transaction_session_timeout", "30s"],
+] as const satisfies readonly PublicLawReadGuard[];
+
+/**
+ * `SET LOCAL` by another name: `set_config(..., true)` reverts with the
+ * transaction, and several settings fit in one statement, so a read pays one
+ * round trip for its guards instead of one per guard. The reader pool is
+ * narrow, so statements per request, not per statement cost, is what a public
+ * page waits on.
+ */
+const localSettings = (guards: readonly PublicLawReadGuard[]): SqlFragment =>
+  sql`SELECT ${sql.join(
+    guards.map(
+      ([setting, value]) => sql`set_config(${setting}, ${value}, true)`,
+    ),
+    sql.raw(", "),
+  )}`;
+
+/**
+ * The guards a read runs under. Repeatable read needs a statement of its own
+ * and must come first: the isolation level binds the snapshot, and Postgres
+ * refuses to change it once a query has taken one.
+ */
+export const configureReadTransaction = async (
+  tx: ConfigurableReadTransaction,
+  isolation: PublicLawReadIsolation,
+  guards: readonly PublicLawReadGuard[],
 ): Promise<void> => {
-  await configureReadTransaction(tx, isolation);
-  await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
-  await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
+  if (isolation === "repeatable-read") {
+    await tx.execute(
+      sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
+    );
+  }
+  await tx.execute(localSettings(guards));
 };
+
+/** A separate database is reached over a network the shared one is not. */
+const publicLawReadGuards = (): readonly PublicLawReadGuard[] =>
+  envBase.PUBLIC_LAW_DATABASE_URL === undefined
+    ? PUBLIC_LAW_READ_GUARDS
+    : EXTERNAL_PUBLIC_LAW_READ_GUARDS;
 
 const startRoleValidation = async (
   external: ExternalPublicLawDatabase,
 ): Promise<void> => {
   const validation = external.database.transaction(async (tx) => {
-    await configureExternalReadTransaction(tx);
+    await configureReadTransaction(
+      tx,
+      "read-committed",
+      EXTERNAL_PUBLIC_LAW_READ_GUARDS,
+    );
     await validateExternalPublicLawDatabase(tx);
   });
   const promise = validation.then(
@@ -440,11 +485,7 @@ export const publicLawReadDb = async <T>(
   const isolation = options?.isolation ?? "read-committed";
   const database = await getPublicLawDatabase();
   return await database.transaction(async (tx) => {
-    if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
-      await configureExternalReadTransaction(tx, isolation);
-    } else {
-      await configureReadTransaction(tx, isolation);
-    }
+    await configureReadTransaction(tx, isolation, publicLawReadGuards());
 
     return await fn(tx);
   });
