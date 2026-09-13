@@ -14,18 +14,13 @@ import {
   emailToPreview,
   resolveEmailMimeType,
 } from "@/api/lib/files/email-to-html";
-import {
-  convertToPdf,
-  isConvertibleMimeType,
-  isNativelyRenderableMimeType,
-} from "@/api/lib/files/gotenberg";
+import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
 import {
   FILE_READ_URL_EXPIRY_SECONDS,
   fileFieldQuery,
 } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
-import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   parseContentLengthHeader,

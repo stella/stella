@@ -409,7 +409,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
       expect(result.value).toEqual({
-        entityId: "entity_1",
+        entityId: baseInput.entityId,
         entityVersionId: comparisonVersionId,
         fieldId: existingFieldId,
         fileName: "existing-redline.docx",
