@@ -131,8 +131,10 @@ export const DecisionTable = ({
     ...tableState.listeners,
   });
 
+  // The rail is a write affordance: a reader the organization has not granted
+  // `create` gets the table without it, not a trigger that fails on submit.
   const rowHost = useDecisionRowHost(
-    questions.type === "available"
+    questions.type === "available" && questions.grants.create
       ? {
           addColumnRail: (
             <BulkAddColumns

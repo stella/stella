@@ -7,6 +7,7 @@ import path from "node:path";
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 const SEARCH_INPUT_RULE = "no-decorated-search-input";
 const DIALOG_FOOTER_RULE = "dialog-footer-owns-actions";
+const LEGAL_CLICHE_RULE = "no-legal-cliche-glyph";
 const temporaryDirectories: string[] = [];
 
 setDefaultTimeout(20_000);
@@ -275,5 +276,50 @@ describe.serial(DIALOG_FOOTER_RULE, () => {
     ].join("\n");
 
     expect(await lint(DIALOG_FOOTER_RULE, source)).toEqual([]);
+  });
+});
+
+describe.serial(LEGAL_CLICHE_RULE, () => {
+  test.each([
+    ['import { ScaleIcon } from "lucide-react";', 1],
+    ['import { LucideGavel } from "lucide-react";', 1],
+    ['import type { Gavel } from "lucide-react";', 1],
+    // The import and the element are two edits, so both are reported.
+    [
+      'import { GavelIcon } from "lucide-react";\nexport const Surface = () => <GavelIcon />;',
+      2,
+    ],
+    // An alias hides the glyph from a name search, not from the rule.
+    [
+      'import { Scale as JusticeIcon } from "lucide-react";\nexport const Surface = () => <JusticeIcon />;',
+      2,
+    ],
+    // Handed to another component rather than drawn here.
+    [
+      'import { ScaleIcon } from "lucide-react";\nexport const ICONS = { court: ScaleIcon };',
+      2,
+    ],
+  ])("reports the legal cliché: %s", async (source, reports) => {
+    expect(await lint(LEGAL_CLICHE_RULE, `${source}\n`)).toEqual(
+      Array.from({ length: reports }, () => LEGAL_CLICHE_RULE),
+    );
+  });
+
+  test.each([
+    // A geometry transform, not a balance.
+    [
+      'import { Scale3D, Scale3dIcon } from "lucide-react";\nexport const ICONS = { a: Scale3dIcon, b: Scale3D };',
+    ],
+    [
+      'import { LandmarkIcon } from "lucide-react";\nexport const Surface = () => <LandmarkIcon />;',
+    ],
+    // The bindings resolve through lucide; a local of the same name does not.
+    ["const Scale = () => <span />;\nexport const Surface = () => <Scale />;"],
+    // A key that spells the glyph is not a reference to it.
+    [
+      'import { LandmarkIcon } from "lucide-react";\nexport const ICONS = { Gavel: LandmarkIcon };',
+    ],
+  ])("accepts a glyph that names its concept: %s", async (source) => {
+    expect(await lint(LEGAL_CLICHE_RULE, `${source}\n`)).toEqual([]);
   });
 });

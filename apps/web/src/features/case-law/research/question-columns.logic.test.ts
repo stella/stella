@@ -6,10 +6,13 @@ import {
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
 } from "@stll/api-contract";
 import type { ResearchAnswerRunCheck } from "@stll/api-contract";
+import { roles } from "@stll/permissions";
 
 import {
+  allowedColumnActions,
   answerKey,
   questionColumnSurface,
+  READ_ONLY_QUESTIONS,
   questionEditDiscardsAnswers,
   questionRunSet,
   questionSuggestionBody,
@@ -19,6 +22,7 @@ import {
 import type {
   QuestionAnswer,
   QuestionColumn,
+  QuestionColumnGrants,
   QuestionSuggestionScope,
 } from "./question-columns.logic";
 
@@ -298,6 +302,7 @@ describe("who is shown question columns", () => {
   const available = {
     answersByKey: new Map<string, QuestionAnswer>(),
     columns,
+    grants: READ_ONLY_QUESTIONS,
     isRunning: false,
     onColumnAction: noop,
     onRetryAnswer: noop,
@@ -305,16 +310,86 @@ describe("who is shown question columns", () => {
     suggestion: { ...UNSEARCHED_SCOPE, decisionIds: [] },
   };
 
-  test("a reader with an organization sees them", () => {
+  // What the results page passes: questions are authored there, so the
+  // columns are read whether or not this search returned anything.
+  test("a signed-in reader with an organization sees the results table's", () => {
     expect(
-      questionColumnSurface({ ...available, asksQuestions: true }),
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: "org_1",
+        enabled: true,
+      }),
     ).toEqual({ type: "available", ...available });
   });
 
-  test("a reader without one sees no column and no control", () => {
+  test("a reader without an organization sees no column and no control", () => {
     expect(
-      questionColumnSurface({ ...available, asksQuestions: false }),
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: null,
+        enabled: true,
+      }),
     ).toEqual({ type: "hidden" });
+  });
+
+  test("a matter with nothing linked asks nothing of anyone", () => {
+    expect(
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: "org_1",
+        enabled: false,
+      }),
+    ).toEqual({ type: "hidden" });
+  });
+
+  // Reading the organization's answers is not a grant: a member it has not
+  // licensed still gets the columns, and is offered nothing to change.
+  test("a member without a grant still sees the columns", () => {
+    expect(
+      questionColumnSurface({
+        ...available,
+        activeOrganizationId: "org_1",
+        enabled: true,
+        grants: READ_ONLY_QUESTIONS,
+      }).type,
+    ).toBe("available");
+  });
+});
+
+describe("what each role may do to a question column", () => {
+  // Read out of the permission matrix rather than restated here, so a grant
+  // moved between roles fails this test instead of drifting past it.
+  const grantsFor = (role: keyof typeof roles): QuestionColumnGrants => ({
+    create: roles[role].authorize({ caseLawResearch: ["create"] }).success,
+    update: roles[role].authorize({ caseLawResearch: ["update"] }).success,
+    delete: roles[role].authorize({ caseLawResearch: ["delete"] }).success,
+    run: roles[role].authorize({ caseLawResearch: ["run"] }).success,
+  });
+
+  test.each(["owner", "admin", "member"] as const)(
+    "%s authors, answers and removes",
+    (role) => {
+      const grants = grantsFor(role);
+
+      expect(grants.create).toBe(true);
+      expect(allowedColumnActions(grants)).toEqual(["edit", "run", "delete"]);
+    },
+  );
+
+  test.each(["intern", "external"] as const)(
+    "%s reads the answers and is offered nothing",
+    (role) => {
+      const grants = grantsFor(role);
+
+      expect(grants).toEqual(READ_ONLY_QUESTIONS);
+      expect(allowedColumnActions(grants)).toEqual([]);
+    },
+  );
+
+  test("a reader who may only ask again gets just that", () => {
+    expect(allowedColumnActions({ ...READ_ONLY_QUESTIONS, run: true })).toEqual(
+      ["run"],
+    );
   });
 });
 

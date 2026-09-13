@@ -12,10 +12,10 @@ import {
   Clock3Icon,
   DownloadIcon,
   LanguagesIcon,
+  LandmarkIcon,
   ListChecksIcon,
   ListIcon,
   ListFilterIcon,
-  ScaleIcon,
   UsersIcon,
   WorkflowIcon,
 } from "lucide-react";
@@ -1795,7 +1795,7 @@ const targetIcon = (item: MatterActivityItem) => {
     case "team":
       return <UsersIcon className="text-muted-foreground size-3.5" />;
     case "court":
-      return <ScaleIcon className="text-muted-foreground size-3.5" />;
+      return <LandmarkIcon className="text-muted-foreground size-3.5" />;
     case "automation":
       return <WorkflowIcon className="text-muted-foreground size-3.5" />;
     default: {

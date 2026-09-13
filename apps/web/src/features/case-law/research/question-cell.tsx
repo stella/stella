@@ -33,7 +33,11 @@ type QuestionCellProps = {
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
   column: QuestionColumn;
   decision: Decision;
-  onRetry: (column: QuestionColumn, decisionId: string) => void;
+  /**
+   * Omitted where the organization has not granted this reader a run: the
+   * failure still shows, without the button that would spend an answer on it.
+   */
+  onRetry?: (column: QuestionColumn, decisionId: string) => void;
   onShowPassage: (decision: Decision, anchorId: string) => void;
 };
 
@@ -76,16 +80,18 @@ export const QuestionCell = ({
           <span className="text-destructive line-clamp-2 text-sm italic">
             {t("caseLaw.research.answers.failed")}
           </span>
-          <Button
-            aria-label={t("common.retry")}
-            className="text-foreground-ghost hover:text-foreground shrink-0"
-            onClick={() => onRetry(column, decision.id)}
-            size="icon-xs"
-            title={t("common.retry")}
-            variant="ghost"
-          >
-            <RefreshCwIcon aria-hidden="true" className="size-3.5" />
-          </Button>
+          {onRetry !== undefined && (
+            <Button
+              aria-label={t("common.retry")}
+              className="text-foreground-ghost hover:text-foreground shrink-0"
+              onClick={() => onRetry(column, decision.id)}
+              size="icon-xs"
+              title={t("common.retry")}
+              variant="ghost"
+            >
+              <RefreshCwIcon aria-hidden="true" className="size-3.5" />
+            </Button>
+          )}
         </span>
       );
     case "answered": {

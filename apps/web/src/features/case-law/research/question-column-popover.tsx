@@ -1,9 +1,10 @@
 /**
  * The question a column asks, and what a reader may do to it.
  *
- * The same header menu shape a matter's property column has — edit, pin, hide,
- * answer again, delete — built from the same primitives, because from the
- * reader's side it is the same extraction engine asking the question.
+ * The same header menu a matter's AI property column has — edit, pin, hide,
+ * rerun, delete — in the same order, with the same icons and the same strings,
+ * because from the reader's side it is the same extraction engine asking the
+ * question. Only the run scope differs, and the item says so.
  */
 
 import { useState } from "react";
@@ -35,13 +36,16 @@ type QuestionColumnPopoverProps = {
   column: TableColumn<DecisionRowData>;
   question: QuestionColumn;
   /**
-   * Omitted for a reader who may look but not act; the header then names the
-   * question and offers only the arrangement every column has.
+   * What the organization grants this reader over the question. Empty for a
+   * reader who may look but not act; the header then names the question and
+   * offers only the arrangement every column has.
    */
+  actions: readonly QuestionColumnAction[];
   onAction?: (column: QuestionColumn, action: QuestionColumnAction) => void;
 };
 
 export const QuestionColumnPopover = ({
+  actions,
   column,
   onAction,
   question,
@@ -52,6 +56,8 @@ export const QuestionColumnPopover = ({
     setIsOpen(false);
     onAction?.(question, action);
   };
+  const may = (action: QuestionColumnAction) =>
+    onAction !== undefined && actions.includes(action);
 
   return (
     <Popover modal onOpenChange={setIsOpen} open={isOpen}>
@@ -69,7 +75,7 @@ export const QuestionColumnPopover = ({
         className="min-w-56 overflow-clip *:data-[slot=popover-viewport]:p-0!"
         initialFocus={false}
       >
-        {onAction !== undefined && (
+        {may("edit") && (
           <>
             <div className="flex flex-col p-1">
               <Button
@@ -79,7 +85,7 @@ export const QuestionColumnPopover = ({
                 variant="ghost"
               >
                 <PencilLineIcon />
-                {t("caseLaw.research.editQuestion")}
+                {t("workspaces.properties.editColumn")}
               </Button>
             </div>
             <Separator />
@@ -100,7 +106,7 @@ export const QuestionColumnPopover = ({
             {t("workspaces.kanban.hideColumn")}
           </Button>
         </div>
-        {onAction !== undefined && (
+        {may("run") && (
           <>
             <Separator />
             <div className="flex flex-col p-1">
@@ -111,8 +117,21 @@ export const QuestionColumnPopover = ({
                 variant="ghost"
               >
                 <RefreshCwIcon />
-                {t("caseLaw.research.runColumn")}
+                {t("workspaces.properties.rerunColumn")}
+                {/* The matter runs its column over the whole table; a question
+                    runs over the page in front of the reader, so the scope is
+                    said rather than assumed. */}
+                <span className="text-muted-foreground">
+                  {t("common.scopeThisPage")}
+                </span>
               </Button>
+            </div>
+          </>
+        )}
+        {may("delete") && (
+          <>
+            <Separator />
+            <div className="flex flex-col p-1">
               <Button
                 className="text-destructive justify-start gap-1.5 font-normal"
                 onClick={() => act("delete")}
@@ -120,7 +139,7 @@ export const QuestionColumnPopover = ({
                 variant="ghost"
               >
                 <Trash2Icon />
-                {t("caseLaw.research.deleteColumn")}
+                {t("workspaces.properties.deleteProperty")}
               </Button>
             </div>
           </>

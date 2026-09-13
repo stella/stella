@@ -45,11 +45,13 @@ import type {
   QuestionAnswer,
   QuestionColumn,
   QuestionColumnAction,
+  QuestionColumnGrants,
   QuestionColumnSurface,
   QuestionRunSet,
   QuestionSuggestionSearch,
 } from "@/features/case-law/research/question-columns.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
@@ -118,6 +120,15 @@ export const useQuestionColumns = ({
   const activeOrganizationId = authStatus.isAuthenticated
     ? authStatus.user.activeOrganizationId
     : null;
+  // One question per action, because the organization grants them separately:
+  // a reader may be licensed to write a question and not to pay for answering
+  // it. `usePermissions` fails closed while the role cache is cold.
+  const grants = {
+    create: usePermissions({ caseLawResearch: ["create"] }),
+    update: usePermissions({ caseLawResearch: ["update"] }),
+    delete: usePermissions({ caseLawResearch: ["delete"] }),
+    run: usePermissions({ caseLawResearch: ["run"] }),
+  } satisfies QuestionColumnGrants;
 
   const [editing, setEditing] = useState<QuestionColumn | null>(null);
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
@@ -227,12 +238,14 @@ export const useQuestionColumns = ({
 
   return {
     surface: questionColumnSurface({
-      answersByKey,
-      columns: asked,
-      // The same answer that gated the reads above gates the controls: a
+      // The same two answers that gated the reads above gate the controls: a
       // surface that asks nothing draws no rail, so nothing reads the
       // organization's columns to decide whether the rail is at its cap.
-      asksQuestions: enabled && activeOrganizationId !== null,
+      activeOrganizationId,
+      enabled,
+      answersByKey,
+      columns: asked,
+      grants,
       isRunning: run.isPending,
       onColumnAction,
       onRetryAnswer: (column, decisionId) => {
@@ -284,7 +297,8 @@ export const useQuestionColumns = ({
  * and the dialogs those flows and the column headers share.
  *
  * Renders nothing at all for a reader without an organization — the same one
- * answer that hides the columns hides every control over them.
+ * answer that hides the columns hides every control over them — and only what
+ * the organization grants for a reader who has one.
  */
 export const QuestionColumnControls = ({
   controller,
@@ -300,11 +314,13 @@ export const QuestionColumnControls = ({
 
   return (
     <>
-      <BulkAddColumns
-        target={{ kind: "organisation", suggestion: surface.suggestion }}
-        triggerVariant="labelled"
-      />
-      {surface.columns.length > 0 && (
+      {surface.grants.create && (
+        <BulkAddColumns
+          target={{ kind: "organisation", suggestion: surface.suggestion }}
+          triggerVariant="labelled"
+        />
+      )}
+      {surface.grants.run && surface.columns.length > 0 && (
         <Button
           className="text-muted-foreground h-7 min-h-0 text-xs"
           disabled={surface.isRunning}
@@ -384,7 +400,7 @@ export const QuestionColumnControls = ({
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {t("caseLaw.research.deleteColumn")}
+              {t("workspaces.properties.deleteProperty")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("caseLaw.research.deleteColumnConfirm")}

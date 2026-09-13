@@ -697,14 +697,11 @@ type Messages = {
         "showSource": "Show source";
         "yes": "Yes";
       };
-      "deleteColumn": "Remove question";
       "deleteColumnConfirm": "This removes the question and every answer it holds.";
-      "editQuestion": "Edit question";
       "editQuestionHint": "Changing the wording or the answer type discards the current answers; run the column again afterwards.";
       "nothingToRun": "Every cell already has an answer";
       "questionPlaceholder": "e.g. Did the court find the termination valid?";
       "runAll": "Answer all";
-      "runColumn": "Answer this column";
       "runConfirm": "Answer now";
       "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.";
       "runTitle": "Answer this page";
@@ -1493,6 +1490,7 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "scopeThisPage": "(this page)";
     "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
     "search": "Search...";

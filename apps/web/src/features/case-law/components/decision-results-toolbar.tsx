@@ -44,6 +44,10 @@ type DecisionResultsToolbarProps = {
   /**
    * What the reader can do with the whole result set, drawn last. A node
    * rather than props, so the toolbar owes nothing to the research slice.
+   *
+   * Outside the scrolling control row: these are the row's only write
+   * affordances, and the row hides its scrollbar, so a narrow viewport used
+   * to carry them off the end with nothing to say they were there.
    */
   actions?: ReactNode;
   /** How many rail filters are on; drawn on the toggle while the rail is folded. */
@@ -66,8 +70,10 @@ type DecisionResultsToolbarProps = {
 
 /**
  * What the reader does to the result set: read how large it is, narrow it,
- * order it, and choose what each row shows. One scrolling row, so a narrow
- * viewport drops nothing.
+ * order it, and choose what each row shows. The reading controls scroll as one
+ * row, so a narrow viewport drops none of them; the actions wrap beside it
+ * instead, because a write affordance that scrolls out of a scrollbar-less row
+ * is one the reader cannot find.
  */
 export const DecisionResultsToolbar = ({
   actions,
@@ -143,13 +149,13 @@ export const DecisionResultsToolbar = ({
           onLayoutChange={onLayoutChange}
           questions={questions}
         />
-        {actions !== undefined && (
-          <>
-            <span className="bg-border mx-1 h-4 w-px" />
-            {actions}
-          </>
-        )}
       </div>
+      {actions !== undefined && (
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="bg-border mx-1 h-4 w-px" />
+          {actions}
+        </div>
+      )}
     </div>
   );
 };

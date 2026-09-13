@@ -4,11 +4,11 @@ import {
   BanknoteIcon,
   CogIcon,
   ExternalLinkIcon,
+  FileBadgeIcon,
   KeyRoundIcon,
   LinkIcon,
   LoaderIcon,
   PencilIcon,
-  ScaleIcon,
   TagIcon,
   UserIcon,
   XIcon,
@@ -145,7 +145,7 @@ export const CatalogueDetailPanel = ({
               {entry.license && (
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailLicense")}
-                  icon={ScaleIcon}
+                  icon={FileBadgeIcon}
                   value={entry.license}
                 />
               )}

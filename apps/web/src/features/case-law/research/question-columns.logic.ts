@@ -7,6 +7,7 @@ import type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
 } from "@stll/api-contract";
+import type { PermissionInput } from "@stll/permissions";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type {
@@ -311,8 +312,49 @@ const setFilters = ({
   ...(language === undefined ? {} : { language }),
 });
 
-/** What the reader can do to the column a question is asked in. */
-export type QuestionColumnAction = "run" | "edit" | "delete";
+/** What the reader can do to the column a question is asked in, in menu order. */
+const QUESTION_COLUMN_ACTIONS = ["edit", "run", "delete"] as const;
+
+export type QuestionColumnAction = (typeof QUESTION_COLUMN_ACTIONS)[number];
+
+/**
+ * What the organization grants this reader over its questions, one flag per
+ * action of the `caseLawResearch` resource. Derived from the permission
+ * statement rather than restated, so an action added there does not compile
+ * until the surface decides what it means.
+ */
+export type QuestionColumnGrants = Record<
+  NonNullable<PermissionInput["caseLawResearch"]>[number],
+  boolean
+>;
+
+/** A reader who may read the answers and change nothing. */
+export const READ_ONLY_QUESTIONS = {
+  create: false,
+  update: false,
+  delete: false,
+  run: false,
+} as const satisfies QuestionColumnGrants;
+
+// Which grant each header action spends. Editing the wording and moving a
+// column are both `update`; answering again spends `run` because it bills.
+const COLUMN_ACTION_GRANT = {
+  edit: "update",
+  run: "run",
+  delete: "delete",
+} as const satisfies Record<QuestionColumnAction, keyof QuestionColumnGrants>;
+
+/**
+ * The header actions this reader may take, in menu order. A reader who holds
+ * none gets a header that names the question and nothing else — the columns
+ * and their answers stay readable, because reading them is not a grant.
+ */
+export const allowedColumnActions = (
+  grants: QuestionColumnGrants,
+): readonly QuestionColumnAction[] =>
+  QUESTION_COLUMN_ACTIONS.filter(
+    (action) => grants[COLUMN_ACTION_GRANT[action]],
+  );
 
 /** Everything the table needs to draw and work the organization's questions. */
 export type AvailableQuestionColumns = {
@@ -329,6 +371,12 @@ export type AvailableQuestionColumns = {
   onShowPassage: (decision: Decision, anchorId: string) => void;
   /** True while a run is being queued, so every run control settles together. */
   isRunning: boolean;
+  /**
+   * What this reader may do to the questions. Read separately from the surface
+   * itself: a member of the organization without the grants still reads the
+   * columns and their answers, and is simply offered nothing to change.
+   */
+  grants: QuestionColumnGrants;
   /**
    * What a newly written question's suggested wording is grounded in. It lives
    * on the available surface because the composer that uses it is drawn from
@@ -350,16 +398,26 @@ export type AvailableQuestionColumns = {
  * same `hidden`. It is one answer rather than two because every control the
  * available surface carries reads the organization's columns to draw itself:
  * a second gate on the reads alone would still let the add-column rail ask.
+ *
+ * Holding no grant is not one of these answers. A member the organization has
+ * not licensed to author or run questions still belongs to it, so they get the
+ * available surface and read every column and answer on it; `grants` decides
+ * what they are offered, not whether they see the work.
  */
 export type QuestionColumnSurface =
   | { type: "hidden" }
   | AvailableQuestionColumns;
 
 export const questionColumnSurface = ({
-  asksQuestions,
+  activeOrganizationId,
+  enabled,
   ...available
 }: Omit<AvailableQuestionColumns, "type"> & {
-  /** Whether this reader, on this surface, has a question to ask at all. */
-  asksQuestions: boolean;
+  /** The organization the questions belong to; null for a reader without one. */
+  activeOrganizationId: string | null;
+  /** Whether this surface has anything to ask a question of. */
+  enabled: boolean;
 }): QuestionColumnSurface =>
-  asksQuestions ? { type: "available", ...available } : { type: "hidden" };
+  enabled && activeOrganizationId !== null
+    ? { type: "available", ...available }
+    : { type: "hidden" };

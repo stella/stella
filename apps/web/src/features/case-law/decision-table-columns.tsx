@@ -13,13 +13,13 @@ import { createContext, use, useMemo } from "react";
 import { panic } from "better-result";
 import {
   CalendarIcon,
+  FileDigitIcon,
   FileTextIcon,
-  GavelIcon,
   GlobeIcon,
   HashIcon,
+  LandmarkIcon,
   LanguagesIcon,
   QuoteIcon,
-  ScaleIcon,
   ShapesIcon,
   TagIcon,
 } from "lucide-react";
@@ -54,7 +54,10 @@ import type {
 } from "@/features/case-law/decision-table-schema";
 import { QuestionCell } from "@/features/case-law/research/question-cell";
 import { QuestionColumnPopover } from "@/features/case-law/research/question-column-popover";
-import { NO_QUESTION_COLUMNS } from "@/features/case-law/research/question-columns.logic";
+import {
+  allowedColumnActions,
+  NO_QUESTION_COLUMNS,
+} from "@/features/case-law/research/question-columns.logic";
 import type {
   AvailableQuestionColumns,
   QuestionColumnSurface,
@@ -62,9 +65,9 @@ import type {
 
 /** The icon each decision column wears in its header menu and the chooser. */
 export const DECISION_COLUMN_ICONS = {
-  caseNumber: ScaleIcon,
+  caseNumber: FileDigitIcon,
   summary: FileTextIcon,
-  court: GavelIcon,
+  court: LandmarkIcon,
   country: GlobeIcon,
   date: CalendarIcon,
   type: ShapesIcon,
@@ -238,6 +241,9 @@ const toDecisionColumnDef = (
         accessorKey: column.id,
         header: ({ header }: TableHeaderContext<unknown, DecisionRowData>) => (
           <QuestionColumnPopover
+            actions={
+              questions === null ? [] : allowedColumnActions(questions.grants)
+            }
             column={header.column}
             question={questionColumn}
             {...(questions === null
@@ -251,8 +257,11 @@ const toDecisionColumnDef = (
               answersByKey={questions.answersByKey}
               column={questionColumn}
               decision={row.original.decision}
-              onRetry={questions.onRetryAnswer}
               onShowPassage={questions.onShowPassage}
+              // Answering one failed cell again bills like any other run.
+              {...(questions.grants.run
+                ? { onRetry: questions.onRetryAnswer }
+                : {})}
             />
           ),
       };

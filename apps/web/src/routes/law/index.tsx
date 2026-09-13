@@ -17,7 +17,7 @@ import {
   ActivityIcon,
   BookOpenIcon,
   HistoryIcon,
-  ScaleIcon,
+  LandmarkIcon,
   SearchIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -431,7 +431,7 @@ function LawHome() {
             search={{ country: countryParam }}
             to="/law/cases"
           >
-            <ScaleIcon className="size-4" />
+            <LandmarkIcon className="size-4" />
             {t("lawHome.topCourts")}
           </Link>
         }
