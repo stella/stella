@@ -7,7 +7,7 @@
 #   docker build -f packages/agent-engine/docker/sandbox.Dockerfile \
 #     -t stella/agent-sandbox:dev packages/agent-engine/docker
 #
-FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
+FROM node:26-slim@sha256:14bf3eac4bf209d906d3c41256597d3ab1f926b2e93a79e9bdfe1efd32454239
 
 # Pin the harness CLI. Bump deliberately; the pinned-content CI check and the
 # engine both assume a known codex surface.
