@@ -269,9 +269,11 @@ const clipboardElementDirection = (element: HTMLElement) =>
 const handleRailWheel = (event: ReactWheelEvent<HTMLElement>) => {
   const rail = event.currentTarget;
   const left = clipboardRailWheelDelta({
+    deltaMode: event.deltaMode,
     deltaX: event.deltaX,
     deltaY: event.deltaY,
     direction: clipboardElementDirection(rail),
+    pageWidth: rail.clientWidth,
   });
   if (left === 0) {
     return;

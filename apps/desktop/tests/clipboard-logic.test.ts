@@ -822,25 +822,60 @@ describe("clipboardRailScrollDelta", () => {
 });
 
 describe("clipboardRailWheelDelta", () => {
+  const pixelWheel = { deltaMode: 0, deltaX: 0, pageWidth: 1000 };
+
   test("maps a vertical wheel onto the rail's axis toward its end", () => {
     expect(
-      clipboardRailWheelDelta({ deltaX: 0, deltaY: 120, direction: "ltr" }),
+      clipboardRailWheelDelta({ ...pixelWheel, deltaY: 120, direction: "ltr" }),
     ).toBe(120);
     expect(
-      clipboardRailWheelDelta({ deltaX: 0, deltaY: 120, direction: "rtl" }),
+      clipboardRailWheelDelta({ ...pixelWheel, deltaY: 120, direction: "rtl" }),
     ).toBe(-120);
     expect(
-      clipboardRailWheelDelta({ deltaX: 0, deltaY: -120, direction: "ltr" }),
+      clipboardRailWheelDelta({
+        ...pixelWheel,
+        deltaY: -120,
+        direction: "ltr",
+      }),
     ).toBe(-120);
+  });
+
+  test("converts line and page deltas to pixels", () => {
+    expect(
+      clipboardRailWheelDelta({
+        ...pixelWheel,
+        deltaMode: 1,
+        deltaY: 3,
+        direction: "ltr",
+      }),
+    ).toBe(48);
+    expect(
+      clipboardRailWheelDelta({
+        ...pixelWheel,
+        deltaMode: 2,
+        deltaY: 1,
+        direction: "rtl",
+      }),
+    ).toBe(-1000);
   });
 
   test("leaves a gesture with horizontal motion to the browser", () => {
     for (const direction of ["ltr", "rtl"] as const) {
       expect(
-        clipboardRailWheelDelta({ deltaX: 40, deltaY: 120, direction }),
+        clipboardRailWheelDelta({
+          ...pixelWheel,
+          deltaX: 40,
+          deltaY: 120,
+          direction,
+        }),
       ).toBe(0);
       expect(
-        clipboardRailWheelDelta({ deltaX: -1, deltaY: 0, direction }),
+        clipboardRailWheelDelta({
+          ...pixelWheel,
+          deltaX: -1,
+          deltaY: 0,
+          direction,
+        }),
       ).toBe(0);
     }
   });

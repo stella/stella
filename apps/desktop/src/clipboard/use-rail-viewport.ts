@@ -1,6 +1,6 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
 
-export type RailViewport = {
+type RailViewport = {
   /** Distance scrolled from the rail's inline start. An RTL rail reports a
    *  negative `scrollLeft`, so the magnitude is what both directions share. */
   scrollOffset: number;

@@ -480,29 +480,53 @@ export const clipboardRailScrollDelta = ({
   return 0;
 };
 
+/** `WheelEvent.deltaMode` values; the DOM constants are not exported. */
+const WHEEL_DELTA_LINE = 1;
+const WHEEL_DELTA_PAGE = 2;
+
+/** CSS pixels one wheel line stands for, matching the root font size. */
+const WHEEL_LINE_PIXELS = 16;
+
 type ClipboardRailWheelDeltaOptions = {
+  deltaMode: number;
   deltaX: number;
   deltaY: number;
   direction: "ltr" | "rtl";
+  /** Distance of one page in `DOM_DELTA_PAGE` mode: the rail's width. */
+  pageWidth: number;
 };
 
 /**
- * Horizontal distance a wheel event moves a rail that only scrolls
- * horizontally. A mouse wheel reports vertical motion, which the browser has
- * nowhere to apply on such a rail; mapping it onto the rail's axis lets the
- * wheel advance toward the rail's end (a negative `scrollLeft` in RTL). A
- * gesture that already carries horizontal motion (trackpad, shift-wheel) is
- * left to the browser.
+ * Horizontal distance in CSS pixels a wheel event moves a rail that only
+ * scrolls horizontally. A mouse wheel reports vertical motion, which the
+ * browser has nowhere to apply on such a rail; mapping it onto the rail's
+ * axis lets the wheel advance toward the rail's end (a negative `scrollLeft`
+ * in RTL). A gesture that already carries horizontal motion (trackpad,
+ * shift-wheel) is left to the browser. Line and page deltas are converted to
+ * pixels, since `scrollBy` takes pixels whatever the event's unit.
  */
 export const clipboardRailWheelDelta = ({
+  deltaMode,
   deltaX,
   deltaY,
   direction,
+  pageWidth,
 }: ClipboardRailWheelDeltaOptions) => {
   if (deltaX !== 0) {
     return 0;
   }
-  return direction === "rtl" ? -deltaY : deltaY;
+  const pixels = deltaY * wheelUnitPixels(deltaMode, pageWidth);
+  return direction === "rtl" ? -pixels : pixels;
+};
+
+const wheelUnitPixels = (deltaMode: number, pageWidth: number) => {
+  if (deltaMode === WHEEL_DELTA_LINE) {
+    return WHEEL_LINE_PIXELS;
+  }
+  if (deltaMode === WHEEL_DELTA_PAGE) {
+    return pageWidth;
+  }
+  return 1;
 };
 
 const UNMEASURED_VISIBLE_CARDS = 8;
