@@ -13,6 +13,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/shallow";
 
 import type { WorkspaceView } from "@/lib/types";
+import type { TableColumnLayout } from "@/lib/workspaces/column-layout";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import {
@@ -32,9 +33,15 @@ const COLUMN_SIZING_DEBOUNCE_MS = 100;
 type UseTableStateProps = {
   workspaceId: string;
   view: WorkspaceView<"table">;
+  /** Which columns show, in what order, pinned how — and where that is kept. */
+  columnLayout: TableColumnLayout;
 };
 
-export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
+export const useTableState = ({
+  workspaceId,
+  view,
+  columnLayout,
+}: UseTableStateProps) => {
   const viewId = view.id;
   const viewRef = { workspaceId, viewId };
   const updateView = useUpdateView(workspaceId);
@@ -86,34 +93,26 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   };
 
   const columnPinning: ColumnPinningState = createColumnPinningState(
-    view.layout.columnPinning,
+    columnLayout.pinned,
   );
 
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
     const data =
       typeof updater === "function" ? updater(columnPinning) : updater;
-    const pinned = getPersistedColumnPinning(data);
-    updateView.mutate({
-      viewId,
-      layout: { ...view.layout, columnPinning: pinned },
-    });
+    columnLayout.onChange({ pinned: getPersistedColumnPinning(data) });
   };
 
   const columnOrder: ColumnOrderState = createColumnOrderState(
-    view.layout.columnOrder,
+    columnLayout.order,
   );
 
   const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
     const data = typeof updater === "function" ? updater(columnOrder) : updater;
-    const order = getPersistedColumnOrder(data);
-    updateView.mutate({
-      viewId,
-      layout: { ...view.layout, columnOrder: order },
-    });
+    columnLayout.onChange({ order: getPersistedColumnOrder(data) });
   };
 
   const columnVisibility: ColumnVisibilityState = createColumnVisibilityState(
-    view.layout.hiddenProperties,
+    columnLayout.hidden,
   );
 
   const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> = (
@@ -122,12 +121,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     const data =
       typeof updater === "function" ? updater(columnVisibility) : updater;
 
-    const hiddenProperties = getPersistedHiddenColumnIds(data);
-
-    updateView.mutate({
-      viewId,
-      layout: { ...view.layout, hiddenProperties },
-    });
+    columnLayout.onChange({ hidden: getPersistedHiddenColumnIds(data) });
   };
 
   const rowSelection = useTableStore(

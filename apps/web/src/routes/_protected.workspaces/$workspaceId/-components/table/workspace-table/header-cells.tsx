@@ -15,7 +15,10 @@ import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/utils";
 
-import type { TableHeader } from "@/components/workspaces/table/types";
+import type {
+  TableHeader,
+  TableRowData,
+} from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { SelectAllState } from "@/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic";
 import { WorkspaceGridHead } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
@@ -37,8 +40,8 @@ import type {
   EndFillerInput,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 
-type DraggableHeaderCellProps = {
-  header: TableHeader;
+type DraggableHeaderCellProps<TRow extends TableRowData> = {
+  header: TableHeader<TRow>;
   index: number;
   collapseEndBorder?: boolean;
   expandedColumnId: string | null;
@@ -46,14 +49,14 @@ type DraggableHeaderCellProps = {
   selectAllState: SelectAllState;
 };
 
-export const DraggableHeaderCell = ({
+export const DraggableHeaderCell = <TRow extends TableRowData>({
   header,
   index,
   collapseEndBorder = false,
   expandedColumnId,
   onToggleSelectAll,
   selectAllState,
-}: DraggableHeaderCellProps) => {
+}: DraggableHeaderCellProps<TRow>) => {
   const headerRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
   const [closestEdge, setClosestEdge] = useState<ColumnDropEdge | null>(null);
@@ -246,10 +249,10 @@ const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
   );
 };
 
-export const HeaderEndFillerCell = ({
+export const HeaderEndFillerCell = <TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
-}: EndFillerInput) => (
+}: EndFillerInput<TRow>) => (
   <WorkspaceGridHead
     aria-hidden="true"
     className={cn("pointer-events-none", addPropertyColumn && "border-e-0")}

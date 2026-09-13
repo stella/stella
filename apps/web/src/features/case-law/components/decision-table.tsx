@@ -28,7 +28,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DataTable } from "@stll/ui/data-table";
-import type { DataTableColumn } from "@stll/ui/data-table";
+import type {
+  DataTableColumn,
+  TableColumnDescriptor,
+} from "@stll/ui/data-table";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   Menu,
@@ -54,13 +57,18 @@ import type {
   DecisionColumnMove,
   DecisionTableLayout,
 } from "@/features/case-law/decision-column-preferences.logic";
-import { decisionTableSchema } from "@/features/case-law/decision-columns";
+import { renderDecisionCell } from "@/features/case-law/decision-columns";
 import {
   DECISION_COLUMN_LABEL_KEYS,
+  DECISION_COLUMN_MIN_SIZE,
   decisionColumnWidthClassNames,
   decisionIdentityLineFields,
+  decisionTableSchema,
 } from "@/features/case-law/decision-columns.logic";
-import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
+import type {
+  DecisionColumnRender,
+  DecisionTableLabels,
+} from "@/features/case-law/decision-columns.logic";
 import { queryHighlightTokens } from "@/features/case-law/headnote-highlight.logic";
 import { answerTypeMeta } from "@/features/case-law/research/answer-type";
 import {
@@ -143,8 +151,29 @@ const ANSWER_COLUMN_PREFIX = "answer:";
 const questionColumnId = (columnId: string): string =>
   `${ANSWER_COLUMN_PREFIX}${columnId}`;
 
-const isDecisionColumnId = (value: string): value is DecisionColumnId =>
-  value in DECISION_COLUMN_LABEL_KEYS;
+type DecisionColumnDescriptor = TableColumnDescriptor<DecisionColumnRender>;
+
+/**
+ * The decision columns, labelled for the reader. The same descriptors the
+ * workspace table arranges, so this table and a matter's cannot drift.
+ */
+const useDecisionColumns = (): readonly DecisionColumnDescriptor[] => {
+  const t = useTranslations();
+
+  const labels: DecisionTableLabels = {
+    caseNumber: t(DECISION_COLUMN_LABEL_KEYS.caseNumber),
+    summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
+    court: t(DECISION_COLUMN_LABEL_KEYS.court),
+    country: t(DECISION_COLUMN_LABEL_KEYS.country),
+    date: t(DECISION_COLUMN_LABEL_KEYS.date),
+    type: t(DECISION_COLUMN_LABEL_KEYS.type),
+    headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
+    citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
+    language: t(DECISION_COLUMN_LABEL_KEYS.language),
+  };
+
+  return decisionTableSchema({ labels }).columns;
+};
 
 /** What a header offers for the column it names. */
 type ColumnArrangement = {
@@ -180,9 +209,11 @@ export const DecisionTable = ({
   selectedIds,
 }: DecisionTableProps) => {
   const t = useTranslations();
+  const decisionColumns = useDecisionColumns();
   const questionColumns =
     questions === null ? NO_QUESTION_COLUMNS : questions.columns;
   const columns = decisionColumnDefs({
+    decisionColumns,
     extraColumns,
     questionColumns,
     withSelection: questions !== null,
@@ -386,15 +417,16 @@ export const DecisionTable = ({
       continue;
     }
 
-    const descriptor = decisionTableSchema.columns.find(
+    const descriptor = decisionColumns.find(
       (candidate) => candidate.id === column.id,
     );
-    if (descriptor === undefined || !isDecisionColumnId(descriptor.id)) {
+    if (descriptor?.render.type !== "decision") {
       continue;
     }
-    const label = t(DECISION_COLUMN_LABEL_KEYS[descriptor.id]);
-    const sortedByThis = descriptor.id === "date" && order === "newest";
-    const width = decisionColumnWidthClassNames(descriptor.id);
+    const decisionColumn = descriptor.render.column;
+    const label = descriptor.label;
+    const sortedByThis = decisionColumn === "date" && order === "newest";
+    const width = decisionColumnWidthClassNames(decisionColumn);
     rendered.push({
       id: descriptor.id,
       header: (
@@ -415,7 +447,8 @@ export const DecisionTable = ({
         width.cell,
         descriptor.emphasis === "metadata" && "text-muted-foreground",
       ),
-      render: (decision) => descriptor.render(decision, context),
+      render: (decision) =>
+        renderDecisionCell({ column: decisionColumn, context, decision }),
     });
   }
 
@@ -478,10 +511,12 @@ const withRowSelected = (
  * the two cannot end up describing different columns.
  */
 const decisionColumnDefs = ({
+  decisionColumns,
   extraColumns,
   questionColumns,
   withSelection,
 }: {
+  decisionColumns: readonly DecisionColumnDescriptor[];
   extraColumns: readonly DecisionExtraColumn[];
   questionColumns: readonly QuestionColumn[];
   withSelection: boolean;
@@ -495,11 +530,11 @@ const decisionColumnDefs = ({
       enablePinning: false,
     });
   }
-  for (const column of decisionTableSchema.columns) {
+  for (const column of decisionColumns) {
     defs.push({
       id: column.id,
       size: column.size,
-      minSize: column.minSize ?? decisionTableSchema.defaultMinSize,
+      minSize: column.minSize ?? DECISION_COLUMN_MIN_SIZE,
       enableHiding: column.capabilities.hide,
       enablePinning: column.capabilities.pin,
     });
@@ -711,6 +746,7 @@ export const DecisionColumnChooser = ({
   questionColumns,
 }: DecisionColumnChooserProps) => {
   const t = useTranslations();
+  const decisionColumns = useDecisionColumns();
   const hidden = new Set(layout.hidden);
   const toggle = (columnId: string, checked: boolean) => {
     const next = new Set(hidden);
@@ -738,7 +774,7 @@ export const DecisionColumnChooser = ({
         {t("common.columns")}
       </MenuTrigger>
       <MenuPopup>
-        {decisionTableSchema.columns
+        {decisionColumns
           .filter((column) => column.capabilities.hide)
           .map((column) => (
             <MenuCheckboxItem
@@ -746,9 +782,7 @@ export const DecisionColumnChooser = ({
               key={column.id}
               onCheckedChange={(checked) => toggle(column.id, checked)}
             >
-              {isDecisionColumnId(column.id)
-                ? t(DECISION_COLUMN_LABEL_KEYS[column.id])
-                : column.id}
+              {column.label}
             </MenuCheckboxItem>
           ))}
         {questionColumns.map((column) => (

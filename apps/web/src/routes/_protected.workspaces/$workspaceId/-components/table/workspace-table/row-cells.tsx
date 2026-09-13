@@ -27,6 +27,7 @@ import {
   getEntityName,
   getFirstFile,
 } from "@/components/workspaces/entity-utils";
+import type { TableRowRenderInput } from "@/components/workspaces/table/row-host";
 import type {
   TableCell,
   TableColumn,
@@ -157,37 +158,20 @@ const isActiveRow = ({
 
 // -- Draggable table row --
 
-export type DraggableRowProps = {
-  row: TableRow;
-  virtualIndex: number;
-  index: number;
-  rowLabel: string;
-  renderColumns: TableColumn[];
-  addPropertyColumn: TableColumn | null;
-  table: WorkspaceTableType;
+/** What the shell hands every row, plus what only the entity host knows. */
+export type DraggableRowProps = TableRowRenderInput & {
   workspaceId: string;
   activeEntityId: string | null;
   activePropertyId: string | null;
   activeTaskId: string | null;
-  contentMode: TableContentMode;
   editingEntityId: string | null;
-  expandedCellId: string | null;
-  hasExpandedTableCell: boolean;
-  lastSelectedIndex: React.RefObject<number | null>;
-  measureElement: (element: Element | null) => void;
   onRename: (entityId: string, newName: string) => void;
   onStartEditing: (entityId: string) => void;
   onStopEditing: () => void;
-  onToggleExpandedCell: (
-    entityId: string,
-    columnId: string,
-    mode?: "toggle" | "open",
-  ) => void;
 };
 
 export const DraggableRow = ({
   row,
-  virtualIndex,
   index,
   rowLabel,
   renderColumns,
@@ -440,11 +424,11 @@ export const DraggableRow = ({
         onRename={onRename}
         onStartEditing={onStartEditing}
         onStopEditing={onStopEditing}
+        index={index}
         ref={setRowRef}
         renderColumns={renderColumns}
         row={row}
         selectCellWithActions={selectCellWithActions}
-        virtualIndex={virtualIndex}
         visibleCells={visibleCells}
       />
     );
@@ -453,7 +437,7 @@ export const DraggableRow = ({
   return (
     <>
       <WorkspaceGridRow
-        aria-rowindex={virtualIndex + 2}
+        aria-rowindex={index + 2}
         aria-selected={row_getIsSelected(row)}
         className={cn(
           "transition-opacity duration-150",
@@ -464,7 +448,7 @@ export const DraggableRow = ({
         )}
         data-active={activeRow || undefined}
         data-drop-target={isDropTarget || undefined}
-        data-index={virtualIndex}
+        data-index={index}
         data-state={row_getIsSelected(row) ? "selected" : undefined}
         key={row.id}
         onClick={containedEventHandler(handleRowClick)}
@@ -500,6 +484,7 @@ type FolderTableRowProps = {
   addPropertyCell: TableCell | undefined;
   editingEntityId: string | null;
   entity: TableTreeNode;
+  index: number;
   isMutedByExpandedCell: boolean;
   onRowContextMenu: (event: React.MouseEvent) => void;
   onRename: (entityId: string, newName: string) => void;
@@ -509,7 +494,6 @@ type FolderTableRowProps = {
   renderColumns: TableColumn[];
   row: TableRow;
   selectCellWithActions: React.ReactNode;
-  virtualIndex: number;
   visibleCells: TableCell[];
 };
 
@@ -518,6 +502,7 @@ const FolderTableRow = ({
   addPropertyCell,
   editingEntityId,
   entity,
+  index,
   isMutedByExpandedCell,
   onRowContextMenu,
   onRename,
@@ -527,7 +512,6 @@ const FolderTableRow = ({
   renderColumns,
   row,
   selectCellWithActions,
-  virtualIndex,
   visibleCells,
 }: FolderTableRowProps) => {
   const selectCell = visibleCells[0];
@@ -538,7 +522,7 @@ const FolderTableRow = ({
 
   return (
     <WorkspaceGridRow
-      aria-rowindex={virtualIndex + 2}
+      aria-rowindex={index + 2}
       aria-selected={row_getIsSelected(row)}
       className={cn(
         "transition-opacity duration-150",
@@ -546,7 +530,7 @@ const FolderTableRow = ({
         isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
       )}
       data-active={entity.entityId === activeEntityId || undefined}
-      data-index={virtualIndex}
+      data-index={index}
       data-state={row_getIsSelected(row) ? "selected" : undefined}
       key={row.id}
       onContextMenu={containedEventHandler(onRowContextMenu)}

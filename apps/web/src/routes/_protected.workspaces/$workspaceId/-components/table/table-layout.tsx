@@ -29,6 +29,7 @@ import {
   EmptyState,
   FilteredEmptyState,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout";
 import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
@@ -40,6 +41,7 @@ import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
+import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 const loadTableDevtoolsGate = async () => {
@@ -97,7 +99,8 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
 const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const t = useTranslations();
-  const tableState = useTableState({ workspaceId, view });
+  const columnLayout = useViewColumnLayout({ workspaceId, view });
+  const tableState = useTableState({ workspaceId, view, columnLayout });
   const updateView = useUpdateView(workspaceId);
   const showListItems = includesListItems(view.layout.filters);
   const excludedKinds: EntityKind[] = showListItems
@@ -177,6 +180,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     state: tableState.state,
     ...tableState.listeners,
   });
+  const rowHost = useEntityRowHost({ workspaceId, table, addRow: true });
 
   if (table.getRowModel().rows.length === 0) {
     // Ahead of the filter and upload states: with a find running, "upload your
@@ -222,9 +226,9 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
           onLoadMore={() => {
             detached(fetchNextPage(), "table-layout.fetch-next-page");
           }}
+          rowHost={rowHost}
           table={table}
           contentMode={tableState.contentMode}
-          workspaceId={workspaceId}
         />
       </FindHighlightScope>
       {TableDevtoolsGate ? (

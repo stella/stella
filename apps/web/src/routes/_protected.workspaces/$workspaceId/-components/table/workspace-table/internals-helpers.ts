@@ -7,6 +7,8 @@ import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type {
   TableColumn,
   TableHeader,
+  TableRowData,
+  TableTreeNode,
 } from "@/components/workspaces/table/types";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { getGridTemplateColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
@@ -30,9 +32,9 @@ export const tableEndFillerCellStyle: CSSProperties = {
   backgroundImage: TABLE_END_FILLER_BACKGROUND,
 };
 
-export type EndFillerInput = {
-  renderColumns: TableColumn[];
-  addPropertyColumn: TableColumn | null;
+export type EndFillerInput<TRow extends TableRowData = TableTreeNode> = {
+  renderColumns: TableColumn<TRow>[];
+  addPropertyColumn: TableColumn<TRow> | null;
 };
 
 export type ColumnDragPinning = "start" | "end" | "center";
@@ -64,10 +66,10 @@ export const getScrollableAncestor = (
   return null;
 };
 
-export function getWorkspaceGridTemplateColumns({
+export function getWorkspaceGridTemplateColumns<TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
-}: EndFillerInput) {
+}: EndFillerInput<TRow>) {
   const contentColumns = getGridTemplateColumns(renderColumns);
   if (addPropertyColumn) {
     return `${contentColumns} minmax(0, 1fr) ${addPropertyColumn.getSize()}px`;
@@ -76,14 +78,16 @@ export function getWorkspaceGridTemplateColumns({
   return `${contentColumns} minmax(0, 1fr)`;
 }
 
-export function getEndFillerGridColumn({
+export function getEndFillerGridColumn<TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
-}: EndFillerInput) {
+}: EndFillerInput<TRow>) {
   return `${renderColumns.length + 1} / ${addPropertyColumn ? "-2" : "-1"}`;
 }
 
-export const getGridPinningStyles = (column: TableColumn): CSSProperties => {
+export const getGridPinningStyles = <TRow extends TableRowData>(
+  column: TableColumn<TRow>,
+): CSSProperties => {
   if (column.id === addPropertyColId) {
     return {
       gridColumn: "-2 / -1",
@@ -107,11 +111,12 @@ export const getGridPinningStyles = (column: TableColumn): CSSProperties => {
   };
 };
 
-export const isPinnedBoundaryColumn = (column: TableColumn) =>
-  column.getIsPinned() === "start" && column.getIsLastColumn("start");
+export const isPinnedBoundaryColumn = <TRow extends TableRowData>(
+  column: TableColumn<TRow>,
+) => column.getIsPinned() === "start" && column.getIsLastColumn("start");
 
-export const getColumnPinningGroup = (
-  column: TableColumn,
+export const getColumnPinningGroup = <TRow extends TableRowData>(
+  column: TableColumn<TRow>,
 ): ColumnDragPinning => {
   const pinning = column.getIsPinned();
   if (pinning === "start" || pinning === "end") {
@@ -147,14 +152,14 @@ export const toColumnDropEdge = (edge: Edge | null): ColumnDropEdge | null => {
   return null;
 };
 
-export const getOrderedHeaders = (
-  headers: TableHeader[],
-  columns: TableColumn[],
+export const getOrderedHeaders = <TRow extends TableRowData>(
+  headers: TableHeader<TRow>[],
+  columns: TableColumn<TRow>[],
 ) => {
   const headersByColumnId = new Map(
     headers.map((header) => [header.column.id, header]),
   );
-  const orderedHeaders: TableHeader[] = [];
+  const orderedHeaders: TableHeader<TRow>[] = [];
 
   for (const column of columns) {
     const header = headersByColumnId.get(column.id);
@@ -166,7 +171,10 @@ export const getOrderedHeaders = (
   return orderedHeaders;
 };
 
-export const getRequiredHeader = (headers: TableHeader[], columnId: string) => {
+export const getRequiredHeader = <TRow extends TableRowData>(
+  headers: TableHeader<TRow>[],
+  columnId: string,
+) => {
   const header = headers.find((candidate) => candidate.column.id === columnId);
   if (!header) {
     panic(`Missing header for workspace table column "${columnId}"`);

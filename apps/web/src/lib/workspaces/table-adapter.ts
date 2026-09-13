@@ -9,7 +9,9 @@
  *
  * Every entry is a query-options factory rather than a promise: the table
  * never fetches, so the transport, the cache keys and the retry policy stay
- * with the data layer.
+ * with the data layer. The shape is structural and its keys are the host's,
+ * so a table over another row kind implements the same four entry points
+ * against its own queries.
  */
 
 import type {
@@ -24,15 +26,40 @@ import {
   useKanbanGroupOptions,
 } from "@/lib/workspaces/queries/entities";
 
-export type WorkspaceTableAdapter = {
+/**
+ * A query-options factory. The return type names only what makes it query
+ * options, so a promise (or anything else the table would have to await)
+ * cannot stand in for one.
+ */
+type RowQuery<TArgs extends readonly unknown[]> = (...args: TArgs) => {
+  queryKey: readonly unknown[];
+};
+
+/** The arguments each entry point takes, per host. */
+type WorkspaceTableAdapterKeys = {
+  listPage: readonly unknown[];
+  sectionPage: readonly unknown[];
+  sectionCounts: readonly unknown[];
+  detail: readonly unknown[];
+};
+
+export type WorkspaceTableAdapter<TKeys extends WorkspaceTableAdapterKeys> = {
   /** One window of rows for a flat table. Deferred, so filters keep stale rows. */
-  useListPage: typeof useEntitiesWindowOptions;
+  useListPage: RowQuery<TKeys["listPage"]>;
   /** One window of rows for one section of a grouped table. */
-  useSectionPage: typeof useKanbanGroupOptions;
+  useSectionPage: RowQuery<TKeys["sectionPage"]>;
   /** Row counts per section, so an empty section never fetches rows. */
-  sectionCounts: typeof groupCountsOptions;
+  sectionCounts: RowQuery<TKeys["sectionCounts"]>;
   /** One row, for a detail surface. */
-  detail: typeof entityOptions;
+  detail: RowQuery<TKeys["detail"]>;
+};
+
+/** The arguments the entity table's own entry points take. */
+export type WorkspaceEntityAdapterKeys = {
+  listPage: [key: EntitiesWindowOptionsInput];
+  sectionPage: [key: KanbanGroupOptionsInput];
+  sectionCounts: [key: GroupCountsOptionsInput];
+  detail: [workspaceId: string, entityId: string];
 };
 
 export const workspaceTableAdapter = {
@@ -40,7 +67,7 @@ export const workspaceTableAdapter = {
   useSectionPage: useKanbanGroupOptions,
   sectionCounts: groupCountsOptions,
   detail: entityOptions,
-} as const satisfies WorkspaceTableAdapter;
+} as const satisfies WorkspaceTableAdapter<WorkspaceEntityAdapterKeys>;
 
 export type {
   EntitiesWindowOptionsInput,

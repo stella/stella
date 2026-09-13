@@ -5,6 +5,7 @@ import { cn } from "@stll/ui/utils";
 import type {
   TableCell,
   TableColumn,
+  TableRowData,
 } from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
@@ -19,15 +20,15 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import type { EndFillerInput } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 
-type TableEndFillerProps = {
-  renderColumns: TableColumn[];
-  addPropertyColumn: TableColumn | null;
+type TableEndFillerProps<TRow extends TableRowData> = {
+  renderColumns: TableColumn<TRow>[];
+  addPropertyColumn: TableColumn<TRow> | null;
 };
 
-export const TableEndFiller = ({
+export const TableEndFiller = <TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
-}: TableEndFillerProps) => (
+}: TableEndFillerProps<TRow>) => (
   <WorkspaceGridRow className="pointer-events-none min-h-0 flex-1">
     {renderColumns.map((column, index) => (
       <WorkspaceGridCell
@@ -70,15 +71,15 @@ export const TableEndFiller = ({
   </WorkspaceGridRow>
 );
 
-type RowEndFillerCellProps = EndFillerInput & {
+type RowEndFillerCellProps<TRow extends TableRowData> = EndFillerInput<TRow> & {
   selected: boolean;
 };
 
-export const RowEndFillerCell = ({
+export const RowEndFillerCell = <TRow extends TableRowData>({
   renderColumns,
   addPropertyColumn,
   selected,
-}: RowEndFillerCellProps) => (
+}: RowEndFillerCellProps<TRow>) => (
   <WorkspaceGridCell
     aria-hidden="true"
     className={cn("p-0", addPropertyColumn && "border-e-0")}
@@ -93,17 +94,17 @@ export const RowEndFillerCell = ({
   />
 );
 
-type AddPropertyCellProps = {
-  cell: TableCell | undefined;
+type AddPropertyCellProps<TRow extends TableRowData> = {
+  cell: TableCell<TRow> | undefined;
   columnIndex: number;
   selected: boolean;
 };
 
-export const AddPropertyCell = ({
+export const AddPropertyCell = <TRow extends TableRowData>({
   cell,
   columnIndex,
   selected,
-}: AddPropertyCellProps) => {
+}: AddPropertyCellProps<TRow>) => {
   if (!cell) {
     return null;
   }

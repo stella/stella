@@ -13,6 +13,7 @@ import {
   getInternalColId,
   getInternalPropertyId,
 } from "@/components/workspaces/entity-utils";
+import type { DecisionColumnRender } from "@/features/case-law/decision-columns.logic";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -23,10 +24,12 @@ const SELECT_COLUMN_SIZE = 48;
 const ADD_PROPERTY_COLUMN_SIZE = 48;
 const PROPERTY_COLUMN_SIZE = 200;
 
-/** What draws a column's header and cells. */
-export type WorkspaceColumnRender =
-  | { type: "select" }
-  | { type: "add-property" }
+/** The columns a table has whatever its rows are. */
+type UtilityColumnRender = { type: "select" } | { type: "add-property" };
+
+/** What draws a column's header and cells over entity rows. */
+type WorkspaceEntityColumnRender =
+  | UtilityColumnRender
   | { type: "name" }
   | { type: "list-item-type" }
   | { type: "task-status" }
@@ -42,9 +45,32 @@ export type WorkspaceColumnRender =
       verdictProperty: WorkspaceProperty | undefined;
     };
 
-export type WorkspaceTableSchema = TableSchema<WorkspaceColumnRender>;
-export type WorkspaceColumnDescriptor =
-  TableColumnDescriptor<WorkspaceColumnRender>;
+/**
+ * What draws a column's header and cells over decision rows. The decision
+ * member is the case-law feature's, so the public results page can build and
+ * draw its columns without reaching into a matter's route.
+ */
+type WorkspaceDecisionColumnRender = UtilityColumnRender | DecisionColumnRender;
+
+/**
+ * What draws a column's header and cells.
+ *
+ * One union across row kinds, split by the kind whose rows a member can read:
+ * a member is drawn from a row, and TanStack's column definition takes that
+ * row as a parameter, so a table over entity rows cannot be handed a column
+ * that reads a decision. A new member joins one of the two halves, and that
+ * half's factory stops compiling until it draws it.
+ */
+export type WorkspaceColumnRender =
+  | WorkspaceEntityColumnRender
+  | WorkspaceDecisionColumnRender;
+
+export type WorkspaceTableSchema<
+  TRender extends WorkspaceColumnRender = WorkspaceEntityColumnRender,
+> = TableSchema<TRender>;
+export type WorkspaceColumnDescriptor<
+  TRender extends WorkspaceColumnRender = WorkspaceEntityColumnRender,
+> = TableColumnDescriptor<TRender>;
 
 /** Labels the schema needs; the caller resolves them for the reader's locale. */
 export type WorkspaceTableLabels = {
@@ -64,20 +90,20 @@ export type WorkspaceTableSchemaParams = {
   labels: WorkspaceTableLabels;
 };
 
-type UtilityColumnParams = {
+type UtilityColumnParams<TRender extends WorkspaceColumnRender> = {
   id: string;
   size: number;
-  render: WorkspaceColumnRender;
+  render: TRender;
   /** The select column is pinned to the start of every table. */
   pin: boolean;
 };
 
-const utilityColumn = ({
+const utilityColumn = <TRender extends WorkspaceColumnRender>({
   id,
   size,
   render,
   pin,
-}: UtilityColumnParams): WorkspaceColumnDescriptor => ({
+}: UtilityColumnParams<TRender>): WorkspaceColumnDescriptor<TRender> => ({
   id,
   label: "",
   render,
@@ -91,7 +117,7 @@ const listColumn = (
   id: string,
   label: string,
   size: number,
-  render: WorkspaceColumnRender,
+  render: WorkspaceEntityColumnRender,
   { sort = true }: { sort?: boolean } = {},
 ): WorkspaceColumnDescriptor => ({
   id,
@@ -106,7 +132,7 @@ const metadataColumn = (
   id: string,
   label: string,
   size: number,
-  render: WorkspaceColumnRender,
+  render: WorkspaceEntityColumnRender,
 ): WorkspaceColumnDescriptor => ({
   id,
   label,

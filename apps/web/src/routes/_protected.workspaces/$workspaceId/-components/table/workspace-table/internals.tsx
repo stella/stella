@@ -1,6 +1,9 @@
 import type { CSSProperties } from "react";
 
-import type { TableColumn } from "@/components/workspaces/table/types";
+import type {
+  TableColumn,
+  TableRowData,
+} from "@/components/workspaces/table/types";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { isPinnedBoundaryColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
@@ -21,15 +24,17 @@ export type ColumnDropPosition = {
 };
 
 export type ExpandedTableCell = {
-  entityId: string;
+  rowId: string;
   columnId: string;
 };
 
-type PinnedBoundaryProps = {
-  column: TableColumn;
+type PinnedBoundaryProps<TRow extends TableRowData> = {
+  column: TableColumn<TRow>;
 };
 
-export const PinnedBoundary = ({ column }: PinnedBoundaryProps) => {
+export const PinnedBoundary = <TRow extends TableRowData>({
+  column,
+}: PinnedBoundaryProps<TRow>) => {
   if (!isPinnedBoundaryColumn(column)) {
     return null;
   }

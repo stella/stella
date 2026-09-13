@@ -1,3 +1,5 @@
+import type { TableSchema } from "@stll/ui/data-table";
+
 import type { TranslationKey } from "@/i18n/types";
 
 /**
@@ -22,6 +24,82 @@ export const DECISION_COLUMN_IDS = [
 ] as const;
 
 export type DecisionColumnId = (typeof DECISION_COLUMN_IDS)[number];
+
+type DecisionColumnModel = {
+  /** The width the column starts at, before a stored resize. */
+  size: number;
+  /** Whether the reader may hide it. */
+  hide: boolean;
+  emphasis: "content" | "metadata";
+};
+
+/**
+ * What a reader may do to each decision column, and how wide it starts.
+ *
+ * The case-number column is the row's identity, so it never hides; the rest
+ * are the reader's to arrange. Data rather than part of the renderer, so the
+ * column set stays testable without drawing one.
+ */
+export const DECISION_COLUMN_MODEL = {
+  caseNumber: { size: 320, hide: false, emphasis: "content" },
+  summary: { size: 460, hide: true, emphasis: "content" },
+  court: { size: 220, hide: true, emphasis: "metadata" },
+  country: { size: 90, hide: true, emphasis: "metadata" },
+  date: { size: 130, hide: true, emphasis: "metadata" },
+  type: { size: 120, hide: true, emphasis: "metadata" },
+  headnote: { size: 420, hide: true, emphasis: "content" },
+  citedBy: { size: 96, hide: true, emphasis: "metadata" },
+  language: { size: 120, hide: true, emphasis: "metadata" },
+} as const satisfies Record<DecisionColumnId, DecisionColumnModel>;
+
+/** The narrowest a decision column may be dragged. */
+export const DECISION_COLUMN_MIN_SIZE = 80;
+
+/**
+ * What draws a decision column: the column itself, drawn by
+ * `renderDecisionCell`. One member of the table's column union, declared
+ * here because the public results page cannot reach into a matter's route.
+ */
+export type DecisionColumnRender = {
+  type: "decision";
+  column: DecisionColumnId;
+};
+
+/** The decision columns' labels, resolved for the reader by the caller. */
+export type DecisionTableLabels = Record<DecisionColumnId, string>;
+
+export type DecisionTableSchemaParams = {
+  labels: DecisionTableLabels;
+};
+
+/**
+ * The column set of a table of decisions.
+ *
+ * The same descriptor shape a matter's table uses, so both are arranged,
+ * hidden and pinned by the same code; only the render member differs.
+ */
+export const decisionTableSchema = ({
+  labels,
+}: DecisionTableSchemaParams): TableSchema<DecisionColumnRender> => ({
+  columns: DECISION_COLUMN_IDS.map((column) => {
+    const model = DECISION_COLUMN_MODEL[column];
+    return {
+      id: column,
+      label: labels[column],
+      render: { type: "decision", column },
+      size: model.size,
+      capabilities: {
+        // Decisions are ordered by the search, never by a column.
+        sort: false,
+        hide: model.hide,
+        resize: true,
+        pin: true,
+      },
+      emphasis: model.emphasis,
+    };
+  }),
+  defaultMinSize: DECISION_COLUMN_MIN_SIZE,
+});
 
 export const DECISION_COLUMN_LABEL_KEYS = {
   caseNumber: "caseLaw.columns.caseNumber",

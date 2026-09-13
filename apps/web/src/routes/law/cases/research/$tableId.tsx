@@ -46,14 +46,12 @@ import { stellaToast } from "@stll/ui/toast";
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { Decision } from "@/features/case-law/components/decision-cells";
-import {
-  DECISION_GROUP_BY_OPTIONS,
-  decisionTableSchema,
-} from "@/features/case-law/decision-columns";
+import { DECISION_GROUP_BY_OPTIONS } from "@/features/case-law/decision-columns";
 import type { DecisionGroupBy } from "@/features/case-law/decision-columns";
 import {
   DECISION_COLUMN_IDS,
   DECISION_COLUMN_LABEL_KEYS,
+  DECISION_COLUMN_MODEL,
 } from "@/features/case-law/decision-columns.logic";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
 import { decisionsInfiniteOptions } from "@/features/case-law/queries/decisions";
@@ -203,14 +201,10 @@ type QuestionDialogState =
   | { mode: "add" }
   | { mode: "edit"; column: ResearchColumn };
 
-const isDecisionColumnId = (value: string): value is DecisionColumnId =>
-  DECISION_COLUMN_IDS.some((id) => id === value);
-
-/** The columns a reader may toggle, narrowed once so closures keep the id type. */
-const hideableColumnIds: DecisionColumnId[] = decisionTableSchema.columns
-  .filter((column) => column.capabilities.hide)
-  .map((column) => column.id)
-  .filter(isDecisionColumnId);
+/** The columns a reader may toggle. */
+const hideableColumnIds: DecisionColumnId[] = DECISION_COLUMN_IDS.filter(
+  (column) => DECISION_COLUMN_MODEL[column].hide,
+);
 
 function ResearchTablePending() {
   return (

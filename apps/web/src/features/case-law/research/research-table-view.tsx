@@ -24,11 +24,13 @@ import { languageLabel } from "@/features/case-law/components/decision-language-
 import {
   DECISION_GROUP_BY_OPTIONS,
   decisionGroupKey,
-  decisionTableSchema,
+  renderDecisionCell,
 } from "@/features/case-law/decision-columns";
 import type { DecisionGroupBy } from "@/features/case-law/decision-columns";
 import {
+  DECISION_COLUMN_IDS,
   DECISION_COLUMN_LABEL_KEYS,
+  DECISION_COLUMN_MODEL,
   decisionIdentityLineFields,
 } from "@/features/case-law/decision-columns.logic";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
@@ -248,9 +250,6 @@ type BuildColumnsOptions = {
   visibleColumns: ReadonlySet<DecisionColumnId>;
 };
 
-const isDecisionColumnId = (value: string): value is DecisionColumnId =>
-  value in DECISION_COLUMN_LABEL_KEYS;
-
 /**
  * The visible decision columns, one column per question, then the row
  * actions. The case number column cannot be hidden, so the tuple the table
@@ -276,22 +275,21 @@ const buildColumns = ({
     // A saved research table is not a live query, so nothing is marked.
     queryTokens: [],
   };
-  for (const column of decisionTableSchema.columns) {
-    if (!isDecisionColumnId(column.id)) {
-      continue;
-    }
-    if (column.capabilities.hide && !visibleColumns.has(column.id)) {
+  for (const column of DECISION_COLUMN_IDS) {
+    const model = DECISION_COLUMN_MODEL[column];
+    if (model.hide && !visibleColumns.has(column)) {
       continue;
     }
     decisionColumns.push({
-      id: column.id,
-      header: labels[column.id],
+      id: column,
+      header: labels[column],
       cellClassName: cn(
         "px-4 py-2 align-top",
-        column.emphasis === "metadata" && "text-muted-foreground",
+        model.emphasis === "metadata" && "text-muted-foreground",
       ),
       headClassName: "px-4 py-2 text-start",
-      render: (row) => column.render(row.decision, context),
+      render: (row) =>
+        renderDecisionCell({ column, context, decision: row.decision }),
     });
   }
   const questionColumns: DataTableColumn<ResearchRow<Decision>>[] =

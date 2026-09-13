@@ -63,6 +63,7 @@ import {
   resolveWorkspaceKanbanGrouping,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
+import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import {
   getGroupSkeletonLayout,
@@ -97,6 +98,7 @@ import {
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
+import { useViewColumnLayout } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-view-column-layout";
 
 // Grouped views eager-load only the first few sections' rows upfront; every
 // later section rides its IntersectionObserver scroll-gate (400px lookahead)
@@ -156,7 +158,8 @@ export const GroupedTableLayout = ({
 }: GroupedTableLayoutProps) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const tableState = useTableState({ workspaceId, view });
+  const columnLayout = useViewColumnLayout({ workspaceId, view });
+  const tableState = useTableState({ workspaceId, view, columnLayout });
   const columns = useTableColumns({ properties, view });
   // Deferred alongside the group keys (each section defers its own), so the
   // marks describe the rows on screen, not a term still being fetched.
@@ -721,6 +724,12 @@ const GroupSection = ({
     state: tableState.state,
     ...tableState.listeners,
   });
+  const rowHost = useEntityRowHost({
+    workspaceId,
+    table,
+    viewId: view.id,
+    addRow: false,
+  });
 
   // While the up-front counts load, or a populated group is still offscreen /
   // fetching its first page, show skeleton rows instead of an empty body.
@@ -781,11 +790,9 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
-              showAddRow={false}
+              rowHost={rowHost}
               stickyColumnHeader={false}
               table={table}
-              viewId={view.id}
-              workspaceId={workspaceId}
             />
           </GroupScopeProvider>
         )}

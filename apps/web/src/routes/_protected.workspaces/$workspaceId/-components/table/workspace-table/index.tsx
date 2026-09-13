@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type RefObject,
   useCallback,
   useLayoutEffect,
@@ -15,15 +16,14 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@stll/ui/utils";
 
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { countDescendants } from "@/components/workspaces/entity-utils";
-import type { WorkspaceTable as WorkspaceTableType } from "@/components/workspaces/table/types";
+import type { TableRowHost } from "@/components/workspaces/table/row-host";
+import type {
+  TableRowData,
+  TableTreeNode,
+  WorkspaceTable as WorkspaceTableType,
+} from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
-import { useTableStore } from "@/lib/workspaces/table-store";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
-import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
-import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import {
   getNextSelectAllRowSelection,
   getSelectAllState,
@@ -66,18 +66,15 @@ import {
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
-import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells";
 
-type WorkspaceTableProps = {
-  workspaceId: string;
-  table: WorkspaceTableType;
+type WorkspaceTableProps<TRow extends TableRowData> = {
+  table: WorkspaceTableType<TRow>;
+  /** Everything that depends on what a row is; see `TableRowHost`. */
+  rowHost: TableRowHost<TRow>;
   contentMode: TableContentMode;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   onLoadMore?: () => void;
-  // Grouped sections opt out so the "+ new document" row isn't repeated
-  // under every group.
-  showAddRow?: boolean;
   // Grouped sections opt out: the group header already sticks to the page,
   // and a second sticky header in each section's own scroll box collides
   // with it on scroll.
@@ -92,11 +89,6 @@ type WorkspaceTableProps = {
   // scroll boxes break the sticky group header). In this mode rows render
   // directly rather than virtualized — group pages are bounded.
   outerScrollRef?: RefObject<HTMLDivElement | null>;
-  // Set by a grouped section (its `view.id`) so "select all" can read the
-  // cross-group row-id union from the table store at click time and keep
-  // selections in other sections (they share one selection) while still
-  // dropping stale ids. Omitted by the flat table.
-  viewId?: string;
 };
 
 // A grouped section virtualizes against a shared ancestor scroll it does not
@@ -107,26 +99,23 @@ type WorkspaceTableProps = {
 // scroll it shares. (The flat table owns its scroll and keeps the default.)
 const noopScrollTo = () => undefined;
 
-export const WorkspaceTable = ({
-  workspaceId,
+export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   table,
+  rowHost,
   contentMode,
   hasNextPage = false,
   isFetchingNextPage = false,
   onLoadMore,
-  showAddRow = true,
   stickyColumnHeader = true,
   fillHeight = true,
   outerScrollRef,
-  viewId,
-}: WorkspaceTableProps) => {
+}: WorkspaceTableProps<TRow>) => {
   const inlineFlow = outerScrollRef !== undefined;
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const previousHorizontalMaxScroll = useRef<number | null>(null);
   const lastColumnDropPosition = useRef<ColumnDropPosition | null>(null);
-  const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [expandedTableCell, setExpandedTableCell] =
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
@@ -183,30 +172,18 @@ export const WorkspaceTable = ({
     };
   }, [expandedTableCell]);
 
-  const renameEntity = useRenameEntity();
+  const handleToggleExpandedCell = useCallback(
+    (rowId: string, columnId: string, mode?: "toggle" | "open") => {
+      setExpandedTableCell((current) => {
+        if (current?.rowId === rowId && current.columnId === columnId) {
+          return mode === "open" ? current : null;
+        }
 
-  const activeEntityId = useInspectorTabsStore((s) => {
-    if (!s.activeId) {
-      return null;
-    }
-    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
-    return tab?.type === "pdf" ? tab.entityId : null;
-  });
-  const activePropertyId = useInspectorTabsStore((s) => {
-    if (!s.activeId) {
-      return null;
-    }
-    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
-    return tab?.type === "pdf" ? (tab.propertyId ?? null) : null;
-  });
-
-  const activeTaskId = useInspectorTabsStore((s) => {
-    if (!s.activeId) {
-      return null;
-    }
-    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
-    return tab?.type === "task" ? tab.id : null;
-  });
+        return { rowId, columnId };
+      });
+    },
+    [],
+  );
 
   const rowModel = table.getRowModel();
   const selectableRowIds = useMemo(() => {
@@ -222,13 +199,11 @@ export const WorkspaceTable = ({
     selectableRowIds,
     rowSelection: table.state.rowSelection,
   });
+  const getPreservableRowIds = rowHost.preservableRowIds;
   const handleToggleSelectAll = useCallback(() => {
-    // Read the latest cross-group row-id union at click time directly from
-    // the table store (never subscribed), so this table never re-renders as
-    // that union grows during load.
-    const preservableRowIds = viewId
-      ? useTableStore.getState().preservableRowIds[workspaceId]?.[viewId]
-      : undefined;
+    // The host reads its union at click time rather than handing it over on
+    // every render, so this table never re-renders as that union grows.
+    const preservableRowIds = getPreservableRowIds?.();
     table.setRowSelection(
       getNextSelectAllRowSelection({
         selectableRowIds,
@@ -236,37 +211,32 @@ export const WorkspaceTable = ({
         ...(preservableRowIds && { preservableRowIds }),
       }),
     );
-  }, [selectableRowIds, workspaceId, viewId, table]);
+  }, [getPreservableRowIds, selectableRowIds, table]);
 
+  const collapsedRowSpan = rowHost.collapsedRowSpan;
   const rowLabels = useMemo(() => {
-    // Compute logical row labels that account for collapsed
-    // folder children. Each visible row gets a 1-based number;
-    // collapsed folders show a range.
+    // Compute logical row labels that account for the rows a collapsed row
+    // hides. Each visible row gets a 1-based number; a collapsed row standing
+    // for others shows a range.
     const labels: string[] = [];
     let logicalPos = 1;
     for (const row of rowModel.rows) {
-      const isFolder = row.original.kind === "folder";
-      const isCollapsed = isFolder && !row.getIsExpanded();
+      const hiddenCount = row.getIsExpanded()
+        ? 0
+        : (collapsedRowSpan?.(row.original) ?? 0);
 
-      if (isCollapsed) {
-        const descendantCount = countDescendants(row.original);
-        if (descendantCount > 0) {
-          labels.push(`${logicalPos}-${logicalPos + descendantCount}`);
-          logicalPos += descendantCount + 1;
-        } else {
-          labels.push(String(logicalPos));
-          logicalPos += 1;
-        }
+      if (hiddenCount > 0) {
+        labels.push(`${logicalPos}-${logicalPos + hiddenCount}`);
+        logicalPos += hiddenCount + 1;
       } else {
         labels.push(String(logicalPos));
         logicalPos += 1;
       }
     }
     return labels;
-  }, [rowModel]);
+  }, [collapsedRowSpan, rowModel]);
   const getVirtualRowKey = useCallback(
-    (index: number) =>
-      rowModel.rows.at(index)?.original.entityId ?? `table-row-${index}`,
+    (index: number) => rowModel.rows.at(index)?.id ?? `table-row-${index}`,
     [rowModel.rows],
   );
   const rowVirtualizer = useVirtualizer({
@@ -642,55 +612,25 @@ export const WorkspaceTable = ({
               }
 
               return (
-                <DraggableRow
-                  activeEntityId={activeEntityId}
-                  activePropertyId={activePropertyId}
-                  activeTaskId={activeTaskId}
-                  editingEntityId={editingEntityId}
-                  expandedCellId={
-                    expandedTableCell?.entityId === row.original.entityId
-                      ? expandedTableCell.columnId
-                      : null
-                  }
-                  contentMode={contentMode}
-                  hasExpandedTableCell={expandedTableCell !== null}
-                  index={index}
-                  key={row.id}
-                  lastSelectedIndex={lastSelectedIndex}
-                  measureElement={rowVirtualizer.measureElement}
-                  onRename={(entityId, newName) => {
-                    renameEntity.mutate({
-                      workspaceId,
-                      entityId,
-                      name: newName,
-                    });
-                  }}
-                  onStartEditing={setEditingEntityId}
-                  onStopEditing={() => setEditingEntityId(null)}
-                  onToggleExpandedCell={(entityId, columnId, mode) => {
-                    setExpandedTableCell((current) => {
-                      if (
-                        current?.entityId === entityId &&
-                        current.columnId === columnId
-                      ) {
-                        if (mode === "open") {
-                          return current;
-                        }
-
-                        return null;
-                      }
-
-                      return { entityId, columnId };
-                    });
-                  }}
-                  addPropertyColumn={addPropertyColumn}
-                  row={row}
-                  rowLabel={rowLabels[index] ?? ""}
-                  renderColumns={renderColumns}
-                  table={table}
-                  virtualIndex={index}
-                  workspaceId={workspaceId}
-                />
+                <Fragment key={row.id}>
+                  {rowHost.renderRow({
+                    addPropertyColumn,
+                    contentMode,
+                    expandedCellId:
+                      expandedTableCell?.rowId === row.id
+                        ? expandedTableCell.columnId
+                        : null,
+                    hasExpandedTableCell: expandedTableCell !== null,
+                    index,
+                    lastSelectedIndex,
+                    measureElement: rowVirtualizer.measureElement,
+                    onToggleExpandedCell: handleToggleExpandedCell,
+                    renderColumns,
+                    row,
+                    rowLabel: rowLabels[index] ?? "",
+                    table,
+                  })}
+                </Fragment>
               );
             })}
             {paddingBottom > 0 && (
@@ -724,22 +664,16 @@ export const WorkspaceTable = ({
                 renderColumns={renderColumns}
               />
             )}
-            {showAddRow && (
-              <BottomRow
-                table={table}
-                onFolderCreated={setEditingEntityId}
-                workspaceId={workspaceId}
-              />
-            )}
+            {rowHost.bottomRow}
           </div>
         </div>
       </div>
-      {addPropertyColumn && (
+      {addPropertyColumn !== null && rowHost.addColumnRail !== undefined && (
         <div
           className="absolute top-0 bottom-12 z-40 w-12"
           style={{ right: verticalScrollbarWidth }}
         >
-          <BulkAddColumns triggerVariant="rail" workspaceId={workspaceId} />
+          {rowHost.addColumnRail}
         </div>
       )}
     </div>
