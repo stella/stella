@@ -7,7 +7,6 @@ import { propertyConfig } from "@stll/property-testing";
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
   type CaseLawResearchColumnContent,
-  type ResearchAnswersOutput,
   type ResearchQuestion,
   buildAnswerJustification,
   buildResearchAnswersSchema,
@@ -276,7 +275,7 @@ describe("parsing the model's answers", () => {
       fc.property(scenario, ([columnIds, output]) => {
         const asked = columnIds.map((columnId) => question(columnId, yesNo));
         const parsed = parseResearchAnswers({
-          output: output as ResearchAnswersOutput,
+          output,
           questions: asked,
           knownAnchorIds: new Set(),
         });
