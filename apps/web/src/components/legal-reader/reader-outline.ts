@@ -25,12 +25,20 @@ export const STATUTE_OUTLINE_COLLAPSE_LEVEL = 2;
  * The two lines a publisher states for one heading: the designation that
  * names the division, and the title that says what it contains. They arrive
  * as one heading split by a line break, in whichever order the parser read
- * them, so the first line leads and the second annotates.
+ * them; the designation leads either way, because it is what the outline is
+ * read by and what a jump addresses.
  */
 type HeadingLines = {
   label: string;
   secondary: string | undefined;
 };
+
+/**
+ * A heading's lines as the publisher broke them, unfiltered: an index here
+ * is the number of breaks the renderer counts to reach the same line.
+ */
+const headingTextLines = (block: HeadingBlock): string[] =>
+  inlinesToPlainText(block.inlines).split("\n");
 
 const ROMAN_NUMERAL_RE = /^[IVXLCDM]+$/u;
 
@@ -63,8 +71,17 @@ export const headingCase = (text: string): string => {
 };
 
 const headingLines = (block: HeadingBlock): HeadingLines | null => {
-  const lines = inlinesToPlainText(block.inlines)
-    .split("\n")
+  const raw = headingTextLines(block);
+  const designationIndex = provisionHeadingLine(block)?.index ?? -1;
+  const designation = raw[designationIndex];
+  const ordered =
+    designation === undefined
+      ? raw
+      : [
+          designation,
+          ...raw.filter((_line, index) => index !== designationIndex),
+        ];
+  const lines = ordered
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   const [label, ...rest] = lines;
@@ -174,6 +191,38 @@ export const parseProvisionDesignation = (
       ? PROVISION_UNITS.section
       : PROVISION_UNITS.article,
   };
+};
+
+/** The designation a heading opens a provision with, and where it is stated. */
+export type ProvisionHeadingLine = {
+  designation: ProvisionDesignation;
+  /** Index of the line among the heading's lines, in document order. */
+  index: number;
+  /** The line as printed: what the provision is named by. */
+  text: string;
+};
+
+/**
+ * The provision a heading opens, wherever the publisher states it.
+ *
+ * A section is published three ways — the designation alone (`§ 56`), the
+ * designation above its title, or the title above the designation
+ * (`Omezení svéprávnosti` / `§ 55`) — and is the same citable unit in all
+ * three. Searching the heading's lines rather than only the first is what
+ * keeps one section from reading as a container because of line order.
+ */
+export const provisionHeadingLine = (
+  block: HeadingBlock,
+): ProvisionHeadingLine | null => {
+  for (const [index, line] of headingTextLines(block).entries()) {
+    const designation = parseProvisionDesignation(line);
+
+    if (designation !== null) {
+      return { designation, index, text: line.trim() };
+    }
+  }
+
+  return null;
 };
 
 /** En dash: a range of provisions is a range, not a subtraction. */

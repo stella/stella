@@ -803,6 +803,53 @@ const footnoteTextCarriesLabel = (
   ).test(plainText);
 };
 
+/** One line of a heading, with where it starts in the heading's plain text. */
+type HeadingSlice = {
+  initialOffset: number;
+  inlines: Inline[];
+};
+
+/**
+ * A heading cut around the line that states the provision designation: what
+ * the publisher printed above it, the designation itself, and what follows.
+ * Each slice carries its offset, so a search range stated over the whole
+ * heading still highlights the right characters.
+ */
+type ProvisionHeadingSlices = {
+  above: HeadingSlice;
+  below: HeadingSlice;
+  designation: HeadingSlice;
+};
+
+const headingSlice = (
+  inlines: readonly Inline[],
+  start: number,
+  end: number,
+): HeadingSlice => ({
+  initialOffset: inlinesToPlainText(inlines.slice(0, start)).length,
+  inlines: inlines.slice(start, end),
+});
+
+const provisionHeadingSlices = (
+  inlines: readonly Inline[],
+  designationLine: number,
+): ProvisionHeadingSlices => {
+  const breaks = inlines.flatMap((inline, index) =>
+    inline.type === "line-break" ? [index] : [],
+  );
+  // The break that closes the preceding line, and the one that closes this
+  // one; a designation on the first or last line has none on that side.
+  const opening =
+    designationLine === 0 ? -1 : (breaks[designationLine - 1] ?? -1);
+  const closing = breaks[designationLine] ?? inlines.length;
+
+  return {
+    above: headingSlice(inlines, 0, Math.max(opening, 0)),
+    below: headingSlice(inlines, closing + 1, inlines.length),
+    designation: headingSlice(inlines, opening + 1, closing),
+  };
+};
+
 export const BlockRenderer = ({
   activeMatchIndex,
   anchorPresentation = "document",
@@ -819,10 +866,20 @@ export const BlockRenderer = ({
   anchorPresentation?: "document" | "embedded" | undefined;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
-  /** A provision has a designation line, a title line and an optional
-   * action beside the designation. Other headings keep source layout. */
+  /**
+   * A provision's designation is a row of its own — the designation at
+   * reading size with an optional action beside it — and the title the
+   * publisher printed with it keeps its place above or below that row.
+   * `designationLine` states which of the heading's lines the designation
+   * is, because publishers state it in either order. Other headings keep
+   * source layout.
+   */
   headingPresentation?:
-    | { accessory?: ReactNode | undefined; type: "provision" }
+    | {
+        accessory?: ReactNode | undefined;
+        designationLine: number;
+        type: "provision";
+      }
     | undefined;
   /**
    * Render the return arrow: this is the last paragraph of a footnote, and
@@ -849,20 +906,16 @@ export const BlockRenderer = ({
 
   if (block.type === "heading") {
     const Tag = `h${block.level}` as const;
-    const lineBreakIndex = block.inlines.findIndex(
-      (inline) => inline.type === "line-break",
-    );
-    const isProvision = headingPresentation?.type === "provision";
-    const leadingInlines = isProvision
-      ? block.inlines.slice(
-          0,
-          lineBreakIndex === -1 ? undefined : lineBreakIndex,
-        )
-      : [];
-    const trailingInlines =
-      isProvision && lineBreakIndex !== -1
-        ? block.inlines.slice(lineBreakIndex + 1)
-        : [];
+    const provision =
+      headingPresentation?.type === "provision"
+        ? {
+            accessory: headingPresentation.accessory,
+            ...provisionHeadingSlices(
+              block.inlines,
+              headingPresentation.designationLine,
+            ),
+          }
+        : null;
     const sharedInlineProps = {
       activeMatchIndex,
       anchors: anchorsForPiece(anchorsByPieceId, block.id),
@@ -875,35 +928,45 @@ export const BlockRenderer = ({
         className={cn(
           "group relative scroll-mt-[var(--reader-anchor-offset)]",
           HEADING_CLASS[variant][block.level],
-          isProvision &&
+          provision !== null &&
             "text-[1rem] leading-snug font-semibold tracking-normal",
         )}
         {...documentAnchorProps}
       >
         {permalink}
-        {isProvision ? (
+        {provision === null ? (
+          <InlineContent {...sharedInlineProps} inlines={block.inlines} />
+        ) : (
           <>
+            {provision.above.inlines.length > 0 && (
+              <span className="mb-3 block">
+                <InlineContent
+                  {...sharedInlineProps}
+                  initialOffset={provision.above.initialOffset}
+                  inlines={provision.above.inlines}
+                />
+              </span>
+            )}
             <span className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-foreground text-[1.35rem] leading-none font-medium">
                 <InlineContent
                   {...sharedInlineProps}
-                  inlines={leadingInlines}
+                  initialOffset={provision.designation.initialOffset}
+                  inlines={provision.designation.inlines}
                 />
               </span>
-              {headingPresentation.accessory}
+              {provision.accessory}
             </span>
-            {trailingInlines.length > 0 && (
+            {provision.below.inlines.length > 0 && (
               <span className="mt-3 block">
                 <InlineContent
                   {...sharedInlineProps}
-                  initialOffset={inlinesToPlainText(leadingInlines).length + 1}
-                  inlines={trailingInlines}
+                  initialOffset={provision.below.initialOffset}
+                  inlines={provision.below.inlines}
                 />
               </span>
             )}
           </>
-        ) : (
-          <InlineContent {...sharedInlineProps} inlines={block.inlines} />
         )}
       </Tag>
     );

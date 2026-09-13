@@ -111,6 +111,37 @@ const renderStatute = (
     />,
   );
 
+/** A section heading as a publisher states it: its lines, in their order. */
+const sectionHeading = (anchorId: string, lines: string[]) =>
+  ({
+    anchorId,
+    id: anchorId,
+    inlines: lines.flatMap((line, index) =>
+      index === 0
+        ? [{ text: line, type: "text" as const }]
+        : [
+            { type: "line-break" as const },
+            { text: line, type: "text" as const },
+          ],
+    ),
+    level: 5,
+    plainText: lines.join("\n"),
+    type: "heading",
+  }) satisfies Block;
+
+/** The designation line of a fixture section, whichever line states it. */
+const designationOf = (section: { plainText: string }): string => {
+  const designation = section.plainText
+    .split("\n")
+    .find((line) => line.startsWith("§"));
+
+  if (designation === undefined) {
+    throw new Error(`fixture states no designation: ${section.plainText}`);
+  }
+
+  return designation;
+};
+
 /** The fixture headings that are citable units; every other one is a container. */
 const PROVISION_HEADINGS = new Set(["§ 47"]);
 
@@ -160,18 +191,10 @@ describe("StatuteText", () => {
   });
 
   test("a provision keeps its action beside the designation and its title below", () => {
-    const provision = {
-      anchorId: "par-1",
-      id: "provision-1",
-      inlines: [
-        { text: "§ 1", type: "text" },
-        { type: "line-break" },
-        { text: "Introductory provisions", type: "text" },
-      ],
-      level: 1,
-      plainText: "§ 1\nIntroductory provisions",
-      type: "heading",
-    } satisfies Block;
+    const provision = sectionHeading("par-1", [
+      "§ 1",
+      "Introductory provisions",
+    ]);
     const markup = renderStatute({
       blocks: [provision],
       citationWork: CITATION_WORK,
@@ -179,7 +202,7 @@ describe("StatuteText", () => {
     });
 
     const designationIndex = markup.indexOf("§ 1");
-    const actionIndex = markup.indexOf(detailsActionFor(provision.plainText));
+    const actionIndex = markup.indexOf(detailsActionFor("§ 1"));
     const titleIndex = markup.indexOf("Introductory provisions");
 
     expect(designationIndex).toBeGreaterThan(-1);
@@ -188,6 +211,40 @@ describe("StatuteText", () => {
     expect(markup).toContain("text-foreground");
     expect(markup).toContain("h-8");
     expect(markup).toContain("2 decisions");
+  });
+
+  test("a section states its designation the same way whichever line the title is on", () => {
+    // The three orders a publisher states a section in. The unit is the same
+    // in all three, so the row that opens it has to be too.
+    const sections = [
+      sectionHeading("par-54", ["§ 54"]),
+      sectionHeading("par-55", ["§ 55", "Legal capacity"]),
+      sectionHeading("par-56", ["Limits on legal capacity", "§ 56"]),
+    ];
+    const markup = renderStatute({
+      blocks: sections,
+      citationWork: CITATION_WORK,
+    });
+
+    for (const section of sections) {
+      const designation = designationOf(section);
+
+      // One row: the designation at reading size, the action beside it.
+      expect(markup).toContain(
+        `>${designation}</span><button aria-label="${detailsActionFor(designation)}"`,
+      );
+    }
+  });
+
+  test("a title the publisher printed above the designation stays above it", () => {
+    const markup = renderStatute({
+      blocks: [sectionHeading("par-56", ["Limits on legal capacity", "§ 56"])],
+      citationWork: CITATION_WORK,
+    });
+
+    expect(markup.indexOf("Limits on legal capacity")).toBeLessThan(
+      markup.indexOf("§ 56"),
+    );
   });
 
   test("every block offers exactly one permalink to its own anchor", () => {
