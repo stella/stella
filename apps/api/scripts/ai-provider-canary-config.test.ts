@@ -104,6 +104,7 @@ describe("AI provider canary coverage", () => {
     const scheduledMatrix = JSON.stringify(CANARY_PROVIDERS);
 
     expect(workflow).toContain(`|| '${scheduledMatrix}'`);
+    expect(workflow).not.toContain("github.event.repository.default_branch");
   });
 
   test("requires every supported provider for an all-provider run", () => {

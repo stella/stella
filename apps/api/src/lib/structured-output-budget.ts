@@ -47,16 +47,20 @@ export const STRUCTURED_OUTPUT_BUDGETS = {
     maxUnionParameters: 1000,
     basis: "documented",
   },
+  // Measured 2026-09-13 against Nova Micro through Bedrock Converse: a
+  // 5,395-byte workflow-batch schema completed, while the former 18,909-byte
+  // placeholder probe failed with `Model produced invalid sequence as part of
+  // ToolUse`. Keep the production boundary at the accepted size.
+  bedrock: {
+    maxSchemaBytes: 5395,
+    maxUnionParameters: 16,
+    basis: "measured",
+  },
   // Placeholders. No schema-size or union limit is published for these
   // providers, so these values only stop a runaway schema rather than
   // encoding a known ceiling; tighten one from a measurement, not a guess.
   // OpenRouter's applies only to an id whose upstream is unknown:
   // `resolveStructuredOutputBudget` reads the upstream off the id first.
-  bedrock: {
-    maxSchemaBytes: 100_000,
-    maxUnionParameters: 1000,
-    basis: "placeholder",
-  },
   google: {
     maxSchemaBytes: 100_000,
     maxUnionParameters: 1000,

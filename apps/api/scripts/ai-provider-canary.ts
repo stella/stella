@@ -28,6 +28,7 @@ import {
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -546,6 +547,11 @@ const PROVIDER_REJECTION_SIGNATURES = [
 type ProviderRejectionReason =
   (typeof PROVIDER_REJECTION_SIGNATURES)[number][1];
 
+const CATALOG_ENTITLEMENT_REJECTION_REASONS = new Set<ProviderRejectionReason>([
+  "model access denied",
+  "model outside subscription tier",
+]);
+
 const providerRejectionSignature = (
   value: unknown,
 ): ProviderRejectionReason | null => {
@@ -657,6 +663,16 @@ export class CanaryCredentialRejectedError extends TypeError {
         "rotate AI_CANARY_API_KEY for this provider",
     );
     this.name = "CanaryCredentialRejectedError";
+  }
+}
+
+export class CanaryProviderUnavailableError extends TypeError {
+  constructor(provider: CanaryProvider, label: string, status: number) {
+    super(
+      `${provider}: provider unavailable after retries (${label}, HTTP ${status}); ` +
+        "restore the canary credential quota",
+    );
+    this.name = "CanaryProviderUnavailableError";
   }
 }
 
@@ -1240,6 +1256,7 @@ const runToolCallRoundTripProbe = async ({
   await runToolProbe({
     context,
     prompt: toolRoundTripPromptForProvider(context.provider),
+    requiredToolName: TOOL_ROUND_TRIP_NAME,
     role: TOOL_CALL_ROLE,
     signal,
     tool,
@@ -1323,9 +1340,36 @@ const runWeeklyToolShapeProbe = async ({
 type RunToolProbeOptions = {
   context: CanaryContext;
   prompt: string;
+  requiredToolName?: string;
   role: ModelRole;
   signal: AbortSignal;
   tool: AnyClientTool | AnyServerTool;
+};
+
+type CanaryToolProbeModelOptions = {
+  model: ResolvedTanStackTextModel;
+  requiredToolName: string | undefined;
+};
+
+export const canaryToolProbeModelOptions = ({
+  model,
+  requiredToolName,
+}: CanaryToolProbeModelOptions) => {
+  const modelOptions = mergeGenerationOptions({
+    caching: NO_CACHING,
+    model,
+    maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
+    serviceTier: "standard",
+    temperature: 0,
+  });
+  if (model.provider !== "anthropic" || requiredToolName === undefined) {
+    return modelOptions;
+  }
+
+  return {
+    ...modelOptions,
+    tool_choice: { type: "tool", name: requiredToolName },
+  };
 };
 
 // Every tool-execution probe gets the reasoning budget here, not at the call
@@ -1334,6 +1378,7 @@ type RunToolProbeOptions = {
 const runToolProbe = async ({
   context: { config, provider },
   prompt,
+  requiredToolName,
   role,
   signal,
   tool,
@@ -1357,13 +1402,7 @@ const runToolProbe = async ({
     abortController: abortControllerFromSignal(signal),
     agentLoopStrategy: maxIterations(2),
     messages: [{ role: "user", content: prompt }],
-    modelOptions: mergeGenerationOptions({
-      caching: NO_CACHING,
-      model,
-      maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
-      serviceTier: "standard",
-      temperature: 0,
-    }),
+    modelOptions: canaryToolProbeModelOptions({ model, requiredToolName }),
     tools: [projectedTool],
   });
   let output = "";
@@ -1657,6 +1696,10 @@ export const runCanaryProbeSequence = async ({
         reason: failure.reason,
       });
     }
+    const status = providerStatus(providerEvidence(result.error));
+    if (status === 429) {
+      throw new CanaryProviderUnavailableError(provider, label, status);
+    }
   }
 
   const remaining = await runCanaryProbeSequence({
@@ -1847,6 +1890,17 @@ export const runCatalogCanaryProbes = async (
       },
       timeoutMs: Math.min(MODEL_ROLE_PROBE_TIMEOUT_MS, remainingMs),
     });
+    const rejectionReason =
+      result.status === "failed" ? providerRejectionReason(result.error) : null;
+    if (
+      rejectionReason !== null &&
+      CATALOG_ENTITLEMENT_REJECTION_REASONS.has(rejectionReason)
+    ) {
+      console.warn(
+        `[ai-canary] ${provider}/${label}: skipped (canary credential lacks model entitlement)`,
+      );
+      continue;
+    }
     totalFailures += recordProbeResult({ label, provider, result });
   }
   return totalFailures;
