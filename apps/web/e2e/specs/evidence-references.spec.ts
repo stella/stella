@@ -148,10 +148,11 @@ for (const locale of ["cs", "en", "ar"] as const) {
       workspace = await createTestWorkspace(request, "evidence-references");
     });
 
-    test.afterEach(async ({ request }) => {
+    test.afterEach(async ({ page, request }) => {
       if (workspace === null) {
         return;
       }
+      await page.goto("about:blank");
       await deleteTestWorkspace(request, workspace.id);
       workspace = null;
     });

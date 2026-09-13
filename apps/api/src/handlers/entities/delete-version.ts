@@ -183,8 +183,7 @@ export const deleteEntityVersionHandler = async function* ({
         return {
           ok: false as const,
           status: 409 as const,
-          message:
-            "This version is required by a collaborative editing room",
+          message: "This version is required by a collaborative editing room",
         };
       }
 

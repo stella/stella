@@ -54,7 +54,6 @@ export type FolioCollaborationFlush = {
 };
 
 type ConnectedRoomState =
-  | { status: "connecting"; room: FolioCollaborationRoom }
   | { status: "synced"; room: FolioCollaborationRoom }
   | { status: "reconnecting"; room: FolioCollaborationRoom }
   | { status: "readOnly"; room: FolioCollaborationRoom };
@@ -207,12 +206,12 @@ const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
 };
 
 const connectedState = (
-  status: ConnectedRoomState["status"],
+  status: ConnectedRoomState["status"] | "connecting",
   room: FolioCollaborationRoom,
-): ConnectedRoomState => {
+): FolioCollaborationRoomState => {
   switch (status) {
     case "connecting":
-      return { status: "connecting", room };
+      return { status: "connecting", room: null };
     case "synced":
       return { status: "synced", room };
     case "reconnecting":
@@ -275,6 +274,7 @@ export const useFolioCollaborationRoom = ({
 
     let disposed = false;
     let hasConnected = false;
+    let hasSynchronized = false;
     let provider: HocuspocusProvider | null = null;
     let activeRoom: FolioCollaborationRoom | null = null;
     let generationRejoinPromise: Promise<void> | null = null;
@@ -288,11 +288,17 @@ export const useFolioCollaborationRoom = ({
       }
     >();
     const isDisposed = () => disposed;
-    const setConnectedState = (status: ConnectedRoomState["status"]) => {
+    const setConnectedState = (
+      status: ConnectedRoomState["status"] | "connecting",
+    ) => {
       if (disposed || activeRoom === null) {
         return;
       }
-      setState(connectedState(status, activeRoom));
+      // A non-seeding editor must receive the Yjs source contract before binding.
+      // Keep the existing document available during later reconnects.
+      setState(
+        connectedState(hasSynchronized ? status : "connecting", activeRoom),
+      );
     };
     setState({ status: "connecting", room: null });
 
@@ -550,6 +556,7 @@ export const useFolioCollaborationRoom = ({
               setConnectedState("reconnecting");
               return;
             }
+            hasSynchronized = true;
             setConnectedState(synchronizedStatus);
           },
           token: refreshTokenIfNeeded,
@@ -634,6 +641,7 @@ export const useFolioCollaborationRoom = ({
           roomId,
           seedDocumentBuffer,
         };
+        hasSynchronized ||= connectedProvider.isSynced;
         setConnectedState(
           connectedProvider.isSynced ? synchronizedStatus : "connecting",
         );
