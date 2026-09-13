@@ -13,7 +13,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
@@ -88,24 +87,6 @@ export type DecisionRenderContext = {
 };
 
 /**
- * A decision link that stays in context.
- *
- * A plain left click opens the decision beside the results, at the passage
- * when the link names one; every browser navigation gesture (middle click,
- * ⌘/Ctrl click, "open in new tab") is left alone and follows the href to the
- * full page, which the inspector also offers explicitly.
- */
-const openTargetInInspector =
-  (openTab: (target: DecisionTabTarget) => void, target: DecisionTabTarget) =>
-  (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!isPlainPrimaryClick(event)) {
-      return;
-    }
-    event.preventDefault();
-    openTab(target);
-  };
-
-/**
  * Identity, and nothing a column of its own is saying. A multilingual
  * decision is one row: the case number opens the version the reader is most
  * likely to want, and the language menu offers every other one.
@@ -120,7 +101,7 @@ export const CaseNumberCell = ({
   const t = useTranslations();
   const format = useFormatter();
   const uiLocale = useLocale();
-  const openTab = useOpenDecisionTab();
+  const openDecision = useOpenDecisionTab();
   const { caseNumber, languageAlternates } = decision;
   const target = preferredDecisionTarget(decision, uiLocale);
   const routeParams = createCaseLawDecisionRouteParams(target);
@@ -138,7 +119,7 @@ export const CaseNumberCell = ({
       <div className="flex flex-wrap items-center gap-x-2">
         <DecisionLink
           className="text-foreground font-medium hover:underline"
-          onClick={openTargetInInspector(openTab, target)}
+          onClick={openDecision.onLinkClick(target)}
           params={routeParams}
         >
           <BidiText>
@@ -209,7 +190,7 @@ export const SummaryCell = ({
   context: DecisionRenderContext;
   decision: Decision;
 }) => {
-  const openTab = useOpenDecisionTab();
+  const openDecision = useOpenDecisionTab();
   const headnoteSegments = headnotePreviewSegments(
     decision.headnote,
     context.queryTokens,
@@ -269,7 +250,7 @@ export const SummaryCell = ({
     children: passage,
     className: "block hover:underline",
     hash: anchorId,
-    onClick: openTargetInInspector(openTab, target),
+    onClick: openDecision.onLinkClick(target),
     params: createCaseLawDecisionRouteParams(target),
   });
 };
@@ -394,7 +375,7 @@ const DecisionLanguageMenu = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const openTab = useOpenDecisionTab();
+  const openDecision = useOpenDecisionTab();
 
   return (
     <Menu>
@@ -427,7 +408,7 @@ const DecisionLanguageMenu = ({
               // A bare Link element: the menu item merges its role, ref and
               // keyboard handlers into it, which a wrapper component would drop.
               render={decisionLinkElement({
-                onClick: openTargetInInspector(openTab, target),
+                onClick: openDecision.onLinkClick(target),
                 params: createCaseLawDecisionRouteParams(target),
               })}
             >

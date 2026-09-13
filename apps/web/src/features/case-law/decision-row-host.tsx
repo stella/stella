@@ -21,10 +21,10 @@ import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 
 /** Opens a decision beside the results, at a passage when one is named. */
 export const useOpenDecisionInspector = () => {
-  const openTab = useOpenDecisionTab();
+  const openDecision = useOpenDecisionTab();
 
   return (decision: Decision, anchorId?: string) => {
-    openTab(decisionTabTarget(decision, anchorId));
+    openDecision.open(decisionTabTarget(decision, anchorId));
   };
 };
 
