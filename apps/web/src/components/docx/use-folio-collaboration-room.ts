@@ -641,7 +641,9 @@ export const useFolioCollaborationRoom = ({
           roomId,
           seedDocumentBuffer,
         };
-        hasSynchronized ||= connectedProvider.isSynced;
+        if (connectedProvider.isSynced) {
+          hasSynchronized = true;
+        }
         setConnectedState(
           connectedProvider.isSynced ? synchronizedStatus : "connecting",
         );
