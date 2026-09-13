@@ -5,7 +5,6 @@ import type { CompareChange } from "@stll/folio-core";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 
 import {
-  COMPARE_CHANGE_KIND_LABEL_KEYS,
   countCompareChanges,
   resolveCompareVersionSelection,
 } from "./compare-facet.logic";
@@ -104,16 +103,18 @@ describe("compare change summary", () => {
       { kind: "insert" },
       { kind: "format" },
       { kind: "table-row-delete" },
+      { kind: "inline-atom" },
+      { kind: "run-format" },
+      { kind: "section-properties" },
     ] satisfies readonly Pick<CompareChange, "kind">[];
 
     expect(countCompareChanges(changes)).toEqual([
       { count: 1, kind: "insert" },
       { count: 2, kind: "format" },
+      { count: 1, kind: "run-format" },
+      { count: 1, kind: "inline-atom" },
+      { count: 1, kind: "section-properties" },
       { count: 1, kind: "table-row-delete" },
     ]);
-  });
-
-  test("keeps the label map total over the Folio change union", () => {
-    expect(Object.keys(COMPARE_CHANGE_KIND_LABEL_KEYS)).toHaveLength(15);
   });
 });

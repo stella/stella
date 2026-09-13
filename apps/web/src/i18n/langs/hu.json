@@ -1917,11 +1917,13 @@
     "compareAnother": "Hasonlíts össze egy másik párt",
     "compareChangeKinds": {
       "delete": "Törölt szöveg",
+      "inlineObjects": "Sorközi objektumok",
       "insert": "Beszúrt szöveg",
       "merge": "Összevont bekezdések",
       "move": "Áthelyezett tartalom",
       "paragraphFormat": "Bekezdés formázása",
       "replace": "Csere szöveg",
+      "sectionProperties": "Szakasztulajdonságok",
       "split": "Bekezdések felosztása",
       "tableColumnDelete": "Táblázat oszlopai törölve",
       "tableColumnInsert": "Táblázatoszlopok beszúrva",

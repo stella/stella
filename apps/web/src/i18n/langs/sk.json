@@ -1917,11 +1917,13 @@
     "compareAnother": "Porovnajte iný pár",
     "compareChangeKinds": {
       "delete": "Odstránený text",
+      "inlineObjects": "Vložené objekty",
       "insert": "Vložený text",
       "merge": "Zlúčené odseky",
       "move": "Presunutý obsah",
       "paragraphFormat": "Formátovanie odsekov",
       "replace": "Nahradený text",
+      "sectionProperties": "Vlastnosti sekcie",
       "split": "Rozdeľte odseky",
       "tableColumnDelete": "Stĺpce tabuľky boli odstránené",
       "tableColumnInsert": "Vložené stĺpce tabuľky",

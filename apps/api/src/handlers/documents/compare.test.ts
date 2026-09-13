@@ -218,12 +218,13 @@ const createHarness = ({
   );
   const readFileHandlerMock = mock(
     async (_options: Parameters<Dependencies["readFileHandler"]>[0]) => {
-      if (downloadFails)
+      if (downloadFails) {
         throw new TimeoutError({
           message: "delivery failed",
           label: "download",
           timeoutMs: 1,
         });
+      }
       return {
         fileId: "file",
         mimeType: DOCX_MIME_TYPE,
@@ -293,7 +294,7 @@ const createHarness = ({
   };
 };
 
-const documentWithBodyText = (text: string): Promise<ArrayBuffer> => {
+const documentWithBodyText = async (text: string): Promise<ArrayBuffer> => {
   const document = createEmptyDocument();
   document.package.document.content = [
     {
@@ -318,12 +319,18 @@ const bodyText = async (buffer: ArrayBuffer): Promise<string> => {
   });
   const paragraphs: string[] = [];
   for (const block of document.package.document.content) {
-    if (block.type !== "paragraph") continue;
+    if (block.type !== "paragraph") {
+      continue;
+    }
     let text = "";
     for (const run of block.content) {
-      if (run.type !== "run") continue;
+      if (run.type !== "run") {
+        continue;
+      }
       for (const content of run.content) {
-        if (content.type === "text") text += content.text;
+        if (content.type === "text") {
+          text += content.text;
+        }
       }
     }
     paragraphs.push(text);
@@ -342,27 +349,27 @@ const copyToArrayBuffer = (buffer: ArrayBuffer | Uint8Array): ArrayBuffer => {
 
 describe("documents.compare", () => {
   test("uses the requested file property for both source versions and the derived write", async () => {
-    const selectedRows = [baseRow, firstTargetRow].map((row) => ({
-      ...row,
-      fields: [
-        ...row.fields,
-        {
+    const selectedRows = [baseRow, firstTargetRow].map(
+      ({ createdAt, fields: originalFields, id, versionNumber }) => {
+        const fields = [...originalFields];
+        fields.push({
           id: secondaryFieldId,
           propertyId: secondaryPropertyId,
           content: {
             version: 1,
             type: "file" as const,
             id: "00000000-0000-4000-8000-000000000014",
-            fileName: `Exhibit v${String(row.versionNumber)}.docx`,
+            fileName: `Exhibit v${String(versionNumber)}.docx`,
             mimeType: DOCX_MIME_TYPE,
             sizeBytes: 128,
             encrypted: false,
             sha256Hex: "b".repeat(64),
             pdfFileId: null,
           },
-        },
-      ],
-    }));
+        });
+        return { createdAt, fields, id, versionNumber };
+      },
+    );
     const harness = createHarness({
       createdFieldId: secondaryFieldId,
       rows: selectedRows,

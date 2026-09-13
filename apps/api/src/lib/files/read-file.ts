@@ -69,8 +69,12 @@ export const readFileHandler = async ({
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
 
-  if (!row) return status(404);
-  if (row.content.type !== "file") return status(400);
+  if (!row) {
+    return status(404);
+  }
+  if (row.content.type !== "file") {
+    return status(400);
+  }
 
   const content = row.content;
   const fileKey = createFileKey({
@@ -140,8 +144,9 @@ export const readFileHandler = async ({
     };
   }
 
-  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE)
+  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
     return status(400);
+  }
   const displayFileId = content.pdfFileId ?? content.id;
   const displayFileKey = createFileKey({
     organizationId,

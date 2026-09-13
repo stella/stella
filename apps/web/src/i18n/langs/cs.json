@@ -1917,11 +1917,13 @@
     "compareAnother": "Porovnejte jiný pár",
     "compareChangeKinds": {
       "delete": "Smazaný text",
+      "inlineObjects": "Vložené objekty",
       "insert": "Vložený text",
       "merge": "Sloučené odstavce",
       "move": "Přesunutý obsah",
       "paragraphFormat": "Formátování odstavce",
       "replace": "Nahrazený text",
+      "sectionProperties": "Vlastnosti oddílu",
       "split": "Rozdělit odstavce",
       "tableColumnDelete": "Sloupce tabulky byly odstraněny",
       "tableColumnInsert": "Vložené sloupce tabulky",

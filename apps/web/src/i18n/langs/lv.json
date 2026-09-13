@@ -1917,11 +1917,13 @@
     "compareAnother": "Salīdziniet citu pāri",
     "compareChangeKinds": {
       "delete": "Izdzēsts teksts",
+      "inlineObjects": "Iekļautie objekti",
       "insert": "Ievietots teksts",
       "merge": "Apvienotās rindkopas",
       "move": "Pārvietots saturs",
       "paragraphFormat": "Rindkopu formatēšana",
       "replace": "Aizstāts teksts",
+      "sectionProperties": "Sadaļas rekvizīti",
       "split": "Sadalīt rindkopas",
       "tableColumnDelete": "Izdzēstas tabulas kolonnas",
       "tableColumnInsert": "Ievietotas tabulas kolonnas",

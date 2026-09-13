@@ -1917,11 +1917,13 @@
     "compareAnother": "Palyginkite kitą porą",
     "compareChangeKinds": {
       "delete": "Ištrintas tekstas",
+      "inlineObjects": "Įterptieji objektai",
       "insert": "Įterptas tekstas",
       "merge": "Sujungtos pastraipos",
       "move": "Perkeltas turinys",
       "paragraphFormat": "Pastraipos formatavimas",
       "replace": "Pakeistas tekstas",
+      "sectionProperties": "Sekcijos ypatybės",
       "split": "Išskaidyti pastraipas",
       "tableColumnDelete": "Ištrinti lentelės stulpeliai",
       "tableColumnInsert": "Įterpti lentelės stulpeliai",

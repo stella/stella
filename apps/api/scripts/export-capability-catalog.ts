@@ -1071,6 +1071,38 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
   }
 
+  const readDeclaredMetadata = (
+    endpoint: (typeof endpoints)[number],
+    id: string,
+  ) => {
+    const requestTimeoutValue = endpoint.config["requestTimeoutMs"];
+    const requestTimeoutMs =
+      typeof requestTimeoutValue === "number" &&
+      Number.isInteger(requestTimeoutValue) &&
+      requestTimeoutValue > 0
+        ? requestTimeoutValue
+        : undefined;
+    if (requestTimeoutValue !== undefined && requestTimeoutMs === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid requestTimeoutMs; expected a positive integer`,
+      );
+      return undefined;
+    }
+    // Declared access describes side effects, independently of permission gates.
+    // Inference only proposes; the affirmation guard below requires explicit reads.
+    const declaredAccessValue = endpoint.config["access"];
+    const declaredAccess =
+      declaredAccessValue === "read" || declaredAccessValue === "write"
+        ? declaredAccessValue
+        : undefined;
+    if (declaredAccessValue !== undefined && declaredAccess === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
+      );
+    }
+    return { requestTimeoutMs, declaredAccess } as const;
+  };
+
   /** Compile one discovered handler into its catalog and dispatch projections. */
   const projectEndpoint = (endpoint: (typeof endpoints)[number]): void => {
     if (
@@ -1128,36 +1160,12 @@ const buildCatalog = async (): Promise<BuildResult> => {
 
     const permissions = endpoint.config["permissions"];
     const hasPermissions = "permissions" in endpoint.config;
-    const requestTimeoutValue = endpoint.config["requestTimeoutMs"];
-    const requestTimeoutMs =
-      typeof requestTimeoutValue === "number" &&
-      Number.isInteger(requestTimeoutValue) &&
-      requestTimeoutValue > 0
-        ? requestTimeoutValue
-        : undefined;
-    if (requestTimeoutValue !== undefined && requestTimeoutMs === undefined) {
-      errors.push(
-        `capability "${id}" declares invalid requestTimeoutMs; expected a positive integer`,
-      );
+    const metadata = readDeclaredMetadata(endpoint, id);
+    if (metadata === undefined) {
       return;
     }
+    const { requestTimeoutMs, declaredAccess } = metadata;
     const verbs = extractVerbs(permissions);
-    // `access` is DECLARED on the config, not inferred: a handler's permission
-    // gate answers "who may call this", a different axis from whether it reads
-    // or writes (the same `workspace:["read"]` gate fronts a pure list and a
-    // cache-filling write). When declared it is authoritative; inference only
-    // proposes, and the affirmation guard below refuses to ship an unaffirmed
-    // read (which would resolve to a `stella:read`-reachable scope).
-    const declaredAccessValue = endpoint.config["access"];
-    const declaredAccess =
-      declaredAccessValue === "read" || declaredAccessValue === "write"
-        ? declaredAccessValue
-        : undefined;
-    if (declaredAccessValue !== undefined && declaredAccess === undefined) {
-      errors.push(
-        `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
-      );
-    }
     const inferredAccess = resolveAccess({
       id,
       verbs,

@@ -1920,11 +1920,13 @@ type Messages = {
     "compareAnother": "Compare another pair";
     "compareChangeKinds": {
       "delete": "Deleted text";
+      "inlineObjects": "Inline objects";
       "insert": "Inserted text";
       "merge": "Merged paragraphs";
       "move": "Moved content";
       "paragraphFormat": "Paragraph formatting";
       "replace": "Replaced text";
+      "sectionProperties": "Section properties";
       "split": "Split paragraphs";
       "tableColumnDelete": "Deleted table columns";
       "tableColumnInsert": "Inserted table columns";

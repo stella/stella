@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
 
 import { entitiesKeys } from "./entities";
 
@@ -60,7 +61,11 @@ export const entityVersionsOptions = ({
         .versions.get({
           ...(filePropertyId === undefined
             ? {}
-            : { query: { filePropertyId } }),
+            : {
+                query: {
+                  filePropertyId: toSafeId<"property">(filePropertyId),
+                },
+              }),
           fetch: { signal },
         });
 
@@ -84,7 +89,9 @@ export const fetchOlderVersions = async ({
     .entity({ entityId })
     .versions.get({
       query:
-        filePropertyId === undefined ? { before } : { before, filePropertyId },
+        filePropertyId === undefined
+          ? { before }
+          : { before, filePropertyId: toSafeId<"property">(filePropertyId) },
     });
 
   const data = unwrapEden(response);

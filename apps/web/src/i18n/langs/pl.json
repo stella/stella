@@ -1917,11 +1917,13 @@
     "compareAnother": "Porównaj inną parę",
     "compareChangeKinds": {
       "delete": "Usunięty tekst",
+      "inlineObjects": "Obiekty w tekście",
       "insert": "Wstawiony tekst",
       "merge": "Połączone akapity",
       "move": "Przeniesiona treść",
       "paragraphFormat": "Formatowanie akapitu",
       "replace": "Zastąpiony tekst",
+      "sectionProperties": "Właściwości sekcji",
       "split": "Podziel akapity",
       "tableColumnDelete": "Usunięte kolumny tabeli",
       "tableColumnInsert": "Wstawione kolumny tabeli",

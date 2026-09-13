@@ -858,7 +858,9 @@ const createSupplierAgreementDocx = async (
         : run.text;
     const escaped = xmlEscape(text);
     if (disposition === "reject") {
-      if (run.kind === "inserted") return "";
+      if (run.kind === "inserted") {
+        return "";
+      }
       return `<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
     }
     if (run.kind === "deleted") {

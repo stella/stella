@@ -1,8 +1,12 @@
+import { panic } from "better-result";
+
 import { stableStringify } from "@stll/stable-stringify";
 
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
+
+const UUID_V8_VARIANTS = ["8", "9", "a", "b"] as const;
 
 type ComparisonVersionIdentity = {
   organizationId: SafeId<"organization">;
@@ -25,8 +29,10 @@ export const comparisonVersionId = (identity: ComparisonVersionIdentity) => {
     )
     .digest("hex");
   // UUIDv8 reserves application-defined bits; keep 122 bits of the digest.
-  const variant = (Number.parseInt(digest.slice(16, 17), 16) & 3) | 8;
-  return toSafeId<"entityVersion">(
-    `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-${variant.toString(16)}${digest.slice(17, 20)}-${digest.slice(20, 32)}`,
+  const variant =
+    UUID_V8_VARIANTS.at(Number.parseInt(digest.slice(16, 17), 16) % 4) ??
+    panic("SHA-256 digest must have a UUID variant nibble");
+  return brandPersistedEntityVersionId(
+    `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-${variant}${digest.slice(17, 20)}-${digest.slice(20, 32)}`,
   );
 };

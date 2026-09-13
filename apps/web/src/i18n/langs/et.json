@@ -1917,11 +1917,13 @@
     "compareAnother": "Võrrelge teist paari",
     "compareChangeKinds": {
       "delete": "Kustutatud tekst",
+      "inlineObjects": "Reasisesed objektid",
       "insert": "Sisestatud tekst",
       "merge": "Ühendatud lõigud",
       "move": "Teisaldatud sisu",
       "paragraphFormat": "Lõigu vormindamine",
       "replace": "Asendatud tekst",
+      "sectionProperties": "Jaotise atribuudid",
       "split": "Lõigud poolitatud",
       "tableColumnDelete": "Tabeli veerud on kustutatud",
       "tableColumnInsert": "Tabeli veerud on sisestatud",

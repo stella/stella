@@ -4,9 +4,13 @@ import { isDeepStrictEqual } from "node:util";
 const parseCliInputObject = (
   value: string | null | undefined,
 ): object | null => {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const result = Result.try(() => JSON.parse(value));
-  if (Result.isError(result)) return null;
+  if (Result.isError(result)) {
+    return null;
+  }
   const parsed: unknown = result.value;
   return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed
@@ -22,7 +26,9 @@ export const sameCliFlagValue = ({
   expected: string;
   flagName: string;
 }): boolean => {
-  if (flagName !== "input") return actual === expected;
+  if (flagName !== "input") {
+    return actual === expected;
+  }
   const actualInput = parseCliInputObject(actual);
   const expectedInput = parseCliInputObject(expected);
   return (

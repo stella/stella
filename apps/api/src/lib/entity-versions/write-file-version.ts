@@ -180,6 +180,63 @@ const hasOpenDocxEditSession = async ({
   return activeCollabRooms.at(0) !== undefined;
 };
 
+type ComparisonReplayResult =
+  | Extract<WriteFileVersionResult, { status: "replayed" }>
+  | { status: "target-file-not-found" };
+
+type ComparisonReplayOptions = {
+  tx: Transaction;
+  entityId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: SafeId<"entityVersion">;
+  writePolicy: Extract<
+    FileVersionWritePolicy,
+    { type: "append-derived-file-from-version" }
+  >;
+};
+
+const replayExistingComparisonVersion = async ({
+  tx,
+  entityId,
+  workspaceId,
+  entityVersionId,
+  writePolicy,
+}: ComparisonReplayOptions): Promise<ComparisonReplayResult | undefined> => {
+  if (entityVersionId !== writePolicy.comparisonVersionId) {
+    panic("Derived comparison must use its deterministic version identity");
+  }
+  const existing = await tx.query.entityVersions.findFirst({
+    where: {
+      id: { eq: entityVersionId },
+      entityId: { eq: entityId },
+      workspaceId: { eq: workspaceId },
+    },
+    columns: { id: true, versionNumber: true, deletedAt: true },
+    with: {
+      fields: {
+        where: { propertyId: { eq: writePolicy.filePropertyId } },
+        columns: { id: true, content: true },
+        limit: 1,
+      },
+    },
+  });
+  if (!existing) {
+    return undefined;
+  }
+  const existingField = existing.fields.at(0);
+  if (existing.deletedAt !== null || existingField?.content.type !== "file") {
+    return { status: "target-file-not-found" };
+  }
+  return {
+    status: "replayed",
+    entityVersionId: existing.id,
+    fieldId: existingField.id,
+    filePropertyId: writePolicy.filePropertyId,
+    fileName: existingField.content.fileName,
+    versionNumber: existing.versionNumber,
+  };
+};
+
 /**
  * Canonical transaction for writing an entity file version.
  *
@@ -307,41 +364,16 @@ export const writeFileVersion = async ({
   }
 
   if (writePolicy.type === "append-derived-file-from-version") {
-    if (entityVersionId !== writePolicy.comparisonVersionId) {
-      panic("Derived comparison must use its deterministic version identity");
-    }
     // The entity lock serializes creation and replay, including concurrent retries.
-    const existing = await tx.query.entityVersions.findFirst({
-      where: {
-        id: { eq: entityVersionId },
-        entityId: { eq: entityId },
-        workspaceId: { eq: workspaceId },
-      },
-      columns: { id: true, versionNumber: true, deletedAt: true },
-      with: {
-        fields: {
-          where: { propertyId: { eq: writePolicy.filePropertyId } },
-          columns: { id: true, content: true },
-          limit: 1,
-        },
-      },
+    const replay = await replayExistingComparisonVersion({
+      tx,
+      entityId,
+      workspaceId,
+      entityVersionId,
+      writePolicy,
     });
-    if (existing) {
-      const existingField = existing.fields.at(0);
-      if (
-        existing.deletedAt !== null ||
-        existingField?.content.type !== "file"
-      ) {
-        return { status: "target-file-not-found" };
-      }
-      return {
-        status: "replayed",
-        entityVersionId: existing.id,
-        fieldId: existingField.id,
-        filePropertyId: writePolicy.filePropertyId,
-        fileName: existingField.content.fileName,
-        versionNumber: existing.versionNumber,
-      };
+    if (replay) {
+      return replay;
     }
   }
 

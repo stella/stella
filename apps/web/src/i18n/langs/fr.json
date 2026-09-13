@@ -1917,11 +1917,13 @@
     "compareAnother": "Comparez une autre paire",
     "compareChangeKinds": {
       "delete": "Texte supprimé",
+      "inlineObjects": "Objets en ligne",
       "insert": "Texte inséré",
       "merge": "Paragraphes fusionnés",
       "move": "Contenu déplacé",
       "paragraphFormat": "Formatage des paragraphes",
       "replace": "Texte remplacé",
+      "sectionProperties": "Propriétés de section",
       "split": "Diviser les paragraphes",
       "tableColumnDelete": "Colonnes du tableau supprimées",
       "tableColumnInsert": "Colonnes de tableau insérées",

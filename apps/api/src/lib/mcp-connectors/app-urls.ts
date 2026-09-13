@@ -10,17 +10,20 @@
  */
 
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
 
 /** The deployment's frontend origin, without a trailing slash. */
 export const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
+
+type BuildDocumentUrlOptions = {
+  entityId: string;
+  fieldId: string;
+  workspaceId: SafeId<"workspace">;
+};
 
 export const buildDocumentUrl = ({
   entityId,
   fieldId,
   workspaceId,
-}: {
-  entityId: string;
-  fieldId: string;
-  workspaceId: string;
-}) =>
+}: BuildDocumentUrlOptions) =>
   `${getAppBaseUrl()}/workspaces/${workspaceId}/all/pdf?entity=${encodeURIComponent(entityId)}&field=${encodeURIComponent(fieldId)}`;

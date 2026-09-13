@@ -341,13 +341,19 @@ describe("first file version persistence", () => {
   test("replays a sequential comparison save without a second audit or current-version update", async () => {
     const entityId = await createEmptyEntity("document");
     const source = await writeTestFile(entityId);
-    if (Result.isError(source)) throw source.error;
-    if (source.value.status !== "ok")
+    if (Result.isError(source)) {
+      throw source.error;
+    }
+    if (source.value.status !== "ok") {
       throw new Error(`Source write failed: ${source.value.status}`);
+    }
     const current = await writeTestFile(entityId);
-    if (Result.isError(current)) throw current.error;
-    if (current.value.status !== "ok")
+    if (Result.isError(current)) {
+      throw current.error;
+    }
+    if (current.value.status !== "ok") {
       throw new Error(`Current write failed: ${current.value.status}`);
+    }
 
     const auditEvents: AuditEvent[] = [];
     const captureAuditEvent: AuditRecorder = async (_tx, event) => {
@@ -372,9 +378,12 @@ describe("first file version persistence", () => {
       recordAuditEvent: captureAuditEvent,
       writePolicy: policy,
     });
-    if (Result.isError(first)) throw first.error;
-    if (first.value.status !== "ok")
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    if (first.value.status !== "ok") {
       throw new Error(`First comparison write failed: ${first.value.status}`);
+    }
 
     const replay = await writeTestFile(entityId, {
       entityVersionId: derivedVersionId,
@@ -382,7 +391,9 @@ describe("first file version persistence", () => {
       recordAuditEvent: captureAuditEvent,
       writePolicy: policy,
     });
-    if (Result.isError(replay)) throw replay.error;
+    if (Result.isError(replay)) {
+      throw replay.error;
+    }
     expect(replay.value).toEqual({
       status: "replayed",
       entityVersionId: derivedVersionId,
@@ -404,13 +415,19 @@ describe("first file version persistence", () => {
   test("serializes concurrent comparison saves into one artifact and replay", async () => {
     const entityId = await createEmptyEntity("document");
     const source = await writeTestFile(entityId);
-    if (Result.isError(source)) throw source.error;
-    if (source.value.status !== "ok")
+    if (Result.isError(source)) {
+      throw source.error;
+    }
+    if (source.value.status !== "ok") {
       throw new Error(`Source write failed: ${source.value.status}`);
+    }
     const current = await writeTestFile(entityId);
-    if (Result.isError(current)) throw current.error;
-    if (current.value.status !== "ok")
+    if (Result.isError(current)) {
+      throw current.error;
+    }
+    if (current.value.status !== "ok") {
       throw new Error(`Current write failed: ${current.value.status}`);
+    }
 
     const auditEvents: AuditEvent[] = [];
     const captureAuditEvent: AuditRecorder = async (_tx, event) => {
@@ -442,8 +459,12 @@ describe("first file version persistence", () => {
         writePolicy: policy,
       }),
     ]);
-    if (Result.isError(first)) throw first.error;
-    if (Result.isError(second)) throw second.error;
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    if (Result.isError(second)) {
+      throw second.error;
+    }
     const outcomes = [first.value, second.value];
     const created = outcomes.find((outcome) => outcome.status === "ok");
     const replayed = outcomes.find((outcome) => outcome.status === "replayed");
@@ -480,13 +501,19 @@ describe("first file version persistence", () => {
   test("replays a comparison after the current version advances", async () => {
     const entityId = await createEmptyEntity("document");
     const source = await writeTestFile(entityId);
-    if (Result.isError(source)) throw source.error;
-    if (source.value.status !== "ok")
+    if (Result.isError(source)) {
+      throw source.error;
+    }
+    if (source.value.status !== "ok") {
       throw new Error(`Source write failed: ${source.value.status}`);
+    }
     const current = await writeTestFile(entityId);
-    if (Result.isError(current)) throw current.error;
-    if (current.value.status !== "ok")
+    if (Result.isError(current)) {
+      throw current.error;
+    }
+    if (current.value.status !== "ok") {
       throw new Error(`Current write failed: ${current.value.status}`);
+    }
 
     const auditEvents: AuditEvent[] = [];
     const captureAuditEvent: AuditRecorder = async (_tx, event) => {
@@ -510,21 +537,29 @@ describe("first file version persistence", () => {
       recordAuditEvent: captureAuditEvent,
       writePolicy: policy,
     });
-    if (Result.isError(derived)) throw derived.error;
-    if (derived.value.status !== "ok")
+    if (Result.isError(derived)) {
+      throw derived.error;
+    }
+    if (derived.value.status !== "ok") {
       throw new Error(`Comparison write failed: ${derived.value.status}`);
+    }
 
     const advanced = await writeTestFile(entityId);
-    if (Result.isError(advanced)) throw advanced.error;
-    if (advanced.value.status !== "ok")
+    if (Result.isError(advanced)) {
+      throw advanced.error;
+    }
+    if (advanced.value.status !== "ok") {
       throw new Error(`Advance write failed: ${advanced.value.status}`);
+    }
     const replay = await writeTestFile(entityId, {
       entityVersionId: derivedVersionId,
       fieldId: createSafeId<"field">(),
       recordAuditEvent: captureAuditEvent,
       writePolicy: policy,
     });
-    if (Result.isError(replay)) throw replay.error;
+    if (Result.isError(replay)) {
+      throw replay.error;
+    }
     expect(replay.value).toEqual({
       status: "replayed",
       entityVersionId: derivedVersionId,
@@ -546,13 +581,19 @@ describe("first file version persistence", () => {
   test("does not replay a withdrawn comparison version", async () => {
     const entityId = await createEmptyEntity("document");
     const source = await writeTestFile(entityId);
-    if (Result.isError(source)) throw source.error;
-    if (source.value.status !== "ok")
+    if (Result.isError(source)) {
+      throw source.error;
+    }
+    if (source.value.status !== "ok") {
       throw new Error(`Source write failed: ${source.value.status}`);
+    }
     const current = await writeTestFile(entityId);
-    if (Result.isError(current)) throw current.error;
-    if (current.value.status !== "ok")
+    if (Result.isError(current)) {
+      throw current.error;
+    }
+    if (current.value.status !== "ok") {
       throw new Error(`Current write failed: ${current.value.status}`);
+    }
 
     const derivedVersionId = createSafeId<"entityVersion">();
     const policy = {
@@ -566,9 +607,12 @@ describe("first file version persistence", () => {
       entityVersionId: derivedVersionId,
       writePolicy: policy,
     });
-    if (Result.isError(derived)) throw derived.error;
-    if (derived.value.status !== "ok")
+    if (Result.isError(derived)) {
+      throw derived.error;
+    }
+    if (derived.value.status !== "ok") {
       throw new Error(`Comparison write failed: ${derived.value.status}`);
+    }
     await testDb
       .update(entityVersions)
       .set({ deletedAt: new Date() })
@@ -578,7 +622,9 @@ describe("first file version persistence", () => {
       entityVersionId: derivedVersionId,
       writePolicy: policy,
     });
-    if (Result.isError(replay)) throw replay.error;
+    if (Result.isError(replay)) {
+      throw replay.error;
+    }
     expect(replay.value).toEqual({ status: "target-file-not-found" });
   });
 

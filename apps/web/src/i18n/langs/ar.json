@@ -1917,11 +1917,13 @@
     "compareAnother": "قارن زوجًا آخر",
     "compareChangeKinds": {
       "delete": "النص المحذوف",
+      "inlineObjects": "كائنات مضمنة",
       "insert": "تم إدراج النص",
       "merge": "الفقرات المدمجة",
       "move": "المحتوى منقول",
       "paragraphFormat": "تنسيق الفقرة",
       "replace": "تم استبدال النص",
+      "sectionProperties": "خصائص المقطع",
       "split": "تقسيم الفقرات",
       "tableColumnDelete": "أعمدة الجدول المحذوفة",
       "tableColumnInsert": "أعمدة الجدول المدرجة",

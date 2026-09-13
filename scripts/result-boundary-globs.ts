@@ -37,6 +37,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
+  "apps/api/src/handlers/documents/**/*.ts",
   "apps/api/src/handlers/docx-suggestions/**/*.ts",
   "apps/api/src/handlers/expenses/**/*.ts",
   "apps/api/src/handlers/files/**/*.ts",
