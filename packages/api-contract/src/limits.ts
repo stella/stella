@@ -81,3 +81,11 @@ export const CASE_LAW_CITATION_TIMELINE_MAX_YEARS = 60;
  * in batches rather than lose the whole run to a validation error.
  */
 export const CASE_LAW_RESEARCH_RUN_DECISIONS_MAX = 100;
+
+/**
+ * Question columns one organization may add. The client hides the add-column
+ * affordance at the cap; the server rejects past it. Enforced on create alone,
+ * so an organization carried over from the per-table model can hold more than
+ * this without any of them being refused a read or a run.
+ */
+export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;

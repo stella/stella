@@ -28,14 +28,20 @@ export type DecisionTableLayout = {
   order: readonly string[];
   /** Column ids kept in front of the order. */
   pinned: readonly string[];
+  /** Widths the reader dragged, by column id; the schema's own otherwise. */
+  sizing: Readonly<Record<string, number>>;
   contentMode: DecisionContentMode;
   facetRail: DecisionFacetRailState;
 };
+
+/** One empty sizing map, so an untouched layout keeps one identity. */
+const NO_COLUMN_SIZING: Readonly<Record<string, number>> = {};
 
 export const DEFAULT_DECISION_TABLE_LAYOUT: DecisionTableLayout = {
   hidden: DEFAULT_HIDDEN_DECISION_COLUMN_IDS,
   order: [],
   pinned: [],
+  sizing: NO_COLUMN_SIZING,
   contentMode: "tight",
   // The results need the width more than the rail does, and nothing is hidden
   // by folding it: the chips row still names every filter that is on.
@@ -60,6 +66,7 @@ export const StoredDecisionLayoutSchema = v.record(
       hidden: v.optional(columnIdList),
       order: v.optional(columnIdList),
       pinned: v.optional(columnIdList),
+      sizing: v.optional(v.record(v.string(), v.number())),
       contentMode: v.optional(v.picklist(DECISION_CONTENT_MODES)),
       facetRail: v.optional(v.picklist(DECISION_FACET_RAIL_STATES)),
     }),
@@ -115,6 +122,7 @@ const decisionTableLayout = (
     hidden: stored.hidden ?? DEFAULT_DECISION_TABLE_LAYOUT.hidden,
     order: stored.order ?? DEFAULT_DECISION_TABLE_LAYOUT.order,
     pinned: stored.pinned ?? DEFAULT_DECISION_TABLE_LAYOUT.pinned,
+    sizing: stored.sizing ?? DEFAULT_DECISION_TABLE_LAYOUT.sizing,
     contentMode:
       stored.contentMode ?? DEFAULT_DECISION_TABLE_LAYOUT.contentMode,
     facetRail: stored.facetRail ?? DEFAULT_DECISION_TABLE_LAYOUT.facetRail,

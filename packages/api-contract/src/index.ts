@@ -258,6 +258,7 @@ export type {
 export {
   AGENT_SKILLS_CHAT_METADATA_MAX,
   CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
+  CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
   ENTITIES_PER_WORKSPACE_MAX,
@@ -329,18 +330,13 @@ export {
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
   CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX,
-  CASE_LAW_RESEARCH_DISPOSITIONS,
-  CASE_LAW_RESEARCH_QUERY_VERSION,
   CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
-  CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
   answerNeedsRun,
 } from "./case-law-research";
 export type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
   CaseLawResearchColumnTool,
-  CaseLawResearchDisposition,
-  CaseLawResearchSavedQuery,
   ResearchAnswerRunCheck,
 } from "./case-law-research";
 export {

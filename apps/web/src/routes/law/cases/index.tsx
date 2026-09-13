@@ -78,10 +78,10 @@ import {
   reachableDecisionPage,
 } from "@/features/case-law/decision-pagination.logic";
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
+import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import { decisionsLoadMode } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRailFacets } from "@/features/case-law/facet-rail.logic";
 import { SaveIntoMatterAction } from "@/features/case-law/matter-links/save-into-matter";
-import { openDecisionAtPassage } from "@/features/case-law/open-decision-at-passage";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,
@@ -98,7 +98,6 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
-import { NO_QUESTION_COLUMNS } from "@/features/case-law/research/question-columns.logic";
 import {
   addRefineTerm,
   canonicalRefinements,
@@ -133,6 +132,8 @@ const MAX_REFINEMENT_LENGTH = 240;
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
+/** A pending page has no organization to ask questions for, and no store yet. */
+const HIDDEN_QUESTION_SURFACE = { type: "hidden" } as const;
 const NO_BROWSE_FACETS: CaseLawBrowseFacets = {
   country: [],
   court: [],
@@ -523,8 +524,7 @@ function PublicCaseLawIndexPending() {
             layout={DEFAULT_DECISION_TABLE_LAYOUT}
             onLayoutChange={() => undefined}
             onSelectedIdsChange={() => undefined}
-            order="newest"
-            questions={null}
+            questions={HIDDEN_QUESTION_SURFACE}
             selectedIds={EMPTY_SELECTION}
           />
           <Skeleton className="h-8 w-full max-w-sm" />
@@ -714,6 +714,7 @@ function PublicCaseLawIndex() {
 
   // Picked rows narrow a run to them; the page they belong to is the only
   // page they mean anything on, so a step forward clears them.
+  const openDecision = useOpenDecisionInspector();
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
   const [selectionPage, setSelectionPage] = useState(pager.currentPage);
@@ -726,12 +727,7 @@ function PublicCaseLawIndex() {
     // The results page is where questions are authored, so the columns are
     // read whether or not this particular search returned anything.
     enabled: true,
-    onShowSource: (decision, anchorId) => {
-      detached(
-        openDecisionAtPassage(routerNavigate, decision, anchorId),
-        "cases.show-source",
-      );
-    },
+    onShowPassage: openDecision,
     pageDecisionIds,
     selectedDecisionIds: selectedIds,
   });
@@ -854,7 +850,6 @@ function PublicCaseLawIndex() {
   const sort: SearchSort | null = sortable
     ? decisionSortOrder(search.sort)
     : null;
-  const order = intent.type === "empty" ? "newest" : (sort ?? "relevance");
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -922,11 +917,7 @@ function PublicCaseLawIndex() {
                 "cases.sort-navigate",
               );
             }}
-            questionColumns={
-              questions.surface === null
-                ? NO_QUESTION_COLUMNS
-                : questions.surface.columns
-            }
+            questions={questions.surface}
             railState={layout.facetRail}
             sort={sort}
             summary={
@@ -964,7 +955,6 @@ function PublicCaseLawIndex() {
             layout={layout}
             onLayoutChange={setLayout}
             onSelectedIdsChange={setSelectedIds}
-            order={order}
             query={effectiveQuery}
             questions={questions.surface}
             selectedIds={selectedIds}

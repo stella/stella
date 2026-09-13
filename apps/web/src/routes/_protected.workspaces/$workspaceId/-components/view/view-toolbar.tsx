@@ -49,11 +49,14 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/components/workspaces/entity-utils";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
+import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import { resolveDocumentTypeClassifier } from "@/components/workspaces/table/group-columns";
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -92,13 +95,10 @@ import { useWorkspaceStore } from "@/lib/workspaces/store";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
-import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { ColumnToggle } from "@/routes/_protected.workspaces/$workspaceId/-components/view/column-toggle";
-import type { ColumnToggleGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/view/column-toggle";
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
 import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
@@ -279,7 +279,10 @@ export const ViewToolbar = ({
           <TableContentModeControl viewId={view.id} workspaceId={workspaceId} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
           <RunPlaybookControl workspaceId={workspaceId} />
-          <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
+          <BulkAddColumns
+            target={{ kind: "workspace", workspaceId }}
+            triggerVariant="labelled"
+          />
         </>
       )}
 

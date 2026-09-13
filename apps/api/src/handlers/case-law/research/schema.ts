@@ -3,88 +3,14 @@ import type { Static } from "elysia";
 
 import {
   CASE_LAW_RESEARCH_COLUMN_OPTIONS_MAX,
-  CASE_LAW_RESEARCH_DISPOSITIONS,
-  CASE_LAW_RESEARCH_QUERY_VERSION,
   CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
-  CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
 } from "@stll/api-contract";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
-import type {
-  caseLawResearchAnswers,
-  caseLawResearchTables,
-} from "@/api/db/schema";
+import type { caseLawResearchAnswers } from "@/api/db/schema";
 import { parseStoredAnswerContent } from "@/api/lib/case-law/research-answers";
-import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-
-/** Route-level mirror of `caseLawResearchSavedQuerySchema`; the handler re-parses. */
-export const researchSavedQueryBodySchema = t.Object(
-  {
-    version: t.Literal(CASE_LAW_RESEARCH_QUERY_VERSION),
-    query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
-    country: t.Optional(t.String({ maxLength: 3 })),
-    court: t.Optional(t.String({ maxLength: 512 })),
-    dateFrom: t.Optional(t.String({ format: "date" })),
-    dateTo: t.Optional(t.String({ format: "date" })),
-    decisionType: t.Optional(t.String({ maxLength: 128 })),
-    language: t.Optional(t.String({ maxLength: 8 })),
-    sourceId: t.Optional(tSafeId("caseLawSource")),
-    // Declared, because `additionalProperties: false` would otherwise reject
-    // the body a table saved under `newest` sends back.
-    sort: t.Optional(searchSortSchema),
-  },
-  { additionalProperties: false },
-);
-
-export const researchTableNameSchema = t.String({
-  minLength: 1,
-  maxLength: CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
-});
-
-export const researchTableParamsSchema = t.Object({
-  tableId: tSafeId("caseLawResearchTable"),
-});
-
-export const researchTableDecisionParamsSchema = t.Object({
-  tableId: tSafeId("caseLawResearchTable"),
-  decisionId: tSafeId("caseLawDecision"),
-});
-
-export const researchTableListQuerySchema = t.Object({
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.caseLawResearchTablesPageSizeMax,
-    }),
-  ),
-});
-
-export const createResearchTableBodySchema = t.Object(
-  {
-    name: researchTableNameSchema,
-    savedQuery: researchSavedQueryBodySchema,
-  },
-  { additionalProperties: false },
-);
-
-export const updateResearchTableBodySchema = t.Object(
-  {
-    name: t.Optional(researchTableNameSchema),
-    savedQuery: t.Optional(researchSavedQueryBodySchema),
-  },
-  { additionalProperties: false },
-);
-
-export const setResearchTableDecisionBodySchema = t.Object(
-  {
-    decisionId: tSafeId("caseLawDecision"),
-    disposition: t.UnionEnum(CASE_LAW_RESEARCH_DISPOSITIONS),
-  },
-  { additionalProperties: false },
-);
 
 export const researchColumnParamsSchema = t.Object({
   columnId: tSafeId("caseLawResearchColumn"),
@@ -209,15 +135,4 @@ export const toResearchAnswerResponse = (
     row.state === "pending" &&
     now.getTime() - row.updatedAt.getTime() >
       LIMITS.caseLawResearchPendingStaleMs,
-});
-
-export const toResearchTableResponse = (
-  row: typeof caseLawResearchTables.$inferSelect,
-) => ({
-  id: row.id,
-  name: row.name,
-  ownerUserId: row.ownerUserId,
-  savedQuery: row.savedQuery,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
 });

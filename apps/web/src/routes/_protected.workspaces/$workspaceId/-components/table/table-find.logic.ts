@@ -14,12 +14,12 @@ import {
 import type { EntityFindScope } from "@stll/api-contract";
 
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
+import type { WorkspaceColumnDescriptor } from "@/components/workspaces/table/table-schema";
 import type { PropertyContentType } from "@/lib/api-contract";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
 import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
 import type { TableFindSelection } from "@/lib/workspaces/table-store";
-import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 /**

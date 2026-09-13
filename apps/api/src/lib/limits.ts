@@ -1,5 +1,6 @@
 import {
   AGENT_SKILLS_CHAT_METADATA_MAX,
+  CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CHAT_RICH_PART_LIMITS,
   ENTITIES_PER_WORKSPACE_MAX,
@@ -388,19 +389,14 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
-  /** Research tables one member may own; a bound, not a plan limit. */
-  caseLawResearchTablesPerUser: 200,
-  caseLawResearchTablesPageSizeDefault: 50,
-  caseLawResearchTablesPageSizeMax: 100,
-  /** Pinned plus excluded decisions per research table. */
-  caseLawResearchTableDecisionsMax: 500,
   /**
    * Question columns one organization may ADD. Enforced on create alone: the
    * columns that predate the organization-owned model were capped per research
    * table, and one member could own many tables, so an organization can arrive
    * holding more than this.
    */
-  caseLawResearchColumnsPerOrganization: 20,
+  caseLawResearchColumnsPerOrganization:
+    CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   /**
    * Question columns one organization may HOLD: the ceiling every read,
    * reorder and run covers, sized for the grandfathered sets the cap above

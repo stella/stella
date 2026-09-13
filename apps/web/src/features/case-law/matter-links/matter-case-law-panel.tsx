@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -9,18 +9,16 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DecisionTable } from "@/features/case-law/components/decision-table";
-import type {
-  Decision,
-  DecisionExtraColumn,
-} from "@/features/case-law/components/decision-table";
+import type { Decision } from "@/features/case-law/components/decision-table";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
+import type { DecisionExtraColumn } from "@/features/case-law/decision-columns.logic";
+import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
   matterLinkKeys,
   matterLinksOptions,
   unlinkDecisionFromMatter,
 } from "@/features/case-law/matter-links/queries";
 import type { MatterDecisionLink } from "@/features/case-law/matter-links/queries";
-import { openDecisionAtPassage } from "@/features/case-law/open-decision-at-passage";
 import {
   QuestionColumnControls,
   useQuestionColumns,
@@ -49,7 +47,6 @@ export const MatterCaseLawPanel = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   // The matter's links are their own read: the overview payload is the
   // workspace slice's entity summary, and folding a three-table case-law join
   // into it would make every matter pay for decisions it has none of. So one
@@ -68,6 +65,7 @@ export const MatterCaseLawPanel = ({
   // arrangement is the one the reader keeps for mixed listings rather than a
   // per-country one.
   const { layout, setLayout } = useDecisionColumnPreferences(MATTER_SCOPE);
+  const openDecision = useOpenDecisionInspector();
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
 
@@ -83,12 +81,7 @@ export const MatterCaseLawPanel = ({
     // The organization's questions are only worth reading once the matter has
     // a decision to ask them of; a matter with nothing linked asks nothing.
     enabled: hasLinks,
-    onShowSource: (decision, anchorId) => {
-      detached(
-        openDecisionAtPassage(navigate, decision, anchorId),
-        "matter-case-law.show-source",
-      );
-    },
+    onShowPassage: openDecision,
     pageDecisionIds: decisions.map((decision) => decision.id),
     selectedDecisionIds: selectedIds,
   });
@@ -171,7 +164,6 @@ export const MatterCaseLawPanel = ({
           layout={layout}
           onLayoutChange={setLayout}
           onSelectedIdsChange={setSelectedIds}
-          order="newest"
           questions={questions.surface}
           selectedIds={selectedIds}
         />

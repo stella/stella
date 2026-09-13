@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { ENTITY_FIND_TERM_MIN_LENGTH } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
+import type { WorkspaceColumnDescriptor } from "@/components/workspaces/table/table-schema";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty } from "@/lib/types";
 import type { TableFindSelection } from "@/lib/workspaces/table-store";
@@ -15,7 +16,6 @@ import {
   toggleFindColumn,
   toPickerFindColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
-import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 
 const property = (
   id: string,

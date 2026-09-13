@@ -18,6 +18,12 @@ import { Temporal } from "@stll/time";
 
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
+import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
+import type {
+  WorkspaceColumnDescriptor,
+  WorkspaceColumnRender,
+  WorkspaceTableSchema,
+} from "@/components/workspaces/table/table-schema";
 import type {
   TableCellContext,
   TableColumnDef,
@@ -35,16 +41,8 @@ import {
   LastUpdatedCell,
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
-import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
 import { getPropertyColumnRender } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import type {
-  WorkspaceColumnDescriptor,
-  WorkspaceColumnRender,
-  WorkspaceTableSchema,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
-import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
-
-export { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
+import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema";
 
 type UseTableColumnsOptions = {
   properties: WorkspaceProperty[];

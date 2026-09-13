@@ -7,22 +7,11 @@ import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delet
 import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
-import createResearchTable from "@/api/handlers/case-law/research/create";
-import deleteResearchTableDecision from "@/api/handlers/case-law/research/decisions-delete";
-import setResearchTableDecision from "@/api/handlers/case-law/research/decisions-set";
-import deleteResearchTable from "@/api/handlers/case-law/research/delete";
-import readResearchTable from "@/api/handlers/case-law/research/get";
-import listResearchTables from "@/api/handlers/case-law/research/list";
-import updateResearchTable from "@/api/handlers/case-law/research/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 /**
  * Organization-scoped. Question columns and their answers belong to the
  * organization: one answer serves every search that surfaces the decision.
- * The `/:tableId` routes below are the retiring research tables.
- *
- * The column and answer paths are registered before `/:tableId` so the static
- * segment wins the match, whichever way the router orders its tree.
  */
 export const caseLawResearchRoute = new Elysia({ prefix: "/case/research" })
   .use(authMacro)
@@ -55,38 +44,4 @@ export const caseLawResearchRoute = new Elysia({ prefix: "/case/research" })
   .post("/answers/run", runResearchAnswers.handler, {
     body: runResearchAnswers.config.body,
     permissions: runResearchAnswers.config.permissions,
-  })
-  .get("/", listResearchTables.handler, {
-    query: listResearchTables.config.query,
-    permissions: listResearchTables.config.permissions,
-  })
-  .post("/", createResearchTable.handler, {
-    body: createResearchTable.config.body,
-    permissions: createResearchTable.config.permissions,
-  })
-  .get("/:tableId", readResearchTable.handler, {
-    params: readResearchTable.config.params,
-    permissions: readResearchTable.config.permissions,
-  })
-  .patch("/:tableId", updateResearchTable.handler, {
-    body: updateResearchTable.config.body,
-    params: updateResearchTable.config.params,
-    permissions: updateResearchTable.config.permissions,
-  })
-  .delete("/:tableId", deleteResearchTable.handler, {
-    params: deleteResearchTable.config.params,
-    permissions: deleteResearchTable.config.permissions,
-  })
-  .put("/:tableId/decisions", setResearchTableDecision.handler, {
-    body: setResearchTableDecision.config.body,
-    params: setResearchTableDecision.config.params,
-    permissions: setResearchTableDecision.config.permissions,
-  })
-  .delete(
-    "/:tableId/decisions/:decisionId",
-    deleteResearchTableDecision.handler,
-    {
-      params: deleteResearchTableDecision.config.params,
-      permissions: deleteResearchTableDecision.config.permissions,
-    },
-  );
+  });

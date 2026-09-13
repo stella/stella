@@ -1,3 +1,12 @@
+/**
+ * The organization's question columns on a decision table: what the table
+ * draws, and what the reader can add, edit, remove and run.
+ *
+ * The hook holds the state because two places need it — the table's own column
+ * headers and the toolbar's controls — and a controller passed between them is
+ * cheaper than a context nobody else reads.
+ */
+
 import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,18 +25,14 @@ import {
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
-import type {
-  DecisionQuestionSurface,
-  QuestionColumnAction,
-} from "@/features/case-law/components/decision-table";
+import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
+import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
-  createQuestionColumn,
   deleteQuestionColumn,
   questionAnswersOptions,
   questionColumnKeys,
   questionColumnsOptions,
   runAnswers,
-  updateQuestionColumn,
 } from "@/features/case-law/research/queries";
 import {
   answerKey,
@@ -39,22 +44,13 @@ import {
 import type {
   QuestionAnswer,
   QuestionColumn,
-  QuestionDraft,
+  QuestionColumnAction,
+  QuestionColumnSurface,
   QuestionRunSet,
 } from "@/features/case-law/research/question-columns.logic";
-import { ResearchQuestionDialog } from "@/features/case-law/research/research-question-dialog";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-
-/**
- * The organization's question columns on the results page: what the table
- * draws, and what the reader can add, edit, remove and run.
- *
- * The hook holds the state because two places need it — the table's own column
- * headers and the toolbar's controls — and a controller passed between them is
- * cheaper than a context nobody else reads.
- */
 
 type QuestionColumnsInput = {
   /**
@@ -68,15 +64,9 @@ type QuestionColumnsInput = {
   pageDecisionIds: readonly string[];
   /** The rows the reader picked; empty means the whole page. */
   selectedDecisionIds: readonly string[];
-  /** Where the "show source" link should take the reader. */
-  onShowSource: DecisionQuestionSurface["onShowSource"];
+  /** Opens a decision at a cited passage, with the reader's highlight. */
+  onShowPassage: (decision: Decision, anchorId: string) => void;
 };
-
-/** Which question the dialog edits, or that it adds one. */
-type QuestionDialogState =
-  | { type: "closed" }
-  | { type: "create" }
-  | { type: "edit"; column: QuestionColumn };
 
 /** One queue request: a confirmed run, or the retry of a single failed cell. */
 type RunRequest = {
@@ -93,12 +83,10 @@ type PendingRun = {
 };
 
 export type QuestionColumnsController = {
-  /** Null for a reader without an organization: no columns, no controls. */
-  surface: DecisionQuestionSurface | null;
-  draft: QuestionDialogState;
-  onDraftChange: (draft: QuestionDialogState) => void;
-  onSubmitDraft: (draft: QuestionDraft) => void;
-  isSaving: boolean;
+  surface: QuestionColumnSurface;
+  /** The question the composer is reworking, or that it is writing a new one. */
+  editing: QuestionColumn | null;
+  onEditingChange: (column: QuestionColumn | null) => void;
   pendingRun: PendingRun | null;
   onCancelRun: () => void;
   onConfirmRun: () => void;
@@ -111,7 +99,7 @@ export type QuestionColumnsController = {
 
 export const useQuestionColumns = ({
   enabled,
-  onShowSource,
+  onShowPassage,
   pageDecisionIds,
   selectedDecisionIds,
 }: QuestionColumnsInput): QuestionColumnsController => {
@@ -123,7 +111,7 @@ export const useQuestionColumns = ({
     ? authStatus.user.activeOrganizationId
     : null;
 
-  const [draft, setDraft] = useState<QuestionDialogState>({ type: "closed" });
+  const [editing, setEditing] = useState<QuestionColumn | null>(null);
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
   const [removing, setRemoving] = useState<QuestionColumn | null>(null);
 
@@ -145,11 +133,6 @@ export const useQuestionColumns = ({
   });
 
   const asked = columns ?? NO_QUESTION_COLUMNS;
-  const surface = questionColumnSurface({
-    columns: asked,
-    hasActiveOrganization: activeOrganizationId !== null,
-  });
-
   const answersByKey = new Map<string, QuestionAnswer>();
   for (const answer of answers ?? NO_QUESTION_ANSWERS) {
     answersByKey.set(answerKey(answer.columnId, answer.decisionId), answer);
@@ -163,25 +146,6 @@ export const useQuestionColumns = ({
   const invalidateColumns = async () => {
     await queryClient.invalidateQueries({ queryKey: questionColumnKeys.all });
   };
-
-  const save = useMutation({
-    mutationFn: async (input: QuestionDraft & { columnId?: string }) =>
-      input.columnId === undefined
-        ? await createQuestionColumn({
-            answerType: input.answerType,
-            question: input.question,
-          })
-        : await updateQuestionColumn({
-            answerType: input.answerType,
-            columnId: input.columnId,
-            question: input.question,
-          }),
-    onSuccess: async () => {
-      setDraft({ type: "closed" });
-      await invalidateColumns();
-    },
-    onError: reportFailure,
-  });
 
   const remove = useMutation({
     mutationFn: async (columnId: string) =>
@@ -242,7 +206,7 @@ export const useQuestionColumns = ({
         askToRun(column);
         break;
       case "edit":
-        setDraft({ type: "edit", column });
+        setEditing(column);
         break;
       case "delete":
         setRemoving(column);
@@ -254,41 +218,29 @@ export const useQuestionColumns = ({
   };
 
   return {
-    surface:
-      surface.type === "hidden"
-        ? null
-        : {
-            answersByKey,
-            columns: surface.columns,
-            isRunning: run.isPending,
-            onColumnAction,
-            onRetryAnswer: (column, decisionId) => {
-              detached(
-                run.mutateAsync({
-                  force: true,
-                  runSet: {
-                    columnIds: [column.id],
-                    decisionIds: [decisionId],
-                    cells: 1,
-                  },
-                }),
-                "case-law-questions.retry-answer",
-              );
+    surface: questionColumnSurface({
+      answersByKey,
+      columns: asked,
+      hasActiveOrganization: activeOrganizationId !== null,
+      isRunning: run.isPending,
+      onColumnAction,
+      onRetryAnswer: (column, decisionId) => {
+        detached(
+          run.mutateAsync({
+            force: true,
+            runSet: {
+              columnIds: [column.id],
+              decisionIds: [decisionId],
+              cells: 1,
             },
-            onShowSource,
-          },
-    draft,
-    onDraftChange: setDraft,
-    onSubmitDraft: (submitted) => {
-      detached(
-        save.mutateAsync({
-          ...submitted,
-          ...(draft.type === "edit" ? { columnId: draft.column.id } : {}),
-        }),
-        "case-law-questions.save-column",
-      );
-    },
-    isSaving: save.isPending,
+          }),
+          "case-law-questions.retry-answer",
+        );
+      },
+      onShowPassage,
+    }),
+    editing,
+    onEditingChange: setEditing,
     pendingRun,
     onCancelRun: () => setPendingRun(null),
     onConfirmRun: () => {
@@ -317,7 +269,7 @@ export const useQuestionColumns = ({
 
 /**
  * The toolbar half of the controller: adding a question, answering the page,
- * and the three dialogs those flows and the column headers share.
+ * and the dialogs those flows and the column headers share.
  *
  * Renders nothing at all for a reader without an organization — the same one
  * answer that hides the columns hides every control over them.
@@ -328,22 +280,18 @@ export const QuestionColumnControls = ({
   controller: QuestionColumnsController;
 }) => {
   const t = useTranslations();
+  const { editing, pendingRun, removing, surface } = controller;
 
-  if (controller.surface === null) {
+  if (surface.type === "hidden") {
     return null;
   }
-  const { pendingRun, removing, surface } = controller;
 
   return (
     <>
-      <Button
-        className="h-7 min-h-0 text-xs"
-        onClick={() => controller.onDraftChange({ type: "create" })}
-        size="sm"
-        variant="outline"
-      >
-        {t("caseLaw.research.addColumn")}
-      </Button>
+      <BulkAddColumns
+        target={{ kind: "organisation" }}
+        triggerVariant="labelled"
+      />
       {surface.columns.length > 0 && (
         <Button
           className="text-muted-foreground h-7 min-h-0 text-xs"
@@ -356,31 +304,19 @@ export const QuestionColumnControls = ({
         </Button>
       )}
 
-      {controller.draft.type !== "closed" && (
-        <ResearchQuestionDialog
+      {editing !== null && (
+        <BulkAddColumns
           // A new dialog per question, so the fields start from what is being
           // edited rather than from whatever was typed last.
-          key={
-            controller.draft.type === "edit"
-              ? controller.draft.column.id
-              : "new"
-          }
-          {...(controller.draft.type === "edit"
-            ? {
-                initial: {
-                  answerType: controller.draft.column.answerType,
-                  question: controller.draft.column.question,
-                },
-              }
-            : {})}
-          isPending={controller.isSaving}
+          key={editing.id}
           onOpenChange={(open) => {
             if (!open) {
-              controller.onDraftChange({ type: "closed" });
+              controller.onEditingChange(null);
             }
           }}
-          onSubmit={controller.onSubmitDraft}
           open
+          target={{ kind: "organisation", editing }}
+          triggerVariant="none"
         />
       )}
 

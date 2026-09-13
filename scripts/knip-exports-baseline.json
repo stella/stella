@@ -1,6 +1,10 @@
 {
   "apps/api": {
+<<<<<<< HEAD
     "count": 759,
+=======
+    "count": 756,
+>>>>>>> c8668798da (feat(case-law): the results page is the workspace table)
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -33,8 +37,6 @@
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/replay.ts": 3,
       "apps/api/src/handlers/case-law/public-routes.ts": 1,
-      "apps/api/src/handlers/case-law/research/list.ts": 1,
-      "apps/api/src/handlers/case-law/research/schema.ts": 2,
       "apps/api/src/handlers/chat/attachment-validation.ts": 1,
       "apps/api/src/handlers/chat/chat-message-parts.ts": 9,
       "apps/api/src/handlers/chat/chat-message-persistence.ts": 1,
@@ -141,8 +143,7 @@
       "apps/api/src/lib/case-law/document-ast.ts": 21,
       "apps/api/src/lib/case-law/language-alternates.ts": 1,
       "apps/api/src/lib/case-law/maintenance-lane.ts": 4,
-      "apps/api/src/lib/case-law/research-answers.ts": 4,
-      "apps/api/src/lib/case-law/research-saved-query.ts": 1,
+      "apps/api/src/lib/case-law/research-answers.ts": 3,
       "apps/api/src/lib/chat/chat-tool-types.ts": 1,
       "apps/api/src/lib/chat/compaction-tokens.ts": 1,
       "apps/api/src/lib/chat/created-draft.ts": 1,
@@ -371,7 +372,7 @@
     }
   },
   "apps/web": {
-    "count": 420,
+    "count": 415,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -429,7 +430,6 @@
       "apps/web/src/components/inline-pill.tsx": 2,
       "apps/web/src/components/inspector/anonymize-pdf.ts": 1,
       "apps/web/src/components/inspector/case-decision-details-view.ts": 1,
-      "apps/web/src/components/inspector/case-decision-view.ts": 1,
       "apps/web/src/components/inspector/inspector-anonymization-store.ts": 1,
       "apps/web/src/components/inspector/inspector-store-types.ts": 11,
       "apps/web/src/components/inspector/inspector-tabs-store.ts": 10,
@@ -473,12 +473,10 @@
       "apps/web/src/features/case-law/citation-treatment.ts": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
-      "apps/web/src/features/case-law/components/decision-table.tsx": 1,
+      "apps/web/src/features/case-law/components/decision-cells.tsx": 1,
       "apps/web/src/features/case-law/provision-label.ts": 2,
       "apps/web/src/features/case-law/queries/citations.ts": 2,
       "apps/web/src/features/case-law/queries/decisions.ts": 1,
-      "apps/web/src/features/case-law/research/research-question-dialog.tsx": 1,
-      "apps/web/src/features/case-law/research/research-table-view.tsx": 1,
       "apps/web/src/features/chat/chat-query-contract.ts": 1,
       "apps/web/src/features/chat/chat-runtime.ts": 3,
       "apps/web/src/features/chat/lib/chat-rename-command-store.ts": 1,
@@ -589,8 +587,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-schema.ts": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/time-entries.ts": 5,
       "apps/web/src/routes/_protected.workspaces/-filters/filter-pipeline.ts": 1,
       "apps/web/src/routes/_protected.workspaces/-utils.ts": 1,

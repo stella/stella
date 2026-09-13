@@ -1229,7 +1229,7 @@ export default defineConfig({
         "apps/web/src/components/search-dialog.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx",
+        "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx",
         "packages/ui/src/kanban/virtual-cell.tsx",
       ],
       rules: {

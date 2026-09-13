@@ -3,12 +3,8 @@ import { eq } from "drizzle-orm";
 import {
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
-  CASE_LAW_RESEARCH_DISPOSITIONS,
 } from "@stll/api-contract";
-import type {
-  CaseLawResearchColumnTool,
-  CaseLawResearchSavedQuery,
-} from "@stll/api-contract";
+import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import {
   CASE_LAW_ANNOTATION_BODY_MAX_LENGTH,
   CASE_LAW_ANNOTATION_COLORS,
@@ -23,6 +19,7 @@ import type {
   CaseLawAnnotationStyle,
   CaseLawAnnotationVisibility,
 } from "@stll/api-contract/case-law-annotations";
+import type { SearchSort } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -57,6 +54,7 @@ import type {
   Polarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -1723,6 +1721,24 @@ export const caseLawMatterLinks = p.pgTable(
 // ---------------------------------------------------------------------------
 
 /**
+ * The search a retiring research table re-runs for its rows. Local to this
+ * module rather than in the api contract: nothing outside these two table
+ * declarations reads it, and it goes with them in the drop migration.
+ */
+type CaseLawResearchSavedQuery = {
+  version: 1;
+  query: string;
+  country?: string;
+  court?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  decisionType?: string;
+  language?: string;
+  sourceId?: SafeId<"caseLawSource">;
+  sort?: SearchSort;
+};
+
+/**
  * A saved case-law search a member keeps working on. Rows are the public
  * corpus, re-run from `savedQuery` and adjusted by the dispositions below;
  * the table itself stores no decision content. Visible to the whole
@@ -1772,6 +1788,13 @@ export const caseLawResearchTables = p.pgTable(
     ...orgPolicies(),
   ],
 );
+
+/**
+ * How one decision deviates from what a retiring table's saved query returns.
+ * Local for the same reason as `CaseLawResearchSavedQuery` above: it goes with
+ * the table in the drop migration.
+ */
+const CASE_LAW_RESEARCH_DISPOSITIONS = ["pinned", "excluded"] as const;
 
 const CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES =
   CASE_LAW_RESEARCH_DISPOSITIONS.map((disposition) =>

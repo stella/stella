@@ -35,24 +35,39 @@ type RowQuery<TArgs extends readonly unknown[]> = (...args: TArgs) => {
   queryKey: readonly unknown[];
 };
 
-/** The arguments each entry point takes, per host. */
+/**
+ * The arguments each entry point takes, per host. A host whose rows never
+ * group omits the two section entries, the way a row host omits a behaviour
+ * its kind does not have, rather than supplying a stub the table would have to
+ * recognise as one.
+ */
 type WorkspaceTableAdapterKeys = {
   listPage: readonly unknown[];
-  sectionPage: readonly unknown[];
-  sectionCounts: readonly unknown[];
+  sectionPage?: readonly unknown[];
+  sectionCounts?: readonly unknown[];
   detail: readonly unknown[];
 };
+
+type SectionEntries<TKeys extends WorkspaceTableAdapterKeys> =
+  TKeys["sectionPage"] extends readonly unknown[]
+    ? TKeys["sectionCounts"] extends readonly unknown[]
+      ? {
+          /** One window of rows for one section of a grouped table. */
+          useSectionPage: RowQuery<TKeys["sectionPage"]>;
+          /** Row counts per section, so an empty section never fetches rows. */
+          sectionCounts: RowQuery<TKeys["sectionCounts"]>;
+        }
+      : never
+    : // A host whose rows never group names no section entry at all, so
+      // `keyof` over its adapter is exactly what it implements.
+      Record<never, never>;
 
 export type WorkspaceTableAdapter<TKeys extends WorkspaceTableAdapterKeys> = {
   /** One window of rows for a flat table. Deferred, so filters keep stale rows. */
   useListPage: RowQuery<TKeys["listPage"]>;
-  /** One window of rows for one section of a grouped table. */
-  useSectionPage: RowQuery<TKeys["sectionPage"]>;
-  /** Row counts per section, so an empty section never fetches rows. */
-  sectionCounts: RowQuery<TKeys["sectionCounts"]>;
   /** One row, for a detail surface. */
   detail: RowQuery<TKeys["detail"]>;
-};
+} & SectionEntries<TKeys>;
 
 /** The arguments the entity table's own entry points take. */
 export type WorkspaceEntityAdapterKeys = {

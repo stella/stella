@@ -351,10 +351,21 @@ export type VerdictRationaleJustificationBlock = {
   matchedRef?: VerdictMatchedRef;
 };
 
+// One passage of a court decision the model leaned on, addressable in the
+// reader by its anchor. It names no file field: the corpus is public and a
+// decision is addressed by its own id, so the excerpt is carried here rather
+// than re-read from a workspace file at render time.
+type DecisionPassageJustificationBlock = {
+  kind: "decision-passage";
+  anchorId: string;
+  excerpt: string;
+};
+
 export type JustificationBlock =
   | PdfBatesJustificationBlock
   | DocxFolioJustificationBlock
-  | VerdictRationaleJustificationBlock;
+  | VerdictRationaleJustificationBlock
+  | DecisionPassageJustificationBlock;
 
 export type JustificationContent = {
   version: 1;

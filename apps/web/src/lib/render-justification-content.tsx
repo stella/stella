@@ -1,6 +1,9 @@
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
+
+import { citationFileFieldId } from "@/lib/citations";
 import type { Citation } from "@/lib/citations";
 import type { JustificationContent } from "@/lib/types";
 
@@ -45,7 +48,7 @@ export const renderJustificationContent = ({
     }
     if (
       firstCitationFileFieldId !== undefined &&
-      firstCitationFileFieldId !== citation.fileFieldId
+      firstCitationFileFieldId !== citationFileFieldId(citation)
     ) {
       return;
     }
@@ -53,71 +56,92 @@ export const renderJustificationContent = ({
   };
 
   for (const [blockIndex, block] of content.blocks.entries()) {
-    if (block.kind === "pdf-bates") {
-      for (const [statementIndex, statement] of block.statements.entries()) {
-        const statementKey = `${blockIndex}-${statementIndex}`;
-        nodes.push(
-          <Fragment key={`${statementKey}-text`}>{statement.text} </Fragment>,
-        );
-        for (const [
-          citationIndex,
-          { bates, pageNumber },
-        ] of statement.citations.entries()) {
-          const citation: Citation = {
-            kind: "pdf-bates",
-            fileFieldId: block.fileFieldId,
-            bates,
-            pageNumber,
-          };
-          consider(citation);
-          const key = `${statementKey}-${citationIndex}`;
+    switch (block.kind) {
+      case "pdf-bates": {
+        for (const [statementIndex, statement] of block.statements.entries()) {
+          const statementKey = `${blockIndex}-${statementIndex}`;
           nodes.push(
-            renderCitation({ citation, key }),
-            <Fragment key={`${key}-space`}> </Fragment>,
+            <Fragment key={`${statementKey}-text`}>{statement.text} </Fragment>,
           );
+          for (const [
+            citationIndex,
+            { bates, pageNumber },
+          ] of statement.citations.entries()) {
+            const citation: Citation = {
+              kind: "pdf-bates",
+              fileFieldId: block.fileFieldId,
+              bates,
+              pageNumber,
+            };
+            consider(citation);
+            const key = `${statementKey}-${citationIndex}`;
+            nodes.push(
+              renderCitation({ citation, key }),
+              <Fragment key={`${key}-space`}> </Fragment>,
+            );
+          }
         }
+        break;
       }
-      continue;
-    }
 
-    // Verdict blocks have no citable document target; the rationale is
-    // surfaced separately by the cell's provenance card.
-    if (block.kind === "playbook-verdict") {
-      continue;
-    }
+      // Verdict blocks have no citable document target; the rationale is
+      // surfaced separately by the cell's provenance card.
+      case "playbook-verdict":
+        break;
 
-    // docx-folio
-    for (const [statementIndex, statement] of block.statements.entries()) {
-      const statementKey = `${blockIndex}-${statementIndex}`;
-      nodes.push(
-        <Fragment key={`${statementKey}-text`}>{statement.text} </Fragment>,
-      );
-      for (const [citationIndex, cite] of statement.citations.entries()) {
-        // Legacy rows without `citationStatus` were allow-listed at write
-        // time, so the absence resolves to a verified, navigable citation.
-        const citation: Citation =
-          cite.citationStatus === "unverified"
-            ? {
-                kind: "docx-folio",
-                citationStatus: "unverified",
-                fileFieldId: block.fileFieldId,
-                text: cite.text,
-              }
-            : {
-                kind: "docx-folio",
-                citationStatus: "verified",
-                fileFieldId: block.fileFieldId,
-                blockId: cite.blockId,
-                text: cite.text,
-              };
-        // An unverified citation has no navigable target, so it never
-        // seeds the peek's auto-scroll.
-        if (citation.citationStatus !== "unverified") {
-          consider(citation);
+      // A cited passage of a decision is the whole block: the model's
+      // reasoning lives beside it on the run, so the block carries only the
+      // words the reader is being pointed at.
+      case "decision-passage": {
+        const citation: Citation = {
+          kind: "decision-passage",
+          anchorId: block.anchorId,
+          excerpt: block.excerpt,
+        };
+        consider(citation);
+        nodes.push(renderCitation({ citation, key: `${blockIndex}-passage` }));
+        break;
+      }
+
+      case "docx-folio": {
+        for (const [statementIndex, statement] of block.statements.entries()) {
+          const statementKey = `${blockIndex}-${statementIndex}`;
+          nodes.push(
+            <Fragment key={`${statementKey}-text`}>{statement.text} </Fragment>,
+          );
+          for (const [citationIndex, cite] of statement.citations.entries()) {
+            // Legacy rows without `citationStatus` were allow-listed at write
+            // time, so the absence resolves to a verified, navigable citation.
+            const citation: Citation =
+              cite.citationStatus === "unverified"
+                ? {
+                    kind: "docx-folio",
+                    citationStatus: "unverified",
+                    fileFieldId: block.fileFieldId,
+                    text: cite.text,
+                  }
+                : {
+                    kind: "docx-folio",
+                    citationStatus: "verified",
+                    fileFieldId: block.fileFieldId,
+                    blockId: cite.blockId,
+                    text: cite.text,
+                  };
+            // An unverified citation has no navigable target, so it never
+            // seeds the peek's auto-scroll.
+            if (citation.citationStatus !== "unverified") {
+              consider(citation);
+            }
+            const key = `${statementKey}-${citationIndex}`;
+            nodes.push(renderCitation({ citation, key }));
+          }
         }
-        const key = `${statementKey}-${citationIndex}`;
-        nodes.push(renderCitation({ citation, key }));
+        break;
       }
+
+      default:
+        block satisfies never;
+        panic(`Unhandled justification block: ${String(block)}`);
     }
   }
 

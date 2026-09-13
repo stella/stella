@@ -10,6 +10,8 @@
  * map into this type.
  */
 
+import { panic } from "better-result";
+
 import type { JustificationContent } from "@/lib/types";
 
 export type PdfBatesCitation = {
@@ -46,7 +48,39 @@ export type DocxFolioCitation =
       text: string;
     };
 
-export type Citation = PdfBatesCitation | DocxFolioCitation;
+/**
+ * One passage of a court decision. It names no file field: the corpus is
+ * public and a decision is addressed by its own id, so the target is the
+ * anchor the reader scrolls to rather than a page of a workspace file.
+ */
+type DecisionPassageCitation = {
+  kind: "decision-passage";
+  anchorId: string;
+  excerpt: string;
+};
+
+export type Citation =
+  | PdfBatesCitation
+  | DocxFolioCitation
+  | DecisionPassageCitation;
+
+/**
+ * The workspace file a citation points into, or null when it points at
+ * something that is not one. Exhaustive, so a new citation kind has to say
+ * which it is rather than defaulting into a file filter it does not belong to.
+ */
+export const citationFileFieldId = (citation: Citation): string | null => {
+  switch (citation.kind) {
+    case "pdf-bates":
+    case "docx-folio":
+      return citation.fileFieldId;
+    case "decision-passage":
+      return null;
+    default:
+      citation satisfies never;
+      return panic(`Unhandled citation kind: ${String(citation)}`);
+  }
+};
 
 // Walk a justification content and yield every Citation in document
 // order. `JustificationContent` already groups by `fileFieldId`, so
@@ -55,45 +89,60 @@ export const iterateJustificationCitations = function* (
   content: JustificationContent,
 ): Generator<Citation> {
   for (const block of content.blocks) {
-    if (block.kind === "pdf-bates") {
-      for (const statement of block.statements) {
-        for (const citation of statement.citations) {
-          yield {
-            kind: "pdf-bates",
-            fileFieldId: block.fileFieldId,
-            bates: citation.bates,
-            pageNumber: citation.pageNumber,
-          };
+    switch (block.kind) {
+      case "pdf-bates": {
+        for (const statement of block.statements) {
+          for (const citation of statement.citations) {
+            yield {
+              kind: "pdf-bates",
+              fileFieldId: block.fileFieldId,
+              bates: citation.bates,
+              pageNumber: citation.pageNumber,
+            };
+          }
         }
+        break;
       }
-      continue;
-    }
-    // Verdict blocks carry a rationale, not document citations.
-    if (block.kind === "playbook-verdict") {
-      continue;
-    }
-    for (const statement of block.statements) {
-      for (const citation of statement.citations) {
-        // Legacy justifications persisted before the verified/unverified
-        // split have no `citationStatus`; they were allow-listed at write
-        // time, so treat the absence as verified.
-        if (citation.citationStatus === "unverified") {
-          yield {
-            kind: "docx-folio",
-            citationStatus: "unverified",
-            fileFieldId: block.fileFieldId,
-            text: citation.text,
-          };
-          continue;
-        }
+      // Verdict blocks carry a rationale, not document citations.
+      case "playbook-verdict":
+        break;
+      case "decision-passage": {
         yield {
-          kind: "docx-folio",
-          citationStatus: "verified",
-          fileFieldId: block.fileFieldId,
-          blockId: citation.blockId,
-          text: citation.text,
+          kind: "decision-passage",
+          anchorId: block.anchorId,
+          excerpt: block.excerpt,
         };
+        break;
       }
+      case "docx-folio": {
+        for (const statement of block.statements) {
+          for (const citation of statement.citations) {
+            // Legacy justifications persisted before the verified/unverified
+            // split have no `citationStatus`; they were allow-listed at write
+            // time, so treat the absence as verified.
+            if (citation.citationStatus === "unverified") {
+              yield {
+                kind: "docx-folio",
+                citationStatus: "unverified",
+                fileFieldId: block.fileFieldId,
+                text: citation.text,
+              };
+              continue;
+            }
+            yield {
+              kind: "docx-folio",
+              citationStatus: "verified",
+              fileFieldId: block.fileFieldId,
+              blockId: citation.blockId,
+              text: citation.text,
+            };
+          }
+        }
+        break;
+      }
+      default:
+        block satisfies never;
+        panic(`Unhandled justification block: ${String(block)}`);
     }
   }
 };

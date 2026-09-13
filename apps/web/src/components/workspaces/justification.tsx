@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
@@ -16,7 +17,7 @@ import {
 import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
-import type { WorkspaceJustification } from "@/lib/types";
+import type { JustificationContent, WorkspaceJustification } from "@/lib/types";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const CITATION_CHIP_CLASSES =
@@ -24,31 +25,60 @@ const CITATION_CHIP_CLASSES =
 
 const DOCX_CHIP_PREVIEW_CHARS = 32;
 
-type JustificationProps = {
-  workspaceId: string;
-  justification: WorkspaceJustification;
-};
+/**
+ * What a justification explains, and therefore where its citations lead.
+ *
+ * A field's justification belongs to a matter, so its chips write the
+ * workspace stores the file viewers read. A decision's belongs to nothing a
+ * matter owns: the corpus is public, so the host says what opening a passage
+ * means and the card stays free of case-law knowledge.
+ */
+export type JustificationSource =
+  | {
+      kind: "field";
+      workspaceId: string;
+      justification: WorkspaceJustification;
+    }
+  | {
+      kind: "decision";
+      content: JustificationContent;
+      /** Opens the decision at the passage, with the reader's highlight. */
+      onOpenPassage: (anchorId: string) => void;
+    };
 
-export const Justification = ({
-  workspaceId,
-  justification,
-}: JustificationProps) => (
+export const Justification = ({ source }: { source: JustificationSource }) => (
   <div>
     {
       renderJustificationContent({
-        content: justification.content,
+        content:
+          source.kind === "field"
+            ? source.justification.content
+            : source.content,
         renderCitation: ({ citation, key }) => {
-          if (citation.kind === "pdf-bates") {
-            return (
-              <PdfChip
-                citation={citation}
-                justification={justification}
-                key={key}
-                workspaceId={workspaceId}
-              />
-            );
+          switch (citation.kind) {
+            case "pdf-bates":
+              return source.kind === "field" ? (
+                <PdfChip
+                  citation={citation}
+                  justification={source.justification}
+                  key={key}
+                  workspaceId={source.workspaceId}
+                />
+              ) : null;
+            case "docx-folio":
+              return <DocxQuote citation={citation} key={key} />;
+            case "decision-passage":
+              return source.kind === "decision" ? (
+                <DecisionPassageChip
+                  citation={citation}
+                  key={key}
+                  onOpen={source.onOpenPassage}
+                />
+              ) : null;
+            default:
+              citation satisfies never;
+              return panic(`Unhandled citation: ${String(citation)}`);
           }
-          return <DocxQuote citation={citation} key={key} />;
         },
       }).nodes
     }
@@ -139,6 +169,45 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
     >
       p.&nbsp;{citation.pageNumber}
     </button>
+  );
+};
+
+type DecisionPassageChipProps = {
+  citation: Extract<Citation, { kind: "decision-passage" }>;
+  onOpen: (anchorId: string) => void;
+};
+
+/**
+ * The passage of a decision an answer leaned on. Pressing it opens the
+ * decision at that paragraph with the reader's highlight on it, the way a
+ * page chip opens a file at its page.
+ */
+const DecisionPassageChip = ({
+  citation,
+  onOpen,
+}: DecisionPassageChipProps) => {
+  const trimmed = citation.excerpt.trim();
+  const preview =
+    trimmed.length > DOCX_CHIP_PREVIEW_CHARS
+      ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
+      : trimmed || "¶";
+
+  return (
+    <Tooltip
+      content={trimmed || undefined}
+      render={
+        <button
+          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
+          dir="auto"
+          onClick={() => onOpen(citation.anchorId)}
+          type="button"
+        >
+          {"“"}
+          {preview}
+          {"”"}
+        </button>
+      }
+    />
   );
 };
 

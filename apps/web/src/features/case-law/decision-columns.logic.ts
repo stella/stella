@@ -1,5 +1,6 @@
-import type { TableSchema } from "@stll/ui/data-table";
+import type { ReactElement } from "react";
 
+import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
 
 /**
@@ -65,41 +66,29 @@ export type DecisionColumnRender = {
   column: DecisionColumnId;
 };
 
-/** The decision columns' labels, resolved for the reader by the caller. */
-export type DecisionTableLabels = Record<DecisionColumnId, string>;
-
-export type DecisionTableSchemaParams = {
-  labels: DecisionTableLabels;
+/**
+ * A column the host adds to the decision model: the note a matter pinned the
+ * decision with, the way back out of that matter. It is arranged, hidden and
+ * pinned like any other column, because a reader does not care where a column
+ * came from.
+ */
+export type DecisionExtraColumn = {
+  id: string;
+  /** Already translated; also the label the column chooser shows. */
+  label: string;
+  size: number;
+  /** Synchronous by type: a cell is an element or text, never a promise. */
+  render: (decision: Decision) => ReactElement | string | null;
 };
 
-/**
- * The column set of a table of decisions.
- *
- * The same descriptor shape a matter's table uses, so both are arranged,
- * hidden and pinned by the same code; only the render member differs.
- */
-export const decisionTableSchema = ({
-  labels,
-}: DecisionTableSchemaParams): TableSchema<DecisionColumnRender> => ({
-  columns: DECISION_COLUMN_IDS.map((column) => {
-    const model = DECISION_COLUMN_MODEL[column];
-    return {
-      id: column,
-      label: labels[column],
-      render: { type: "decision", column },
-      size: model.size,
-      capabilities: {
-        // Decisions are ordered by the search, never by a column.
-        sort: false,
-        hide: model.hide,
-        resize: true,
-        pin: true,
-      },
-      emphasis: model.emphasis,
-    };
-  }),
-  defaultMinSize: DECISION_COLUMN_MIN_SIZE,
-});
+/** What draws a host-added decision column. One member of the column union. */
+export type DecisionExtraColumnRender = {
+  type: "decision-extra";
+  column: DecisionExtraColumn;
+};
+
+/** The decision columns' labels, resolved for the reader by the caller. */
+export type DecisionTableLabels = Record<DecisionColumnId, string>;
 
 export const DECISION_COLUMN_LABEL_KEYS = {
   caseNumber: "caseLaw.columns.caseNumber",

@@ -1,53 +1,15 @@
 import { panic } from "better-result";
 
 import type { PropertyContentType } from "./entity-find";
-import type { SafeId } from "./safe-id";
-import type { SearchSort } from "./search";
 
 /**
- * Question columns and their answers, and the research tables they are being
- * moved off.
+ * Question columns and their answers.
  *
  * A question column belongs to the organization: every member sees it, and an
  * answer keyed `(columnId, decisionId)` is reusable on every search that
  * surfaces the decision. Rows are the public corpus itself, addressed by
  * decision id; nothing about a decision is copied.
- *
- * A research table is a saved case-law search a lawyer keeps working on: the
- * query it was made from and the decisions pinned into or excluded from its
- * rows. It is retiring into the results table.
  */
-export const CASE_LAW_RESEARCH_QUERY_VERSION = 1 as const;
-
-/** A table's name; a search saved as a table is cut to this before it is sent. */
-export const CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH = 256;
-
-/** How one decision deviates from what the saved query returns. */
-export const CASE_LAW_RESEARCH_DISPOSITIONS = ["pinned", "excluded"] as const;
-
-export type CaseLawResearchDisposition =
-  (typeof CASE_LAW_RESEARCH_DISPOSITIONS)[number];
-
-/**
- * The search a table re-runs for its rows. Field names and types are those of
- * the public decision search body, so the client passes it straight through.
- */
-export type CaseLawResearchSavedQuery = {
-  version: typeof CASE_LAW_RESEARCH_QUERY_VERSION;
-  query: string;
-  country?: string;
-  court?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  decisionType?: string;
-  language?: string;
-  sourceId?: SafeId<"caseLawSource">;
-  /**
-   * The order the table was saved under. Absent means the default, which is
-   * what every table saved before the order existed was built from.
-   */
-  sort?: SearchSort;
-};
 
 /**
  * What a question column expects for an answer: the property content types a

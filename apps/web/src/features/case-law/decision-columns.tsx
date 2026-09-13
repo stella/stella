@@ -8,7 +8,6 @@ import {
   CountryPill,
   DecisionDateCell,
   DecisionLanguageCell,
-  decisionYear,
   HeadnoteCell,
   SummaryCell,
 } from "@/features/case-law/components/decision-cells";
@@ -17,7 +16,6 @@ import type {
   DecisionRenderContext,
 } from "@/features/case-law/components/decision-cells";
 import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
-import { normalizeCaseLawLanguageSegment } from "@/lib/case-law-route";
 
 /**
  * The one column model for decision rows, wherever they are shown: the public
@@ -72,46 +70,3 @@ export const renderDecisionCell = ({
 
 /** What a cell draws for a value the decision does not carry. */
 const EMPTY_DECISION_VALUE = "\u2014";
-
-/** What rows can be grouped by; every option is a column whose value is finite. */
-export const DECISION_GROUP_BY_OPTIONS = [
-  "none",
-  "court",
-  "country",
-  "year",
-  "type",
-  "language",
-] as const;
-
-export type DecisionGroupBy = (typeof DECISION_GROUP_BY_OPTIONS)[number];
-
-/**
- * The grouping key of a row, or null for an ungrouped table. Keys are raw
- * values (not labels) so the same decision groups the same way in every
- * locale; the caller labels them.
- */
-export const decisionGroupKey = (
-  groupBy: DecisionGroupBy,
-  decision: Decision,
-): string | null => {
-  switch (groupBy) {
-    case "none":
-      return null;
-    case "court":
-      return decision.court;
-    case "country":
-      return decision.country;
-    case "year": {
-      const year = decisionYear(decision.decisionDate);
-      return year === null ? "" : String(year);
-    }
-    case "type":
-      return decision.decisionType ?? "";
-    case "language":
-      return normalizeCaseLawLanguageSegment(decision.language) ?? "";
-    default: {
-      groupBy satisfies never;
-      return panic(`Unhandled group by: ${String(groupBy)}`);
-    }
-  }
-};

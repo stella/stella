@@ -16,10 +16,25 @@ import {
 } from "./question-columns.logic";
 import type { QuestionAnswer, QuestionColumn } from "./question-columns.logic";
 
+/**
+ * A yes/no question, which the property model spells as a two-option select:
+ * there is no boolean content type, and the null value a select already has is
+ * the decision not settling the question.
+ */
+const YES_NO_CONTENT = {
+  version: 1,
+  type: "single-select",
+  options: [
+    { value: "yes", color: "green" },
+    { value: "no", color: "red" },
+  ],
+  fallback: null,
+} as const satisfies QuestionColumn["content"];
+
 const column = (id: string): QuestionColumn => ({
   id,
   question: `question ${id}`,
-  answerType: "yes_no",
+  content: YES_NO_CONTENT,
 });
 
 const answer = (
@@ -34,7 +49,10 @@ const answer = (
     decisionId,
     state,
     stale,
-    answer: state === "answered" ? { type: "yes_no", value: "yes" } : null,
+    answer:
+      state === "answered"
+        ? { version: 1, type: "single-select", value: "yes" }
+        : null,
   },
 ];
 
@@ -265,15 +283,25 @@ describe("how a run reaches the endpoint", () => {
 });
 
 describe("who is shown question columns", () => {
+  const noop = () => undefined;
+  const available = {
+    answersByKey: new Map<string, QuestionAnswer>(),
+    columns,
+    isRunning: false,
+    onColumnAction: noop,
+    onRetryAnswer: noop,
+    onShowPassage: noop,
+  };
+
   test("a reader with an organization sees them", () => {
     expect(
-      questionColumnSurface({ columns, hasActiveOrganization: true }),
-    ).toEqual({ type: "available", columns });
+      questionColumnSurface({ ...available, hasActiveOrganization: true }),
+    ).toEqual({ type: "available", ...available });
   });
 
   test("a reader without one sees no column and no control", () => {
     expect(
-      questionColumnSurface({ columns, hasActiveOrganization: false }),
+      questionColumnSurface({ ...available, hasActiveOrganization: false }),
     ).toEqual({ type: "hidden" });
   });
 });
@@ -281,7 +309,7 @@ describe("who is shown question columns", () => {
 describe("when saving a question throws its answers away", () => {
   const stored = {
     question: "Was the termination valid?",
-    answerType: "yes_no",
+    content: YES_NO_CONTENT,
   } as const;
 
   test("adding a question has nothing to discard", () => {
@@ -318,7 +346,7 @@ describe("when saving a question throws its answers away", () => {
   test("a different kind of answer discards them", () => {
     expect(
       questionEditDiscardsAnswers({
-        draft: { ...stored, answerType: "text" },
+        draft: { ...stored, content: { version: 1, type: "text" } },
         stored,
       }),
     ).toBe(true);

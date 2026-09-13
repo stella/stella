@@ -25,13 +25,13 @@ import {
 } from "@stll/ui/select";
 
 import Tooltip from "@/components/tooltip";
-import { DecisionColumnChooser } from "@/features/case-law/components/decision-table";
+import { DecisionColumnToggle } from "@/features/case-law/components/decision-column-toggle";
 import type {
   DecisionFacetRailState,
   DecisionTableLayout,
 } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionContentMode } from "@/features/case-law/decision-columns.logic";
-import type { QuestionColumn } from "@/features/case-law/research/question-columns.logic";
+import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -51,7 +51,7 @@ type DecisionResultsToolbarProps = {
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   /** Drawn in the column chooser too, so a question can be hidden like any column. */
-  questionColumns: readonly QuestionColumn[];
+  questions: QuestionColumnSurface;
   /** Adds the entry to the query as one more thing every hit must say. */
   onRefine: (entry: string) => void;
   onRailToggle: () => void;
@@ -77,7 +77,7 @@ export const DecisionResultsToolbar = ({
   onRailToggle,
   onRefine,
   onSortChange,
-  questionColumns,
+  questions,
   railState,
   sort,
   summary,
@@ -138,10 +138,10 @@ export const DecisionResultsToolbar = ({
           }))}
           value={layout.contentMode}
         />
-        <DecisionColumnChooser
+        <DecisionColumnToggle
           layout={layout}
           onLayoutChange={onLayoutChange}
-          questionColumns={questionColumns}
+          questions={questions}
         />
         {actions !== undefined && (
           <>

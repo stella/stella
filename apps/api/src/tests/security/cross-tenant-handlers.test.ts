@@ -18,7 +18,6 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
-  caseLawResearchTables,
   documentTranslationRuns,
   entities,
   legalLists,
@@ -32,8 +31,6 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
-import readResearchTable from "@/api/handlers/case-law/research/get";
-import listResearchTables from "@/api/handlers/case-law/research/list";
 import readContactById from "@/api/handlers/contacts/get";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
@@ -127,9 +124,6 @@ const savedSearchB = toSafeId<"savedSearch">(
 );
 const foreignSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222248",
-);
-const researchTableB = toSafeId<"caseLawResearchTable">(
-  "22222222-2222-4222-8222-222222222252",
 );
 const researchColumnB = toSafeId<"caseLawResearchColumn">(
   "22222222-2222-4222-8222-222222222253",
@@ -489,36 +483,6 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, savedSearchB),
   },
   {
-    // Research tables are organization-scoped and visible to every member of
-    // the organization, so the organization boundary is the only wall.
-    name: "case-law research table list",
-    runAAgainstB: async ({ workspaceA }) =>
-      await runHandler(listResearchTables, workspaceA, {
-        query: { limit: 100 },
-      }),
-    runBPositive: async ({ workspaceB }) =>
-      await runHandler(listResearchTables, workspaceB, {
-        query: { limit: 100 },
-      }),
-    expectDenied: (result) => expectPageExcludesId(result, researchTableB),
-    expectPositive: (result) => expectPageContainsId(result, researchTableB),
-  },
-  {
-    name: "case-law research table read",
-    runAAgainstB: async ({ workspaceA }) =>
-      await runHandler(readResearchTable, workspaceA, {
-        params: { tableId: researchTableB },
-      }),
-    runBPositive: async ({ workspaceB }) =>
-      await runHandler(readResearchTable, workspaceB, {
-        params: { tableId: researchTableB },
-      }),
-    expectDenied: expectStatus(404),
-    expectPositive: (result) => {
-      expect(result).toMatchObject({ table: { id: researchTableB } });
-    },
-  },
-  {
     // Answer cells are the organization's. Asking about a decision another
     // organization has answered returns nothing: the cells are keyed by that
     // organization's own question columns.
@@ -684,13 +648,6 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
-  await testDb.insert(caseLawResearchTables).values({
-    id: researchTableB,
-    organizationId: ids.orgB,
-    ownerUserId: ids.userB1,
-    name: "Organization B leases",
-    savedQuery: { version: 1, query: "lease" },
-  });
   await testDb.insert(caseLawResearchColumns).values({
     id: researchColumnB,
     organizationId: ids.orgB,

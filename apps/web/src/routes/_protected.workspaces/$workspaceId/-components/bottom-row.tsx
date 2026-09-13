@@ -5,12 +5,12 @@ import { cn } from "@stll/ui/utils";
 
 import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable } from "@/components/workspaces/table/types";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
+} from "@/components/workspaces/table/workspace-grid";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 
 const selectColId = getInternalColId("select");
 // Add-row is chrome, not data: it recedes (muted, single hairline border) and

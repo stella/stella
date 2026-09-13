@@ -31,7 +31,12 @@ type InlineOptionEditorProps = {
   removeOptionAt: (index: number) => void;
   replaceOptionAt: (index: number, option: WorkspacePropertyOption) => void;
   fallback: string | null;
-  onFallbackChange: (next: string | null) => void;
+  /**
+   * Omitted where the column has no fallback to offer: a case-law question
+   * column never substitutes a default, because a decision not settling the
+   * question is itself the answer.
+   */
+  onFallbackChange?: ((next: string | null) => void) | undefined;
 };
 
 export const InlineOptionEditor = ({
@@ -141,7 +146,7 @@ export const InlineOptionEditor = ({
         />
       </label>
 
-      {options.length > 0 && (
+      {options.length > 0 && onFallbackChange !== undefined && (
         <SelectFallback
           onValueChange={onFallbackChange}
           options={options}

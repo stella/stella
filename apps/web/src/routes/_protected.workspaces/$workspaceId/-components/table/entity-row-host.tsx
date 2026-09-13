@@ -12,6 +12,7 @@
 import { useState } from "react";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { countDescendants } from "@/components/workspaces/entity-utils";
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
 import type {
@@ -21,8 +22,7 @@ import type {
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
-import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
-import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells";
+import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells";
 
 type EntityRowHostInput = {
   workspaceId: string;
@@ -97,7 +97,10 @@ export const useEntityRowHost = ({
     ),
     collapsedRowSpan: folderDescendantCount,
     addColumnRail: (
-      <BulkAddColumns triggerVariant="rail" workspaceId={workspaceId} />
+      <BulkAddColumns
+        target={{ kind: "workspace", workspaceId }}
+        triggerVariant="rail"
+      />
     ),
     ...(viewId === undefined
       ? {}

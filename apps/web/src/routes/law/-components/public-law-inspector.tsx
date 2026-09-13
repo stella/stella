@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 
 import { useRouterState } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -13,13 +14,11 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { getInspectorView } from "@/components/inspector/view-registry";
-import {
-  PublicInspectorDock,
-  PublicInspectorRail,
-} from "@/components/public-inspector-rail";
+import { PublicInspectorDock } from "@/components/public-inspector-rail";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import Tooltip from "@/components/tooltip";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { publicLawInspectorPresence } from "@/routes/law/-components/public-law-inspector.logic";
 
 // The full inspector pulls the chat stack in with it. Only a reader with a
 // session can reach any of it, so it stays out of this shell's own chunk.
@@ -33,10 +32,13 @@ const LazySessionInspector = lazy(async () => {
  * workspace inspector, so a tab opened here behaves the way it does anywhere
  * else in the product; without one the dock renders the views the reader
  * opened and routes every account affordance to sign-in.
+ *
+ * The rail is always there, with or without a tab: a reader who has opened
+ * nothing yet can still see that a panel exists and open it, which is what a
+ * matter's own inspector does.
  */
 export const PublicLawInspector = () => {
   const user = useMaybeAuthenticatedUser();
-  const requestSignIn = usePublicSignInRequest();
   const tabs = useInspectorTabsStore((state) => state.tabs);
   const minimized = useInspectorTabsStore((state) => state.minimized);
   // The case reader docks its own inspector, chat providers included. Two
@@ -47,32 +49,30 @@ export const PublicLawInspector = () => {
         match.routeId.startsWith("/law/$country/cases/"),
       ),
   });
+  const presence = publicLawInspectorPresence({
+    caseReaderOwnsDock,
+    hasSession: user !== null,
+  });
 
-  if (user !== null) {
-    if (caseReaderOwnsDock || tabs.length === 0) {
+  switch (presence) {
+    case "none":
       return null;
-    }
-
-    return (
-      <PublicInspectorDock expanded={!minimized}>
-        <Suspense fallback={null}>
-          <LazySessionInspector />
-        </Suspense>
-      </PublicInspectorDock>
-    );
+    case "session":
+      return (
+        // The pane widens only for a tab; with none the rail stands alone and
+        // the inspector draws its own empty state behind the toggle.
+        <PublicInspectorDock expanded={!minimized && tabs.length > 0}>
+          <Suspense fallback={null}>
+            <LazySessionInspector />
+          </Suspense>
+        </PublicInspectorDock>
+      );
+    case "anonymous":
+      return <AnonymousViewDock tabs={tabs.filter(isGenericInspectorTab)} />;
+    default:
+      presence satisfies never;
+      return panic(`Unhandled inspector presence: ${String(presence)}`);
   }
-
-  const viewTabs = tabs.filter(isGenericInspectorTab);
-
-  if (viewTabs.length === 0) {
-    // `requestSignIn` is provided by the public shell this dock renders in;
-    // without it the rail's affordances would lead nowhere.
-    return requestSignIn === null ? null : (
-      <PublicInspectorRail onActivate={() => requestSignIn("/chat/new")} />
-    );
-  }
-
-  return <AnonymousViewDock tabs={viewTabs} />;
 };
 
 type GenericTab = Extract<InspectorTab, { type: "view" }>;

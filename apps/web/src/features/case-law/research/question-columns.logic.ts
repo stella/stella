@@ -5,9 +5,14 @@ import {
 import type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
-  CaseLawResearchAnswerValue,
-  CaseLawResearchAnswerPassage,
 } from "@stll/api-contract";
+
+import type { Decision } from "@/features/case-law/components/decision-cells";
+import type {
+  JustificationContent,
+  WorkspaceFieldContent,
+  WorkspaceProperty,
+} from "@/lib/types";
 
 /**
  * What a run covers and what it costs, decided before anything is sent.
@@ -18,14 +23,55 @@ import type {
  * rows picked out of it), minus every cell that already holds an answer.
  */
 
+/**
+ * What a question column expects for an answer: the property content a matter
+ * column of the same kind carries, narrowed to the kinds a model can produce.
+ * Derived from the property model rather than restated, so a question column
+ * and a matter property cannot describe their options differently — which is
+ * also what lets one cell renderer draw both.
+ */
+export type QuestionColumnContent = Extract<
+  WorkspaceProperty["content"],
+  { type: CaseLawResearchAnswerType }
+>;
+
 /** What the question dialog holds: the wording, and what the answer is. */
 export type QuestionDraft = {
   question: string;
-  answerType: CaseLawResearchAnswerType;
+  content: QuestionColumnContent;
 };
+
+/** A question column as the reader describes it, on the way to the endpoint. */
+export type QuestionColumnInput = QuestionDraft;
 
 /** One question asked of every decision the organization looks at. */
 export type QuestionColumn = QuestionDraft & { id: string };
+
+/**
+ * What draws a question column's header and cells. One member of the table's
+ * column union, declared here because the public results page cannot reach
+ * into a matter's route; the cell it draws is the shared field-value renderer
+ * a matter's AI property column draws, because a question column holds the
+ * same content a property holds.
+ */
+export type QuestionColumnRender = {
+  type: "question";
+  column: QuestionColumn;
+};
+
+/**
+ * A question column's id in the table. Namespaced, so a question can never
+ * collide with a decision column or with either utility column.
+ */
+export const questionColumnId = (columnId: string): string =>
+  `question:${columnId}`;
+
+/** How an answer was produced, kept beside it so a cell can be read back. */
+type QuestionAnswerRun = {
+  rationale: string;
+  /** The cited passages, in the citation shape a workspace justification uses. */
+  justification: JustificationContent;
+};
 
 /** One cell, as the answer lookup reports it. */
 export type QuestionAnswer = {
@@ -34,11 +80,8 @@ export type QuestionAnswer = {
   state: CaseLawResearchAnswerState;
   /** A pending cell whose run went quiet; the server decides, on its clock. */
   stale: boolean;
-  answer: CaseLawResearchAnswerValue | null;
-  run?: {
-    rationale: string;
-    passages: readonly CaseLawResearchAnswerPassage[];
-  } | null;
+  answer: WorkspaceFieldContent | null;
+  run?: QuestionAnswerRun | null;
 };
 
 /** Stable empties: an organization with no questions hands out the same one. */
@@ -174,7 +217,27 @@ export const questionEditDiscardsAnswers = ({
 }): boolean =>
   stored !== undefined &&
   (stored.question.trim() !== draft.question.trim() ||
-    stored.answerType !== draft.answerType);
+    stored.content.type !== draft.content.type);
+
+/** What the reader can do to the column a question is asked in. */
+export type QuestionColumnAction = "run" | "edit" | "delete";
+
+/** Everything the table needs to draw and work the organization's questions. */
+export type AvailableQuestionColumns = {
+  type: "available";
+  columns: readonly QuestionColumn[];
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  onColumnAction: (
+    column: QuestionColumn,
+    action: QuestionColumnAction,
+  ) => void;
+  /** Asks one failed cell again, from the cell itself. */
+  onRetryAnswer: (column: QuestionColumn, decisionId: string) => void;
+  /** Opens the decision at a cited passage, with the reader's highlight. */
+  onShowPassage: (decision: Decision, anchorId: string) => void;
+  /** True while a run is being queued, so every run control settles together. */
+  isRunning: boolean;
+};
 
 /**
  * How much of the question surface a reader gets.
@@ -187,13 +250,14 @@ export const questionEditDiscardsAnswers = ({
  */
 export type QuestionColumnSurface =
   | { type: "hidden" }
-  | { type: "available"; columns: readonly QuestionColumn[] };
+  | AvailableQuestionColumns;
 
 export const questionColumnSurface = ({
-  columns,
   hasActiveOrganization,
-}: {
-  columns: readonly QuestionColumn[];
+  ...available
+}: Omit<AvailableQuestionColumns, "type"> & {
   hasActiveOrganization: boolean;
 }): QuestionColumnSurface =>
-  hasActiveOrganization ? { type: "available", columns } : { type: "hidden" };
+  hasActiveOrganization
+    ? { type: "available", ...available }
+    : { type: "hidden" };
