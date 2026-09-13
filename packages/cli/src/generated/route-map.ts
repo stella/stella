@@ -5902,7 +5902,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "case-law", "matter-links-create"],
                 capabilityId: "case-law.matter-links.create",
                 description:
-                  "Link one case-law decision from the corpus to the current matter, with an optional note. A decision that is not in the corpus is a 404, a decision already linked to this matter is a 409, and the call is refused once the matter holds its maximum number of links.",
+                  "Link one case-law decision from the corpus to the current matter, with an optional note. A decision that is not in the corpus is a 404; a decision already linked to this matter returns the existing link unchanged, note included. The call is refused once the matter holds its maximum number of links.",
                 access: "write",
                 flags: [
                   {
@@ -6045,7 +6045,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "case-law", "matter-links-list"],
                 capabilityId: "case-law.matter-links.list",
                 description:
-                  "List the case-law decisions linked to the current matter, newest link first, each with its note and the decision's case number, ECLI, court, country, date, and type. Returns the whole set up to the per-matter link cap; there is no pagination.",
+                  "List the case-law decisions linked to the current matter, newest link first, each with its note and the decision's row facts: case number, slug, ECLI, court, country, language, date, type, citation count and headnote preview. Returns the whole set up to the per-matter link cap; there is no pagination.",
                 access: "read",
                 flags: [
                   {
