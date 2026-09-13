@@ -27,8 +27,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
-  INSPECTOR_RAIL_WIDTH,
   InspectorDock,
+  resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
   useInspectorPaneWidth,
@@ -57,6 +57,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
+import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
@@ -712,6 +713,7 @@ function WorkspaceInspectorSidePanel() {
   const viewportWidth = useViewportWidth();
   const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
     sidebarWidth,
+    storageKey: inspectorPaneWidthStorageKey("matter"),
     viewportWidth,
   });
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not
@@ -721,7 +723,10 @@ function WorkspaceInspectorSidePanel() {
 
   // Rail is always shown; only when there are real tabs and the
   // user hasn't minimized do we widen to the full pane width.
-  const dockWidth = showPaneContent ? width : INSPECTOR_RAIL_WIDTH;
+  const dockWidth = resolveInspectorDockWidth({
+    paneWidth: width,
+    showPaneContent,
+  });
   const reservedInlineEndWidthPx = isMobile ? "0px" : `${dockWidth}px`;
 
   useExternalSyncEffect(() => {

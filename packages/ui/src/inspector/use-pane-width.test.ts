@@ -103,6 +103,54 @@ describe("stored width", () => {
     });
   });
 
+  // The pane renders whatever it read back, so a width that does not survive
+  // the round trip snaps the pane somewhere the reader never dragged it.
+  test("every width the pane can take survives write then read", () => {
+    const entries = new Map<string, string>();
+    withWindow(
+      {
+        getItem: (key: string) => entries.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          entries.set(key, value);
+        },
+      },
+      () => {
+        for (const width of [
+          INSPECTOR_PANE_MIN_WIDTH,
+          INSPECTOR_PANE_MIN_WIDTH + 1,
+          INSPECTOR_PANE_DEFAULT_WIDTH,
+          777,
+          INSPECTOR_PANE_MAX_WIDTH - 1,
+          INSPECTOR_PANE_MAX_WIDTH,
+        ]) {
+          writeStoredWidth("inspector-pane-width", width);
+          expect(readStoredWidth("inspector-pane-width")).toBe(width);
+        }
+      },
+    );
+  });
+
+  // Two docked panes must not read each other's width back.
+  test("keeps each key's width to itself", () => {
+    const entries = new Map<string, string>();
+    withWindow(
+      {
+        getItem: (key: string) => entries.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          entries.set(key, value);
+        },
+      },
+      () => {
+        writeStoredWidth("matter", 640);
+        writeStoredWidth("public-law", 420 + INSPECTOR_PANE_MIN_WIDTH);
+        expect(readStoredWidth("matter")).toBe(640);
+        expect(readStoredWidth("public-law")).toBe(
+          420 + INSPECTOR_PANE_MIN_WIDTH,
+        );
+      },
+    );
+  });
+
   test("writing to blocked storage is not an error", () => {
     withWindow(
       {

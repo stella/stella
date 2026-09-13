@@ -3,14 +3,18 @@ import type { ReactNode } from "react";
 import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { InspectorRailIconButton, SIDE_RAIL_WIDTH } from "@stll/ui/inspector";
-import { cn } from "@stll/ui/utils";
+import {
+  InspectorDock,
+  InspectorRailIconButton,
+  resolveInspectorDockWidth,
+  useInspectorPaneWidth,
+} from "@stll/ui/inspector";
+import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
+import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useSidebarInlineSize } from "@/components/sidebar";
 import Tooltip from "@/components/tooltip";
-
-/** Reading width of an expanded public inspector pane, in pixels. */
-export const PUBLIC_INSPECTOR_PANE_WIDTH = 420;
 
 /**
  * Public twin of the inspector side rail: same geometry and chrome as the
@@ -60,35 +64,36 @@ type PublicInspectorDockProps = {
 };
 
 /**
- * The column a public surface docks its inspector into. It reserves its own
- * width in the flow, so the reading column beside it is never covered. Narrow
- * viewports get no dock at all: there the reader owns the whole screen.
+ * The column a public surface docks its inspector into: the same
+ * `InspectorDock` a matter uses, so the pane drags, resizes from the keyboard
+ * and is remembered here exactly as it is there. Only the storage key
+ * differs — the public surface is read at its own width.
  */
 export const PublicInspectorDock = ({
   children,
   expanded = false,
 }: PublicInspectorDockProps) => {
-  const width = expanded ? { width: PUBLIC_INSPECTOR_PANE_WIDTH } : undefined;
+  const t = useTranslations();
+  const sidebarWidth = useSidebarInlineSize();
+  const viewportWidth = useViewportWidth();
+  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+    sidebarWidth,
+    storageKey: inspectorPaneWidthStorageKey("public-law"),
+    viewportWidth,
+  });
 
   return (
-    <div
-      className="text-sidebar-foreground hidden md:block"
-      data-side="right"
-      data-state={expanded ? "expanded" : "collapsed"}
+    <InspectorDock
+      resizeHandleLabel={t("inspector.resizePane")}
+      resizeHandleProps={resizeHandleProps}
+      showPaneContent={expanded}
+      width={resolveInspectorDockWidth({
+        paneWidth: width,
+        showPaneContent: expanded,
+      })}
+      onResetWidth={resetWidth}
     >
-      <div
-        className={cn("bg-sidebar relative", !expanded && SIDE_RAIL_WIDTH)}
-        style={width}
-      />
-      <div
-        className={cn(
-          "fixed inset-y-0 end-0 z-10 hidden h-svh md:flex",
-          !expanded && SIDE_RAIL_WIDTH,
-        )}
-        style={width}
-      >
-        <div className="bg-sidebar flex h-full w-full flex-col">{children}</div>
-      </div>
-    </div>
+      {children}
+    </InspectorDock>
   );
 };

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
 import type * as ChromeModule from "./chrome";
 import {
   Inspector,
@@ -189,6 +190,30 @@ describe("dock", () => {
     );
     expect(renderDock(false)).not.toContain(
       'data-slot="inspector-resize-grip"',
+    );
+  });
+
+  // A dock a page mounts inside the content column crosses the shell's sticky
+  // top bar; one hung on the shell's end column sits beside it and never
+  // does. Giving both the same layer hides one behind the other.
+  test("lifts a content-mounted pane over the shell's own chrome", () => {
+    const contentMarkup = renderToStaticMarkup(
+      <InspectorDock
+        mount="content"
+        resizeHandleLabel="Resize"
+        resizeHandleProps={noopHandlers}
+        showPaneContent
+        width={512}
+      >
+        <Inspector />
+      </InspectorDock>,
+    );
+
+    expect(classesOf(contentMarkup, "inspector-dock-pane")).toContain(
+      SHELL_CHROME_LAYER_CLASS_NAME,
+    );
+    expect(classesOf(renderDock(true), "inspector-dock-pane")).not.toContain(
+      SHELL_CHROME_LAYER_CLASS_NAME,
     );
   });
 
