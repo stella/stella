@@ -235,10 +235,8 @@ test("cursor iteration stops fetching when its consumer stops", async () => {
     return { items: ["first"], limit: 1, nextCursor: "next" };
   });
 
-  for await (const page of pages) {
-    expect(page).toEqual(["first"]);
-    break;
-  }
+  expect((await pages.next()).value).toEqual(["first"]);
+  await pages.return(undefined);
 
   expect(requested).toEqual([null]);
 });

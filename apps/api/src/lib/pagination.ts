@@ -37,7 +37,10 @@ export const createCursorPage = <T>({
   };
 };
 
-/** Walk cursor pages sequentially, retaining only the current page. */
+/**
+ * Walk cursor pages sequentially, retaining only the current page.
+ * @yields The items in each fetched page.
+ */
 export async function* iterateCursorPages<T>(
   readPage: (cursor: string | null) => Promise<Page<T>>,
 ): AsyncGenerator<T[]> {
