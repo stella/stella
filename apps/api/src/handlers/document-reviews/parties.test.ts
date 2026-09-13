@@ -8,6 +8,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  documentReviewParties,
+  entityVersions,
+  workspaces,
+} from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { detectReviewParties } from "@/api/lib/document-review/parties";
@@ -74,22 +79,50 @@ const orgAIConfig = {
 
 const createHarness = ({
   cachedRows = [{ parties: cachedParties }],
-}: { cachedRows?: { parties: unknown }[] } = {}) => {
+  invalidation,
+}: {
+  cachedRows?: { parties: unknown }[];
+  invalidation?: "workspace" | "version";
+} = {}) => {
   let insertCalled = false;
+  let invalidated = false;
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       entities: { findMany: async () => [entityRow] },
     },
     select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => cachedRows,
-        }),
-      }),
+      from: (table: unknown) => {
+        let result: unknown[];
+        if (table === documentReviewParties) {
+          result = cachedRows;
+        } else if (
+          table === workspaces &&
+          !(invalidated && invalidation === "workspace")
+        ) {
+          result = [{ id: WORKSPACE_ID }];
+        } else if (
+          table === entityVersions &&
+          !(invalidated && invalidation === "version")
+        ) {
+          result = [{ id: ENTITY_VERSION_ID }];
+        } else {
+          result = [];
+        }
+        return {
+          where: () => ({
+            limit: async () => result,
+            for: async () => result,
+          }),
+        };
+      },
     }),
     insert: () => {
       insertCalled = true;
-      throw new Error("cache hit must not write");
+      return {
+        values: () => ({
+          onConflictDoUpdate: async () => undefined,
+        }),
+      };
     },
   });
 
@@ -106,7 +139,13 @@ const createHarness = ({
     promptCachingEnabled: false,
   });
 
-  return { context, insertCalled: () => insertCalled };
+  return {
+    context,
+    insertCalled: () => insertCalled,
+    invalidate: () => {
+      invalidated = true;
+    },
+  };
 };
 
 /** A prepared DOCX target: the detection fake never reads it. */
@@ -131,6 +170,53 @@ describe("reviewParties", () => {
     });
     expect(insertCalled()).toBe(false);
   });
+
+  test("persists detected parties when the target remains available", async () => {
+    const { context, insertCalled } = createHarness({
+      cachedRows: [],
+    });
+    const handler = createReviewParties({
+      detectParties: asTestRaw<typeof detectReviewParties>(
+        async () => await Promise.resolve(Result.ok(cachedParties)),
+      ),
+      prepareReviewFiles: prepareReviewFilesFake,
+    });
+
+    const result = await handler.handler(context);
+
+    expect(result).toEqual({
+      entityVersionId: ENTITY_VERSION_ID,
+      parties: cachedParties,
+    });
+    expect(insertCalled()).toBe(true);
+  });
+
+  for (const unavailable of ["workspace", "version"] as const) {
+    test(`returns 404 when ${unavailable} wins during detection`, async () => {
+      const { context, insertCalled, invalidate } = createHarness({
+        cachedRows: [],
+        invalidation: unavailable,
+      });
+      const handler = createReviewParties({
+        detectParties: asTestRaw<typeof detectReviewParties>(async () => {
+          invalidate();
+          return await Promise.resolve(Result.ok(cachedParties));
+        }),
+        prepareReviewFiles: prepareReviewFilesFake,
+      });
+
+      const result = await handler.handler(context);
+
+      if (!("code" in result)) {
+        throw new Error("Expected target-unavailable response");
+      }
+      expect(result.code).toBe(404);
+      expect(result.response).toMatchObject({
+        message: "Document review target is no longer available",
+      });
+      expect(insertCalled()).toBe(false);
+    });
+  }
 
   for (const { cause, message, name, status } of PROVIDER_FAILURE_CASES) {
     test(`answers ${name} with the status that names it`, async () => {

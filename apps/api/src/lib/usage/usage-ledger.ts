@@ -39,6 +39,7 @@ import {
   usageEvents,
   usageAllocations,
   usageEntitlements,
+  workspaces,
 } from "@/api/db/schema";
 import type {
   UsageActionType,
@@ -332,9 +333,29 @@ export const recordUsageEvent = async ({
 }: RecordUsageEventInput): Promise<RecordUsageEventResult> => {
   const periodResolved = period ?? (await resolvePeriod(tx, organizationId));
 
+  // Model calls can finish after matter deletion. Preserve organization-level
+  // consumption with the same null attribution as the FK's ON DELETE SET NULL.
+  // The key-share lock closes the gap between the existence check and insert.
+  const retainedWorkspaceId = await (async () => {
+    if (workspaceId === null) {
+      return null;
+    }
+    const owners = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .for("key share");
+    return owners.at(0)?.id ?? null;
+  })();
+
   const values = {
     organizationId,
-    workspaceId,
+    workspaceId: retainedWorkspaceId,
     userId,
     periodStart: periodResolved.start,
     periodEnd: periodResolved.end,

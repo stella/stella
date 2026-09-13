@@ -10,10 +10,14 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { documentReviewParties } from "@/api/db/schema";
+import {
+  documentReviewParties,
+  entityVersions,
+  workspaces,
+} from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/schemas";
 import { aiHandlerError } from "@/api/lib/ai-error";
@@ -187,8 +191,39 @@ export const createReviewParties = ({
       }
       const parties = detected.value;
 
-      yield* Result.await(
+      const persisted = yield* Result.await(
         safeDb(async (tx) => {
+          // Model work runs outside the transaction. Fence its final write
+          // against matter deletion and version tombstoning, in that order.
+          const owners = await tx
+            .select({ id: workspaces.id })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.id, workspaceId),
+                eq(workspaces.organizationId, organizationId),
+                ne(workspaces.status, "deleting"),
+              ),
+            )
+            .for("share");
+          if (owners.length === 0) {
+            return false;
+          }
+          const versions = await tx
+            .select({ id: entityVersions.id })
+            .from(entityVersions)
+            .where(
+              and(
+                eq(entityVersions.id, entityVersionId),
+                eq(entityVersions.entityId, entityId),
+                eq(entityVersions.workspaceId, workspaceId),
+                isNull(entityVersions.deletedAt),
+              ),
+            )
+            .for("share");
+          if (versions.length === 0) {
+            return false;
+          }
           // audit: skip — derived AI cache keyed by entity version;
           // recomputable from the document's current content, never surfaces
           // as an audited mutation on its own.
@@ -212,8 +247,18 @@ export const createReviewParties = ({
                 createdAt: sql`excluded.created_at`,
               },
             });
+          return true;
         }),
       );
+
+      if (!persisted) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Document review target is no longer available",
+          }),
+        );
+      }
 
       return Result.ok({ entityVersionId, parties });
     },

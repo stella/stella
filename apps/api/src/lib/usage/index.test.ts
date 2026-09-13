@@ -6,11 +6,16 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { TransactionRollbackError } from "drizzle-orm";
+import { eq, TransactionRollbackError } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { usagePolicies, usageEntitlements } from "@/api/db/schema";
+import {
+  usageEvents,
+  usagePolicies,
+  usageEntitlements,
+  workspaces,
+} from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -274,6 +279,56 @@ describe("usage ledger — assertUsageAvailable", () => {
 });
 
 describe("usage ledger — allocation + usage math", () => {
+  test("retains consumption when a matter disappears", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      const workspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+      await tx.insert(workspaces).values({
+        id: workspaceId,
+        organizationId: fx.organizationId,
+        name: "Test Matter",
+        reference: `matter-${workspaceId}`,
+      });
+      const event = {
+        organizationId: fx.organizationId,
+        userId: fx.userId,
+        actionType: "doc_review" as const,
+        modelRole: "fast" as const,
+        unitsConsumed: 300,
+        serviceTier: "flex" as const,
+        isByok: false,
+        period: { start: fx.periodStart, end: fx.periodEnd },
+      };
+
+      await recordUsageEvent({ ...event, tx, workspaceId });
+      const attributed = await tx
+        .select({ workspaceId: usageEvents.workspaceId })
+        .from(usageEvents)
+        .where(eq(usageEvents.organizationId, fx.organizationId));
+      expect(attributed.at(0)?.workspaceId).toBe(workspaceId);
+
+      await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+      await recordUsageEvent({
+        ...event,
+        tx,
+        workspaceId,
+        idempotencyKey: `after-delete-${Bun.randomUUIDv7()}`,
+      });
+
+      const events = await tx
+        .select({
+          unitsConsumed: usageEvents.unitsConsumed,
+          workspaceId: usageEvents.workspaceId,
+        })
+        .from(usageEvents)
+        .where(eq(usageEvents.organizationId, fx.organizationId));
+      expect(events).toEqual([
+        { unitsConsumed: 300, workspaceId: null },
+        { unitsConsumed: 300, workspaceId: null },
+      ]);
+    });
+  });
+
   test("balance = SUM(allocations) - SUM(consumption) within active period", async () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);
