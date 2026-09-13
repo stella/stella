@@ -270,3 +270,28 @@ test("an ordinary query still matches loosely", async () => {
   expect(await matchesSearch(partialReference)).toBe(true);
   expect(await matchesReferenceExactly(partialReference)).toBe(false);
 });
+
+
+test("a delayed projection cannot restore a tombstoned historical reference", async () => {
+  const database = projectionDatabase();
+  await upsertSearchDocument(entityId, {
+    database: {
+      ...database,
+      transaction: async (run) => {
+        // The old projection has already read every stamp. A deletion and its
+        // repair finish before that old projection acquires the entity lock.
+        await db
+          .update(entityVersions)
+          .set({ deletedAt: new Date() })
+          .where(eq(entityVersions.id, versionId(1)));
+        await indexEntity();
+        expect(await matchesReferenceExactly(firstReference)).toBe(false);
+        return await database.transaction(run);
+      },
+    },
+    syncActivity: async () => undefined,
+  });
+
+  expect(await matchesReferenceExactly(firstReference)).toBe(false);
+  expect(await matchesReferenceExactly(secondReference)).toBe(true);
+});
