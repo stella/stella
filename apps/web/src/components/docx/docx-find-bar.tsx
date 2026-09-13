@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import { SearchIcon, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -37,7 +37,6 @@ export const DocxFindBar = ({ find }: DocxFindBarProps) => {
 
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
-      <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
       <Input
         aria-label={t("folio.findReplace.findText")}
         className="h-7 flex-1 rounded-md"

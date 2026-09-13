@@ -1,12 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { useState } from "react";
 
-import {
-  AlignJustifyIcon,
-  SearchIcon,
-  WrapTextIcon,
-  XIcon,
-} from "lucide-react";
+import { AlignJustifyIcon, WrapTextIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SEARCH_SORTS } from "@stll/api-contract/search";
@@ -184,13 +179,9 @@ const RefineWithinResults = ({
         setEntry("");
       }}
     >
-      <SearchIcon
-        aria-hidden="true"
-        className="text-muted-foreground pointer-events-none absolute start-2 top-1/2 size-3.5 -translate-y-1/2"
-      />
       <Input
         aria-label={t("caseLaw.refineWithinResults")}
-        className="h-7 min-h-0 w-40 ps-7 text-xs sm:w-52"
+        className="h-7 min-h-0 w-40 text-xs sm:w-52"
         onChange={(event) => setEntry(event.target.value)}
         placeholder={t("caseLaw.refineWithinResults")}
         type="search"

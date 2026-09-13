@@ -211,6 +211,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-dialog-trigger-menu-item.fixture.tsx", [
     "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item",
   ]),
+  fixtureRuleOverride("no-decorated-search-input.fixture.tsx", [
+    "no-decorated-search-input/no-decorated-search-input",
+  ]),
+  fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
+    "dialog-footer-owns-actions/dialog-footer-owns-actions",
+  ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
   ]),
@@ -1118,6 +1124,8 @@ export default defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
+    "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -2212,6 +2220,33 @@ export default defineConfig({
       ],
       rules: {
         "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item": "error",
+      },
+    },
+    {
+      // `type="search"` is the whole contract: the @stll/ui Input draws the
+      // search icon and reserves its inline-start space. A caller that adds a
+      // second icon or its own leading padding doubles the glyph and shifts
+      // the placeholder.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-decorated-search-input.fixture.tsx",
+      ],
+      rules: {
+        "no-decorated-search-input/no-decorated-search-input": "error",
+      },
+    },
+    {
+      // A dialog's action row is a full-bleed band the footer primitive owns.
+      // A hand-rolled div sits inside the panel padding and renders inset,
+      // without the border or the narrow-viewport stacking.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/dialog-footer-owns-actions.fixture.tsx",
+      ],
+      rules: {
+        "dialog-footer-owns-actions/dialog-footer-owns-actions": "error",
       },
     },
     {
