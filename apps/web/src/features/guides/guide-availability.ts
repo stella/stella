@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   GUIDE_TOUR_IDS,
   type GuideTourId,
@@ -33,6 +35,6 @@ export const isGuideTourAvailable = (
       return availability.workflowsAvailable && availability.canCreateWorkflow;
     default:
       tourId satisfies never;
-      return false;
+      return panic(`Unknown guide tour: ${String(tourId)}`);
   }
 };

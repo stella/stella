@@ -252,7 +252,7 @@ export const useGuideRunner = ({
         }
         default:
           route satisfies never;
-          return false;
+          return panic(`Unknown guide route: ${String(route)}`);
       }
     });
     if (Result.isError(result)) {
@@ -417,6 +417,9 @@ export const useGuideRunner = ({
             break;
           default:
             revealingInteraction satisfies never;
+            return panic(
+              `Unknown revealing interaction: ${String(revealingInteraction)}`,
+            );
         }
       }
       return element;
@@ -471,7 +474,6 @@ export const useGuideRunner = ({
           continue;
         }
         if (step.route) {
-          // eslint-disable-next-line no-await-in-loop -- sequential by design: each candidate navigates then waits before the next is tried
           const routeAvailable = await navigateToGuideRoute(
             step.route,
             runAbort.signal,
@@ -493,7 +495,6 @@ export const useGuideRunner = ({
           deadline =
             Temporal.Now.instant().epochMilliseconds + STEP_POLL_TIMEOUT_MS;
         }
-        // eslint-disable-next-line no-await-in-loop -- sequential by design: resolve this candidate's anchor before trying the next
         const element = await resolveStepElement(
           index,
           step.anchor,
@@ -595,7 +596,6 @@ export const useGuideRunner = ({
       entryIndex = firstIndex;
 
       for (;;) {
-        // eslint-disable-next-line no-await-in-loop -- sequential by design: block on the user acting on this step before resolving the next
         const outcome = await showStep(engine, current, firstIndex);
 
         switch (outcome) {
@@ -607,7 +607,6 @@ export const useGuideRunner = ({
             if (current.index <= firstIndex) {
               break;
             }
-            // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
             const previous = await resolveFrom(current.index - 1, -1);
             // Nothing earlier resolves: stay on this step rather than dropping
             // the user out of the tour on a back press. Re-resolving forwards
