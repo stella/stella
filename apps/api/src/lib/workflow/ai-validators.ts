@@ -1,13 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   AiExtractablePropertyContent,
   FieldContent,
 } from "@/api/db/schema-validators";
-import {
-  Unreachable,
-  WorkflowValidationError,
-} from "@/api/lib/errors/tagged-errors";
+import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type { AIJustificationOutput } from "@/api/lib/workflow/parse-justifications";
@@ -203,9 +200,7 @@ export const validateAnswerForContent = ({
     // default is a bug rather than a missing branch.
     default:
       content satisfies never;
-      throw new Unreachable({
-        message: "Property type not matched",
-      });
+      return panic("Property type not matched");
   }
 };
 
@@ -260,9 +255,7 @@ export const fieldContentFromValidated = (
           };
     default: {
       validated satisfies never;
-      throw new Unreachable({
-        message: "Validated result type not matched",
-      });
+      return panic("Validated result type not matched");
     }
   }
 };

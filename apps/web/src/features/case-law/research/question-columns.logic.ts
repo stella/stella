@@ -345,17 +345,21 @@ export type AvailableQuestionColumns = {
  * table: no columns, and, because one answer decides both, no control that
  * would create or run one. `hidden` carries no columns at all, so a reader who
  * signed out cannot be drawn a column the table happens to still hold.
+ *
+ * A surface with nothing to ask of — a matter with no decision linked — is the
+ * same `hidden`. It is one answer rather than two because every control the
+ * available surface carries reads the organization's columns to draw itself:
+ * a second gate on the reads alone would still let the add-column rail ask.
  */
 export type QuestionColumnSurface =
   | { type: "hidden" }
   | AvailableQuestionColumns;
 
 export const questionColumnSurface = ({
-  hasActiveOrganization,
+  asksQuestions,
   ...available
 }: Omit<AvailableQuestionColumns, "type"> & {
-  hasActiveOrganization: boolean;
+  /** Whether this reader, on this surface, has a question to ask at all. */
+  asksQuestions: boolean;
 }): QuestionColumnSurface =>
-  hasActiveOrganization
-    ? { type: "available", ...available }
-    : { type: "hidden" };
+  asksQuestions ? { type: "available", ...available } : { type: "hidden" };

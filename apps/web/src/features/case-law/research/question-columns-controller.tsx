@@ -229,7 +229,10 @@ export const useQuestionColumns = ({
     surface: questionColumnSurface({
       answersByKey,
       columns: asked,
-      hasActiveOrganization: activeOrganizationId !== null,
+      // The same answer that gated the reads above gates the controls: a
+      // surface that asks nothing draws no rail, so nothing reads the
+      // organization's columns to decide whether the rail is at its cap.
+      asksQuestions: enabled && activeOrganizationId !== null,
       isRunning: run.isPending,
       onColumnAction,
       onRetryAnswer: (column, decisionId) => {

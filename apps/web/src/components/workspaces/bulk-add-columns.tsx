@@ -13,6 +13,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
+import { Result } from "better-result";
 import { KeyboardIcon, PlusIcon, RouteIcon, XIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -345,10 +346,11 @@ const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
 
 /** The cap the target enforces, so the trigger disappears at it. */
 const useAddColumnsLimit = (target: AddColumnsTarget): boolean => {
-  // Both hooks run on every render: which answer is used depends on the
-  // target, which one is asked may not.
+  // Both hooks run on every render, but only the target's own read is
+  // enabled: the other has no workspace or organization to count, and asking
+  // anyway spends a request per trigger drawn.
   const workspaceLimitReached = usePropertiesCountLimit(
-    target.kind === "workspace" ? target.workspaceId : "",
+    target.kind === "workspace" ? target.workspaceId : null,
   );
   const organisationLimitReached = useQuestionColumnsCountLimit(
     target.kind === "organisation",
@@ -489,10 +491,9 @@ const useColumnsSubmit = (onClose: () => void) => {
     count: number;
     run: () => Promise<void>;
   }) => {
-    try {
-      await run();
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const created = await Result.tryPromise(run);
+    if (Result.isError(created)) {
+      getAnalytics().captureError(created.error);
       stellaToast.add({
         title: t("workspaces.properties.bulk.createFailed"),
         type: "error",

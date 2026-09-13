@@ -16,9 +16,11 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 // must not suspend the surrounding layout. While the query is loading
 // we treat the limit as not-reached so the action stays available; the
 // backend is the source of truth and will reject if the limit is hit.
-export const usePropertiesCountLimit = (workspaceId: string) => {
+/** `null` where the surface is not a workspace's: no id, so no read. */
+export const usePropertiesCountLimit = (workspaceId: string | null) => {
   const { data: propertiesCount } = useQuery({
-    ...propertiesOptions(workspaceId),
+    ...propertiesOptions(workspaceId ?? ""),
+    enabled: workspaceId !== null,
     select: (data) => data.length,
   });
 

@@ -307,13 +307,13 @@ describe("who is shown question columns", () => {
 
   test("a reader with an organization sees them", () => {
     expect(
-      questionColumnSurface({ ...available, hasActiveOrganization: true }),
+      questionColumnSurface({ ...available, asksQuestions: true }),
     ).toEqual({ type: "available", ...available });
   });
 
   test("a reader without one sees no column and no control", () => {
     expect(
-      questionColumnSurface({ ...available, hasActiveOrganization: false }),
+      questionColumnSurface({ ...available, asksQuestions: false }),
     ).toEqual({ type: "hidden" });
   });
 });
