@@ -130,6 +130,44 @@ describe("stored width", () => {
     );
   });
 
+  // A pointer routinely leaves the pane's bounds: dragged onto the window
+  // edge, or across the whole viewport. The bound it stopped at is what has
+  // to come back, because `parsePersistedPaneWidth` refuses an out-of-range
+  // entry and falls back to the default — a pane dragged to its minimum used
+  // to reopen at 512.
+  test("a drag past either bound persists that bound and reloads to it", () => {
+    const entries = new Map<string, string>();
+    withWindow(
+      {
+        getItem: (key: string) => entries.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          entries.set(key, value);
+        },
+      },
+      () => {
+        const viewportWidth = 1920;
+        const overshoots = [
+          // Dragged onto and past the inline-end edge itself.
+          { clientX: viewportWidth - 40, expected: INSPECTOR_PANE_MIN_WIDTH },
+          { clientX: viewportWidth + 120, expected: INSPECTOR_PANE_MIN_WIDTH },
+          // Dragged out through the opposite edge of the window.
+          { clientX: -200, expected: INSPECTOR_PANE_MAX_WIDTH },
+        ];
+
+        for (const { clientX, expected } of overshoots) {
+          const dragged = resolveDragWidth({
+            clientX,
+            isRtl: false,
+            viewportWidth,
+          });
+          expect(dragged).toBe(expected);
+          writeStoredWidth("inspector-pane-width", dragged);
+          expect(readStoredWidth("inspector-pane-width")).toBe(expected);
+        }
+      },
+    );
+  });
+
   // Two docked panes must not read each other's width back.
   test("keeps each key's width to itself", () => {
     const entries = new Map<string, string>();

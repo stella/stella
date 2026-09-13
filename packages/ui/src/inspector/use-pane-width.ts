@@ -5,6 +5,7 @@ import type {
 } from "react";
 
 import {
+  clampInspectorPaneWidth,
   INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
@@ -40,6 +41,12 @@ export const parsePersistedPaneWidth = (raw: string | null): number => {
  * That edge is the right in LTR (width = distance from the right) and the
  * left in RTL (width = distance from the left). Without the RTL branch the
  * delta is inverted and the drag oscillates.
+ *
+ * A pointer can be dragged well past either bound — off the window edge, or
+ * across the whole viewport — so the raw distance is clamped here, before
+ * anything keeps it. Persisting the raw distance is what made a pane dragged
+ * narrower than the minimum come back at the *default* width on the next
+ * load, because `parsePersistedPaneWidth` refuses an out-of-range entry.
  */
 export const resolveDragWidth = ({
   clientX,
@@ -49,7 +56,7 @@ export const resolveDragWidth = ({
   clientX: number;
   isRtl: boolean;
   viewportWidth: number;
-}) => (isRtl ? clientX : viewportWidth - clientX);
+}) => clampInspectorPaneWidth(isRtl ? clientX : viewportWidth - clientX);
 
 /** Pixels one arrow press moves the edge; Page/Home/End move further. */
 export const INSPECTOR_PANE_KEYBOARD_STEP = 16;
@@ -244,9 +251,7 @@ export const useInspectorPaneWidth = ({
       return;
     }
     event.preventDefault();
-    setDesiredWidth(
-      Math.min(Math.max(next, INSPECTOR_PANE_MIN_WIDTH), maxWidth),
-    );
+    setDesiredWidth(Math.min(clampInspectorPaneWidth(next), maxWidth));
   };
 
   const resetWidth = () => {
