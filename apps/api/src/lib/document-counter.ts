@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
+import { documentReferenceBase } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { documentCounters, documentReferenceCounters } from "@/api/db/schema";
@@ -188,31 +189,11 @@ export const recordEntityStamp = async ({
   if (!workspace) {
     panic("Document stamp recorded for a missing workspace");
   }
-  const match = /^(.*)\/(\d+)\.v\d+$/.exec(stamp);
-  if (!match) {
-    panic("Document stamp has an invalid reference format");
-  }
-  const [, reference, sequence] = match;
+  const base = documentReferenceBase(stamp);
+  const sequence = /\/(\d+)$/.exec(base)?.[1];
+  const reference = sequence ? base.slice(0, -(sequence.length + 1)) : null;
   if (!reference || !sequence) {
     panic("Document stamp has an invalid reference format");
-  }
-
-  const ledgerRows = await tx
-    .select({
-      id: documentReferenceCounters.id,
-      workspaceId: documentReferenceCounters.workspaceId,
-    })
-    .from(documentReferenceCounters)
-    .where(
-      and(
-        eq(documentReferenceCounters.organizationId, workspace.organizationId),
-        eq(documentReferenceCounters.reference, reference),
-      ),
-    )
-    .for("update");
-  const ledger = ledgerRows.at(0);
-  if (ledger && ledger.workspaceId !== workspaceId) {
-    panic("Document stamp reference belongs to another workspace");
   }
 
   const lastValue = Number(sequence);
@@ -220,7 +201,7 @@ export const recordEntityStamp = async ({
     panic("Document stamp sequence is not a safe integer");
   }
 
-  await tx
+  const rows = await tx
     .insert(documentReferenceCounters)
     .values({
       id: createSafeId<"documentReferenceCounter">(),
@@ -237,5 +218,10 @@ export const recordEntityStamp = async ({
       set: {
         lastValue: sql`GREATEST(${documentReferenceCounters.lastValue}, ${lastValue})`,
       },
-    });
+      where: eq(documentReferenceCounters.workspaceId, workspaceId),
+    })
+    .returning({ id: documentReferenceCounters.id });
+  if (!rows.at(0)) {
+    panic("Document stamp reference belongs to another workspace");
+  }
 };

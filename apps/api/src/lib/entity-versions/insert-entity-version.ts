@@ -58,24 +58,37 @@ const withVerificationCode = (values: EntityVersionValues) => ({
  * re-inserts only the missing rows with fresh codes. The code the caller never
  * saw is the code that is stored; readers take it from the row.
  */
+type InsertEntityVersionsOptions = {
+  reserveStamps?: boolean;
+};
+
 export const insertEntityVersions = async (
   tx: Transaction,
   values: EntityVersionValues[],
+  { reserveStamps = true }: InsertEntityVersionsOptions = {},
 ): Promise<void> => {
   if (values.length === 0) {
     return;
   }
 
-  for (const value of values) {
-    if (value.stamp === null || value.stamp === undefined) {
-      continue;
+  if (reserveStamps) {
+    const stamps = new Map<string, (typeof values)[number]>();
+    for (const value of values) {
+      if (value.stamp !== null && value.stamp !== undefined) {
+        stamps.set(value.stamp, value);
+      }
     }
+    for (const value of stamps.values()) {
+      if (value.stamp === null || value.stamp === undefined) {
+        continue;
+      }
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction connection must serialize ledger row locks
-    await recordEntityStamp({
-      tx,
-      workspaceId: value.workspaceId,
-      stamp: value.stamp,
-    });
+      await recordEntityStamp({
+        tx,
+        workspaceId: value.workspaceId,
+        stamp: value.stamp,
+      });
+    }
   }
 
   await insertPendingEntityVersions(tx, values.map(withVerificationCode), 1);
