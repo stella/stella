@@ -49,6 +49,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "native_tool_ui" },
+  access: "read",
 } satisfies HandlerConfig;
 
 export const createInfosoudCourts = (

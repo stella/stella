@@ -147,6 +147,7 @@ export const readDocumentPropertiesEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
+    access: "read",
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
   async function* ({
@@ -251,6 +252,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
+    access: "read",
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
   async function* ({
@@ -281,6 +283,7 @@ export const ocrExportEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
+    access: "read",
     query: t.Object({ format: t.UnionEnum(OCR_EXPORT_FORMATS) }),
     params: workspaceParams({ fieldId: tSafeId("field") }),
     response: t.Unknown(),

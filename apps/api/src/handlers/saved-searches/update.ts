@@ -17,7 +17,7 @@ import { toSavedSearchResponse } from "./response";
 import { savedSearchParamsSchema, updateSavedSearchBodySchema } from "./schema";
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { savedSearch: ["update"] },
   mcp: { type: "internal", reason: "search_ui" },
   params: savedSearchParamsSchema,
   body: updateSavedSearchBodySchema,

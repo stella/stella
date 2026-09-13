@@ -64,6 +64,7 @@ const readKanbanGroupBodySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "document_processing" },
+  access: "read",
   body: readKanbanGroupBodySchema,
 } satisfies HandlerConfig;
 

@@ -30,7 +30,7 @@ const requestQuery = t.Object({
 });
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { integration: ["create"] },
   mcp: { type: "internal", reason: "mcp_transport" },
   query: requestQuery,
 } satisfies HandlerConfig;

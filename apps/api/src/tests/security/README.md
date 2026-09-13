@@ -31,12 +31,10 @@ every member, including the lowest-privileged role, already holds —
 unless it affirms `access: "read"` and meters no AI. The read side is an
 affirmation, not an inference, so a mutating handler cannot leave the
 census by declaring nothing; metering under any `requiresUsage.actionType`
-keeps a handler in it. Two exits: a `// permissions-exempt: <reason>`
-comment in the handler file, for a reviewed exception (e.g. a
-purpose-dependent grant checked in-handler rather than statically), and
-`BASELINE_ON_READ_GRANT`, the frozen list of endpoints that already
-relied on the baseline grant. The baseline is asserted by equality, so it
-can only shrink.
+keeps a handler in it. The one exit is a `// permissions-exempt: <reason>`
+comment in the handler file, for a reviewed exception (e.g. a write that
+reaches nothing but the caller's own row). The assertion is that the
+offender set is empty.
 
 ### `case-law-research-permissions.test.ts`
 
@@ -45,6 +43,17 @@ The organization's case-law question columns sit behind the
 set of endpoints under `handlers/case-law/research/` is fully covered,
 and drives the real handlers as each role: a role without the grant gets
 403 from the framework before any database work.
+
+### `own-work-permissions.test.ts`
+
+The writes a member makes to their own work — a mark on a decision
+(`caseLawAnnotation`), a stored search (`savedSearch`), a link between
+their account and an outside system (`integration`: MCP connections, a
+SharePoint sign-in, an agent client, a desktop registry key). Pins the
+declared grant per endpoint, checks the sibling reads stay on the
+baseline grant while affirming `access: "read"`, and drives the real
+handlers as an external collaborator: the role that holds no write grant
+anywhere gets 403 from the framework before any database work.
 
 ### `branded-types.test.ts`
 

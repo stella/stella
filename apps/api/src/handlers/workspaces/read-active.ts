@@ -9,6 +9,7 @@ const config = {
     workspace: ["read"],
   },
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const readActiveWorkspace = createSafeRootHandler(

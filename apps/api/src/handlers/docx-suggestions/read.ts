@@ -56,6 +56,7 @@ const listDocxSuggestions = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "document_processing" },
+    access: "read",
     params: workspaceParams({ entityId: tSafeId("entity") }),
     query: t.Object({
       cursor: t.Optional(tPaginationCursor()),

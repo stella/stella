@@ -96,6 +96,7 @@ const readFieldFileHandler = async function* ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "document_processing" },
+  access: "read",
   params: readFieldFileParamsSchema,
 } satisfies HandlerConfig;
 

@@ -16,7 +16,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { caseLawAnnotation: ["update"] },
   mcp: { type: "internal", reason: "reader_annotations" },
   params: annotationParamsSchema,
   body: updateAnnotationBodySchema,

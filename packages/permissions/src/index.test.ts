@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { BETTER_AUTH_ORGANIZATION_STATEMENTS } from "@stll/auth-model";
 
+import type { PermissionInput } from "./index";
 import { roles, statements } from "./index";
 
 const ROLE_NAMES = ["owner", "admin", "member", "intern", "external"] as const;
@@ -223,6 +224,44 @@ describe("role grant boundaries", () => {
           roles[role].authorize({ caseLawResearch: [action] }).success,
         ).toBe(false);
       }
+    }
+  });
+
+  test("everyone but an external collaborator keeps their own work", () => {
+    // Annotations, stored searches and account links are the caller's own
+    // work, so they follow the time entry / expense / chat line rather than
+    // the authoring line: staff and interns hold them, external
+    // collaborators hold no write grant at all.
+    const ownWorkGrants: { permissions: PermissionInput; resource: string }[] =
+      [
+        {
+          permissions: {
+            caseLawAnnotation: ["create", "update", "delete"],
+          },
+          resource: "caseLawAnnotation",
+        },
+        {
+          permissions: { savedSearch: ["create", "update", "delete"] },
+          resource: "savedSearch",
+        },
+        {
+          permissions: { integration: ["create", "update", "delete"] },
+          resource: "integration",
+        },
+      ];
+
+    for (const { permissions, resource } of ownWorkGrants) {
+      for (const role of ["owner", "admin", "member", "intern"] as const) {
+        expect({
+          resource,
+          role,
+          granted: roles[role].authorize(permissions).success,
+        }).toEqual({ resource, role, granted: true });
+      }
+      expect({
+        resource,
+        granted: roles.external.authorize(permissions).success,
+      }).toEqual({ resource, granted: false });
     }
   });
 

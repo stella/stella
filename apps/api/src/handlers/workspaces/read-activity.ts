@@ -28,6 +28,7 @@ import { LIMITS } from "@/api/lib/limits";
 const config = {
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "read",
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(

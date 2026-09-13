@@ -1,10 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -17,23 +13,18 @@ const bodySchema = t.Object({
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
 });
 
+// Answers whether the upload that follows would fit, so it asks for the grant
+// that upload spends rather than the baseline every role holds.
 const config = {
-  permissions: uploadRoutePermission,
+  permissions: { entity: ["create"] },
   mcp: { type: "internal", reason: "upload_mechanics" },
+  access: "read",
   body: bodySchema,
 } satisfies HandlerConfig;
 
 const preflightEntityCreate = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, memberRole, body }) {
-    const authorization = authorizeUploadPurpose({
-      memberRole,
-      purpose: "entity_create",
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
-
+  async function* ({ safeDb, workspaceId, body }) {
     const validation = yield* validateEntityCreateCapacity({
       safeDb,
       workspaceId,

@@ -18,6 +18,7 @@ import {
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "mcp_transport" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const listMcpConnectors = createSafeRootHandler(

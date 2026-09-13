@@ -10,6 +10,8 @@
 import * as cheerio from "cheerio";
 
 import type { Block, Inline } from "@/api/lib/case-law/document-ast";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
 
 // ── Types ──────────────────────────────────────────────────
@@ -36,8 +38,13 @@ export type ValidationResult = {
     hugeBlocks: number;
     /** Consecutive duplicate plainText blocks. */
     duplicateBlocks: number;
+    /** Blocks whose text still carries the source's own markup. */
+    markupResidue: BlockMarkupResidue[];
   };
 };
+
+/** Source markup found in one block, named by the anchor that holds it. */
+export type BlockMarkupResidue = MarkupResidue & { anchorId: string };
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -391,9 +398,20 @@ export const validateAst = (
   let hugeBlocks = 0;
   let duplicateBlocks = 0;
   let prevText = "";
+  const markupResidue: BlockMarkupResidue[] = [];
 
   for (const block of blocks) {
     const text = block.plainText.trim();
+
+    // Source markup that survived into the text. Completeness class, like
+    // CONTENT_LOSS: the reader prints it, search indexes it and the model
+    // is prompted with it, and none of them can tell it from the court's
+    // words. It also inflates the retention ratio, so a parse carrying
+    // residue is the one whose CONTENT_LOSS reading cannot be trusted.
+    const residue = markupResidueIn(text);
+    if (residue) {
+      markupResidue.push({ ...residue, anchorId: block.anchorId });
+    }
 
     // Tiny blocks. A heading is legitimately short, and an image's text
     // is its alt text — a figure with a two-word label is not a parse
@@ -464,6 +482,18 @@ export const validateAst = (
       code: "DUPLICATE_BLOCKS",
       message: `${duplicateBlocks} consecutive duplicate blocks`,
       severity: "warning",
+    });
+  }
+
+  const firstResidue = markupResidue.at(0);
+  if (firstResidue) {
+    issues.push({
+      code: MARKUP_RESIDUE,
+      message:
+        `${markupResidue.length} block(s) carry source markup ` +
+        `(${firstResidue.reason} at ${firstResidue.anchorId}): ${ 
+        firstResidue.excerpt}`,
+      severity: "error",
     });
   }
 

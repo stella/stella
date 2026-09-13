@@ -24,6 +24,7 @@ const requestQuery = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "provider_secret" },
+  access: "read",
   query: requestQuery,
 } satisfies HandlerConfig;
 

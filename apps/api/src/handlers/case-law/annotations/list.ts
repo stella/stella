@@ -22,6 +22,7 @@ const querySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "reader_annotations" },
+  access: "read",
   params: decisionParamsSchema,
   query: querySchema,
 } satisfies HandlerConfig;

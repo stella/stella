@@ -14,6 +14,7 @@ const config = {
   body: infosoudLookupBodySchema,
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "native_tool_ui" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const infosoudLookup = createSafeHandler(

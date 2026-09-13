@@ -31,6 +31,7 @@ const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "document_processing" },
+  access: "read",
   query: t.Object({
     disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
   }),

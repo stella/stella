@@ -17,10 +17,10 @@ const config = {
   body: t.Object({
     user_code: t.String({ minLength: 1, maxLength: 32 }),
   }),
-  // Any authenticated org member may bind an agent to themselves; the
-  // agent inherits the confirming user's least-privilege scopes, not the
-  // org's. `workspace: ["read"]` is the lightest "is a member" gate.
-  permissions: { workspace: ["read"] },
+  // Binding an agent client to oneself is an integration the member owns:
+  // the agent inherits the confirming user's least-privilege scopes, not
+  // the organization's. External collaborators hold no integration grant.
+  permissions: { integration: ["create"] },
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies HandlerConfig;
 

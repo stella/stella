@@ -19,74 +19,15 @@ import {
  * nothing. That is what makes the census total over the handler graph. The
  * hole it closes was precise: the exporter's affirmation guard runs only on
  * exported capabilities, so every `mcp: { type: "internal" }` handler could
- * mutate organization data or meter AI on the baseline grant unobserved — and
- * every entry in the debt list below is one of those.
+ * mutate organization data or meter AI on the baseline grant unobserved.
  *
- * Two escape routes, deliberately different in kind:
- *  - `// permissions-exempt: <reason>` in the handler file is a REVIEWED
- *    exception (e.g. a purpose-dependent grant checked in-handler rather than
- *    statically). This census reads it from the file's source, not the config
- *    object (comments do not survive to runtime).
- *  - `BASELINE_ON_READ_GRANT` is not a review; it is frozen debt. The
- *    assertion is an equality, so the list can only shrink: a new handler
- *    cannot join it, and an entry that stops offending fails as stale.
+ * The one escape route is `// permissions-exempt: <reason>` in the handler
+ * file: a REVIEWED exception (e.g. a write that reaches nothing but the
+ * caller's own row). This census reads it from the file's source, not the
+ * config object (comments do not survive to runtime).
  */
 
 const EXEMPT_COMMENT_RE = /\/\/\s*permissions-exempt:/u;
-
-/**
- * Endpoints that already relied on the baseline grant when the census became
- * total. Every one is `mcp: { type: "internal" }`, which is how they escaped
- * both this census and the exporter's affirmation guard. Clearing an entry
- * means either affirming `access: "read"` (a pure read) or giving the handler
- * the resource grant it actually needs — not moving it to the other list.
- */
-const BASELINE_ON_READ_GRANT = [
-  "agent-auth/confirm.ts",
-  "case-law/annotations/create.ts",
-  "case-law/annotations/delete.ts",
-  "case-law/annotations/list.ts",
-  "case-law/annotations/update.ts",
-  "desktop-registry/grant.ts",
-  "docx-suggestions/read.ts",
-  "entities/read-field-file.ts",
-  "entities/read-group-counts.ts",
-  "entities/read-kanban-group.ts",
-  "entities/read-property-facets.ts",
-  "external-preview/preview.ts",
-  "external-preview/preview.ts#previewExternalFile",
-  "files/email-attachment.ts",
-  "files/office-citation.ts",
-  "files/routes.ts#ocrExportEndpoint",
-  "files/routes.ts#readDocumentPropertiesEndpoint",
-  "files/routes.ts#scrubbedDownloadEndpoint",
-  "mcp-connectors/connect.ts",
-  "mcp-connectors/create-connection.ts",
-  "mcp-connectors/delete-connection.ts",
-  "mcp-connectors/list-connections.ts",
-  "mcp-connectors/list-connectors.ts",
-  "mcp-connectors/oauth-callback.ts",
-  "mcp-connectors/update-connection.ts",
-  "saved-searches/create.ts",
-  "saved-searches/delete.ts",
-  "saved-searches/update.ts",
-  "sharepoint/connect.ts",
-  "sharepoint/disconnect.ts",
-  "sharepoint/list-drive-root.ts",
-  "sharepoint/oauth-callback.ts",
-  "sharepoint/status.ts",
-  "uploads/entity-create-tree.ts",
-  "uploads/preflight-entity-create.ts",
-  "workspaces/export-overview-activity.ts",
-  "workspaces/infosoud-courts.ts",
-  "workspaces/infosoud-lookup.ts",
-  "workspaces/read-active.ts",
-  "workspaces/read-activity.ts",
-  "workspaces/read-navigation.ts",
-  "workspaces/read-overview-activity-actors.ts",
-  "workspaces/read-overview-activity.ts",
-  "workspaces/update-active.ts",
-].map((suffix) => `apps/api/src/handlers/${suffix}`);
 
 /** A grant that reaches past `workspace:["read"]`, the grant everyone holds. */
 const carriesExplicitPermission = (permissions: unknown): boolean => {
@@ -155,7 +96,7 @@ describe("the census rule", () => {
 
 describe("write/AI-consuming handlers carry a grant beyond workspace:read", () => {
   test(
-    "the handlers on the baseline grant are exactly the frozen debt list",
+    "no handler writes or meters AI on the baseline grant",
     async () => {
       const { endpoints, files, importErrors } = await discoverSafeHandlers();
 
@@ -186,9 +127,7 @@ describe("write/AI-consuming handlers carry a grant beyond workspace:read", () =
         offenders.push(id);
       }
 
-      // Equality, not containment: an addition fails as an unguarded handler,
-      // a stale entry fails as debt someone already paid off.
-      expect(offenders.toSorted()).toEqual(BASELINE_ON_READ_GRANT.toSorted());
+      expect(offenders.toSorted()).toEqual([]);
     },
     { timeout: 30_000 },
   );

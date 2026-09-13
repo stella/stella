@@ -29,6 +29,7 @@ const config = {
     workspace: ["read"],
   },
   mcp: { type: "internal", reason: "ui_navigation_state" },
+  access: "read",
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(
