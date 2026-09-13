@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.13
+
+### Patch Changes
+
+- [#3236](https://github.com/stella/stella/pull/3236) [`00fd0ea`](https://github.com/stella/stella/commit/00fd0ea8b2cbc20f80ba4c11950487b74e3ffce1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the generated document comparison capability command.
+
 ## 1.2.12
 
 ### Patch Changes
