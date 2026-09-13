@@ -184,27 +184,26 @@ const EvidenceFilePicker = ({
       excludedKinds: ["folder"],
     }),
   );
-  const files =
-    query.data?.pages.flatMap((page) =>
-      page.entities.flatMap((entity) =>
-        Object.values(entity.fields).flatMap((field) => {
-          if (
-            field?.content.type !== "file" ||
-            !isFileDisplayable(field.content) ||
-            (entity.entityId === entityId && field.id === currentFieldId)
-          ) {
-            return [];
-          }
-          return [
-            {
-              entityId: entity.entityId,
-              fieldId: field.id,
-              title: field.content.fileName,
-            },
-          ];
-        }),
-      ),
-    ) ?? [];
+  const files = query.data?.pages.flatMap((page) =>
+    page.entities.flatMap((entity) =>
+      Object.values(entity.fields).flatMap((field) => {
+        if (
+          field?.content.type !== "file" ||
+          !isFileDisplayable(field.content) ||
+          (entity.entityId === entityId && field.id === currentFieldId)
+        ) {
+          return [];
+        }
+        return [
+          {
+            entityId: entity.entityId,
+            fieldId: field.id,
+            title: field.content.fileName,
+          },
+        ];
+      }),
+    ),
+  );
   const reportInsertError = (error: unknown) => {
     if (controller.current?.signal.aborted !== false) {
       return;
@@ -302,7 +301,7 @@ const EvidenceFilePicker = ({
         </div>
       )}
       <ul className="flex flex-col gap-1">
-        {files.map((file) => (
+        {files?.map((file) => (
           <li key={file.fieldId}>
             <Button
               className="h-auto min-h-11 w-full justify-start text-start whitespace-normal"
@@ -317,7 +316,7 @@ const EvidenceFilePicker = ({
           </li>
         ))}
       </ul>
-      {!query.isPending && !query.isError && files.length === 0 && (
+      {query.isSuccess && files?.length === 0 && (
         <p className="text-muted-foreground text-sm">{t("common.noResults")}</p>
       )}
       {query.hasNextPage && (
