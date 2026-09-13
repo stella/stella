@@ -49,7 +49,7 @@ describe("WorkspaceViewSwitcher", () => {
       'class="absolute inset-e-0 top-1/2 mt-1 -translate-y-1/2"',
     );
     expect(markup).toContain(
-      'class="mt-1 flex shrink-0 items-center"><button type="button">Add view</button>',
+      'class="flex shrink-0 translate-y-1 items-center"><button type="button">Add view</button>',
     );
   });
 
