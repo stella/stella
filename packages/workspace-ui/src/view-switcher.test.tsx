@@ -46,7 +46,10 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup.match(/pe-6\.5/gu)).toHaveLength(VIEWS.length);
     expect(markup).toContain('class="relative flex h-full items-center"');
     expect(markup).toContain(
-      'class="absolute inset-e-0 top-1/2 -translate-y-1/2"',
+      'class="absolute inset-e-0 top-1/2 mt-1 -translate-y-1/2"',
+    );
+    expect(markup).toContain(
+      'class="flex shrink-0 translate-y-1 items-center"><button type="button">Add view</button>',
     );
   });
 
