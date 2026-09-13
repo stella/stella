@@ -159,9 +159,9 @@ afterEach(() => {
 test("persists an entity's semantic updated timestamp when indexing", async () => {
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.find(([query]) =>
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
     new PgDialect()
-      .sqlToQuery(query)
+      .sqlToQuery(executedQuery)
       .sql.includes("INSERT INTO search_documents"),
   )?.[0];
   expect(query).toBeDefined();
@@ -194,9 +194,9 @@ test("persists an entity's semantic updated timestamp when indexing", async () =
 test("rejects an out-of-order projection against the authoritative entity", async () => {
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.find(([query]) =>
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
     new PgDialect()
-      .sqlToQuery(query)
+      .sqlToQuery(executedQuery)
       .sql.includes("INSERT INTO search_documents"),
   )?.[0];
   expect(query).toBeDefined();
@@ -316,9 +316,9 @@ test("excludes stale extracted text and fences its observed provenance", async (
   });
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.find(([query]) =>
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
     new PgDialect()
-      .sqlToQuery(query)
+      .sqlToQuery(executedQuery)
       .sql.includes("INSERT INTO search_documents"),
   )?.[0];
   expect(query).toBeDefined();
@@ -411,9 +411,9 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
   expect(
     stringParamsOfExecutedQueries().some((param) => param.includes(legacyText)),
   ).toBe(true);
-  const query = executeMock.mock.calls.find(([query]) =>
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
     new PgDialect()
-      .sqlToQuery(query)
+      .sqlToQuery(executedQuery)
       .sql.includes("INSERT INTO search_documents"),
   )?.[0];
   expect(query).toBeDefined();
@@ -507,9 +507,9 @@ const stampedVersion = (stamp: string, suffix: number): VersionRow => ({
  * insert binds it twice: the stored column, and the tsvector it builds.
  */
 const projectedSearchableTextContaining = (marker: string): string => {
-  const query = executeMock.mock.calls.find(([query]) =>
+  const query = executeMock.mock.calls.find(([executedQuery]) =>
     new PgDialect()
-      .sqlToQuery(query)
+      .sqlToQuery(executedQuery)
       .sql.includes("INSERT INTO search_documents"),
   )?.[0];
   if (!query) {
