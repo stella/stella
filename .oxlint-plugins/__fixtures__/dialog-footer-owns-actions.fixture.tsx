@@ -62,6 +62,24 @@ export const _d = () => (
   </DialogContent>
 );
 
+// Flagged: the popup's body is a component of its own, so no popup element
+// encloses the row lexically. It is still the dialog's action row.
+export const _e = () => (
+  <DialogContent>
+    <HandRolledRowBody />
+  </DialogContent>
+);
+const HandRolledRowBody = () => (
+  <>
+    <p>{t("common.description")}</p>
+    {/* oxlint-disable-next-line dialog-footer-owns-actions/dialog-footer-owns-actions */}
+    <div className="flex justify-end gap-2">
+      <Button variant="ghost">{t("common.cancel")}</Button>
+      <Button type="submit">{t("common.save")}</Button>
+    </div>
+  </>
+);
+
 // --- Allowed: the footer primitive owns the row ---
 export const _ok1 = () => (
   <DialogContent>
@@ -150,6 +168,76 @@ export const _ok9 = () => (
     <DialogFooter>
       <Button type="submit">{t("common.save")}</Button>
     </DialogFooter>
+  </DialogContent>
+);
+// Allowed: the body component mounts the footer itself.
+export const _ok10 = () => (
+  <DialogContent>
+    <FooterBody />
+  </DialogContent>
+);
+const FooterBody = () => (
+  <DialogFooter>
+    <Button variant="ghost">{t("common.cancel")}</Button>
+    <Button type="submit">{t("common.save")}</Button>
+  </DialogFooter>
+);
+// Allowed: the popup mounts the footer, so the body component's pair is a
+// segmented body control.
+export const _ok11 = () => (
+  <DialogContent>
+    <SegmentedBody />
+    <DialogFooter>
+      <Button type="submit">{t("common.save")}</Button>
+    </DialogFooter>
+  </DialogContent>
+);
+const SegmentedBody = () => (
+  <div className="flex gap-2">
+    <Button variant="outline">{t("common.copy")}</Button>
+    <Button variant="outline">{t("common.move")}</Button>
+  </div>
+);
+// Allowed: a view's root container holds content beside its actions, so it is
+// body layout and not the dialog's band.
+export const _ok12 = () => (
+  <DialogContent>
+    <RateEntriesBody />
+  </DialogContent>
+);
+const RateEntriesBody = () => (
+  <div className="flex flex-col gap-4">
+    <h3>{t("billing.rates.rateEntries")}</h3>
+    <Button variant="ghost">{t("common.back")}</Button>
+    <Button size="sm">{t("common.add")}</Button>
+  </div>
+);
+// Allowed: the popup writes its own body layout, so a card nested inside it
+// owns its controls; they are not the dialog's band.
+export const _ok13 = () => (
+  <DialogContent>
+    <div className="flex flex-col gap-4 p-4">
+      <CardFormBody />
+    </div>
+  </DialogContent>
+);
+const CardFormBody = () => (
+  <div className="rounded-md border p-3">
+    <Input />
+    <div className="flex justify-end gap-2">
+      <Button variant="outline">{t("common.cancel")}</Button>
+      <Button type="submit">{t("common.save")}</Button>
+    </div>
+  </div>
+);
+// Allowed: the same container shape written inline in the popup.
+export const _ok14 = () => (
+  <DialogContent>
+    <div className="flex flex-col gap-4">
+      <h3>{t("billing.rates.rateEntries")}</h3>
+      <Button variant="ghost">{t("common.back")}</Button>
+      <Button size="sm">{t("common.add")}</Button>
+    </div>
   </DialogContent>
 );
 // Allowed: the same row outside any dialog popup.

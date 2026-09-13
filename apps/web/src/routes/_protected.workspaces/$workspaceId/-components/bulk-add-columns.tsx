@@ -17,6 +17,7 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
+  DialogFooter,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -472,7 +473,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
         </Button>
       </div>
 
-      <div className="bg-muted/64 flex items-center justify-between gap-2 border-t px-5 py-3">
+      <DialogFooter className="px-5 py-3 sm:items-center sm:justify-between">
         {classifier && docTypeOptions.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
             <RouteIcon className="text-muted-foreground size-4 shrink-0" />
@@ -523,7 +524,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
             {t("workspaces.properties.bulk.title")}
           </Button>
         </div>
-      </div>
+      </DialogFooter>
     </>
   );
 };

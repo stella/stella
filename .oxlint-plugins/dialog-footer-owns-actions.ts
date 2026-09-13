@@ -20,11 +20,20 @@
 // flagged for the row it contains. Every component resolves through its
 // `@stll/ui` import.
 //
-// Two shapes are deliberately out of scope, because neither is the dialog's
-// own action row: a row rendered from a callback (a `.map(...)` item's hover
-// actions), and any pair inside a popup that already mounts a footer, where
-// the action row exists and the pair is body content such as a segmented
-// copy/move toggle.
+// A popup that hands its whole body to a component of its own is still the
+// owner of that body's action row, even though no popup element encloses the
+// row lexically. Such a body is one the popup reaches without crossing a host
+// element: once the popup writes layout of its own (`<div>`, `<form>`), what
+// hangs below is body content, and a card nested there owns its controls. The
+// footer check then spans both halves — the popup that mounts the body and the
+// body itself — so a footer on either side owns the row.
+//
+// Three shapes are deliberately out of scope, because none is the dialog's own
+// action row: a row rendered from a callback (a `.map(...)` item's hover
+// actions), any pair inside a popup that already mounts a footer, where the
+// action row exists and the pair is body content such as a segmented copy/move
+// toggle, and a container holding content beside its buttons (a view's root
+// with a heading and a back button), which is body layout, not a band.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -91,6 +100,60 @@ const elementName = (element: unknown): string | null => {
     : null;
 };
 
+// The name a function is declared under, so a component boundary can be told
+// from an anonymous callback: `function Body()` and `const Body = () => …`
+// both name `Body`, while a `.map(...)` argument names nothing.
+const functionName = (node: AstNode): string | null => {
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression"
+  ) {
+    return isAstNode(node.id) && typeof node.id.name === "string"
+      ? node.id.name
+      : null;
+  }
+  const parent = isAstNode(node.parent) ? node.parent : null;
+  return parent?.type === "VariableDeclarator" &&
+    isAstNode(parent.id) &&
+    parent.id.type === "Identifier" &&
+    typeof parent.id.name === "string"
+    ? parent.id.name
+    : null;
+};
+
+// Every node under `root`, reached without assuming a shape: the walk has to
+// cross statements and expressions a JSX-only traversal never sees.
+const everyNode = (root: AstNode): AstNode[] => {
+  const out: AstNode[] = [];
+  const seen = new Set<unknown>();
+  const pending: unknown[] = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (Array.isArray(current)) {
+      pending.push(...current);
+      continue;
+    }
+    if (!isAstNode(current) || seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    out.push(current);
+    for (const [key, value] of Object.entries(current)) {
+      // `parent` walks back out of the subtree under inspection.
+      if (key !== "parent" && typeof value === "object") {
+        pending.push(value);
+      }
+    }
+  }
+  return out;
+};
+
+// JSX resolves a capitalised name to a component and a lowercase one to a host
+// element, which is how a popup's own layout is told from what it delegates.
+const COMPONENT_NAME = /^[A-Z]/u;
+
+const isComponentName = (name: string): boolean => COMPONENT_NAME.test(name);
+
 // JSX elements rendered in place under `node`, including through fragments,
 // conditionals, arrays, and literal element props such as
 // `render={<Button />}`. Call expressions and function bodies are not
@@ -145,6 +208,120 @@ const collectRenderedElements = (value: unknown, out: AstNode[]): void => {
   }
 };
 
+// The elements a row renders one level down: fragments, conditionals and
+// expression containers are stepped through, elements are not. An action row
+// holds actions and nothing else, so a container with a heading, a field, or a
+// list beside its buttons is body layout rather than the dialog's action band.
+const collectChildElements = (value: unknown, out: AstNode[]): void => {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectChildElements(entry, out);
+    }
+    return;
+  }
+  if (!isAstNode(value)) {
+    return;
+  }
+  switch (value.type) {
+    case "JSXElement": {
+      out.push(value);
+      return;
+    }
+    case "JSXFragment": {
+      collectChildElements(value.children, out);
+      return;
+    }
+    case "JSXExpressionContainer": {
+      collectChildElements(value.expression, out);
+      return;
+    }
+    case "ConditionalExpression": {
+      collectChildElements(value.consequent, out);
+      collectChildElements(value.alternate, out);
+      return;
+    }
+    case "LogicalExpression": {
+      collectChildElements(value.left, out);
+      collectChildElements(value.right, out);
+      return;
+    }
+    case "ArrayExpression": {
+      collectChildElements(value.elements, out);
+      return;
+    }
+    default:
+  }
+};
+
+const childElements = (node: AstNode): AstNode[] => {
+  const out: AstNode[] = [];
+  collectChildElements(node.children, out);
+  return out;
+};
+
+// The components a popup hands its whole body to, reached without crossing a
+// host element. Once the popup writes layout of its own (`<div>`, `<form>`),
+// what hangs below it is body content: a nested card's own controls are that
+// card's, not the dialog's band.
+const collectDelegatedBodies = (value: unknown, out: AstNode[]): void => {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectDelegatedBodies(entry, out);
+    }
+    return;
+  }
+  if (!isAstNode(value)) {
+    return;
+  }
+  switch (value.type) {
+    case "JSXElement": {
+      const name = elementName(value);
+      if (name === null || !isComponentName(name)) {
+        return;
+      }
+      out.push(value);
+      if (isAstNode(value.openingElement)) {
+        collectDelegatedBodies(value.openingElement.attributes, out);
+      }
+      collectDelegatedBodies(value.children, out);
+      return;
+    }
+    case "JSXFragment": {
+      collectDelegatedBodies(value.children, out);
+      return;
+    }
+    case "JSXAttribute": {
+      collectDelegatedBodies(value.value, out);
+      return;
+    }
+    case "JSXExpressionContainer": {
+      collectDelegatedBodies(value.expression, out);
+      return;
+    }
+    case "ConditionalExpression": {
+      collectDelegatedBodies(value.consequent, out);
+      collectDelegatedBodies(value.alternate, out);
+      return;
+    }
+    case "LogicalExpression": {
+      collectDelegatedBodies(value.left, out);
+      collectDelegatedBodies(value.right, out);
+      return;
+    }
+    case "ArrayExpression": {
+      collectDelegatedBodies(value.elements, out);
+      return;
+    }
+    default:
+  }
+};
+
+const delegatedBodies = (popup: AstNode): AstNode[] => {
+  const out: AstNode[] = [];
+  collectDelegatedBodies(popup.children, out);
+  return out;
+};
+
 const renderedElements = (node: unknown): AstNode[] => {
   const out: AstNode[] = [];
   collectRenderedElements(node, out);
@@ -167,6 +344,9 @@ export default eslintCompatPlugin({
         const footerLocals = new Set<string>();
         const fieldLocals = new Set<string>();
         const buttonLocals = new Set<string>();
+        // Components this file renders inside a popup, mapped to whether any
+        // popup mounting them already owns a footer.
+        const popupBodies = new Map<string, boolean>();
 
         const collectImports = (program: unknown) => {
           for (const locals of [
@@ -225,12 +405,21 @@ export default eslintCompatPlugin({
         };
 
         // True when this element is the innermost plain host carrying the
-        // action pair, so a wrapper is never reported for the row inside it.
+        // action pair and holds nothing but actions, so a wrapper is never
+        // reported for the row inside it and a view's root container is never
+        // mistaken for one.
         const ownsTheActionRow = (node: AstNode): boolean => {
           const descendants = renderedElements(node).filter(
             (element) => element !== node,
           );
           if (actionCount(descendants) < 2) {
+            return false;
+          }
+          if (
+            !childElements(node).every(
+              (child) => actionCount(renderedElements(child)) > 0,
+            )
+          ) {
             return false;
           }
           return !descendants.some(
@@ -246,41 +435,58 @@ export default eslintCompatPlugin({
         // deliberately untyped and exhaustive, unlike the in-place walk above:
         // a footer rendered from a helper or a branch still means the popup
         // has its action row.
-        const containsFooter = (node: AstNode): boolean => {
-          const seen = new Set<unknown>();
-          const pending: unknown[] = [node];
-          while (pending.length > 0) {
-            const current = pending.pop();
-            if (Array.isArray(current)) {
-              pending.push(...current);
-              continue;
-            }
-            if (!isAstNode(current) || seen.has(current)) {
-              continue;
-            }
-            seen.add(current);
+        const containsFooter = (node: AstNode): boolean =>
+          everyNode(node).some((current) => {
             const name = elementName(current);
-            if (name !== null && footerLocals.has(name)) {
-              return true;
+            return name !== null && footerLocals.has(name);
+          });
+
+        // The components this file hands a popup as its body. A popup's body
+        // often lives in its own component, and that component's action row is
+        // still the dialog's, so the lexical walk has to be able to leave it.
+        const collectPopupBodies = (program: unknown) => {
+          popupBodies.clear();
+          if (!isAstNode(program)) {
+            return;
+          }
+          for (const node of everyNode(program)) {
+            const popupName = elementName(node);
+            if (popupName === null || !contentLocals.has(popupName)) {
+              continue;
             }
-            for (const [key, value] of Object.entries(current)) {
-              // `parent` walks back out of the subtree under inspection.
-              if (key !== "parent" && typeof value === "object") {
-                pending.push(value);
+            const popupOwnsFooter = containsFooter(node);
+            for (const element of delegatedBodies(node)) {
+              const name = elementName(element);
+              if (
+                name === null ||
+                contentLocals.has(name) ||
+                footerLocals.has(name) ||
+                fieldLocals.has(name) ||
+                buttonLocals.has(name)
+              ) {
+                continue;
               }
+              popupBodies.set(
+                name,
+                (popupBodies.get(name) ?? false) || popupOwnsFooter,
+              );
             }
           }
-          return false;
         };
 
         // True when this row is the popup's own action row: a dialog popup
         // ancestor that mounts no footer of its own, with no footer, form row,
-        // or callback boundary in between.
+        // or callback boundary in between. A body component the popup renders
+        // ends the walk the same way the popup element does; any other
+        // function in between is a callback rendering rows of its own items.
         const isTheDialogsOwnRow = (node: AstNode): boolean => {
           let current = isAstNode(node.parent) ? node.parent : null;
           while (current !== null) {
             if (FUNCTION_BOUNDARIES.has(current.type)) {
-              return false;
+              const owner = functionName(current);
+              const popupOwnsFooter =
+                owner === null ? undefined : popupBodies.get(owner);
+              return popupOwnsFooter === false && !containsFooter(current);
             }
             const name = elementName(current);
             if (name !== null) {
@@ -297,7 +503,10 @@ export default eslintCompatPlugin({
         };
 
         return {
-          Program: collectImports,
+          Program(program) {
+            collectImports(program);
+            collectPopupBodies(program);
+          },
           JSXElement(node) {
             if (
               !isPlainRow(node) ||

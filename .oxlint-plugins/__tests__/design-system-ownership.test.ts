@@ -167,6 +167,10 @@ const DIALOG_IMPORTS = [
 const dialogSource = (body: string): string =>
   `${DIALOG_IMPORTS}\nconst items: string[] = [];\nexport const Surface = () => (\n<DialogContent>${body}</DialogContent>\n);\n`;
 
+/** The same popup with its body extracted into a component of its own. */
+const dialogBodySource = (body: string, popupExtras = ""): string =>
+  `${DIALOG_IMPORTS}\nconst items: string[] = [];\nexport const Surface = () => (\n<DialogContent><Body />${popupExtras}</DialogContent>\n);\nconst Body = () => (\n${body}\n);\n`;
+
 describe.serial(DIALOG_FOOTER_RULE, () => {
   test.each([
     ['<div className="flex gap-2"><Button /><Button /></div>'],
@@ -208,6 +212,59 @@ describe.serial(DIALOG_FOOTER_RULE, () => {
     ],
   ])("accepts an owned or non-action row: %s", async (body) => {
     expect(await lint(DIALOG_FOOTER_RULE, dialogSource(body))).toEqual([]);
+  });
+
+  test("reports a hand-rolled row in the popup's body component", async () => {
+    const body =
+      '<><p>copy</p><div className="flex gap-2"><Button /><Button /></div></>';
+
+    expect(await lint(DIALOG_FOOTER_RULE, dialogBodySource(body))).toEqual([
+      DIALOG_FOOTER_RULE,
+    ]);
+  });
+
+  test.each([
+    // The body component mounts the footer itself.
+    ["<DialogFooter><Button /><Button /></DialogFooter>", ""],
+    // The popup mounts it, so the body's pair is a segmented body control.
+    [
+      '<div className="flex gap-2"><Button /><Button /></div>',
+      "<DialogFooter><Button /></DialogFooter>",
+    ],
+    // A view's root container holds content beside its actions.
+    [
+      '<div className="flex flex-col gap-4"><h3>x</h3><Button /><Button /></div>',
+      "",
+    ],
+  ])(
+    "accepts an owned or non-action row in a body component: %s",
+    async (body, popupExtras) => {
+      expect(
+        await lint(DIALOG_FOOTER_RULE, dialogBodySource(body, popupExtras)),
+      ).toEqual([]);
+    },
+  );
+
+  test("ignores a container that holds content beside its actions", async () => {
+    const body =
+      '<div className="flex flex-col gap-4"><h3>x</h3><Button /><Button /></div>';
+
+    expect(await lint(DIALOG_FOOTER_RULE, dialogSource(body))).toEqual([]);
+  });
+
+  test("ignores a card nested in the popup's own body layout", async () => {
+    const source = [
+      DIALOG_IMPORTS,
+      "export const Surface = () => (",
+      '<DialogContent><div className="p-4"><Card /></div></DialogContent>',
+      ");",
+      "const Card = () => (",
+      '<div className="rounded-md border p-3"><div className="flex gap-2"><Button /><Button /></div></div>',
+      ");",
+      "",
+    ].join("\n");
+
+    expect(await lint(DIALOG_FOOTER_RULE, source)).toEqual([]);
   });
 
   test("ignores the same row outside a dialog popup", async () => {
