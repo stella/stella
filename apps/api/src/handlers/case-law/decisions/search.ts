@@ -70,7 +70,7 @@ import {
 } from "@/api/lib/case-law/decision-search-order-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import {
   redistributableCaseLawSource,
@@ -1316,7 +1316,6 @@ const corpusSearchOrder = (sort: SearchSort): CorpusSearchOrder => {
 
 type ReadCaseLawSearchFacetsOptions = {
   body: SearchDecisionsBody;
-  caseLawDb: CaseLawPublicReadDb;
   cluster: QuickwitCluster;
   courtWeights: CourtWeightMap;
   /** The generation's document-id field, already asserted aggregatable. */
@@ -1345,7 +1344,6 @@ type CaseLawSearchFacetsRead = {
  */
 const readCaseLawSearchFacets = async ({
   body,
-  caseLawDb,
   cluster,
   courtWeights,
   decisionCountField,
@@ -1359,10 +1357,12 @@ const readCaseLawSearchFacets = async ({
   // Read ahead of the aggregations, and failing closed: source policy is an
   // input to every count below, so a revocation this read cannot confirm means
   // no facets rather than facets that might still advertise a revoked source.
-  const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
-  if (Result.isError(excludedSourceIds)) {
+  // The same read carries the display names, so labelling the buckets costs no
+  // further round trip once the counts are back.
+  const registry = await readCaseLawSourceRegistry();
+  if (Result.isError(registry)) {
     logger.warn("case_law.search_facets.unavailable", {
-      "error.type": errorTag(excludedSourceIds.error),
+      "error.type": errorTag(registry.error),
     });
     return null;
   }
@@ -1370,7 +1370,7 @@ const readCaseLawSearchFacets = async ({
   const read = await readCorpusSearchFacets({
     aggregate: async (input) =>
       await getCorpusIndexClient(cluster).aggregate({ indexId, ...input }),
-    excludedSourceIds: excludedSourceIds.value,
+    excludedSourceIds: registry.value.excludedSourceIds,
     // The year buckets run to one year past this one, so a decision a
     // publisher dated ahead still lands in a bucket of its own.
     currentYear: Temporal.Now.instant().toZonedDateTimeISO("UTC").year,
@@ -1386,10 +1386,6 @@ const readCaseLawSearchFacets = async ({
   }
 
   const { court, decisionType, language, source, year } = read.value.facets;
-  const sourceNames = await readCaseLawSourceNames(
-    caseLawDb,
-    source.map((bucket) => bucket.value),
-  );
   return {
     facets: {
       court: groupCourtsByTier({
@@ -1400,7 +1396,7 @@ const readCaseLawSearchFacets = async ({
       }),
       year,
       decisionType,
-      source: labelSourceBuckets(source, sourceNames),
+      source: labelSourceBuckets(source, registry.value.nameById),
       language,
     },
     total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),
@@ -1630,7 +1626,6 @@ export const searchCorpusIndexDecisions = async (
     parsedCursor === null
       ? readCaseLawSearchFacets({
           body,
-          caseLawDb,
           cluster: serving.cluster,
           courtWeights,
           decisionCountField,
