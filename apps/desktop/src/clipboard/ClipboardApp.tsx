@@ -121,7 +121,6 @@ import {
   adjacentClipboardScope,
   clipboardControlsKeyAction,
   clipboardScopeKeyAction,
-  clipboardSearchScope,
   clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
@@ -212,12 +211,11 @@ const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
 // The search field shows which scope it searches; the up/down glyph beside
 // the icon is the affordance for the arrow keys that switch it.
 const CLIPBOARD_SCOPE_PRESENTATION = {
-  clips: { icon: ClipboardIcon, label: "allClips" },
+  clips: { icon: ClipboardIcon, label: "clips" },
   registry: { icon: Building2Icon, label: "externalRegistry" },
-  groups: { icon: TagsIcon, label: "groups" },
 } as const satisfies Record<
   ClipboardSearchScope,
-  { icon: LucideIcon; label: "allClips" | "externalRegistry" | "groups" }
+  { icon: LucideIcon; label: "clips" | "externalRegistry" }
 >;
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
@@ -1393,9 +1391,8 @@ const ClipboardApp = () => {
     () => Temporal.Now.instant().epochMilliseconds,
   );
   const [query, setQuery] = useState("");
-  const [searchSource, setSearchSource] = useState<"clips" | "registry">(
-    "clips",
-  );
+  const [searchSource, setSearchSource] =
+    useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -1967,23 +1964,15 @@ const ClipboardApp = () => {
     );
   };
 
-  const searchScope = clipboardSearchScope({
-    activeGroupId,
-    source: searchSource,
-  });
-  const ScopeIcon = CLIPBOARD_SCOPE_PRESENTATION[searchScope].icon;
-  const availableScopes: readonly ClipboardSearchScope[] =
-    snapshot.groups.length === 0
-      ? CLIPBOARD_SEARCH_SCOPES.filter((scope) => scope !== "groups")
-      : CLIPBOARD_SEARCH_SCOPES;
+  const ScopeIcon = CLIPBOARD_SCOPE_PRESENTATION[searchSource].icon;
   // Scopes are the only thing vertical arrows do, from the rail, the search
   // field, and the footer alike. Focus returns to the search field so typing
   // continues in the new scope without another keystroke.
   const switchScope = (action: "next" | "previous") => {
     const next = adjacentClipboardScope({
       action,
-      available: availableScopes,
-      current: searchScope,
+      available: CLIPBOARD_SEARCH_SCOPES,
+      current: searchSource,
     });
     if (next !== null) {
       applyScope({ next, focusSearch: false });
@@ -1998,20 +1987,11 @@ const ClipboardApp = () => {
     setContextMenu({ type: "closed" });
     switch (next) {
       case "clips":
-        setSelectedGroupId(null);
         setSearchSource("clips");
         break;
       case "registry":
         setSearchSource("registry");
         break;
-      case "groups": {
-        const remembered = snapshot.groups.find(
-          (group) => group.id === selectedGroupId,
-        );
-        setSelectedGroupId((remembered ?? snapshot.groups.at(0))?.id ?? null);
-        setSearchSource("clips");
-        break;
-      }
       default:
         next satisfies never;
         panic("Unknown clipboard search scope.");
@@ -2022,8 +2002,10 @@ const ClipboardApp = () => {
   };
   // The pointer path through the scopes: a click steps forward and wraps.
   const cycleScope = () => {
-    const index = availableScopes.indexOf(searchScope);
-    const next = availableScopes.at((index + 1) % availableScopes.length);
+    const index = CLIPBOARD_SEARCH_SCOPES.indexOf(searchSource);
+    const next = CLIPBOARD_SEARCH_SCOPES.at(
+      (index + 1) % CLIPBOARD_SEARCH_SCOPES.length,
+    );
     if (next === undefined) {
       return;
     }
@@ -2507,14 +2489,14 @@ const ClipboardApp = () => {
                 <InputGroupAddon className="text-foreground/65">
                   <button
                     aria-label={t(
-                      CLIPBOARD_SCOPE_PRESENTATION[searchScope].label,
+                      CLIPBOARD_SCOPE_PRESENTATION[searchSource].label,
                     )}
                     aria-keyshortcuts="ArrowUp ArrowDown"
                     className="focus-visible:ring-ring ms-1.5 flex h-8 items-center gap-1 rounded-full px-1.5 outline-none focus-visible:ring-2"
-                    data-clipboard-scope={searchScope}
+                    data-clipboard-scope={searchSource}
                     onClick={cycleScope}
                     onKeyDown={handleSwitcherKeyDown}
-                    title={t(CLIPBOARD_SCOPE_PRESENTATION[searchScope].label)}
+                    title={t(CLIPBOARD_SCOPE_PRESENTATION[searchSource].label)}
                     type="button"
                   >
                     <ScopeIcon aria-hidden="true" className="size-4" />
