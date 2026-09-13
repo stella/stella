@@ -10,22 +10,26 @@ export function PublicToolsShell() {
   return <PublicWorkspaceShell topBar={<PublicToolsTopBar />} />;
 }
 
+/**
+ * The name the matched route chose to show, if it carries one.
+ *
+ * Typed `unknown` on purpose: the deepest match is any route in the tree, and
+ * narrowing the tree-wide union here made the guard change meaning whenever a
+ * route elsewhere changed what its loader returns.
+ */
+const routeDisplayName = (loaderData: unknown): string | null =>
+  typeof loaderData === "object" &&
+  loaderData !== null &&
+  "displayName" in loaderData &&
+  typeof loaderData.displayName === "string"
+    ? loaderData.displayName
+    : null;
+
 function PublicToolsTopBar() {
   const t = useTranslations();
   const { isMobile } = useSidebar();
   const entryName = useRouterState({
-    select: (state) => {
-      const loaderData = state.matches.at(-1)?.loaderData;
-      if (
-        typeof loaderData === "object" &&
-        loaderData !== null &&
-        "displayName" in loaderData &&
-        typeof loaderData.displayName === "string"
-      ) {
-        return loaderData.displayName;
-      }
-      return null;
-    },
+    select: (state) => routeDisplayName(state.matches.at(-1)?.loaderData),
   });
 
   return (
