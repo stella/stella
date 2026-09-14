@@ -18,8 +18,9 @@ export type DesktopRegistrySearchResult = {
   name: string;
   /** Markers stripped, for desktops older than `rendered`; remove once those are unsupported. */
   text: string;
-  /** Rendered output with its `**bold**` / `*italic*` markers intact. */
-  rendered: string;
+  /** Rendered output with its `**bold**` / `*italic*` markers intact.
+   *  Absent only when a newer desktop is connected to an older API. */
+  rendered?: string;
 };
 
 /** Whose default `defaultFormatId` is; `null` when there is none to own. */

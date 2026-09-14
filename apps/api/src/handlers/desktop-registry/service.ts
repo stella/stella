@@ -13,8 +13,6 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
-import { resolveLookupFormatDefault } from "@/api/handlers/templates/lookup-formats/resolve-default";
-import { setLookupFormatUserDefault } from "@/api/handlers/templates/lookup-formats/set-user-default";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryDispatch,
@@ -32,6 +30,8 @@ import {
 } from "@/api/lib/docx/lookup-fields";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { arrayOrEmpty } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { resolveLookupFormatDefault } from "@/api/lib/templates/lookup-formats/resolve-default";
+import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
 
 import { getDefaultDesktopRegistry } from "./default-registry";
 

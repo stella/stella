@@ -3,6 +3,7 @@ import JSZip from "jszip";
 
 import { parseResRecord } from "@stll/business-registries/ares";
 import { ARES_DEFAULT_FORMAT } from "@stll/business-registries/ares/default-format";
+import { PREVIOUS_DEFAULT_FORMATS } from "@stll/business-registries/default-formats";
 import { KrsValidationError } from "@stll/business-registries/krs";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
@@ -306,6 +307,35 @@ describe("renderLookupOutput", () => {
       ).toBe("Custom **Example a.s.** (27082440)");
       expect(stripLookupMarkdown(renderLookupOutput(null, hit))).toBe(
         expected.replaceAll("**", ""),
+      );
+    },
+  );
+  test.each([
+    ["Městský soud v Praze", "B", "8573"],
+    [null, "", ""],
+  ])(
+    "a saved copy of the previous ARES built-in still renders as the built-in: %s",
+    (court, section, insert) => {
+      const company = {
+        ...parseResRecord({
+          ico: "27082440",
+          obchodniJmeno: "Example a.s.",
+          pravniForma: "121",
+          primarniZaznam: true,
+        }),
+        courtFile: court === null ? null : { court, section, insert },
+      };
+      const hit = {
+        registry: "ares",
+        id: company.ico,
+        name: company.name,
+        legalForm: company.legalForm,
+        address: { ...KRS_ADDRESS, textAddress: "Praha 7" },
+        registryUrl: company.registryUrl,
+        details: { registry: "ares", company },
+      } satisfies BusinessRegistryHit;
+      expect(renderLookupOutput(PREVIOUS_DEFAULT_FORMATS.ares[0], hit)).toBe(
+        renderLookupOutput(null, hit),
       );
     },
   );

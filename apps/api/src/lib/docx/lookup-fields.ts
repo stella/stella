@@ -36,7 +36,7 @@ import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms
 import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
 import {
-  BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
+  isBuiltInRegistryFormat,
   parseRegistryFormatMarkdown,
   type RegistryFormatSlug,
 } from "@stll/business-registries/default-formats";
@@ -595,10 +595,9 @@ export const renderLookupOutput = (
     return renderLookupHit(hit);
   }
   const template = format.trim();
-  if (
-    template ===
-    BUSINESS_REGISTRY_FORMAT_CAPABILITIES[hit.registry].defaultFormat
-  ) {
+  // A saved copy of the built-in (current, or one shipped earlier) is not
+  // authored text, so it keeps the particulars-aware built-in rendering.
+  if (isBuiltInRegistryFormat(hit.registry, template)) {
     return renderLookupHit(hit);
   }
   if (template === "") {

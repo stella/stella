@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, getColumns, isNotNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -87,11 +87,7 @@ const listLookupFormats = createSafeRootHandler(
     const defaultRows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({
-            ...getColumns(templateLookupFormats),
-            // Non-null exactly on the row the caller chose for themselves.
-            chosenBy: templateLookupFormatUserDefaults.userId,
-          })
+          .select()
           .from(templateLookupFormats)
           .leftJoin(
             templateLookupFormatUserDefaults,
@@ -128,9 +124,14 @@ const listLookupFormats = createSafeRootHandler(
       ),
     );
     const defaultFormat = defaultRows.find(
-      (row) => row.preference === LOOKUP_FORMAT_PREFERENCE.DEFAULT,
-    );
-    const userDefaultFormat = defaultRows.find((row) => row.chosenBy !== null);
+      (row) =>
+        row.template_lookup_formats.preference ===
+        LOOKUP_FORMAT_PREFERENCE.DEFAULT,
+    )?.template_lookup_formats;
+    // The joined row is present exactly when the caller chose this format.
+    const userDefaultFormat = defaultRows.find(
+      (row) => row.template_lookup_format_user_defaults !== null,
+    )?.template_lookup_formats;
     return Result.ok({
       ...page,
       items: page.items.map(toResponse),

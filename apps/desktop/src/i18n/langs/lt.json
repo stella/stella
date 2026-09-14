@@ -130,7 +130,7 @@
     "externalRegistry": "Išorinis registras",
     "cancel": "Atšaukti",
     "capturePaused": "Fiksavimas pristabdytas",
-    "characterCount": "{count, plural, one {{count} simbolis} few {{count} simboliai} many {{count} simbolio} other {{count} simbolių}}",
+    "characterCount": "{count, plural, one {{count} simbolis} few {{count} simboliai} other {{count} simbolių}}",
     "clipText": "Iškarpos tekstas",
     "clear": "Išvalyti istoriją",
     "clearConfirmation": "Išvalyti visą iškarpinės istoriją? Šio veiksmo atšaukti negalima.",

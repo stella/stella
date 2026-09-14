@@ -13,12 +13,12 @@ import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/defa
 import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
 import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
 import setMyDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/my-default/update";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   LOOKUP_FORMAT_DEFAULT_SOURCE,
   resolveLookupFormatDefault,
-} from "@/api/handlers/templates/lookup-formats/resolve-default";
-import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/templates/lookup-formats/resolve-default";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";

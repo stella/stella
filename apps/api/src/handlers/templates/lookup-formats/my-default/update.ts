@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { setLookupFormatUserDefault } from "@/api/handlers/templates/lookup-formats/set-user-default";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
+import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
 
 const config = {
   description:

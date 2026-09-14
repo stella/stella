@@ -734,7 +734,9 @@ const ClipboardEditor = () => {
   };
 
   const setGroupDraft = (groupDraft: GroupDraftState) => {
-    if (state.type !== "ready") {
+    // A command in flight owns the state. Clearing `saving` here would re-enable
+    // the buttons it guards, and a second create would make a second group.
+    if (state.type !== "ready" || state.save.type === "saving") {
       return;
     }
     setState({
@@ -876,6 +878,10 @@ const ClipboardEditor = () => {
   }
 
   const { item } = state.context;
+  // While the group is being created the clip is already moving into it: the
+  // choice is settled, so nothing that could change or abandon it stays live.
+  const groupCreationPending =
+    state.groupDraft.type === "open" && state.save.type === "saving";
   const sourceName = item.sourceApp
     ? clipboardSourceLabel(item.sourceApp)
     : null;
@@ -1018,6 +1024,7 @@ const ClipboardEditor = () => {
               {t("group")}
             </span>
             <Select
+              disabled={groupCreationPending}
               onValueChange={(value) => {
                 if (value === NEW_GROUP_OPTION_VALUE) {
                   setGroupDraft({
@@ -1071,7 +1078,12 @@ const ClipboardEditor = () => {
               </SelectPopup>
             </Select>
           </label>
-          <Button onClick={requestClose} type="button" variant="ghost">
+          <Button
+            disabled={groupCreationPending}
+            onClick={requestClose}
+            type="button"
+            variant="ghost"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -1083,9 +1095,10 @@ const ClipboardEditor = () => {
           </Button>
         </div>
         {state.groupDraft.type === "open" ? (
-          <section
+          <fieldset
             aria-label={t("createGroup")}
             className="border-border shrink-0 rounded-2xl border p-4"
+            disabled={groupCreationPending}
           >
             <ClipboardGroupFields
               autoFocus
@@ -1097,6 +1110,7 @@ const ClipboardEditor = () => {
             />
             <div className="mt-4 flex items-center justify-end gap-3">
               <Button
+                disabled={groupCreationPending}
                 onClick={() => setGroupDraft({ type: "closed" })}
                 type="button"
                 variant="ghost"
@@ -1104,16 +1118,14 @@ const ClipboardEditor = () => {
                 {t("cancel")}
               </Button>
               <Button
-                disabled={
-                  !state.groupDraft.name.trim() || state.save.type === "saving"
-                }
+                disabled={!state.groupDraft.name.trim() || groupCreationPending}
                 onClick={createGroup}
                 type="button"
               >
                 {t("create")}
               </Button>
             </div>
-          </section>
+          </fieldset>
         ) : null}
         {state.save.type === "error" ? (
           <p className="text-destructive text-xs" role="alert">

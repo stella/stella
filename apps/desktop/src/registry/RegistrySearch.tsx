@@ -54,7 +54,12 @@ type Connection =
   | { status: "disconnected" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
-type ResultCard = DesktopRegistrySearchResponse["results"][number] & {
+type ResultCard = Omit<
+  DesktopRegistrySearchResponse["results"][number],
+  "rendered"
+> & {
+  /** Normalised at the boundary: an older API sends only `text`. */
+  rendered: string;
   formatId: string | null;
   status: "ready" | "formatting";
 };
@@ -114,6 +119,8 @@ export const RegistrySearch = ({
   const connectionGeneration = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
   const formatRequests = useRef(new Map<string, number>());
+  const defaultFormatRequests = useRef(0);
+  const [savingDefaultFormat, setSavingDefaultFormat] = useState(false);
   const connectionError = t("registryErrorState");
   const searchError = t("registryErrorSearch");
   const connected = connection?.status === "connected";
@@ -247,6 +254,7 @@ export const RegistrySearch = ({
             defaultFormatSource: response.defaultFormatSource,
             results: response.results.map((result) => ({
               ...result,
+              rendered: result.rendered ?? result.text,
               formatId: response.defaultFormatId,
               status: "ready",
             })),
@@ -346,12 +354,12 @@ export const RegistrySearch = ({
           }
         : current,
     );
-    void invoke<{ text: string; rendered: string }>("registry_format", {
+    void invoke<{ text: string; rendered?: string }>("registry_format", {
       registry: registryId,
       id: card.id,
       formatId,
     })
-      .then(({ text, rendered }) => {
+      .then(({ text, rendered = text }) => {
         if (
           request !== generation.current ||
           formatRequests.current.get(card.id) !== operation
@@ -396,14 +404,25 @@ export const RegistrySearch = ({
   };
   // The reply carries the default the member now resolves to: clearing a
   // personal choice hands them back the organization's, which is not `null`.
+  //
+  // One default per registry, so the counter is the component's, not a card's:
+  // only the newest save may land, or a slow first reply would overwrite the
+  // choice a later one already recorded.
   const setDefaultFormat = (formatId: string | null) => {
     const request = generation.current;
+    defaultFormatRequests.current += 1;
+    const operation = defaultFormatRequests.current;
     setError(null);
+    setSavingDefaultFormat(true);
     void invoke<DesktopRegistryDefaultFormat>("registry_set_default_format", {
       registry: registryId,
       formatId,
     })
       .then(({ defaultFormatId, defaultFormatSource }) => {
+        if (defaultFormatRequests.current !== operation) {
+          return;
+        }
+        setSavingDefaultFormat(false);
         if (request !== generation.current) {
           return;
         }
@@ -414,7 +433,13 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => setError(t("registryErrorSetDefaultFormat")));
+      .catch(() => {
+        if (defaultFormatRequests.current !== operation) {
+          return;
+        }
+        setSavingDefaultFormat(false);
+        setError(t("registryErrorSetDefaultFormat"));
+      });
   };
   const openCompanyFormat = (card: ResultCard) => {
     setError(null);
@@ -678,6 +703,7 @@ export const RegistrySearch = ({
                       formatId={card.formatId}
                       defaultFormatId={currentSearch.defaultFormatId}
                       defaultFormatSource={currentSearch.defaultFormatSource}
+                      saving={savingDefaultFormat}
                       onSelect={setDefaultFormat}
                     />
                     <MenuItem
@@ -741,6 +767,8 @@ export const RegistrySearch = ({
 type DefaultFormatItemProps = DesktopRegistryDefaultFormat & {
   /** The format this card currently renders with. */
   formatId: string | null;
+  /** A save is in flight; only its reply may change the default. */
+  saving: boolean;
   onSelect: (formatId: string | null) => void;
 };
 
@@ -754,6 +782,7 @@ const DefaultFormatItem = ({
   defaultFormatId,
   defaultFormatSource,
   formatId,
+  saving,
   onSelect,
 }: DefaultFormatItemProps) => {
   const t = useTranslations("clipboard");
@@ -765,14 +794,14 @@ const DefaultFormatItem = ({
       return null;
     }
     return (
-      <MenuItem closeOnClick onClick={() => onSelect(null)}>
+      <MenuItem closeOnClick disabled={saving} onClick={() => onSelect(null)}>
         <StarOffIcon aria-hidden="true" />
         {t("registryClearDefaultFormat")}
       </MenuItem>
     );
   }
   return (
-    <MenuItem closeOnClick onClick={() => onSelect(formatId)}>
+    <MenuItem closeOnClick disabled={saving} onClick={() => onSelect(formatId)}>
       <StarIcon aria-hidden="true" />
       {t("registryUseAsDefaultFormat")}
     </MenuItem>
