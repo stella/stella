@@ -110,11 +110,12 @@
 }
 
 /* The canvas keeps its width — margin notes, page markers and block
-   permalinks all hang off it — while the decision's text is capped at the
-   measure and centred in whatever pane it was opened in, rail or full page.
-   The statute reader is deliberately left at the full canvas: its provisions
-   carry their own indent ladder and centred designations. */
-.reader-case-law {
+   permalinks all hang off it — while the text of a decision or a statute is
+   capped at the measure and centred in whatever pane it was opened in, rail
+   or full page. Both readers, so a line is the same length whichever document
+   is open. */
+.reader-case-law,
+.reader-statute {
   max-width: var(--reader-measure);
   margin-inline: auto;
 }
