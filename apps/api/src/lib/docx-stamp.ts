@@ -302,7 +302,15 @@ export const injectStamp = async (
   }
 
   await injectCustomProperties(archive, stamp, verificationCode);
-  await injectFooter(archive, stamp, verificationCode, frontendUrl);
+  const footerResult = await injectFooter(
+    archive,
+    stamp,
+    verificationCode,
+    frontendUrl,
+  );
+  if (Result.isError(footerResult)) {
+    return await Promise.reject(footerResult.error);
+  }
 
   return archive.zip.generateAsync({
     type: "arraybuffer",
@@ -944,10 +952,10 @@ const injectFooter = async (
   stamp: string,
   verificationCode: string,
   frontendUrl: string,
-): Promise<void> => {
+): Promise<Result<void, DocxStampError>> => {
   const docXml = await archive.readEntryString("word/document.xml");
   if (!docXml) {
-    return;
+    return Result.ok();
   }
 
   const docRelsPath = "word/_rels/document.xml.rels";
@@ -958,12 +966,14 @@ const injectFooter = async (
 
   if (footerMatches.length > 0) {
     if (footerMatches.length > LIMITS.docxStampFooterPartsMax) {
-      throw new DocxStampError({
-        message:
-          `DOCX references ${String(footerMatches.length)} distinct footer parts ` +
-          `(max ${String(LIMITS.docxStampFooterPartsMax)})`,
-        reason: "too-many-footer-parts",
-      });
+      return Result.err(
+        new DocxStampError({
+          message:
+            `DOCX references ${String(footerMatches.length)} distinct footer parts ` +
+            `(max ${String(LIMITS.docxStampFooterPartsMax)})`,
+          reason: "too-many-footer-parts",
+        }),
+      );
     }
 
     const footerParts: LoadedFooterMatch[] = [];
@@ -992,7 +1002,7 @@ const injectFooter = async (
         );
         bookmarkId += 1;
       }
-      return;
+      return Result.ok();
     }
   }
 
@@ -1005,6 +1015,7 @@ const injectFooter = async (
     verificationCode,
     verifyUrl,
   );
+  return Result.ok();
 };
 
 type FooterMatch = {
