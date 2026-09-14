@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Powtórz",
+      "replay": "Uruchom ponownie",
       "skip": "Pomiń",
       "start": "Rozpocznij"
     },
@@ -2355,19 +2355,11 @@
       "progress": "Ukończono {completed} z {total}"
     },
     "community": {
-      "body": "Uzyskaj pomoc od innych użytkowników i deweloperów na naszym czacie społeczności.",
-      "directLinkLabel": "Napisz do nas",
-      "directPrompt": "Chcesz porozmawiać bezpośrednio z zespołem?",
-      "linkLabel": "Otwórz forum społeczności"
+      "personalSupport": "Indywidualne wsparcie"
     },
     "help": {
-      "buttonLabel": "Pomoc i przewodniki",
-      "subtitle": "Interaktywne przewodniki po obszarze roboczym",
-      "tabs": {
-        "community": "Społeczność",
-        "guides": "Przewodniki"
-      },
-      "title": "Pomoc i przewodniki"
+      "buttonLabel": "Pomoc i opinie",
+      "title": "Pomoc i opinie"
     },
     "leave": "Zakończ przewodnik",
     "minutes": "{count} min.",
@@ -2380,11 +2372,11 @@
     },
     "tours": {
       "chat": {
-        "description": "Napisz prośbę, dodaj właściwy plik lub sprawę i bezpiecznie wyślij",
+        "description": "Dodaj kontekst dla AI i bezpiecznie wyślij zapytanie",
         "examplePrompt": "Podsumuj najważniejsze obowiązki wynikające z tej umowy",
         "steps": {
           "anonymize": {
-            "body": "Zastępuje nazwiska, identyfikatory i inne dane osobowe symbolami zastępczymi, zanim zapytanie opuści twój obszar roboczy, a w czytanej przez ciebie odpowiedzi przywraca prawdziwe wartości.",
+            "body": "Ukrywa dane osobowe przed wysłaniem, a następnie przywraca je w odpowiedzi.",
             "title": "Wyślij anonimowo",
             "when": "Włącz, gdy tekst zawiera dane osobowe, a pytanie nie zależy od tego, kim są strony. Zostaw wyłączone, gdy chodzi właśnie o tożsamość, na przykład przy badaniu konfliktu interesów: symbole zastępcze zabierają dokładnie to, o co pytasz."
           },
@@ -2398,25 +2390,25 @@
             "title": "Zacznij od polecenia"
           },
           "context": {
-            "body": "Kieruje zapytanie na materiał już zapisany: całą sprawę albo pojedynczy plik w niej. Nic nie jest przesyłane ani kopiowane; odwołanie to odnośnik do miejsca, w którym materiał już leży.",
+            "body": "Używa jako kontekstu zapisanej już sprawy lub pliku. Niczego ponownie nie przesyła ani nie kopiuje.",
             "title": "Odwołaj się do sprawy lub pliku",
             "when": "Używaj zamiast załączania pliku zawsze, gdy dokument jest już zapisany. Wskaż sprawę, gdy asystent ma przejrzeć ją w całości; jeden plik, gdy dokładnie wiesz, który ma przeczytać. Wpisanie @ w pustym edytorze otwiera tę listę od razu."
           },
           "plusMenu": {
-            "body": "Przycisk + otwiera menu edytora. Kolejne kroki je otworzą i pokażą dwie opcje, z których będziesz korzystać najczęściej: załączenie pliku i odwołanie do sprawy.",
-            "title": "Wszystko, co możesz dodać, kryje się pod +",
-            "when": "Sięgaj po +, gdy odpowiedź zależy od czegoś, czego asystent jeszcze nie widzi: pliku, sprawy, wewnętrznej zasady albo aktualnego źródła zewnętrznego."
+            "body": "Za pomocą + załączysz plik lub wskażesz sprawę.",
+            "title": "Dodaj materiały przez +",
+            "when": "Gdy potrzebnych materiałów nie ma jeszcze na czacie."
           },
           "send": {
             "body": "Wysyła wiadomość razem ze wszystkim, co powyżej załączono, wskazano lub włączono. Edytor zostaje na miejscu, więc kolejnym pytaniem uzupełnisz to, czego zabrakło w pierwszej odpowiedzi.",
             "title": "Wyślij wiadomość",
-            "when": "Wysyłaj wcześnie. Krótka pierwsza odpowiedź szybciej pokaże, jakiego kontekstu brakuje, niż dopracowywanie pierwszego polecenia."
+            "when": "Pierwsza odpowiedź pokaże, czego jeszcze brakuje."
           }
         },
-        "title": "Pytaj z właściwym kontekstem"
+        "title": "Zacznij od czatu"
       },
       "chatPower": {
-        "description": "Zmieniaj modele, uruchamiaj umiejętności i podłączaj serwery narzędzi",
+        "description": "Użyj umiejętności lub podłącz inne przydatne narzędzia",
         "steps": {
           "mcp": {
             "body": "Włącza i wyłącza narzędzia podłączonego serwera w twoich czatach: rejestry przedsiębiorców, systemy wewnętrzne, wszystko, co podłączył twój zespół.",
@@ -2425,8 +2417,7 @@
           },
           "models": {
             "body": "Zmienia model tylko w tej rozmowie. Pozostałe wątki zachowują model domyślny ustawiony dla twojego obszaru roboczego.",
-            "title": "Który model",
-            "when": "Mocniejszy model wybierz do uważnej lektury, redagowania i wszędzie tam, gdzie błędna odpowiedź dużo kosztuje. Przy wyszukiwaniu, streszczeniach i szybkich przeróbkach zostań przy domyślnym: dodatkowa głębia zmieni tylko czas oczekiwania."
+            "title": "Który model"
           },
           "plusMenu": {
             "body": "To samo menu zawiera też zmianę modelu, umiejętności i podłączone serwery narzędzi. Kolejne kroki je otworzą i omówią każdą opcję po kolei.",
@@ -2438,7 +2429,7 @@
             "when": "Użyj, gdy zadanie się powtarza i liczy się sformułowanie, na przykład przy standardowej weryfikacji umowy albo streszczeniu zlecenia. Wpisanie / w pustym edytorze otwiera tę listę od razu."
           }
         },
-        "title": "Zaawansowane funkcje czatu"
+        "title": "Wykorzystaj czat w pełni"
       },
       "documents": {
         "description": "Dodaj dokument do sprawy i znajdź go później",
@@ -2448,7 +2439,7 @@
             "title": "Znajdź dokument ponownie"
           },
           "upload": {
-            "body": "Przycisk Prześlij otwiera selektor plików; możesz też przeciągać pliki do sprawy. Każdy plik staje się dokumentem w tej sprawie, dzięki czemu zespół może go znaleźć, a Stella może wykorzystać podczas przeglądu.",
+            "body": "Przycisk Prześlij otwiera selektor plików; możesz też przeciągać pliki do sprawy. Każdy plik staje się dokumentem w tej sprawie, dzięki czemu zespół może go znaleźć, a stella może wykorzystać podczas przeglądu.",
             "title": "Dodaj dokument do sprawy",
             "when": "Prześlij plik tutaj, jeśli należy do sprawy i powinien pozostać dostępny. Dołącz go bezpośrednio w czacie tylko wtedy, gdy stanowi tymczasowy kontekst jednej rozmowy."
           }
@@ -2456,29 +2447,26 @@
         "title": "Praca z dokumentami"
       },
       "playbooks": {
-        "description": "Zamień wiedzę o przeglądzie w wielokrotnego użytku scenariusz",
+        "description": "Zapisz sposób weryfikacji dokumentów na przyszłość",
         "steps": {
           "basics": {
-            "body": "Nadaj scenariuszowi nazwę, która określa standard, a nie bieżący plik. Dodaj krótki opis, aby inna osoba przeprowadzająca przegląd znała zakres; jeśli scenariusz dotyczy tylko jednego typu dokumentu, wybierz go tutaj.",
-            "title": "Nazwij standard i określ jego zakres",
-            "when": "Ogranicz typ dokumentu tylko wtedy, gdy reguły przeglądu rzeczywiście różnią się zależnie od kategorii. Pozostaw wszystkie typy, gdy te same pytania mają zastosowanie w całej sprawie."
+            "body": "Dodaj nazwę i opis. W razie potrzeby ogranicz go do określonego typu dokumentu.",
+            "title": "Nazwij playbook"
           },
           "create": {
-            "body": "Opcja Utwórz otwiera pustą wersję roboczą bez zapisywania czegokolwiek. Kolejne kroki określają jej zakres i stanowiska przeglądu, dzięki którym scenariusz jest użyteczny.",
-            "title": "Rozpocznij pusty scenariusz"
+            "body": "Zacznij od pustego playbooka.",
+            "title": "Utwórz playbook"
           },
           "overview": {
-            "body": "Scenariusz przekształca kryteria przeglądu we wspólny zestaw pytań, oczekiwanych odpowiedzi i stanowisk rezerwowych. Osoby przeprowadzające przegląd mogą stosować ten sam standard bez ponownego tworzenia instrukcji dla każdego dokumentu.",
-            "title": "Wykorzystuj kryteria przeglądu wielokrotnie",
-            "when": "Użyj scenariusza, gdy ten sam standard przeglądu powtarza się w wielu dokumentach lub stosuje go wiele osób. Jednorazowe pytanie zadaj bezpośrednio na czacie, jeśli odpowiedź nie musi zostać włączona do stale stosowanego standardu."
+            "body": "Playbook zachowa pytania i zasady dla kolejnych dokumentów.",
+            "title": "Zapisz sposób weryfikacji"
           },
           "positions": {
-            "body": "Stanowiska są instrukcjami przeglądu w scenariuszu. Dodaj stanowisko oceniane, gdy Stella ma porównać sformułowanie z akceptowalnymi i nieakceptowalnymi wynikami; dodaj stanowisko typu Tylko ekstrakcja, gdy potrzebujesz jedynie ustrukturyzowanego faktu z dokumentu.",
-            "title": "Dodaj stanowiska przeglądu",
-            "when": "Oceniaj sformułowania, gdy odpowiedź wymaga oceny prawnej lub wskazówek negocjacyjnych. Wydobądź dane, gdy odpowiedź jest faktem i nie wymaga werdyktu."
+            "body": "Dla każdej zasady wybierz, czy stella ma ocenić tekst, czy pobrać z niego informację.",
+            "title": "Dodaj zasady weryfikacji"
           }
         },
-        "title": "Zbuduj scenariusz"
+        "title": "Utwórz playbook"
       },
       "tabularReview": {
         "description": "Wydobądź odpowiedzi z wielu plików naraz",
@@ -2489,7 +2477,7 @@
             "when": "Utwórz osobną kolumnę dla każdej odpowiedzi, którą chcesz porównywać, filtrować, sortować lub eksportować. Powiązany kontekst umieść w prompcie zamiast łączyć kilka odpowiedzi w jednej komórce."
           },
           "answerType": {
-            "body": "Pole Zwraca określa format każdej odpowiedzi. Gdy wynik ma strukturę, wybierz liczbę, datę, pojedynczy wybór lub wielokrotny wybór; Stella zachowa spójność kolumny zamiast zwracać dowolny tekst.",
+            "body": "Pole Zwraca określa format każdej odpowiedzi. Gdy wynik ma strukturę, wybierz liczbę, datę, pojedynczy wybór lub wielokrotny wybór; stella zachowa spójność kolumny zamiast zwracać dowolny tekst.",
             "title": "Wybierz typ odpowiedzi",
             "when": "Użyj wyboru dla stałego zestawu wyników, liczby lub daty do sortowania i obliczeń, a tekstu tylko wtedy, gdy odpowiedź rzeczywiście wymaga szczegółowego opisu."
           },
@@ -3032,7 +3020,6 @@
       "addPosition": "Dodaj stanowisko",
       "addRule": "Reguła",
       "adoptAsIdeal": "Przyjmij jako idealne brzmienie",
-      "advanced": "Zmień działanie",
       "all": "Wszystkie playbooki",
       "approval": {
         "approve": "Zatwierdź",
@@ -4181,7 +4168,7 @@
     "description": "Formatowanie dokumentów wielokrotnego użytku dla szablonów i nowych dokumentów",
     "editor": {
       "bodyText": "Tekst podstawowy",
-      "createFromStella": "Utwórz wariant na podstawie Stella Style",
+      "createFromStella": "Utwórz wariant na podstawie stella Style",
       "createTitle": "Utwórz zestaw stylów",
       "description": "Dostosuj system formatowania dokumentu i sprawdź rezultat przed zapisaniem.",
       "double": "Podwójna",
@@ -4252,7 +4239,7 @@
     "saveFailed": "Nie udało się zapisać zestawu stylów",
     "savedDescription": "Zapisany zestaw stylów",
     "sourceDocument": "Źródłowy DOCX",
-    "stellaDescription": "Kompletne, neutralne formatowanie dokumentów prawnych Stella",
+    "stellaDescription": "Kompletne, neutralne formatowanie dokumentów prawnych stella",
     "stellaStyle": "Stella Style",
     "title": "Zestawy stylów",
     "untitledDocument": "Dokument bez tytułu"

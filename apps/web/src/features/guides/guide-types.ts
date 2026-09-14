@@ -17,6 +17,8 @@ export type GuideRoute =
   | { type: "static"; to: GuideStaticRoute }
   | { type: "workspace-unfiltered-table" };
 
+export type GuidePlacement = "top" | "right" | "bottom" | "left";
+
 // Guide copy lives under `guides.tours.*` and takes no ICU arguments, so these
 // keys are safe to pass to `t(key)` with a single argument. Narrowing to the
 // no-argument subset (rather than the full `TranslationKey` union, which
@@ -52,8 +54,7 @@ export type GuideStep = {
   // it over its neighbours. Rendered under the body as a muted, labelled
   // secondary line. Omit it on steps where there is no real choice to make.
   whenKey?: GuideMessageKey;
-  // No placement field: the popover is pinned to one fixed, centred position
-  // for the whole run, so a step has nothing to say about where it appears.
+  placement: GuidePlacement;
   seed?: GuideSeed;
   interaction?: GuideInteraction;
 };

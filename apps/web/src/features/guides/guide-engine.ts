@@ -2,6 +2,7 @@ import { type Driver, driver, type PopoverDOM } from "driver.js";
 import "driver.js/dist/driver.css";
 
 import "@/features/guides/guide-popover.css";
+import type { GuidePlacement } from "@/features/guides/guide-types";
 
 // Thin, swappable wrapper around the spotlight engine (driver.js, MIT, zero
 // runtime deps). This module statically imports driver.js and its CSS; the
@@ -25,6 +26,7 @@ export type GuideEngineStep = {
   // Rendered under the body as a muted, labelled secondary line; `undefined`
   // on steps that describe a control with no alternative to weigh it against.
   when: GuideEngineWhen | undefined;
+  placement: GuidePlacement;
   // Pre-localized "N of M" label; passed through verbatim (no {{tokens}}).
   progressText: string;
   // Back is rendered on every step and disabled here, so the footer keeps the
@@ -106,12 +108,9 @@ const restoreTargetAttributes = (
 // the one control that throws the run away.
 const renderLeaveControl =
   (leaveLabel: string) =>
-  ({ closeButton, footer }: PopoverDOM) => {
-    closeButton.textContent = leaveLabel;
-    // The visible label is now the accessible name; driver's hardcoded
-    // "Close" aria-label would otherwise override it.
-    closeButton.removeAttribute("aria-label");
-    footer.append(closeButton);
+  ({ closeButton }: PopoverDOM) => {
+    closeButton.textContent = "×";
+    closeButton.setAttribute("aria-label", leaveLabel);
   };
 
 export const createGuideEngine = (): GuideEngine => {
@@ -177,9 +176,8 @@ export const createGuideEngine = (): GuideEngine => {
           onNextClick: () => step.onNext(),
           onCloseClick: () => step.onLeave(),
           onPopoverRender: renderLeaveControl(step.leaveLabel),
-          // No `side`/`align`: the popover is pinned to one fixed, centred
-          // position by `guide-popover.css` rather than chasing the target
-          // around the viewport, so per-step placement has nothing to say.
+          side: step.placement,
+          align: "start",
         },
       });
       if (previousTarget && !isSameTarget) {

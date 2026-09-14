@@ -73,7 +73,6 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
-import { FeedbackDialog } from "@/components/feedback-dialog";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
 import { MatterIcon } from "@/components/matter-icon";
@@ -783,7 +782,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
               </Suspense>
             )}
           </SidebarMenuItem>
-          <FeedbackDialog userEmail={user.email} />
           <SidebarUserMenu user={user} />
         </SidebarMenu>
       </SidebarFooter>

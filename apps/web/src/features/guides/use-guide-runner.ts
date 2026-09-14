@@ -607,6 +607,7 @@ export const useGuideRunner = ({
             step.whenKey === undefined
               ? undefined
               : { label: t("guides.whenLabel"), text: t(step.whenKey) },
+          placement: step.placement,
           // Numbered by position in the tour, so the count reads the same
           // whichever direction the user arrived from.
           progressText: t("common.stepProgress", {

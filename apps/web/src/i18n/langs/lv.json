@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Atkārtot",
+      "replay": "Sākt no jauna",
       "skip": "Izlaist",
       "start": "Sākt"
     },
@@ -2355,19 +2355,11 @@
       "progress": "Pabeigti {completed} no {total}"
     },
     "community": {
-      "body": "Saņemiet palīdzību no citiem lietotājiem un izstrādātājiem mūsu kopienas tērzēšanā.",
-      "directLinkLabel": "Sazinieties ar mums",
-      "directPrompt": "Vai vēlaties runāt tieši ar komandu?",
-      "linkLabel": "Atvērt kopienas forumu"
+      "personalSupport": "Personīgs atbalsts"
     },
     "help": {
-      "buttonLabel": "Palīdzība un ceļveži",
-      "subtitle": "Interaktīvi darba vietas pārskati",
-      "tabs": {
-        "community": "Kopiena",
-        "guides": "Ceļveži"
-      },
-      "title": "Palīdzība un ceļveži"
+      "buttonLabel": "Palīdzība un atsauksmes",
+      "title": "Palīdzība un atsauksmes"
     },
     "leave": "Iziet no ceļveža",
     "minutes": "{count} min.",
@@ -2380,11 +2372,11 @@
     },
     "tours": {
       "chat": {
-        "description": "Uzrakstiet pieprasījumu, pievienojiet pareizo failu vai lietu un droši nosūtiet",
+        "description": "Sniedziet AI kontekstu un droši nosūtiet pieprasījumu",
         "examplePrompt": "Apkopojiet šī līguma galvenās saistības",
         "steps": {
           "anonymize": {
-            "body": "Aizstāj vārdus, identifikatorus un citus personas datus ar vietturiem, pirms pieprasījums atstāj jūsu darbvietu, un atbildē, ko lasāt, atjauno īstās vērtības.",
+            "body": "Pirms nosūtīšanas paslēpj personas datus un pēc tam tos atjauno atbildē.",
             "title": "Sūtīt anonimizēti",
             "when": "Ieslēdziet, kad tekstā ir personas dati un atbilde nav atkarīga no tā, kas ir puses. Atstājiet izslēgtu, kad svarīga ir tieši identitāte, piemēram, interešu konflikta pārbaudē: vietturi aizvāc tieši to, par ko jautājat."
           },
@@ -2398,25 +2390,25 @@
             "title": "Sāciet ar pieprasījumu"
           },
           "context": {
-            "body": "Novirza pieprasījumu uz jau reģistrētu materiālu: uz visu lietu vai vienu failu tajā. Nekas netiek augšupielādēts un nekas netiek kopēts; atsauce ir saite uz vietu, kur materiāls jau glabājas.",
+            "body": "Pievieno esošu lietu vai failu kā kontekstu. Nekas netiek augšupielādēts vai kopēts.",
             "title": "Atsaukties uz lietu vai failu",
             "when": "Izmantojiet to pievienošanas vietā vienmēr, kad dokuments jau ir reģistrēts. Atsaucieties uz lietu, ja asistentam tā jāpārskata visa; uz vienu failu, ja precīzi zināt, kurš jāizlasa. Ierakstot @ tukšā redaktorā, šis saraksts atveras uzreiz."
           },
           "plusMenu": {
-            "body": "Poga + atver redaktora izvēlni. Nākamie soļi to atvērs un parādīs divas biežāk lietotās iespējas: faila pievienošanu un atsauci uz lietu.",
-            "title": "Viss pievienojamais slēpjas aiz +",
-            "when": "Izmantojiet +, kad atbilde ir atkarīga no kaut kā, ko asistents vēl neredz: no faila, lietas, iekšēja noteikuma vai aktuāla ārēja avota."
+            "body": "Izmantojiet +, lai pievienotu failu vai atsauktos uz lietu.",
+            "title": "Pievienojiet kontekstu ar +",
+            "when": "Kad vajadzīgā konteksta vēl nav tērzēšanā."
           },
           "send": {
             "body": "Nosūta ziņu kopā ar visu, ko iepriekš pievienojāt, uz ko atsaucāties vai ko ieslēdzāt. Redaktors paliek vietā, tāpēc ar nākamo jautājumu varat papildināt to, kā trūka pirmajā atbildē.",
             "title": "Nosūtiet ziņu",
-            "when": "Sūtiet agri. Īsa pirmā atbilde ātrāk parāda, kāda konteksta vēl trūkst, nekā perfekti noslīpēta pirmā uzvedne."
+            "when": "Pirmā atbilde parāda, kas vēl trūkst."
           }
         },
-        "title": "Jautājiet ar pareizo kontekstu"
+        "title": "Sāciet ar tērzēšanu"
       },
       "chatPower": {
-        "description": "Mainiet modeļus, palaidiet prasmes un pievienojiet rīku serverus",
+        "description": "Izmantojiet prasmes vai pievienojiet citus noderīgus rīkus",
         "steps": {
           "mcp": {
             "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu sarunās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
@@ -2425,8 +2417,7 @@
           },
           "models": {
             "body": "Maina modeli tikai šajā sarunā. Visas pārējās sarakstes paliek pie jūsu darbvietas noklusējuma modeļa.",
-            "title": "Kurš modelis",
-            "when": "Uz jaudīgāku modeli pārejiet rūpīgai lasīšanai, sagatavošanai un visur, kur nepareiza atbilde dārgi maksā. Meklējumiem, kopsavilkumiem un ātriem pārrakstījumiem palieciet pie noklusējuma: papildu dziļums tur maina vienīgi gaidīšanas laiku."
+            "title": "Kurš modelis"
           },
           "plusMenu": {
             "body": "Tajā pašā izvēlnē ir arī modeļa maiņa, prasmes un pievienotie rīku serveri. Nākamie soļi to atvērs un aplūkos katru iespēju.",
@@ -2438,7 +2429,7 @@
             "when": "Izmantojiet, kad uzdevums atkārtojas un formulējums ir svarīgs, piemēram, tipveida līguma pārbaudē vai uzņemšanas kopsavilkumā. Ierakstot / tukšā redaktorā, šis saraksts atveras uzreiz."
           }
         },
-        "title": "Tērzēšanas papildiespējas"
+        "title": "Paveiciet vairāk tērzēšanā"
       },
       "documents": {
         "description": "Pievienojiet dokumentu lietai un vēlāk atrodiet to",
@@ -2448,7 +2439,7 @@
             "title": "Vēlreiz atrast dokumentu"
           },
           "upload": {
-            "body": "Nospiežot Augšupielādēt, tiek atvērts failu atlasītājs; failus varat arī ievilkt lietā. Katrs fails kļūst par šīs lietas dokumentu, ko jūsu komanda var atrast un Stella var izmantot pārskatīšanā.",
+            "body": "Nospiežot Augšupielādēt, tiek atvērts failu atlasītājs; failus varat arī ievilkt lietā. Katrs fails kļūst par šīs lietas dokumentu, ko jūsu komanda var atrast un stella var izmantot pārskatīšanā.",
             "title": "Pievienot dokumentu lietai",
             "when": "Augšupielādējiet šeit, ja fails pieder pie lietas un tam jāpaliek pieejamam. Pievienojiet to tieši tērzēšanā tikai tad, ja tas ir pagaidu konteksts vienai sarunai."
           }
@@ -2456,40 +2447,37 @@
         "title": "Darbs ar dokumentiem"
       },
       "playbooks": {
-        "description": "Pārvērtiet pārskatīšanas zināšanas atkārtoti izmantojamā plānā",
+        "description": "Saglabājiet dokumentu pārskatīšanas procesu nākamajai reizei",
         "steps": {
           "basics": {
-            "body": "Piešķiriet plānam nosaukumu, kas identificē standartu, nevis pašreizējo failu. Pievienojiet īsu aprakstu, lai cits pārskatītājs zinātu tvērumu; ja plāns attiecas tikai uz vienu dokumentu veidu, atlasiet to šeit.",
-            "title": "Nosaukt standartu un noteikt tā tvērumu",
-            "when": "Ierobežojiet dokumentu veidu tikai tad, ja pārskatīšanas noteikumi tiešām atšķiras pēc kategorijas. Atstājiet visus veidus, ja visā lietā ir piemērojami vieni un tie paši jautājumi."
+            "body": "Pievienojiet nosaukumu un aprakstu. Ja vajadzīgs, attieciniet to tikai uz vienu dokumenta veidu.",
+            "title": "Piešķiriet plānam nosaukumu"
           },
           "create": {
-            "body": "Izveidot atver tukšu melnrakstu, neko nesaglabājot. Nākamajās darbībās noteiksiet tā tvērumu un pārskatīšanas pozīcijas, kas padara plānu noderīgu.",
-            "title": "Sākt tukšu plānu"
+            "body": "Sāciet ar tukšu plānu.",
+            "title": "Izveidojiet plānu"
           },
           "overview": {
-            "body": "Plāns pārvērš pārskatīšanas apsvērumus kopīgā jautājumu, sagaidāmo atbilžu un rezerves nostāju kopumā. Pārskatītāji var piemērot vienu un to pašu standartu, no jauna neveidojot norādījumus katram dokumentam.",
-            "title": "Atkārtoti izmantot pārskatīšanas apsvērumus",
-            "when": "Izmantojiet plānu, ja viens pārskatīšanas standarts atkārtojas vairākos dokumentos vai to izmanto vairāki pārskatītāji. Vienreizēju jautājumu uzdodiet tieši tērzēšanā, ja atbilde nav jāiekļauj turpmāk izmantojamā standartā."
+            "body": "Plānā tiek saglabāti jautājumi un noteikumi citiem dokumentiem.",
+            "title": "Saglabājiet pārskatīšanas procesu"
           },
           "positions": {
-            "body": "Pozīcijas ir plāna pārskatīšanas norādījumi. Pievienojiet novērtētu pozīciju, ja Stellai jāsalīdzina formulējums ar pieņemamiem un nepieņemamiem rezultātiem; pievienojiet izvilkšanas pozīciju, ja no dokumenta vajadzīgs tikai strukturēts fakts.",
-            "title": "Pievienot pārskatīšanas pozīcijas",
-            "when": "Novērtējiet formulējumu, ja atbildei vajadzīgs juridisks vērtējums vai sarunu norādījumi. Izvelciet datus, ja atbilde ir faktiska un tai nav vajadzīgs vērtējums."
+            "body": "Katram noteikumam izvēlieties, vai novērtēt tekstu vai izgūt detaļu.",
+            "title": "Pievienojiet pārskatīšanas noteikumus"
           }
         },
-        "title": "Izstrādāt plānu"
+        "title": "Izveidojiet plānu"
       },
       "tabularReview": {
         "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
         "steps": {
           "addColumn": {
-            "body": "Jauna kolonna atver kolonnas redaktoru. Piešķiriet kolonnai skaidru, jautājuma formā izteiktu nosaukumu un precīzi norādiet Stellai, ko meklēt; viens un tas pats norādījums tiek izpildīts katrai dokumenta rindai.",
+            "body": "Jauna kolonna atver kolonnas redaktoru. Piešķiriet kolonnai skaidru, jautājuma formā izteiktu nosaukumu un precīzi norādiet stellai, ko meklēt; viens un tas pats norādījums tiek izpildīts katrai dokumenta rindai.",
             "title": "Uzdot vienu jautājumu par katru dokumentu",
             "when": "Katram atbildes veidam, ko vēlaties salīdzināt, filtrēt, kārtot vai eksportēt, izveidojiet atsevišķu kolonnu. Saistīto kontekstu iekļaujiet uzvednē, nevis apvienojiet vairākas atbildes vienā šūnā."
           },
           "answerType": {
-            "body": "Lauks Atgriež nosaka katras atbildes formu. Ja rezultāts ir strukturēts, izvēlieties skaitli, datumu, vienu atlasi vai vairākas atlases; Stella saglabās kolonnas vienveidību, nevis atgriezīs patvaļīgu tekstu.",
+            "body": "Lauks Atgriež nosaka katras atbildes formu. Ja rezultāts ir strukturēts, izvēlieties skaitli, datumu, vienu atlasi vai vairākas atlases; stella saglabās kolonnas vienveidību, nevis atgriezīs patvaļīgu tekstu.",
             "title": "Izvēlēties atbildes veidu",
             "when": "Fiksētai rezultātu kopai izmantojiet atlasi, kārtošanai un aprēķiniem – skaitli vai datumu, bet tekstu tikai tad, ja atbildei patiešām nepieciešams detalizēts izklāsts."
           },
@@ -3032,7 +3020,6 @@
       "addPosition": "Pievienot pozīciju",
       "addRule": "Noteikums",
       "adoptAsIdeal": "Pieņemt kā ideālu formulējumu",
-      "advanced": "Mainīt darbību",
       "all": "Visi pārbaudes ceļveži",
       "approval": {
         "approve": "Apstiprināt",
@@ -4181,7 +4168,7 @@
     "description": "Atkārtoti izmantojams dokumentu formatējums veidnēm un jauniem dokumentiem",
     "editor": {
       "bodyText": "Pamatteksts",
-      "createFromStella": "Izveidot variantu no Stella Style",
+      "createFromStella": "Izveidot variantu no stella Style",
       "createTitle": "Izveidot stilu kopu",
       "description": "Pielāgojiet dokumenta formatējuma sistēmu un pirms saglabāšanas pārskatiet rezultātu.",
       "double": "Dubulta",
@@ -4252,7 +4239,7 @@
     "saveFailed": "Neizdevās saglabāt stilu kopu",
     "savedDescription": "Saglabāta stilu kopa",
     "sourceDocument": "Avota DOCX",
-    "stellaDescription": "Pilnīgs neitrāls Stella juridisko dokumentu formatējums",
+    "stellaDescription": "Pilnīgs neitrāls stella juridisko dokumentu formatējums",
     "stellaStyle": "Stella Style",
     "title": "Stilu kopas",
     "untitledDocument": "Dokuments bez nosaukuma"

@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Esita uuesti",
+      "replay": "Alusta uuesti",
       "skip": "Jäta vahele",
       "start": "Alusta"
     },
@@ -2355,19 +2355,11 @@
       "progress": "{completed} / {total} tehtud"
     },
     "community": {
-      "body": "Küsi abi teistelt kasutajatelt ja arendajatelt meie kogukonna vestluses.",
-      "directLinkLabel": "Võtke meiega ühendust",
-      "directPrompt": "Kas soovite meeskonnaga otse rääkida?",
-      "linkLabel": "Ava kogukonna foorum"
+      "personalSupport": "Personaalne tugi"
     },
     "help": {
-      "buttonLabel": "Abi ja juhendid",
-      "subtitle": "Interaktiivsed tuurid tööruumis",
-      "tabs": {
-        "community": "Kogukond",
-        "guides": "Juhendid"
-      },
-      "title": "Abi ja juhendid"
+      "buttonLabel": "Abi ja tagasiside",
+      "title": "Abi ja tagasiside"
     },
     "leave": "Välju juhendist",
     "minutes": "{count} min.",
@@ -2380,11 +2372,11 @@
     },
     "tours": {
       "chat": {
-        "description": "Kirjutage päring, lisage õige fail või toimik ja saatke see turvaliselt",
+        "description": "Lisa AI-le kontekst ja saada päring turvaliselt",
         "examplePrompt": "Võta kokku selle lepingu peamised kohustused",
         "steps": {
           "anonymize": {
-            "body": "Asendab nimed, tunnused ja muud isikuandmed kohatäidetega, enne kui päring sinu tööruumist lahkub, ning taastab õiged väärtused vastuses, mida loed.",
+            "body": "Peidab isikuandmed enne saatmist ja taastab need vastuses.",
             "title": "Saada anonüümitult",
             "when": "Lülita sisse, kui tekst sisaldab isikuandmeid ja küsimus ei sõltu sellest, kes on osapooled. Jäta välja, kui just isik ongi küsimuse tuum, näiteks huvide konflikti kontrollimisel: kohatäited eemaldavad täpselt selle, mille kohta küsid."
           },
@@ -2398,25 +2390,25 @@
             "title": "Alusta soovist"
           },
           "context": {
-            "body": "Suunab päringu materjalile, mis on juba salvestatud: tervele toimikule või ühele failile selle sees. Midagi ei laadita üles ega kopeerita; viide osutab kohta, kus materjal juba asub.",
+            "body": "Lisab olemasoleva toimiku või faili kontekstiks. Midagi ei laadita üles ega kopeerita.",
             "title": "Viita toimikule või failile",
             "when": "Kasuta seda faili lisamise asemel alati, kui dokument on juba salvestatud. Viita toimikule, kui assistent peaks selle tervikuna läbi vaatama; ühele failile siis, kui tead täpselt, mida lugeda. @ tühjas redaktoris avab selle loendi otse."
           },
           "plusMenu": {
-            "body": "Nupp + avab redaktori menüü. Järgmised sammud avavad selle ja näitavad kahte kõige sagedamini kasutatavat valikut: faili lisamist ja toimikule viitamist.",
-            "title": "Kõik lisatav peitub nupu + taga",
-            "when": "Kasuta nuppu +, kui vastus sõltub millestki, mida assistent veel ei näe: failist, toimikust, majasisesest reeglist või värskest välisallikast."
+            "body": "Kasuta nuppu +, et lisada fail või viidata toimikule.",
+            "title": "Lisa konteksti nupuga +",
+            "when": "Kui vajalikku konteksti pole veel vestluses."
           },
           "send": {
             "body": "Saadab sõnumi koos kõigega, mille eespool lisasid, millele viitasid või mille sisse lülitasid. Redaktor jääb paigale, nii et järelküsimusega saad lisada selle, mis esimesest vastusest puudus.",
             "title": "Saada teele",
-            "when": "Saada varakult. Lühike esimene vastus näitab kiiremini, milline kontekst veel puudub, kui täiuslikuks lihvitud esimene viip."
+            "when": "Esimene vastus näitab, mis on veel puudu."
           }
         },
-        "title": "Küsi õige kontekstiga"
+        "title": "Alusta vestlusest"
       },
       "chatPower": {
-        "description": "Vahetage mudeleid, käivitage oskusi ja ühendage tööriistaservereid",
+        "description": "Kasuta oskusi või ühenda muid kasulikke tööriistu",
         "steps": {
           "mcp": {
             "body": "Lülitab ühendatud serveri tööriistad sinu vestlustes sisse või välja: äriregistrid, sisemised süsteemid, kõik, mille sinu meeskond on ühendanud.",
@@ -2425,8 +2417,7 @@
           },
           "models": {
             "body": "Vahetab mudelit ainult selles vestluses. Kõik teised lõimed jäävad sinu tööruumi vaikemudeli juurde.",
-            "title": "Milline mudel",
-            "when": "Vali tugevam mudel tähelepaneliku lugemise, koostamise ja kõige jaoks, kus vale vastus läheb kalliks. Otsingute, kokkuvõtete ja kiirete ümbersõnastuste puhul jää vaikemudeli juurde: lisasügavus muudab seal ainult ooteaega."
+            "title": "Milline mudel"
           },
           "plusMenu": {
             "body": "Samas menüüs on ka mudeli vahetus, oskused ja ühendatud tööriistaserverid. Järgmised sammud avavad selle ja käsitlevad iga valikut eraldi.",
@@ -2438,7 +2429,7 @@
             "when": "Kasuta siis, kui ülesanne kordub ja sõnastus loeb, näiteks tavapärase lepingu ülevaatamisel või vastuvõtu kokkuvõttes. / tühjas redaktoris avab selle loendi otse."
           }
         },
-        "title": "Vestluse lisavõimalused"
+        "title": "Tee vestluses rohkem"
       },
       "documents": {
         "description": "Lisa dokument toimikusse ja leia see hiljem uuesti",
@@ -2448,7 +2439,7 @@
             "title": "Leia dokument uuesti"
           },
           "upload": {
-            "body": "Nupp „Laadi üles“ avab failivalija; faile saab ka toimikusse lohistada. Igast failist saab selles toimikus dokument, mille sinu meeskond leiab ja mida Stella saab ülevaatusel kasutada.",
+            "body": "Nupp „Laadi üles“ avab failivalija; faile saab ka toimikusse lohistada. Igast failist saab selles toimikus dokument, mille sinu meeskond leiab ja mida stella saab ülevaatusel kasutada.",
             "title": "Lisa dokument toimikusse",
             "when": "Laadi fail siia, kui see kuulub toimikusse ja peab jääma kättesaadavaks. Lisa fail otse vestlusesse ainult siis, kui see on ajutine kontekst ühe vestluse jaoks."
           }
@@ -2456,40 +2447,37 @@
         "title": "Töö dokumentidega"
       },
       "playbooks": {
-        "description": "Muuda ülevaatuse oskusteave korduvkasutatavaks juhendiks",
+        "description": "Salvesta dokumendi ülevaatamise protsess järgmiseks korraks",
         "steps": {
           "basics": {
-            "body": "Anna juhendile nimi, mis tähistab standardit, mitte praegust faili. Lisa lühikirjeldus, et teine ülevaataja mõistaks selle ulatust; kui juhend kehtib ainult ühe dokumendiliigi kohta, vali see siin.",
-            "title": "Anna standardile nimi ja määra selle ulatus",
-            "when": "Piira dokumendiliiki ainult siis, kui ülevaatuse reeglid tõesti kategooriate lõikes erinevad. Jäta valituks kõik liigid, kui kogu toimikus kehtivad samad küsimused."
+            "body": "Lisa nimi ja kirjeldus. Vajadusel piira see ühe dokumendiliigiga.",
+            "title": "Anna juhendile nimi"
           },
           "create": {
-            "body": "Nupp „Loo“ avab tühja mustandi ega salvesta veel midagi. Järgmised sammud käsitlevad selle ulatust ja ülevaatuse seisukohti, mis muudavad juhendi kasulikuks.",
-            "title": "Alusta tühja juhendiga"
+            "body": "Alusta tühja juhendiga.",
+            "title": "Loo juhend"
           },
           "overview": {
-            "body": "Juhend koondab ülevaatusel tehtavad otsused jagatud küsimusteks, oodatud vastusteks ja alternatiivseteks seisukohtadeks. Nii saavad ülevaatajad rakendada sama standardit, ilma et peaksid iga dokumendi jaoks juhiseid uuesti koostama.",
-            "title": "Muuda ülevaatuse otsused korduvkasutatavaks",
-            "when": "Kasuta juhendit, kui sama ülevaatuse standard kordub mitme dokumendi või ülevaataja puhul. Ühekordne küsimus, mille vastusest ei pea saama püsiv standard, esita otse vestluses."
+            "body": "Juhend säilitab küsimused ja reeglid teiste dokumentide jaoks.",
+            "title": "Salvesta ülevaatamise käik"
           },
           "positions": {
-            "body": "Seisukohad on juhendi ülevaatusjuhised. Lisa hinnatud seisukoht, kui Stella peab võrdlema sõnastust vastuvõetavate ja vastuvõetamatute tulemustega; lisa väljavõtte seisukoht, kui vajad dokumendist ainult struktureeritud fakti.",
-            "title": "Lisa ülevaatuse seisukohad",
-            "when": "Hinda sõnastust, kui vastus nõuab õiguslikku hinnangut või läbirääkimisjuhiseid. Tee väljavõte, kui vastus on faktiline ega vaja otsust."
+            "body": "Vali iga reegli puhul, kas hinnata teksti või eraldada sellest üksikasi.",
+            "title": "Lisa ülevaatuse reeglid"
           }
         },
-        "title": "Koosta juhend"
+        "title": "Loo juhend"
       },
       "tabularReview": {
         "description": "Eralda vastused paljudest failidest korraga",
         "steps": {
           "addColumn": {
-            "body": "Nupp „Uus veerg“ avab veeruredaktori. Sõnasta veeru nimi selge küsimusena ja ütle Stellale täpselt, mida otsida; sama juhist rakendatakse iga dokumendi rea suhtes.",
+            "body": "Nupp „Uus veerg“ avab veeruredaktori. Sõnasta veeru nimi selge küsimusena ja ütle stellale täpselt, mida otsida; sama juhist rakendatakse iga dokumendi rea suhtes.",
             "title": "Esita igale dokumendile sama küsimus",
             "when": "Loo eraldi veerg iga vastuse jaoks, mida soovid võrrelda, filtreerida, sortida või eksportida. Lisa seotud kontekst juhisesse, selle asemel et ühendada mitu vastust ühte lahtrisse."
           },
           "answerType": {
-            "body": "Valik „Vorming“ määrab iga vastuse kuju. Kui tulemusel on kindel struktuur, vali arv, kuupäev, üksikvalik või mitmikvalik; nii hoiab Stella veeru ühtlasena ega tagasta suvalist vabateksti.",
+            "body": "Valik „Vorming“ määrab iga vastuse kuju. Kui tulemusel on kindel struktuur, vali arv, kuupäev, üksikvalik või mitmikvalik; nii hoiab stella veeru ühtlasena ega tagasta suvalist vabateksti.",
             "title": "Vali vastuse tüüp",
             "when": "Kasuta fikseeritud tulemuste jaoks valikut, sortimiseks ja arvutusteks arvu või kuupäeva ning teksti ainult siis, kui vastus vajab tõepoolest põhjalikku kirjeldust."
           },
@@ -3032,7 +3020,6 @@
       "addPosition": "Lisa seisukoht",
       "addRule": "Reegel",
       "adoptAsIdeal": "Võta ideaalse sõnastusena kasutusele",
-      "advanced": "Muuda toimimist",
       "all": "Kõik playbookid",
       "approval": {
         "approve": "Kiida heaks",
@@ -4181,7 +4168,7 @@
     "description": "Korduskasutatav dokumendivorming mallidele ja uutele dokumentidele",
     "editor": {
       "bodyText": "Põhitekst",
-      "createFromStella": "Loo Stella Style’i põhjal variant",
+      "createFromStella": "Loo stella Style’i põhjal variant",
       "createTitle": "Loo stiilikomplekt",
       "description": "Kohandage dokumendi vormingusüsteemi ja vaadake tulemus enne salvestamist üle.",
       "double": "Kahekordne",

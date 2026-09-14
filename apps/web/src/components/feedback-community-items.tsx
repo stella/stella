@@ -1,11 +1,8 @@
 import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
 import { MenuItem } from "@stll/ui/menu";
 
-import { COMMUNITY_FORUM_URL } from "@/lib/consts";
+import { COMMUNITY_FORUM_URL, GITHUB_FEEDBACK_URL } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
-
-const GITHUB_FEEDBACK_URL =
-  "https://github.com/stella/stella/issues/new/choose";
 
 const COMMUNITY_CHANNELS = [
   { name: "Discord", href: COMMUNITY_FORUM_URL, icon: DiscordLogoIcon },

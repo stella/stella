@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { CheckIcon, ClockIcon, ExternalLinkIcon } from "lucide-react";
+import { CheckIcon, ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -14,8 +14,6 @@ import {
 } from "@/features/guides/guide-types";
 import type { OnboardingProgress } from "@/features/guides/use-onboarding-progress";
 import { useFormatter } from "@/i18n/formatting-context";
-import { COMMUNITY_FORUM_URL } from "@/lib/consts";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type GuideChecklistProps = {
   tours: readonly GuideTour[];
@@ -76,28 +74,10 @@ export const GuideChecklist = ({
 
   if (tours.length === 0) {
     return (
-      <div className="flex flex-col items-start gap-3" role="status">
+      <div role="status">
         <p className="text-muted-foreground text-sm">
           {t("guides.unavailable")}
         </p>
-        <p className="text-muted-foreground text-sm">
-          {t("guides.community.body")}
-        </p>
-        <Button
-          render={
-            <a
-              aria-label={t("guides.community.linkLabel")}
-              href={sanitizeHref(COMMUNITY_FORUM_URL)}
-              rel="noreferrer noopener"
-              target="_blank"
-            />
-          }
-          size="sm"
-          variant="secondary"
-        >
-          {t("guides.community.linkLabel")}
-          <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
-        </Button>
       </div>
     );
   }

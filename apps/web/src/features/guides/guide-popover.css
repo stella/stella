@@ -7,23 +7,11 @@
  * tokens published on `:root` (the `--color-*` alias with the underlying
  * token as a fallback, because Tailwind only emits an alias a utility uses).
  *
- * Two deliberate departures from driver.js's defaults:
+ * One deliberate departure from driver.js's defaults:
  *
- * 1. A fixed, predictable position. driver anchors the popover beside whatever
- *    it spotlights, so the card jumps around the viewport between steps.
- *    Reading from one stable place beats proximity to the target, so the card
- *    is centred horizontally and pinned near the top, clear of the bottom band
- *    where the composer and the surfaces it opens live. driver rewrites
- *    `top`/`left` inline on every render, scroll, and resize, so the overrides
- *    have to be `!important` (an author `!important` outranks an inline
- *    declaration); the arrow is hidden because it no longer points at
- *    anything.
- *
- * 2. Controls sized for a glance. The tour is read while the user is looking
- *    somewhere else on the screen, so the footer gets a comfortable hit area
- *    and an explicit hierarchy: next primary, back secondary, leave quiet and
- *    on its own row so it is never mistaken for, or fat-fingered instead of,
- *    the navigation pair.
+ * Controls sized for a glance. The tour is read while the user is looking
+ *    somewhere else on the screen, so navigation gets a comfortable hit area
+ *    and explicit hierarchy while leave stays in the familiar top corner.
  *
  * Every rule is scoped to `.stella-guide-popover` (the engine's
  * `popoverClass`) so no other driver.js usage inherits any of it.
@@ -46,19 +34,8 @@
   --stella-guide-ring: var(--color-ring, var(--ring));
   --stella-guide-radius: var(--radius, 0.625rem);
 
-  /* Below any top chrome, and far enough above the fold that a spotlighted
-   * control in the lower half of the screen stays uncovered. */
-  --stella-guide-inset-top: max(4.5rem, 8vh);
   --stella-guide-width: min(34rem, calc(100vw - 2rem));
 
-  position: fixed !important;
-  inset-block-start: var(--stella-guide-inset-top) !important;
-  inset-block-end: auto !important;
-  /* `inset-inline: 0` plus `margin-inline: auto` centres a fixed element in
-   * both writing directions, with no transform to undo per direction. */
-  inset-inline: 0 !important;
-  margin-block: 0;
-  margin-inline: auto !important;
   box-sizing: border-box;
   display: flex !important;
   flex-direction: column;
@@ -68,10 +45,7 @@
   /* Capped so a long step cannot grow down over the spotlight, and bounded by
    * the viewport so a short window still fits. The description is what
    * scrolls, which keeps the controls reachable at any height. */
-  max-block-size: min(
-    calc(100dvh - var(--stella-guide-inset-top) - 1.5rem),
-    24rem
-  );
+  max-block-size: min(calc(100dvh - 2rem), 24rem);
   padding: 1.25rem;
   font-family: inherit;
   color: var(--stella-guide-text);
@@ -82,12 +56,9 @@
     color-mix(in srgb, var(--stella-guide-text) 18%, transparent);
 }
 
-.stella-guide-popover .driver-popover-arrow {
-  display: none !important;
-}
-
 .stella-guide-popover .driver-popover-title {
   flex: 0 0 auto;
+  padding-inline-end: 2.5rem;
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.4;
@@ -116,10 +87,7 @@
   font-weight: 600;
 }
 
-/*
- * Row 1: progress on the reading-start side, back and next on the far side.
- * Row 2: leave, on its own, quiet.
- */
+/* Progress on the reading-start side, back and next on the far side. */
 .stella-guide-popover .driver-popover-footer {
   display: grid !important;
   grid-template-columns: 1fr auto;
@@ -191,33 +159,33 @@
   background-color: var(--stella-guide-accent);
 }
 
-/*
- * The way out. driver renders it as a bare "×" pinned to the popover's top
- * corner; the engine relabels it and moves it into the footer, so everything
- * about its default box has to be undone here.
- */
+/* The way out stays compact without sacrificing its hit area or label. */
 .stella-guide-popover .driver-popover-close-btn {
-  grid-row: 2;
-  grid-column: 1 / -1;
-  justify-self: start;
-  position: static;
+  position: absolute;
+  inset-block-start: 0.5rem;
+  inset-inline-end: 0.5rem;
   box-sizing: border-box;
-  inline-size: auto;
-  block-size: auto;
-  /* Pulled back by its own padding so the label lines up with the body text
-   * while keeping a full-size hit area. */
-  margin-inline-start: -0.75rem;
-  padding: 0.625rem 0.75rem;
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  overflow: hidden;
+  padding: 0;
   font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25;
-  text-align: start;
+  font-size: 0;
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
   color: var(--stella-guide-muted);
   background-color: transparent;
   border: 1px solid transparent;
   border-radius: calc(var(--stella-guide-radius) - 0.125rem);
   cursor: pointer;
+}
+
+.stella-guide-popover .driver-popover-close-btn::before {
+  content: "×";
+  font-size: 1.5rem;
 }
 
 .stella-guide-popover .driver-popover-close-btn:hover,

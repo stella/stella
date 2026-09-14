@@ -11,7 +11,7 @@ import {
   deleteTestWorkspace,
 } from "../helpers/workspace";
 
-const HELP_BUTTON_NAME = "Help and guides";
+const HELP_BUTTON_NAME = "Help and feedback";
 const GUIDE_POPOVER_SELECTOR = ".stella-guide-popover";
 const GUIDE_NEXT_BUTTON_SELECTOR = ".driver-popover-next-btn";
 const GUIDE_PREVIOUS_BUTTON_SELECTOR = ".driver-popover-prev-btn";
@@ -99,6 +99,26 @@ const advanceToGuideStep = async (
   await expectGuideStep(page, anchor, progress);
 };
 
+const expectGuidePopoverBesideTarget = async (page: Page, anchor: string) => {
+  const overlapsTarget = await page
+    .locator(`[data-guide-anchor="${anchor}"]`)
+    .evaluate((target, popoverSelector) => {
+      const popover = document.querySelector(popoverSelector);
+      if (!(popover instanceof HTMLElement)) {
+        return true;
+      }
+      const targetRect = target.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      return (
+        targetRect.left < popoverRect.right &&
+        targetRect.right > popoverRect.left &&
+        targetRect.top < popoverRect.bottom &&
+        targetRect.bottom > popoverRect.top
+      );
+    }, GUIDE_POPOVER_SELECTOR);
+  expect(overlapsTarget).toBe(false);
+};
+
 const finishGuide = async (page: Page) => {
   await guidePopover(page).locator(GUIDE_NEXT_BUTTON_SELECTOR).click();
   await expect(guidePopover(page)).toHaveCount(0);
@@ -110,11 +130,65 @@ const startGuide = async (page: Page, title: string) => {
   await helpButton.click();
   const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
   const card = drawer.locator("li").filter({ hasText: title });
-  const start = card.getByRole("button", { name: /^(?:Replay|Start)$/u });
+  const start = card.getByRole("button", { name: /^(?:Start again|Start)$/u });
   await expect(start).toBeEnabled({ timeout: 30_000 });
   await start.click();
   await expect(drawer).toHaveCount(0);
 };
+
+test("Help keeps guides scrollable above one support footer", async ({
+  page,
+}) => {
+  await enableGuidesTestFeatures(page);
+  await page.goto("/chat", {
+    timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "commit",
+  });
+
+  await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
+  const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("tablist")).toHaveCount(0);
+  for (const name of [
+    "Discord",
+    "GitHub",
+    "Personal support",
+    "Documentation",
+  ]) {
+    await expect(drawer.getByRole("link", { name })).toBeVisible();
+  }
+  const resourceLinks = ["Discord", "GitHub", "Documentation"].map((name) =>
+    drawer.getByRole("link", { name }),
+  );
+  const resourceBoxes = await Promise.all(
+    resourceLinks.map(async (link) => link.boundingBox()),
+  );
+  const personalSupportBox = await drawer
+    .getByRole("link", { name: "Personal support" })
+    .boundingBox();
+  const footerBox = await drawer
+    .locator('[data-slot="sheet-footer"]')
+    .boundingBox();
+  expect(resourceBoxes.every((box) => box?.y === resourceBoxes.at(0)?.y)).toBe(
+    true,
+  );
+  expect(
+    personalSupportBox &&
+      resourceBoxes.every(
+        (box) => box && personalSupportBox.y >= box.y + box.height,
+      ),
+  ).toBe(true);
+  expect(
+    personalSupportBox &&
+      footerBox &&
+      Math.abs(
+        personalSupportBox.x +
+          personalSupportBox.width / 2 -
+          (footerBox.x + footerBox.width / 2),
+      ) < 1,
+  ).toBe(true);
+  await expect(page.getByRole("button", { name: "Feedback" })).toHaveCount(0);
+});
 
 test("Chat guide resolves every live anchor exactly once", async ({ page }) => {
   await enableGuidesTestFeatures(page);
@@ -123,12 +197,32 @@ test("Chat guide resolves every live anchor exactly once", async ({ page }) => {
     waitUntil: "commit",
   });
 
-  await startGuide(page, "Ask with the right context");
+  await startGuide(page, "Start with chat");
   await expectGuideStep(page, GUIDE_ANCHORS.chatComposer, "1 of 6");
+  const leaveButton = guidePopover(page).getByRole("button", {
+    name: "Leave guide",
+  });
+  const leaveBox = await leaveButton.boundingBox();
+  expect(
+    await leaveButton.evaluate((button) => ({
+      marker: getComputedStyle(button, "::before").content,
+      overflow: getComputedStyle(button).overflow,
+    })),
+  ).toEqual({ marker: '"×"', overflow: "hidden" });
+  const navigationBox = await guidePopover(page)
+    .locator(".driver-popover-footer")
+    .boundingBox();
+  expect(
+    leaveBox &&
+      navigationBox &&
+      leaveBox.height >= 44 &&
+      leaveBox.y + leaveBox.height < navigationBox.y,
+  ).toBe(true);
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatToolsButton, "2 of 6");
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuAttach, "3 of 6");
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuContext, "4 of 6");
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatAnonymize, "5 of 6");
+  await expectGuidePopoverBesideTarget(page, GUIDE_ANCHORS.chatAnonymize);
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatSend, "6 of 6");
   await finishGuide(page);
 });
@@ -142,7 +236,7 @@ test("Chat power guide ends inside the menu and closes it", async ({
     waitUntil: "commit",
   });
 
-  await startGuide(page, "Chat power features");
+  await startGuide(page, "Do more in chat");
   await expectGuideStep(page, GUIDE_ANCHORS.chatToolsButton, "1 of 4");
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuModels, "2 of 4");
   await advanceToGuideStep(page, GUIDE_ANCHORS.chatMenuSkills, "3 of 4");
@@ -267,7 +361,7 @@ test("Playbooks guide reverses and replays its local editor transition", async (
     waitUntil: "commit",
   });
 
-  await startGuide(page, "Build a playbook");
+  await startGuide(page, "Create a playbook");
   await expectGuideStep(page, GUIDE_ANCHORS.playbooksOverview, "1 of 4");
   await advanceToGuideStep(page, GUIDE_ANCHORS.playbooksCreate, "2 of 4");
   await advanceToGuideStep(page, GUIDE_ANCHORS.playbooksBasics, "3 of 4");
@@ -281,7 +375,7 @@ test("Playbooks guide reverses and replays its local editor transition", async (
   // Finishing leaves the reversible local editor visible. Replaying from that
   // pathname starts at its first visible editor step without discarding work;
   // Back cannot reverse a transition owned by an earlier run.
-  await startGuide(page, "Build a playbook");
+  await startGuide(page, "Create a playbook");
   await expectGuideStep(page, GUIDE_ANCHORS.playbooksBasics, "3 of 4");
   await expect(
     guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR),
