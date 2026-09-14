@@ -357,7 +357,9 @@ export const registerOAuthClient = async ({
     redirect_uris: [redirectUri],
     response_types: ["code"],
     token_endpoint_auth_method: "none",
-    contacts: [],
+    // `contacts` is optional (RFC 7591 §2) and some authorization servers
+    // reject an empty array as invalid metadata, so it is omitted rather than
+    // sent empty.
     software_id: `stella-${connectorSlug}`,
     ...(requestedScopes.length > 0 ? { scope: requestedScopes.join(" ") } : {}),
   };
