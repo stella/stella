@@ -21,13 +21,13 @@ import { CommandItem } from "@stll/ui/command";
 import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
 import {
-  SEARCH_MENU_HEADING_CLASS_NAME,
-  SEARCH_MENU_LIST_CLASS_NAME,
-  SEARCH_MENU_ROW_CLASS_NAME,
-  SEARCH_MENU_SECTION_CLASS_NAME,
   compactMeta,
   KIND_TRANSLATION_KEYS,
 } from "@/components/search-dialog.shared";
+import {
+  SearchMenuSection,
+  SEARCH_MENU_ROW_CLASS_NAME,
+} from "@/components/search-menu-section";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -291,73 +291,63 @@ export const SearchRecents = ({
   return (
     <>
       {recentSearches.length > 0 && (
-        <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
-          <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
-            {t("search.recentSearches")}
-          </h3>
-          <div className={SEARCH_MENU_LIST_CLASS_NAME}>
-            {recentSearches.map((recent) => (
-              <Button
-                className={SEARCH_MENU_ROW_CLASS_NAME}
-                data-search-empty-row=""
-                key={recent.query}
-                onClick={() => onSearchClick(recent)}
-                variant="ghost"
-              >
-                <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
-                <span className="truncate">{recent.query}</span>
-              </Button>
-            ))}
-          </div>
-        </section>
+        <SearchMenuSection title={t("search.recentSearches")}>
+          {recentSearches.map((recent) => (
+            <Button
+              className={SEARCH_MENU_ROW_CLASS_NAME}
+              data-search-empty-row=""
+              key={recent.query}
+              onClick={() => onSearchClick(recent)}
+              variant="ghost"
+            >
+              <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
+              <span className="truncate">{recent.query}</span>
+            </Button>
+          ))}
+        </SearchMenuSection>
       )}
       {recentFiles.length > 0 && (
-        <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
-          <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
-            {t("search.recentlyOpenedFiles")}
-          </h3>
-          <div className={SEARCH_MENU_LIST_CLASS_NAME}>
-            {recentFiles.map((file) => (
-              <Button
-                aria-current={
-                  previewedFileId === file.entityId ? "true" : undefined
-                }
-                className={SEARCH_MENU_ROW_CLASS_NAME}
-                data-previewing={previewedFileId === file.entityId}
-                data-search-empty-row=""
-                key={file.entityId}
-                onFocus={() => onFilePreview(file)}
-                onClick={() => {
-                  onFileClick(file);
-                }}
-                onPointerEnter={() => onFilePreview(file)}
-                variant={
-                  previewedFileId === file.entityId ? "secondary" : "ghost"
-                }
-              >
-                {file.mimeType ? (
-                  <DocumentIcon
-                    className="text-muted-foreground size-4 shrink-0"
-                    mimeType={file.mimeType}
-                  />
-                ) : (
-                  <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1">
-                  <BidiText as="span" className="block truncate">
-                    {file.title}
-                  </BidiText>
-                  <BidiText
-                    as="span"
-                    className="text-muted-foreground block truncate text-xs"
-                  >
-                    {file.workspaceName}
-                  </BidiText>
-                </span>
-              </Button>
-            ))}
-          </div>
-        </section>
+        <SearchMenuSection title={t("search.recentlyOpenedFiles")}>
+          {recentFiles.map((file) => (
+            <Button
+              aria-current={
+                previewedFileId === file.entityId ? "true" : undefined
+              }
+              className={SEARCH_MENU_ROW_CLASS_NAME}
+              data-previewing={previewedFileId === file.entityId}
+              data-search-empty-row=""
+              key={file.entityId}
+              onFocus={() => onFilePreview(file)}
+              onClick={() => {
+                onFileClick(file);
+              }}
+              onPointerEnter={() => onFilePreview(file)}
+              variant={
+                previewedFileId === file.entityId ? "secondary" : "ghost"
+              }
+            >
+              {file.mimeType ? (
+                <DocumentIcon
+                  className="text-muted-foreground size-4 shrink-0"
+                  mimeType={file.mimeType}
+                />
+              ) : (
+                <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
+              )}
+              <span className="min-w-0 flex-1">
+                <BidiText as="span" className="block truncate">
+                  {file.title}
+                </BidiText>
+                <BidiText
+                  as="span"
+                  className="text-muted-foreground block truncate text-xs"
+                >
+                  {file.workspaceName}
+                </BidiText>
+              </span>
+            </Button>
+          ))}
+        </SearchMenuSection>
       )}
     </>
   );

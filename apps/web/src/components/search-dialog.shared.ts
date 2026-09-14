@@ -12,13 +12,6 @@ import type { TranslationKey } from "@/i18n/types";
 import type { EntityKind, GlobalSearchHit } from "@/lib/api-contract";
 import type { TimePreset } from "@/lib/search";
 
-export const SEARCH_MENU_SECTION_CLASS_NAME = "shrink-0 px-4 py-3";
-export const SEARCH_MENU_HEADING_CLASS_NAME =
-  "text-muted-foreground mb-2 text-xs font-medium";
-export const SEARCH_MENU_LIST_CLASS_NAME = "space-y-1";
-export const SEARCH_MENU_ROW_CLASS_NAME =
-  "h-auto min-h-11 min-w-0 w-full justify-start gap-2 border border-transparent px-2 py-2 text-start text-sm sm:h-auto [&_svg]:mx-0";
-
 export const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
   "text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium";
 export const SEARCH_PREVIEW_COLUMN_CLASS_NAME =

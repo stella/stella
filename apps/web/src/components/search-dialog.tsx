@@ -109,9 +109,6 @@ import {
   KIND_TRANSLATION_KEYS,
   mergeSelectedBuckets,
   SEARCH_PREVIEW_COLUMN_CLASS_NAME,
-  SEARCH_MENU_HEADING_CLASS_NAME,
-  SEARCH_MENU_LIST_CLASS_NAME,
-  SEARCH_MENU_SECTION_CLASS_NAME,
 } from "@/components/search-dialog.shared";
 import {
   canShowSearchSummary,
@@ -126,6 +123,7 @@ import {
   toggleArrayMember,
 } from "@/components/search-filters.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
+import { SearchMenuSection } from "@/components/search-menu-section";
 import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
 import type { SearchScope } from "@/components/search-scope";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -1873,25 +1871,20 @@ export const SearchDialog = ({
                       </div>
                       {scopeVisibility.actions &&
                         filteredActions.length > 0 && (
-                          <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
-                            <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
-                              {t("common.actions")}
-                            </h3>
-                            <div className={SEARCH_MENU_LIST_CLASS_NAME}>
-                              {actionEntries.map((entry, index) => (
-                                <CommandActionItem
-                                  entry={entry}
-                                  navigation={
-                                    hasVisibleSearch
-                                      ? { type: "command", index }
-                                      : { type: "button" }
-                                  }
-                                  key={entry.action.id}
-                                  onSelect={handleActionSelect}
-                                />
-                              ))}
-                            </div>
-                          </section>
+                          <SearchMenuSection title={t("common.actions")}>
+                            {actionEntries.map((entry, index) => (
+                              <CommandActionItem
+                                entry={entry}
+                                navigation={
+                                  hasVisibleSearch
+                                    ? { type: "command", index }
+                                    : { type: "button" }
+                                }
+                                key={entry.action.id}
+                                onSelect={handleActionSelect}
+                              />
+                            ))}
+                          </SearchMenuSection>
                         )}
                       <SearchResultsContent
                         onRetry={() => {

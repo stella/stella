@@ -44,13 +44,11 @@ import {
   shouldShowSavedSearchList,
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
-import {
-  SEARCH_MENU_HEADING_CLASS_NAME,
-  SEARCH_MENU_LIST_CLASS_NAME,
-  SEARCH_MENU_ROW_CLASS_NAME,
-  SEARCH_MENU_SECTION_CLASS_NAME,
-} from "@/components/search-dialog.shared";
 import type { SearchFilters } from "@/components/search-filters.logic";
+import {
+  SearchMenuSection,
+  SEARCH_MENU_ROW_CLASS_NAME,
+} from "@/components/search-menu-section";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -261,96 +259,91 @@ export const SavedSearches = ({
       )}
 
       {shouldShowList && (
-        <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
-          <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
-            {t("search.savedSearches")}
-          </h3>
-          <div className={SEARCH_MENU_LIST_CLASS_NAME}>
-            {savedSearchesQuery.isPending && (
-              <div className="flex h-11 items-center px-2">
-                <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
-              </div>
-            )}
-            {savedSearchesQuery.isError && (
+        <SearchMenuSection title={t("search.savedSearches")}>
+          {savedSearchesQuery.isPending && (
+            <div className="flex h-11 items-center px-2">
+              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+            </div>
+          )}
+          {savedSearchesQuery.isError && (
+            <Button
+              className="h-11 w-full justify-start px-2"
+              onClick={() => {
+                detached(
+                  savedSearchesQuery.refetch(),
+                  "saved-searches.refetch",
+                );
+              }}
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          )}
+          {savedSearches?.map((savedSearch) => (
+            <div className="flex min-w-0 items-center" key={savedSearch.id}>
               <Button
-                className="h-11 w-full justify-start px-2"
-                onClick={() => {
-                  detached(
-                    savedSearchesQuery.refetch(),
-                    "saved-searches.refetch",
-                  );
-                }}
+                className={cn(SEARCH_MENU_ROW_CLASS_NAME, "w-auto flex-1")}
+                data-search-empty-row=""
+                onClick={() => onApply(savedSearch.criteria)}
                 variant="ghost"
               >
-                {t("common.retry")}
+                <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
+                <BidiText as="span" className="truncate">
+                  {savedSearch.name}
+                </BidiText>
               </Button>
-            )}
-            {savedSearches?.map((savedSearch) => (
-              <div className="flex min-w-0 items-center" key={savedSearch.id}>
-                <Button
-                  className={cn(SEARCH_MENU_ROW_CLASS_NAME, "w-auto flex-1")}
-                  data-search-empty-row=""
-                  onClick={() => onApply(savedSearch.criteria)}
-                  variant="ghost"
-                >
-                  <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                  <BidiText as="span" className="truncate">
-                    {savedSearch.name}
-                  </BidiText>
-                </Button>
-                <Button
-                  aria-label={t("common.rename")}
-                  className="size-11 shrink-0"
-                  disabled={isMutatingSavedSearch}
-                  onClick={() =>
-                    setDialog({
-                      type: "rename",
-                      name: savedSearch.name,
-                      search: savedSearch,
-                    })
-                  }
-                  size="icon"
-                  title={t("common.rename")}
-                  variant="ghost"
-                >
-                  <PencilIcon className="size-4" />
-                </Button>
-                <Button
-                  aria-label={t("common.delete")}
-                  className="size-11 shrink-0"
-                  disabled={isMutatingSavedSearch}
-                  onClick={() =>
-                    setDialog({ type: "delete", search: savedSearch })
-                  }
-                  size="icon"
-                  title={t("common.delete")}
-                  variant="ghost"
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            ))}
-            {savedSearchesQuery.hasNextPage && (
               <Button
-                className="h-11 w-full"
-                disabled={savedSearchesQuery.isFetchingNextPage}
-                onClick={() => {
-                  detached(
-                    savedSearchesQuery.fetchNextPage(),
-                    "saved-searches.fetch-next-page",
-                  );
-                }}
+                aria-label={t("common.rename")}
+                className="size-11 shrink-0"
+                disabled={isMutatingSavedSearch}
+                onClick={() =>
+                  setDialog({
+                    type: "rename",
+                    name: savedSearch.name,
+                    search: savedSearch,
+                  })
+                }
+                size="icon"
+                title={t("common.rename")}
                 variant="ghost"
               >
-                {savedSearchesQuery.isFetchingNextPage ? (
-                  <LoaderIcon className="size-4 animate-spin" />
-                ) : (
-                  t("common.loadMore")
-                )}
+                <PencilIcon className="size-4" />
               </Button>
-            )}
-          </div>
-        </section>
+              <Button
+                aria-label={t("common.delete")}
+                className="size-11 shrink-0"
+                disabled={isMutatingSavedSearch}
+                onClick={() =>
+                  setDialog({ type: "delete", search: savedSearch })
+                }
+                size="icon"
+                title={t("common.delete")}
+                variant="ghost"
+              >
+                <Trash2Icon className="size-4" />
+              </Button>
+            </div>
+          ))}
+          {savedSearchesQuery.hasNextPage && (
+            <Button
+              className="h-11 w-full"
+              disabled={savedSearchesQuery.isFetchingNextPage}
+              onClick={() => {
+                detached(
+                  savedSearchesQuery.fetchNextPage(),
+                  "saved-searches.fetch-next-page",
+                );
+              }}
+              variant="ghost"
+            >
+              {savedSearchesQuery.isFetchingNextPage ? (
+                <LoaderIcon className="size-4 animate-spin" />
+              ) : (
+                t("common.loadMore")
+              )}
+            </Button>
+          )}
+        </SearchMenuSection>
       )}
 
       <Dialog
