@@ -680,6 +680,10 @@
     "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
+    "searchUnavailable": {
+      "description": "Nepavyko pasiekti teismų praktikos paieškos. Jūsų užklausa lieka adreso juostoje, pabandykite po akimirkos dar kartą.",
+      "title": "Paieška laikinai nepasiekiama"
+    },
     "showWholeHeadnote": "Rodyti visą santrauką",
     "sort": {
       "newest": "Naujausi",

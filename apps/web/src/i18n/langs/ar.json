@@ -680,6 +680,10 @@
     "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
+    "searchUnavailable": {
+      "description": "تعذّر الوصول إلى بحث الاجتهاد القضائي. الاستعلام محفوظ في شريط العنوان، لذا أعد المحاولة بعد لحظات.",
+      "title": "البحث غير متاح مؤقتًا"
+    },
     "showWholeHeadnote": "عرض خلاصة الحكم كاملة",
     "sort": {
       "newest": "الأحدث",

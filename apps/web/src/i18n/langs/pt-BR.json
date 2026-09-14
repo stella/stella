@@ -680,6 +680,10 @@
     "searchAskPrompt": "{query} (jurisprudência de {country})",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
+    "searchUnavailable": {
+      "description": "Não foi possível acessar a pesquisa de jurisprudência. Sua consulta permanece na barra de endereços; tente novamente em instantes.",
+      "title": "A pesquisa está temporariamente indisponível"
+    },
     "showWholeHeadnote": "Mostrar a ementa completa",
     "sort": {
       "newest": "Mais recentes",

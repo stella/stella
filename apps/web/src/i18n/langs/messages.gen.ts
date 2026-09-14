@@ -683,6 +683,10 @@ type Messages = {
     "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
+    "searchUnavailable": {
+      "description": "The case-law search could not be reached. Your query is kept in the address bar, so try again in a moment.";
+      "title": "Search is temporarily unavailable";
+    };
     "showWholeHeadnote": "Show whole headnote";
     "sort": {
       "newest": "Newest";

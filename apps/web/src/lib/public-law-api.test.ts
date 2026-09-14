@@ -2,9 +2,22 @@ import { describe, expect, test } from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
 import {
+  isSearchUnavailableError,
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
+
+const thrownBy = (status: number, value: unknown): unknown => {
+  try {
+    unwrapPublicLawEden(
+      { data: null, error: { status, value } },
+      "searchPublicCaseLawDecisions",
+    );
+  } catch (error) {
+    return error;
+  }
+  return null;
+};
 
 describe("unwrapPublicLawEden", () => {
   test("returns the data of a successful response", () => {
@@ -54,5 +67,37 @@ describe("unwrapPublicLawEden", () => {
         "listPublicCaseLawFacets",
       ),
     ).toThrow(APIError);
+  });
+});
+
+describe("isSearchUnavailableError", () => {
+  test("recognizes the engine outage the search endpoint reports", () => {
+    expect(
+      isSearchUnavailableError(
+        thrownBy(503, { message: "Search is temporarily unavailable" }),
+      ),
+    ).toBe(true);
+  });
+
+  test("classifies by status, not by the message the API happens to send", () => {
+    expect(
+      isSearchUnavailableError(
+        thrownBy(500, { message: "Search is temporarily unavailable" }),
+      ),
+    ).toBe(false);
+  });
+
+  test("leaves a request the engine refused to the error boundary", () => {
+    expect(isSearchUnavailableError(thrownBy(502, null))).toBe(false);
+  });
+
+  test("a disabled public-law surface is not a search outage", () => {
+    expect(
+      isSearchUnavailableError(thrownBy(404, { error: "Not Found" })),
+    ).toBe(false);
+  });
+
+  test("anything that is not an API failure is not a search outage", () => {
+    expect(isSearchUnavailableError(new Error("boom"))).toBe(false);
   });
 });
