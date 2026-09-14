@@ -798,7 +798,7 @@ export const AnnotationToolbar = ({
 
   return createPortal(
     <div
-      className="bg-popover text-popover-foreground fixed z-[100] -translate-x-1/2 rounded-md border p-1 font-sans text-xs shadow-md"
+      className="reader-chrome bg-popover text-popover-foreground fixed z-[100] -translate-x-1/2 rounded-md border p-1 text-xs shadow-md"
       ref={barRef}
       style={position}
     >

@@ -217,6 +217,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
+    "no-font-utility-in-reader/no-font-utility-in-reader",
+  ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
   ]),
@@ -543,7 +546,9 @@ const customCssClassNames = [
   "ray",
   "reader-apparatus",
   "reader-apparatus-summary",
+  "reader-body",
   "reader-case-law",
+  "reader-chrome",
   "reader-justify",
   "reader-note-back",
   "reader-note-label",
@@ -1130,6 +1135,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
@@ -2243,6 +2249,22 @@ export default defineConfig({
       ],
       rules: {
         "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+      },
+    },
+    {
+      // The reader's face is inherited from the reader root, which reader.css
+      // sets from `--reader-body-font`. A font utility on one element inside
+      // it mixes two faces in one document; chrome that is sans on purpose
+      // says so with `reader-chrome`, quoted text outside the root with
+      // `reader-body`.
+      files: [
+        "apps/web/src/components/legal-reader/**/*.tsx",
+        "apps/web/src/features/case-law/components/case-viewer/**/*.tsx",
+        "apps/web/src/features/statutes/components/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-font-utility-in-reader.fixture.tsx",
+      ],
+      rules: {
+        "no-font-utility-in-reader/no-font-utility-in-reader": "error",
       },
     },
     {

@@ -109,7 +109,7 @@ export const CitedDecisionLink = ({
   return (
     <PreviewCard>
       <PreviewCardTrigger render={link}>{children}</PreviewCardTrigger>
-      <PreviewCardPopup className="w-auto max-w-72 flex-col gap-0.5 p-3 font-sans">
+      <PreviewCardPopup className="reader-chrome w-auto max-w-72 flex-col gap-0.5 p-3">
         <BidiText as="span" className="text-foreground text-sm font-medium">
           {citedDecisionLabel(decision)}
         </BidiText>

@@ -694,14 +694,32 @@ const PARAGRAPH_LIST_INDENT_CLASS = {
 } as const satisfies Record<ParagraphListDepth, string>;
 
 /**
+ * Where the glyph sits. A left-aligned block hangs it in the margin at the
+ * edge its text starts from; a heading sets it in the row with its own words,
+ * because a centred designation starts nowhere near that margin.
+ */
+type PermalinkPlacement = "hanging" | "inline";
+
+const PERMALINK_PLACEMENT_CLASS = {
+  hanging: "absolute end-full top-0 me-1",
+  inline: "ms-1",
+} as const satisfies Record<PermalinkPlacement, string>;
+
+/**
  * A block's own address, as a link the reader can take with them.
  *
- * The `href` alone is what makes it work: following it is native anchor
- * navigation, so the hash lands in the URL and `:target` flashes the block
- * without a single line of script. The clipboard copy on top is the
- * convenience, not the mechanism.
+ * A plain click copies the link and writes the hash with `replaceState`: the
+ * address bar and `:target` follow the block the reader pointed at, without
+ * the browser scrolling it out from under them. The `href` stays a real one,
+ * so a modified click, "copy link address" and middle-click still navigate.
  */
-const BlockPermalink = ({ anchorId }: { anchorId: string }) => {
+const BlockPermalink = ({
+  anchorId,
+  placement = "hanging",
+}: {
+  anchorId: string;
+  placement?: PermalinkPlacement;
+}) => {
   const t = useTranslations();
 
   const copyPermalink = async () => {
@@ -719,10 +737,18 @@ const BlockPermalink = ({ anchorId }: { anchorId: string }) => {
   return (
     <a
       aria-label={t("common.copyLink")}
-      className="text-foreground-disabled hover:text-foreground focus-visible:ring-ring absolute end-full top-0 me-1 rounded-sm px-1 leading-[inherit] no-underline opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none print:hidden [@media(hover:none)]:opacity-100"
+      className={cn(
+        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none print:hidden [@media(hover:none)]:opacity-100",
+        PERMALINK_PLACEMENT_CLASS[placement],
+      )}
       data-reader-chrome=""
       href={`#${anchorId}`}
-      onClick={() => {
+      onClick={(event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        event.preventDefault();
+        window.history.replaceState(null, "", `#${anchorId}`);
         detached(copyPermalink(), "legal-reader.permalink-copy");
       }}
     >
@@ -899,10 +925,13 @@ export const BlockRenderer = ({
     "data-anchor": block.anchorId,
     id: anchorPresentation === "document" ? block.anchorId : undefined,
   };
-  const permalink =
-    anchorPresentation === "document" ? (
-      <BlockPermalink anchorId={block.anchorId} />
-    ) : null;
+  const isAddressable = anchorPresentation === "document";
+  const permalink = isAddressable ? (
+    <BlockPermalink anchorId={block.anchorId} />
+  ) : null;
+  const headingPermalink = isAddressable ? (
+    <BlockPermalink anchorId={block.anchorId} placement="inline" />
+  ) : null;
 
   if (block.type === "heading") {
     const Tag = `h${block.level}` as const;
@@ -933,9 +962,11 @@ export const BlockRenderer = ({
         )}
         {...documentAnchorProps}
       >
-        {permalink}
         {provision === null ? (
-          <InlineContent {...sharedInlineProps} inlines={block.inlines} />
+          <>
+            <InlineContent {...sharedInlineProps} inlines={block.inlines} />
+            {headingPermalink}
+          </>
         ) : (
           <>
             {provision.above.inlines.length > 0 && (
@@ -956,6 +987,7 @@ export const BlockRenderer = ({
                 />
               </span>
               {provision.accessory}
+              {headingPermalink}
             </span>
             {provision.below.inlines.length > 0 && (
               <span className="mt-3 block">
@@ -1017,7 +1049,7 @@ export const BlockRenderer = ({
           isRomanNumeralDivider &&
             "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
           block.role === "case-number" &&
-            "text-muted-foreground mb-2 text-end font-sans text-[0.95rem]",
+            "reader-chrome text-muted-foreground mb-2 text-end text-[0.95rem]",
           block.role === "closing" && "mt-8 text-center",
           block.role === "signature" &&
             "reader-signature text-muted-foreground mt-1 text-end",
@@ -1045,7 +1077,7 @@ export const BlockRenderer = ({
         {block.number !== undefined && (
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
-            className="text-muted-foreground absolute start-0 font-sans text-[0.8em] select-none"
+            className="reader-chrome text-muted-foreground absolute start-0 text-[0.8em] select-none"
             data-reader-chrome=""
             pieceId={getParagraphNumberPieceId(block.id)}
             ranges={rangesForPiece(
@@ -1100,7 +1132,7 @@ export const BlockRenderer = ({
     <div className="group relative">
       {permalink}
       <table
-        className="my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] font-sans text-[0.88rem]"
+        className="reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[0.88rem]"
         {...documentAnchorProps}
       >
         <tbody>

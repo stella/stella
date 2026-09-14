@@ -176,7 +176,7 @@ export const StatuteText = ({
         lang={language}
         style={READER_STYLE}
       >
-        <h1 className="mb-10 text-center font-sans text-xl font-semibold text-balance">
+        <h1 className="mb-10 text-center text-xl font-semibold text-balance">
           {statuteTitle}
         </h1>
         <FulltextFallback
@@ -219,7 +219,7 @@ const ProvisionDetailsAction = ({
   return (
     <button
       aria-label={t("statutes.provisionDetailsFor", { provision })}
-      className="border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 font-sans text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
+      className="reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
       onClick={onOpen}
       type="button"
     >
