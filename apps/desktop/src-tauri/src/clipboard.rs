@@ -1643,7 +1643,7 @@ impl ClipboardManager {
   }
 
   /// How many groups may exist, the same ceiling `create_group` enforces.
-  pub fn group_limit(&self) -> usize {
+  pub const fn group_limit() -> usize {
     MAX_GROUPS
   }
 
