@@ -16,7 +16,6 @@ minimumReleaseAgeExcludes = [
   # Oxlint 1.82 and Ultracite 7.11.1 add branch-wise loop-condition checking.
   # Keep the plugin SDK and every native binding with the pinned release;
   # quarantined optional bindings otherwise leave the executable unavailable.
-  "ultracite", # quarantine-expires: 2026-09-14T13:44:07.879Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
