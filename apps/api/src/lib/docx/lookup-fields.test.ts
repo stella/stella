@@ -249,29 +249,29 @@ describe("renderLookupOutput", () => {
       "B",
       "8573",
       "Praha 7",
-      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440, zapsaná v obchodním rejstříku vedeném Městským soudem v Praze pod sp. zn. B 8573",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 270 82 440, zapsaná v obchodním rejstříku vedeném Městským soudem v Praze pod sp. zn. B 8573",
     ],
     [
       "UNKNOWN",
       "B",
       "8573",
       "Praha 7",
-      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 270 82 440",
     ],
-    [null, "B", "8573", null, "společnost **Example a.s.**, IČO: 27082440"],
+    [null, "B", "8573", null, "společnost **Example a.s.**, IČO: 270 82 440"],
     [
       "Městský soud v Praze",
       "",
       "8573",
       "Praha 7",
-      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 270 82 440",
     ],
     [
       "Městský soud v Praze",
       "B",
       "",
       "Praha 7",
-      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 27082440",
+      "společnost **Example a.s.**, se sídlem Praha 7, IČO: 270 82 440",
     ],
   ])(
     "uses the ARES default without inventing absent particulars: %s/%s/%s/%s",
@@ -334,20 +334,27 @@ describe("renderLookupOutput", () => {
         registryUrl: company.registryUrl,
         details: { registry: "ares", company },
       } satisfies BusinessRegistryHit;
-      expect(renderLookupOutput(null, hit)).toBe("**Example**, IČO: 27082440");
+      expect(renderLookupOutput(null, hit)).toBe(
+        "**Example**, IČO: 270 82 440",
+      );
       expect(renderLookupOutput(ARES_DEFAULT_FORMAT, hit)).toBe(
-        "**Example**, IČO: 27082440",
+        "**Example**, IČO: 270 82 440",
       );
     },
   );
   test.each([
-    ["Městský soud v Praze", "Městským soudem v Praze"],
-    ["Krajský soud v Brně", "Krajským soudem v Brně"],
-    ["UNKNOWN", ""],
-    [null, ""],
+    [
+      "Městský soud v Praze",
+      "Městským soudem v Praze",
+      "Městského soudu v Praze",
+    ],
+    ["Krajský soud v Brně", "Krajským soudem v Brně", "Krajského soudu v Brně"],
+    ["MSPH", "Městským soudem v Praze", "Městského soudu v Praze"],
+    ["UNKNOWN", "", ""],
+    [null, "", ""],
   ])(
-    "renders the instrumental court token from ARES particulars: %s",
-    (court, expected) => {
+    "renders the declined court tokens from ARES particulars: %s",
+    (court, instrumental, genitive) => {
       const company = {
         ...parseResRecord({
           ico: "27082440",
@@ -367,7 +374,13 @@ describe("renderLookupOutput", () => {
         details: { registry: "ares", company },
       } satisfies BusinessRegistryHit;
       expect(renderLookupOutput("Soud: [court instrumental]", hit)).toBe(
-        `Soud: ${expected}`.trim(),
+        `Soud: ${instrumental}`.trim(),
+      );
+      expect(renderLookupOutput("u [court genitive]", hit)).toBe(
+        `u ${genitive}`.trim(),
+      );
+      expect(renderLookupOutput("IČO: [registry number spaced]", hit)).toBe(
+        "IČO: 270 82 440",
       );
     },
   );

@@ -1,5 +1,11 @@
-import { ARES_COURT_INSTRUMENTAL_TOKEN } from "@stll/business-registries/ares/court-names";
-import { ARES_FILE_REFERENCE_TOKEN } from "@stll/business-registries/ares/default-format";
+import {
+  ARES_COURT_GENITIVE_TOKEN,
+  ARES_COURT_INSTRUMENTAL_TOKEN,
+} from "@stll/business-registries/ares/court-names";
+import {
+  ARES_FILE_REFERENCE_TOKEN,
+  ARES_IDENTIFIER_SPACED_TOKEN,
+} from "@stll/business-registries/ares/default-format";
 import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
@@ -20,9 +26,11 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
   {
     ares: [
       ...REGISTRY_BASE_RETURN_FIELDS,
+      ARES_IDENTIFIER_SPACED_TOKEN,
       "share capital",
       "court file",
       ARES_COURT_INSTRUMENTAL_TOKEN,
+      ARES_COURT_GENITIVE_TOKEN,
       ARES_FILE_REFERENCE_TOKEN,
       "registered on",
       "acting clause",

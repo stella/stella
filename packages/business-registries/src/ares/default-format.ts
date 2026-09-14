@@ -2,6 +2,18 @@ import { ARES_COURT_INSTRUMENTAL_TOKEN } from "./court-names.js";
 
 export const ARES_FILE_REFERENCE_TOKEN = "file reference" as const;
 
+export const ARES_IDENTIFIER_SPACED_TOKEN = "registry number spaced" as const;
+
+const EIGHT_DIGITS_RE = /^\d{8}$/u;
+
+/** Czech practice groups an eight-digit IČO as "ddd dd ddd". Anything else
+ *  (already grouped, foreign, malformed) is returned untouched, which also
+ *  makes the grouping idempotent. */
+export const formatAresIdentifierSpaced = (identifier: string): string =>
+  EIGHT_DIGITS_RE.test(identifier)
+    ? `${identifier.slice(0, 3)} ${identifier.slice(3, 5)} ${identifier.slice(5)}`
+    : identifier;
+
 // FORMA company codes: v.o.s., s.r.o., k.s., a.s., and European company.
 export const isAresCommercialCompany = (legalForm: string | null): boolean =>
   legalForm !== null && ["111", "112", "113", "121", "932"].includes(legalForm);
@@ -13,7 +25,7 @@ export const ARES_DEFAULT_FORMAT_PARTS: Record<
 > = {
   name: "společnost **[company name]**",
   address: "se sídlem [address]",
-  identifier: "IČO: [registry number]",
+  identifier: `IČO: [${ARES_IDENTIFIER_SPACED_TOKEN}]`,
   registration: `zapsaná v obchodním rejstříku vedeném [${ARES_COURT_INSTRUMENTAL_TOKEN}] pod sp. zn. [${ARES_FILE_REFERENCE_TOKEN}]`,
 };
 
