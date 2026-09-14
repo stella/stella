@@ -360,7 +360,7 @@ Project: desktop-tauri
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
 - piper 0.2.5 — Apache-2.0 OR MIT
 - pkg-config 0.3.33 — Apache-2.0 OR MIT
-- plist 1.10.0 — MIT
+- plist 1.10.1 — MIT
 - png 0.17.16 — Apache-2.0 OR MIT
 - png 0.18.1 — Apache-2.0 OR MIT
 - polling 3.11.0 — Apache-2.0 OR MIT
@@ -378,6 +378,7 @@ Project: desktop-tauri
 - pxfm 0.1.30 — Apache-2.0 OR BSD-3-Clause
 - quick-error 2.0.1 — MIT/Apache-2.0
 - quick-xml 0.41.0 — MIT
+- quick-xml 0.42.0 — MIT
 - quinn 0.11.11 — Apache-2.0 OR MIT
 - quinn-proto 0.11.16 — Apache-2.0 OR MIT
 - quinn-udp 0.5.15 — Apache-2.0 OR MIT

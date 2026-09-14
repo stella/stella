@@ -16408,7 +16408,7 @@
       "version": "0.3.33"
     },
     {
-      "bom-ref": "pkg:cargo/plist@1.10.0",
+      "bom-ref": "pkg:cargo/plist@1.10.1",
       "evidence": {
         "identity": [
           {
@@ -16429,7 +16429,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7da1d65da6dd5d1e44199ac0f58712d241c0f439f80adea8924d832384087f85"
+          "content": "2896bade328c13f7042a297ea5ac5b0951f6cf989dea5f32c2fd98da398195cb"
         }
       ],
       "licenses": [
@@ -16446,9 +16446,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/plist@1.10.0",
+      "purl": "pkg:cargo/plist@1.10.1",
       "type": "library",
-      "version": "1.10.0"
+      "version": "1.10.1"
     },
     {
       "bom-ref": "pkg:cargo/png@0.17.16",
@@ -17245,6 +17245,49 @@
       "purl": "pkg:cargo/quick-xml@0.41.0",
       "type": "library",
       "version": "0.41.0"
+    },
+    {
+      "bom-ref": "pkg:cargo/quick-xml@0.42.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "quick-xml",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/quick-xml@0.42.0",
+      "type": "library",
+      "version": "0.42.0"
     },
     {
       "bom-ref": "pkg:cargo/quinn@0.11.11",
@@ -34309,13 +34352,13 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/base64@0.22.1",
+        "pkg:cargo/base64@0.23.1",
         "pkg:cargo/indexmap@2.14.0",
-        "pkg:cargo/quick-xml@0.41.0",
+        "pkg:cargo/quick-xml@0.42.0",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/time@0.3.55"
       ],
-      "ref": "pkg:cargo/plist@1.10.0"
+      "ref": "pkg:cargo/plist@1.10.1"
     },
     {
       "dependsOn": [
@@ -34408,7 +34451,7 @@
       "dependsOn": [
         "pkg:cargo/memchr@2.8.3"
       ],
-      "ref": "pkg:cargo/quick-xml@0.41.0"
+      "ref": "pkg:cargo/quick-xml@0.42.0"
     },
     {
       "dependsOn": [
@@ -35033,7 +35076,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/opener@0.8.5",
-        "pkg:cargo/plist@1.10.0",
+        "pkg:cargo/plist@1.10.1",
         "pkg:cargo/reqwest@0.13.4",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
@@ -35244,7 +35287,7 @@
         "pkg:cargo/objc2-web-kit@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/percent-encoding@2.3.2",
-        "pkg:cargo/plist@1.10.0",
+        "pkg:cargo/plist@1.10.1",
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/reqwest@0.13.4",
         "pkg:cargo/serde@1.0.229",
@@ -35292,7 +35335,7 @@
         "pkg:cargo/brotli@8.0.4",
         "pkg:cargo/ico@0.5.0",
         "pkg:cargo/json-patch@3.0.1",
-        "pkg:cargo/plist@1.10.0",
+        "pkg:cargo/plist@1.10.1",
         "pkg:cargo/png@0.17.16",
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
@@ -35325,7 +35368,7 @@
       "dependsOn": [
         "pkg:cargo/anyhow@1.0.104",
         "pkg:cargo/glob@0.3.4",
-        "pkg:cargo/plist@1.10.0",
+        "pkg:cargo/plist@1.10.1",
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
@@ -35360,7 +35403,7 @@
     {
       "dependsOn": [
         "pkg:cargo/dunce@1.0.5",
-        "pkg:cargo/plist@1.10.0",
+        "pkg:cargo/plist@1.10.1",
         "pkg:cargo/rust-ini@0.21.3",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
@@ -35533,7 +35576,7 @@
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/memchr@2.8.3",
         "pkg:cargo/phf@0.13.1",
-        "pkg:cargo/plist@1.10.0",
+        "pkg:cargo/plist@1.10.1",
         "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quote@1.0.47",
         "pkg:cargo/regex@1.13.1",
