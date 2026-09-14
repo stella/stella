@@ -240,6 +240,88 @@ describe("renderLookupHit", () => {
     expect(renderLookupOutput(null, hit)).toBe(
       "**EXEMPLE SA**, SIREN 552081317, siège social : 22 avenue de Wagram, 75008 Paris, SIRET 55208131701234",
     );
+    expect(
+      renderLookupOutput("SIREN [SIREN spaced], SIRET [SIRET spaced]", hit),
+    ).toBe("SIREN 552 081 317, SIRET 552 081 317 01234");
+  });
+
+  test("renders a French head-office hit without a branch SIRET", () => {
+    const hit = {
+      registry: "recherche-entreprises",
+      id: "552081317",
+      name: "EXEMPLE SA",
+      legalForm: "5599",
+      address: null,
+      registryUrl: "https://example.invalid/fr/552081317",
+      details: {
+        registry: "recherche-entreprises",
+        company: {
+          siren: "552081317",
+          name: "EXEMPLE SA",
+          legalFormCode: "5599",
+          shortName: null,
+          headOffice: null,
+          matchedEstablishment: null,
+          status: { type: "active" },
+          registeredAt: null,
+          ceasedAt: null,
+          directors: [],
+          registryUrl: "https://example.invalid/fr/552081317",
+        },
+      },
+    } satisfies BusinessRegistryHit;
+    expect(
+      renderLookupOutput("SIREN [SIREN spaced] SIRET [SIRET spaced]", hit),
+    ).toBe("SIREN 552 081 317 SIRET");
+  });
+
+  test.each([
+    ["942404110", "94-2404110"],
+    // EDGAR has returned a punctuated EIN before: it is passed through, not
+    // punctuated twice.
+    ["94-2404110", "94-2404110"],
+    [null, ""],
+  ])("punctuates the EDGAR EIN %s for a US party block", (ein, dashed) => {
+    const company = {
+      cik: "0000320193",
+      name: "Apple Inc.",
+      sic: null,
+      sicDescription: null,
+      tickers: [],
+      exchanges: [],
+      ein,
+      addresses: { mailing: null, business: null },
+      formerNames: [],
+      recentFilings: [],
+      status: { type: "active" },
+      registryUrl: "https://example.invalid/us/0000320193",
+    } as const;
+    const hit = {
+      registry: "edgar",
+      id: company.cik,
+      name: company.name,
+      legalForm: null,
+      address: null,
+      registryUrl: company.registryUrl,
+      details: { registry: "edgar", company },
+    } satisfies BusinessRegistryHit;
+    expect(renderLookupOutput("IRS No. [EIN dashed]", hit)).toBe(
+      `IRS No. ${dashed}`.trim(),
+    );
+  });
+
+  test("groups a Norwegian organisasjonsnummer", () => {
+    const hit = {
+      registry: "brreg",
+      id: "923609016",
+      name: "EXEMPLE AS",
+      legalForm: "AS",
+      address: null,
+      registryUrl: "https://example.invalid/no/923609016",
+    } satisfies BusinessRegistryHit;
+    expect(
+      renderLookupOutput("organisasjonsnummer [registry number spaced]", hit),
+    ).toBe("organisasjonsnummer 923 609 016");
   });
 });
 
@@ -414,6 +496,66 @@ describe("renderLookupOutput", () => {
       );
     },
   );
+  test.each([
+    ["Mestský súd Bratislava III", "B", "Mestského súdu Bratislava III"],
+    ["Okresný súd Trenčín", "R", "Okresného súdu Trenčín"],
+    // The extract omitted the name: the insert letter still resolves.
+    [null, "V", "Mestského súdu Košice"],
+    // Renamed by the 2023 court map — not inflected from a stale name.
+    ["Okresný súd Bratislava I", "B", "Mestského súdu Bratislava III"],
+    [null, "Z", ""],
+  ])(
+    "renders the declined ORSR court token from %s",
+    (courtName, court, genitive) => {
+      const company = {
+        ico: "31322832",
+        name: "ESET, spol. s r.o.",
+        legalForm: "Spoločnosť s ručením obmedzeným",
+        address: null,
+        courtFile: { court, courtName, section: "Sro", insertNumber: "3586" },
+        establishedAt: null,
+        terminatedAt: null,
+        shareCapital: null,
+        shareCapitalPaid: null,
+        actingClause: null,
+        status: { type: "active" },
+        statutoryBodies: [],
+        stakeholders: [],
+        registryUrl: "https://example.invalid/sk/31322832",
+      } as const;
+      const hit = {
+        registry: "orsr",
+        id: company.ico,
+        name: company.name,
+        legalForm: company.legalForm,
+        address: null,
+        registryUrl: company.registryUrl,
+        details: { registry: "orsr", company },
+      } satisfies BusinessRegistryHit;
+      expect(
+        renderLookupOutput("v Obchodnom registri [court genitive]", hit),
+      ).toBe(`v Obchodnom registri ${genitive}`.trim());
+      expect(renderLookupOutput("IČO: [registry number spaced]", hit)).toBe(
+        "IČO: 31 322 832",
+      );
+    },
+  );
+  test("groups a Slovak IČO on a search row carrying no extract", () => {
+    const hit = {
+      registry: "orsr",
+      id: "00151653",
+      name: "Slovenská sporiteľňa, a.s.",
+      legalForm: null,
+      address: null,
+      registryUrl: "https://example.invalid/sk/00151653",
+    } satisfies BusinessRegistryHit;
+    expect(renderLookupOutput("IČO: [registry number spaced]", hit)).toBe(
+      "IČO: 00 151 653",
+    );
+    expect(
+      renderLookupOutput("v Obchodnom registri [court genitive]", hit),
+    ).toBe("v Obchodnom registri");
+  });
   test("renders ARES output tokens as readable company particulars", () => {
     const company = {
       ...parseResRecord({

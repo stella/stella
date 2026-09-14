@@ -6,7 +6,15 @@ import {
   ARES_FILE_REFERENCE_TOKEN,
   ARES_IDENTIFIER_SPACED_TOKEN,
 } from "@stll/business-registries/ares/default-format";
+import { BRREG_IDENTIFIER_SPACED_TOKEN } from "@stll/business-registries/brreg/identifier-format";
 import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
+import { EIN_DASHED_TOKEN } from "@stll/business-registries/edgar/identifier-format";
+import { ORSR_COURT_GENITIVE_TOKEN } from "@stll/business-registries/orsr/court-names";
+import { ORSR_IDENTIFIER_SPACED_TOKEN } from "@stll/business-registries/orsr/identifier-format";
+import {
+  SIREN_SPACED_TOKEN,
+  SIRET_SPACED_TOKEN,
+} from "@stll/business-registries/recherche-entreprises/identifier-format";
 
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
 
@@ -38,9 +46,11 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
     ],
     orsr: [
       ...REGISTRY_BASE_RETURN_FIELDS,
+      ORSR_IDENTIFIER_SPACED_TOKEN,
       "share capital",
       "share capital paid",
       "court file",
+      ORSR_COURT_GENITIVE_TOKEN,
       "registered on",
       "acting clause",
     ],
@@ -59,16 +69,22 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
     denue: REGISTRY_BASE_RETURN_FIELDS.filter(
       (fieldName) => fieldName !== "legal form",
     ),
-    brreg: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+    brreg: [
+      ...REGISTRY_BASE_RETURN_FIELDS,
+      BRREG_IDENTIFIER_SPACED_TOKEN,
+      "registered on",
+    ],
     prh: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
     "recherche-entreprises": [
       ...REGISTRY_BASE_RETURN_FIELDS,
       "SIREN",
+      SIREN_SPACED_TOKEN,
       "SIRET",
+      SIRET_SPACED_TOKEN,
       "head office address",
       "registered on",
     ],
-    edgar: [...REGISTRY_BASE_RETURN_FIELDS, "EIN"],
+    edgar: [...REGISTRY_BASE_RETURN_FIELDS, "EIN", EIN_DASHED_TOKEN],
     gcis: [
       ...REGISTRY_BASE_RETURN_FIELDS,
       "registering authority",

@@ -34,6 +34,10 @@ import {
 } from "@stll/business-registries/ares/default-format";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { validateOrgnr } from "@stll/business-registries/brreg";
+import {
+  BRREG_IDENTIFIER_SPACED_TOKEN,
+  formatBrregIdentifierSpaced,
+} from "@stll/business-registries/brreg/identifier-format";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
 import {
   isBuiltInRegistryFormat,
@@ -42,11 +46,29 @@ import {
 } from "@stll/business-registries/default-formats";
 import { validateEstablishmentId } from "@stll/business-registries/denue";
 import { validateCik } from "@stll/business-registries/edgar";
+import {
+  EIN_DASHED_TOKEN,
+  formatEinDashed,
+} from "@stll/business-registries/edgar/identifier-format";
 import { validateTaxId } from "@stll/business-registries/gcis";
 import { validateKrsNumber } from "@stll/business-registries/krs";
 import { validateIco as validateOrsrIco } from "@stll/business-registries/orsr";
+import {
+  getOrsrCourtNameGenitive,
+  ORSR_COURT_GENITIVE_TOKEN,
+} from "@stll/business-registries/orsr/court-names";
+import {
+  formatOrsrIdentifierSpaced,
+  ORSR_IDENTIFIER_SPACED_TOKEN,
+} from "@stll/business-registries/orsr/identifier-format";
 import { validateBusinessId } from "@stll/business-registries/prh";
 import { hasCanonicalShape as hasRechercheEntreprisesShape } from "@stll/business-registries/recherche-entreprises";
+import {
+  formatSirenSpaced,
+  formatSiretSpaced,
+  SIREN_SPACED_TOKEN,
+  SIRET_SPACED_TOKEN,
+} from "@stll/business-registries/recherche-entreprises/identifier-format";
 import { validateVatFormat } from "@stll/business-registries/vies";
 import { assertNever, resolvePath } from "@stll/template-conditions";
 import { parseIsoDateLocal } from "@stll/time";
@@ -428,6 +450,15 @@ const lookupTemplateTokens = (
   if (hit.registry === "ares") {
     tokens[ARES_IDENTIFIER_SPACED_TOKEN] = formatAresIdentifierSpaced(hit.id);
   }
+  // Same for the Slovak IČO, which an ORSR search row carries without any
+  // extract particulars. The Slovak grouping is "dd ddd ddd", not the Czech
+  // "ddd dd ddd", so the two registries keep separate formatters.
+  if (hit.registry === "orsr") {
+    tokens[ORSR_IDENTIFIER_SPACED_TOKEN] = formatOrsrIdentifierSpaced(hit.id);
+  }
+  if (hit.registry === "brreg") {
+    tokens[BRREG_IDENTIFIER_SPACED_TOKEN] = formatBrregIdentifierSpaced(hit.id);
+  }
   const details = hit.details;
   if (details === undefined) {
     return tokens;
@@ -482,6 +513,14 @@ const lookupTemplateTokens = (
             insert: company.courtFile.insertNumber,
           })
         : null;
+      // The extract endpoint supplies the full court name; a file reference
+      // parsed from a leaner payload carries only the insert letter. Both
+      // resolve against the same table, so try the name first and fall back.
+      tokens[ORSR_COURT_GENITIVE_TOKEN] = company.courtFile
+        ? (getOrsrCourtNameGenitive(
+            company.courtFile.courtName ?? company.courtFile.court,
+          ) ?? getOrsrCourtNameGenitive(company.courtFile.court))
+        : null;
       tokens["registered on"] = company.establishedAt;
       tokens["acting clause"] = company.actingClause;
       break;
@@ -534,6 +573,10 @@ const lookupTemplateTokens = (
       // would drop the SIRET that selected the address.
       tokens["SIREN"] = company.siren;
       tokens["SIRET"] = company.matchedEstablishment?.siret ?? null;
+      tokens[SIREN_SPACED_TOKEN] = formatSirenSpaced(company.siren);
+      tokens[SIRET_SPACED_TOKEN] = company.matchedEstablishment
+        ? formatSiretSpaced(company.matchedEstablishment.siret)
+        : null;
       tokens["head office address"] =
         company.headOffice?.address?.textAddress ?? null;
       tokens["registered on"] = company.registeredAt;
@@ -543,6 +586,8 @@ const lookupTemplateTokens = (
       const { company } = details;
       tokens["registry number"] = company.cik;
       tokens["EIN"] = company.ein;
+      tokens[EIN_DASHED_TOKEN] =
+        company.ein === null ? null : formatEinDashed(company.ein);
       break;
     }
     case "gcis": {
