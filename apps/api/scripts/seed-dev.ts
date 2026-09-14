@@ -5418,27 +5418,29 @@ export const seedPlaybooks = async (
 
 export async function seed(organizationId?: string, userId?: string) {
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
-  const USER_ID = userId ?? DEFAULT_USER_ID;
+  let USER_ID = userId ?? DEFAULT_USER_ID;
+  let resolvedSeedUserIds: readonly string[] | undefined;
   const toWs = (id: WorkspaceId) => id;
-  const seedUserIds = buildSeedUserIds({
-    primaryUserId: USER_ID,
-    colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
-  });
-  const seedUserRates = buildSeedUserRates(seedUserIds);
 
   const ensureSeedUsers = async () => {
     if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
-      await ensureTestUsers(ORG_ID);
+      const { colleagueUserIds, testUserId } = await ensureTestUsers(ORG_ID);
+      USER_ID = testUserId;
+      resolvedSeedUserIds = [
+        testUserId,
+        ...colleagueUserIds.slice(0, DEFAULT_SEED_COLLEAGUE_COUNT),
+      ];
       return;
     }
     await ensurePrimarySeedUserInOrganization({
       organizationId: ORG_ID,
       userId: USER_ID,
     });
-    await ensureSeedColleaguesInOrganization({
+    const colleagueUserIds = await ensureSeedColleaguesInOrganization({
       organizationId: ORG_ID,
       colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
     });
+    resolvedSeedUserIds = [USER_ID, ...colleagueUserIds];
   };
 
   const clearSeedData = async () => {
@@ -5513,6 +5515,13 @@ export async function seed(organizationId?: string, userId?: string) {
   // Ensure referenced users exist in the target org before seeding matters,
   // billing, and analytics data; then clear deterministic IDs for replay.
   await ensureSeedUsers();
+  const seedUserIds =
+    resolvedSeedUserIds ??
+    buildSeedUserIds({
+      primaryUserId: USER_ID,
+      colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
+    });
+  const seedUserRates = buildSeedUserRates(seedUserIds);
   await clearSeedData();
 
   console.log("Seeding development data...\n");

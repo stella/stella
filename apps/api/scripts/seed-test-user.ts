@@ -19,7 +19,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -93,12 +93,9 @@ const buildMemberId = (organizationId: string, userId: string): string => {
   return `seed-member-${hash.slice(0, 24)}`;
 };
 
-// Upsert rather than insert-if-missing: the dev database is long-lived and
-// shared, so an insert-only seed would leave a renamed identity stale on every
-// existing row (and therefore on screen in a re-shot marketing capture). Only
-// the display fields are reconciled; the id and email are the stable keys.
-// Drizzle drops undefined values from the update set, so a colleague-less
-// `image` never blanks an existing avatar.
+// Better Auth may create the local test email before this seed runs, using its
+// own generated user id. Resolve by either unique identity so the seed
+// converges on that row instead of colliding on the email constraint.
 const ensureUserExists = async ({
   id,
   name,
@@ -109,23 +106,43 @@ const ensureUserExists = async ({
   name: string;
   email: string;
   image?: string;
-}) => {
-  await rootDb
-    .insert(user)
-    .values({
-      id,
-      name,
-      email,
-      image,
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: user.id,
-      set: { name, image, updatedAt: now },
-    });
-};
+}) =>
+  rootDb.transaction(async (transaction) => {
+    await transaction
+      .insert(user)
+      .values({
+        id,
+        name,
+        email,
+        image,
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing();
+
+    const matches = await transaction
+      .select({ id: user.id })
+      .from(user)
+      .where(or(eq(user.id, id), eq(user.email, email)))
+      .limit(2);
+    const match = matches.at(0);
+    if (!match || matches.length !== 1) {
+      return panic(
+        `Seed user identity is ambiguous for id ${id} and email ${email}`,
+      );
+    }
+    const resolvedId = match.id;
+
+    // Reconcile every seed-owned display/login field in place. The unique
+    // lookup above proves no second row owns the target email.
+    await transaction
+      .update(user)
+      .set({ email, emailVerified: true, image, name, updatedAt: now })
+      .where(eq(user.id, resolvedId));
+
+    return resolvedId;
+  });
 
 export const ensureOrganizationExists = async (organizationId: string) => {
   const org = getSeedOrganizationIdentity(organizationId);
@@ -198,9 +215,11 @@ export async function ensureSeedColleagueUsers({
 }: {
   colleagueCount?: number;
 } = {}) {
+  const userIds: string[] = [];
   for (const colleague of getSeedColleagues(colleagueCount)) {
-    await ensureUserExists(colleague);
+    userIds.push(await ensureUserExists(colleague));
   }
+  return userIds;
 }
 
 export async function ensureSeedColleaguesInOrganization({
@@ -210,15 +229,17 @@ export async function ensureSeedColleaguesInOrganization({
   organizationId: string;
   colleagueCount?: number;
 }) {
-  await ensureSeedColleagueUsers({ colleagueCount });
+  const userIds = await ensureSeedColleagueUsers({ colleagueCount });
 
-  for (const colleague of getSeedColleagues(colleagueCount)) {
+  for (const userId of userIds) {
     await ensureMembershipExists({
       organizationId,
-      userId: colleague.id,
+      userId,
       role: DEFAULT_MEMBER_ROLE,
     });
   }
+
+  return userIds;
 }
 
 export async function ensurePrimarySeedUserInOrganization({
@@ -261,22 +282,24 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
   // valid without weakening the fail-closed census for existing databases.
   await assertConfiguredBetterAuthOAuthPolicy();
 
-  await ensureUserExists(TEST_USER);
+  const testUserId = await ensureUserExists(TEST_USER);
   await ensureOrganizationExists(organizationId);
   await ensureMembershipExists({
     organizationId,
-    userId: TEST_USER.id,
+    userId: testUserId,
     role: OWNER_MEMBER_ROLE,
   });
-  await ensureSeedColleagueUsers();
+  const colleagueUserIds = await ensureSeedColleagueUsers();
 
-  for (const colleague of COLLEAGUES) {
+  for (const userId of colleagueUserIds) {
     await ensureMembershipExists({
       organizationId,
-      userId: colleague.id,
+      userId,
       role: DEFAULT_MEMBER_ROLE,
     });
   }
+
+  return { colleagueUserIds, testUserId };
 }
 
 async function seed() {
@@ -286,27 +309,44 @@ async function seed() {
   }
 
   const existingUsers = await rootDb
-    .select({ id: user.id })
+    .select({ email: user.email, id: user.id })
     .from(user)
-    .where(inArray(user.id, ALL_TEST_USER_IDS));
+    .where(
+      or(
+        inArray(user.id, ALL_TEST_USER_IDS),
+        inArray(
+          user.email,
+          [TEST_USER, ...COLLEAGUES].map(({ email }) => email),
+        ),
+      ),
+    );
   const existingUserIds = new Set(
     existingUsers.map((existingUser) => existingUser.id),
+  );
+  const existingUserEmails = new Set(
+    existingUsers.map((existingUser) => existingUser.email),
   );
   const orgExistedBeforeSeed = !!(await rootDb.query.organization.findFirst({
     where: { id: { eq: TEST_ORG.id } },
     columns: { id: true },
   }));
 
-  await ensureTestUsers();
+  const { testUserId } = await ensureTestUsers();
 
-  if (existingUserIds.has(TEST_USER.id)) {
+  if (
+    existingUserIds.has(TEST_USER.id) ||
+    existingUserEmails.has(TEST_USER.email)
+  ) {
     console.log("Test user already exists:", TEST_USER.email);
   } else {
     console.log("Created test user:", TEST_USER.email);
   }
 
   for (const colleague of COLLEAGUES) {
-    if (existingUserIds.has(colleague.id)) {
+    if (
+      existingUserIds.has(colleague.id) ||
+      existingUserEmails.has(colleague.email)
+    ) {
       console.log("Colleague already exists:", colleague.email);
       continue;
     }
@@ -340,6 +380,7 @@ async function seed() {
         createdAt: now,
         updatedAt: now,
         activeOrganizationId: TEST_ORG.id,
+        userId: testUserId,
       })
       .where(eq(session.id, SESSION_ID));
     console.log("Refreshed test session expiry");
@@ -347,7 +388,7 @@ async function seed() {
     await rootDb.insert(session).values({
       id: SESSION_ID,
       token: SESSION_TOKEN,
-      userId: TEST_USER.id,
+      userId: testUserId,
       activeOrganizationId: TEST_ORG.id,
       expiresAt,
       createdAt: now,
