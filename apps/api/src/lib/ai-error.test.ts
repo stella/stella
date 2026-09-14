@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   classifyAIError,
   isAnticipatedAIFailure,
+  providerStatusCode,
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import {
@@ -358,6 +359,41 @@ describe("isAnticipatedAIFailure", () => {
 });
 
 describe("providerStatusFields", () => {
+  test("reads a numeric top-level code from an OpenRouter raw event", () => {
+    const rawEvent = {
+      code: 400,
+      message: "Provider returned error",
+      metadata: { raw: { provider: "openrouter" } },
+    };
+
+    expect(providerStatusCode(rawEvent)).toBe(400);
+    expect(classifyAIError(rawEvent)).toBe("unknown");
+    expect(providerStatusFields(rawEvent)).toEqual({
+      "error.provider.status": "400",
+    });
+  });
+
+  test("accepts every HTTP-range numeric code and rejects non-status codes", () => {
+    const validStatuses = [100, 200, 400, 429, 500, 599];
+    for (const status of validStatuses) {
+      expect(providerStatusCode({ code: status })).toBe(status);
+    }
+
+    for (const code of [Number.NaN, Number.POSITIVE_INFINITY, 99, 600, 400.5]) {
+      expect(providerStatusCode({ code })).toBeNull();
+    }
+  });
+
+  test("does not read a HandlerError's service status as provider code", () => {
+    const error = new HandlerError({
+      status: 502,
+      message: "generation failed",
+    });
+
+    expect(providerStatusCode(error)).toBeNull();
+    expect(providerStatusFields(error)).toEqual({});
+  });
+
   test("reports the status behind a failure the classifier cannot name", () => {
     // A 403 is a status the classifier reads but maps to no kind, so it falls
     // to `unknown` and is logged as a defect. The body arrives as a plain

@@ -582,7 +582,7 @@ const createExtendedBedrockAdapter = (
   return apiKey ? bedrock(modelId, { apiKey }) : bedrock(modelId);
 };
 
-const createTanStackTextAdapterFactory = ({
+export const createTanStackTextAdapterFactory = ({
   provider,
   apiKey,
   region,

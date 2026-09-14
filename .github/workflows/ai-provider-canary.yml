@@ -2,10 +2,8 @@ name: AI provider canary
 
 on:
   schedule:
-    # The weekly tier is a superset of the daily tier, so it replaces Monday's
-    # daily run instead of duplicating the same provider calls. GitHub Actions
-    # day-of-week accepts 0-6 (0 = Sunday); Tuesday-Sunday is "0,2-6".
-    - cron: "17 3 * * 0,2-6"
+    # Live provider drift is checked weekly; offline contract tests run in
+    # PR CI and the nightly test suite. Focused live runs remain available below.
     - cron: "17 3 * * 1"
   workflow_dispatch:
     inputs:
@@ -110,7 +108,7 @@ jobs:
         if: steps.credential.outputs.configured == 'true'
         env:
           AI_CANARY_API_KEY: ${{ matrix.provider == 'google' && secrets.GOOGLE_GENERATIVE_AI_API_KEY || matrix.provider == 'openrouter' && secrets.OPENROUTER_API_KEY || matrix.provider == 'openai' && secrets.OPENAI_API_KEY || matrix.provider == 'anthropic' && secrets.ANTHROPIC_API_KEY || matrix.provider == 'bedrock' && secrets.BEDROCK_API_KEY || matrix.provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
-          CANARY_TIER: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || github.event.schedule == '17 3 * * 1' && 'weekly' || 'daily' }}
+          CANARY_TIER: ${{ github.event_name == 'workflow_dispatch' && inputs.tier || 'weekly' }}
           USE_MOCK_AI: "false"
         run: >-
           bun run canary:ai-provider --

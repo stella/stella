@@ -49,6 +49,7 @@ import {
 import type { FolioAIEditSnapshot } from "@stll/folio-core/server";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import {
@@ -432,7 +433,10 @@ const runModelTurn = async ({
           serviceTier: "standard",
           temperature: 0,
         }),
-        tools,
+        tools: projectChatToolSchemasForProvider({
+          modelTools: tools,
+          provider: model.provider,
+        }),
       }),
     onChunk: (chunk) => {
       if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
