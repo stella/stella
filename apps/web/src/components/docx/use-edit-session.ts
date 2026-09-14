@@ -349,7 +349,7 @@ export const useEditSession = ({
   const finalize = async () => {
     const session = sessionRef.current;
     if (!session) {
-      return;
+      return true;
     }
 
     debouncedCheckpoint.cancel();
@@ -362,9 +362,6 @@ export const useEditSession = ({
       sessionToken: session.sessionToken,
     });
 
-    sessionRef.current = null;
-    setIsDirty(false);
-
     if (response.error) {
       setState({
         detail: userErrorMessage(response.error, "Failed to save DOCX."),
@@ -372,8 +369,11 @@ export const useEditSession = ({
         reason: getEditSessionErrorReason(response.error),
         source: "finalize",
       });
-      return;
+      return false;
     }
+
+    sessionRef.current = null;
+    setIsDirty(false);
 
     const finalizedFieldId =
       response.data.outcome === "finalized" ? response.data.fieldId : fieldId;
@@ -419,6 +419,7 @@ export const useEditSession = ({
 
     setState({ status: "idle" });
     onFinalized?.(response.data);
+    return true;
   };
 
   const cancel = async () => {

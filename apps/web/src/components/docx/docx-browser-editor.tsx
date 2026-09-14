@@ -10,7 +10,12 @@ import {
  * DocxBrowserEditor — wrapper that manages the edit session lifecycle
  * and renders the Folio DocxEditor.
  */
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  RefObject,
+} from "react";
 
 import {
   keepPreviousData,
@@ -20,7 +25,6 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
-  CheckIcon,
   EyeIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
@@ -71,7 +75,10 @@ import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
-import { EvidenceReferences } from "@/components/docx/evidence-references";
+import {
+  EvidenceReferencesButton,
+  EvidenceReferencesDialog,
+} from "@/components/docx/evidence-references";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useDocxFind } from "@/components/docx/use-docx-find";
 import { useEvidenceReferences } from "@/components/docx/use-evidence-references";
@@ -108,10 +115,12 @@ import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import {
   getDocxEditBlockReason,
+  getDocxLeaveAction,
   getDocxEditSafety,
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
+  shouldRequestEditFromMouseDown,
   shouldReuseCollaborationPublication,
 } from "./docx-browser-editor.logic";
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
@@ -158,7 +167,7 @@ type DocxBrowserEditorBaseProps = {
   onCollaborationPublishableChange?:
     | ((publishable: boolean) => void)
     | undefined;
-  canUnlock?: boolean | undefined;
+  canUnlock: boolean;
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
   onSaved?: ((fieldId: string) => void) | undefined;
@@ -187,9 +196,24 @@ type PendingCollaborationPublication = {
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
 
+type EvidenceReferencesDialogState = "closed" | "open" | "requested";
+
+const canInsertEvidenceReference = (
+  canUnlock: boolean,
+  compatibility: DocxCompatibility | null,
+) => canUnlock && compatibility?.canSafelyEdit !== false;
+
+type DocxBrowserEditorContentProps = DocxBrowserEditorProps & {
+  evidenceReferencesDialogState: EvidenceReferencesDialogState;
+  onEvidenceReferencesDialogStateChange: (
+    state: EvidenceReferencesDialogState,
+  ) => void;
+};
+
 export type DocxBrowserEditorActions = {
   cancel: () => Promise<void>;
-  finalize: () => void;
+  finalize: () => Promise<boolean>;
+  leave: () => Promise<boolean>;
   /**
    * Force-checkpoint any pending in-flight edits to the server,
    * bypassing the debounce. Call this before navigating away from
@@ -207,6 +231,8 @@ export type DocxBrowserEditorActions = {
 
 export const DocxBrowserEditor = (props: DocxBrowserEditorProps) => {
   const { errorFallback, fieldId, onError, workspaceId } = props;
+  const [evidenceReferencesDialogState, setEvidenceReferencesDialogState] =
+    useState<EvidenceReferencesDialogState>("closed");
 
   return (
     <QuerySuspenseBoundary
@@ -217,23 +243,30 @@ export const DocxBrowserEditor = (props: DocxBrowserEditorProps) => {
       resetKeys={[workspaceId, fieldId]}
     >
       <RenderStormRegion name="docx-browser-editor">
-        <DocxBrowserEditorContent {...props} />
+        <DocxBrowserEditorContent
+          {...props}
+          evidenceReferencesDialogState={evidenceReferencesDialogState}
+          onEvidenceReferencesDialogStateChange={
+            setEvidenceReferencesDialogState
+          }
+        />
       </RenderStormRegion>
     </QuerySuspenseBoundary>
   );
 };
 
-const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
+const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const {
     workspaceId,
     entityId,
+    evidenceReferencesDialogState,
     fieldId,
     propertyId,
     actionsKey,
     actionsMapRef,
     actionsRef,
     actionBarControls,
-    canUnlock = true,
+    canUnlock,
     collaboration,
     isEditing = true,
     initialScrollTop,
@@ -241,6 +274,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onCollaborationPublishableChange,
     onCompatibilityChange,
     onBlockedUnlock,
+    onEvidenceReferencesDialogStateChange,
     onUnlockedChange,
     onSaved,
     onScrollTopChange,
@@ -643,8 +677,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     compatibilityState.targetKey === editTargetKey
       ? compatibilityState.value
       : null;
-  const [autosaveStatus, setAutosaveStatus] =
-    useState<AutosaveStatus>("synced");
+  const [, setAutosaveStatus] = useState<AutosaveStatus>("synced");
   // Controlled `DocxEditor` comment state, round-tripped back through
   // `onCommentsChange`. Feeds the file-chat overlay's folio-agents comment
   // tools (read/add/reply/resolve) via `FileViewerWithAI`, and lets those
@@ -1002,7 +1035,32 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const evidence = useEvidenceReferences(
     isUnlocked && editorMode !== "viewing",
   );
+  const canInsertEvidence = canInsertEvidenceReference(
+    canUnlock,
+    compatibility,
+  );
   const wasUnlockedRef = useRef(false);
+
+  const handleEvidenceReferencesClick = useCallback(() => {
+    if (!canInsertEvidence || isUnlocked) {
+      if (canInsertEvidence) {
+        editorRef.current?.ensureEditorView({ focus: false });
+      }
+      onEvidenceReferencesDialogStateChange("open");
+      return;
+    }
+
+    editorRef.current?.ensureEditorView({ focus: false });
+    onEvidenceReferencesDialogStateChange("requested");
+    if (!didOpenRef.current) {
+      detached(requestEditMode(), "evidence-reference.request-edit-mode");
+    }
+  }, [
+    canInsertEvidence,
+    isUnlocked,
+    onEvidenceReferencesDialogStateChange,
+    requestEditMode,
+  ]);
 
   useExternalSyncEffect(() => {
     onUnlockedChange?.(isUnlocked);
@@ -1277,7 +1335,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       isPublishingCollaborationVersion ||
       isPublishingCollaborationVersionRef.current
     ) {
-      return;
+      return false;
     }
 
     isPublishingCollaborationVersionRef.current = true;
@@ -1314,7 +1372,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           title: t("folio.createVersionFailedTitle"),
           type: "error",
         });
-        return;
+        return false;
       }
       const checkpointResult = await Result.tryPromise(async () =>
         api
@@ -1333,7 +1391,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           title: t("folio.createVersionFailedTitle"),
           type: "error",
         });
-        return;
+        return false;
       }
       if (checkpointResult.value.error) {
         getAnalytics().captureError(toAPIError(checkpointResult.value.error));
@@ -1343,7 +1401,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           title: t("folio.createVersionFailedTitle"),
           type: "error",
         });
-        return;
+        return false;
       }
 
       const checkpoint = checkpointResult.value.data;
@@ -1375,7 +1433,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         title: t("folio.createVersionFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
     if (publishResult.value.error) {
       const apiError = toAPIError(publishResult.value.error);
@@ -1393,7 +1451,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           title: t("folio.versionConflictTitle"),
           type: "warning",
         });
-        return;
+        return false;
       }
       if (
         apiError.code === "folio_collab_checkpoint_changed" ||
@@ -1406,7 +1464,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         title: t("folio.createVersionFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
 
     pendingCollaborationPublicationRef.current = null;
@@ -1421,6 +1479,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       title: t("folio.versionCreatedTitle"),
       type: "success",
     });
+    return true;
   }, [
     collaborationSession,
     collaborationState.status,
@@ -1450,8 +1509,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
     if (isCollaborativeEditing) {
       clearQueuedChangeCheckpoint();
-      await handlePublishCollaborationVersion();
-      return;
+      return await handlePublishCollaborationVersion();
     }
 
     // Save the final version before finalizing
@@ -1464,7 +1522,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         title: t("folio.saveEditorUnavailableTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
 
     const hasPendingEditorChanges = ref.hasPendingChanges();
@@ -1476,7 +1534,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       })
     ) {
       await cancelActiveSession();
-      return;
+      return true;
     }
 
     const buffer = await ref.save({ selective: true });
@@ -1486,7 +1544,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         title: t("folio.saveSerializeFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
 
     setAutosaveStatus("syncing");
@@ -1498,7 +1556,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         title: t("folio.saveCheckpointFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
     setAutosaveStatus("synced");
     if (previewFile !== null) {
@@ -1518,7 +1576,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     finalizedBufferRef.current = buffer;
     hasSessionChangesRef.current = false;
-    await finalizeActiveSession();
+    return await finalizeActiveSession();
   }, [
     cancelActiveSession,
     clearQueuedChangeCheckpoint,
@@ -1595,13 +1653,26 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     handleUnlock();
   }, [handleUnlock, isUnlocked]);
 
-  const handleToggleLock = useCallback(() => {
-    if (!isUnlocked) {
-      handleUnlock();
-      return;
-    }
-    detached(handleFinalize(), "docx-browser-editor.finalize");
-  }, [handleFinalize, handleUnlock, isUnlocked]);
+  const handleReadonlySurfaceMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+      const isToolbarTarget =
+        target instanceof Element &&
+        target.closest('[role="toolbar"]') !== null;
+      if (
+        !shouldRequestEditFromMouseDown({
+          canUnlock,
+          isEditing: isUnlocked,
+          isToolbarTarget,
+        })
+      ) {
+        return;
+      }
+
+      handleLockedEditAttempt();
+    },
+    [canUnlock, handleLockedEditAttempt, isUnlocked],
+  );
 
   // Registers this render's action handles into the parent-provided ref
   // and/or keyed map. Wrapped in useCallback (stable unless actionsKey /
@@ -1636,16 +1707,40 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [actionsKey, actionsMapRef, actionsRef],
   );
 
+  const handleDesktopSessionExit = useCallback(async () => {
+    switch (getDocxLeaveAction(state)) {
+      case "allow":
+        return true;
+      case "block":
+        return false;
+      case "finalize":
+        return await handleFinalize();
+      case "retryFinalize":
+        return await finalizeActiveSession();
+      default:
+        return panic("Unsupported DOCX exit action");
+    }
+  }, [finalizeActiveSession, handleFinalize, state]);
+
   useImperativeHandle(
     registerActions,
     () => ({
       cancel: handleCancel,
-      finalize: () => {
-        if (isCollaborativeEditing || state.status === "editing") {
-          detached(handleFinalize(), "docx-browser-editor.finalize");
+      finalize: async () => {
+        if (isCollaborativeEditing) {
+          return await handleFinalize();
         }
+        return await handleDesktopSessionExit();
       },
       flushPendingChanges,
+      leave: async () => {
+        if (isCollaborativeEditing) {
+          // Collaboration owns its snapshot lifecycle. Cancelling it from a
+          // route blocker races the room cleanup against its final flush.
+          return true;
+        }
+        return await handleDesktopSessionExit();
+      },
       print: () => {
         editorRef.current?.print();
       },
@@ -1656,10 +1751,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [
       flushPendingChanges,
       handleCancel,
+      handleDesktopSessionExit,
       handleFinalize,
       isCollaborativeEditing,
       requestEditMode,
-      state.status,
     ],
   );
 
@@ -1685,16 +1780,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return (
         <>
           {actionBarControls}
-          <EvidenceReferences
-            workspaceId={workspaceId}
-            entityId={entityId}
-            fieldId={fieldId}
-            view={editorViewForAnonymization}
+          <EvidenceReferencesButton
+            canInsert={canInsertEvidence}
             document={evidence.document}
-            editable={isUnlocked && editorMode !== "viewing"}
-            onPrepareEditor={() => {
-              editorRef.current?.ensureEditorView({ focus: false });
-            }}
+            onClick={handleEvidenceReferencesClick}
           />
           {showActionBar && collaborationState.room !== null && (
             <>
@@ -1732,27 +1821,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 <XIcon />
                 <span>{t("common.close")}</span>
               </Button>
-            </>
-          )}
-          {showActionBar && isUnlocked && !isCollaborativeEditing && (
-            <>
-              <Button
-                aria-label={t("common.save")}
-                className="px-2"
-                disabled={
-                  state.status === "opening" ||
-                  state.status === "saving" ||
-                  collaborationState.status === "connecting"
-                }
-                onClick={handleToggleLock}
-                size="sm"
-                tooltip={t("common.save")}
-                variant="ghost"
-              >
-                <CheckIcon />
-                <span>{t("common.save")}</span>
-              </Button>
-              <AutosaveIndicator status={autosaveStatus} />
             </>
           )}
         </>
@@ -1881,6 +1949,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       ref={composedContainerRef}
       className="flex h-full w-full min-w-0 flex-col"
     >
+      <EvidenceReferencesDialog
+        workspaceId={workspaceId}
+        entityId={entityId}
+        fieldId={fieldId}
+        view={editorViewForAnonymization}
+        document={evidence.document}
+        canInsert={canInsertEvidence}
+        editable={isUnlocked && editorMode !== "viewing"}
+        open={
+          evidenceReferencesDialogState === "open" ||
+          (evidenceReferencesDialogState === "requested" && isUnlocked)
+        }
+        onOpenChange={(nextOpen) => {
+          onEvidenceReferencesDialogStateChange(nextOpen ? "open" : "closed");
+        }}
+      />
       {find.isOpen && <DocxFindBar find={find} />}
       {/* Folio editor with AI overlay */}
       <div
@@ -1891,9 +1975,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         // dialog and the doc becomes unselectable; fall through to the
         // typing-based onReadonlyEditAttempt path instead, which only
         // fires on real edit attempts (not text-selection clicks).
-        onMouseDownCapture={
-          isUnlocked || !canUnlock ? undefined : handleLockedEditAttempt
-        }
+        onMouseDownCapture={handleReadonlySurfaceMouseDown}
       >
         <FileViewerWithAI
           key={`ai-${previewIdentity}`}
@@ -2115,32 +2197,6 @@ const useDocxBrowserCollaboration = ({
     isCollaborativeEditing: collaborationSession !== null,
     requestCollaboration,
   };
-};
-
-const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {
-  const t = useTranslations();
-  const isSynced = status === "synced";
-  const isSyncing = status === "syncing";
-
-  return (
-    <span
-      aria-label={isSynced ? t("folio.synced") : t("folio.syncing")}
-      className="text-foreground-ghost inline-flex h-8 w-8 items-center justify-center"
-      role="status"
-    >
-      {(() => {
-        if (isSynced) {
-          return <CheckCircle2Icon className="size-3.5" />;
-        }
-        if (isSyncing) {
-          return (
-            <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />
-          );
-        }
-        return <RefreshCwIcon className="size-3.5 opacity-45" />;
-      })()}
-    </span>
-  );
 };
 
 const CollaborationStatusIndicator = ({

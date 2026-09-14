@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getDocxEditBlockReason,
+  getDocxLeaveAction,
   selectDocxBrowserEditorBuffer,
   selectEditorBuffer,
   selectPreviewFile,
   shouldBlockDocxEdit,
   shouldFinalizeEditSession,
   shouldPromptReadonlyUnlock,
+  shouldRequestEditFromMouseDown,
   shouldReuseCollaborationPublication,
   shouldUseDocxBrowserEditor,
 } from "./docx-browser-editor.logic";
@@ -168,6 +170,23 @@ describe("DOCX readonly unlock prompt", () => {
       shouldPromptReadonlyUnlock({ canUnlock: true, isEditing: true }),
     ).toBe(false);
   });
+
+  test("toolbar commands never unlock a readonly document", () => {
+    expect(
+      shouldRequestEditFromMouseDown({
+        canUnlock: true,
+        isEditing: false,
+        isToolbarTarget: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRequestEditFromMouseDown({
+        canUnlock: true,
+        isEditing: false,
+        isToolbarTarget: false,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("DOCX edit finalization", () => {
@@ -199,6 +218,40 @@ describe("DOCX edit finalization", () => {
         hasPendingEditorChanges: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("DOCX route leave policy", () => {
+  test("retries a failed finalization and blocks other in-flight or failed saves", () => {
+    expect(
+      getDocxLeaveAction({
+        status: "error",
+        reason: "unknown",
+        source: "finalize",
+      }),
+    ).toBe("retryFinalize");
+    expect(getDocxLeaveAction({ status: "saving" })).toBe("block");
+    expect(
+      getDocxLeaveAction({
+        status: "error",
+        reason: "takenOver",
+        source: "checkpoint",
+      }),
+    ).toBe("block");
+  });
+
+  test("finalizes active edits and allows sessions without an acquired lock", () => {
+    expect(
+      getDocxLeaveAction({
+        status: "editing",
+        sessionId: "session-1",
+        sessionToken: "token-1",
+        buffer: bufferFrom([1]),
+        fileName: "Contract.docx",
+      }),
+    ).toBe("finalize");
+    expect(getDocxLeaveAction({ status: "idle" })).toBe("allow");
+    expect(getDocxLeaveAction({ status: "opening" })).toBe("allow");
   });
 });
 

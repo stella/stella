@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
-import { FileCheckIcon, PlusIcon } from "lucide-react";
+import { Link2Icon, PlusIcon } from "lucide-react";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
@@ -16,7 +16,6 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-  DialogTrigger,
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
@@ -38,59 +37,96 @@ import {
 } from "./evidence-reference";
 import type { EvidenceReference } from "./evidence-reference";
 
-type EvidenceReferencesProps = {
+type EvidenceReferencesButtonProps = {
+  canInsert: boolean;
+  document: ProseMirrorNode | null;
+  onClick: () => void;
+};
+
+export const EvidenceReferencesButton = ({
+  canInsert,
+  document,
+  onClick,
+}: EvidenceReferencesButtonProps) => {
+  const t = useTranslations();
+  const collected =
+    document === null
+      ? { references: [], invalidPositions: [] }
+      : collectEvidenceReferences(document);
+  const hasReferences =
+    collected.references.length > 0 || collected.invalidPositions.length > 0;
+
+  if (!canInsert && !hasReferences) {
+    return null;
+  }
+
+  const label = canInsert
+    ? t("folio.insertEvidence")
+    : t("folio.evidenceReferences");
+
+  return (
+    <Button
+      aria-label={label}
+      onClick={onClick}
+      size="icon"
+      variant="ghost"
+      tooltip={label}
+    >
+      <Link2Icon />
+    </Button>
+  );
+};
+
+type EvidenceReferencesDialogProps = {
   workspaceId: string;
   entityId: string;
   fieldId: string;
   view: EditorView | null;
   document: ProseMirrorNode | null;
+  canInsert: boolean;
   editable: boolean;
-  onPrepareEditor: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
-export const EvidenceReferences = ({
+export const EvidenceReferencesDialog = ({
   workspaceId,
   entityId,
   fieldId,
   view,
   document,
+  canInsert,
   editable,
-  onPrepareEditor,
-}: EvidenceReferencesProps) => {
+  open,
+  onOpenChange,
+}: EvidenceReferencesDialogProps) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return null;
+  }
+
   const collected =
     document === null
       ? { references: [], invalidPositions: [] }
       : collectEvidenceReferences(document);
+  const hasReferences =
+    collected.references.length > 0 || collected.invalidPositions.length > 0;
+
+  if (!canInsert && !hasReferences) {
+    return null;
+  }
+
+  const dialogLabel = canInsert
+    ? t("folio.insertEvidence")
+    : t("folio.evidenceReferences");
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (nextOpen) {
-          onPrepareEditor();
-        }
-        setOpen(nextOpen);
-      }}
-    >
-      <DialogTrigger
-        render={
-          <Button
-            className="min-h-11"
-            size="sm"
-            variant="ghost"
-            tooltip={t("folio.evidenceReferences")}
-          >
-            <FileCheckIcon />
-            <span>{t("folio.evidenceReferences")}</span>
-          </Button>
-        }
-      />
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>{t("folio.evidenceReferences")}</DialogTitle>
-          {editable && (
+          <DialogTitle>{dialogLabel}</DialogTitle>
+          {canInsert && (
             <DialogDescription>{t("folio.chooseEvidence")}</DialogDescription>
           )}
         </DialogHeader>
@@ -110,7 +146,7 @@ export const EvidenceReferences = ({
                     className="h-auto min-h-11 w-full justify-start text-start whitespace-normal"
                     disabled={reference.workspaceId !== workspaceId}
                     onClick={() => {
-                      setOpen(false);
+                      onOpenChange(false);
                       detached(
                         openSourceBoundEntityFile(reference),
                         "evidence-reference.open-source",
@@ -131,11 +167,11 @@ export const EvidenceReferences = ({
               ))}
             </ol>
           )}
-          {open && editable && view !== null && (
+          {canInsert && editable && view !== null && (
             <EvidenceFilePicker
               entityId={entityId}
               fieldId={fieldId}
-              onInserted={() => setOpen(false)}
+              onInserted={() => onOpenChange(false)}
               view={view}
               workspaceId={workspaceId}
             />
