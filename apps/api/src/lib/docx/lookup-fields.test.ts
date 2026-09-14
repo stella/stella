@@ -7,7 +7,9 @@ import {
   BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
   PREVIOUS_DEFAULT_FORMATS,
 } from "@stll/business-registries/default-formats";
+import type { EdgarCompany } from "@stll/business-registries/edgar";
 import { KrsValidationError } from "@stll/business-registries/krs";
+import type { OrsrCompany } from "@stll/business-registries/orsr";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type {
@@ -114,7 +116,7 @@ describe("isPlausibleLookupValue", () => {
 describe("renderLookupHit", () => {
   test("renders a registry-specific identification reference", () => {
     expect(renderLookupHit(KRS_HIT)).toBe(
-      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, adres: ul. Stanisława Matyi 8, 61-586 Poznań, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000123456",
+      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
   });
 
@@ -125,10 +127,10 @@ describe("renderLookupHit", () => {
         address: { ...KRS_ADDRESS, textAddress: null },
       }),
     ).toBe(
-      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000123456",
+      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
     expect(renderLookupHit({ ...KRS_HIT, address: null })).toBe(
-      "**Żabka Polska sp. z o.o.**, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000123456",
+      "**Żabka Polska sp. z o.o.**, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
   });
 
@@ -177,7 +179,7 @@ describe("renderLookupHit", () => {
     } satisfies BusinessRegistryHit;
 
     expect(renderLookupOutput(null, hit)).toBe(
-      "**ROLLS-ROYCE PLC**, a company incorporated in England and Wales (company number 01003142) whose registered office is at Kings Place, 90 York Way, London, United Kingdom, N1 9FX",
+      "**ROLLS-ROYCE PLC**, public limited company registered in England and Wales (company number 01003142) whose registered office is at Kings Place, 90 York Way, London, United Kingdom, N1 9FX",
     );
   });
 
@@ -243,7 +245,7 @@ describe("renderLookupHit", () => {
     } satisfies BusinessRegistryHit;
 
     expect(renderLookupOutput(null, hit)).toBe(
-      "**EXEMPLE SA**, dont le siège social est situé 22 avenue de Wagram, 75008 Paris, immatriculée au Registre du commerce et des sociétés sous le numéro 552 081 317",
+      "**EXEMPLE SA**, dont le siège social est situé 22 avenue de Wagram, 75008 Paris, numéro SIREN 552 081 317",
     );
     expect(
       renderLookupOutput("SIREN [SIREN spaced], SIRET [SIRET spaced]", hit),
@@ -300,7 +302,7 @@ describe("renderLookupHit", () => {
       recentFilings: [],
       status: { type: "active" },
       registryUrl: "https://example.invalid/us/0000320193",
-    } as const;
+    } satisfies EdgarCompany;
     const hit = {
       registry: "edgar",
       id: company.cik,
@@ -527,7 +529,7 @@ describe("renderLookupOutput", () => {
         statutoryBodies: [],
         stakeholders: [],
         registryUrl: "https://example.invalid/sk/31322832",
-      } as const;
+      } satisfies OrsrCompany;
       const hit = {
         registry: "orsr",
         id: company.ico,
@@ -648,7 +650,7 @@ describe("renderLookupOutput", () => {
     const fallback =
       "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań";
     expect(renderLookupOutput(null, KRS_HIT)).toBe(
-      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, adres: ul. Stanisława Matyi 8, 61-586 Poznań, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000123456",
+      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
     expect(renderLookupOutput("  ", KRS_HIT)).toBe(fallback);
     // A template of only unknown tokens renders empty → same fallback.
@@ -1676,10 +1678,10 @@ describe("built-in party clauses", () => {
     statutoryBodies: [],
     stakeholders: [],
     registryUrl: "https://example.invalid/sk/31322832",
-  } as const;
+  } satisfies OrsrCompany;
 
   const orsrHit = (
-    company: typeof ORSR_COMPANY,
+    company: OrsrCompany,
     textAddress: string | null,
   ): BusinessRegistryHit => ({
     registry: "orsr",
@@ -1784,38 +1786,67 @@ describe("built-in party clauses", () => {
   const companiesHouseHit = (
     jurisdiction: string | null,
     textAddress: string | null,
-  ): BusinessRegistryHit => ({
-    registry: "companies-house",
-    id: "01003142",
-    name: "ROLLS-ROYCE PLC",
-    legalForm: "plc",
-    address: textAddressOf(textAddress),
-    registryUrl: "https://example.invalid/uk/01003142",
-    details: {
+  ) =>
+    ({
       registry: "companies-house",
-      company: {
-        companyNumber: "01003142",
-        name: "ROLLS-ROYCE PLC",
-        status: { type: "active" },
-        statusDetail: null,
-        type: "plc",
-        subtype: null,
-        jurisdiction,
-        dateOfCreation: null,
-        dateOfCessation: null,
-        registeredOfficeAddress: null,
-        serviceAddress: null,
-        sicCodes: [],
-        accounts: null,
-        confirmationStatement: null,
-        hasCharges: null,
-        hasInsolvencyHistory: null,
-        hasBeenLiquidated: null,
-        previousNames: [],
-        registryUrl: "https://example.invalid/uk/01003142",
+      id: "01003142",
+      name: "ROLLS-ROYCE PLC",
+      legalForm: "plc",
+      address: textAddressOf(textAddress),
+      registryUrl: "https://example.invalid/uk/01003142",
+      details: {
+        registry: "companies-house",
+        company: {
+          companyNumber: "01003142",
+          name: "ROLLS-ROYCE PLC",
+          status: { type: "active" },
+          statusDetail: null,
+          type: "plc",
+          subtype: null,
+          jurisdiction,
+          dateOfCreation: null,
+          dateOfCessation: null,
+          registeredOfficeAddress: null,
+          serviceAddress: null,
+          sicCodes: [],
+          accounts: null,
+          confirmationStatement: null,
+          hasCharges: null,
+          hasInsolvencyHistory: null,
+          hasBeenLiquidated: null,
+          previousNames: [],
+          registryUrl: "https://example.invalid/uk/01003142",
+        },
       },
-    },
+    }) satisfies BusinessRegistryHit;
+
+  test.each([
+    ["llp", "limited liability partnership"],
+    ["limited-partnership", "limited partnership"],
+    ["plc", "public limited company"],
+    ["ltd", "private limited company"],
+  ])("companies-house preserves the %s legal form", (type, legalForm) => {
+    const hit = companiesHouseHit("scotland", null);
+    hit.details.company.type = type;
+    expect(renderLookupOutput(null, hit)).toContain(
+      `, ${legalForm} registered in Scotland`,
+    );
+    expect(renderLookupOutput(null, hit)).not.toContain("incorporated");
   });
+
+  test.each([
+    [
+      "llp",
+      "**ROLLS-ROYCE PLC**, limited liability partnership (company number 01003142)",
+    ],
+    [null, "**ROLLS-ROYCE PLC** (company number 01003142)"],
+  ])(
+    "companies-house handles legal form %s without a full record",
+    (legalForm, expected) => {
+      const { details: _details, ...hit } = companiesHouseHit(null, null);
+      expect(renderLookupOutput(null, { ...hit, legalForm })).toBe(expected);
+    },
+  );
 
   test("companies-house keeps the sentence intact when particulars drop out", () => {
     expect(
@@ -1824,15 +1855,15 @@ describe("built-in party clauses", () => {
         companiesHouseHit("scotland", "1 George St, Edinburgh"),
       ),
     ).toBe(
-      "**ROLLS-ROYCE PLC**, a company incorporated in Scotland (company number 01003142) whose registered office is at 1 George St, Edinburgh",
+      "**ROLLS-ROYCE PLC**, public limited company registered in Scotland (company number 01003142) whose registered office is at 1 George St, Edinburgh",
     );
     expect(
       renderLookupOutput(null, companiesHouseHit(null, "1 George St")),
     ).toBe(
-      "**ROLLS-ROYCE PLC** (company number 01003142) whose registered office is at 1 George St",
+      "**ROLLS-ROYCE PLC**, public limited company (company number 01003142) whose registered office is at 1 George St",
     );
     expect(renderLookupOutput(null, companiesHouseHit("scotland", null))).toBe(
-      "**ROLLS-ROYCE PLC**, a company incorporated in Scotland (company number 01003142)",
+      "**ROLLS-ROYCE PLC**, public limited company registered in Scotland (company number 01003142)",
     );
   });
 
@@ -1880,12 +1911,12 @@ describe("built-in party clauses", () => {
 
   test("recherche-entreprises names the siège social only when it has one", () => {
     expect(renderLookupOutput(null, frenchHit(FR_HEAD_OFFICE))).toBe(
-      "**EXEMPLE SA**, dont le siège social est situé 22 avenue de Wagram, 75008 Paris, immatriculée au Registre du commerce et des sociétés sous le numéro 552 081 317",
+      "**EXEMPLE SA**, dont le siège social est situé 22 avenue de Wagram, 75008 Paris, numéro SIREN 552 081 317",
     );
     // A branch address is not the siège social, so the clause drops rather
     // than describing the wrong establishment.
     expect(renderLookupOutput(null, frenchHit(null))).toBe(
-      "**EXEMPLE SA**, immatriculée au Registre du commerce et des sociétés sous le numéro 552 081 317",
+      "**EXEMPLE SA**, numéro SIREN 552 081 317",
     );
   });
 
@@ -1896,52 +1927,80 @@ describe("built-in party clauses", () => {
       regon: string | null;
       shareCapital: { amount: string; currency: string } | null;
     }>,
-  ): BusinessRegistryHit => ({
-    registry: "krs",
-    id: "0000006865",
-    name: "CD PROJEKT S.A.",
-    legalForm: "spółka akcyjna",
-    address: KRS_ADDRESS,
-    registryUrl: "https://example.invalid/krs/0000006865",
-    details: {
+  ) =>
+    ({
       registry: "krs",
-      entity: {
-        krsNumber: "0000006865",
-        register: "P",
-        name: "CD PROJEKT S.A.",
-        legalForm: "spółka akcyjna",
-        identifiers: {
-          nip: entity.nip === undefined ? "7342867148" : entity.nip,
-          regon: entity.regon === undefined ? "492707333" : entity.regon,
+      id: "0000006865",
+      name: "CD PROJEKT S.A.",
+      legalForm: "spółka akcyjna",
+      address: KRS_ADDRESS,
+      registryUrl: "https://example.invalid/krs/0000006865",
+      details: {
+        registry: "krs",
+        entity: {
+          krsNumber: "0000006865",
+          register: "RejP",
+          name: "CD PROJEKT S.A.",
+          legalForm: "spółka akcyjna",
+          identifiers: {
+            nip: entity.nip === undefined ? "7342867148" : entity.nip,
+            regon: entity.regon === undefined ? "492707333" : entity.regon,
+          },
+          shareCapital:
+            entity.shareCapital === undefined
+              ? { amount: "100 000 000,00", currency: "PLN" }
+              : entity.shareCapital,
+          address: null,
+          registeredSeat:
+            entity.seat === null
+              ? null
+              : {
+                  country: null,
+                  voivodeship: null,
+                  county: null,
+                  commune: null,
+                  locality: entity.seat ?? "Warszawa",
+                },
+          email: null,
+          website: null,
+          status: { type: "active" },
+          registeredAt: null,
+          lastEntryAt: null,
+          registryUrl: "https://example.invalid/krs/0000006865",
         },
-        shareCapital:
-          entity.shareCapital === undefined
-            ? { amount: "100 000 000,00", currency: "PLN" }
-            : entity.shareCapital,
-        address: null,
-        registeredSeat:
-          entity.seat === null
-            ? null
-            : {
-                country: null,
-                voivodeship: null,
-                county: null,
-                commune: null,
-                locality: entity.seat ?? "Warszawa",
-              },
-        email: null,
-        website: null,
-        status: { type: "active" },
-        registeredAt: null,
-        lastEntryAt: null,
-        registryUrl: "https://example.invalid/krs/0000006865",
       },
+    }) satisfies BusinessRegistryHit;
+
+  test.each(["RejP", "RejS"] as const)(
+    "krs identifies %s without inventing a sub-register",
+    (register) => {
+      const hit = krsHit({});
+      expect(
+        renderLookupOutput(null, {
+          ...hit,
+          details: {
+            registry: "krs",
+            entity: { ...hit.details.entity, register },
+          },
+        }),
+      ).toContain("numer w Krajowym Rejestrze Sądowym: 0000006865");
     },
-  });
+  );
+
+  test.each(["5599", "9220", "7389"])(
+    "recherche-entreprises identifies legal form %s without asserting RCS registration",
+    (legalFormCode) => {
+      const hit = frenchHit(FR_HEAD_OFFICE);
+      hit.details.company.legalFormCode = legalFormCode;
+      const output = renderLookupOutput(null, hit);
+      expect(output).toContain("numéro SIREN 552 081 317");
+      expect(output).not.toContain("commerce et des sociétés");
+    },
+  );
 
   test("krs renders the komparycja particulars it has", () => {
     expect(renderLookupOutput(null, krsHit({}))).toBe(
-      "**CD PROJEKT S.A.**, siedziba: Warszawa, adres: ul. Stanisława Matyi 8, 61-586 Poznań, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000006865, NIP 7342867148, REGON 492707333, kapitał zakładowy 100 000 000,00 PLN",
+      "**CD PROJEKT S.A.**, siedziba: Warszawa, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000006865, NIP 7342867148, REGON 492707333, kapitał zakładowy 100 000 000,00 PLN",
     );
   });
 
@@ -1952,7 +2011,7 @@ describe("built-in party clauses", () => {
         krsHit({ nip: null, regon: null, shareCapital: null, seat: null }),
       ),
     ).toBe(
-      "**CD PROJEKT S.A.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000006865",
+      "**CD PROJEKT S.A.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000006865",
     );
   });
 

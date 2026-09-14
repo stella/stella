@@ -3,9 +3,8 @@ import type { RegistryFormatClause } from "../format-clauses.js";
 
 /**
  * The UK party clause. The company number is never grouped, and the
- * jurisdiction of incorporation is what the clause names — Companies House
- * registers companies for England and Wales, Scotland and Northern Ireland
- * separately.
+ * legal form comes from the record, including partnerships. Registration
+ * wording also covers limited partnerships, which are not companies.
  *
  * https://find-and-update.company-information.service.gov.uk/company/00445790
  */
@@ -13,8 +12,13 @@ export const COMPANIES_HOUSE_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClau
   [
     { template: "**[company name]**", requires: ["company name"] },
     {
-      template: "a company incorporated in [jurisdiction]",
+      template: "[legal form]",
+      requires: ["legal form"],
+    },
+    {
+      template: "registered in [jurisdiction]",
       requires: ["jurisdiction"],
+      separator: " ",
     },
     {
       template: "(company number [registry number])",

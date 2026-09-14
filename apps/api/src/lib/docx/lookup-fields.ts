@@ -225,9 +225,9 @@ const COMPANIES_HOUSE_JURISDICTION_NAMES: Readonly<Record<string, string>> = {
 
 const wordsFromCode = (value: string): string => value.replaceAll("-", " ");
 
-const companiesHouseLegalFormName = (value: string | null): string =>
+const companiesHouseLegalFormName = (value: string | null): string | null =>
   value === null
-    ? "company"
+    ? null
     : (COMPANIES_HOUSE_LEGAL_FORM_NAMES[value] ?? wordsFromCode(value));
 
 const companiesHouseJurisdictionName = (
@@ -380,6 +380,9 @@ const lookupTemplateTokens = (
   }
   if (hit.registry === "brreg") {
     tokens[BRREG_IDENTIFIER_SPACED_TOKEN] = formatBrregIdentifierSpaced(hit.id);
+  }
+  if (hit.registry === "companies-house") {
+    tokens["legal form"] = companiesHouseLegalFormName(hit.legalForm);
   }
   const details = hit.details;
   if (details === undefined) {

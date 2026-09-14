@@ -3,18 +3,11 @@ import type { RegistryFormatClause } from "../format-clauses.js";
 import { SIREN_SPACED_TOKEN } from "./identifier-format.js";
 
 /**
- * The French party clause, per Bpifrance Création's official SAS statutes
- * model and Code de commerce R.123-237.
+ * SIREN identifies companies, associations and public bodies. The adapter
+ * supplies no RCS registration fact, so the identifier carries no RCS claim.
+ * Share capital and a readable legal form are also unavailable.
  *
- * Three particulars the canonical clause carries are absent because the
- * adapter cannot supply them, and stating them from nothing would be worse
- * than omitting them: the share capital ("au capital de … euros") is not in
- * the payload; the legal form arrives only as a raw INSEE category code with
- * no name mapping; and the greffe city is not returned, so the clause names
- * the register without a city rather than guessing one. Add "de [RCS city]"
- * here if the adapter ever exposes the greffe.
- *
- * https://bpifrance-creation.fr/file/555741/download?token=509z4M_H
+ * https://www.insee.fr/fr/information/1972132
  */
 export const RECHERCHE_ENTREPRISES_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[] =
   [
@@ -24,7 +17,7 @@ export const RECHERCHE_ENTREPRISES_DEFAULT_FORMAT_CLAUSES: readonly RegistryForm
       requires: ["head office address"],
     },
     {
-      template: `immatriculée au Registre du commerce et des sociétés sous le numéro [${SIREN_SPACED_TOKEN}]`,
+      template: `numéro SIREN [${SIREN_SPACED_TOKEN}]`,
       requires: [SIREN_SPACED_TOKEN],
     },
   ];

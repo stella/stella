@@ -61,7 +61,7 @@ describe("isBuiltInRegistryFormat", () => {
 });
 
 describe("clause-driven built-in defaults", () => {
-  test.each(REGISTRY_FORMAT_SLUGS)(
+  test.each([...REGISTRY_FORMAT_SLUGS])(
     "%s derives its default from its clause list, when it has one",
     (slug) => {
       if (isClauseDrivenRegistry(slug)) {
@@ -72,7 +72,7 @@ describe("clause-driven built-in defaults", () => {
     },
   );
 
-  test.each(REGISTRY_FORMAT_SLUGS)(
+  test.each([...REGISTRY_FORMAT_SLUGS])(
     "%s keeps every string it ever shipped recognisable as built-in",
     (slug) => {
       const { defaultFormat } = BUSINESS_REGISTRY_FORMAT_CAPABILITIES[slug];

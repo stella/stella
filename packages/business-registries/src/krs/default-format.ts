@@ -8,6 +8,7 @@ import type { RegistryFormatClause } from "../format-clauses.js";
  * deliberately absent: the API exposes only "the court that made the last
  * entry", which can read "SYSTEM" and arrives as an unnormalized all-caps
  * blob, so naming a court here would risk naming the wrong one.
+ * The KRS number covers both RejP and RejS; the clause names no sub-register.
  *
  * https://lexlege.pl/ksh/art-206/
  * https://umowywit.pl/strony-umowy-wdrozeniowej-jak-oznaczyc/
@@ -21,8 +22,7 @@ export const KRS_DEFAULT_FORMAT_CLAUSES: readonly RegistryFormatClause[] = [
   { template: "siedziba: [seat]", requires: ["seat"] },
   { template: "adres: [address]", requires: ["address"] },
   {
-    template:
-      "wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS [registry number]",
+    template: "numer w Krajowym Rejestrze Sądowym: [registry number]",
     requires: ["registry number"],
   },
   { template: "NIP [NIP]", requires: ["NIP"] },
