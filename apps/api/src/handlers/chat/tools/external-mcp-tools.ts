@@ -16,20 +16,16 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   createMcpClientForConnection,
   loadActiveMcpConnectionsForUser,
+  MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-// A single connector call can legitimately chain several sequential
-// upstream HTTP round trips (OAuth authorization-server discovery, token
-// refresh, then the MCP `tools()` call itself), each already bounded by
-// its own ~10s per-call timeout inside `mcp-upstream/connections.ts`. This
-// is the aggregate ceiling for one connector's whole discovery — client
-// creation through tool listing — so a connector stuck in an unbounded
-// step (e.g. a hung DB/KMS call with no timeout of its own) cannot stall
-// discovery past a bounded budget, regardless of how many connectors the
-// user has configured.
+// The client remains open after discovery so chat can execute its tools, which
+// may legitimately take minutes. This aggregate ceiling still bounds the
+// initial client creation and `tools()` call: closing the client aborts an
+// in-flight transport request when discovery exceeds the budget.
 const EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS = 20_000;
 
 export type LoadedExternalMcpTools = {
@@ -279,6 +275,7 @@ const loadConnectorTools = async ({
     (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
       const createdClient = await dependencies.createMcpClientForConnection({
         organizationId,
+        requestTimeoutMs: MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
         row,
         safeDb,
         userId,

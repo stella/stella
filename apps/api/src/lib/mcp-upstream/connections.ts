@@ -38,7 +38,8 @@ import {
 
 import { normalizeDiscoveredMcpTools } from "./cached-tools";
 
-const MCP_HTTP_REQUEST_TIMEOUT_MS = 10_000;
+const MCP_DISCOVERY_REQUEST_TIMEOUT_MS = 10_000;
+export const MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS = 5 * 60_000;
 const MCP_HTTP_RESPONSE_MAX_BYTES = 10_000_000;
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
@@ -273,6 +274,7 @@ export const createMcpClientForConnection = async ({
   organizationId,
   dependencies = DEFAULT_CONNECTION_DEPENDENCIES,
   outboundFetch = DEFAULT_OUTBOUND_FETCH_DEPENDENCIES,
+  requestTimeoutMs = MCP_DISCOVERY_REQUEST_TIMEOUT_MS,
   row,
   safeDb,
   userId,
@@ -280,6 +282,7 @@ export const createMcpClientForConnection = async ({
   organizationId: SafeId<"organization">;
   outboundFetch?: OutboundFetchDependencies;
   dependencies?: ConnectionDependencies;
+  requestTimeoutMs?: number;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -309,7 +312,7 @@ export const createMcpClientForConnection = async ({
       type: "http",
       url: target.value.url.toString(),
       fetch: createSafeMcpFetch(
-        MCP_HTTP_REQUEST_TIMEOUT_MS,
+        requestTimeoutMs,
         outboundFetch.safeOutboundFetchStream,
       ),
       ...(token.value === null
@@ -464,6 +467,7 @@ export const proxyMcpToolCall = async ({
     organizationId,
     ...(dependencies === undefined ? {} : { dependencies }),
     ...(outboundFetch === undefined ? {} : { outboundFetch }),
+    requestTimeoutMs: MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
     row,
     safeDb,
     userId,

@@ -22,6 +22,7 @@ type RefreshResult = Result<
 >;
 
 type CapturedTransport = {
+  fetch?: typeof fetch;
   headers?: Record<string, string>;
   url: string;
 };
@@ -274,6 +275,57 @@ describe("MCP upstream connection lifecycle", () => {
       content: [{ text: JSON.stringify(applicationOutput), type: "text" }],
     });
     expect(Object.keys(result)).toEqual(["content"]);
+  });
+
+  test("allows external tool execution to wait for a long-running upstream response", async () => {
+    let observedTimeoutMs: number | undefined;
+    const recordingOutboundFetch = asTestRaw<
+      NonNullable<Parameters<typeof proxyMcpToolCallImpl>[0]["outboundFetch"]>
+    >({
+      safeOutboundFetchStream: async (
+        args: Parameters<typeof outboundFetch.safeOutboundFetchStream>[0],
+      ) => {
+        observedTimeoutMs = args.timeoutMs;
+        return Result.ok({
+          body: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.close();
+            },
+          }),
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+      validateOutboundFetchTarget: async (url: string) =>
+        Result.ok({ url: new URL(url) }),
+    });
+    state.toolsImpl = async () => [
+      {
+        execute: async () => {
+          const transportFetch = state.transports.at(-1)?.fetch;
+          if (!transportFetch) {
+            throw new Error("MCP transport fetch was not configured");
+          }
+          await transportFetch("https://mcp.example.com/rpc");
+          return "ok";
+        },
+      },
+    ];
+
+    const result = await proxyMcpToolCallImpl({
+      args: {},
+      cachedTool,
+      dependencies: connectionDependencies,
+      organizationId,
+      outboundFetch: recordingOutboundFetch,
+      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      safeDb: makeSafeDb(),
+      userId,
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(observedTimeoutMs).toBe(5 * 60_000);
   });
 
   test("a missing refresh token short-circuits to needs_reauth without calling refresh", async () => {
