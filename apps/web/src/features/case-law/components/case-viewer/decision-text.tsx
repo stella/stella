@@ -1060,20 +1060,32 @@ export const DecisionText = ({
     // than the document, so they survive a failed read and are what a lawyer
     // can still work from.
     return (
-      <>
-        <EditorialSupplement
+      <article
+        className="text-card-foreground text-start"
+        lang={decision.language}
+        ref={articleRef}
+        style={{
+          fontFamily: "var(--reader-body-font)",
+          fontSize: "var(--reader-body-size)",
+          lineHeight: "var(--reader-body-line-height)",
+        }}
+      >
+        <DecisionTopMatterSections
           activeMatchIndex={shownMatchIndex}
+          anchorsByPieceId={anchorsByPieceId}
           annotationAnchors={
             hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
           }
+          footnotes={footnotes}
+          key={decisionId}
           rangesByPieceId={searchResults.rangesByPieceId}
-          textFields={decision.textFields}
+          topMatter={topMatter}
         />
         <DecisionBodyUnavailable
           decisionId={decision.id}
           reason={missingBodyReason(decision)}
         />
-      </>
+      </article>
     );
   })();
 

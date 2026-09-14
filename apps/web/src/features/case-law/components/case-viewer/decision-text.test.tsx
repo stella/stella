@@ -134,6 +134,7 @@ describe("a decision whose text did not resolve", () => {
                 },
               },
             }}
+            decisionId="dec-1"
             searchQuery=""
           />
         </QueryClientProvider>
@@ -143,6 +144,7 @@ describe("a decision whose text did not resolve", () => {
   test("says the text could not be read, and offers to ask again", () => {
     const markup = renderBodyless();
 
+    expect(markup).toContain("<article");
     expect(markup).toContain(messages.caseLaw.viewer.textReadFailed);
     expect(markup).toContain(messages.common.retry);
     // The case-law list's "configure a source and run a sync" line used to
@@ -320,7 +322,11 @@ const renderTopMatter = ({
           caseNumber: "1 As 1/2026",
           court: "Test court",
           documentAst,
+          documentPending: false,
+          documentReadFailed: false,
+          documentUnavailable: false,
           fulltext: null,
+          id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
           language: "cs",
           sourceAttributionUrl: null,
           textFields: {
