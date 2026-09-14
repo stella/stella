@@ -21,7 +21,10 @@ import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
-import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
+import {
+  decisionClampClassName,
+  decisionHeadnoteIsCut,
+} from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionColumnId,
   DecisionContentMode,
@@ -540,8 +543,8 @@ export const HeadnoteProse = ({
           text={showingWhole ? view.text : preview.text}
         />
       </BidiText>
-      {preview.truncated && (
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
+      {decisionHeadnoteIsCut(preview) && (
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
           {view.type === HEADNOTE_VIEW.FAILED && (
             <span className="text-muted-foreground">
               {t("errors.actionFailed")}

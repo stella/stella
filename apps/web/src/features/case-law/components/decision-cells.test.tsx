@@ -75,6 +75,17 @@ describe("a cut headnote can be read whole", () => {
     expect(prose({ truncated: true, view: collapsed })).toContain(CLAMP);
   });
 
+  test("the control sits outside the clamped text, never inside it", () => {
+    // A control drawn inside a two-line clamp is a control the compact
+    // density hides: the reader is offered the rest of the headnote by
+    // something they cannot see. The row's own height leaves room for this
+    // line (`decisionHeadnoteIsCut` in decision-row.tsx).
+    const markup = prose({ truncated: true, view: collapsed });
+
+    expect(markup.indexOf("</p>")).toBeLessThan(markup.indexOf("<button"));
+    expect(markup.slice(markup.indexOf("</p>"))).not.toContain(CLAMP);
+  });
+
   test("a read that failed says so and offers another try", () => {
     const markup = prose({
       truncated: true,

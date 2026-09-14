@@ -39,8 +39,8 @@ import {
   selectColId,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import { decisionHeadnoteIsCut } from "@/features/case-law/decision-columns.logic";
 import { isDecisionRowActive } from "@/features/case-law/decision-inspector.logic";
-import { useDecisionRenderScope } from "@/features/case-law/decision-table-columns";
 import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 /**
@@ -98,10 +98,13 @@ export const DecisionRow = ({
     : undefined;
   const isActive = isDecisionRowActive(activeTabId, decision);
   // A compact row is one fixed height, which is what makes a page of them
-  // scannable; the one row a reader asked to read whole is the exception, and
-  // it grows to the text rather than clipping it.
-  const { expandedHeadnoteIds } = useDecisionRenderScope();
-  const tightRowHeight = expandedHeadnoteIds.has(decision.id)
+  // scannable. A row whose headnote was cut is the exception twice over: the
+  // control that reads the rest is a line the fixed height has no room for,
+  // and the text it swaps in is several. Such a row keeps the compact floor
+  // and grows past it, so nothing the reader is offered is drawn where it
+  // cannot be seen; every other row is untouched, because a floor only grows
+  // a row whose content asks it to.
+  const tightRowHeight = decisionHeadnoteIsCut(decision.headnote)
     ? TOOLBAR_ROW_MIN_HEIGHT
     : TOOLBAR_ROW_HEIGHT;
 
