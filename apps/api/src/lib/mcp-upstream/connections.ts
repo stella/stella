@@ -38,8 +38,10 @@ import {
 
 import { normalizeDiscoveredMcpTools } from "./cached-tools";
 
-const MCP_HTTP_REQUEST_TIMEOUT_MS = 10_000;
+const MCP_DISCOVERY_REQUEST_TIMEOUT_MS = 10_000;
+export const MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS = 5 * 60_000;
 const MCP_HTTP_RESPONSE_MAX_BYTES = 10_000_000;
+const MCP_CALL_TOOL_METHOD = "tools/call";
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
 type OutboundFetchDependencies = {
@@ -308,10 +310,7 @@ export const createMcpClientForConnection = async ({
     transport: {
       type: "http",
       url: target.value.url.toString(),
-      fetch: createSafeMcpFetch(
-        MCP_HTTP_REQUEST_TIMEOUT_MS,
-        outboundFetch.safeOutboundFetchStream,
-      ),
+      fetch: createSafeMcpFetch(outboundFetch.safeOutboundFetchStream),
       ...(token.value === null
         ? {}
         : { headers: { Authorization: `Bearer ${token.value}` } }),
@@ -475,14 +474,17 @@ export const proxyMcpToolCall = async ({
   }
 
   try {
-    const tools = await client.tools([
-      toolDefinition({
-        name: cachedTool.rawName,
-        description:
-          cachedTool.description ?? cachedTool.title ?? cachedTool.rawName,
-        inputSchema: cachedTool.inputSchema,
-      }),
-    ]);
+    const tools = await client.tools(
+      [
+        toolDefinition({
+          name: cachedTool.rawName,
+          description:
+            cachedTool.description ?? cachedTool.title ?? cachedTool.rawName,
+          inputSchema: cachedTool.inputSchema,
+        }),
+      ],
+      { callToolTimeoutMs: MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS },
+    );
     const tool: unknown = tools.at(0);
     if (!isExecutableMcpTool(tool)) {
       return serializeToolResult(
@@ -498,7 +500,6 @@ export const proxyMcpToolCall = async ({
 };
 
 const createSafeMcpFetch = (
-  timeoutMs: number,
   safeOutboundFetchStreamImpl: typeof safeOutboundFetchStream,
 ): typeof fetch => {
   const safeFetch: typeof fetch = Object.assign(
@@ -511,15 +512,16 @@ const createSafeMcpFetch = (
       }
 
       const url = mcpFetchUrl(input);
+      const body = await mcpFetchBody(input, init);
       const response = await safeOutboundFetchStreamImpl({
-        body: await mcpFetchBody(input, init),
+        body,
         headers: mcpFetchHeaders(input, init),
         maxBytes: MCP_HTTP_RESPONSE_MAX_BYTES,
         method:
           init?.method ?? (input instanceof Request ? input.method : "GET"),
         signal:
           init?.signal ?? (input instanceof Request ? input.signal : undefined),
-        timeoutMs,
+        timeoutMs: mcpRequestTimeoutMs(body),
         url,
       });
       if (Result.isError(response)) {
@@ -536,6 +538,43 @@ const createSafeMcpFetch = (
 
   return safeFetch;
 };
+
+const mcpRequestTimeoutMs = (
+  body: SafeOutboundFetchBody | undefined,
+): number => {
+  const text = mcpFetchBodyText(body);
+  if (text === null) {
+    return MCP_DISCOVERY_REQUEST_TIMEOUT_MS;
+  }
+
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  if (Result.isError(parsed)) {
+    return MCP_DISCOVERY_REQUEST_TIMEOUT_MS;
+  }
+
+  const messages = Array.isArray(parsed.value) ? parsed.value : [parsed.value];
+  return messages.some(isMcpCallToolRequest)
+    ? MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS
+    : MCP_DISCOVERY_REQUEST_TIMEOUT_MS;
+};
+
+const mcpFetchBodyText = (
+  body: SafeOutboundFetchBody | undefined,
+): string | null => {
+  if (typeof body === "string") {
+    return body;
+  }
+  if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
+    return new TextDecoder().decode(body);
+  }
+  return null;
+};
+
+const isMcpCallToolRequest = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  "method" in value &&
+  value.method === MCP_CALL_TOOL_METHOD;
 
 const mcpFetchUrl = (input: Parameters<typeof fetch>[0]): URL => {
   if (input instanceof Request) {

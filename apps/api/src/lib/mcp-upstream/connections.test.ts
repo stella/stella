@@ -22,6 +22,7 @@ type RefreshResult = Result<
 >;
 
 type CapturedTransport = {
+  fetch?: typeof fetch;
   headers?: Record<string, string>;
   url: string;
 };
@@ -37,9 +38,10 @@ const state = {
       refresh_token: "fresh-refresh",
     })) as () => RefreshResult,
   refreshCalls: 0,
+  toolsOptions: [] as unknown[],
   toolsImpl: (async () => [
     { execute: async () => ({ content: [{ text: "ok", type: "text" }] }) },
-  ]) as (defs?: unknown) => Promise<unknown[]>,
+  ]) as (defs?: unknown, options?: unknown) => Promise<unknown[]>,
   transports: [] as CapturedTransport[],
 };
 
@@ -50,7 +52,10 @@ const connectionDependenciesTestDouble = {
       close: async () => {
         state.closes += 1;
       },
-      tools: async (defs?: unknown) => await state.toolsImpl(defs),
+      tools: async (defs?: unknown, options?: unknown) => {
+        state.toolsOptions.push(options);
+        return await state.toolsImpl(defs, options);
+      },
     };
   },
   refreshOAuthToken: async () => {
@@ -172,6 +177,7 @@ beforeEach(() => {
   state.dbSets = [];
   state.encryptCalls = 0;
   state.refreshCalls = 0;
+  state.toolsOptions = [];
   state.refresh = () =>
     Result.ok({ access_token: "fresh-access", refresh_token: "fresh-refresh" });
   state.toolsImpl = async () => [
@@ -274,6 +280,128 @@ describe("MCP upstream connection lifecycle", () => {
       content: [{ text: JSON.stringify(applicationOutput), type: "text" }],
     });
     expect(Object.keys(result)).toEqual(["content"]);
+  });
+
+  test("allows external tool execution to wait for a long-running upstream response", async () => {
+    let observedTimeoutMs: number | undefined;
+    const recordingOutboundFetch = asTestRaw<
+      NonNullable<Parameters<typeof proxyMcpToolCallImpl>[0]["outboundFetch"]>
+    >({
+      safeOutboundFetchStream: async (
+        args: Parameters<typeof outboundFetch.safeOutboundFetchStream>[0],
+      ) => {
+        observedTimeoutMs = args.timeoutMs;
+        return Result.ok({
+          body: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.close();
+            },
+          }),
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+      validateOutboundFetchTarget: async (url: string) =>
+        Result.ok({ url: new URL(url) }),
+    });
+    state.toolsImpl = async () => [
+      {
+        execute: async () => {
+          const transportFetch = state.transports.at(-1)?.fetch;
+          if (!transportFetch) {
+            throw new Error("MCP transport fetch was not configured");
+          }
+          await transportFetch("https://mcp.example.com/rpc", {
+            body: JSON.stringify({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { arguments: {}, name: "lookup" },
+            }),
+            method: "POST",
+          });
+          return "ok";
+        },
+      },
+    ];
+
+    const result = await proxyMcpToolCallImpl({
+      args: {},
+      cachedTool,
+      dependencies: connectionDependencies,
+      organizationId,
+      outboundFetch: recordingOutboundFetch,
+      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      safeDb: makeSafeDb(),
+      userId,
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(observedTimeoutMs).toBe(5 * 60_000);
+    expect(state.toolsOptions).toEqual([{ callToolTimeoutMs: 5 * 60_000 }]);
+  });
+
+  test("keeps initialization requests on the short discovery timeout", async () => {
+    let observedTimeoutMs: number | undefined;
+    const recordingOutboundFetch = asTestRaw<
+      NonNullable<
+        Parameters<typeof createMcpClientForConnectionImpl>[0]["outboundFetch"]
+      >
+    >({
+      safeOutboundFetchStream: async (
+        args: Parameters<typeof outboundFetch.safeOutboundFetchStream>[0],
+      ) => {
+        observedTimeoutMs = args.timeoutMs;
+        return Result.ok({
+          body: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.close();
+            },
+          }),
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+      validateOutboundFetchTarget: async (url: string) =>
+        Result.ok({ url: new URL(url) }),
+    });
+    const initializingDependencies = asTestRaw<
+      NonNullable<
+        Parameters<typeof createMcpClientForConnectionImpl>[0]["dependencies"]
+      >
+    >({
+      ...connectionDependenciesTestDouble,
+      createMCPClient: async ({
+        transport,
+      }: {
+        transport: CapturedTransport;
+      }) => {
+        await transport.fetch?.("https://mcp.example.com/rpc", {
+          body: JSON.stringify({
+            id: 1,
+            jsonrpc: "2.0",
+            method: "initialize",
+            params: {},
+          }),
+          method: "POST",
+        });
+        return connectionDependenciesTestDouble.createMCPClient({ transport });
+      },
+    });
+
+    const client = await createMcpClientForConnectionImpl({
+      dependencies: initializingDependencies,
+      organizationId,
+      outboundFetch: recordingOutboundFetch,
+      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      safeDb: makeSafeDb(),
+      userId,
+    });
+
+    expect(client).not.toBeNull();
+    expect(observedTimeoutMs).toBe(10_000);
   });
 
   test("a missing refresh token short-circuits to needs_reauth without calling refresh", async () => {

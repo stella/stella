@@ -6,6 +6,7 @@ import {
   loadCatalogue,
   recommendedSlugsForJurisdictions,
   type CatalogueCost,
+  type CatalogueSetup,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 
@@ -14,6 +15,7 @@ import {
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
+import type { McpConnectorAuthType } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   computeCatalogueInstallState,
@@ -33,6 +35,12 @@ import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 
 const CUSTOM_SKILL_LIST_LIMIT =
   LIMITS.agentSkillsPerUser + LIMITS.agentSkillsTeamPerOrganization;
+
+const MCP_CONNECTOR_SETUP = {
+  bearer: "api-key",
+  none: "none",
+  oauth2: "account",
+} as const satisfies Record<McpConnectorAuthType, CatalogueSetup>;
 
 const config = {
   description:
@@ -497,7 +505,7 @@ const buildCustomMcpCatalogueEntry = (
     license: null,
     cost: null,
     serverVersion: connector.serverVersion,
-    setup: connector.authType === "none" ? "none" : "api-key",
+    setup: MCP_CONNECTOR_SETUP[connector.authType],
     tags: [],
     jurisdictions: [],
     url: connector.url,

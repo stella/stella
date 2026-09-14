@@ -108,6 +108,25 @@ afterEach(() => {
 });
 
 describe("loadExternalMcpToolsForUser client lifecycle", () => {
+  test("keeps the discovered client usable for long-running tool execution", async () => {
+    const row = buildRow();
+    const fakeClient = buildFakeClient();
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
+    createMcpClientForConnectionMock.mockResolvedValue(asMcpClient(fakeClient));
+
+    const loaded = await loadExternalMcpToolsForUserForTest({
+      nullUnionStrategy: "json-schema",
+      organizationId: orgId,
+      safeDb: stubSafeDb,
+      userId,
+    });
+
+    expect(fakeClient.tools).toHaveBeenCalledWith({
+      callToolTimeoutMs: 5 * 60_000,
+    });
+    await loaded.close();
+  });
+
   test("closes the MCP client when discovery fails after the client is created", async () => {
     const row = buildRow();
     loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
