@@ -157,7 +157,7 @@
     "@electric-sql/pglite": "^0.5.8",
     "@faker-js/faker": "^10.6.0",
     "@modelcontextprotocol/client": "2.0.0",
-    "@modelcontextprotocol/ext-apps": "^1.7.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/nodemailer": "^8.0.1",
