@@ -20,12 +20,22 @@ export type DecisionTabTarget = {
   decisionId: string;
   language?: string | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
+  /** The words that found the row, so the opened text marks them. */
+  searchQuery?: string | undefined;
   slug?: string | null | undefined;
+};
+
+/** What the reader's gesture says about where in the decision it lands. */
+type DecisionOpenContext = {
+  /** The block the gesture names; the whole decision when it names none. */
+  anchorId?: string | undefined;
+  /** What was searched for, empty on a browse listing. */
+  searchQuery?: string | undefined;
 };
 
 export const decisionTabTarget = (
   decision: Decision,
-  anchorId?: string,
+  { anchorId, searchQuery }: DecisionOpenContext = {},
 ): DecisionTabTarget => ({
   caseNumber: decision.caseNumber,
   country: decision.country,
@@ -35,6 +45,7 @@ export const decisionTabTarget = (
   languageAlternates: decision.languageAlternates,
   slug: decision.slug,
   ...(anchorId === undefined ? {} : { anchorId }),
+  ...(searchQuery === undefined || searchQuery === "" ? {} : { searchQuery }),
 });
 
 /** What marking a row as open needs: the version that matched, and its translations. */

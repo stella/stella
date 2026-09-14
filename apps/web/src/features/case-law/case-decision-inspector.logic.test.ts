@@ -50,6 +50,14 @@ describe("case decision inspector", () => {
     expect(isCaseDecisionViewPayload({ ...payload, decisionId: "" })).toBe(
       false,
     );
+    // The terms survive structured-clone synchronization between windows, and
+    // an empty string is not a find anyone asked for.
+    expect(
+      isCaseDecisionViewPayload({ ...payload, searchQuery: "náhrada" }),
+    ).toBe(true);
+    expect(isCaseDecisionViewPayload({ ...payload, searchQuery: "" })).toBe(
+      false,
+    );
   });
 
   test("narrows only stored generic tabs carrying a decision payload", () => {
@@ -107,11 +115,13 @@ describe("case decision inspector", () => {
         slug: "c-400-99-f472865427c41152",
       }).payload,
     );
-    // A tab opened at a passage keeps it: the reader who leaves the inspector
-    // for the full page lands on the block they were reading, not at the top.
+    // A tab opened at a passage keeps it, and keeps the words that found it:
+    // the reader who leaves the inspector for the full page lands on the block
+    // they were reading, with the same words marked.
     void navigateToCaseDecisionMain(navigate, {
       ...base,
       anchorId: "p-12",
+      searchQuery: "náhrada škody",
     });
 
     expect(calls).toEqual([
@@ -122,6 +132,7 @@ describe("case decision inspector", () => {
           court: "nejvyssi-spravni-soud",
           slug: "4-as-3-2008",
         },
+        search: { q: undefined },
       },
       {
         to: "/law/$country/cases/$court/$language/$slug",
@@ -131,6 +142,7 @@ describe("case decision inspector", () => {
           language: "es",
           slug: "c-400-99-f472865427c41152",
         },
+        search: { q: undefined },
       },
       {
         to: "/law/$country/cases/$court/$slug",
@@ -139,6 +151,7 @@ describe("case decision inspector", () => {
           court: "nejvyssi-spravni-soud",
           slug: "4-as-3-2008",
         },
+        search: { q: "náhrada škody" },
         hash: "p-12",
       },
     ]);

@@ -17,6 +17,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
+import {
+  SEARCH_MARK_CLASS_NAME,
+  SEARCH_MARK_DESCENDANT_CLASS_NAME,
+} from "@/components/legal-reader/query-marks";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
@@ -92,6 +96,11 @@ export type DecisionRenderContext = {
   identityLineFields: readonly DecisionIdentityLineField[];
   /** The query's words, so the summary cell can show why the row matched. */
   queryTokens: readonly string[];
+  /**
+   * The query as it was typed, carried into whatever the row opens so the
+   * decision's own text marks the words the row marks.
+   */
+  searchQuery: string | undefined;
   /** Whether a prose cell is clamped to two lines or shown whole. */
   contentMode: DecisionContentMode;
   /** The rows whose cut headnote the reader asked to see whole. */
@@ -117,7 +126,10 @@ export const CaseNumberCell = ({
   const uiLocale = useLocale();
   const openDecision = useOpenDecisionTab();
   const { caseNumber, languageAlternates } = decision;
-  const target = preferredDecisionTarget(decision, uiLocale);
+  const target = preferredDecisionTarget(decision, {
+    searchQuery: context.searchQuery,
+    uiLocale,
+  });
   const routeParams = createCaseLawDecisionRouteParams(target);
   const displayLanguage = normalizeCaseLawLanguageSegment(
     routeParams.language ?? decision.language,
@@ -144,6 +156,7 @@ export const CaseNumberCell = ({
           <DecisionLanguageMenu
             alternates={languageAlternates}
             displayLanguage={displayLanguage}
+            searchQuery={context.searchQuery}
           />
         )}
       </div>
@@ -243,7 +256,10 @@ export const SummaryCell = ({
   // The version that matched, not the reader's preferred one: a block anchor
   // is version-local, so its identifier means nothing in a translation. The
   // preferred alternate stays one click away through the language control.
-  const target = decisionTabTarget(decision, anchorId);
+  const target = decisionTabTarget(decision, {
+    anchorId,
+    searchQuery: context.searchQuery,
+  });
   return decisionLinkElement({
     children: passage,
     className: "block hover:underline",
@@ -259,10 +275,6 @@ export const SummaryCell = ({
  * ask to read one.
  */
 const SUMMARY_TEXT_CLASS_NAME = "text-foreground text-sm";
-
-/** The same mark the server's own highlighting draws, so one row reads as one thing. */
-const MARK_CLASS_NAME =
-  "text-foreground bg-warning/30 font-medium dark:bg-warning/20";
 
 /** The bounded text a row carries, where the source published one. */
 type PresentHeadnote = Extract<
@@ -388,7 +400,7 @@ const HighlightedProse = ({
   <>
     {highlightSegments(text, queryTokens).map((segment) =>
       segment.match ? (
-        <mark className={MARK_CLASS_NAME} key={segment.start}>
+        <mark className={SEARCH_MARK_CLASS_NAME} key={segment.start}>
           {segment.text}
         </mark>
       ) : (
@@ -589,7 +601,7 @@ const HighlightedPassage = ({
     className={cn(
       SUMMARY_TEXT_CLASS_NAME,
       decisionClampClassName(contentMode),
-      "[&_mark]:text-foreground [&_mark]:bg-warning/30 dark:[&_mark]:bg-warning/20 [&_mark]:font-medium",
+      SEARCH_MARK_DESCENDANT_CLASS_NAME,
     )}
     dangerouslySetInnerHTML={{
       // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
@@ -661,9 +673,11 @@ const DecisionLink = ({
 const DecisionLanguageMenu = ({
   alternates,
   displayLanguage,
+  searchQuery,
 }: {
   alternates: readonly PublicDecisionLanguageAlternate[];
   displayLanguage: string;
+  searchQuery: string | undefined;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -693,6 +707,9 @@ const DecisionLanguageMenu = ({
             language: alternate.language,
             languageAlternates: alternates,
             slug: alternate.slug,
+            ...(searchQuery === undefined || searchQuery === ""
+              ? {}
+              : { searchQuery }),
           };
           return (
             <MenuItem

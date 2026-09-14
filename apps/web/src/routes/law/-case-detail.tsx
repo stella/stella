@@ -45,6 +45,12 @@ export function PublicDecisionViewer({
   initialSearchQuery,
 }: PublicDecisionViewerProps) {
   const decisionId = extractId(decision.id);
+  // The block the URL names. A results row that could not open beside the
+  // list lands here instead, at the passage and on the words it matched.
+  const initialAnchorId = useRouterState({
+    select: ({ location }) =>
+      location.hash === "" ? undefined : location.hash,
+  });
   const authStatus = useClientAuthStatus();
   const inspector = useInspectorView();
   const navigate = useNavigate();
@@ -83,6 +89,8 @@ export function PublicDecisionViewer({
       inspector.close(swapTarget.id);
     }
     inspector.open(
+      // The same decision, read the same way: docking it must not silently
+      // drop the passage and the words the reader arrived on.
       createCaseDecisionViewTab({
         caseNumber: decision.caseNumber,
         country: decision.country,
@@ -91,6 +99,10 @@ export function PublicDecisionViewer({
         language: decision.language,
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
+        ...(initialAnchorId === undefined ? {} : { anchorId: initialAnchorId }),
+        ...(initialSearchQuery === undefined
+          ? {}
+          : { searchQuery: initialSearchQuery }),
       }),
     );
     if (swapTarget !== undefined) {
@@ -142,6 +154,7 @@ export function PublicDecisionViewer({
                 aiMode="locked"
                 decision={decision}
                 decisionId={decisionId}
+                initialAnchorId={initialAnchorId}
                 initialSearchQuery={initialSearchQuery}
               />
             </div>
@@ -150,6 +163,7 @@ export function PublicDecisionViewer({
           <AuthenticatedCaseLawWorkspace
             decision={decision}
             decisionId={decisionId}
+            initialAnchorId={initialAnchorId}
             initialSearchQuery={initialSearchQuery}
             user={authStatus.user}
           />
@@ -158,6 +172,7 @@ export function PublicDecisionViewer({
         <GuestDecisionWorkspace
           decision={decision}
           decisionId={decisionId}
+          initialAnchorId={initialAnchorId}
           initialSearchQuery={initialSearchQuery}
         />
       )}
@@ -168,10 +183,12 @@ export function PublicDecisionViewer({
 const GuestDecisionWorkspace = ({
   decision,
   decisionId,
+  initialAnchorId,
   initialSearchQuery,
 }: {
   decision: PublicCaseLawDecision;
   decisionId: ReturnType<typeof extractId>;
+  initialAnchorId?: string | undefined;
   initialSearchQuery?: string | undefined;
 }) => {
   const requestSignIn = usePublicSignInRequest();
@@ -185,6 +202,7 @@ const GuestDecisionWorkspace = ({
         aiMode="locked"
         decision={decision}
         decisionId={decisionId}
+        initialAnchorId={initialAnchorId}
         initialSearchQuery={initialSearchQuery}
         onRequestAI={
           requestSignIn === null ? undefined : () => requestSignIn(currentHref)

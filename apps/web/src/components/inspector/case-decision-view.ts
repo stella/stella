@@ -11,13 +11,15 @@ import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 export const CASE_DECISION_VIEW = "case-law-decision";
 
 export type CaseDecisionViewPayload = {
-  /** A block to scroll to and flash once the text is shown. */
+  /** A block to scroll to and mark once the text is shown. */
   anchorId?: string | undefined;
   caseNumber: string;
   country: string;
   court: string;
   decisionId: string;
   language?: string | undefined;
+  /** The words that found the decision, so the reader opens on them marked. */
+  searchQuery?: string | undefined;
   slug: string;
 };
 
@@ -29,6 +31,7 @@ type CaseDecisionTarget = {
   decisionId: string;
   language?: string | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
+  searchQuery?: string | undefined;
   slug?: string | null | undefined;
 };
 
@@ -58,7 +61,10 @@ export const isCaseDecisionViewPayload = (
       isNonEmptyString(value.language)) &&
     (!("anchorId" in value) ||
       value.anchorId === undefined ||
-      isNonEmptyString(value.anchorId))
+      isNonEmptyString(value.anchorId)) &&
+    (!("searchQuery" in value) ||
+      value.searchQuery === undefined ||
+      isNonEmptyString(value.searchQuery))
   );
 };
 
@@ -81,18 +87,29 @@ export const isCaseDecisionGenericTab = (
  * Navigate the main view to the decision an inspector tab holds. The
  * payload's route identity was resolved at tab creation, so this is a
  * pure param mapping onto the two public decision routes. A tab opened at a
- * passage keeps it: the full page lands on the same block.
+ * passage keeps it: the full page lands on the same block, with the same
+ * words marked. The terms ride in `?q=`, outside the canonical path the
+ * public routes are indexed under.
  */
 export const navigateToCaseDecisionMain = async (
   navigate: ReturnType<typeof useNavigate>,
-  { anchorId, country, court, language, slug }: CaseDecisionViewPayload,
+  {
+    anchorId,
+    country,
+    court,
+    language,
+    searchQuery,
+    slug,
+  }: CaseDecisionViewPayload,
 ): Promise<void> => {
   const hash = anchorId === undefined ? {} : { hash: anchorId };
+  const search = { q: searchQuery };
 
   if (language === undefined) {
     await navigate({
       to: "/law/$country/cases/$court/$slug",
       params: { country, court, slug },
+      search,
       ...hash,
     });
     return;
@@ -101,6 +118,7 @@ export const navigateToCaseDecisionMain = async (
   await navigate({
     to: "/law/$country/cases/$court/$language/$slug",
     params: { country, court, language, slug },
+    search,
     ...hash,
   });
 };
@@ -124,6 +142,7 @@ export const createCaseDecisionViewTab = ({
   decisionId,
   language,
   languageAlternates,
+  searchQuery,
   slug,
 }: CaseDecisionTarget): CaseDecisionViewTab => {
   const route = createCaseLawDecisionRouteParams({
@@ -150,6 +169,7 @@ export const createCaseDecisionViewTab = ({
       slug: route.slug,
       ...(route.language === undefined ? {} : { language: route.language }),
       ...(anchorId === undefined ? {} : { anchorId }),
+      ...(searchQuery === undefined ? {} : { searchQuery }),
     },
   };
 };

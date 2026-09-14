@@ -105,6 +105,8 @@ type DecisionRenderScopeValue = {
   expandedHeadnoteIds: ReadonlySet<string>;
   onToggleHeadnote: (decisionId: string) => void;
   queryTokens: readonly string[];
+  /** The query as typed, which every gesture that opens a row carries with it. */
+  searchQuery: string | undefined;
 };
 
 const NO_QUERY_TOKENS: readonly string[] = [];
@@ -119,6 +121,7 @@ const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
   onToggleHeadnote: () =>
     panic("Decision cell rendered outside a decision render scope"),
   queryTokens: NO_QUERY_TOKENS,
+  searchQuery: undefined,
 });
 
 export const DecisionRenderScope = DecisionRenderScopeContext.Provider;
@@ -292,8 +295,13 @@ const DecisionCell = ({
   decision: Decision;
   visibleColumnIds: readonly string[];
 }) => {
-  const { contentMode, expandedHeadnoteIds, onToggleHeadnote, queryTokens } =
-    use(DecisionRenderScopeContext);
+  const {
+    contentMode,
+    expandedHeadnoteIds,
+    onToggleHeadnote,
+    queryTokens,
+    searchQuery,
+  } = use(DecisionRenderScopeContext);
 
   return renderDecisionCell({
     column,
@@ -305,6 +313,7 @@ const DecisionCell = ({
       // moves its value into the identity line and showing it takes it back.
       identityLineFields: decisionIdentityLineFields(visibleColumnIds),
       queryTokens,
+      searchQuery,
     },
     decision,
   });

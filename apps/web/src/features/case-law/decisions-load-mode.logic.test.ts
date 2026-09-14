@@ -5,6 +5,7 @@ import {
   decisionRowsPhase,
   decisionsLoadMode,
   decisionsSearchOutage,
+  queryAnsweredByRows,
 } from "./decisions-load-mode.logic";
 
 describe("whether the results route waits for its rows", () => {
@@ -139,5 +140,64 @@ describe("whether the results region stands in for an unreachable search", () =>
         loaded: undefined,
       }),
     ).toBe(false);
+  });
+});
+
+describe("which search the rows on screen answer", () => {
+  // One run of the page: a search settles, the reader asks another, and the
+  // previous rows stay up while it is in flight. The term a row is read with
+  // has to lag the URL for exactly that window and no longer, or a row is
+  // marked with words that did not find it and opens on them too.
+  test("the term stays with the rows until the new ones arrive", () => {
+    const settled = queryAnsweredByRows({
+      phase: "rows",
+      requested: "smlouva",
+      shown: undefined,
+    });
+    expect(settled).toBe("smlouva");
+
+    const refreshing = queryAnsweredByRows({
+      phase: "stale",
+      requested: "náhrada škody",
+      shown: settled,
+    });
+    expect(refreshing).toBe("smlouva");
+
+    expect(
+      queryAnsweredByRows({
+        phase: "rows",
+        requested: "náhrada škody",
+        shown: refreshing,
+      }),
+    ).toBe("náhrada škody");
+  });
+
+  // A search with nothing to keep draws a skeleton, and a skeleton has no row
+  // to disagree with: the reader is already looking at the new search.
+  test("a skeleton answers the search being fetched", () => {
+    expect(
+      queryAnsweredByRows({
+        phase: "skeleton",
+        requested: "náhrada škody",
+        shown: "smlouva",
+      }),
+    ).toBe("náhrada škody");
+  });
+
+  test("clearing the box is a search like any other", () => {
+    expect(
+      queryAnsweredByRows({
+        phase: "stale",
+        requested: undefined,
+        shown: "smlouva",
+      }),
+    ).toBe("smlouva");
+    expect(
+      queryAnsweredByRows({
+        phase: "rows",
+        requested: undefined,
+        shown: "smlouva",
+      }),
+    ).toBeUndefined();
   });
 });

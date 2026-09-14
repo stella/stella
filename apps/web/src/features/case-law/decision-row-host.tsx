@@ -19,12 +19,16 @@ import { decisionTabTarget } from "@/features/case-law/decision-inspector.logic"
 import { DecisionRow } from "@/features/case-law/decision-row";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 
-/** Opens a decision beside the results, at a passage when one is named. */
-export const useOpenDecisionInspector = () => {
+/**
+ * Opens a decision beside the results, at a passage when one is named and on
+ * the words that found it. The query is the list's, not the row's: every row
+ * of one result set was found by the same terms.
+ */
+export const useOpenDecisionInspector = (searchQuery?: string) => {
   const openDecision = useOpenDecisionTab();
 
   return (decision: Decision, anchorId?: string) => {
-    openDecision.open(decisionTabTarget(decision, anchorId));
+    openDecision.open(decisionTabTarget(decision, { anchorId, searchQuery }));
   };
 };
 
@@ -34,13 +38,16 @@ type DecisionRowHostInput = {
    * organization, who has nothing to hang a question on.
    */
   addColumnRail?: ReactNode | undefined;
+  /** What was searched for; a browse listing has none. */
+  searchQuery?: string | undefined;
 };
 
 export const useDecisionRowHost = ({
   addColumnRail,
+  searchQuery,
 }: DecisionRowHostInput): TableRowHost<DecisionRowData> => {
   const activeTabId = useInspectorTabsStore((s) => s.activeId);
-  const openDecision = useOpenDecisionInspector();
+  const openDecision = useOpenDecisionInspector(searchQuery);
 
   return {
     renderRow: (input) => (

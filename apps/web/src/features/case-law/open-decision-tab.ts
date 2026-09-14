@@ -9,8 +9,9 @@
  * Beside the results is only possible where there is a beside: the public
  * inspector dock is not rendered below `md` (see `PublicInspectorDock`), so on
  * a phone opening a tab would change nothing on screen. There the gesture goes
- * to the decision's own page instead — a link by following its href, the row
- * by navigating to the same route.
+ * to the decision's own page instead, by the same navigation the row uses: the
+ * link's href is the page without the search that found it, and a reader who
+ * tapped a result asked for the passage and the words, not the bare page.
  */
 
 import type { MouseEvent } from "react";
@@ -21,8 +22,8 @@ import { useIsMobile } from "@stll/ui/use-mobile";
 
 import {
   createCaseDecisionViewTab,
+  isPlainPrimaryClick,
   navigateToCaseDecisionMain,
-  opensCitationInInspector,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
@@ -49,19 +50,18 @@ export const useOpenDecisionTab = () => {
     /** The row's own gesture: a click or Enter, with no href to fall back to. */
     open,
     /**
-     * A decision link's click. A plain left click opens the decision beside
-     * the results, at the passage when the link names one; every browser
-     * navigation gesture (middle click, ⌘/Ctrl click, "open in new tab") and
-     * every tap where there is no dock is left alone and follows the href to
-     * the full page, which the inspector also offers explicitly.
+     * A decision link's click, which opens exactly what the row's own gesture
+     * opens. Every browser navigation gesture (middle click, ⌘/Ctrl click,
+     * "open in new tab") is left alone and follows the href to the full page,
+     * so the URL a reader copies or shares is the decision, not a search.
      */
     onLinkClick:
       (target: DecisionTabTarget) => (event: MouseEvent<HTMLAnchorElement>) => {
-        if (!opensCitationInInspector(event, inspectorAvailable)) {
+        if (!isPlainPrimaryClick(event)) {
           return;
         }
         event.preventDefault();
-        openView(createCaseDecisionViewTab(target));
+        open(target);
       },
   };
 };

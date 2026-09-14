@@ -15,6 +15,7 @@ import type {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { SEARCH_MARK_CLASS_NAME } from "@/components/legal-reader/query-marks";
 import type {
   SearchMatchRange,
   SearchPiece,
@@ -107,6 +108,13 @@ export const getTableCellPieceId = ({
   rowIndex: number;
 }): string => `table:${blockId}:${rowIndex}:${columnIndex}`;
 
+/**
+ * The one match the find is standing on. Same mark as the rest — the reader is
+ * reading, not being pointed at — with a ring around it so stepping through
+ * the matches is visible.
+ */
+const ACTIVE_MATCH_RING = "ring-warning ring-1";
+
 const renderHighlightedSlice = ({
   activeMatchIndex,
   pieceId,
@@ -143,12 +151,7 @@ const renderHighlightedSlice = ({
     const isActive = range.matchIndex === activeMatchIndex;
     children.push(
       <mark
-        className={cn(
-          "text-inherit",
-          isActive
-            ? "bg-primary/40 text-primary-foreground ring-primary ring-1"
-            : "bg-primary/22",
-        )}
+        className={cn(SEARCH_MARK_CLASS_NAME, isActive && ACTIVE_MATCH_RING)}
         data-reader-match-index={range.matchIndex}
         key={`${pieceId}-${range.matchIndex}-${localStart}`}
       >
@@ -882,6 +885,7 @@ export const BlockRenderer = ({
   anchorsByPieceId,
   block,
   headingPresentation,
+  landing = false,
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
@@ -908,6 +912,12 @@ export const BlockRenderer = ({
       }
     | undefined;
   /**
+   * This is the block the reader was sent to. Unlike an arrival flash the
+   * marker stays, so the passage is still findable after scrolling away and
+   * back; the caller drops it when the reader jumps somewhere else.
+   */
+  landing?: boolean | undefined;
+  /**
    * Render the return arrow: this is the last paragraph of a footnote, and
    * the value is the anchor of its first paragraph, where the jump lands.
    */
@@ -923,6 +933,7 @@ export const BlockRenderer = ({
 }) => {
   const documentAnchorProps = {
     "data-anchor": block.anchorId,
+    "data-reader-landing": landing ? "" : undefined,
     id: anchorPresentation === "document" ? block.anchorId : undefined,
   };
   const isAddressable = anchorPresentation === "document";
@@ -1266,6 +1277,76 @@ export const buildDocumentAstSearchPieces = (
   }
 
   return pieces;
+};
+
+/**
+ * Every search piece one block renders, in the order
+ * `buildDocumentAstSearchPieces` writes them. Derived from that builder's own
+ * shapes rather than restated, so a new kind of piece cannot go missing here.
+ */
+const blockSearchPieceIds = (block: Block): string[] =>
+  buildDocumentAstSearchPieces([block]).map((piece) => piece.id);
+
+/** The lowest match index among one block's search pieces, or null for none. */
+const firstMatchIndexInBlock = (
+  block: Block,
+  rangesByPieceId: Record<string, SearchMatchRange[]>,
+): number | null => {
+  let first: number | null = null;
+  for (const pieceId of blockSearchPieceIds(block)) {
+    for (const { matchIndex } of rangesForPiece(rangesByPieceId, pieceId)) {
+      first = first === null ? matchIndex : Math.min(first, matchIndex);
+    }
+  }
+  return first;
+};
+
+/**
+ * The find's first match inside the passage an anchor names, as an index into
+ * the document's matches, or null when the query does not reach it.
+ *
+ * A passage is a run of blocks, not one block: the corpus indexes a
+ * contiguous run of them as a single searchable unit and deep-links it by its
+ * *first* member's anchor, so the words that won the hit may sit in a block
+ * after the one named. The scan therefore walks forward from the anchor, and
+ * stops at the next heading, which is where a passage ends — a heading closes
+ * the run it follows rather than joining it. A section long enough to be
+ * indexed as several passages has no heading between them, so the scan can
+ * reach a match one passage further down the same section; that is a near
+ * miss inside the section the reader asked for, where scanning the anchor
+ * block alone lands them on an unrelated match at the top of the decision.
+ * Naming the matching block exactly is the search result's job, not the
+ * client's: nothing here can see the index's passage boundaries.
+ *
+ * Matches are numbered in document order, so the first block with any match
+ * carries the one nearest the reader.
+ */
+export const firstMatchIndexInPassage = ({
+  anchorId,
+  blocks,
+  rangesByPieceId,
+}: {
+  anchorId: string;
+  blocks: readonly Block[];
+  rangesByPieceId: Record<string, SearchMatchRange[]>;
+}): number | null => {
+  const start = blocks.findIndex((block) => block.anchorId === anchorId);
+  if (start === -1) {
+    return null;
+  }
+
+  for (const [offset, block] of blocks.slice(start).entries()) {
+    // The anchor's own block counts even when it is a heading; a later one
+    // ends the passage before it is read.
+    if (offset > 0 && block.type === "heading") {
+      return null;
+    }
+    const first = firstMatchIndexInBlock(block, rangesByPieceId);
+    if (first !== null) {
+      return first;
+    }
+  }
+  return null;
 };
 
 /** Search pieces for the paragraph split `FulltextFallback` renders. */

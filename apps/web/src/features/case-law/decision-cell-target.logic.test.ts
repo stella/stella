@@ -49,7 +49,7 @@ const multilingual: Decision = {
 
 describe("the version a case-number link names", () => {
   test("a decision with no other version is its own target", () => {
-    expect(preferredDecisionTarget(monolingual, "en")).toEqual({
+    expect(preferredDecisionTarget(monolingual, { uiLocale: "en" })).toEqual({
       caseNumber: "III. ÚS 649/05",
       country: "CZE",
       court: "Ústavní soud",
@@ -61,7 +61,7 @@ describe("the version a case-number link names", () => {
   });
 
   test("the reader's language wins over the version that matched", () => {
-    const target = preferredDecisionTarget(multilingual, "en");
+    const target = preferredDecisionTarget(multilingual, { uiLocale: "en" });
 
     expect(target.decisionId).toBe("decision-en");
     expect(target.slug).toBe("c-123-20-en");
@@ -72,11 +72,42 @@ describe("the version a case-number link names", () => {
   // send the link to a path the chosen version does not live at.
   test("the link the target builds addresses the chosen version", () => {
     const params = createCaseLawDecisionRouteParams(
-      preferredDecisionTarget(multilingual, "en"),
+      preferredDecisionTarget(multilingual, { uiLocale: "en" }),
     );
 
     expect(params.language).toBe("en");
     expect(params.slug).toBe("c-123-20-en");
+  });
+});
+
+describe("the words the reader was searching for", () => {
+  // The reader asked a question of the corpus; the decision they open is an
+  // answer to it, so the text opens on the same words the row marked.
+  test("every gesture that opens a row carries the query", () => {
+    const passage = decisionTabTarget(multilingual, {
+      anchorId: "p-16",
+      searchQuery: "náhrada škody",
+    });
+    const caseNumber = preferredDecisionTarget(multilingual, {
+      searchQuery: "náhrada škody",
+      uiLocale: "en",
+    });
+
+    expect(passage.searchQuery).toBe("náhrada škody");
+    expect(caseNumber.searchQuery).toBe("náhrada škody");
+  });
+
+  // A browse listing has no query, and an empty one in the tab would open the
+  // find on nothing.
+  test("a browse listing carries none", () => {
+    expect("searchQuery" in decisionTabTarget(multilingual, {})).toBe(false);
+    expect(
+      "searchQuery" in
+        preferredDecisionTarget(multilingual, {
+          searchQuery: "",
+          uiLocale: "en",
+        }),
+    ).toBe(false);
   });
 });
 
@@ -85,7 +116,7 @@ describe("the version a matched-passage link names", () => {
   // that matched and means nothing in a translation, so the passage link
   // stays on that version however the reader's language would choose.
   test("the passage stays on the version that produced it", () => {
-    const target = decisionTabTarget(multilingual, "p-16");
+    const target = decisionTabTarget(multilingual, { anchorId: "p-16" });
 
     expect(target.decisionId).toBe("decision-fr");
     expect(target.anchorId).toBe("p-16");

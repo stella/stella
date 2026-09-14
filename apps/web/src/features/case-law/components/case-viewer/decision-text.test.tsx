@@ -106,3 +106,141 @@ describe("source attribution", () => {
     expect(footer).not.toContain("data-anchor");
   });
 });
+
+// A results row sends the reader to one passage for one reason: it holds the
+// words they searched for. Both facts have to survive the trip — the words
+// marked through the reader's own find, the passage marked in a way that
+// outlives an arrival flash.
+const searchedAst = {
+  blocks: [
+    {
+      anchorId: "p-1",
+      id: "b-1",
+      inlines: [
+        { text: "The appellant relied on the contract.", type: "text" },
+      ],
+      plainText: "The appellant relied on the contract.",
+      type: "paragraph",
+    },
+    {
+      anchorId: "p-2",
+      id: "b-2",
+      inlines: [{ text: "The contract was void.", type: "text" }],
+      plainText: "The contract was void.",
+      type: "paragraph",
+    },
+    {
+      anchorId: "p-3",
+      id: "b-3",
+      inlines: [{ text: "Costs follow the event.", type: "text" }],
+      plainText: "Costs follow the event.",
+      type: "paragraph",
+    },
+  ],
+  metadata: {
+    caseNumber: "1 As 1/2026",
+    court: "Test court",
+    decisionDate: null,
+    decisionType: "Judgment",
+    ecli: null,
+    keywords: [],
+    statutes: [],
+  },
+  source: { documentId: "1", printUrl: "", system: "test", webUrl: "" },
+  version: 1,
+} as const satisfies DocumentAst;
+
+const renderSearchedDecision = ({
+  activeMatchIndex,
+  landingAnchorId,
+}: {
+  activeMatchIndex: number;
+  landingAnchorId?: string | undefined;
+}): string =>
+  renderToStaticMarkup(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <DecisionText
+        activeMatchIndex={activeMatchIndex}
+        decision={{
+          caseNumber: "1 As 1/2026",
+          court: "Test court",
+          documentAst: searchedAst,
+          fulltext: null,
+          language: "en",
+          sourceAttributionUrl: null,
+          textFields: {
+            abstract: {
+              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              type: TEXT_FIELD_TYPE.ABSENT,
+            },
+            headnote: {
+              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              type: TEXT_FIELD_TYPE.ABSENT,
+            },
+            legalSentence: {
+              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              type: TEXT_FIELD_TYPE.ABSENT,
+            },
+            summary: {
+              reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              type: TEXT_FIELD_TYPE.ABSENT,
+            },
+          },
+        }}
+        landingAnchorId={landingAnchorId}
+        searchQuery="contract"
+      />
+    </IntlProvider>,
+  );
+
+const activeMatchIndexOf = (markup: string): number | null => {
+  const active =
+    /<mark class="[^"]*ring-warning[^"]*" data-reader-match-index="(?<index>\d+)"/u.exec(
+      markup,
+    )?.groups?.["index"];
+  return active === undefined ? null : Number(active);
+};
+
+describe("a decision opened from a search result", () => {
+  test("the query's words are marked and the landing passage holds the active match", () => {
+    const markup = renderSearchedDecision({
+      activeMatchIndex: 0,
+      landingAnchorId: "p-2",
+    });
+
+    expect(markup).toContain('data-reader-match-index="0"');
+    expect(markup).toContain('data-reader-match-index="1"');
+    expect(activeMatchIndexOf(markup)).toBe(1);
+  });
+
+  test("without a landing passage the find keeps its own position", () => {
+    expect(
+      activeMatchIndexOf(renderSearchedDecision({ activeMatchIndex: 0 })),
+    ).toBe(0);
+  });
+
+  // A question's source chip names the block its answer came from, which the
+  // query had no part in choosing. Activating the find's own position there
+  // would mark an occurrence the reader never asked about, somewhere else
+  // entirely; the passage they did ask for still carries its marker.
+  test("a landing passage the query does not reach activates no match", () => {
+    const markup = renderSearchedDecision({
+      activeMatchIndex: 0,
+      landingAnchorId: "p-3",
+    });
+
+    expect(markup).toContain('data-reader-match-index="0"');
+    expect(activeMatchIndexOf(markup)).toBeNull();
+    expect(markup).toContain('data-anchor="p-3" data-reader-landing=""');
+  });
+
+  test("the landing passage keeps a marker, and no other block takes one", () => {
+    const markup = renderSearchedDecision({
+      activeMatchIndex: 0,
+      landingAnchorId: "p-2",
+    });
+
+    expect(markup).toContain('data-anchor="p-2" data-reader-landing=""');
+    expect(markup).not.toContain('data-anchor="p-1" data-reader-landing=""');
+  });
+});

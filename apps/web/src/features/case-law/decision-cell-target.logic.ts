@@ -11,6 +11,12 @@ import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 
+type PreferredDecisionTargetOptions = {
+  /** The words that found the row; they travel with every gesture that opens it. */
+  searchQuery?: string | undefined;
+  uiLocale: string;
+};
+
 /**
  * The version of a multilingual decision the reader is most likely to want:
  * their UI language when it exists, otherwise the version that matched. A
@@ -18,13 +24,15 @@ import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-pre
  */
 export const preferredDecisionTarget = (
   decision: Decision,
-  uiLocale: string,
+  { searchQuery, uiLocale }: PreferredDecisionTargetOptions,
 ): DecisionTabTarget => {
   const preferred = pickPreferredCaseLawLanguageVariant({
     alternates: decision.languageAlternates,
     matchedLanguage: decision.language,
     uiLocale,
   });
+  const terms =
+    searchQuery === undefined || searchQuery === "" ? {} : { searchQuery };
 
   return preferred === null
     ? {
@@ -35,6 +43,7 @@ export const preferredDecisionTarget = (
         language: decision.language,
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
+        ...terms,
       }
     : {
         caseNumber: preferred.caseNumber,
@@ -44,5 +53,6 @@ export const preferredDecisionTarget = (
         language: preferred.language,
         languageAlternates: decision.languageAlternates,
         slug: preferred.slug,
+        ...terms,
       };
 };

@@ -4,6 +4,11 @@ import {
   stripDiacritics,
 } from "@stll/text-normalize";
 
+import {
+  queryHighlightTokens,
+  wordPrefixMatchEnd,
+} from "@/components/legal-reader/query-marks";
+
 export type SearchPiece = {
   id: string;
   text: string;
@@ -153,9 +158,24 @@ const normalizeReaderSearchText = (text: string): NormalizedText => {
   };
 };
 
-const normalizeQuery = (query: string): string =>
-  normalizeReaderSearchText(query).text.trim();
+/**
+ * The query's words, on the same axis the text is matched on. Normalizing
+ * before tokenising is what lets a reader type "nahrada skody" and reach
+ * "Náhrada škody": the fold happens once, and the tokeniser then splits the
+ * folded string by the rule the results table splits the same query by.
+ */
+const readerQueryTokens = (query: string): readonly string[] =>
+  queryHighlightTokens(normalizeReaderSearchText(query).text);
 
+/**
+ * Every word of the query, wherever it starts a word in the text.
+ *
+ * Word-prefix rather than substring, so a multi-word query marks its words
+ * where the text actually uses them — an inflected corpus almost never repeats
+ * the reader's phrase verbatim, and a phrase that does appear is marked
+ * anyway, one word at a time. Matches are numbered in piece order and then in
+ * position order, so a match index is a position in the document.
+ */
 export const buildSearchResults = ({
   pieces,
   query,
@@ -163,8 +183,8 @@ export const buildSearchResults = ({
   pieces: SearchPiece[];
   query: string;
 }): SearchResults => {
-  const normalizedQuery = normalizeQuery(query);
-  if (normalizedQuery.length === 0) {
+  const tokens = readerQueryTokens(query);
+  if (tokens.length === 0) {
     return { matchCount: 0, rangesByPieceId: {} };
   }
 
@@ -173,23 +193,17 @@ export const buildSearchResults = ({
 
   for (const piece of pieces) {
     const normalizedPiece = normalizeReaderSearchText(piece.text);
-    if (normalizedPiece.text.length === 0) {
-      continue;
-    }
 
-    let fromIndex = 0;
-    while (fromIndex < normalizedPiece.text.length) {
-      const matchStart = normalizedPiece.text.indexOf(
-        normalizedQuery,
-        fromIndex,
-      );
-      if (matchStart === -1) {
-        break;
+    let index = 0;
+    while (index < normalizedPiece.text.length) {
+      const end = wordPrefixMatchEnd(normalizedPiece.text, index, tokens);
+      if (end === null || end === index) {
+        index += 1;
+        continue;
       }
 
-      const matchEnd = matchStart + normalizedQuery.length;
-      const originalStart = normalizedPiece.startMap[matchStart];
-      const originalEnd = normalizedPiece.endMap[matchEnd - 1];
+      const originalStart = normalizedPiece.startMap[index];
+      const originalEnd = normalizedPiece.endMap[end - 1];
 
       if (originalStart !== undefined && originalEnd !== undefined) {
         const existingRanges = rangesByPieceId[piece.id];
@@ -206,7 +220,7 @@ export const buildSearchResults = ({
         matchCount += 1;
       }
 
-      fromIndex = matchStart + normalizedQuery.length;
+      index = end;
     }
   }
 

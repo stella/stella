@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
+import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
@@ -35,7 +36,6 @@ import {
   DecisionRenderScope,
   useDecisionTableColumns,
 } from "@/features/case-law/decision-table-columns";
-import { queryHighlightTokens } from "@/features/case-law/headnote-highlight.logic";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
@@ -75,7 +75,11 @@ type DecisionTableProps = {
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   onSelectedIdsChange: (decisionIds: string[]) => void;
-  /** What was searched for, so the summary cell can say why a row matched. */
+  /**
+   * The query the rows answer, which is not always the one the URL asks
+   * for while a refresh is in flight: see `queryAnsweredByRows`. Every
+   * cell's marks and every link out of a row are drawn from it.
+   */
   query?: string | undefined;
   questions: QuestionColumnSurface;
   selectedIds: readonly string[];
@@ -158,8 +162,9 @@ export const DecisionTable = ({
 
   // The rail is a write affordance: a reader the organization has not granted
   // `create` gets the table without it, not a trigger that fails on submit.
-  const rowHost = useDecisionRowHost(
-    questions.type === "available" && questions.grants.create
+  const rowHost = useDecisionRowHost({
+    searchQuery: query,
+    ...(questions.type === "available" && questions.grants.create
       ? {
           addColumnRail: (
             <BulkAddColumns
@@ -171,8 +176,8 @@ export const DecisionTable = ({
             />
           ),
         }
-      : {},
-  );
+      : {}),
+  });
 
   // Which rows are showing their whole headnote is about this screenful of
   // results and nothing else: it is not worth a URL, and a new search leaves
@@ -191,6 +196,7 @@ export const DecisionTable = ({
         );
       },
       queryTokens: queryHighlightTokens(query),
+      searchQuery: query,
     }),
     [expandedHeadnoteIds, layout.contentMode, query],
   );

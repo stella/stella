@@ -152,6 +152,30 @@ article [data-highlight] {
   border-radius: 0.25rem;
 }
 
+/* The passage a search result sent the reader to. A flash answers "you have
+   arrived" and then leaves nothing behind; a reader who scrolls on and back
+   has to find the passage again. A rule in the gutter stays until they jump
+   somewhere else, and costs no layout: it is painted outside the text column
+   rather than indenting it. */
+article [data-reader-landing] {
+  position: relative;
+}
+
+article [data-reader-landing]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -0.6rem;
+  width: 2px;
+  border-radius: 1px;
+  background-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+
+/* The marker replaces the arrival flash on the block it marks. */
+article [data-reader-landing]:target {
+  animation: none;
+}
+
 /* Always show scrollbar in the decision reader scroll container.
    Thin, subtle track that doesn't compete with the text. */
 .reader-scroll {

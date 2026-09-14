@@ -3,13 +3,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import type { HeadingLevel } from "@stll/legal-ast/document-ast";
+import type { Block, HeadingLevel } from "@stll/legal-ast/document-ast";
 
 import {
   BlockRenderer,
+  buildDocumentAstSearchPieces,
   FulltextFallback,
+  firstMatchIndexInPassage,
   HEADING_CLASS,
 } from "@/components/legal-reader/document-ast-text";
+import { buildSearchResults } from "@/components/legal-reader/reader-search";
 
 // A statute is navigated by its containers (Část, Hlava, Díl, Oddíl) and
 // read by its sections. The four containers carry the hierarchy; the
@@ -143,5 +146,141 @@ describe("fallback legal text anchors", () => {
     expect(markup).toContain(
       '<mark data-annotation-id="one">Second</mark> paragraph.',
     );
+  });
+});
+
+// A reader sent to a passage by a search result should land on the words in
+// that passage, not on the document's first occurrence of them. Matches are
+// numbered across the whole document, so the lookup has to map a block back
+// onto every search piece it renders.
+describe("the find's first match inside a passage", () => {
+  // A corpus passage is a run of blocks deep-linked by its first member, so a
+  // hit's anchor names where the passage starts, not where the words are.
+  const blocks = [
+    {
+      anchorId: "p-1",
+      id: "b-1",
+      inlines: [
+        { text: "The appellant relied on the contract.", type: "text" },
+      ],
+      plainText: "The appellant relied on the contract.",
+      type: "paragraph",
+    },
+    {
+      anchorId: "p-2",
+      id: "b-2",
+      inlines: [{ text: "The parties disagreed.", type: "text" }],
+      plainText: "The parties disagreed.",
+      type: "paragraph",
+    },
+    {
+      anchorId: "p-3",
+      id: "b-3",
+      inlines: [{ text: "The contract was void.", type: "text" }],
+      plainText: "The contract was void.",
+      type: "paragraph",
+    },
+    {
+      anchorId: "p-4",
+      id: "b-4",
+      inlines: [{ text: "Costs follow the event.", type: "text" }],
+      number: 142,
+      plainText: "Costs follow the event.",
+      type: "paragraph",
+    },
+    {
+      anchorId: "h-1",
+      id: "b-5",
+      inlines: [{ text: "Further reasons", type: "text" }],
+      level: 2,
+      plainText: "Further reasons",
+      type: "heading",
+    },
+    {
+      anchorId: "p-5",
+      id: "b-6",
+      inlines: [{ text: "The contract is mentioned once more.", type: "text" }],
+      plainText: "The contract is mentioned once more.",
+      type: "paragraph",
+    },
+  ] as const satisfies readonly Block[];
+
+  const rangesFor = (query: string) =>
+    buildSearchResults({
+      pieces: buildDocumentAstSearchPieces(blocks),
+      query,
+    }).rangesByPieceId;
+
+  test("the lowest match index in the passage is the one the reader lands on", () => {
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-1",
+        blocks,
+        rangesByPieceId: rangesFor("contract"),
+      }),
+    ).toBe(0);
+  });
+
+  // The words that won the hit may sit in a block after the one the anchor
+  // names. Reading the anchor block alone would miss them and send the reader
+  // to the earlier, unrelated occurrence instead.
+  test("a passage whose words sit in a later block still finds them", () => {
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-2",
+        blocks,
+        rangesByPieceId: rangesFor("contract"),
+      }),
+    ).toBe(1);
+  });
+
+  // A heading closes the run it follows, so the scan must not read past one
+  // into the next passage even when that passage matches.
+  test("the scan stops at the heading that ends the passage", () => {
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-4",
+        blocks,
+        rangesByPieceId: rangesFor("contract"),
+      }),
+    ).toBeNull();
+    // The fixture has to carry a match beyond the heading, or the boundary is
+    // never reached.
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-5",
+        blocks,
+        rangesByPieceId: rangesFor("contract"),
+      }),
+    ).toBe(2);
+  });
+
+  test("a passage the query does not reach names no match", () => {
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-5",
+        blocks,
+        rangesByPieceId: rangesFor("bankruptcy"),
+      }),
+    ).toBeNull();
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-9",
+        blocks,
+        rangesByPieceId: rangesFor("contract"),
+      }),
+    ).toBeNull();
+  });
+
+  // A numbered paragraph hangs its number in the margin as a search piece of
+  // its own; it is still that paragraph, so a match on it counts as one.
+  test("the hanging paragraph number belongs to its own block", () => {
+    expect(
+      firstMatchIndexInPassage({
+        anchorId: "p-4",
+        blocks,
+        rangesByPieceId: rangesFor("142"),
+      }),
+    ).toBe(0);
   });
 });
