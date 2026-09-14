@@ -1,8 +1,6 @@
-import {
-  decodeCaseLawDecisionIdFromRoute,
-  encodeCaseLawDecisionIdForRoute,
-  isCaseLawDecisionId,
-} from "@/lib/case-law-route";
+import { Result } from "better-result";
+
+import { decodeCompactUuid, encodeCompactUuid } from "@stll/uuid-codec";
 
 /**
  * Jurisdiction the statutes browser opens on when the current route carries
@@ -55,11 +53,8 @@ export const createStatuteIndexPath = (
  * the backfill has not reached it). Nothing else addresses a statute by id;
  * there is no id-only route.
  *
- * The uuid codec is case-law-route's own, not a second copy: both public-law
- * readers hand out these segments and they have to decode identically. The
- * names still read "case law" because that module minted the encoding first;
- * a package of its own is the follow-up the duplicate-export-name ratchet
- * points at.
+ * The compacting is `@stll/uuid-codec`'s: both public-law readers hand out
+ * these segments and they have to decode identically.
  */
 const ID_ROUTE_PARAM_SEPARATOR = "--";
 
@@ -72,10 +67,10 @@ export const extractStatuteDocumentIdFromRouteParam = (
     return null;
   }
 
-  const decoded = decodeCaseLawDecisionIdFromRoute(
+  const decoded = decodeCompactUuid(
     param.slice(separator + ID_ROUTE_PARAM_SEPARATOR.length),
   );
-  return isCaseLawDecisionId(decoded) ? decoded : null;
+  return Result.isError(decoded) ? null : decoded.value;
 };
 
 /**
@@ -162,9 +157,13 @@ export const createStatuteRouteParams = ({
   const countrySegment = toStatuteCountrySegment(country);
 
   if (storedSlug === null) {
+    // A value that is not an id is carried through as it came: the link is
+    // already broken, and swallowing it would hide which row minted it.
+    const compacted = encodeCompactUuid(documentId.trim());
+    const idSegment = Result.isError(compacted) ? documentId : compacted.value;
     return {
       country: countrySegment,
-      slug: `${idRouteParamPrefix(eli)}${ID_ROUTE_PARAM_SEPARATOR}${encodeCaseLawDecisionIdForRoute(documentId)}`,
+      slug: `${idRouteParamPrefix(eli)}${ID_ROUTE_PARAM_SEPARATOR}${idSegment}`,
     };
   }
 

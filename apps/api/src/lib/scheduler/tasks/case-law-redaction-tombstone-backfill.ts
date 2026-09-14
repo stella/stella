@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import { rootDb } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -11,7 +13,6 @@ import {
   caseLawSearchDocuments,
   schedulerJobs,
 } from "@/api/db/schema";
-import { isUuid } from "@/api/lib/custom-schema";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =

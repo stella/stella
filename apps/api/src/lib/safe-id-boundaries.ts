@@ -1,6 +1,7 @@
+import { isUuid } from "@stll/uuid-codec";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AuthProviderIdType, SafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
 
 type ActorSessionIdentityInput = {
   organizationId: string;

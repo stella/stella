@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
@@ -19,7 +21,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
-import { isUuid } from "@/api/lib/custom-schema";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

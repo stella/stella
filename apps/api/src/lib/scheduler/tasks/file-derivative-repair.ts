@@ -3,6 +3,7 @@ import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
+import { isUuid } from "@stll/uuid-codec";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -16,7 +17,6 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
 import {
   FileDerivativeRepairError,
   UnrecognizedDerivativeStateError,

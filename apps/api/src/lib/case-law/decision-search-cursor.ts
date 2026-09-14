@@ -14,7 +14,8 @@
  * entirely, so `relevance` is what its page was ordered by, soundly.
  */
 
-import { isUuid } from "@/api/lib/custom-schema";
+import { isUuid } from "@stll/uuid-codec";
+
 import {
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,

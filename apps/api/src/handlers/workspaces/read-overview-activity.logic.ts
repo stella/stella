@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { Temporal } from "@stll/time";
+import { isUuid } from "@stll/uuid-codec";
 
 import {
   type AuditAction,
@@ -11,7 +12,6 @@ import {
   type AuditActivityCategory,
   type AuditResourceType,
 } from "@/api/lib/audit-log";
-import { isUuid } from "@/api/lib/custom-schema";
 import type { TimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   decodePaginationCursor,

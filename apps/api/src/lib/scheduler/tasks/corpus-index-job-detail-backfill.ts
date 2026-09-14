@@ -13,6 +13,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
+import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
@@ -22,7 +23,6 @@ import {
   legislationIndexJobs,
   schedulerJobs,
 } from "@/api/db/schema";
-import { isUuid } from "@/api/lib/custom-schema";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type {

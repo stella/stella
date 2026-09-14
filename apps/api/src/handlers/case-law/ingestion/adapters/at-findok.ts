@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { Temporal, parsePlainDate } from "@stll/time";
+import { isUuid } from "@stll/uuid-codec";
 
 import {
   ADAPTER_KEYS,
@@ -36,7 +37,6 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
-import { isUuid } from "@/api/lib/custom-schema";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";

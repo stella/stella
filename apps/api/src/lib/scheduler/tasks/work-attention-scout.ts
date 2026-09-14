@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import { rootDb } from "@/api/db/root";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
