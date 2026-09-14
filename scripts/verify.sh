@@ -326,6 +326,7 @@ run_step "Documentation source policy rule" bun run check:docs-sources
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot
+run_step "CLI contract changeset guard" bun scripts/check-cli-contract-changeset.ts --base "$base_ref"
 run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog
 run_step "Capability description ledger" run_capability_description_ledger
