@@ -1,14 +1,5 @@
-import {
-  convertSchemaToJsonSchema,
-  createModel,
-  extendAdapter,
-} from "@tanstack/ai";
+import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import type { Tool } from "@tanstack/ai";
-import { createAnthropicChat } from "@tanstack/ai-anthropic";
-import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
-import { createGeminiChat } from "@tanstack/ai-gemini";
-import { createMistralText } from "@tanstack/ai-mistral";
-import { createOpenaiChat } from "@tanstack/ai-openai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
@@ -23,7 +14,7 @@ import {
 } from "@stll/ai-catalog";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
+import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 
 import {
   buildCanaryChatToolsets,
@@ -49,23 +40,42 @@ const requireArray = (value: unknown, description: string): unknown[] =>
     ? value
     : panic(`Expected ${description} to be an array.`);
 
-const emptyProviderStream = async function* () {
-  // The adapter contract only needs to map and issue the SDK request.
-};
+const CAPTURE_RESPONSE_MESSAGE = "Offline provider request capture complete.";
 
 const consumeProviderStream = async (
   stream: AsyncIterable<unknown>,
 ): Promise<void> => {
-  for await (const _chunk of stream) {
-    // The fake provider streams are empty.
+  const streamError = await (async () => {
+    for await (const _chunk of stream) {
+      // Provider errors are expected after the transport captures the request.
+    }
+  })().then(
+    () => null,
+    (error: unknown) => error,
+  );
+  if (streamError === null) {
+    return;
   }
+  if (!(streamError instanceof Error)) {
+    return panic("Provider adapter rejected with a non-Error value.");
+  }
+  if (streamError.message.includes(CAPTURE_RESPONSE_MESSAGE)) {
+    return;
+  }
+  throw streamError;
 };
 
-const installOfflineNetworkGuard = () => {
+type CapturedHttpRequest = {
+  body: unknown;
+  pathname: string;
+};
+
+const installRequestCaptureTransport = () => {
   const originalFetch = globalThis.fetch;
-  let attempts = 0;
+  const requests: CapturedHttpRequest[] = [];
+  let blockedAttempts = 0;
   const blockNativeNetwork = (): never => {
-    attempts += 1;
+    blockedAttempts += 1;
     throw new TypeError("Provider matrix network access is forbidden.");
   };
   const nativeSpies = [
@@ -75,20 +85,37 @@ const installOfflineNetworkGuard = () => {
     spyOn(nodeHttps, "get").mockImplementation(blockNativeNetwork),
     spyOn(nodeHttp2, "connect").mockImplementation(blockNativeNetwork),
   ];
-  const blockedFetch = async (
-    ..._args: Parameters<typeof globalThis.fetch>
-  ) => {
-    attempts += 1;
-    throw new TypeError("Provider matrix network access is forbidden.");
+  const captureFetch = async (
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const request =
+      input instanceof Request
+        ? new Request(input, init)
+        : new Request(input.toString(), init);
+    requests.push({
+      body: await request.clone().json(),
+      pathname: new URL(request.url).pathname,
+    });
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: CAPTURE_RESPONSE_MESSAGE,
+          type: "invalid_request_error",
+        },
+      }),
+      { status: 400, headers: { "content-type": "application/json" } },
+    );
   };
-  globalThis.fetch = Object.assign(blockedFetch, {
+  globalThis.fetch = Object.assign(captureFetch, {
     preconnect: () => {
-      attempts += 1;
+      blockedAttempts += 1;
       throw new TypeError("Provider matrix network access is forbidden.");
     },
   });
   return {
-    attemptCount: () => attempts,
+    blockedAttemptCount: () => blockedAttempts,
+    requests,
     restore: () => {
       globalThis.fetch = originalFetch;
       for (const spy of nativeSpies) {
@@ -171,191 +198,118 @@ type CapturedProviderRequest = {
 
 type CaptureProviderRequestOptions = ChatModelSelection & { tools: Tool[] };
 
+const modelIdFromPath = ({
+  description,
+  pathname,
+  prefix,
+  suffix,
+}: {
+  description: string;
+  pathname: string;
+  prefix: string;
+  suffix: string;
+}): string => {
+  const decodedPath = decodeURIComponent(pathname);
+  const start = decodedPath.lastIndexOf(prefix);
+  if (start === -1 || !decodedPath.endsWith(suffix)) {
+    return panic(`Expected ${description} model id in request path.`);
+  }
+  return decodedPath.slice(start + prefix.length, -suffix.length);
+};
+
 const captureProviderRequest = async (
   options: CaptureProviderRequestOptions,
+  transport: ReturnType<typeof installRequestCaptureTransport>,
 ): Promise<CapturedProviderRequest> => {
+  const requestIndex = transport.requests.length;
+  const createAdapter = createTanStackTextAdapterFactory({
+    apiKey: "test-key",
+    provider: options.provider,
+  });
+  const adapter = createAdapter(options.modelId);
+  await consumeProviderStream(
+    adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
+  );
+  if (transport.requests.length !== requestIndex + 1) {
+    return panic(
+      `Expected one ${options.provider} request, received ${String(transport.requests.length - requestIndex)}.`,
+    );
+  }
+  const captured =
+    transport.requests.at(requestIndex) ??
+    panic(`Expected a captured ${options.provider} request.`);
+  const request = requireRecord(
+    captured.body,
+    `${options.provider} HTTP request body`,
+  );
+
   switch (options.provider) {
     case "openai": {
-      const createAdapter = extendAdapter(createOpenaiChat, [
-        createModel(options.modelId, {
-          features: ["structured_outputs"] as const,
-          input: ["text", "image", "document"] as const,
-        }),
-      ]);
-      const adapter = createAdapter(options.modelId, "test-key");
-      let request: unknown;
-      Reflect.set(adapter, "client", {
-        responses: {
-          create: (payload: unknown) => {
-            request = payload;
-            return emptyProviderStream();
-          },
-        },
-      });
-      await consumeProviderStream(
-        adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
-      );
-      const record = requireRecord(request, "OpenAI request");
       return {
-        request: record,
-        requestTools: requireArray(record["tools"], "OpenAI request tools"),
-        wireModelId: record["model"],
+        request,
+        requestTools: requireArray(request["tools"], "OpenAI request tools"),
+        wireModelId: request["model"],
       };
     }
     case "google": {
-      const createAdapter = extendAdapter(createGeminiChat, [
-        createModel(options.modelId, {
-          features: ["structured_outputs"] as const,
-          input: ["text", "image", "document"] as const,
-        }),
-      ]);
-      const adapter = createAdapter(options.modelId, "test-key");
-      let request: unknown;
-      Reflect.set(adapter, "client", {
-        models: {
-          generateContentStream: (payload: unknown) => {
-            request = payload;
-            return emptyProviderStream();
-          },
-        },
-      });
-      await consumeProviderStream(
-        adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
-      );
-      const record = requireRecord(request, "Gemini request");
-      const config = requireRecord(record["config"], "Gemini request config");
-      const groups = requireArray(config["tools"], "Gemini request tools");
+      const groups = requireArray(request["tools"], "Gemini request tools");
       return {
-        request: record,
+        request,
         requestTools: groups.flatMap((group) => {
           const toolGroup = requireRecord(group, "Gemini tool group");
           return Array.isArray(toolGroup["functionDeclarations"])
             ? toolGroup["functionDeclarations"]
             : [toolGroup];
         }),
-        wireModelId: record["model"],
+        wireModelId: modelIdFromPath({
+          description: "Gemini",
+          pathname: captured.pathname,
+          prefix: "/models/",
+          suffix: ":streamGenerateContent",
+        }),
       };
     }
     case "anthropic": {
-      const createAdapter = extendAdapter(createAnthropicChat, [
-        createModel(options.modelId, {
-          features: ["structured_outputs"] as const,
-          input: ["text", "image", "document"] as const,
-        }),
-      ]);
-      const adapter = createAdapter(options.modelId, "test-key");
-      let request: unknown;
-      Reflect.set(adapter, "client", {
-        beta: {
-          messages: {
-            create: (payload: unknown) => {
-              request = payload;
-              return emptyProviderStream();
-            },
-          },
-        },
-      });
-      await consumeProviderStream(
-        adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
-      );
-      const record = requireRecord(request, "Anthropic request");
       return {
-        request: record,
-        requestTools: requireArray(record["tools"], "Anthropic request tools"),
-        wireModelId: record["model"],
+        request,
+        requestTools: requireArray(request["tools"], "Anthropic request tools"),
+        wireModelId: request["model"],
       };
     }
     case "bedrock": {
-      let request: unknown;
-      class CapturingBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
-        protected override async sendStream(input: unknown) {
-          request = input;
-          return await Promise.resolve(emptyProviderStream());
-        }
-      }
-      const createAdapter = extendAdapter(
-        (model: never) =>
-          new CapturingBedrockTextAdapter({ apiKey: "test-key" }, model),
-        [
-          createModel(options.modelId, {
-            features: ["structured_outputs"] as const,
-            input: ["text", "image", "document"] as const,
-          }),
-        ],
-      );
-      const adapter = createAdapter(options.modelId);
-      await consumeProviderStream(
-        adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
-      );
-      const record = requireRecord(request, "Bedrock request");
       const toolConfig = requireRecord(
-        record["toolConfig"],
+        request["toolConfig"],
         "Bedrock tool config",
       );
       return {
-        request: record,
+        request,
         requestTools: requireArray(
           toolConfig["tools"],
           "Bedrock request tools",
         ),
-        wireModelId: record["modelId"],
+        wireModelId: modelIdFromPath({
+          description: "Bedrock",
+          pathname: captured.pathname,
+          prefix: "/model/",
+          suffix: "/converse-stream",
+        }),
       };
     }
     case "openrouter": {
-      const createAdapter = extendAdapter(createStellaOpenRouterText, [
-        createModel(options.modelId, {
-          features: ["structured_outputs"] as const,
-          input: ["text", "image", "document"] as const,
-        }),
-      ]);
-      const adapter = createAdapter(options.modelId, "test-key");
-      let request: unknown;
-      Reflect.set(adapter, "orClient", {
-        chat: {
-          send: (payload: unknown) => {
-            request = payload;
-            return emptyProviderStream();
-          },
-        },
-      });
-      await consumeProviderStream(
-        adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
-      );
-      const record = requireRecord(request, "OpenRouter SDK request");
-      const chatRequest = requireRecord(
-        record["chatRequest"],
-        "OpenRouter chat request",
-      );
       return {
-        request: record,
+        request,
         requestTools: requireArray(
-          chatRequest["tools"],
+          request["tools"],
           "OpenRouter request tools",
         ),
-        wireModelId: chatRequest["model"],
+        wireModelId: request["model"],
       };
     }
     case "mistral": {
-      const createAdapter = extendAdapter(createMistralText, [
-        createModel(options.modelId, {
-          features: ["structured_outputs"] as const,
-          input: ["text", "image"] as const,
-        }),
-      ]);
-      const adapter = createAdapter(options.modelId, "test-key");
-      let request: unknown;
-      Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
-        request = payload;
-        return emptyProviderStream();
-      });
-      await consumeProviderStream(
-        adapter.chatStream(commonProviderOptions(adapter.model, options.tools)),
-      );
-      const record = requireRecord(request, "Mistral request");
       return {
-        request: record,
-        requestTools: requireArray(record["tools"], "Mistral request tools"),
-        wireModelId: record["model"],
+        request,
+        requestTools: requireArray(request["tools"], "Mistral request tools"),
+        wireModelId: request["model"],
       };
     }
     default: {
@@ -401,7 +355,7 @@ const emptyStringEnumPaths = (value: unknown, path = "request"): string[] => {
 
 describe("AI provider production chat tool matrix", () => {
   test("maps every advertised chat model and DOCX registry through its real SDK adapter with accepted enums", async () => {
-    const networkGuard = installOfflineNetworkGuard();
+    const transport = installRequestCaptureTransport();
     try {
       expect(chatToolsetScenarios().map(({ id }) => id)).toEqual([
         "manual:file-overlay",
@@ -419,10 +373,13 @@ describe("AI provider production chat tool matrix", () => {
               projectCanaryChatToolset({ provider, toolset }),
             );
             const { request, requestTools, wireModelId } =
-              await captureProviderRequest({
-                ...selection,
-                tools,
-              });
+              await captureProviderRequest(
+                {
+                  ...selection,
+                  tools,
+                },
+                transport,
+              );
 
             expect(
               requestTools,
@@ -451,9 +408,9 @@ describe("AI provider production chat tool matrix", () => {
         0,
       );
       expect(cells).toBe(advertisedChatModels * chatToolsetScenarios().length);
-      expect(networkGuard.attemptCount()).toBe(0);
+      expect(transport.blockedAttemptCount()).toBe(0);
     } finally {
-      networkGuard.restore();
+      transport.restore();
     }
   }, 180_000);
 });
