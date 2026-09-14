@@ -367,7 +367,7 @@
     }
   },
   "apps/web": {
-    "count": 410,
+    "count": 409,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
