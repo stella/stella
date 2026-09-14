@@ -9,6 +9,7 @@ import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/c
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
+  STAMPED_DOWNLOAD_METADATA,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
 import {
@@ -118,9 +119,11 @@ const stampedDownloadEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
+    query: t.Object({ metadata: t.UnionEnum(STAMPED_DOWNLOAD_METADATA) }),
   } satisfies HandlerConfig,
   async function* ({
     params: { fieldId },
+    query: { metadata },
     scopedDb,
     session,
     workspaceId,
@@ -135,6 +138,7 @@ const stampedDownloadEndpoint = createSafeHandler(
             workspaceId,
             scopedDb,
             recordAuditEvent,
+            metadata,
           }),
       ),
     );
@@ -345,6 +349,7 @@ export const filesRoute = new Elysia({
   .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
     params: stampedDownloadEndpoint.config.params,
     permissions: stampedDownloadEndpoint.config.permissions,
+    query: stampedDownloadEndpoint.config.query,
   })
   .get("/ocr-export/:fieldId", ocrExportEndpoint.handler, {
     params: ocrExportEndpoint.config.params,

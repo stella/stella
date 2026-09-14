@@ -1,75 +1,103 @@
-import {
-  ChevronDownIcon,
-  DownloadIcon,
-  EraserIcon,
-  FileBadgeIcon,
-  FileOutputIcon,
-  type LucideIcon,
-} from "lucide-react";
+import { useState } from "react";
+
+import { ChevronDownIcon, DownloadIcon, FileOutputIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuCheckboxItem,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
-import type {
-  DownloadRendition,
-  DownloadVariant,
+import {
+  type DownloadRendition,
+  type DownloadVariant,
+  getDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import Tooltip from "@/components/tooltip";
-import type { TranslationKey } from "@/i18n/types";
-
-const RENDITION_LABEL_KEY = {
-  pdf: "workspaces.files.downloadPdf",
-  reference: "workspaces.files.downloadWithReference",
-  scrubbed: "workspaces.files.downloadScrubbed",
-} as const satisfies Record<DownloadRendition, TranslationKey>;
-
-const RENDITION_ICON = {
-  pdf: FileOutputIcon,
-  reference: FileBadgeIcon,
-  scrubbed: EraserIcon,
-} as const satisfies Record<DownloadRendition, LucideIcon>;
 
 type DownloadRenditionMenuItemsProps = {
-  onSelect: (rendition: DownloadRendition) => void;
+  onSelect: (variant: DownloadVariant) => void;
   renditions: readonly DownloadRendition[];
 };
 
 /**
- * The renditions a file can be downloaded as, rendered as menu items. Shared
- * by the inspector header and the matter row menu so both offer the same
- * wording in the same order; `getDownloadRenditions` decides which appear.
+ * Optional transformations for one download, followed by the action that
+ * confirms them. Shared by the inspector header and the matter row menu so
+ * both entry points build the same rendition from the same choices.
  */
 export const DownloadRenditionMenuItems = ({
   onSelect,
   renditions,
 }: DownloadRenditionMenuItemsProps) => {
   const t = useTranslations();
+  const [includeReference, setIncludeReference] = useState(false);
+  const [stripMetadata, setStripMetadata] = useState(false);
+  const canIncludeReference = renditions.includes("reference");
+  const canStripMetadata = renditions.includes("scrubbed");
+  const canTransform = canIncludeReference || canStripMetadata;
+
   return (
     <>
-      {renditions.map((rendition) => {
-        const Icon = RENDITION_ICON[rendition];
-        const item = (
-          <MenuItem key={rendition} onClick={() => onSelect(rendition)}>
-            <Icon />
-            {t(RENDITION_LABEL_KEY[rendition])}
+      {renditions.includes("pdf") && (
+        <>
+          <MenuItem onClick={() => onSelect("pdf")}>
+            <FileOutputIcon />
+            {t("workspaces.files.downloadPdf")}
           </MenuItem>
-        );
-
-        // The metadata-free copy is the only one whose label does not say what
-        // it costs, so it keeps its hint.
-        if (rendition !== "scrubbed") {
-          return item;
-        }
-        return (
-          <Tooltip
-            content={t("workspaces.files.downloadScrubbedHint")}
-            key={rendition}
-            render={item}
-          />
-        );
-      })}
+          {canTransform && <MenuSeparator />}
+        </>
+      )}
+      {canIncludeReference && (
+        <MenuCheckboxItem
+          checked={includeReference}
+          closeOnClick={false}
+          onCheckedChange={setIncludeReference}
+        >
+          {t("workspaces.files.includeReferenceNumber")}
+        </MenuCheckboxItem>
+      )}
+      {canStripMetadata && (
+        <MenuCheckboxItem
+          checked={stripMetadata}
+          className="items-start"
+          closeOnClick={false}
+          onCheckedChange={setStripMetadata}
+        >
+          <span className="flex max-w-72 flex-col py-0.5">
+            <span>{t("workspaces.files.removeMetadata")}</span>
+            <span className="text-muted-foreground text-xs text-wrap">
+              {t.rich("workspaces.files.removeMetadataHint", {
+                bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+              })}
+            </span>
+          </span>
+        </MenuCheckboxItem>
+      )}
+      {canTransform && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            onClick={() =>
+              onSelect(
+                getDownloadVariant({
+                  metadata: stripMetadata ? "strip" : "keep",
+                  reference: includeReference ? "include" : "omit",
+                }),
+              )
+            }
+          >
+            <DownloadIcon />
+            {t("common.download")}
+          </MenuItem>
+        </>
+      )}
     </>
   );
 };
@@ -79,12 +107,7 @@ type DownloadSplitButtonProps = {
   renditions: readonly DownloadRendition[];
 };
 
-/**
- * Download in a toolbar: one click on the uploaded bytes, always, with the
- * built copies behind a chevron that appears only when there are any. The
- * button never changes what it hands over, so a user who learned it once
- * cannot be surprised by a version that happens to carry a reference.
- */
+/** The uploaded bytes remain one click away; optional copies require confirm. */
 export const DownloadSplitButton = ({
   onDownload,
   renditions,
@@ -121,10 +144,11 @@ export const DownloadSplitButton = ({
                 variant="ghost"
               />
             }
+            tooltip=""
           >
             <ChevronDownIcon className="size-3" />
           </MenuTrigger>
-          <MenuPopup align="end">
+          <MenuPopup align="end" className="min-w-72">
             <DownloadRenditionMenuItems
               onSelect={onDownload}
               renditions={renditions}

@@ -14,13 +14,13 @@ import { downloadFile } from "@/lib/utils";
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 
-/** The API path that builds each rendition the server assembles per request. */
-const BUILT_RENDITION_PATH = {
-  reference: "stamped",
-  scrubbed: "scrubbed",
+const BUILT_RENDITION_REQUEST = {
+  reference: { path: "stamped", query: "?metadata=keep" },
+  "reference-scrubbed": { path: "stamped", query: "?metadata=strip" },
+  scrubbed: { path: "scrubbed", query: "" },
 } as const;
 
-type BuiltRendition = keyof typeof BUILT_RENDITION_PATH;
+type BuiltRendition = keyof typeof BUILT_RENDITION_REQUEST;
 
 type DownloadTabFileProps = {
   fieldId: string;
@@ -51,11 +51,12 @@ const fetchBuiltFile = async ({
   rendition: BuiltRendition;
   workspaceId: string;
 }): Promise<Blob | null> => {
+  const request = BUILT_RENDITION_REQUEST[rendition];
   const responseResult = await Result.tryPromise(
     async () =>
       await fetchWithTimeout(
         apiUrl(
-          `/files/${encodeURIComponent(workspaceId)}/${BUILT_RENDITION_PATH[rendition]}/${encodeURIComponent(fieldId)}`,
+          `/files/${encodeURIComponent(workspaceId)}/${request.path}/${encodeURIComponent(fieldId)}${request.query}`,
         ),
         { credentials: "include", timeoutMs: DOWNLOAD_TIMEOUT_MS },
       ),
@@ -73,7 +74,9 @@ const fetchBuiltFile = async ({
 const isBuiltRendition = (
   variant: DownloadVariant,
 ): variant is BuiltRendition =>
-  variant === "reference" || variant === "scrubbed";
+  variant === "reference" ||
+  variant === "reference-scrubbed" ||
+  variant === "scrubbed";
 
 /**
  * Downloads one field's file in the requested copy: the uploaded original and
@@ -102,7 +105,7 @@ export const downloadTabFile = async ({
       // the server could not remove — and the user's next step differs.
       onError(
         t(
-          variant === "scrubbed"
+          variant === "scrubbed" || variant === "reference-scrubbed"
             ? "workspaces.files.scrubFailed"
             : "workspaces.files.downloadFailed",
         ),

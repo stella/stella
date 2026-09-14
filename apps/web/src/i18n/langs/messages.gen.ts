@@ -4843,10 +4843,8 @@ type Messages = {
       "downloadExtractedText": "Extracted text (.txt)";
       "downloadFailed": "Download failed";
       "downloadPdf": "Download as PDF";
-      "downloadScrubbed": "Download without metadata";
-      "downloadScrubbedHint": "Removes the author, company and drafting history the file carries. The copy in the matter keeps them.";
       "downloadSearchablePdf": "Searchable PDF";
-      "downloadWithReference": "Download with reference number";
+      "includeReferenceNumber": "Include reference number";
       "itemLimitReached": "This matter has reached its item limit.";
       "maxEntitiesReached": "Maximum number of items reached";
       "ocrAlreadyProcessed": "Text recognition has already completed";
@@ -4860,6 +4858,8 @@ type Messages = {
         "title": "File these as new versions?";
         "uploadAsNewDocument": "Upload as new document";
       };
+      "removeMetadata": "Remove document metadata";
+      "removeMetadataHint": "Removes author, company and editing history. <bdi>stella</bdi> reference codes are kept.";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
       "runOcr": "Queue OCR";
