@@ -87,8 +87,8 @@ const CLOSING_FTR_RE = /<\/w:ftr>/u;
 const STRIP_PATH_RE = /^.*\//u;
 const FOOTER_REL_RE =
   /Id="(?<id>[^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="(?<target>[^"]+)"/gu;
-const DEFAULT_FOOTER_REF_RE =
-  /w:footerReference[^>]*w:type="default"[^>]*r:id="(?<rid>[^"]+)"/u;
+const FOOTER_REF_RE =
+  /<w:footerReference\b[^>]*\br:id="(?<rid>[^"]+)"[^>]*\/?>/gu;
 const PARAGRAPH_OPEN_RE = /<w:p(?:\s[^>]*)?>/gu;
 const ANY_PROPERTY_RE = /<property[\s>]/u;
 const ANY_PARAGRAPH_RE = /<w:p[\s/>]/u;
@@ -945,28 +945,33 @@ const injectFooter = async (
   const docRels = (await archive.readEntryString(docRelsPath)) ?? "";
 
   const verifyUrl = `${frontendUrl}/verify/${verificationCode}`;
-  const footerMatch = findExistingFooter(docXml, docRels);
+  const footerMatches = findExistingFooters(docXml, docRels);
 
-  if (footerMatch) {
-    await updateExistingFooter(
-      archive,
-      footerMatch.path,
-      footerMatch.relsPath,
-      stamp,
-      verificationCode,
-      verifyUrl,
+  if (footerMatches.length > 0) {
+    await Promise.all(
+      footerMatches.map(({ path, relsPath }) =>
+        updateExistingFooter(
+          archive,
+          path,
+          relsPath,
+          stamp,
+          verificationCode,
+          verifyUrl,
+        ),
+      ),
     );
-  } else {
-    await createNewFooter(
-      archive,
-      docXml,
-      docRelsPath,
-      docRels,
-      stamp,
-      verificationCode,
-      verifyUrl,
-    );
+    return;
   }
+
+  await createNewFooter(
+    archive,
+    docXml,
+    docRelsPath,
+    docRels,
+    stamp,
+    verificationCode,
+    verifyUrl,
+  );
 };
 
 type FooterMatch = {
@@ -975,14 +980,15 @@ type FooterMatch = {
 };
 
 /**
- * Find the existing default footer in the document.
- * Prefers the footer referenced by `w:type="default"` in
- * document.xml; falls back to the first footer relationship.
+ * Find every footer part a section references, deduplicating parts shared by
+ * multiple sections or page variants. A relationship without a reference is
+ * used only as a fallback for the malformed packages the previous behavior
+ * tolerated.
  */
-const findExistingFooter = (
+const findExistingFooters = (
   docXml: string,
   docRels: string,
-): FooterMatch | null => {
+): FooterMatch[] => {
   // Build a map of relationship ID → target path
   const relMap = new Map<string, string>();
   for (const m of docRels.matchAll(FOOTER_REL_RE)) {
@@ -994,23 +1000,28 @@ const findExistingFooter = (
   }
 
   if (relMap.size === 0) {
-    return null;
+    return [];
   }
 
-  // Prefer the default footer reference from document.xml
-  const defaultRef = DEFAULT_FOOTER_REF_RE.exec(docXml);
-  const rId = defaultRef?.groups?.["rid"];
-  const target = (rId ? relMap.get(rId) : null) ?? relMap.values().next().value;
-
-  if (!target) {
-    return null;
+  const targets = new Set<string>();
+  for (const match of docXml.matchAll(FOOTER_REF_RE)) {
+    const rId = match.groups?.["rid"];
+    const target = rId === undefined ? undefined : relMap.get(rId);
+    if (target !== undefined) {
+      targets.add(target);
+    }
+  }
+  if (targets.size === 0) {
+    const fallback = relMap.values().next().value;
+    if (fallback !== undefined) {
+      targets.add(fallback);
+    }
   }
 
-  const path = target.startsWith("word/") ? target : `word/${target}`;
-  const fileName = target.replace(STRIP_PATH_RE, "");
-  const relsPath = `word/_rels/${fileName}.rels`;
-
-  return { path, relsPath };
+  return [...targets].map((target) => {
+    const path = target.startsWith("word/") ? target : `word/${target}`;
+    return { path, relsPath: footerRelsPathFor(path) };
+  });
 };
 
 const updateExistingFooter = async (
