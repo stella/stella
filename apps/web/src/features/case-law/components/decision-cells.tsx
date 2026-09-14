@@ -260,7 +260,7 @@ export const SummaryCell = ({
  * Two lines while the reader is scanning a page of them, all of it once they
  * ask to read one.
  */
-const SUMMARY_TEXT_CLASS_NAME = "text-muted-foreground text-xs";
+const SUMMARY_TEXT_CLASS_NAME = "text-foreground text-sm";
 
 /** The same mark the server's own highlighting draws, so one row reads as one thing. */
 const MARK_CLASS_NAME =
