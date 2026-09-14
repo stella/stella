@@ -68,6 +68,7 @@
     "caseLaw.analysis.categories.reasoning",
     "caseLaw.research.answers.no",
     "caseLaw.research.answers.yes",
+    "caseLaw.results.excerpt.medium",
     "catalogue.cost.free",
     "catalogue.cost.paid",
     "catalogue.filter.skills",
@@ -394,6 +395,9 @@
     ],
     "caseLaw.research.answers.no": [
       "es"
+    ],
+    "caseLaw.results.excerpt.long": [
+      "fr"
     ],
     "catalogue.configuration": [
       "fr"

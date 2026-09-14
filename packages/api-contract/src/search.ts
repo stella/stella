@@ -18,6 +18,25 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 
+/**
+ * How much of the matched passage a result carries.
+ *
+ * A name rather than a character count, for the same reason the orders above
+ * are names: the reader picks how much of the passage they want to read, and
+ * what that costs in characters is the search's business and differs by the
+ * engine answering. Here rather than in the API because the search body and
+ * the web that sends it both declare it.
+ *
+ * `short` is first because Elysia coerces an absent optional `UnionEnum` to
+ * its first member, so slot 0 has to be the default a handler applies — and
+ * it is the size every result has always been shown at.
+ */
+export const SEARCH_EXCERPTS = ["short", "medium", "long"] as const;
+
+export type SearchExcerpt = (typeof SEARCH_EXCERPTS)[number];
+
+export const DEFAULT_SEARCH_EXCERPT = SEARCH_EXCERPTS[0];
+
 export const SEARCH_TOTAL_TYPE = {
   EXACT: "exact",
   ESTIMATE: "estimate",

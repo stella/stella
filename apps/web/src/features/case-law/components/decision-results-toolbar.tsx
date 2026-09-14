@@ -3,8 +3,8 @@ import type { ComponentType, ReactNode } from "react";
 import { AlignJustifyIcon, WrapTextIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { SEARCH_SORTS } from "@stll/api-contract/search";
-import type { SearchSort } from "@stll/api-contract/search";
+import { SEARCH_EXCERPTS, SEARCH_SORTS } from "@stll/api-contract/search";
+import type { SearchExcerpt, SearchSort } from "@stll/api-contract/search";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
@@ -38,6 +38,14 @@ type DecisionResultsToolbarProps = {
    */
   actions?: ReactNode;
   /**
+   * The excerpt length the rows are drawn at, or null where there are no
+   * matched passages to widen. A browse listing shows each decision's own
+   * headnote, so the control would be one the reader could move without
+   * anything changing. Not `sort`'s nullness: an identifier lookup has no
+   * order to choose either, and still shows passages.
+   */
+  excerpt: SearchExcerpt | null;
+  /**
    * What narrows the result set, drawn first: the filter popover's own
    * button. A node rather than props, so the toolbar owes nothing to the
    * facet model it never reads.
@@ -65,6 +73,7 @@ type DecisionResultsToolbarProps = {
  */
 export const DecisionResultsToolbar = ({
   actions,
+  excerpt,
   filters,
   find,
   layout,
@@ -126,6 +135,40 @@ export const DecisionResultsToolbar = ({
           }))}
           value={layout.contentMode}
         />
+        {excerpt !== null && (
+          <>
+            <span className="bg-border mx-1 h-4 w-px" />
+            <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
+              {t("caseLaw.results.excerpt.label")}
+            </span>
+            <Select
+              onValueChange={(value: string | null) => {
+                const chosen = SEARCH_EXCERPTS.find(
+                  (length) => length === value,
+                );
+                if (chosen !== undefined) {
+                  onLayoutChange({ ...layout, excerpt: chosen });
+                }
+              }}
+              value={excerpt}
+            >
+              <SelectTrigger
+                aria-label={t("caseLaw.results.excerpt.label")}
+                className="h-7 min-h-0 w-auto min-w-28 text-xs"
+                size="sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {EXCERPT_OPTIONS.map((option) => (
+                  <SelectItem key={option.excerpt} value={option.excerpt}>
+                    {t(option.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </>
+        )}
         <DecisionColumnToggle
           layout={layout}
           onLayoutChange={onLayoutChange}
@@ -168,6 +211,24 @@ const TABLE_CONTENT_MODE_OPTIONS = [
 // a mode the reader cannot get back to.
 type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["mode"];
 true satisfies DecisionContentMode extends OfferedContentMode ? true : never;
+
+/**
+ * How much of the matched passage a row carries, shortest first: the reader
+ * trades reading the hit in context against fitting more hits on the screen.
+ */
+const EXCERPT_OPTIONS = [
+  { excerpt: "short", labelKey: "caseLaw.results.excerpt.short" },
+  { excerpt: "medium", labelKey: "caseLaw.results.excerpt.medium" },
+  { excerpt: "long", labelKey: "caseLaw.results.excerpt.long" },
+] as const satisfies readonly {
+  excerpt: SearchExcerpt;
+  labelKey: TranslationKey;
+}[];
+
+// Every length is offered, always: a length the control drops is one the
+// reader cannot get back to, and a stored preference nothing can undo.
+type OfferedExcerpt = (typeof EXCERPT_OPTIONS)[number]["excerpt"];
+true satisfies SearchExcerpt extends OfferedExcerpt ? true : never;
 
 export type DecisionFilterChip = {
   /** Stable within the row, so removing one does not remount the rest. */

@@ -23,6 +23,7 @@ import {
   exactDecisionMatches,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  DEFAULT_SEARCH_EXCERPT,
   SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
@@ -103,6 +104,8 @@ import {
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -379,10 +382,13 @@ export const Route = createFileRoute("/law/cases/")({
     // chain to the page it names, and only a page the results themselves do
     // not reach falls back to the deepest one that does. One redirect for
     // both, so the reader is corrected once.
-    const filters = createDecisionFiltersFromSearch({
-      ...search,
-      country: countryParam,
-    });
+    const filters = createDecisionFiltersFromSearch(
+      { ...search, country: countryParam },
+      // The excerpt length lives in the reader's browser, which the router
+      // cannot reach here. Priming the default keeps this walk on the entry
+      // the reader's first page will read when they never changed it.
+      { excerpt: DEFAULT_SEARCH_EXCERPT },
+    );
     const decisionsOptions = decisionsInfiniteOptions(
       filters,
       decisionPageSize(search.pageSize),
@@ -425,7 +431,12 @@ export const Route = createFileRoute("/law/cases/")({
       publicCaseLawCountryFromParam(deps.country) ??
       panic("The case-law route loaded without a launch-ready country.");
     const decisionsOptions = decisionsInfiniteOptions(
-      createDecisionFiltersFromSearch(deps),
+      // The default again: a loader has no browser storage to read the
+      // reader's length from, and a reader who never changed it lands on the
+      // entry this primes.
+      createDecisionFiltersFromSearch(deps, {
+        excerpt: DEFAULT_SEARCH_EXCERPT,
+      }),
       decisionPageSize(deps.pageSize),
     );
     const mode = decisionsLoadMode({
@@ -586,7 +597,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
-  const filters = createDecisionFiltersFromSearch(search);
+  const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
+  const filters = createDecisionFiltersFromSearch(search, {
+    excerpt: layout.excerpt,
+  });
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
   // What the field last asked the URL to hold. A navigation that lands on
@@ -619,7 +633,6 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     }
   }
 
-  const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
   // The results column — toolbar, chips and grid: what a Cmd/Ctrl+F inside
   // belongs to, so a press with a cell focused opens this table's find.
   const paneRef = useRef<HTMLDivElement>(null);
@@ -632,6 +645,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     ...decisionFacetsOptions(scope),
     placeholderData: keepPreviousData,
   });
+  const decisionsOptions = decisionsInfiniteOptions(filters, pageSize);
   const {
     data,
     error,
@@ -642,7 +656,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     isPlaceholderData,
     refetch,
   } = useInfiniteQuery({
-    ...decisionsInfiniteOptions(filters, pageSize),
+    ...decisionsOptions,
     // The chain the reader has walked stays loaded while the filters change,
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
@@ -681,9 +695,32 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // One page of the chain is on screen, never the chain itself: the pages
   // behind the reader are cursors kept for the links, not rows to draw.
   const walkedPageCount = data?.pages.length ?? 0;
+  const wantedPage = decisionPageNumber(search.page);
+
+  // The router walked the default length's chain, because the length the
+  // reader chose lives in their browser and `beforeLoad` cannot read it. A
+  // reader who chose another length therefore arrives on a chain holding one
+  // page while the URL names a deeper one, and the pager would clamp to what
+  // the chain reaches. The length changes neither which decisions match nor
+  // the order they match in, so page N of this chain is page N of the one the
+  // router walked: the same pages exist here and are walked once, on arrival.
+  const walkToWantedPage = useLatestCallback(
+    async () =>
+      await ensureRouteInfiniteQueryData(queryClient, {
+        ...decisionsOptions,
+        pages: decisionPagesToWalk(wantedPage, walkedPageCount),
+      }),
+  );
+  useExternalSyncEffect(() => {
+    if (wantedPage <= walkedPageCount) {
+      return;
+    }
+    detached(walkToWantedPage(), "cases.walk-chosen-excerpt");
+  }, [walkToWantedPage, walkedPageCount, wantedPage]);
+
   const pager = decisionPagerModel({
     hasNextPage,
-    page: decisionPageNumber(search.page),
+    page: wantedPage,
     walkedPageCount,
   });
   const decisions: readonly Decision[] =
@@ -876,6 +913,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     writeQuery.flush();
     detached(
       openDecisionMatch({
+        excerpt: layout.excerpt,
         navigate: routerNavigate,
         queryClient,
         search: { ...search, q: entry },
@@ -912,6 +950,11 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
 
       <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
         <DecisionResultsToolbar
+          // A browse listing draws each decision's own headnote, not a matched
+          // passage, so there is no excerpt to widen and the control is not
+          // offered. `filters.search` is what the search endpoint was actually
+          // given, so it answers that exactly.
+          excerpt={filters.search === undefined ? null : layout.excerpt}
           filters={
             <DecisionFilterPopover
               activeFilterCount={activeCaseLawFilterCount(search)}

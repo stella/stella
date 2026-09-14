@@ -682,6 +682,14 @@
       "title": "Kutatási táblák",
       "updated": "Utoljára szerkesztve: {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Részlet",
+        "long": "Hosszú",
+        "medium": "Közepes",
+        "short": "Rövid"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
     "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",

@@ -685,6 +685,14 @@ type Messages = {
       "title": "Research tables";
       "updated": "Last edited {date}";
     };
+    "results": {
+      "excerpt": {
+        "label": "Excerpt";
+        "long": "Long";
+        "medium": "Medium";
+        "short": "Short";
+      };
+    };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
     "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";

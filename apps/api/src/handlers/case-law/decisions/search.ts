@@ -11,6 +11,7 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import {
   countedSearchTotal,
+  DEFAULT_SEARCH_EXCERPT,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
@@ -51,6 +52,11 @@ import {
   loadCourtWeights,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
+import {
+  CORPUS_FRAGMENT_JOIN,
+  corpusExcerpt,
+  decisionHeadlineConfig,
+} from "@/api/lib/case-law/decision-excerpt";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import {
@@ -113,6 +119,7 @@ import {
 import {
   caseLawCorpusQuery,
   type CorpusTermExpander,
+  tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
   type CorpusSearchCursor,
@@ -150,10 +157,7 @@ import type {
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  escapeAndHighlight,
-  TS_HEADLINE_CONFIG,
-} from "@/api/lib/search/highlight";
+import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -217,6 +221,7 @@ const searchPostgresDecisions = async (
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
+  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
 
   // Validate cursor early so a tampered value fails visibly, and refuse one
   // that bounds a different order: its key is a position in that order.
@@ -397,7 +402,7 @@ const searchPostgresDecisions = async (
           ${LIMITS.searchHeadlineDocumentMaxChars}
         ),
         ${ftsSearch.headlineQuery},
-        ${TS_HEADLINE_CONFIG}
+        ${decisionHeadlineConfig(excerpt)}
       ) AS headline,
       m.sort_key,
       m.citation_count,
@@ -818,7 +823,7 @@ const extractCorpusSnippet = (
   snippet: Record<string, unknown> | undefined,
 ): string | null => {
   const text = snippet?.["text"];
-  const raw = Array.isArray(text) ? text.join(" … ") : text;
+  const raw = Array.isArray(text) ? text.join(CORPUS_FRAGMENT_JOIN) : text;
   if (typeof raw !== "string" || raw.length === 0) {
     return null;
   }
@@ -1615,6 +1620,17 @@ export const searchCorpusIndexDecisions = async (
   // the pages reach.
   const scopedQuery = withCaseLawDatedDecisions(resolved.query, sort);
 
+  // What a wider excerpt is cut with. Both are pure derivations of the request
+  // the query was already built from, so reading them again here cannot
+  // disagree with the query the engine answered.
+  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+  const excerptFields = caseLawCorpusQueryFields({
+    generation,
+    jurisdiction: body.country,
+    language: body.language,
+  });
+  const excerptTokens = tokenizeCorpusFreeText(body.query);
+
   const [searchPage, facetsAndTotal] = await Promise.all([
     readCorpusIndexSearchPage({
       cluster: serving.cluster,
@@ -1628,7 +1644,14 @@ export const searchCorpusIndexDecisions = async (
         const id = hit["document_id"];
         return typeof id === "string" && isUuid(id) ? id : null;
       },
-      extractSnippet: extractCorpusSnippet,
+      extractSnippet: (snippet, hit) =>
+        corpusExcerpt({
+          engineSnippet: extractCorpusSnippet(snippet),
+          excerpt,
+          language: excerptFields.stemming?.language ?? null,
+          passage: hit["text"],
+          tokens: excerptTokens,
+        }),
       unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
       rankCandidates: async (candidates) =>
         await rehydrateCaseLawCandidates({

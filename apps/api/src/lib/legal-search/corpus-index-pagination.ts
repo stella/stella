@@ -87,8 +87,15 @@ type CorpusIndexSearchPageInput<TContext> = {
    */
   snippetFields: string[];
   extractId: (hit: CorpusIndexHit) => string | null;
+  /**
+   * The excerpt one hit shows. Handed the hit beside its snippet because the
+   * engine's snippet is a fixed width with no size on the wire: a caller that
+   * wants a wider one cuts it from the hit's own stored passage, which costs
+   * no further read.
+   */
   extractSnippet: (
     snippet: Record<string, unknown> | undefined,
+    hit: CorpusIndexHit,
   ) => string | null;
   /**
    * Highest blended score any unseen candidate could still reach, given
@@ -222,6 +229,7 @@ type ReadPageSnippetsOptions = {
   extractId: (hit: CorpusIndexHit) => string | null;
   extractSnippet: (
     snippet: Record<string, unknown> | undefined,
+    hit: CorpusIndexHit,
   ) => string | null;
   indexId: string;
   query: string;
@@ -277,7 +285,7 @@ const readPageSnippets = async ({
     if (id === null || snippetById.has(id)) {
       continue;
     }
-    const snippet = extractSnippet(result.value.snippets[index]);
+    const snippet = extractSnippet(result.value.snippets[index], hit);
     if (snippet !== null) {
       snippetById.set(id, snippet);
     }

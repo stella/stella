@@ -682,6 +682,14 @@
       "title": "Recherchetabellen",
       "updated": "Zuletzt bearbeitet {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Auszug",
+        "long": "Lang",
+        "medium": "Mittel",
+        "short": "Kurz"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
     "searchAskPrompt": "{query} (Rechtsprechung, {country})",
     "searchLabel": "Rechtsprechung durchsuchen",

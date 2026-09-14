@@ -682,6 +682,14 @@
       "title": "Pētījumu tabulas",
       "updated": "Pēdējo reizi labota {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Izvilkums",
+        "long": "Garš",
+        "medium": "Vidējs",
+        "short": "Īss"
+      }
+    },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchAskPrompt": "{query} (judikatūra, {country})",
     "searchLabel": "Meklēt judikatūrā",

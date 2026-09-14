@@ -682,6 +682,14 @@
       "title": "Rešeršné tabuľky",
       "updated": "Naposledy upravené {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Úryvok",
+        "long": "Dlhý",
+        "medium": "Stredný",
+        "short": "Krátky"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
     "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",

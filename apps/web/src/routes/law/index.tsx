@@ -45,6 +45,7 @@ import {
   decisionLinkElement,
   formatDecisionDate,
 } from "@/features/case-law/components/decision-cells";
+import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
@@ -289,6 +290,9 @@ function LawHome() {
     publicCaseLawCountryFromParam(country) ??
     panic("The law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
+  // The results page reads this jurisdiction's stored excerpt length too, so
+  // the lookup below and the list it falls back to share one cached result set.
+  const { layout } = useDecisionColumnPreferences(countryParam);
   const statuteCountry = statuteCountryOf(scope);
   const descriptor = lawHomeDescriptor(scope);
 
@@ -344,6 +348,7 @@ function LawHome() {
     }
 
     const opened = await openDecisionMatch({
+      excerpt: layout.excerpt,
       navigate,
       queryClient,
       search: { country: countryParam, q: trimmed },

@@ -198,3 +198,46 @@ describe("what the pager offers", () => {
     expect(model.currentPage).toBe(1);
   });
 });
+
+/**
+ * The excerpt length is not in the URL, so the router walks the default
+ * length's chain and a reader who chose another one arrives on a chain holding
+ * one page. The length changes neither which decisions match nor their order,
+ * so page N of that chain is page N of the walked one, and walking this chain
+ * to the same depth is what puts the pager back on the page the URL names.
+ */
+describe("a deep link on a chain the router could not walk", () => {
+  const FRESH_CHAIN = 1;
+
+  test("walking to the page the URL names puts the pager on it", () => {
+    const wanted = 3;
+
+    // What the browser walks its own chain to on arrival.
+    const walked = decisionPagesToWalk(wanted, FRESH_CHAIN);
+    expect(walked).toBe(wanted);
+
+    expect(reachableDecisionPage(wanted, walked)).toBe(wanted);
+    expect(
+      decisionPagerModel({
+        hasNextPage: false,
+        page: wanted,
+        walkedPageCount: walked,
+      }).currentPage,
+    ).toBe(wanted);
+    // The rows are read by index into the walked pages, so the page the pager
+    // reports has to be one the chain actually holds.
+    expect(decisionPageIndex(wanted, walked)).toBe(wanted - 1);
+  });
+
+  // Without the walk this is what the reader saw: the pager clamped to the one
+  // page the chain held while the URL still named a deeper one.
+  test("an unwalked chain clamps the pager away from the URL's page", () => {
+    expect(
+      decisionPagerModel({
+        hasNextPage: false,
+        page: 3,
+        walkedPageCount: FRESH_CHAIN,
+      }).currentPage,
+    ).not.toBe(3);
+  });
+});
