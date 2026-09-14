@@ -31,18 +31,25 @@ export const truncateDecisionHeadnote = (text: string) => {
 };
 
 /**
- * A decision's publisher summary as one bounded line: whitespace runs are
- * collapsed, then the text is fitted to the row budget. Null means the row
- * has nothing to show. `publisher-summary.ts` owns which source field wins;
- * this helper owns only the public preview.
+ * A decision's publisher summary as one line, whole: whitespace runs
+ * collapsed, nothing cut. Null means the row has nothing to show.
+ * `publisher-summary.ts` owns which source field wins; this helper owns only
+ * how that text reads on one line.
  */
-export const normalizeDecisionHeadnote = (raw: unknown) => {
+export const collapseDecisionHeadnote = (raw: unknown): string | null => {
   if (typeof raw !== "string") {
     return null;
   }
   const collapsed = raw.replace(/\s+/gu, " ").trim();
-  if (collapsed.length === 0) {
-    return null;
-  }
-  return truncateDecisionHeadnote(collapsed);
+  return collapsed.length === 0 ? null : collapsed;
+};
+
+/**
+ * The same line, fitted to the row budget. The preview is cut from the whole
+ * reading above rather than from a second one, so a row that shows the rest
+ * continues the text it was showing instead of replacing it.
+ */
+export const normalizeDecisionHeadnote = (raw: unknown) => {
+  const collapsed = collapseDecisionHeadnote(raw);
+  return collapsed === null ? null : truncateDecisionHeadnote(collapsed);
 };

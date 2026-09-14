@@ -59,9 +59,7 @@ export const renderDecisionCell = ({
         <HighlightedText columnId="type" text={decision.decisionType} />
       );
     case "headnote":
-      return (
-        <HeadnoteCell contentMode={context.contentMode} decision={decision} />
-      );
+      return <HeadnoteCell context={context} decision={decision} />;
     case "citedBy":
       return <CitedByCell decision={decision} />;
     case "language":

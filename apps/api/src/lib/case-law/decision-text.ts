@@ -15,7 +15,10 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 
-import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
+import {
+  collapseDecisionHeadnote,
+  normalizeDecisionHeadnote,
+} from "@/api/lib/case-law/decision-headnote";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
@@ -195,6 +198,29 @@ export const readDecisionHeadnote = (
             text: preview.text,
             truncated: preview.truncated,
           };
+    }
+    default: {
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+    }
+  }
+};
+
+/**
+ * The same publisher summary, whole: what a reader asks for when the row's
+ * preview stops mid-sentence. Read from the same value the preview is cut
+ * from, so the two can never be two different texts.
+ */
+export const readWholeDecisionHeadnote = (value: unknown): TextField => {
+  const field = readTextField(value);
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return field;
+    case TEXT_FIELD_TYPE.PRESENT: {
+      const text = collapseDecisionHeadnote(field.text);
+      return text === null
+        ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
+        : { type: TEXT_FIELD_TYPE.PRESENT, text };
     }
     default: {
       field satisfies never;

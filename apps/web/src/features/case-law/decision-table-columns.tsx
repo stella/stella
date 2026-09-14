@@ -101,13 +101,23 @@ const DECISION_ACCESSORS = {
  */
 type DecisionRenderScopeValue = {
   contentMode: DecisionContentMode;
+  /** The rows whose cut headnote the reader asked to see whole. */
+  expandedHeadnoteIds: ReadonlySet<string>;
+  onToggleHeadnote: (decisionId: string) => void;
   queryTokens: readonly string[];
 };
 
 const NO_QUERY_TOKENS: readonly string[] = [];
+const NO_EXPANDED_HEADNOTES: ReadonlySet<string> = new Set();
 
 const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
   contentMode: "tight",
+  expandedHeadnoteIds: NO_EXPANDED_HEADNOTES,
+  // A cell drawn outside a table has nowhere to keep the expansion; reading
+  // the default rather than a provider is a defect, not a row that cannot
+  // expand.
+  onToggleHeadnote: () =>
+    panic("Decision cell rendered outside a decision render scope"),
   queryTokens: NO_QUERY_TOKENS,
 });
 
@@ -282,12 +292,15 @@ const DecisionCell = ({
   decision: Decision;
   visibleColumnIds: readonly string[];
 }) => {
-  const { contentMode, queryTokens } = use(DecisionRenderScopeContext);
+  const { contentMode, expandedHeadnoteIds, onToggleHeadnote, queryTokens } =
+    use(DecisionRenderScopeContext);
 
   return renderDecisionCell({
     column,
     context: {
       contentMode,
+      expandedHeadnoteIds,
+      onToggleHeadnote,
       // Derived from what is on screen rather than stored, so hiding a column
       // moves its value into the identity line and showing it takes it back.
       identityLineFields: decisionIdentityLineFields(visibleColumnIds),

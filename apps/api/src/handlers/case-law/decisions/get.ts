@@ -23,8 +23,12 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
+import {
+  readDecisionTextMetadata,
+  readWholeDecisionHeadnote,
+} from "@/api/lib/case-law/decision-text";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
+import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
@@ -389,6 +393,13 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       }),
       documentUrl: decision.documentUrl,
       metadata,
+      // The whole publisher summary the list and search cut a preview from.
+      // Metadata only, deliberately: the rows read the same sources in SQL
+      // and nothing else, so a reader asking for the rest of a cut line gets
+      // the rest of that line rather than a better text from the document.
+      headnote: readWholeDecisionHeadnote(
+        publisherSummaryOf({ documentAst: null, metadata: decision.metadata }),
+      ),
       textFields,
       createdAt: decision.createdAt,
       updatedAt: decision.updatedAt,
