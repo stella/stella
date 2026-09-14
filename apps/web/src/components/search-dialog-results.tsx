@@ -24,6 +24,10 @@ import {
   compactMeta,
   KIND_TRANSLATION_KEYS,
 } from "@/components/search-dialog.shared";
+import {
+  SearchMenuSection,
+  SEARCH_MENU_ROW_CLASS_NAME,
+} from "@/components/search-menu-section";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -87,7 +91,7 @@ export const CommandActionItem = ({
     case "command":
       return (
         <CommandItem
-          className="min-h-11 w-full gap-2 px-2 py-2 text-start text-sm"
+          className={SEARCH_MENU_ROW_CLASS_NAME}
           data-command-action-id={action.id}
           data-command-action-index={navigation.index}
           index={navigation.index}
@@ -100,7 +104,7 @@ export const CommandActionItem = ({
     case "button":
       return (
         <Button
-          className="h-auto min-h-11 w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+          className={SEARCH_MENU_ROW_CLASS_NAME}
           data-command-action-id={action.id}
           data-search-empty-row=""
           onClick={() => onSelect(action.id)}
@@ -285,77 +289,67 @@ export const SearchRecents = ({
     );
   }
   return (
-    <div className="space-y-5 px-4 py-4">
+    <>
       {recentSearches.length > 0 && (
-        <section>
-          <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-            {t("search.recentSearches")}
-          </h3>
-          <div className="space-y-1">
-            {recentSearches.map((recent) => (
-              <Button
-                className="h-auto w-full justify-start gap-2 px-2 py-2 text-start text-sm"
-                data-search-empty-row=""
-                key={recent.query}
-                onClick={() => onSearchClick(recent)}
-                variant="ghost"
-              >
-                <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
-                <span className="truncate">{recent.query}</span>
-              </Button>
-            ))}
-          </div>
-        </section>
+        <SearchMenuSection title={t("search.recentSearches")}>
+          {recentSearches.map((recent) => (
+            <Button
+              className={SEARCH_MENU_ROW_CLASS_NAME}
+              data-search-empty-row=""
+              key={recent.query}
+              onClick={() => onSearchClick(recent)}
+              variant="ghost"
+            >
+              <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
+              <span className="truncate">{recent.query}</span>
+            </Button>
+          ))}
+        </SearchMenuSection>
       )}
       {recentFiles.length > 0 && (
-        <section>
-          <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-            {t("search.recentlyOpenedFiles")}
-          </h3>
-          <div className="flex flex-col gap-y-1">
-            {recentFiles.map((file) => (
-              <Button
-                aria-current={
-                  previewedFileId === file.entityId ? "true" : undefined
-                }
-                className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
-                data-previewing={previewedFileId === file.entityId}
-                data-search-empty-row=""
-                key={file.entityId}
-                onFocus={() => onFilePreview(file)}
-                onClick={() => {
-                  onFileClick(file);
-                }}
-                onPointerEnter={() => onFilePreview(file)}
-                variant={
-                  previewedFileId === file.entityId ? "secondary" : "ghost"
-                }
-              >
-                {file.mimeType ? (
-                  <DocumentIcon
-                    className="text-muted-foreground size-4 shrink-0"
-                    mimeType={file.mimeType}
-                  />
-                ) : (
-                  <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1">
-                  <BidiText as="span" className="block truncate">
-                    {file.title}
-                  </BidiText>
-                  <BidiText
-                    as="span"
-                    className="text-muted-foreground block truncate text-xs"
-                  >
-                    {file.workspaceName}
-                  </BidiText>
-                </span>
-              </Button>
-            ))}
-          </div>
-        </section>
+        <SearchMenuSection title={t("search.recentlyOpenedFiles")}>
+          {recentFiles.map((file) => (
+            <Button
+              aria-current={
+                previewedFileId === file.entityId ? "true" : undefined
+              }
+              className={SEARCH_MENU_ROW_CLASS_NAME}
+              data-previewing={previewedFileId === file.entityId}
+              data-search-empty-row=""
+              key={file.entityId}
+              onFocus={() => onFilePreview(file)}
+              onClick={() => {
+                onFileClick(file);
+              }}
+              onPointerEnter={() => onFilePreview(file)}
+              variant={
+                previewedFileId === file.entityId ? "secondary" : "ghost"
+              }
+            >
+              {file.mimeType ? (
+                <DocumentIcon
+                  className="text-muted-foreground size-4 shrink-0"
+                  mimeType={file.mimeType}
+                />
+              ) : (
+                <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
+              )}
+              <span className="min-w-0 flex-1">
+                <BidiText as="span" className="block truncate">
+                  {file.title}
+                </BidiText>
+                <BidiText
+                  as="span"
+                  className="text-muted-foreground block truncate text-xs"
+                >
+                  {file.workspaceName}
+                </BidiText>
+              </span>
+            </Button>
+          ))}
+        </SearchMenuSection>
       )}
-    </div>
+    </>
   );
 };
 

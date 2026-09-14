@@ -36,6 +36,7 @@ import { Input } from "@stll/ui/input";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import {
   canSaveSearch,
@@ -44,6 +45,10 @@ import {
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
+import {
+  SearchMenuSection,
+  SEARCH_MENU_ROW_CLASS_NAME,
+} from "@/components/search-menu-section";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -116,8 +121,17 @@ export const SavedSearches = ({
     enabled: isOpen,
   });
 
-  const invalidateSavedSearches = async () =>
+  const onMutationSuccess = async () => {
+    setDialog({ type: "closed" });
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
+  };
+  const onMutationError = (error: Error) => {
+    analytics.captureError(error);
+    stellaToast.add({
+      title: t("common.somethingWentWrong"),
+      type: "error",
+    });
+  };
 
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -136,17 +150,8 @@ export const SavedSearches = ({
         }),
       );
     },
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await invalidateSavedSearches();
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+    onSuccess: onMutationSuccess,
+    onError: onMutationError,
   });
 
   const renameMutation = useMutation({
@@ -160,43 +165,24 @@ export const SavedSearches = ({
       unwrapEden(
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await invalidateSavedSearches();
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+    onSuccess: onMutationSuccess,
+    onError: onMutationError,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
       unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await invalidateSavedSearches();
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+    onSuccess: onMutationSuccess,
+    onError: onMutationError,
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
     (page) => page.items,
   );
-  const hasSavedSearches = (savedSearches?.length ?? 0) > 0;
   const shouldShowList =
     showList &&
     shouldShowSavedSearchList({
-      itemCount: hasSavedSearches ? (savedSearches?.length ?? 0) : 0,
+      itemCount: savedSearches?.length ?? 0,
       status: savedSearchesQuery.status,
     });
   const savedSearchesError = savedSearchesQuery.error;
@@ -254,96 +240,91 @@ export const SavedSearches = ({
       )}
 
       {shouldShowList && (
-        <section className="px-4 pt-4">
-          <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-            {t("search.savedSearches")}
-          </h3>
-          <div className="space-y-1">
-            {savedSearchesQuery.isPending && (
-              <div className="flex h-11 items-center px-2">
-                <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
-              </div>
-            )}
-            {savedSearchesQuery.isError && (
+        <SearchMenuSection title={t("search.savedSearches")}>
+          {savedSearchesQuery.isPending && (
+            <div className="flex h-11 items-center px-2">
+              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+            </div>
+          )}
+          {savedSearchesQuery.isError && (
+            <Button
+              className="h-11 w-full justify-start px-2"
+              onClick={() => {
+                detached(
+                  savedSearchesQuery.refetch(),
+                  "saved-searches.refetch",
+                );
+              }}
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          )}
+          {savedSearches?.map((savedSearch) => (
+            <div className="flex min-w-0 items-center" key={savedSearch.id}>
               <Button
-                className="h-11 w-full justify-start px-2"
-                onClick={() => {
-                  detached(
-                    savedSearchesQuery.refetch(),
-                    "saved-searches.refetch",
-                  );
-                }}
+                className={cn(SEARCH_MENU_ROW_CLASS_NAME, "w-auto flex-1")}
+                data-search-empty-row=""
+                onClick={() => onApply(savedSearch.criteria)}
                 variant="ghost"
               >
-                {t("common.retry")}
+                <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
+                <BidiText as="span" className="truncate">
+                  {savedSearch.name}
+                </BidiText>
               </Button>
-            )}
-            {savedSearches?.map((savedSearch) => (
-              <div className="flex min-w-0 items-center" key={savedSearch.id}>
-                <Button
-                  className="h-11 min-w-0 flex-1 justify-start gap-2 px-2 text-start text-sm"
-                  data-search-empty-row=""
-                  onClick={() => onApply(savedSearch.criteria)}
-                  variant="ghost"
-                >
-                  <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                  <BidiText as="span" className="truncate">
-                    {savedSearch.name}
-                  </BidiText>
-                </Button>
-                <Button
-                  aria-label={t("common.rename")}
-                  className="size-11 shrink-0"
-                  disabled={isMutatingSavedSearch}
-                  onClick={() =>
-                    setDialog({
-                      type: "rename",
-                      name: savedSearch.name,
-                      search: savedSearch,
-                    })
-                  }
-                  size="icon"
-                  title={t("common.rename")}
-                  variant="ghost"
-                >
-                  <PencilIcon className="size-4" />
-                </Button>
-                <Button
-                  aria-label={t("common.delete")}
-                  className="size-11 shrink-0"
-                  disabled={isMutatingSavedSearch}
-                  onClick={() =>
-                    setDialog({ type: "delete", search: savedSearch })
-                  }
-                  size="icon"
-                  title={t("common.delete")}
-                  variant="ghost"
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            ))}
-            {savedSearchesQuery.hasNextPage && (
               <Button
-                className="h-11 w-full"
-                disabled={savedSearchesQuery.isFetchingNextPage}
-                onClick={() => {
-                  detached(
-                    savedSearchesQuery.fetchNextPage(),
-                    "saved-searches.fetch-next-page",
-                  );
-                }}
+                aria-label={t("common.rename")}
+                className="size-11 shrink-0"
+                disabled={isMutatingSavedSearch}
+                onClick={() =>
+                  setDialog({
+                    type: "rename",
+                    name: savedSearch.name,
+                    search: savedSearch,
+                  })
+                }
+                size="icon"
+                title={t("common.rename")}
                 variant="ghost"
               >
-                {savedSearchesQuery.isFetchingNextPage ? (
-                  <LoaderIcon className="size-4 animate-spin" />
-                ) : (
-                  t("common.loadMore")
-                )}
+                <PencilIcon className="size-4" />
               </Button>
-            )}
-          </div>
-        </section>
+              <Button
+                aria-label={t("common.delete")}
+                className="size-11 shrink-0"
+                disabled={isMutatingSavedSearch}
+                onClick={() =>
+                  setDialog({ type: "delete", search: savedSearch })
+                }
+                size="icon"
+                title={t("common.delete")}
+                variant="ghost"
+              >
+                <Trash2Icon className="size-4" />
+              </Button>
+            </div>
+          ))}
+          {savedSearchesQuery.hasNextPage && (
+            <Button
+              className="h-11 w-full"
+              disabled={savedSearchesQuery.isFetchingNextPage}
+              onClick={() => {
+                detached(
+                  savedSearchesQuery.fetchNextPage(),
+                  "saved-searches.fetch-next-page",
+                );
+              }}
+              variant="ghost"
+            >
+              {savedSearchesQuery.isFetchingNextPage ? (
+                <LoaderIcon className="size-4 animate-spin" />
+              ) : (
+                t("common.loadMore")
+              )}
+            </Button>
+          )}
+        </SearchMenuSection>
       )}
 
       <Dialog

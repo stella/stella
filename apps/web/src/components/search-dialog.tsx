@@ -123,6 +123,7 @@ import {
   toggleArrayMember,
 } from "@/components/search-filters.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
+import { SearchMenuSection } from "@/components/search-menu-section";
 import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
 import type { SearchScope } from "@/components/search-scope";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -1870,25 +1871,20 @@ export const SearchDialog = ({
                       </div>
                       {scopeVisibility.actions &&
                         filteredActions.length > 0 && (
-                          <section className="shrink-0 px-4 py-4">
-                            <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-                              {t("common.actions")}
-                            </h3>
-                            <div className="space-y-1">
-                              {actionEntries.map((entry, index) => (
-                                <CommandActionItem
-                                  entry={entry}
-                                  navigation={
-                                    hasVisibleSearch
-                                      ? { type: "command", index }
-                                      : { type: "button" }
-                                  }
-                                  key={entry.action.id}
-                                  onSelect={handleActionSelect}
-                                />
-                              ))}
-                            </div>
-                          </section>
+                          <SearchMenuSection title={t("common.actions")}>
+                            {actionEntries.map((entry, index) => (
+                              <CommandActionItem
+                                entry={entry}
+                                navigation={
+                                  hasVisibleSearch
+                                    ? { type: "command", index }
+                                    : { type: "button" }
+                                }
+                                key={entry.action.id}
+                                onSelect={handleActionSelect}
+                              />
+                            ))}
+                          </SearchMenuSection>
                         )}
                       <SearchResultsContent
                         onRetry={() => {
