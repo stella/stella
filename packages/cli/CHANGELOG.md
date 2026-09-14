@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.2.14
+
+### Patch Changes
+
+- [#3367](https://github.com/stella/stella/pull/3367) [`4181271`](https://github.com/stella/stella/commit/4181271d2de5f2e932deed74898b251b6239afa5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep the CLI capability catalog in sync with the API contract.
+
 ## 1.2.13
 
 ### Patch Changes
