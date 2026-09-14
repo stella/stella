@@ -40,6 +40,8 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { isDecisionRowActive } from "@/features/case-law/decision-inspector.logic";
+import { useDecisionRenderScope } from "@/features/case-law/decision-table-columns";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 /**
@@ -96,6 +98,17 @@ export const DecisionRow = ({
         .find((cell) => cell.column.id === addPropertyColumn.id)
     : undefined;
   const isActive = isDecisionRowActive(activeTabId, decision);
+  // A row that swaps a cut headnote for the whole one changes height, and the
+  // virtualizer only learns a row's height from the row. Left unsaid, the
+  // height it keeps is the one from before the swap, and the difference is
+  // drawn as empty space under the rows.
+  const { expandedHeadnoteIds } = useDecisionRenderScope();
+  const showsWholeHeadnote = expandedHeadnoteIds.has(decision.id);
+  useExternalSyncEffect(() => {
+    if (rowRef.current) {
+      measureElement(rowRef.current);
+    }
+  }, [contentMode, measureElement, showsWholeHeadnote]);
 
   const open = () => onOpen(decision);
   const handleClick = (event: React.MouseEvent) => {
