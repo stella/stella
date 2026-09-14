@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1082,
+    "count": 1072,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 1,
@@ -130,7 +130,6 @@
       "apps/api/src/handlers/chat/tools/remember-tool.ts": 5,
       "apps/api/src/handlers/chat/tools/template-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/tool-policy.ts": 1,
-      "apps/api/src/handlers/chat/tools/version-compare-tools.ts": 10,
       "apps/api/src/handlers/chat/tools/web-search-tools.ts": 4,
       "apps/api/src/handlers/chat/tools/workspace-tools.ts": 17,
       "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,

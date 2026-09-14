@@ -368,7 +368,7 @@
     }
   },
   "apps/web": {
-    "count": 412,
+    "count": 411,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -443,7 +443,6 @@
       "apps/web/src/components/office/silurus-office-viewer.tsx": 1,
       "apps/web/src/components/organization/invite-member-dialog.tsx": 1,
       "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx": 2,
-      "apps/web/src/components/public-inspector-rail.tsx": 1,
       "apps/web/src/components/public-law-search.tsx": 1,
       "apps/web/src/components/require-ai-key.tsx": 1,
       "apps/web/src/components/responsive-action-toolbar.tsx": 1,
