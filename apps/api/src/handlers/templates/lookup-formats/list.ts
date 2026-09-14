@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNotNull, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
   LOOKUP_FORMAT_PREFERENCE,
+  templateLookupFormatUserDefaults,
   templateLookupFormats,
 } from "@/api/db/schema";
 import {
@@ -40,7 +41,7 @@ const config = {
 
 const listLookupFormats = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, query }) {
+  async function* ({ safeDb, session, user, query }) {
     const limit = query.limit ?? FORMAT_LIMITS.pageDefault;
     const conditions = [
       eq(templateLookupFormats.organizationId, session.activeOrganizationId),
@@ -78,11 +79,35 @@ const listLookupFormats = createSafeRootHandler(
       limit,
       cursorForItem: (row) => encodePaginationCursor([row.id, row.registry]),
     });
-    const defaults = yield* Result.await(
+    // Both defaults in one statement: the organization's, which every colleague
+    // sees, and the caller's own override of it. They are returned apart rather
+    // than pre-resolved because the client labels the two rows differently; the
+    // member who picked the organization's own default is one row answering to
+    // both. Bounded at two: only one of each can exist.
+    const defaultRows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select()
+          .select({
+            ...getTableColumns(templateLookupFormats),
+            // Non-null exactly on the row the caller chose for themselves.
+            chosenBy: templateLookupFormatUserDefaults.userId,
+          })
           .from(templateLookupFormats)
+          .leftJoin(
+            templateLookupFormatUserDefaults,
+            and(
+              eq(
+                templateLookupFormatUserDefaults.formatId,
+                templateLookupFormats.id,
+              ),
+              eq(templateLookupFormatUserDefaults.userId, user.id),
+              eq(
+                templateLookupFormatUserDefaults.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(templateLookupFormatUserDefaults.registry, query.registry),
+            ),
+          )
           .where(
             and(
               eq(
@@ -90,20 +115,29 @@ const listLookupFormats = createSafeRootHandler(
                 session.activeOrganizationId,
               ),
               eq(templateLookupFormats.registry, query.registry),
-              eq(
-                templateLookupFormats.preference,
-                LOOKUP_FORMAT_PREFERENCE.DEFAULT,
+              or(
+                isNotNull(templateLookupFormatUserDefaults.userId),
+                eq(
+                  templateLookupFormats.preference,
+                  LOOKUP_FORMAT_PREFERENCE.DEFAULT,
+                ),
               ),
             ),
           )
-          .limit(1),
+          .limit(2),
       ),
     );
-    const defaultFormat = defaults.at(0);
+    const defaultFormat = defaultRows.find(
+      (row) => row.preference === LOOKUP_FORMAT_PREFERENCE.DEFAULT,
+    );
+    const userDefaultFormat = defaultRows.find((row) => row.chosenBy !== null);
     return Result.ok({
       ...page,
       items: page.items.map(toResponse),
       defaultFormat: defaultFormat ? toResponse(defaultFormat) : null,
+      userDefaultFormat: userDefaultFormat
+        ? toResponse(userDefaultFormat)
+        : null,
     });
   },
 );

@@ -22,6 +22,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { REGISTRY_DEFAULT_FORMAT } from "@/components/templates/registry-format-config";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
 import { usePermissions } from "@/hooks/use-permissions";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -81,21 +82,35 @@ export const useCompanyFormatLibrary = ({
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
-  const defaultFormat = saved.data?.pages.at(0)?.defaultFormat ?? null;
+  const firstPage = saved.data?.pages.at(0);
+  const defaultFormat = firstPage?.defaultFormat ?? null;
+  const userDefaultFormat = firstPage?.userDefaultFormat ?? null;
   const pageFormats = saved.data
     ? saved.data.pages.flatMap((page) => page.items)
     : [];
-  const formats = defaultFormat
-    ? [
-        defaultFormat,
-        ...pageFormats.filter((item) => item.id !== defaultFormat.id),
-      ]
-    : pageFormats;
+  // Both defaults come back whole, so either is selectable even when its row
+  // sits on a page the picker has not fetched. They lead the list in the order
+  // they take effect, and the same row chosen twice is listed once.
+  const pinned: typeof pageFormats = [];
+  for (const candidate of [userDefaultFormat, defaultFormat]) {
+    if (candidate && !pinned.some((item) => item.id === candidate.id)) {
+      pinned.push(candidate);
+    }
+  }
+  const pinnedIds = new Set(pinned.map((item) => item.id));
+  const formats = [
+    ...pinned,
+    ...pageFormats.filter((item) => !pinnedIds.has(item.id)),
+  ];
+  const effectiveDefault = userDefaultFormat ?? defaultFormat;
   const format =
-    draftFormat ?? defaultFormat?.format ?? REGISTRY_DEFAULT_FORMAT[registry];
+    draftFormat ??
+    effectiveDefault?.format ??
+    REGISTRY_DEFAULT_FORMAT[registry];
   const selected = formats.find(
     (item) =>
-      item.id === (selectedId ?? defaultFormat?.id) && item.format === format,
+      item.id === (selectedId ?? effectiveDefault?.id) &&
+      item.format === format,
   );
   const builtIn = !selected && format === REGISTRY_DEFAULT_FORMAT[registry];
   const choose = (id: string | null) => {
@@ -142,16 +157,33 @@ export const useCompanyFormatLibrary = ({
     },
     onError,
   });
+  // No permission gate: a personal default changes nothing a colleague sees.
+  const setMyDefault = useMutation({
+    mutationFn: async (formatId: NonNullable<typeof selected>["id"] | null) =>
+      unwrapEden(
+        await api.templates["lookup-formats"]["my-default"].post({
+          registry,
+          formatId,
+        }),
+      ),
+    onSuccess: async () => {
+      stellaToast.success(t("templates.lookupFormatSaved"));
+      await queryClient.invalidateQueries({ queryKey });
+    },
+    onError,
+  });
   return {
     saved,
     formats,
     defaultFormat,
+    userDefaultFormat,
     selected,
     builtIn,
     format,
     choose,
     create,
     setDefault,
+    setMyDefault,
     name,
     setName,
     canCreate,
@@ -191,6 +223,14 @@ export const CompanyFormatPicker = ({ library }: CompanyFormatLibraryProps) => {
                 {t("templates.defaultLookupFormat")}
               </span>
             )}
+            {/* Only where the two disagree: labelling one row twice says
+                nothing the organization badge has not already said. */}
+            {item.id === library.userDefaultFormat?.id &&
+              item.id !== library.defaultFormat?.id && (
+                <span className="text-muted-foreground ms-2 text-xs">
+                  {t("templates.myDefaultLookupFormat")}
+                </span>
+              )}
           </SelectItem>
         ))}
         {library.saved.hasNextPage && (
@@ -219,26 +259,59 @@ export const CompanyFormatLibrary = ({
   const isDefault = library.selected
     ? library.selected.id === library.defaultFormat?.id
     : library.builtIn && library.defaultFormat === null;
+  // The built-in entry is how a personal default is given up, so its button
+  // clears rather than sets; with nothing to clear it has nothing to do.
+  const isMyDefault =
+    library.selected !== undefined &&
+    library.selected.id === library.userDefaultFormat?.id;
+  const clearsMyDefault = library.builtIn;
+  const myDefaultLabel = ((): TranslationKey => {
+    if (isMyDefault) {
+      return "templates.myDefaultLookupFormat";
+    }
+    return clearsMyDefault
+      ? "templates.clearMyLookupFormatDefault"
+      : "templates.useAsMyLookupFormatDefault";
+  })();
+  const choosable = library.selected !== undefined || library.builtIn;
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-xs">
         {t("templates.lookupFormatsSharedHint")}
       </p>
-      {library.canUpdate &&
-        (library.selected !== undefined || library.builtIn) && (
+      {choosable && (
+        <div className="flex flex-wrap gap-2">
+          {library.canUpdate && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isDefault || library.setDefault.isPending}
+              onClick={() =>
+                library.setDefault.mutate(library.selected?.id ?? null)
+              }
+            >
+              {isDefault
+                ? t("templates.defaultLookupFormat")
+                : t("billing.rates.setAsDefault")}
+            </Button>
+          )}
+          {/* Ungated: this is the caller's own preference, not the firm's. */}
           <Button
             size="sm"
             variant="outline"
-            disabled={isDefault || library.setDefault.isPending}
+            disabled={
+              isMyDefault ||
+              (clearsMyDefault && library.userDefaultFormat === null) ||
+              library.setMyDefault.isPending
+            }
             onClick={() =>
-              library.setDefault.mutate(library.selected?.id ?? null)
+              library.setMyDefault.mutate(library.selected?.id ?? null)
             }
           >
-            {isDefault
-              ? t("templates.defaultLookupFormat")
-              : t("billing.rates.setAsDefault")}
+            {t(myDefaultLabel)}
           </Button>
-        )}
+        </div>
+      )}
       {library.canCreate && (
         <div className="flex items-end gap-2">
           <Field className="min-w-0 flex-1">

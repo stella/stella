@@ -4329,6 +4329,7 @@ type Messages = {
     "checkResultsTitle": "Template check";
     "checkTemplate": "Check template";
     "checkWarnings": "{count, plural, one {# warning} other {# warnings}}";
+    "clearMyLookupFormatDefault": "Clear my default";
     "conditionAddGroup": "Add group";
     "conditionAddRule": "Add rule";
     "conditionAnd": "And";
@@ -4438,10 +4439,11 @@ type Messages = {
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
     "lookupFormatSaved": "Output format saved";
-    "lookupFormatsSharedHint": "Saved formats are available to colleagues in this organization.";
+    "lookupFormatsSharedHint": "Saved formats are available to colleagues in this organization. Your own default applies to you alone.";
     "moveToCategory": "Move to category";
     "moveToMatter": "Save to matter";
     "moveToMatterAnyway": "Save anyway";
+    "myDefaultLookupFormat": "My default";
     "newFromTemplate": "New document from template";
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.";
     "newTemplate": "New template";
@@ -4618,6 +4620,7 @@ type Messages = {
     "uploadDifferent": "Upload a different template";
     "uploadTitle": "Create a template";
     "usageGuidance": "Usage guidance";
+    "useAsMyLookupFormatDefault": "Use as my default";
     "useTemplate": "Use template";
     "useTemplateHint": "Fill in the fields, then download the document or save it to a matter.";
     "usedTimes": "Used {count, plural, one {# time} other {# times}}";
