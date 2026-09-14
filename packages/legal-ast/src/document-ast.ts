@@ -124,6 +124,24 @@ export const APPARATUS_ROLES = [
 
 export type ApparatusRole = (typeof APPARATUS_ROLES)[number];
 
+/**
+ * The apparatus roles that carry the publisher's own summary of the decision:
+ * the text a reader recognises the case by. `apparatus` and `counsel` are
+ * apparatus too and summarise nothing — the first is unnamed publisher
+ * matter, the second is who appeared.
+ *
+ * One list, because two surfaces resolve over it and must not drift: the API
+ * reads a decision's headnote from these paragraphs before it reads any
+ * metadata key, and the reader opens a decision with them.
+ */
+export const PUBLISHER_SUMMARY_ROLES = [
+  "headnotes",
+  "syllabus",
+  "summary",
+] as const satisfies readonly ApparatusRole[];
+
+export type PublisherSummaryRole = (typeof PUBLISHER_SUMMARY_ROLES)[number];
+
 export type ParagraphNote = {
   type: "footnote";
   /** The note's mark as printed ("3", "[3]", "*"). */

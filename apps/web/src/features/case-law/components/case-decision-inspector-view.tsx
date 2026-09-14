@@ -200,6 +200,7 @@ export const CaseDecisionInspectorView = ({
                 activeMatchIndex={0}
                 citationAnchors={citationAnchors}
                 decision={decision}
+                decisionId={decisionId}
                 landingAnchorId={payload.anchorId}
                 provisionAnchors={provisionAnchors}
                 searchQuery={payload.searchQuery ?? ""}

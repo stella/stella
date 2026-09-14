@@ -347,9 +347,8 @@
     }
   },
   "apps/landing": {
-    "count": 28,
+    "count": 27,
     "files": {
-      "apps/landing/src/data/ai-facts.ts": 1,
       "apps/landing/src/data/product-story.ts": 8,
       "apps/landing/src/data/products/pillars.ts": 2,
       "apps/landing/src/data/products/types.ts": 4,
@@ -368,7 +367,7 @@
     }
   },
   "apps/web": {
-    "count": 411,
+    "count": 410,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -438,7 +437,7 @@
       "apps/web/src/components/jurisdiction-picker.tsx": 1,
       "apps/web/src/components/legal-reader/annotations/selection-anchor.ts": 2,
       "apps/web/src/components/legal-reader/document-ast-text.tsx": 3,
-      "apps/web/src/components/legal-reader/reader-outline.ts": 2,
+      "apps/web/src/components/legal-reader/reader-outline.ts": 1,
       "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx": 1,
       "apps/web/src/components/office/silurus-office-viewer.tsx": 1,
       "apps/web/src/components/organization/invite-member-dialog.tsx": 1,
