@@ -121,8 +121,19 @@ export const SavedSearches = ({
     enabled: isOpen,
   });
 
-  const invalidateSavedSearches = async () =>
-    await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
+  const mutationCallbacks = {
+    onSuccess: async () => {
+      setDialog({ type: "closed" });
+      await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
+    },
+    onError: (error: Error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+    },
+  };
 
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -141,17 +152,7 @@ export const SavedSearches = ({
         }),
       );
     },
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await invalidateSavedSearches();
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+    ...mutationCallbacks,
   });
 
   const renameMutation = useMutation({
@@ -165,33 +166,13 @@ export const SavedSearches = ({
       unwrapEden(
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await invalidateSavedSearches();
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+    ...mutationCallbacks,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
       unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await invalidateSavedSearches();
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+    ...mutationCallbacks,
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
