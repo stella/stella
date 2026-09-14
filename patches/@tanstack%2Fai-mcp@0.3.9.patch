@@ -1,0 +1,169 @@
+diff --git a/dist/esm/client.js b/dist/esm/client.js
+index 9dc9bb295317d40eae4418e60e51547a52c1f418..02f90cc212f0593947efe697b121088860fbba92 100644
+--- a/dist/esm/client.js
++++ b/dist/esm/client.js
+@@ -45,7 +45,7 @@ var MCPClientImpl = class {
+ 				const serverTool = available.get(def.name);
+ 				if (!serverTool) throw new MCPToolNotFoundError(def.name);
+ 				if (requiresTaskExecution(serverTool)) throw new MCPTaskRequiredToolError(def.name);
+-				const bound = def.server(makeMcpExecute(this.#client, def.name, Boolean(def.outputSchema)));
++				const bound = def.server(makeMcpExecute(this.#client, def.name, Boolean(def.outputSchema), options.callToolTimeoutMs));
+ 				const existingMcp = bound.metadata?.mcp;
+ 				const mcpBase = existingMcp !== null && typeof existingMcp === "object" ? existingMcp : {};
+ 				return {
+@@ -65,7 +65,8 @@ var MCPClientImpl = class {
+ 			const defs = (await this.#client.listTools()).tools;
+ 			tools = toServerTools(this.#client, defs, {
+ 				prefix: this.prefix,
+-				lazy: options.lazy
++				lazy: options.lazy,
++				callToolTimeoutMs: options.callToolTimeoutMs
+ 			});
+ 		}
+ 		const seen = /* @__PURE__ */ new Set();
+diff --git a/dist/esm/tools.d.ts b/dist/esm/tools.d.ts
+index 3726af5b90a5ba357a5dd5e82e123a852c910161..c005645e4e5c4eb6be936ec3c86752f1b2ebc8dd 100644
+--- a/dist/esm/tools.d.ts
++++ b/dist/esm/tools.d.ts
+@@ -32,7 +32,7 @@ export declare function mcpContentToTanstack(content: Array<any>): string | Arra
+  *   validation in `executeServerTool` validates MCP's typed payload rather than
+  *   a JSON-in-text blob. Otherwise normalize `content[]` → string | ContentPart[].
+  */
+-export declare function makeMcpExecute(client: Client, mcpName: string, preferStructured: boolean): (args: unknown, ctx?: {
++export declare function makeMcpExecute(client: Client, mcpName: string, preferStructured: boolean, callToolTimeoutMs?: number): (args: unknown, ctx?: {
+     abortSignal?: AbortSignal;
+ }) => Promise<{} | null>;
+ /**
+diff --git a/dist/esm/tools.js b/dist/esm/tools.js
+index 9eb749467d780e9f0e609923eb7d08df8b3c1412..9e43512335fffd76890154d45f442411b94ed9d7 100644
+--- a/dist/esm/tools.js
++++ b/dist/esm/tools.js
+@@ -81,13 +81,16 @@ function mcpContentToTanstack(content) {
+ *   validation in `executeServerTool` validates MCP's typed payload rather than
+ *   a JSON-in-text blob. Otherwise normalize `content[]` → string | ContentPart[].
+ */
+-function makeMcpExecute(client, mcpName, preferStructured) {
++function makeMcpExecute(client, mcpName, preferStructured, callToolTimeoutMs) {
+ 	return async (args, ctx) => {
+ 		ctx?.abortSignal?.throwIfAborted();
+ 		const result = await client.callTool({
+ 			name: mcpName,
+ 			arguments: args ?? {}
+-		}, void 0, { signal: ctx?.abortSignal });
++		}, void 0, {
++			...ctx?.abortSignal === void 0 ? {} : { signal: ctx.abortSignal },
++			...callToolTimeoutMs === void 0 ? {} : { timeout: callToolTimeoutMs }
++		});
+ 		if (result.isError) {
+ 			const text = Array.isArray(result.content) ? mcpContentToTanstack(result.content) : void 0;
+ 			const detail = typeof text === "string" ? text : text === void 0 ? void 0 : JSON.stringify(text);
+@@ -124,7 +127,7 @@ function toServerTools(client, defs, options) {
+ 			...def.outputSchema ? { outputSchema: def.outputSchema } : {},
+ 			...options.lazy ? { lazy: true } : {},
+ 			metadata: { mcp: toolMcpMetadata(def, options.prefix) },
+-			execute: makeMcpExecute(client, def.name, Boolean(def.outputSchema))
++			execute: makeMcpExecute(client, def.name, Boolean(def.outputSchema), options.callToolTimeoutMs)
+ 		};
+ 	});
+ }
+diff --git a/dist/esm/types.d.ts b/dist/esm/types.d.ts
+index d03874bf1d744a7591eb8673c25ce6296b6d1faa..e145bb5c5c436d1e8983c69ff495f64cefbd3b36 100644
+--- a/dist/esm/types.d.ts
++++ b/dist/esm/types.d.ts
+@@ -119,6 +119,8 @@ export interface MCPClientOptions {
+ export interface ToolsOptions {
+     /** Mark tools `lazy: true` to defer schema-sending via LazyToolManager. */
+     lazy?: boolean;
++    /** Override the MCP SDK request timeout for calls made by these tools. */
++    callToolTimeoutMs?: number;
+ }
+ /**
+  * Per-element ServerTool type from a tool definition. `def.server(execute)`
+diff --git a/src/client.ts b/src/client.ts
+index 274fe9f4f3f15f86b47471c51a1b496478451f2f..126c5cc0bbb744d4a87d38c00f81194908dd1139 100644
+--- a/src/client.ts
++++ b/src/client.ts
+@@ -178,7 +178,12 @@ class MCPClientImpl<
+         if (requiresTaskExecution(serverTool))
+           throw new MCPTaskRequiredToolError(def.name)
+         const bound = def.server(
+-          makeMcpExecute(this.#client, def.name, Boolean(def.outputSchema)),
++          makeMcpExecute(
++            this.#client,
++            def.name,
++            Boolean(def.outputSchema),
++            options.callToolTimeoutMs,
++          ),
+         ) as ServerTool
+         // A caller-supplied definition may already carry its own `mcp` block,
+         // and `metadata.mcp` is untyped there — only spread it when it really
+@@ -214,6 +219,7 @@ class MCPClientImpl<
+       tools = toServerTools(this.#client, defs, {
+         prefix: this.prefix,
+         lazy: options.lazy,
++        callToolTimeoutMs: options.callToolTimeoutMs,
+       })
+     }
+ 
+diff --git a/src/tools.ts b/src/tools.ts
+index 422261b10a081db99b4892a02cc6fa8ab5df2047..12ae1fabfc833dc6e0d7bed82b4a30d945b40047 100644
+--- a/src/tools.ts
++++ b/src/tools.ts
+@@ -9,6 +9,7 @@ import type { McpServerTool, McpToolMetadata } from './types'
+ interface ConvertOptions {
+   prefix?: string
+   lazy?: boolean
++  callToolTimeoutMs?: number
+ }
+ 
+ /** Reads the MCP Apps `_meta.ui.resourceUri` link from a tool def, if present. */
+@@ -103,13 +104,21 @@ export function makeMcpExecute(
+   client: Client,
+   mcpName: string,
+   preferStructured: boolean,
++  callToolTimeoutMs?: number,
+ ) {
+   return async (args: unknown, ctx?: { abortSignal?: AbortSignal }) => {
+     ctx?.abortSignal?.throwIfAborted()
+     const result = await client.callTool(
+       { name: mcpName, arguments: (args ?? {}) as Record<string, unknown> },
+       undefined,
+-      { signal: ctx?.abortSignal },
++      {
++        ...(ctx?.abortSignal === undefined
++          ? {}
++          : { signal: ctx.abortSignal }),
++        ...(callToolTimeoutMs === undefined
++          ? {}
++          : { timeout: callToolTimeoutMs }),
++      },
+     )
+     if (result.isError) {
+       const text = Array.isArray(result.content)
+@@ -173,7 +182,12 @@ export function toServerTools(
+         metadata: {
+           mcp: toolMcpMetadata(def, options.prefix),
+         },
+-        execute: makeMcpExecute(client, def.name, Boolean(def.outputSchema)),
++        execute: makeMcpExecute(
++          client,
++          def.name,
++          Boolean(def.outputSchema),
++          options.callToolTimeoutMs,
++        ),
+       }
+       return tool
+     })
+diff --git a/src/types.ts b/src/types.ts
+index d70865e991a99eba198f23f10c3dfed75cb95add..b8f43e6b817d20f7dbd10b7577c570d012384b09 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -117,6 +117,8 @@ export interface MCPClientOptions {
+ export interface ToolsOptions {
+   /** Mark tools `lazy: true` to defer schema-sending via LazyToolManager. */
+   lazy?: boolean
++  /** Override the MCP SDK request timeout for calls made by these tools. */
++  callToolTimeoutMs?: number
+ }
+ 
+ /**

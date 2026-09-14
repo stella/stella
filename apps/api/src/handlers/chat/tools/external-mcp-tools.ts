@@ -275,7 +275,6 @@ const loadConnectorTools = async ({
     (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
       const createdClient = await dependencies.createMcpClientForConnection({
         organizationId,
-        requestTimeoutMs: MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
         row,
         safeDb,
         userId,
@@ -384,7 +383,9 @@ export const loadMcpConnectorTools = async ({
 }): Promise<AnyServerTool[]> => {
   const definitions = getExternalMcpToolDefinitionsForConnector(row);
   if (definitions === null) {
-    return await client.tools();
+    return await client.tools({
+      callToolTimeoutMs: MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
+    });
   }
 
   const allowedDefinitions = selectAllowedExternalMcpToolDefinitions({
@@ -395,7 +396,9 @@ export const loadMcpConnectorTools = async ({
     return [];
   }
 
-  return await client.tools(allowedDefinitions);
+  return await client.tools(allowedDefinitions, {
+    callToolTimeoutMs: MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
+  });
 };
 
 export const buildExternalMcpSystemHint = (

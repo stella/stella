@@ -121,9 +121,9 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       userId,
     });
 
-    expect(createMcpClientForConnectionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ requestTimeoutMs: 5 * 60_000 }),
-    );
+    expect(fakeClient.tools).toHaveBeenCalledWith({
+      callToolTimeoutMs: 5 * 60_000,
+    });
     await loaded.close();
   });
 
