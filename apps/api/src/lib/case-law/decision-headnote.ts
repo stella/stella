@@ -30,13 +30,46 @@ export const truncateDecisionHeadnote = (text: string) => {
   };
 };
 
+/** Whitespace inside a line. A break between lines is not it. */
+const HORIZONTAL_WHITESPACE = /[^\S\n]+/gu;
+
+/** Every spelling of a line break a publisher payload arrives with. */
+const LINE_BREAK = /\r\n?|\n/u;
+
 /**
- * A decision's publisher summary as one line, whole: whitespace runs
- * collapsed, nothing cut. Null means the row has nothing to show.
+ * A decision's publisher summary as the publisher set it, whole: the spacing
+ * inside each line collapsed, the breaks between them kept as one newline
+ * each. Null means the row has nothing to show.
+ *
+ * The breaks carry meaning a space cannot: a Czech or Slovak headnote is
+ * often numbered points ("I.", "II.", "III."), and run together they read as
+ * one sentence that contradicts itself. Blank lines collapse to a single
+ * break because the row's budget is spent on words, not on air.
+ *
  * `publisher-summary.ts` owns which source field wins; this helper owns only
- * how that text reads on one line.
+ * how that text reads.
  */
 export const collapseDecisionHeadnote = (raw: unknown): string | null => {
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const lines: string[] = [];
+  for (const line of raw.split(LINE_BREAK)) {
+    const collapsed = line.replace(HORIZONTAL_WHITESPACE, " ").trim();
+    if (collapsed.length > 0) {
+      lines.push(collapsed);
+    }
+  }
+  const text = lines.join("\n");
+  return text.length === 0 ? null : text;
+};
+
+/**
+ * One term of a classification. A term is one line by definition, so the
+ * breaks a headnote keeps are spaces here: a tag drawn over two lines is a
+ * tag the reader has to work out.
+ */
+const collapseDecisionTerm = (raw: unknown): string | null => {
   if (typeof raw !== "string") {
     return null;
   }
@@ -66,7 +99,7 @@ export const normalizeDecisionKeywords = (raw: unknown) => {
   }
   const terms: string[] = [];
   for (const value of raw) {
-    const term = collapseDecisionHeadnote(value);
+    const term = collapseDecisionTerm(value);
     // A repeated term is a publisher's bookkeeping, not a second tag.
     if (term !== null && !terms.includes(term)) {
       terms.push(term);

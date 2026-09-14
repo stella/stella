@@ -7,6 +7,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   collapseDecisionHeadnote,
   normalizeDecisionHeadnote,
+  normalizeDecisionKeywords,
   truncateDecisionHeadnote,
 } from "@/api/lib/case-law/decision-headnote";
 import { LIMITS } from "@/api/lib/limits";
@@ -33,18 +34,62 @@ describe("headnote text fits one row", () => {
           LIMITS.caseLawHeadnoteMaxChars,
         );
         expect(headnote.text).toBe(headnote.text.trim());
-        expect(headnote.text).not.toMatch(/\s{2}/u);
-        expect(headnote.text).not.toMatch(/[\n\t]/u);
+        // One break between lines, one space inside them, and nothing else:
+        // the publisher's structure survives, their typing does not.
+        expect(headnote.text).not.toMatch(/[^\S\n]{2}/u);
+        expect(headnote.text).not.toMatch(/\n\s|\s\n/u);
+        expect(headnote.text).not.toMatch(/[\t\r]/u);
         expect(headnote.text.isWellFormed()).toBe(true);
       }),
       propertyConfig(),
     );
   });
 
-  test("short text passes through with its whitespace collapsed", () => {
+  test("short text passes through with its spacing collapsed", () => {
+    expect(normalizeDecisionHeadnote("  Nájemní   smlouva \tvýpověď ")).toEqual(
+      { text: "Nájemní smlouva výpověď", truncated: false },
+    );
+  });
+
+  test("the publisher's numbered points keep their own lines", () => {
+    // How a Constitutional Court headnote is written, and why a flattened one
+    // reads as a single sentence saying three different things.
     expect(
-      normalizeDecisionHeadnote("  Nájemní   smlouva\n\tvýpověď "),
-    ).toEqual({ text: "Nájemní smlouva výpověď", truncated: false });
+      normalizeDecisionHeadnote(
+        "I. První bod.\r\n\r\n\r\nII.  Druhý   bod.\nIII. Třetí bod.",
+      ),
+    ).toEqual({
+      text: "I. První bod.\nII. Druhý bod.\nIII. Třetí bod.",
+      truncated: false,
+    });
+  });
+
+  test("a break between lines is not a line of its own", () => {
+    expect(normalizeDecisionHeadnote("\n\n  Jediná věta.  \n \t \n")).toEqual({
+      text: "Jediná věta.",
+      truncated: false,
+    });
+  });
+
+  test("a cut falling on a break leaves no break behind", () => {
+    // The first point fills the row, and the second opens with a word too
+    // long to fit, so the only boundary the cut can take is the break itself.
+    const first = "I. ".concat("a".repeat(LIMITS.caseLawHeadnoteMaxChars - 5));
+    const headnote = normalizeDecisionHeadnote(`${first}\n${"II".repeat(20)}`);
+
+    expect(headnote?.truncated).toBe(true);
+    expect(headnote?.text).toMatch(/…$/u);
+    expect(headnote?.text).not.toMatch(/\s…$/u);
+    expect(headnote?.text.length).toBeLessThanOrEqual(
+      LIMITS.caseLawHeadnoteMaxChars,
+    );
+  });
+
+  test("a term of a classification is one line whatever the publisher typed", () => {
+    expect(normalizeDecisionKeywords(["Nájem\nbytu", "  Výpověď  "])).toEqual({
+      items: ["Nájem bytu", "Výpověď"],
+      omitted: 0,
+    });
   });
 
   test("long text is cut on a word boundary and reports truncation", () => {

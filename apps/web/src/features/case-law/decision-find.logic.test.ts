@@ -145,6 +145,28 @@ describe("what a decision row shows a find", () => {
     expect(classified.get("headnote")).toBe("Nájem bytu · Výpověď");
   });
 
+  test("carries a headnote's points as the cell draws them", () => {
+    // The cell draws the publisher's breaks, so the find reads them too: a
+    // flattened reading would keep a row for a phrase spanning the break and
+    // then mark nothing in it.
+    const points = decisionFindRowText({
+      answersByKey: ANSWERS,
+      decision: {
+        ...TERMINATION,
+        headnote: {
+          type: TEXT_FIELD_TYPE.PRESENT,
+          text: "I. Vypoved z najmu.\nII. Pisemna forma.",
+          truncated: false,
+        },
+      },
+      questionColumns: [],
+    });
+
+    expect(points.get("headnote")).toBe(
+      "I. Vypoved z najmu.\nII. Pisemna forma.",
+    );
+  });
+
   test("carries the answer a question column holds", () => {
     expect(text.get(questionColumnId("outcome"))).toBe("Odvolání zamítnuto");
   });
