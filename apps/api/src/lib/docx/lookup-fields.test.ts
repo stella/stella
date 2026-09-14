@@ -3,8 +3,13 @@ import JSZip from "jszip";
 
 import { parseResRecord } from "@stll/business-registries/ares";
 import { ARES_DEFAULT_FORMAT } from "@stll/business-registries/ares/default-format";
-import { PREVIOUS_DEFAULT_FORMATS } from "@stll/business-registries/default-formats";
+import {
+  BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
+  PREVIOUS_DEFAULT_FORMATS,
+} from "@stll/business-registries/default-formats";
+import type { EdgarCompany } from "@stll/business-registries/edgar";
 import { KrsValidationError } from "@stll/business-registries/krs";
+import type { OrsrCompany } from "@stll/business-registries/orsr";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type {
@@ -111,7 +116,7 @@ describe("isPlausibleLookupValue", () => {
 describe("renderLookupHit", () => {
   test("renders a registry-specific identification reference", () => {
     expect(renderLookupHit(KRS_HIT)).toBe(
-      "**Żabka Polska sp. z o.o.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, KRS: 0000123456",
+      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
   });
 
@@ -121,9 +126,11 @@ describe("renderLookupHit", () => {
         ...KRS_HIT,
         address: { ...KRS_ADDRESS, textAddress: null },
       }),
-    ).toBe("**Żabka Polska sp. z o.o.**, adres: Poznań, KRS: 0000123456");
+    ).toBe(
+      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, numer w Krajowym Rejestrze Sądowym: 0000123456",
+    );
     expect(renderLookupHit({ ...KRS_HIT, address: null })).toBe(
-      "**Żabka Polska sp. z o.o.**, KRS: 0000123456",
+      "**Żabka Polska sp. z o.o.**, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
   });
 
@@ -172,7 +179,7 @@ describe("renderLookupHit", () => {
     } satisfies BusinessRegistryHit;
 
     expect(renderLookupOutput(null, hit)).toBe(
-      "**ROLLS-ROYCE PLC**, a public limited company registered in England and Wales under company number 01003142, whose registered office is at Kings Place, 90 York Way, London, United Kingdom, N1 9FX",
+      "**ROLLS-ROYCE PLC**, public limited company registered in England and Wales (company number 01003142) whose registered office is at Kings Place, 90 York Way, London, United Kingdom, N1 9FX",
     );
   });
 
@@ -238,8 +245,90 @@ describe("renderLookupHit", () => {
     } satisfies BusinessRegistryHit;
 
     expect(renderLookupOutput(null, hit)).toBe(
-      "**EXEMPLE SA**, SIREN 552081317, siège social : 22 avenue de Wagram, 75008 Paris, SIRET 55208131701234",
+      "**EXEMPLE SA**, dont le siège social est situé 22 avenue de Wagram, 75008 Paris, numéro SIREN 552 081 317",
     );
+    expect(
+      renderLookupOutput("SIREN [SIREN spaced], SIRET [SIRET spaced]", hit),
+    ).toBe("SIREN 552 081 317, SIRET 552 081 317 01234");
+  });
+
+  test("renders a French head-office hit without a branch SIRET", () => {
+    const hit = {
+      registry: "recherche-entreprises",
+      id: "552081317",
+      name: "EXEMPLE SA",
+      legalForm: "5599",
+      address: null,
+      registryUrl: "https://example.invalid/fr/552081317",
+      details: {
+        registry: "recherche-entreprises",
+        company: {
+          siren: "552081317",
+          name: "EXEMPLE SA",
+          legalFormCode: "5599",
+          shortName: null,
+          headOffice: null,
+          matchedEstablishment: null,
+          status: { type: "active" },
+          registeredAt: null,
+          ceasedAt: null,
+          directors: [],
+          registryUrl: "https://example.invalid/fr/552081317",
+        },
+      },
+    } satisfies BusinessRegistryHit;
+    expect(
+      renderLookupOutput("SIREN [SIREN spaced] SIRET [SIRET spaced]", hit),
+    ).toBe("SIREN 552 081 317 SIRET");
+  });
+
+  test.each([
+    ["942404110", "94-2404110"],
+    // EDGAR has returned a punctuated EIN before: it is passed through, not
+    // punctuated twice.
+    ["94-2404110", "94-2404110"],
+    [null, ""],
+  ])("punctuates the EDGAR EIN %s for a US party block", (ein, dashed) => {
+    const company = {
+      cik: "0000320193",
+      name: "Apple Inc.",
+      sic: null,
+      sicDescription: null,
+      tickers: [],
+      exchanges: [],
+      ein,
+      addresses: { mailing: null, business: null },
+      formerNames: [],
+      recentFilings: [],
+      status: { type: "active" },
+      registryUrl: "https://example.invalid/us/0000320193",
+    } satisfies EdgarCompany;
+    const hit = {
+      registry: "edgar",
+      id: company.cik,
+      name: company.name,
+      legalForm: null,
+      address: null,
+      registryUrl: company.registryUrl,
+      details: { registry: "edgar", company },
+    } satisfies BusinessRegistryHit;
+    expect(renderLookupOutput("IRS No. [EIN dashed]", hit)).toBe(
+      `IRS No. ${dashed}`.trim(),
+    );
+  });
+
+  test("groups a Norwegian organisasjonsnummer", () => {
+    const hit = {
+      registry: "brreg",
+      id: "923609016",
+      name: "EXEMPLE AS",
+      legalForm: "AS",
+      address: null,
+      registryUrl: "https://example.invalid/no/923609016",
+    } satisfies BusinessRegistryHit;
+    expect(
+      renderLookupOutput("organisasjonsnummer [registry number spaced]", hit),
+    ).toBe("organisasjonsnummer 923 609 016");
   });
 });
 
@@ -414,6 +503,66 @@ describe("renderLookupOutput", () => {
       );
     },
   );
+  test.each([
+    ["Mestský súd Bratislava III", "B", "Mestského súdu Bratislava III"],
+    ["Okresný súd Trenčín", "R", "Okresného súdu Trenčín"],
+    // The extract omitted the name: the insert letter still resolves.
+    [null, "V", "Mestského súdu Košice"],
+    // Renamed by the 2023 court map — not inflected from a stale name.
+    ["Okresný súd Bratislava I", "B", "Mestského súdu Bratislava III"],
+    [null, "Z", ""],
+  ])(
+    "renders the declined ORSR court token from %s",
+    (courtName, court, genitive) => {
+      const company = {
+        ico: "31322832",
+        name: "ESET, spol. s r.o.",
+        legalForm: "Spoločnosť s ručením obmedzeným",
+        address: null,
+        courtFile: { court, courtName, section: "Sro", insertNumber: "3586" },
+        establishedAt: null,
+        terminatedAt: null,
+        shareCapital: null,
+        shareCapitalPaid: null,
+        actingClause: null,
+        status: { type: "active" },
+        statutoryBodies: [],
+        stakeholders: [],
+        registryUrl: "https://example.invalid/sk/31322832",
+      } satisfies OrsrCompany;
+      const hit = {
+        registry: "orsr",
+        id: company.ico,
+        name: company.name,
+        legalForm: company.legalForm,
+        address: null,
+        registryUrl: company.registryUrl,
+        details: { registry: "orsr", company },
+      } satisfies BusinessRegistryHit;
+      expect(
+        renderLookupOutput("v Obchodnom registri [court genitive]", hit),
+      ).toBe(`v Obchodnom registri ${genitive}`.trim());
+      expect(renderLookupOutput("IČO: [registry number spaced]", hit)).toBe(
+        "IČO: 31 322 832",
+      );
+    },
+  );
+  test("groups a Slovak IČO on a search row carrying no extract", () => {
+    const hit = {
+      registry: "orsr",
+      id: "00151653",
+      name: "Slovenská sporiteľňa, a.s.",
+      legalForm: null,
+      address: null,
+      registryUrl: "https://example.invalid/sk/00151653",
+    } satisfies BusinessRegistryHit;
+    expect(renderLookupOutput("IČO: [registry number spaced]", hit)).toBe(
+      "IČO: 00 151 653",
+    );
+    expect(
+      renderLookupOutput("v Obchodnom registri [court genitive]", hit),
+    ).toBe("v Obchodnom registri");
+  });
   test("renders ARES output tokens as readable company particulars", () => {
     const company = {
       ...parseResRecord({
@@ -501,7 +650,7 @@ describe("renderLookupOutput", () => {
     const fallback =
       "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań";
     expect(renderLookupOutput(null, KRS_HIT)).toBe(
-      "**Żabka Polska sp. z o.o.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, KRS: 0000123456",
+      "**Żabka Polska sp. z o.o.**, siedziba: Poznań, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000123456",
     );
     expect(renderLookupOutput("  ", KRS_HIT)).toBe(fallback);
     // A template of only unknown tokens renders empty → same fallback.
@@ -1488,4 +1637,413 @@ describe("lookup formats are addressed by their keys", () => {
     expect(text).toContain(NAME_RENDER);
     expect(text).toContain(KRS_RENDER);
   });
+});
+
+/**
+ * Every built-in default is a party-identification clause, so it has to read
+ * correctly both for a complete record and for one missing particulars: a
+ * company with no share capital must not produce a dangling label.
+ */
+describe("built-in party clauses", () => {
+  const textAddressOf = (textAddress: string | null) =>
+    textAddress === null
+      ? null
+      : {
+          line1: null,
+          line2: null,
+          postalCode: null,
+          city: null,
+          region: null,
+          country: null,
+          textAddress,
+        };
+
+  const ORSR_COMPANY = {
+    ico: "31322832",
+    name: "ESET, spol. s r.o.",
+    legalForm: "Spoločnosť s ručením obmedzeným",
+    address: null,
+    courtFile: {
+      court: "B",
+      courtName: "Mestský súd Bratislava III",
+      section: "Sro",
+      insertNumber: "3586",
+    },
+    establishedAt: null,
+    terminatedAt: null,
+    shareCapital: null,
+    shareCapitalPaid: null,
+    actingClause: null,
+    status: { type: "active" },
+    statutoryBodies: [],
+    stakeholders: [],
+    registryUrl: "https://example.invalid/sk/31322832",
+  } satisfies OrsrCompany;
+
+  const orsrHit = (
+    company: OrsrCompany,
+    textAddress: string | null,
+  ): BusinessRegistryHit => ({
+    registry: "orsr",
+    id: company.ico,
+    name: company.name,
+    legalForm: company.legalForm,
+    address: textAddressOf(textAddress),
+    registryUrl: company.registryUrl,
+    details: { registry: "orsr", company },
+  });
+
+  test("ORSR renders the Slovak register citation in full", () => {
+    expect(
+      renderLookupOutput(
+        null,
+        orsrHit(ORSR_COMPANY, "Einsteinova 24, Bratislava"),
+      ),
+    ).toBe(
+      "**ESET, spol. s r.o.**, so sídlom Einsteinova 24, Bratislava, IČO: 31 322 832, zapísaná v Obchodnom registri Mestského súdu Bratislava III, oddiel: Sro, vložka č. 3586/B",
+    );
+  });
+
+  test("ORSR drops the address and the citation when they are absent", () => {
+    expect(renderLookupOutput(null, orsrHit(ORSR_COMPANY, null))).toBe(
+      "**ESET, spol. s r.o.**, IČO: 31 322 832, zapísaná v Obchodnom registri Mestského súdu Bratislava III, oddiel: Sro, vložka č. 3586/B",
+    );
+    expect(
+      renderLookupOutput(
+        null,
+        orsrHit({ ...ORSR_COMPANY, courtFile: null }, null),
+      ),
+    ).toBe("**ESET, spol. s r.o.**, IČO: 31 322 832");
+  });
+
+  test("ORSR drops the citation when the court is not a known one", () => {
+    expect(
+      renderLookupOutput(
+        null,
+        orsrHit(
+          {
+            ...ORSR_COMPANY,
+            courtFile: {
+              ...ORSR_COMPANY.courtFile,
+              court: "Z",
+              courtName: null,
+            },
+          },
+          null,
+        ),
+      ),
+    ).toBe("**ESET, spol. s r.o.**, IČO: 31 322 832");
+  });
+
+  test("ORSR cites the court file in the register's own order", () => {
+    expect(
+      renderLookupOutput("[court file]", orsrHit(ORSR_COMPANY, "Bratislava")),
+    ).toBe("Sro 3586/B");
+    expect(
+      renderLookupOutput(
+        "oddiel [section], vložka [insert]",
+        orsrHit(ORSR_COMPANY, "Bratislava"),
+      ),
+    ).toBe("oddiel Sro, vložka 3586/B");
+  });
+
+  const brregHit = (textAddress: string | null): BusinessRegistryHit => ({
+    registry: "brreg",
+    id: "923609016",
+    name: "EXEMPLE AS",
+    legalForm: "AS",
+    address: textAddressOf(textAddress),
+    registryUrl: "https://example.invalid/no/923609016",
+  });
+
+  test("brreg renders the Norwegian party clause with and without an address", () => {
+    expect(
+      renderLookupOutput(null, brregHit("Snarøyveien 30, 1360 Fornebu")),
+    ).toBe("**EXEMPLE AS**, org.nr. 923 609 016, Snarøyveien 30, 1360 Fornebu");
+    expect(renderLookupOutput(null, brregHit(null))).toBe(
+      "**EXEMPLE AS**, org.nr. 923 609 016",
+    );
+  });
+
+  const prhHit = (textAddress: string | null): BusinessRegistryHit => ({
+    registry: "prh",
+    id: "0992445-3",
+    name: "EXEMPLE OY",
+    legalForm: null,
+    address: textAddressOf(textAddress),
+    registryUrl: "https://example.invalid/fi/0992445-3",
+  });
+
+  test("prh keeps the Y-tunnus hyphenated and parenthesised", () => {
+    expect(
+      renderLookupOutput(null, prhHit("Mannerheimintie 1, Helsinki")),
+    ).toBe("**EXEMPLE OY** (Y-tunnus 0992445-3), Mannerheimintie 1, Helsinki");
+    expect(renderLookupOutput(null, prhHit(null))).toBe(
+      "**EXEMPLE OY** (Y-tunnus 0992445-3)",
+    );
+  });
+
+  const companiesHouseHit = (
+    jurisdiction: string | null,
+    textAddress: string | null,
+  ) =>
+    ({
+      registry: "companies-house",
+      id: "01003142",
+      name: "ROLLS-ROYCE PLC",
+      legalForm: "plc",
+      address: textAddressOf(textAddress),
+      registryUrl: "https://example.invalid/uk/01003142",
+      details: {
+        registry: "companies-house",
+        company: {
+          companyNumber: "01003142",
+          name: "ROLLS-ROYCE PLC",
+          status: { type: "active" },
+          statusDetail: null,
+          type: "plc",
+          subtype: null,
+          jurisdiction,
+          dateOfCreation: null,
+          dateOfCessation: null,
+          registeredOfficeAddress: null,
+          serviceAddress: null,
+          sicCodes: [],
+          accounts: null,
+          confirmationStatement: null,
+          hasCharges: null,
+          hasInsolvencyHistory: null,
+          hasBeenLiquidated: null,
+          previousNames: [],
+          registryUrl: "https://example.invalid/uk/01003142",
+        },
+      },
+    }) satisfies BusinessRegistryHit;
+
+  test.each([
+    ["llp", "limited liability partnership"],
+    ["limited-partnership", "limited partnership"],
+    ["plc", "public limited company"],
+    ["ltd", "private limited company"],
+  ])("companies-house preserves the %s legal form", (type, legalForm) => {
+    const hit = companiesHouseHit("scotland", null);
+    hit.details.company.type = type;
+    expect(renderLookupOutput(null, hit)).toContain(
+      `, ${legalForm} registered in Scotland`,
+    );
+    expect(renderLookupOutput(null, hit)).not.toContain("incorporated");
+  });
+
+  test.each([
+    [
+      "llp",
+      "**ROLLS-ROYCE PLC**, limited liability partnership (company number 01003142)",
+    ],
+    [null, "**ROLLS-ROYCE PLC** (company number 01003142)"],
+  ])(
+    "companies-house handles legal form %s without a full record",
+    (legalForm, expected) => {
+      const { details: _details, ...hit } = companiesHouseHit(null, null);
+      expect(renderLookupOutput(null, { ...hit, legalForm })).toBe(expected);
+    },
+  );
+
+  test("companies-house keeps the sentence intact when particulars drop out", () => {
+    expect(
+      renderLookupOutput(
+        null,
+        companiesHouseHit("scotland", "1 George St, Edinburgh"),
+      ),
+    ).toBe(
+      "**ROLLS-ROYCE PLC**, public limited company registered in Scotland (company number 01003142) whose registered office is at 1 George St, Edinburgh",
+    );
+    expect(
+      renderLookupOutput(null, companiesHouseHit(null, "1 George St")),
+    ).toBe(
+      "**ROLLS-ROYCE PLC**, public limited company (company number 01003142) whose registered office is at 1 George St",
+    );
+    expect(renderLookupOutput(null, companiesHouseHit("scotland", null))).toBe(
+      "**ROLLS-ROYCE PLC**, public limited company registered in Scotland (company number 01003142)",
+    );
+  });
+
+  const FR_HEAD_OFFICE = {
+    siret: "55208131700018",
+    isHeadOffice: true,
+    address: {
+      textAddress: "22 avenue de Wagram, 75008 Paris",
+      street: "22 avenue de Wagram",
+      postalCode: "75008",
+      city: "Paris",
+      country: "France",
+    },
+    activityCode: null,
+    status: { type: "open" },
+    createdAt: null,
+    closedAt: null,
+  } as const;
+
+  const frenchHit = (headOffice: typeof FR_HEAD_OFFICE | null) =>
+    ({
+      registry: "recherche-entreprises",
+      id: "552081317",
+      name: "EXEMPLE SA",
+      legalForm: "5599",
+      address: null,
+      registryUrl: "https://example.invalid/fr/552081317",
+      details: {
+        registry: "recherche-entreprises",
+        company: {
+          siren: "552081317",
+          name: "EXEMPLE SA",
+          legalFormCode: "5599",
+          shortName: null,
+          headOffice,
+          matchedEstablishment: null,
+          status: { type: "active" },
+          registeredAt: null,
+          ceasedAt: null,
+          directors: [],
+          registryUrl: "https://example.invalid/fr/552081317",
+        },
+      },
+    }) satisfies BusinessRegistryHit;
+
+  test("recherche-entreprises names the siège social only when it has one", () => {
+    expect(renderLookupOutput(null, frenchHit(FR_HEAD_OFFICE))).toBe(
+      "**EXEMPLE SA**, dont le siège social est situé 22 avenue de Wagram, 75008 Paris, numéro SIREN 552 081 317",
+    );
+    // A branch address is not the siège social, so the clause drops rather
+    // than describing the wrong establishment.
+    expect(renderLookupOutput(null, frenchHit(null))).toBe(
+      "**EXEMPLE SA**, numéro SIREN 552 081 317",
+    );
+  });
+
+  const krsHit = (
+    entity: Partial<{
+      seat: string | null;
+      nip: string | null;
+      regon: string | null;
+      shareCapital: { amount: string; currency: string } | null;
+    }>,
+  ) =>
+    ({
+      registry: "krs",
+      id: "0000006865",
+      name: "CD PROJEKT S.A.",
+      legalForm: "spółka akcyjna",
+      address: KRS_ADDRESS,
+      registryUrl: "https://example.invalid/krs/0000006865",
+      details: {
+        registry: "krs",
+        entity: {
+          krsNumber: "0000006865",
+          register: "RejP",
+          name: "CD PROJEKT S.A.",
+          legalForm: "spółka akcyjna",
+          identifiers: {
+            nip: entity.nip === undefined ? "7342867148" : entity.nip,
+            regon: entity.regon === undefined ? "492707333" : entity.regon,
+          },
+          shareCapital:
+            entity.shareCapital === undefined
+              ? { amount: "100 000 000,00", currency: "PLN" }
+              : entity.shareCapital,
+          address: null,
+          registeredSeat:
+            entity.seat === null
+              ? null
+              : {
+                  country: null,
+                  voivodeship: null,
+                  county: null,
+                  commune: null,
+                  locality: entity.seat ?? "Warszawa",
+                },
+          email: null,
+          website: null,
+          status: { type: "active" },
+          registeredAt: null,
+          lastEntryAt: null,
+          registryUrl: "https://example.invalid/krs/0000006865",
+        },
+      },
+    }) satisfies BusinessRegistryHit;
+
+  test.each(["RejP", "RejS"] as const)(
+    "krs identifies %s without inventing a sub-register",
+    (register) => {
+      const hit = krsHit({});
+      expect(
+        renderLookupOutput(null, {
+          ...hit,
+          details: {
+            registry: "krs",
+            entity: { ...hit.details.entity, register },
+          },
+        }),
+      ).toContain("numer w Krajowym Rejestrze Sądowym: 0000006865");
+    },
+  );
+
+  test.each(["5599", "9220", "7389"])(
+    "recherche-entreprises identifies legal form %s without asserting RCS registration",
+    (legalFormCode) => {
+      const hit = frenchHit(FR_HEAD_OFFICE);
+      hit.details.company.legalFormCode = legalFormCode;
+      const output = renderLookupOutput(null, hit);
+      expect(output).toContain("numéro SIREN 552 081 317");
+      expect(output).not.toContain("commerce et des sociétés");
+    },
+  );
+
+  test("krs renders the komparycja particulars it has", () => {
+    expect(renderLookupOutput(null, krsHit({}))).toBe(
+      "**CD PROJEKT S.A.**, siedziba: Warszawa, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000006865, NIP 7342867148, REGON 492707333, kapitał zakładowy 100 000 000,00 PLN",
+    );
+  });
+
+  test("krs omits the seat, NIP, REGON and capital labels when unfiled", () => {
+    expect(
+      renderLookupOutput(
+        null,
+        krsHit({ nip: null, regon: null, shareCapital: null, seat: null }),
+      ),
+    ).toBe(
+      "**CD PROJEKT S.A.**, adres: ul. Stanisława Matyi 8, 61-586 Poznań, numer w Krajowym Rejestrze Sądowym: 0000006865",
+    );
+  });
+
+  /** A saved copy of any string a registry ever shipped is an untouched
+   *  built-in row, so it must still render through the built-in path rather
+   *  than as authored text frozen on the old wording. */
+  test.each([
+    ["orsr", orsrHit(ORSR_COMPANY, "Einsteinova 24, Bratislava")],
+    ["brreg", brregHit("Snarøyveien 30, 1360 Fornebu")],
+    ["prh", prhHit("Mannerheimintie 1, Helsinki")],
+    ["companies-house", companiesHouseHit("scotland", "1 George St")],
+    ["recherche-entreprises", frenchHit(FR_HEAD_OFFICE)],
+    ["krs", krsHit({})],
+  ] as const)(
+    "%s keeps every shipped default on the built-in path",
+    (slug, hit) => {
+      const builtIn = renderLookupHit(hit);
+      expect(renderLookupOutput(null, hit)).toBe(builtIn);
+      expect(
+        renderLookupOutput(
+          BUSINESS_REGISTRY_FORMAT_CAPABILITIES[slug].defaultFormat,
+          hit,
+        ),
+      ).toBe(builtIn);
+      const previous =
+        Object.entries(PREVIOUS_DEFAULT_FORMATS).find(
+          ([registry]) => registry === slug,
+        )?.[1] ?? [];
+      expect(previous.length).toBeGreaterThan(0);
+      for (const format of previous) {
+        expect(renderLookupOutput(format, hit)).toBe(builtIn);
+      }
+    },
+  );
 });

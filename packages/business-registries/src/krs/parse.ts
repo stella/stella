@@ -1,3 +1,4 @@
+import { normalizeRegon } from "./regon.js";
 import {
   KRS_REGISTER_CODES,
   type KrsAddress,
@@ -153,9 +154,11 @@ export const parseStatus = (
 
 const parseIdentifiers = (odpis: KrsRawOdpis | undefined): KrsIdentifiers => {
   const ids = odpis?.dane?.dzial1?.danePodmiotu?.identyfikatory;
+  const regon = trimToNull(ids?.regon);
   return {
     nip: trimToNull(ids?.nip),
-    regon: trimToNull(ids?.regon),
+    // The API right-pads a nine-digit REGON to fourteen; see `normalizeRegon`.
+    regon: regon === null ? null : normalizeRegon(regon),
   };
 };
 

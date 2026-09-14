@@ -364,7 +364,7 @@ describe("parseEntity (fixture-driven)", () => {
     expect(entity.name).toBe("CD PROJEKT SPÓŁKA AKCYJNA");
     expect(entity.legalForm).toBe("SPÓŁKA AKCYJNA");
     expect(entity.identifiers.nip).toBe("7342867148");
-    expect(entity.identifiers.regon).toBe("49270733300000");
+    expect(entity.identifiers.regon).toBe("492707333");
     // Share capital surfaced verbatim from
     // dzial1.kapital.wysokoscKapitaluZakladowego (Polish comma decimal).
     expect(entity.shareCapital).toEqual({
