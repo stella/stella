@@ -136,7 +136,7 @@ describe("what a decision row shows a find", () => {
         headnote: {
           type: "keywords",
           items: ["Nájem bytu", "Výpověď"],
-          truncated: false,
+          omitted: 0,
         },
       },
       questionColumns: [],

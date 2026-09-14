@@ -64,30 +64,35 @@ export const normalizeDecisionKeywords = (raw: unknown) => {
   if (!Array.isArray(raw)) {
     return null;
   }
-  const items: string[] = [];
-  let budget = LIMITS.caseLawHeadnoteMaxChars;
-  let truncated = false;
+  const terms: string[] = [];
   for (const value of raw) {
     const term = collapseDecisionHeadnote(value);
     // A repeated term is a publisher's bookkeeping, not a second tag.
-    if (term === null || items.includes(term)) {
-      continue;
+    if (term !== null && !terms.includes(term)) {
+      terms.push(term);
     }
+  }
+  if (terms.length === 0) {
+    return null;
+  }
+
+  const items: string[] = [];
+  let budget = LIMITS.caseLawHeadnoteMaxChars;
+  for (const term of terms) {
     // A term is a term: the row drops the ones past its budget rather than
-    // drawing a tag cut in half. The exception is a single term over the
-    // whole budget, which is still the only hook the row has.
+    // drawing a tag cut in half.
     if (
       term.length > budget ||
       items.length >= LIMITS.caseLawHeadnoteKeywords
     ) {
-      truncated = true;
-      if (items.length === 0) {
-        items.push(truncateDecisionHeadnote(term).text);
-      }
       break;
     }
     budget -= term.length;
     items.push(term);
   }
-  return items.length === 0 ? null : { items, truncated };
+  if (items.length === 0) {
+    // A single term over the whole budget is still the only hook the row has.
+    items.push(truncateDecisionHeadnote(terms[0] ?? "").text);
+  }
+  return { items, omitted: terms.length - items.length };
 };

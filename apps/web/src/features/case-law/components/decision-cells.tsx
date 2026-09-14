@@ -297,8 +297,8 @@ const HeadnotePreviewCell = ({
       return (
         <DecisionKeywords
           columnId={columnId}
-          contentMode={context.contentMode}
           items={headnote.items}
+          omitted={headnote.omitted}
           queryTokens={queryTokens}
         />
       );
@@ -325,45 +325,52 @@ const HeadnotePreviewCell = ({
  */
 export const DecisionKeywords = ({
   columnId,
-  contentMode,
   items,
+  omitted,
   queryTokens,
 }: {
   columnId: DecisionColumnId;
-  contentMode: DecisionContentMode;
   items: readonly string[];
+  /** Terms the row's budget dropped, so a part filing does not read whole. */
+  omitted: number;
   queryTokens: readonly string[];
-}) => (
-  <ul
-    className={cn(
-      "flex items-center gap-1",
-      // The density control decides here too: a page being scanned keeps
-      // every row one line tall, and the terms past it are cut the way a
-      // sentence is; a row being read shows the whole filing.
-      contentMode === "tight" ? "flex-nowrap overflow-hidden" : "flex-wrap",
-    )}
-  >
-    {items.map((item) => (
-      <li
-        // A tag stands in for the headnote, so it reads as loudly as one:
-        // same class, so a change to how the hook is set moves both.
-        className={cn(
-          SUMMARY_TEXT_CLASS_NAME,
-          "bg-muted shrink-0 rounded px-1.5 py-0.5",
-        )}
-        key={item}
-      >
-        <BidiText as="span">
-          <HighlightedProse
-            columnId={columnId}
-            queryTokens={queryTokens}
-            text={item}
-          />
-        </BidiText>
-      </li>
-    ))}
-  </ul>
-);
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    // Wrapped rather than cut: the row's height is a floor, and a tag sliced
+    // at the edge of the cell says less than the term it was.
+    <ul className="flex flex-wrap items-center gap-1">
+      {items.map((item) => (
+        <li
+          // A tag stands in for the headnote, so it reads as loudly as one:
+          // same class, so a change to how the hook is set moves both.
+          className={cn(
+            SUMMARY_TEXT_CLASS_NAME,
+            "bg-muted shrink-0 rounded px-1.5 py-0.5",
+          )}
+          key={item}
+        >
+          <BidiText as="span">
+            <HighlightedProse
+              columnId={columnId}
+              queryTokens={queryTokens}
+              text={item}
+            />
+          </BidiText>
+        </li>
+      ))}
+      {omitted > 0 && (
+        <li className="text-muted-foreground shrink-0 text-xs">
+          {t("workspaces.views.calendar.more", {
+            count: format.number(omitted),
+          })}
+        </li>
+      )}
+    </ul>
+  );
+};
 
 /**
  * Two highlighters over one string: the search's words, and the reader's find

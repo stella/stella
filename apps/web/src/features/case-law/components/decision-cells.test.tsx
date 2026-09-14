@@ -12,6 +12,7 @@ import {
   HeadnoteProse,
 } from "@/features/case-law/components/decision-cells";
 import type { HeadnoteView } from "@/features/case-law/components/decision-cells";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
 const PREVIEW = "Nájemní smlouva a výpověď z nájmu bytu…";
@@ -24,7 +25,9 @@ const CLAMP = "line-clamp-2";
 const render = (node: ReactNode): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {node}
+      <FormattingProvider locale="en" timeZone="UTC">
+        {node}
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -104,8 +107,8 @@ describe("a classification is drawn as what it is", () => {
     const markup = render(
       <DecisionKeywords
         columnId="summary"
-        contentMode="fit-content"
         items={["Nájem bytu", "Výpověď"]}
+        omitted={0}
         queryTokens={["výpověď"]}
       />,
     );
@@ -115,5 +118,20 @@ describe("a classification is drawn as what it is", () => {
     expect(markup).toContain("Nájem bytu");
     expect(markup).toContain("<mark");
     expect(markup).not.toContain("Nájem bytu · Výpověď");
+  });
+
+  test("a filing the row could not hold whole says how much it is missing", () => {
+    // Eight tags and nothing else reads as the publisher's whole filing; the
+    // count is what keeps a part from passing for the thing.
+    const markup = render(
+      <DecisionKeywords
+        columnId="summary"
+        items={["Nájem bytu"]}
+        omitted={3}
+        queryTokens={[]}
+      />,
+    );
+
+    expect(markup).toContain("+3 more");
   });
 });

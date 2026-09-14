@@ -54,8 +54,12 @@ export type DecisionHeadnotePreview =
   | {
       readonly type: typeof DECISION_HEADNOTE_KEYWORDS;
       readonly items: readonly string[];
-      /** Whether the row's budget dropped terms the publisher filed. */
-      readonly truncated: boolean;
+      /**
+       * How many terms the publisher filed that the row's budget dropped. A
+       * count rather than a flag, because a row that shows part of a filing
+       * has to say how much of it is missing.
+       */
+      readonly omitted: number;
     };
 
 /** How a classification reads where only one line of text will do. */

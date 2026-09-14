@@ -44,7 +44,7 @@ const DECISION_HEADNOTE_SCHEMAS = {
         t.String({ minLength: 1, maxLength: LIMITS.caseLawHeadnoteMaxChars }),
         { minItems: 1, maxItems: LIMITS.caseLawHeadnoteKeywords },
       ),
-      truncated: t.Boolean(),
+      omitted: t.Integer({ minimum: 0 }),
     },
     { additionalProperties: false },
   ),

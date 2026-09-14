@@ -210,7 +210,7 @@ export const readDecisionHeadnote = ({
         : {
             type: DECISION_HEADNOTE_KEYWORDS,
             items: classification.items,
-            truncated: classification.truncated,
+            omitted: classification.omitted,
           };
     }
     case TEXT_FIELD_TYPE.PRESENT: {

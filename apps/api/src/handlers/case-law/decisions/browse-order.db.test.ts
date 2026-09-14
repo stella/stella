@@ -206,7 +206,7 @@ test(
     expect(second?.headnote).toEqual({
       type: "keywords",
       items: ["smlouva"],
-      truncated: false,
+      omitted: 0,
     });
     expect(undated?.headnote).toEqual({
       type: "absent",

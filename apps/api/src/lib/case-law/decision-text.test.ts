@@ -355,7 +355,7 @@ describe("decision text fields", () => {
     ).toEqual({
       type: "keywords",
       items: ["Nájem", "Výpověď"],
-      truncated: false,
+      omitted: 0,
     });
   });
 
