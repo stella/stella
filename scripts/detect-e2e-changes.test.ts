@@ -678,19 +678,50 @@ describe("detect-e2e-changes", () => {
     );
   });
 
+  test("scopes browser work before every dependency setup step", () => {
+    const job = workflowJob("ci-browser");
+    const scope = "Check UI browser test scope";
+    const setupSteps = [
+      "Setup Bun",
+      "Install Safe Chain",
+      "Turbo remote cache",
+      "Install dependencies",
+      "Prepare environment",
+      "Install UI browser test runtime",
+    ];
+    expect(job.indexOf(scope)).toBeGreaterThan(-1);
+    for (const name of setupSteps) {
+      expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
+      expect(workflowStep(job, name)).toContain(
+        "if: steps.ui-browser-tests.outputs.required == 'true'",
+      );
+    }
+    expect(workflowStep(job, scope)).not.toContain("bun ");
+  });
+
   test("shares and launch-verifies a version-keyed browser cache", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
     ).toHaveLength(4);
-    const ciChecks = workflowJob("ci-checks");
-    expect(ciChecks).toContain("Check UI browser test scope");
-    expect(ciChecks).toContain("apps/web/src/routes/dev");
-    expect(ciChecks).toContain("Test UI browser interactions");
-    expect(ciChecks).toContain("Test UI playground visuals");
-    expect(ciChecks).toContain("bun --filter @stll/web test:e2e:ui-playground");
-    expect(workflowStep(ciChecks, "Install UI browser test runtime")).toContain(
-      "dependency-mode: full",
+    const ciBrowser = workflowJob("ci-browser");
+    expect(ciBrowser).toContain("Check UI browser test scope");
+    expect(ciBrowser).toContain("apps/web/src/routes/dev");
+    expect(ciBrowser).toContain("Test UI browser interactions");
+    expect(ciBrowser).toContain("Test UI playground visuals");
+    expect(ciBrowser).toContain(
+      "bun --filter @stll/web test:e2e:ui-playground",
     );
+    const uiRuntime = workflowStep(
+      ciBrowser,
+      "Install UI browser test runtime",
+    );
+    expect(uiRuntime).toContain("dependency-mode: full");
+    // The desktop suite runs Chromium and WebKit. Both come from the cached
+    // action, so nothing downloads a browser per run.
+    expect(uiRuntime).toContain("browsers: chromium webkit");
+    expect(
+      workflowStep(ciBrowser, "Test desktop browser interactions"),
+    ).not.toContain("playwright install");
     expect(marketingCapture).toContain(
       [
         "uses: ./.github/actions/setup-playwright",
@@ -709,12 +740,15 @@ describe("detect-e2e-changes", () => {
     );
     expect(playwrightSetup).not.toContain("bunx playwright --version");
     expect(playwrightSetup).toContain("~/.cache/ms-playwright");
+    // The browser set joins the key: a narrower entry must not report a hit
+    // for a run that needs more engines.
     expect(playwrightSetup).toContain(
       [
         "playwright",
         githubExpression("runner.os"),
         githubExpression("runner.arch"),
         githubExpression("steps.version.outputs.version"),
+        githubExpression("inputs.browsers"),
       ].join("-"),
     );
     expect(playwrightSetup).toContain(
@@ -731,14 +765,16 @@ describe("detect-e2e-changes", () => {
     expect(playwrightSetup).toContain(
       `PLAYWRIGHT_CACHE_HIT: ${githubExpression("steps.browser-cache.outputs.cache-hit")}`,
     );
-    expect(playwrightSetup).toContain("if verify_chromium; then");
-    expect(playwrightSetup).toContain("bunx playwright install-deps chromium");
+    expect(playwrightSetup).toContain("if verify_browsers; then");
+    expect(playwrightSetup).toContain(
+      `bunx playwright install-deps "${shellExpansion("browsers[@]")}"`,
+    );
     expect(
       actionStep(playwrightSetup, "Disable runner Chrome apt source"),
     ).toContain(runnerChromeAptSource);
     expect(
       playwrightSetup.indexOf("Disable runner Chrome apt source"),
-    ).toBeLessThan(playwrightSetup.indexOf("Install Chromium on cache miss"));
+    ).toBeLessThan(playwrightSetup.indexOf("Install browsers on cache miss"));
   });
 
   test("isolates cross-engine stack redaction from Chromium E2E", () => {
