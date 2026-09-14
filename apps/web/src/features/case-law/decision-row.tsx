@@ -39,9 +39,8 @@ import {
   selectColId,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import type { Decision } from "@/features/case-law/components/decision-cells";
-import { decisionHeadnoteIsCut } from "@/features/case-law/decision-columns.logic";
 import { isDecisionRowActive } from "@/features/case-law/decision-inspector.logic";
-import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 /**
  * A gesture that already means something else: the case-number link, the
@@ -97,16 +96,6 @@ export const DecisionRow = ({
         .find((cell) => cell.column.id === addPropertyColumn.id)
     : undefined;
   const isActive = isDecisionRowActive(activeTabId, decision);
-  // A compact row is one fixed height, which is what makes a page of them
-  // scannable. A row whose headnote was cut is the exception twice over: the
-  // control that reads the rest is a line the fixed height has no room for,
-  // and the text it swaps in is several. Such a row keeps the compact floor
-  // and grows past it, so nothing the reader is offered is drawn where it
-  // cannot be seen; every other row is untouched, because a floor only grows
-  // a row whose content asks it to.
-  const tightRowHeight = decisionHeadnoteIsCut(decision.headnote)
-    ? TOOLBAR_ROW_MIN_HEIGHT
-    : TOOLBAR_ROW_HEIGHT;
 
   const open = () => onOpen(decision);
   const handleClick = (event: React.MouseEvent) => {
@@ -130,7 +119,12 @@ export const DecisionRow = ({
       aria-selected={row_getIsSelected(row)}
       className={cn(
         "cursor-pointer transition-opacity duration-150",
-        contentMode === "tight" && tightRowHeight,
+        // The compact height is a floor, not a ceiling. The density clamps
+        // prose to two lines, and a fixed height that cannot hold the two
+        // lines it promised clips them — which is what the control offering
+        // the rest of a headnote, and the text it swaps in, would meet. A row
+        // whose content fits keeps the rhythm; one that does not, grows.
+        contentMode === "tight" && TOOLBAR_ROW_MIN_HEIGHT,
       )}
       data-active={isActive || undefined}
       data-index={index}

@@ -21,10 +21,7 @@ import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
-import {
-  decisionClampClassName,
-  decisionHeadnoteIsCut,
-} from "@/features/case-law/decision-columns.logic";
+import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionColumnId,
   DecisionContentMode,
@@ -348,7 +345,12 @@ export const DecisionKeywords = ({
   >
     {items.map((item) => (
       <li
-        className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs"
+        // A tag stands in for the headnote, so it reads as loudly as one:
+        // same class, so a change to how the hook is set moves both.
+        className={cn(
+          SUMMARY_TEXT_CLASS_NAME,
+          "bg-muted shrink-0 rounded px-1.5 py-0.5",
+        )}
         key={item}
       >
         <BidiText as="span">
@@ -543,7 +545,7 @@ export const HeadnoteProse = ({
           text={showingWhole ? view.text : preview.text}
         />
       </BidiText>
-      {decisionHeadnoteIsCut(preview) && (
+      {preview.truncated && (
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
           {view.type === HEADNOTE_VIEW.FAILED && (
             <span className="text-muted-foreground">

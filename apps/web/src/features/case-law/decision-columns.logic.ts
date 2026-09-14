@@ -1,10 +1,5 @@
 import type { ReactElement } from "react";
 
-import {
-  TEXT_FIELD_TYPE,
-  type DecisionHeadnotePreview,
-} from "@stll/api-contract/case-law-text-field";
-
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -186,15 +181,6 @@ const DECISION_CLAMP_CLASS_NAMES = {
 /** The clamp a prose cell carries in this mode; empty when it carries none. */
 export const decisionClampClassName = (mode: DecisionContentMode): string =>
   DECISION_CLAMP_CLASS_NAMES[mode];
-
-/**
- * Whether a row draws the control that reads the rest of its headnote. The
- * cell and the row both ask, because the control is a line of its own and the
- * compact row has to leave room for it.
- */
-export const decisionHeadnoteIsCut = (
-  headnote: DecisionHeadnotePreview,
-): boolean => headnote.type === TEXT_FIELD_TYPE.PRESENT && headnote.truncated;
 
 /**
  * Facts the case-number cell repeats under the case number when, and only
