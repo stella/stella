@@ -617,17 +617,18 @@ const ClipboardCard = ({
             />
           </button>
         )}
-        {active && characterCount !== null ? (
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {t("characterCount", { count: characterCount })}
-          </span>
-        ) : null}
+        {/* The footer has room for one figure: the highlighted card shows
+            its length, the rest their age; the tooltip keeps the full time. */}
         <time
           className="text-muted-foreground shrink-0 text-xs tabular-nums"
           dateTime={item.copiedAt}
           title={copiedAtLabel}
         >
-          <span aria-hidden="true">{relativeTime}</span>
+          <span aria-hidden="true">
+            {active && characterCount !== null
+              ? t("characterCount", { count: characterCount })
+              : relativeTime}
+          </span>
           <span className="sr-only">{copiedAtLabel}</span>
         </time>
         {item.type === "image" && imagePreviewStatus === "error" ? (
