@@ -53,6 +53,7 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
+  CORPUS_FRAGMENT_JOIN,
   corpusExcerpt,
   decisionHeadlineConfig,
 } from "@/api/lib/case-law/decision-excerpt";
@@ -822,7 +823,7 @@ const extractCorpusSnippet = (
   snippet: Record<string, unknown> | undefined,
 ): string | null => {
   const text = snippet?.["text"];
-  const raw = Array.isArray(text) ? text.join(" … ") : text;
+  const raw = Array.isArray(text) ? text.join(CORPUS_FRAGMENT_JOIN) : text;
   if (typeof raw !== "string" || raw.length === 0) {
     return null;
   }

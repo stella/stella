@@ -93,6 +93,47 @@ export const usesEngineSnippet = (excerpt: SearchExcerpt): boolean =>
 /** Whitespace folded to one space, so a snippet re-wrapped by the engine still matches. */
 const foldWhitespace = (text: string): string => text.replaceAll(/\s+/gu, " ");
 
+const WHITESPACE = /\s/u;
+
+/** How `extractCorpusSnippet` joins the engine's fragments into one string. */
+export const CORPUS_FRAGMENT_JOIN = " … ";
+
+/**
+ * The first position after a run of whitespace at or after `from`, or `from`
+ * when there is none before `limit`.
+ *
+ * Every kind of whitespace, not just a space: these passages carry newlines
+ * between the source's lines, tabs from its tables and non-breaking spaces
+ * around its section marks, and an edge placed inside a word by ignoring one
+ * of those is a cut word on screen.
+ */
+const wordStartAtOrAfter = (
+  text: string,
+  from: number,
+  limit: number,
+): number => {
+  for (let index = from; index < limit; index += 1) {
+    if (WHITESPACE.test(text.charAt(index))) {
+      return index + 1;
+    }
+  }
+  return from;
+};
+
+/** The last position at or before `from` that ends a word, or `from`. */
+const wordEndAtOrBefore = (
+  text: string,
+  from: number,
+  limit: number,
+): number => {
+  for (let index = from; index > limit; index -= 1) {
+    if (WHITESPACE.test(text.charAt(index))) {
+      return index;
+    }
+  }
+  return from;
+};
+
 /**
  * Where the engine's snippet sits in the passage, or null when it cannot be
  * placed.
@@ -164,28 +205,28 @@ const growAroundSnippet = (
     return anchor;
   }
 
+  // Half each way, but a match near either end of the passage cannot spend its
+  // half there: what one side cannot take, the other does, so the reader gets
+  // the length they asked for wherever in the passage the match happens to sit.
   const half = Math.floor(spare / 2);
-  const wantedStart = Math.max(0, anchor.start - half);
-  const wantedEnd = Math.min(passage.length, anchor.end + (spare - half));
+  let start = anchor.start - half;
+  let end = anchor.end + (spare - half);
+  if (start < 0) {
+    end = Math.min(passage.length, end - start);
+    start = 0;
+  }
+  if (end > passage.length) {
+    start = Math.max(0, start - (end - passage.length));
+    end = passage.length;
+  }
 
-  const atWordStart =
-    wantedStart === 0
-      ? 0
-      : (() => {
-          const boundary = passage.indexOf(" ", wantedStart);
-          return boundary === -1 || boundary >= anchor.start
-            ? wantedStart
-            : boundary + 1;
-        })();
-  const atWordEnd =
-    wantedEnd === passage.length
-      ? passage.length
-      : (() => {
-          const boundary = passage.lastIndexOf(" ", wantedEnd);
-          return boundary <= anchor.end ? wantedEnd : boundary;
-        })();
-
-  return { end: atWordEnd, start: atWordStart };
+  return {
+    end:
+      end === passage.length
+        ? end
+        : wordEndAtOrBefore(passage, end, anchor.end),
+    start: start === 0 ? 0 : wordStartAtOrAfter(passage, start, anchor.start),
+  };
 };
 
 /** The engine's own marked runs, as ranges into the snippet's plain text. */
@@ -205,6 +246,34 @@ const engineMarkRanges = (
     plainLength += text.length;
   }
   return ranges;
+};
+
+/**
+ * Where to anchor the wider window, from the engine's snippet.
+ *
+ * The engine answers with fragments, and `extractCorpusSnippet` joins several
+ * into one string. That join is not a run of the passage, so it can never be
+ * located there: the fragments are tried one at a time instead, longest first
+ * because the longest is the most distinctive and the least likely to land on
+ * a repeated phrase.
+ */
+const locateAnchor = (
+  passage: string,
+  engineSnippet: string,
+): { end: number; start: number } | null => {
+  const fragments = stripSearchHighlightMarkup(engineSnippet)
+    .split(CORPUS_FRAGMENT_JOIN)
+    .map((fragment) => fragment.trim())
+    .filter((fragment) => fragment.length > 0)
+    .sort((a, b) => b.length - a.length);
+
+  for (const fragment of fragments) {
+    const at = locateSnippet(passage, fragment);
+    if (at !== null) {
+      return at;
+    }
+  }
+  return null;
 };
 
 type CorpusExcerptOptions = {
@@ -271,9 +340,7 @@ export const corpusExcerpt = ({
 
   const { maxChars } = decisionExcerptWindow(excerpt);
   const anchor =
-    engineSnippet === null
-      ? null
-      : locateSnippet(passage, stripSearchHighlightMarkup(engineSnippet));
+    engineSnippet === null ? null : locateAnchor(passage, engineSnippet);
   const window =
     anchor === null ? null : growAroundSnippet(passage, anchor, maxChars);
 

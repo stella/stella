@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { SEARCH_EXCERPTS } from "@stll/api-contract/search";
 
 import {
+  CORPUS_FRAGMENT_JOIN,
   corpusExcerpt,
   DECISION_EXCERPT_WINDOWS,
   decisionExcerptWindow,
@@ -238,6 +239,94 @@ describe("the excerpt a corpus hit shows", () => {
         widened,
       ),
     ).toBe(false);
+  });
+
+  // The engine answers with fragments and the handler joins several into one
+  // string. That join is not a run of the passage, so anchoring on it whole
+  // would never locate anything and every multi-fragment hit would quietly
+  // take the unanchored path.
+  test("a snippet of several fragments is anchored on one of them", () => {
+    // The locatable fragment sits late in the passage, and the tokens are not
+    // in the passage at all, so the unanchored path would answer with the
+    // opening. Finding the late text is what proves a fragment was anchored on
+    // rather than the joined string being searched for whole.
+    const late = "Rozsah náhrady určuje soud podle";
+    expect(PASSAGE).toContain(late);
+
+    const widened = stripSearchHighlightMarkup(
+      corpusExcerpt({
+        engineSnippet: `<mark>zcela jiná věta</mark>${CORPUS_FRAGMENT_JOIN}${late}`,
+        excerpt: "medium",
+        language: null,
+        passage: PASSAGE,
+        tokens: tokenizeCorpusFreeText("bezdůvodné obohacení"),
+      }) ?? "",
+    );
+
+    expect(widened).toContain(late);
+    expect(PASSAGE).toContain(widened);
+  });
+
+  // Half the budget each way, except at the passage's edges: a match in the
+  // opening line cannot spend a left half that is not there, and the reader
+  // still asked for the whole length.
+  test.each([
+    ["at the start", 0],
+    ["at the end", 1],
+  ])("a match %s still spends the whole budget", (_label, atEnd) => {
+    const anchorText =
+      atEnd === 1 ? "dozvěděl o škodě." : "Soud dovodil, že náhrada";
+    const widened = stripSearchHighlightMarkup(
+      corpusExcerpt({
+        engineSnippet: anchorText,
+        excerpt: "long",
+        language: null,
+        passage: PASSAGE,
+        tokens,
+      }) ?? "",
+    );
+
+    // Within a word of the budget: the edges move to word boundaries, and the
+    // passage itself is longer than the window.
+    expect(widened.length).toBeGreaterThan(
+      DECISION_EXCERPT_WINDOWS.long.maxChars - 30,
+    );
+    expect(widened.length).toBeLessThanOrEqual(
+      DECISION_EXCERPT_WINDOWS.long.maxChars,
+    );
+  });
+
+  // The source's own line breaks and tabs are word boundaries too; reading
+  // only the space character cuts a word in half at an edge that lands on one.
+  test("an edge lands on a boundary that is not a space", () => {
+    const lines = [
+      "Nejvyšší soud v Brně rozhodl takto:",
+      "\tnáhrada škody přísluší poškozenému v plném rozsahu",
+      "Odůvodnění následuje v dalším\u00a0oddíle tohoto rozhodnutí.",
+    ].join("\n");
+    const widened = stripSearchHighlightMarkup(
+      corpusExcerpt({
+        engineSnippet: "<mark>náhrada</mark> škody",
+        excerpt: "medium",
+        language: null,
+        passage: lines,
+        tokens,
+      }) ?? "",
+    );
+
+    expect(lines).toContain(widened);
+    // No half word at either edge: whatever the boundary character was, the
+    // cut landed on it rather than inside the word beside it.
+    for (const edge of [widened.slice(0, 1), widened.slice(-1)]) {
+      expect(/\s/u.test(edge)).toBe(false);
+    }
+    const before = lines[lines.indexOf(widened) - 1];
+    const after = lines[lines.indexOf(widened) + widened.length];
+    for (const neighbour of [before, after]) {
+      if (neighbour !== undefined) {
+        expect(/\s/u.test(neighbour)).toBe(true);
+      }
+    }
   });
 
   // A reader who asked for more text is answered with the text there was,
