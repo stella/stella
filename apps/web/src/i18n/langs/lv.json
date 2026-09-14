@@ -680,6 +680,10 @@
     "searchAskPrompt": "{query} (judikatūra, {country})",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
+    "searchUnavailable": {
+      "description": "Neizdevās sazināties ar tiesu prakses meklēšanu. Jūsu vaicājums saglabājas adreses joslā, mēģiniet vēlreiz pēc brīža.",
+      "title": "Meklēšana īslaicīgi nav pieejama"
+    },
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",

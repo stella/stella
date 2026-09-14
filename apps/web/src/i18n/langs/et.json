@@ -680,6 +680,10 @@
     "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
+    "searchUnavailable": {
+      "description": "Kohtupraktika otsinguga ei õnnestunud ühendust saada. Sinu päring säilib aadressiribal, proovi hetke pärast uuesti.",
+      "title": "Otsing pole ajutiselt saadaval"
+    },
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",

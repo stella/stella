@@ -1,5 +1,7 @@
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
+
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
 // wasm32-wasip1-threads binding (shared memory), which browsers only
 // instantiate in a cross-origin-isolated context (SharedArrayBuffer
@@ -22,10 +24,15 @@ export default createServerEntry({
     )) {
       headers.set(name, value);
     }
+    // A route that rendered a degraded page names the status it wants; the
+    // marker is consumed here so only the status crosses the wire.
+    const requestedStatus = ssrStatusFromHeader(headers.get(SSR_STATUS_HEADER));
+    headers.delete(SSR_STATUS_HEADER);
+
     return new Response(response.body, {
       headers,
-      status: response.status,
-      statusText: response.statusText,
+      status: requestedStatus ?? response.status,
+      ...(requestedStatus === null && { statusText: response.statusText }),
     });
   },
 });

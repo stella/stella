@@ -12,7 +12,8 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
+import { RefreshCwIcon, SearchXIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -29,6 +30,7 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
@@ -78,8 +80,10 @@ import {
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
+  DECISIONS_SEARCH_STATE,
   decisionRowsPhase,
   decisionsLoadMode,
+  decisionsSearchOutage,
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import {
@@ -109,6 +113,10 @@ import {
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
+  isSearchUnavailableError,
+  SEARCH_UNAVAILABLE_STATUS,
+} from "@/lib/public-law-api";
+import {
   createLegalCollectionJsonLd,
   createPublicLawCanonicalUrl,
   createPublicLawHead,
@@ -117,6 +125,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { ssrStatusHeaders } from "@/ssr-response-status";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
@@ -282,6 +291,30 @@ const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
 };
 
 /**
+ * A results read, answering null when the search backend could not be
+ * reached. Every other failure is propagated untouched, so the route's error
+ * boundary still owns it and still reads the status off the original error;
+ * `Result#unwrap` would hand it on wrapped in a `Panic` instead.
+ */
+const resultsOrOutage = async <TRead,>(
+  read: Promise<TRead>,
+): Promise<TRead | null> => {
+  const result = await Result.tryPromise({
+    try: async () => await read,
+    // A rejection that is not an `Error` carries no status to classify and no
+    // stack to report, so it is named before it travels any further.
+    catch: (cause): Error =>
+      cause instanceof Error ? cause : new UnhandledException({ cause }),
+  });
+  if (Result.isError(result)) {
+    return isSearchUnavailableError(result.error)
+      ? null
+      : await Promise.reject(result.error);
+  }
+  return result.value;
+};
+
+/**
  * The page the document describes: its rows are what the crawler reads and
  * what the collection markup lists. Empty while a background load has not
  * produced that page yet, which only a reader with JavaScript ever sees.
@@ -359,15 +392,22 @@ export const Route = createFileRoute("/law/cases/")({
     // Only a deep arrival pays for the walk. A first page, and a page the
     // chain already holds, leave the fetching to the loader, which decides
     // whether this navigation is worth awaiting at all.
-    const reached =
-      wanted > 1 && wanted > walked
-        ? (
-            await ensureRouteInfiniteQueryData(queryClient, {
-              ...decisionsOptions,
-              pages: decisionPagesToWalk(wanted, walked),
-            })
-          ).pages.length
-        : walked;
+    let reached = walked;
+    if (wanted > 1 && wanted > walked) {
+      const chain = await resultsOrOutage(
+        ensureRouteInfiniteQueryData(queryClient, {
+          ...decisionsOptions,
+          pages: decisionPagesToWalk(wanted, walked),
+        }),
+      );
+      // An outage proves nothing about which pages exist, so the walk stops
+      // where it is and the URL keeps the page the reader linked to: the
+      // results region says the search is down, and correcting them to page
+      // one would lose the link to a failure that passes. The loader walks the
+      // same chain, so a backend that recovers in between still answers for
+      // the page this URL names rather than serving page one under it.
+      reached = chain === null ? wanted : chain.pages.length;
+    }
     const page = decisionPageSearchValue(
       reachableDecisionPage(wanted, reached),
     );
@@ -403,18 +443,51 @@ export const Route = createFileRoute("/law/cases/")({
           queryClient.getQueryData(decisionsOptions.queryKey),
           deps.page,
         ),
+        search: DECISIONS_SEARCH_STATE.answered,
       };
     }
 
     // `beforeLoad` has already walked the chain to the page a deep link named,
-    // so this is a cache read for that case and the first fetch otherwise.
+    // so this is a cache read for that case and the first fetch otherwise —
+    // except when its walk hit an outage, which leaves the chain unwalked
+    // behind a URL that still names a later page. Asking for the pages this
+    // page needs is what keeps the rows and the URL the same page.
+    const walked =
+      queryClient.getQueryData(decisionsOptions.queryKey)?.pages.length ?? 0;
+    const wanted = decisionPageNumber(deps.page);
     const [decisionPages] = await Promise.all([
-      ensureRouteInfiniteQueryData(queryClient, decisionsOptions),
+      resultsOrOutage(
+        ensureRouteInfiniteQueryData(queryClient, {
+          ...decisionsOptions,
+          ...(wanted > 1 &&
+            wanted > walked && {
+              pages: decisionPagesToWalk(wanted, walked),
+            }),
+        }),
+      ),
       ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
     ]);
 
-    return { decisions: shownDecisions(decisionPages, deps.page) };
+    // The rows are one region of this page, so a search backend that cannot be
+    // reached is that region's failure and not the route's: the box and the
+    // filters are the URL's own and stay usable. Every other failure is still
+    // the error boundary's.
+    if (decisionPages === null) {
+      return { decisions: [], search: DECISIONS_SEARCH_STATE.unavailable };
+    }
+
+    return {
+      decisions: shownDecisions(decisionPages, deps.page),
+      search: DECISIONS_SEARCH_STATE.answered,
+    };
   },
+  // The document is drawn, but it lists nothing and the results it stands for
+  // are still out there. 503 tells a crawler to come back for them instead of
+  // recording this page as empty.
+  headers: ({ loaderData }) =>
+    loaderData?.search === DECISIONS_SEARCH_STATE.unavailable
+      ? ssrStatusHeaders(SEARCH_UNAVAILABLE_STATUS)
+      : undefined,
   head: ({ loaderData, match }) => {
     const search = match.search;
     const title = pageTitle("common.caseLaw");
@@ -560,16 +633,29 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   });
   const {
     data,
+    error,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     isLoading,
     isPlaceholderData,
+    refetch,
   } = useInfiniteQuery({
     ...decisionsInfiniteOptions(filters, pageSize),
     // The chain the reader has walked stays loaded while the filters change,
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
+  });
+  // A backend that cannot be reached is this region's failure, not the page's.
+  // The loader lets it through for the same reason, so both the first render
+  // and a filter applied to a drawn page arrive here.
+  const loadedSearch = Route.useMatch({
+    select: (match) => match.loaderData?.search,
+  });
+  const isSearchUnavailable = decisionsSearchOutage({
+    hasPages: data !== undefined,
+    isQueryOutage: isSearchUnavailableError(error),
+    loaded: loadedSearch,
   });
   // The rows are the only region that waits: either they are not there yet,
   // or they answer the search before this one and say so themselves rather
@@ -863,28 +949,71 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           }}
         />
 
-        <DecisionTable
-          decisions={find.decisions}
-          expectedRowCount={pageSize}
-          findHighlight={find.highlight}
-          isLoading={rows === "skeleton"}
-          isRefreshing={isRefreshing}
-          layout={layout}
-          onLayoutChange={setLayout}
-          onSelectedIdsChange={setSelectedIds}
-          query={search.q}
-          questions={questions.surface}
-          selectedIds={selectedIds}
-        />
-        <DecisionPager
-          isWalking={isFetchingNextPage}
-          model={pager}
-          onPageSizeChange={setPageSize}
-          onWalkForward={walkForward}
-          pageSize={pageSize}
-        />
+        {isSearchUnavailable ? (
+          <SearchUnavailable
+            onRetry={() => {
+              detached(refetch(), "cases.search-retry");
+            }}
+          />
+        ) : (
+          <>
+            <DecisionTable
+              decisions={find.decisions}
+              expectedRowCount={pageSize}
+              findHighlight={find.highlight}
+              isLoading={rows === "skeleton"}
+              isRefreshing={isRefreshing}
+              layout={layout}
+              onLayoutChange={setLayout}
+              onSelectedIdsChange={setSelectedIds}
+              query={search.q}
+              questions={questions.surface}
+              selectedIds={selectedIds}
+            />
+            <DecisionPager
+              isWalking={isFetchingNextPage}
+              model={pager}
+              onPageSizeChange={setPageSize}
+              onWalkForward={walkForward}
+              pageSize={pageSize}
+            />
+          </>
+        )}
       </div>
     </main>
+  );
+}
+
+type SearchUnavailableProps = {
+  onRetry: () => void;
+};
+
+/**
+ * The results region when the search backend could not be reached. It stands
+ * where the grid stands, so the box and the filters above it keep working and
+ * the reader's query stays in the URL for the retry to use.
+ *
+ * The same shape the workspace tables and the citation panels use for a read
+ * that failed, rather than the page-level `EmptyScreen`: this replaces one
+ * region of a drawn page, and a hero would read as the whole page being gone.
+ */
+function SearchUnavailable({ onRetry }: SearchUnavailableProps) {
+  const t = useTranslations();
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+      <SearchXIcon className="text-muted-foreground size-8" />
+      <div className="max-w-sm">
+        <p className="text-sm">{t("caseLaw.searchUnavailable.title")}</p>
+        <p className="text-foreground-strong-muted mt-1 text-xs">
+          {t("caseLaw.searchUnavailable.description")}
+        </p>
+      </div>
+      <Button onClick={onRetry} size="sm" variant="secondary">
+        <RefreshCwIcon />
+        {t("common.retry")}
+      </Button>
+    </div>
   );
 }
 

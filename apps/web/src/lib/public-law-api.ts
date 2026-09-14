@@ -2,12 +2,28 @@ import { TaggedError } from "better-result";
 
 import { parseApiErrorValue } from "@stll/api-contract";
 
-import { toAPIError } from "@/lib/errors/api";
-import type { APIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
 
 const PUBLIC_LAW_DISABLED_STATUS = 404;
 const PUBLIC_LAW_DISABLED_MARKER = "Not Found";
 const PUBLIC_LAW_AREA = "public-law";
+
+/**
+ * What the API answers when the corpus index could not be reached. It grades
+ * an engine that is busy or down as 503 and a request the engine refused as
+ * 502, so the status is the whole classification: 503 means the answer is
+ * missing and asking again is the fix.
+ */
+export const SEARCH_UNAVAILABLE_STATUS = 503;
+
+/**
+ * Whether a failed public-law read is the search backend being unreachable
+ * rather than a real answer. Read from the typed error's status, never from
+ * its message, so the surface that degrades cannot drift from what the API
+ * grades as retryable.
+ */
+export const isSearchUnavailableError = (error: unknown): boolean =>
+  APIError.is(error) && error.status === SEARCH_UNAVAILABLE_STATUS;
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.

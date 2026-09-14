@@ -680,6 +680,10 @@
     "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
+    "searchUnavailable": {
+      "description": "Vyhľadávanie v judikatúre sa nepodarilo kontaktovať. Váš dotaz zostáva v adresnom riadku, skúste to prosím o chvíľu znova.",
+      "title": "Vyhľadávanie je dočasne nedostupné"
+    },
     "showWholeHeadnote": "Zobraziť celú právnu vetu",
     "sort": {
       "newest": "Najnovšie",

@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  DECISIONS_SEARCH_STATE,
   decisionRowsPhase,
   decisionsLoadMode,
+  decisionsSearchOutage,
 } from "./decisions-load-mode.logic";
 
 describe("whether the results route waits for its rows", () => {
@@ -72,5 +74,70 @@ describe("what the results region shows while the page stays put", () => {
         routeState: "loaded",
       }),
     ).toBe("rows");
+  });
+});
+
+describe("whether the results region stands in for an unreachable search", () => {
+  test("the server renders the outage its own read hit", () => {
+    expect(
+      decisionsSearchOutage({
+        hasPages: false,
+        isQueryOutage: true,
+        loaded: DECISIONS_SEARCH_STATE.unavailable,
+      }),
+    ).toBe(true);
+  });
+
+  // The rehydrating render is the case this exists for: the query's failure
+  // arrives as a bare Error, so `isQueryOutage` is false where the server had
+  // it true, and only the load's own conclusion still carries the outage.
+  test("hydration keeps the outage the server rendered", () => {
+    expect(
+      decisionsSearchOutage({
+        hasPages: false,
+        isQueryOutage: false,
+        loaded: DECISIONS_SEARCH_STATE.unavailable,
+      }),
+    ).toBe(true);
+  });
+
+  test("a page the query went on to fetch replaces the outage", () => {
+    expect(
+      decisionsSearchOutage({
+        hasPages: true,
+        isQueryOutage: false,
+        loaded: DECISIONS_SEARCH_STATE.unavailable,
+      }),
+    ).toBe(false);
+  });
+
+  test("a failure raised in this browser is an outage on its own", () => {
+    expect(
+      decisionsSearchOutage({
+        hasPages: true,
+        isQueryOutage: true,
+        loaded: DECISIONS_SEARCH_STATE.answered,
+      }),
+    ).toBe(true);
+  });
+
+  test("a load that answered never stands in", () => {
+    expect(
+      decisionsSearchOutage({
+        hasPages: false,
+        isQueryOutage: false,
+        loaded: DECISIONS_SEARCH_STATE.answered,
+      }),
+    ).toBe(false);
+  });
+
+  test("a render with no load behind it yet waits rather than reporting", () => {
+    expect(
+      decisionsSearchOutage({
+        hasPages: false,
+        isQueryOutage: false,
+        loaded: undefined,
+      }),
+    ).toBe(false);
   });
 });
