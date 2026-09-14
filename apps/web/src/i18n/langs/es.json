@@ -629,7 +629,6 @@
       "saveTitle": "Guardar en un asunto",
       "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
     },
-    "narrowResultsHint": "Todos los resultados deben contenerlo",
     "newestDecisions": "Resoluciones más recientes",
     "notesFilter": {
       "ai": "IA",
@@ -655,7 +654,6 @@
       "headMatter": "Encabezamiento",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
-    "refineWithinResults": "Acotar resultados",
     "research": {
       "answering": "{count, plural, one {Respondiendo # celda…} other {Respondiendo # celdas…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Guardar mensaje"
     },
     "filter": "Filtro",
+    "filters": "Filtros",
     "find": "Buscar",
     "formula": "Fórmula",
     "goBack": "Volver",
     "goBackToEditing": "Volver a editar",
     "hideDetails": "Ocultar detalles",
-    "hideFilters": "Ocultar filtros",
     "hideSecretValue": "Ocultar valor secreto",
     "history": "Historial",
     "import": "Importar",
@@ -1472,7 +1470,6 @@
     "settings": "Configuración",
     "showAll": "Mostrar todo",
     "showDetails": "Mostrar detalles",
-    "showFilters": "Mostrar filtros",
     "showLess": "Mostrar menos",
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",

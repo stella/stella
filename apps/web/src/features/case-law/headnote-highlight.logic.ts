@@ -38,8 +38,8 @@ const isWordCharacter = (character: string | undefined): boolean =>
 
 /**
  * The words of a query worth marking, lowercased and without repeats.
- * Punctuation is a separator, so the quotes a refinement writes into `q` never
- * become part of a token.
+ * Punctuation is a separator, so the quotes a reader types around a phrase
+ * never become part of a token.
  */
 export const queryHighlightTokens = (
   query: string | undefined,

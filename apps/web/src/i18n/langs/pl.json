@@ -629,7 +629,6 @@
       "saveTitle": "Zapisz do sprawy",
       "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
     },
-    "narrowResultsHint": "Każdy wynik musi to zawierać",
     "newestDecisions": "Najnowsze orzeczenia",
     "notesFilter": {
       "ai": "AI",
@@ -655,7 +654,6 @@
       "headMatter": "Część wstępna",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
-    "refineWithinResults": "Zawęź wyniki",
     "research": {
       "answering": "{count, plural, one {Odpowiadam na # komórkę…} few {Odpowiadam na # komórki…} many {Odpowiadam na # komórek…} other {Odpowiadam na # komórki…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Zapisz wiadomość"
     },
     "filter": "Filtr",
+    "filters": "Filtry",
     "find": "Znajdź",
     "formula": "Formuła",
     "goBack": "Wróć",
     "goBackToEditing": "Wróć do edycji",
     "hideDetails": "Ukryj szczegóły",
-    "hideFilters": "Ukryj filtry",
     "hideSecretValue": "Ukryj tajną wartość",
     "history": "Historia",
     "import": "Importuj",
@@ -1472,7 +1470,6 @@
     "settings": "Ustawienia",
     "showAll": "Pokaż wszystko",
     "showDetails": "Pokaż szczegóły",
-    "showFilters": "Pokaż filtry",
     "showLess": "Pokaż mniej",
     "showMore": "Pokaż więcej",
     "showSecretValue": "Pokaż tajną wartość",

@@ -629,7 +629,6 @@
       "saveTitle": "Saglabāt lietā",
       "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
     },
-    "narrowResultsHint": "Tam jābūt katrā rezultātā",
     "newestDecisions": "Jaunākie nolēmumi",
     "notesFilter": {
       "ai": "MI",
@@ -655,7 +654,6 @@
       "headMatter": "Ievaddaļa",
       "sourceAttribution": "Avota dati ir brīvi pieejami vietnē <link>{source}</link>."
     },
-    "refineWithinResults": "Sašaurināt rezultātus",
     "research": {
       "answering": "{count, plural, zero {Atbild uz # šūnām…} one {Atbild uz # šūnu…} other {Atbild uz # šūnām…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Saglabāt ziņojumu"
     },
     "filter": "Filtrs",
+    "filters": "Filtri",
     "find": "Meklēt",
     "formula": "Formula",
     "goBack": "Atpakaļ",
     "goBackToEditing": "Atpakaļ pie rediģēšanas",
     "hideDetails": "Slēpt detaļas",
-    "hideFilters": "Slēpt filtrus",
     "hideSecretValue": "Paslēpt slepeno vērtību",
     "history": "Vēsture",
     "import": "Importēt",
@@ -1472,7 +1470,6 @@
     "settings": "Iestatījumi",
     "showAll": "Rādīt visu",
     "showDetails": "Rādīt detaļas",
-    "showFilters": "Rādīt filtrus",
     "showLess": "Rādīt mazāk",
     "showMore": "Rādīt vairāk",
     "showSecretValue": "Rādīt slepeno vērtību",

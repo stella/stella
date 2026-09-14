@@ -632,7 +632,6 @@ type Messages = {
       "saveTitle": "Save into a matter";
       "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}";
     };
-    "narrowResultsHint": "Every result must contain it";
     "newestDecisions": "Newest decisions";
     "notesFilter": {
       "ai": "AI";
@@ -658,7 +657,6 @@ type Messages = {
       "headMatter": "Head matter";
       "sourceAttribution": "The source data is freely available at <link>{source}</link>.";
     };
-    "refineWithinResults": "Narrow results";
     "research": {
       "answering": "{count, plural, one {Answering # cell…} other {Answering # cells…}}";
       "answers": {
@@ -1355,12 +1353,12 @@ type Messages = {
       "title": "Save message";
     };
     "filter": "Filter";
+    "filters": "Filters";
     "find": "Find";
     "formula": "Formula";
     "goBack": "Go back";
     "goBackToEditing": "Go back to editing";
     "hideDetails": "Hide details";
-    "hideFilters": "Hide filters";
     "hideSecretValue": "Hide secret value";
     "history": "History";
     "import": "Import";
@@ -1475,7 +1473,6 @@ type Messages = {
     "settings": "Settings";
     "showAll": "Show all";
     "showDetails": "Show details";
-    "showFilters": "Show filters";
     "showLess": "Show less";
     "showMore": "Show more";
     "showSecretValue": "Show secret value";

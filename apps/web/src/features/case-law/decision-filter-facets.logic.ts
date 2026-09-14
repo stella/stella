@@ -1,7 +1,7 @@
 import type { TranslationKey } from "@/i18n/types";
 
 /**
- * What one facet section shows: the buckets the current result set reports,
+ * What one filter section shows: the buckets the current result set reports,
  * trimmed to a scannable head, with the reader's own choice always among them.
  */
 
@@ -82,8 +82,8 @@ export const facetSectionView = ({
 /**
  * How high a court stands, which is the only ordering of courts a reader can
  * scan: an apex court answers a question differently from a district one. The
- * order here is the rail's order, so the order the facets happen to arrive in
- * cannot reshuffle the sections between two searches.
+ * order here is the popover's order, so the order the facets happen to arrive
+ * in cannot reshuffle the sections between two searches.
  */
 const COURT_TIER_ORDER = [
   "constitutional",
@@ -119,12 +119,11 @@ export type CourtTierBuckets = {
   courts: readonly FacetSourceBucket[];
 };
 
-/** The facets the rail draws, whichever endpoint they came from. */
-export type DecisionRailFacets = {
+/** The facets the filter popover draws, whichever endpoint they came from. */
+export type DecisionFilterFacets = {
   courtTiers: readonly CourtTierBuckets[];
   year: readonly FacetSourceBucket[];
   decisionType: readonly FacetSourceBucket[];
-  source: readonly FacetSourceBucket[];
   language: readonly FacetSourceBucket[];
 };
 
@@ -132,7 +131,7 @@ const isCourtTier = (value: string): value is CourtTier =>
   COURT_TIER_ORDER.some((tier) => tier === value);
 
 /**
- * Court tiers in the rail's own order. A tier name the UI has no heading for
+ * Court tiers in the popover's own order. A tier name the UI has no heading for
  * is folded into the catch-all rather than dropped: a court the reader cannot
  * see is a court they cannot filter by.
  */
@@ -182,18 +181,17 @@ export const yearsNewestFirst = (
 ): FacetSourceBucket[] => years.toSorted(byYearDescending);
 
 /**
- * Browse facets as the rail draws them. A corpus-wide listing ranks no courts
- * and reports no types, sources or languages, so the rail shows the two
- * sections it can fill rather than five, three of them empty.
+ * Browse facets as the popover draws them. A corpus-wide listing ranks no
+ * courts and reports no types or languages, so the popover shows the two
+ * sections it can fill rather than four, two of them empty.
  */
-export const railFacetsFromBrowse = (browse: {
+export const decisionFilterFacetsFromBrowse = (browse: {
   court: readonly FacetSourceBucket[];
   year: readonly FacetSourceBucket[];
-}): DecisionRailFacets => ({
+}): DecisionFilterFacets => ({
   courtTiers:
     browse.court.length === 0 ? [] : [{ tier: null, courts: browse.court }],
   year: yearsNewestFirst(browse.year),
   decisionType: [],
-  source: [],
   language: [],
 });

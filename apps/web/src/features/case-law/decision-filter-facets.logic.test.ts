@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   facetSectionView,
   type FacetSourceBucket,
-} from "@/features/case-law/facet-rail.logic";
+} from "@/features/case-law/decision-filter-facets.logic";
 
 const buckets = (count: number): FacetSourceBucket[] =>
   Array.from({ length: count }, (_, index) => ({

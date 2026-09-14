@@ -629,7 +629,6 @@
       "saveTitle": "Uložit do spisu",
       "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
     },
-    "narrowResultsHint": "Každý výsledek to musí obsahovat",
     "newestDecisions": "Nejnovější rozhodnutí",
     "notesFilter": {
       "ai": "AI",
@@ -655,7 +654,6 @@
       "headMatter": "Úvodní část",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
     },
-    "refineWithinResults": "Zúžit výsledky",
     "research": {
       "answering": "{count, plural, one {Odpovídám na # buňku…} few {Odpovídám na # buňky…} many {Odpovídám na # buňky…} other {Odpovídám na # buněk…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Uložit zprávu"
     },
     "filter": "Filtr",
+    "filters": "Filtry",
     "find": "Najít",
     "formula": "Vzorec",
     "goBack": "Zpět",
     "goBackToEditing": "Zpět k úpravám",
     "hideDetails": "Skrýt podrobnosti",
-    "hideFilters": "Skrýt filtry",
     "hideSecretValue": "Skrýt tajnou hodnotu",
     "history": "Historie",
     "import": "Importovat",
@@ -1472,7 +1470,6 @@
     "settings": "Nastavení",
     "showAll": "Zobrazit vše",
     "showDetails": "Zobrazit podrobnosti",
-    "showFilters": "Zobrazit filtry",
     "showLess": "Zobrazit méně",
     "showMore": "Zobrazit více",
     "showSecretValue": "Zobrazit tajnou hodnotu",

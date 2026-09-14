@@ -629,7 +629,6 @@
       "saveTitle": "حفظ في ملف",
       "saved": "{count, plural, zero {لم يُحفظ أي حكم} one {تم حفظ حكم واحد} two {تم حفظ حكمين} few {تم حفظ # أحكام} many {تم حفظ # حكمًا} other {تم حفظ # حكم}} في {matter}"
     },
-    "narrowResultsHint": "يجب أن تحتوي عليه كل نتيجة",
     "newestDecisions": "أحدث الأحكام",
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
@@ -655,7 +654,6 @@
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
-    "refineWithinResults": "تضييق النتائج",
     "research": {
       "answering": "{count, plural, zero {لا توجد خلايا قيد الإجابة…} one {تجري الإجابة عن خلية واحدة…} two {تجري الإجابة عن خليتين…} few {تجري الإجابة عن # خلايا…} many {تجري الإجابة عن # خلية…} other {تجري الإجابة عن # خلية…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "حفظ الرسالة"
     },
     "filter": "تصفية",
+    "filters": "عوامل التصفية",
     "find": "بحث",
     "formula": "صيغة حسابية",
     "goBack": "رجوع",
     "goBackToEditing": "العودة إلى التعديل",
     "hideDetails": "إخفاء التفاصيل",
-    "hideFilters": "إخفاء عوامل التصفية",
     "hideSecretValue": "إخفاء القيمة السرية",
     "history": "السجل",
     "import": "استيراد",
@@ -1472,7 +1470,6 @@
     "settings": "الإعدادات",
     "showAll": "عرض الكل",
     "showDetails": "إظهار التفاصيل",
-    "showFilters": "إظهار عوامل التصفية",
     "showLess": "عرض أقل",
     "showMore": "عرض المزيد",
     "showSecretValue": "إظهار القيمة السرية",

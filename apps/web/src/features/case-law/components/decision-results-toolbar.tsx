@@ -1,20 +1,12 @@
 import type { ComponentType, ReactNode } from "react";
-import { useState } from "react";
 
-import {
-  AlignJustifyIcon,
-  PanelLeftIcon,
-  WrapTextIcon,
-  XIcon,
-} from "lucide-react";
+import { AlignJustifyIcon, WrapTextIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SEARCH_SORTS } from "@stll/api-contract/search";
 import type { SearchSort } from "@stll/api-contract/search";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { Input } from "@stll/ui/input";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
@@ -24,15 +16,10 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import Tooltip from "@/components/tooltip";
 import { DecisionColumnToggle } from "@/features/case-law/components/decision-column-toggle";
-import type {
-  DecisionFacetRailState,
-  DecisionTableLayout,
-} from "@/features/case-law/decision-column-preferences.logic";
+import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionContentMode } from "@/features/case-law/decision-columns.logic";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
-import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
 const SORT_LABEL_KEYS = {
@@ -50,24 +37,19 @@ type DecisionResultsToolbarProps = {
    * to carry them off the end with nothing to say they were there.
    */
   actions?: ReactNode;
-  /** How many rail filters are on; drawn on the toggle while the rail is folded. */
-  activeFilterCount: number;
   /**
-   * Find-in-table: the shared bar, in the place a matter's toolbar keeps it —
-   * at the head of the reading controls, beside the control that narrows the
-   * search itself.
+   * What narrows the result set, drawn first: the filter popover's own
+   * button. A node rather than props, so the toolbar owes nothing to the
+   * facet model it never reads.
    */
+  filters: ReactNode;
+  /** Find-in-table: the shared bar, in the place a matter's toolbar keeps it. */
   find: ReactNode;
   layout: DecisionTableLayout;
   onLayoutChange: (layout: DecisionTableLayout) => void;
   /** Drawn in the column chooser too, so a question can be hidden like any column. */
   questions: QuestionColumnSurface;
-  /** Adds the entry to the query as one more thing every hit must say. */
-  onRefine: (entry: string) => void;
-  onRailToggle: () => void;
   onSortChange: (sort: SearchSort) => void;
-  /** The facet rail's state, so the toggle says which way it goes. */
-  railState: DecisionFacetRailState;
   /** Null while browsing, where the list is newest-first by definition. */
   sort: SearchSort | null;
   /** What the list is: a count, or what the query matched. */
@@ -83,15 +65,12 @@ type DecisionResultsToolbarProps = {
  */
 export const DecisionResultsToolbar = ({
   actions,
-  activeFilterCount,
+  filters,
   find,
   layout,
   onLayoutChange,
-  onRailToggle,
-  onRefine,
   onSortChange,
   questions,
-  railState,
   sort,
   summary,
 }: DecisionResultsToolbarProps) => {
@@ -99,17 +78,12 @@ export const DecisionResultsToolbar = ({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      <FacetRailToggle
-        activeFilterCount={activeFilterCount}
-        onToggle={onRailToggle}
-        railState={railState}
-      />
+      {filters}
       <div className="text-muted-foreground min-w-0 flex-1 text-xs">
         {summary}
       </div>
       <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {find}
-        <NarrowResults onRefine={onRefine} />
         {sort !== null && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
@@ -169,57 +143,6 @@ export const DecisionResultsToolbar = ({
 };
 
 /**
- * The rail's own switch, beside the results it competes with for width. Only
- * where the rail is a column: a narrow viewport reaches the same sections
- * through the rail's sheet, which this never hides.
- *
- * Folded, the toggle carries the count of filters that are on, so the reader
- * is never left wondering why the list is short; the chips row under the
- * toolbar still names each of them, so nothing is only on the badge.
- */
-const FacetRailToggle = ({
-  activeFilterCount,
-  onToggle,
-  railState,
-}: {
-  activeFilterCount: number;
-  onToggle: () => void;
-  railState: DecisionFacetRailState;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const label =
-    railState === "open" ? t("common.hideFilters") : t("common.showFilters");
-  const showCount = railState === "collapsed" && activeFilterCount > 0;
-
-  return (
-    <Tooltip
-      content={label}
-      render={
-        <Button
-          aria-label={label}
-          className="text-muted-foreground hover:text-foreground relative hidden shrink-0 lg:inline-flex"
-          onClick={onToggle}
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-        />
-      }
-    >
-      <DirectionalIcon className="size-4" icon={PanelLeftIcon} />
-      {showCount && (
-        <span
-          aria-hidden="true"
-          className="bg-primary text-primary-foreground absolute -end-0.5 -top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-medium tabular-nums"
-        >
-          {format.number(activeFilterCount)}
-        </span>
-      )}
-    </Tooltip>
-  );
-};
-
-/**
  * How much of a prose cell a row shows. The same two modes, icons and words as
  * the workspace table's own density control; the state is this page's, because
  * a public results table has no view to hang it on.
@@ -245,45 +168,6 @@ const TABLE_CONTENT_MODE_OPTIONS = [
 // a mode the reader cannot get back to.
 type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["mode"];
 true satisfies DecisionContentMode extends OfferedContentMode ? true : never;
-
-/**
- * One more word every hit has to carry. It is written into the query itself,
- * because the query is the only text the search reads; the chips below say
- * which words came from here, and take them back out.
- *
- * Its neighbour in the toolbar is find-in-table, which looks only at the rows
- * already on screen. Both say so: the label names what this one does to the
- * result set, and the tooltip says it in a clause.
- */
-const NarrowResults = ({ onRefine }: { onRefine: (entry: string) => void }) => {
-  const t = useTranslations();
-  const [entry, setEntry] = useState("");
-
-  return (
-    <form
-      className="relative"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onRefine(entry);
-        setEntry("");
-      }}
-    >
-      <Tooltip
-        content={t("caseLaw.narrowResultsHint")}
-        render={
-          <Input
-            aria-label={t("caseLaw.refineWithinResults")}
-            className="h-7 min-h-0 w-40 text-xs sm:w-52"
-            onChange={(event) => setEntry(event.target.value)}
-            placeholder={t("caseLaw.refineWithinResults")}
-            type="search"
-            value={entry}
-          />
-        }
-      />
-    </form>
-  );
-};
 
 export type DecisionFilterChip = {
   /** Stable within the row, so removing one does not remount the rest. */

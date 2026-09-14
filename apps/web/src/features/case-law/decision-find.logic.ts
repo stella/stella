@@ -3,8 +3,8 @@
  * a find, and which rows survive one.
  *
  * Decision rows are found on the client, over exactly the page the reader is
- * looking at. The corpus is narrowed by the search itself — a refinement every
- * hit has to carry — so a second server round for the same words would be the
+ * looking at. The corpus is narrowed by the search box, which every hit has
+ * already answered, so a second server round for the same words would be the
  * same question asked twice; a find is the other question, "where on this page
  * does that word appear".
  */

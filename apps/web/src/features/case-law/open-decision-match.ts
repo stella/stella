@@ -19,7 +19,6 @@ import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
 } from "@/features/case-law/queries/decisions";
-import { queryWithRefinements } from "@/features/case-law/search-refine.logic";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
@@ -78,10 +77,8 @@ export const createDecisionFiltersFromSearch = ({
   lang,
   q,
   sort,
-  source,
   to,
   type,
-  within,
   year,
 }: CaseLawSearchScope): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
@@ -90,9 +87,7 @@ export const createDecisionFiltersFromSearch = ({
   }
   const range = decisionDateRange({ from, to, year });
   const search = searchTextOfIntent(
-    readDecisionIntent(queryWithRefinements(q, within), {
-      jurisdiction: scope,
-    }),
+    readDecisionIntent(q, { jurisdiction: scope }),
   );
 
   return {
@@ -101,7 +96,6 @@ export const createDecisionFiltersFromSearch = ({
     ...(range.from === undefined ? {} : { dateFrom: range.from }),
     ...(range.to === undefined ? {} : { dateTo: range.to }),
     ...(type ? { decisionType: type } : {}),
-    ...(source ? { sourceId: source } : {}),
     ...(lang ? { language: lang } : {}),
     // An order is a property of a ranked answer, so a browse listing carries
     // none: it is newest-first by definition.
@@ -129,12 +123,9 @@ export const openDecisionMatch = async ({
   search,
   uiLocale,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
-  const intent = readDecisionIntent(
-    queryWithRefinements(search.q, search.within),
-    {
-      jurisdiction: caseLawCountryScope(search.country),
-    },
-  );
+  const intent = readDecisionIntent(search.q, {
+    jurisdiction: caseLawCountryScope(search.country),
+  });
   if (intent.type !== "identifier") {
     return false;
   }

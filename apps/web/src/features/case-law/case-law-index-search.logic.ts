@@ -25,27 +25,19 @@ export type CaseLawIndexSearch = {
   lang?: string | undefined;
   q?: string | undefined;
   sort?: SearchSort | undefined;
-  source?: string | undefined;
   /** The end of the decision-date range, inclusive. */
   to?: string | undefined;
   type?: string | undefined;
-  /** Refinements added by the results toolbar, separate from reader-entered `q`. */
-  within?: string | undefined;
   /**
    * A whole year, as links made before the range existed spell it. Read, never
-   * written: the rail's year list is a quick pick for `from`/`to` now, so one
-   * span keeps one address instead of two ways to name the same twelve months.
+   * written: the year list is a quick pick for `from`/`to` now, so one span
+   * keeps one address instead of two ways to name the same twelve months.
    */
   year?: string | undefined;
 };
 
 /** The single-select facet fields, so clearing cannot miss one added later. */
-export const CASE_LAW_FILTER_KEYS = [
-  "court",
-  "lang",
-  "source",
-  "type",
-] as const;
+export const CASE_LAW_FILTER_KEYS = ["court", "lang", "type"] as const;
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
 
@@ -128,7 +120,6 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
   court: undefined,
   from: undefined,
   lang: undefined,
-  source: undefined,
   to: undefined,
   type: undefined,
   year: undefined,
@@ -138,7 +129,7 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
  * The URL a navigation should start from while the search field holds text the
  * URL has not been told about yet.
  *
- * The field writes `q` on a debounce. A filter, sort or refine change that
+ * The field writes `q` on a debounce. A filter or sort change that
  * cancelled that write and navigated from the URL would lose the edit for
  * good: `q` would not change, so the field would never resync and would keep
  * showing text no result set reflects. Folding the pending value in first
@@ -158,9 +149,9 @@ export const withPendingQuery = (
 };
 
 /**
- * How many of the rail's own filters are on. The date span counts as one
- * whichever ends it names, because that is the one chip it becomes and the one
- * row it occupies on the rail.
+ * How many filters are on. The date span counts as one whichever ends it
+ * names, because that is the one chip it becomes and the one row it occupies
+ * in the popover.
  */
 export const activeCaseLawFilterCount = (search: CaseLawIndexSearch): number =>
   CASE_LAW_FILTER_KEYS.filter((key) => search[key] !== undefined).length +
@@ -185,7 +176,7 @@ export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
 ): `/law/cases${string}` => {
-  const { country, court, lang, q, sort, source, type, within } = search;
+  const { country, court, lang, q, sort, type } = search;
   const params = new URLSearchParams();
   const range = decisionDateRange(search);
   if (country) {
@@ -205,17 +196,11 @@ export const createCaseLawIndexPath = (
   if (type) {
     params.set("type", type);
   }
-  if (source) {
-    params.set("source", source);
-  }
   if (lang) {
     params.set("lang", lang);
   }
   if (q) {
     params.set("q", q);
-  }
-  if (within) {
-    params.set("within", within);
   }
   const sortParam = decisionSortParam(sort);
   if (sortParam !== undefined) {

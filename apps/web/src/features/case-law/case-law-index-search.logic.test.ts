@@ -62,13 +62,11 @@ describe("the filters the URL carries", () => {
         from: "2024-01-01",
         lang: "cs",
         q: "nájem",
-        source: "nsoud",
         to: "2024-12-31",
         type: "rozsudek",
-        within: '"dobré mravy"',
       }),
     ).toBe(
-      "/law/cases?country=cz&court=Nejvy%C5%A1%C5%A1%C3%AD+soud&from=2024-01-01&to=2024-12-31&type=rozsudek&source=nsoud&lang=cs&q=n%C3%A1jem&within=%22dobr%C3%A9+mravy%22",
+      "/law/cases?country=cz&court=Nejvy%C5%A1%C5%A1%C3%AD+soud&from=2024-01-01&to=2024-12-31&type=rozsudek&lang=cs&q=n%C3%A1jem",
     );
   });
 
@@ -131,7 +129,7 @@ describe("how many filters the badge reports", () => {
     ).toBe(CASE_LAW_FILTER_KEYS.length);
   });
 
-  // One chip, one row on the rail, so one count whichever ends it names.
+  // One chip, one row in the popover, so one count whichever ends it names.
   test("the date span counts once, however it is spelled", () => {
     expect(
       activeCaseLawFilterCount({ country: "cz", from: "2024-01-01" }),

@@ -629,7 +629,6 @@
       "saveTitle": "Išsaugoti byloje",
       "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
     },
-    "narrowResultsHint": "To turi būti kiekviename rezultate",
     "newestDecisions": "Naujausi sprendimai",
     "notesFilter": {
       "ai": "DI",
@@ -655,7 +654,6 @@
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
-    "refineWithinResults": "Susiaurinti rezultatus",
     "research": {
       "answering": "{count, plural, one {Atsakoma į # langelį…} few {Atsakoma į # langelius…} many {Atsakoma į # langelio…} other {Atsakoma į # langelių…}}",
       "answers": {
@@ -1352,12 +1350,12 @@
       "title": "Išsaugoti žinutę"
     },
     "filter": "Filtras",
+    "filters": "Filtrai",
     "find": "Ieškoti",
     "formula": "Formulė",
     "goBack": "Grįžti atgal",
     "goBackToEditing": "Grįžti į redagavimą",
     "hideDetails": "Slėpti detales",
-    "hideFilters": "Slėpti filtrus",
     "hideSecretValue": "Slėpti slaptą reikšmę",
     "history": "Istorija",
     "import": "Importuoti",
@@ -1472,7 +1470,6 @@
     "settings": "Nustatymai",
     "showAll": "Rodyti viską",
     "showDetails": "Rodyti detales",
-    "showFilters": "Rodyti filtrus",
     "showLess": "Rodyti mažiau",
     "showMore": "Rodyti daugiau",
     "showSecretValue": "Rodyti slaptą reikšmę",
