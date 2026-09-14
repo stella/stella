@@ -211,6 +211,9 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
     );
     expect(configSource).toContain("apps/web/src/lib/public-law-sitemap.ts");
+    expect(configSource).toContain(
+      "apps/web/src/features/statutes/statute-sitemap.ts",
+    );
     expect(configSource).toContain('name: "@/routes/-auth-context"');
     expect(configSource).toContain('name: "@/lib/auth"');
     expect(configSource).toContain(

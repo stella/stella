@@ -27,6 +27,11 @@ import {
   readLegislationShelfHandler,
 } from "@/api/handlers/legislation/shelf";
 import {
+  listStatuteSitemapShardsHandler,
+  listStatuteSitemapStatutesHandler,
+  sitemapShardStatutesQuerySchema,
+} from "@/api/handlers/legislation/sitemap";
+import {
   listStatuteVersionsHandler,
   listStatuteVersionsParamsSchema,
   listStatuteVersionsQuerySchema,
@@ -172,6 +177,40 @@ const readProvisionHistory = createSafePublicHandler(
   },
 );
 
+const listStatuteSitemapShards = createSafePublicHandler(
+  { mcp: { type: "internal", reason: "public_indexing" } },
+  async function* () {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listStatuteSitemapShardsHandler(legislationPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const listStatuteSitemapStatutes = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: sitemapShardStatutesQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listStatuteSitemapStatutesHandler(
+            query,
+            legislationPublicReadDb,
+          ),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
 /**
  * Public-read routes: no auth, no session, no organization context.
  * Only sources cleared for redistribution are readable.
@@ -227,4 +266,8 @@ export const publicLegislationRoute = new Elysia({
       params: readProvisionHistory.config.params,
       query: readProvisionHistory.config.query,
     },
-  );
+  )
+  .get("/sitemap/shards", listStatuteSitemapShards.handler)
+  .get("/sitemap/statutes/shard", listStatuteSitemapStatutes.handler, {
+    query: listStatuteSitemapStatutes.config.query,
+  });

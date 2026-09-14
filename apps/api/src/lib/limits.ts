@@ -489,6 +489,10 @@ export const LIMITS = {
    */
   legislationProvisionHistoryPageSizeDefault: 5,
   legislationProvisionHistoryPageSizeMax: 20,
+  /** Works (one canonical URL each) in one statute sitemap shard. */
+  statuteSitemapShardUrlLimit: 5000,
+  /** Max child sitemap entries in one sitemap index by protocol. */
+  statuteSitemapIndexEntryLimit: 50_000,
   caseLawPolarityRulesPerLanguage: 500,
   // corpus index two-stage search: lexical candidates fetched per index window
   // before the citation-authority rerank.
