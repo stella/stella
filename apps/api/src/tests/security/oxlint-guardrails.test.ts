@@ -349,7 +349,12 @@ describe("custom oxlint guardrails", () => {
     expect(protectedRouteSource).toContain("aiAvailabilityOptions");
     expect(protectedRouteSource).toContain("roleOptions");
     expect(protectedRouteSource).not.toContain("organizationOptions");
-    expect(protectedRouteSource).not.toContain("workspacesNavigationOptions");
+    expect(protectedRouteSource).toContain(
+      "useChromeQuery(\n    workspacesNavigationOptions(",
+    );
+    expect(protectedRouteSource).not.toContain(
+      "prefetchRouteQuery(\n        context.queryClient,\n        workspacesNavigationOptions(",
+    );
     expect(protectedRouteSource).toContain("AIAvailabilityProvider");
     expect(protectedRouteSource).toContain("AppSidebar");
     expect(protectedRouteSource).toContain("ChatMentionProviders");
