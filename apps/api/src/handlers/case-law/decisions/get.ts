@@ -22,6 +22,14 @@ import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import {
+  courtPresentation,
+  readCourtRegistry,
+} from "@/api/lib/case-law/court-presentation";
+import {
+  type CourtWeightMap,
+  loadCourtWeights,
+} from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   readDecisionTextMetadata,
@@ -75,6 +83,12 @@ export const readDecisionQuerySchema = t.Object({
 
 type ReadDecisionOptions = {
   citationsCursor?: string | null | undefined;
+  /**
+   * The court registry the chip beside the court's name is drawn from. It
+   * lives on the root pool rather than the reader's, so a caller holding only
+   * the reader supplies its own; every other caller takes the default.
+   */
+  readCourtWeights?: (() => Promise<CourtWeightMap>) | undefined;
   /**
    * Gated upstream, and the only database handle this read gets: its rows
    * come from the transaction that approved it.
@@ -207,6 +221,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
+    readCourtWeights = loadCourtWeights,
     subject: { id: decisionId, tx },
   }: ReadDecisionOptions) => {
     const citationCursors = decodeDecisionCitationCursor(citationsCursor);
@@ -270,27 +285,36 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       ecli: decision.ecli,
     });
 
-    const [languageAlternates, citationsFromPage, citationsToPage] =
-      await Promise.all([
-        listPublicDecisionLanguageAlternates({
-          tx,
-          languageGroupKey: decision.languageGroupKey,
-        }),
-        citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
-          ? emptyCitationPage()
-          : listOutgoingDecisionCitations({
-              tx,
-              cursor: citationPageCursor(citationCursors.from),
-              decisionId,
-            }),
-        citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
-          ? emptyCitationPage()
-          : listIncomingDecisionCitations({
-              tx,
-              cursor: citationPageCursor(citationCursors.to),
-              decisionId,
-            }),
-      ]);
+    const [
+      courtWeights,
+      languageAlternates,
+      citationsFromPage,
+      citationsToPage,
+    ] = await Promise.all([
+      // Bounded and degraded to no badge. This read runs inside the gated
+      // transaction, holding a reader connection, and the registry lives on
+      // the root pool: an unreachable root pool must cost the decision its
+      // chip, not the reader its decision.
+      readCourtRegistry(readCourtWeights),
+      listPublicDecisionLanguageAlternates({
+        tx,
+        languageGroupKey: decision.languageGroupKey,
+      }),
+      citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+        ? emptyCitationPage()
+        : listOutgoingDecisionCitations({
+            tx,
+            cursor: citationPageCursor(citationCursors.from),
+            decisionId,
+          }),
+      citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
+        ? emptyCitationPage()
+        : listIncomingDecisionCitations({
+            tx,
+            cursor: citationPageCursor(citationCursors.to),
+            decisionId,
+          }),
+    ]);
 
     if (!("items" in citationsFromPage)) {
       return citationsFromPage;
@@ -366,6 +390,12 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             documentUnavailable: false,
           };
 
+    const presentation = courtPresentation(courtWeights, {
+      country: decision.country,
+      court: decision.court,
+      ecli: decision.ecli,
+    });
+
     return {
       documentPending,
       documentReadFailed,
@@ -376,6 +406,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       ecli: decision.ecli,
       identifiers,
       court: decision.court,
+      courtAbbreviation: presentation.courtAbbreviation,
+      courtTier: presentation.courtTier,
       country: decision.country,
       language: decision.language,
       languageGroupKey: decision.languageGroupKey,

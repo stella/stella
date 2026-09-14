@@ -1167,6 +1167,8 @@ const CONTRACT_CORPUS = {
               citationCount: 3,
               country: "CZ",
               court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+              courtTier: "supreme",
               createdAt: "2020-05-01T00:00:00.000Z",
               decisionDate: "2020-05-01",
               decisionId: uid(53),
@@ -1227,6 +1229,8 @@ const CONTRACT_CORPUS = {
           citationsNextCursor: null,
           country: "CZ",
           court: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          courtTier: "supreme",
           // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"
           // string), not a `Date` object.
           decisionDate: "2020-05-01",

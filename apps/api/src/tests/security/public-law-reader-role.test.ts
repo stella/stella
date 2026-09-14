@@ -17,6 +17,7 @@ import {
   caseLawSources,
   corpusIndexGenerations,
 } from "@/api/db/schema";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   readDecisionHandler,
   readDecisionTextColumnWritten,
@@ -35,6 +36,7 @@ import {
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
+import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -648,12 +650,18 @@ describe("public-law reader role", () => {
     expect(result.ranked).toEqual([]);
   });
 
+  /** The seeded court registry, for the reads that rank or chip a court. */
+  const readCourtWeights = async () => courtWeightMapFromSeed();
+
   test("executes list, sitemap, and search projections as the reader role", async () => {
     const caseLawDb = caseLawReaderDb();
 
     const list = await listDecisionsHandler(
       { country: PUBLIC_COUNTRY },
       caseLawDb,
+      // The registry as the seed migration writes it: this census holds the
+      // reader role alone, and the loader reads the root pool.
+      readCourtWeights,
     );
     expect(list).toMatchObject({ items: [] });
     await readPublicDecisionLanguageAlternatesByGroup({
@@ -758,7 +766,8 @@ describe("public-law reader role", () => {
       const decision = await withRedistributableSubject(
         caseLawDb,
         { kind: "id", id: decisionId },
-        async (subject) => await readDecisionHandler({ subject }),
+        async (subject) =>
+          await readDecisionHandler({ readCourtWeights, subject }),
       );
       expect(decision).not.toBeNull();
       exercised.add(readDecisionHandler.publicLawSharedQuery);
@@ -793,6 +802,14 @@ describe("public-law reader role", () => {
           excludedSourceIds: [],
         });
         exercised.add(readCaseLawCorpusStatusQuery.publicLawSharedQuery);
+
+        await readCaseLawCourtActivityQuery(tx, {
+          country: PUBLIC_COUNTRY,
+          courts: ["Reader role census"],
+          excludedSourceIds: [],
+          now: new Date(),
+        });
+        exercised.add(readCaseLawCourtActivityQuery.publicLawSharedQuery);
 
         await readNonRedistributableLegislationSourceIdsQuery(tx);
         exercised.add(

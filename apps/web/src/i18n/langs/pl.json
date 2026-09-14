@@ -598,6 +598,11 @@
       "headnote": "Teza",
       "summary": "Teza / trafienie"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# sąd} few {# sądy} many {# sądów} other {# sądu}}",
+      "newLast24Hours": "{count} z ostatnich 24 h",
+      "newLast7Days": "Nowe z ostatnich 7 dni"
+    },
     "courtTiers": {
       "constitutional": "Trybunały konstytucyjne",
       "other": "Pozostałe sądy",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Szukaj w bazie prawnej",
     "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",
     "signals": "Sygnały",
-    "tier": {
-      "constitutional": "Kontrola konstytucyjna",
-      "supreme": "Najwyższa instancja"
-    },
     "topCourts": "Z najwyższych sądów",
     "tryIdentifier": "Wypróbuj identyfikator"
   },

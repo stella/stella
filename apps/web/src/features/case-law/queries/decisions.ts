@@ -7,6 +7,7 @@ import {
   type SearchSort,
 } from "@stll/api-contract/search";
 
+import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import {
   DEFAULT_DECISION_PAGE_SIZE,
   type DecisionPageSize,
@@ -216,6 +217,10 @@ export const decisionsInfiniteOptions = (
             ecli: h.ecli,
             identifiers: h.identifiers,
             court: h.court,
+            courtAbbreviation: h.courtAbbreviation,
+            // Folded into the catch-all where the UI has no heading for the
+            // label, the same way the facet rail folds one.
+            courtTier: isCourtTier(h.courtTier) ? h.courtTier : "other",
             country: h.country,
             language: h.language,
             languageAlternates: h.languageAlternates,

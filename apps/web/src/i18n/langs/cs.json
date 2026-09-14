@@ -598,6 +598,11 @@
       "headnote": "Právní věta",
       "summary": "Právní věta / shoda"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# soud} few {# soudy} many {# soudu} other {# soudů}}",
+      "newLast24Hours": "{count} za posledních 24 h",
+      "newLast7Days": "Nové za posledních 7 dní"
+    },
     "courtTiers": {
       "constitutional": "Ústavní soudy",
       "other": "Ostatní soudy",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Hledat v právní databázi",
     "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo klíčová slova",
     "signals": "Signály",
-    "tier": {
-      "constitutional": "Ústavní přezkum",
-      "supreme": "Nejvyšší instance"
-    },
     "topCourts": "Z vrcholných soudů",
     "tryIdentifier": "Vyzkoušejte identifikátor"
   },

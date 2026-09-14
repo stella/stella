@@ -598,6 +598,11 @@
       "headnote": "Kopsavilkums",
       "summary": "Tiesību atziņa / atbilsme"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, zero {# tiesu} one {# tiesa} other {# tiesas}}",
+      "newLast24Hours": "{count} pēdējās 24 h",
+      "newLast7Days": "Jaunie pēdējās 7 dienās"
+    },
     "courtTiers": {
       "constitutional": "Konstitucionālās tiesas",
       "other": "Citas tiesas",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
     "signals": "Signāli",
-    "tier": {
-      "constitutional": "Konstitucionālā kontrole",
-      "supreme": "Augstākā instance"
-    },
     "topCourts": "No augstākajām tiesām",
     "tryIdentifier": "Izmēģiniet identifikatoru"
   },

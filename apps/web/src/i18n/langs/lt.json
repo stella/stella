@@ -598,6 +598,11 @@
       "headnote": "Santrauka",
       "summary": "Teisės taisyklė / atitiktis"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# teismas} few {# teismai} many {# teismo} other {# teismų}}",
+      "newLast24Hours": "{count} per pastarąsias 24 val.",
+      "newLast7Days": "Nauji per pastarąsias 7 dienas"
+    },
     "courtTiers": {
       "constitutional": "Konstituciniai teismai",
       "other": "Kiti teismai",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Ieškoti teisės duomenų bazėje",
     "searchPlaceholder": "Bylos numeris, akto numeris, ECLI arba raktažodžiai",
     "signals": "Signalai",
-    "tier": {
-      "constitutional": "Konstitucinė kontrolė",
-      "supreme": "Aukščiausioji instancija"
-    },
     "topCourts": "Iš aukščiausiųjų teismų",
     "tryIdentifier": "Išbandykite identifikatorių"
   },

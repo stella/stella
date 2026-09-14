@@ -47,6 +47,8 @@ const validResponse = {
         },
       ],
       court: "court",
+      courtAbbreviation: null,
+      courtTier: "other",
       country: "XX",
       language: "xx",
       languageAlternates: [],

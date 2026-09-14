@@ -598,6 +598,11 @@
       "headnote": "Sumario",
       "summary": "Sumario / coincidencia"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# tribunal} other {# tribunales}}",
+      "newLast24Hours": "{count} en las últimas 24 h",
+      "newLast7Days": "Nuevas en los últimos 7 días"
+    },
     "courtTiers": {
       "constitutional": "Tribunales constitucionales",
       "other": "Otros tribunales",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Buscar en la base de datos jurídica",
     "searchPlaceholder": "Número de asunto, número de norma, ECLI o palabras clave",
     "signals": "Señales",
-    "tier": {
-      "constitutional": "Control de constitucionalidad",
-      "supreme": "Última instancia"
-    },
     "topCourts": "De los tribunales superiores",
     "tryIdentifier": "Prueba un identificador"
   },

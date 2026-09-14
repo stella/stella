@@ -15,9 +15,11 @@ import { Separator } from "@stll/ui/separator";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
+import { CourtName } from "@/features/case-law/components/court-name";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
+import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import {
@@ -95,6 +97,22 @@ function PublicLawTopBar() {
   const court = useRouterState({
     select: (state) =>
       readStringField(state.matches.at(-1)?.loaderData, "court"),
+  });
+  // The court's own short form and rank, as the decision read derived them:
+  // the header names a court, so it draws the same chip the results table
+  // does. Both are absent on every route but a decision's.
+  const courtAbbreviation = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "courtAbbreviation"),
+  });
+  const courtTier = useRouterState({
+    select: (state) => {
+      const tier = readStringField(
+        state.matches.at(-1)?.loaderData,
+        "courtTier",
+      );
+      return tier !== null && isCourtTier(tier) ? tier : undefined;
+    },
   });
   const documentStatus = useRouterState({
     select: (state) =>
@@ -226,8 +244,13 @@ function PublicLawTopBar() {
                 {court !== null && (
                   // Dropped on a narrow screen: the case number identifies the
                   // decision on its own, the court only qualifies it.
-                  <span className="text-muted-foreground min-w-0 truncate max-sm:hidden">
-                    {DECISION_TITLE_SEPARATOR} <BidiText>{court}</BidiText>
+                  <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate max-sm:hidden">
+                    {DECISION_TITLE_SEPARATOR}
+                    <CourtName
+                      abbreviation={courtAbbreviation}
+                      court={court}
+                      tier={courtTier}
+                    />
                   </span>
                 )}
                 {legalArea !== null && (

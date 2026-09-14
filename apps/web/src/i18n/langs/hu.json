@@ -598,6 +598,11 @@
       "headnote": "Jogi tétel",
       "summary": "Jogtétel / találat"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# bíróság} other {# bíróság}}",
+      "newLast24Hours": "{count} az elmúlt 24 órában",
+      "newLast7Days": "Új az elmúlt 7 napban"
+    },
     "courtTiers": {
       "constitutional": "Alkotmánybíróságok",
       "other": "Egyéb bíróságok",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Keresés a jogi adatbázisban",
     "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy kulcsszavak",
     "signals": "Jelzések",
-    "tier": {
-      "constitutional": "Alkotmányossági felülvizsgálat",
-      "supreme": "Legfelsőbb fórum"
-    },
     "topCourts": "A legfelsőbb bíróságoktól",
     "tryIdentifier": "Próbáljon ki egy azonosítót"
   },

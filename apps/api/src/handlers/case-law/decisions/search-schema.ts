@@ -132,6 +132,14 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           ecli: nullableStringSchema,
           identifiers: decisionIdentifiersSchema,
           court: t.String(),
+          /**
+           * The court's short form, null where nothing states one. A reader
+           * scans it; the court name beside it carries the meaning on its own,
+           * so an unknown abbreviation is never a placeholder.
+           */
+          courtAbbreviation: nullableStringSchema,
+          /** Where the court stands, which is what the abbreviation is drawn as. */
+          courtTier: t.UnionEnum([...COURT_TIER_LABELS]),
           country: t.String(),
           language: t.String(),
           languageAlternates: languageAlternatesSchema,

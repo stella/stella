@@ -598,6 +598,11 @@
       "headnote": "Lühikokkuvõte",
       "summary": "Õiguslik seisukoht / vaste"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# kohus} other {# kohut}}",
+      "newLast24Hours": "{count} viimase 24 h jooksul",
+      "newLast7Days": "Uued viimase 7 päeva jooksul"
+    },
     "courtTiers": {
       "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
       "other": "Muud kohtud",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
     "signals": "Signaalid",
-    "tier": {
-      "constitutional": "Põhiseaduslikkuse järelevalve",
-      "supreme": "Kõrgeim aste"
-    },
     "topCourts": "Kõrgeimatest kohtutest",
     "tryIdentifier": "Proovi tunnust"
   },
