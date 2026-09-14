@@ -577,6 +577,7 @@
       "lastNegative": "viimane negatiivne viide aastal {year}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
       "openAtCitation": "Ava viite kohal",
+      "openDecision": "Ava lahend",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
       "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
@@ -702,12 +703,17 @@
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
       "popularName": "Rahvanimi",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# mainimine} other {# mainimist}}",
       "provisionsCited": "Viidatud sätted",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
       },
-      "statutes": "Kohaldatavad õigusaktid"
+      "statutes": "Kohaldatavad õigusaktid",
+      "textPending": "Lahendi teksti alles hangitakse",
+      "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
+      "textUnavailable": "Selle lahendi teksti ei ole saadaval"
     }
   },
   "catalogue": {

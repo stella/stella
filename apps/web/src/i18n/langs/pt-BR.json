@@ -577,6 +577,7 @@
       "lastNegative": "última citação negativa em {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "openAtCitation": "Abrir na citação",
+      "openDecision": "Abrir a decisão",
       "passageNotFound": "O trecho citante não foi encontrado no texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
       "showAll": "{count, plural, one {Mostrar a decisão} many {Mostrar todas as # decisões} other {Mostrar todas as # decisões}}",
@@ -702,12 +703,17 @@
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
       "popularName": "Nome popular",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções}}",
       "provisionsCited": "Dispositivos citados",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"
       },
-      "statutes": "Normas aplicáveis"
+      "statutes": "Normas aplicáveis",
+      "textPending": "O texto da decisão ainda está sendo obtido",
+      "textReadFailed": "Não foi possível carregar o texto da decisão",
+      "textUnavailable": "Não há texto disponível para esta decisão"
     }
   },
   "catalogue": {

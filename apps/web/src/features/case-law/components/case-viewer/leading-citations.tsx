@@ -11,6 +11,8 @@ import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import type { CitationPassage } from "@/features/case-law/citation-passage";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -21,7 +23,10 @@ import type {
   CitationTreatment,
   CitedDecision,
 } from "@/features/case-law/citation-treatment";
-import { CitationPassagePreview } from "@/features/case-law/components/case-viewer/citation-passage-preview";
+import {
+  CitationPassageQuote,
+  useCitationPassage,
+} from "@/features/case-law/components/case-viewer/citation-passage-preview";
 import {
   CitationList,
   DIRECTION_TITLE,
@@ -151,7 +156,11 @@ const DirectionSection = ({
       })}
       {showingAll ? (
         <div className="border-border/60 -mx-3 border-t pt-2">
-          <CitationList decisionId={decisionId} direction={direction} />
+          <CitationList
+            decision={decision}
+            decisionId={decisionId}
+            direction={direction}
+          />
         </div>
       ) : (
         <Button
@@ -229,7 +238,6 @@ const LeadingRow = ({
   direction: CitationDirection;
   row: LeadingCitation;
 }) => {
-  const t = useTranslations();
   const format = useFormatter();
   const inspector = useInspectorView();
   const rowRef = useRef<HTMLLIElement>(null);
@@ -272,7 +280,7 @@ const LeadingRow = ({
       </button>
       {open && (
         <div className="ps-4">
-          <CitationPassagePreview
+          <LeadingPassage
             citation={{
               citationText: row.citationText,
               decision: cited,
@@ -308,11 +316,44 @@ const LeadingRow = ({
               forceReflow(element);
               element.dataset["highlight"] = "";
             }}
-            openLabel={t("caseLaw.citation.openAtCitation")}
             textDecisionId={textDecisionId}
           />
         </div>
       )}
     </li>
+  );
+};
+
+/**
+ * The passage where the citation is made, and — once it is located — the way
+ * into the text at it. The read starts when the row is opened, so a list of
+ * leading citations does not read every citing decision up front.
+ */
+const LeadingPassage = ({
+  citation,
+  onOpen,
+  textDecisionId,
+}: {
+  citation: CitationAnchorSource;
+  onOpen: (passage: CitationPassage) => void;
+  textDecisionId: string;
+}) => {
+  const t = useTranslations();
+  const read = useCitationPassage({ citation, textDecisionId });
+
+  return (
+    <div className="flex flex-col items-start gap-1.5 py-1">
+      <CitationPassageQuote read={read} />
+      {read.status === "found" && (
+        <Button
+          className="h-6 px-2 text-xs"
+          onClick={() => onOpen(read.passage)}
+          size="sm"
+          variant="outline"
+        >
+          {t("caseLaw.citation.openAtCitation")}
+        </Button>
+      )}
+    </div>
   );
 };

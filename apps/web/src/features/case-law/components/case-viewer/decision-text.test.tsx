@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -45,7 +46,11 @@ const renderDecision = (abstract: string): string =>
           caseNumber: "1 As 1/2026",
           court: "Test court",
           documentAst: ast,
+          documentPending: false,
+          documentReadFailed: false,
+          documentUnavailable: false,
           fulltext: null,
+          id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
           language: "cs",
           sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
           textFields: {
@@ -82,6 +87,68 @@ describe("editorial legal text annotations", () => {
     }
     expect(markup).toContain('href="http://example.test/source"');
     expect(markup).not.toContain(messages.caseLaw.viewer.provisionsCited);
+  });
+});
+
+// The abstract and the legal sentence are published beside the decision, not
+// inside its document, so an unreadable document does not take them with it.
+describe("a decision whose text did not resolve", () => {
+  const renderBodyless = (): string =>
+    renderToStaticMarkup(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <QueryClientProvider client={new QueryClient()}>
+          <DecisionText
+            activeMatchIndex={-1}
+            decision={{
+              caseNumber: "1 As 1/2026",
+              court: "Test court",
+              documentAst: null,
+              documentPending: true,
+              documentReadFailed: true,
+              documentUnavailable: false,
+              fulltext: null,
+              id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+              language: "cs",
+              sourceAttributionUrl: null,
+              textFields: {
+                abstract: {
+                  text: "Analytická právní věta o náhradě škody.",
+                  type: TEXT_FIELD_TYPE.PRESENT,
+                },
+                headnote: {
+                  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+                  type: TEXT_FIELD_TYPE.ABSENT,
+                },
+                legalSentence: {
+                  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+                  type: TEXT_FIELD_TYPE.ABSENT,
+                },
+                summary: {
+                  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+                  type: TEXT_FIELD_TYPE.ABSENT,
+                },
+              },
+            }}
+            searchQuery=""
+          />
+        </QueryClientProvider>
+      </IntlProvider>,
+    );
+
+  test("says the text could not be read, and offers to ask again", () => {
+    const markup = renderBodyless();
+
+    expect(markup).toContain(messages.caseLaw.viewer.textReadFailed);
+    expect(markup).toContain(messages.common.retry);
+    // The case-law list's "configure a source and run a sync" line used to
+    // stand here, telling a reader of one decision to go administer an import.
+    expect(markup).not.toContain(messages.caseLaw.emptyState);
+  });
+
+  test("keeps the editorial supplement the record still carries", () => {
+    expect(renderBodyless()).toContain(
+      "Analytická právní věta o náhradě škody.",
+    );
   });
 });
 
@@ -165,7 +232,11 @@ const renderSearchedDecision = ({
           caseNumber: "1 As 1/2026",
           court: "Test court",
           documentAst: searchedAst,
+          documentPending: false,
+          documentReadFailed: false,
+          documentUnavailable: false,
           fulltext: null,
+          id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
           language: "en",
           sourceAttributionUrl: null,
           textFields: {

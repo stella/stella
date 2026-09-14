@@ -5,13 +5,16 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-import type {
-  ProvisionReference,
-  RenderProvisionPart,
-} from "@/features/case-law/provision-label";
+import {
+  groupProvisionsByWork,
+  type ProvisionGroup,
+  type WorkGroup,
+} from "@/features/case-law/components/case-viewer/provisions-cited.logic";
+import type { RenderProvisionPart } from "@/features/case-law/provision-label";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
   decisionProvisionsInfiniteOptions,
@@ -29,6 +32,7 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
+import type { StatuteLinkTarget } from "@/lib/statute-route";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 /**
@@ -38,48 +42,6 @@ import { createStatuteLinkTarget } from "@/lib/statute-route";
  * read, they just do not link.
  */
 const LINKED_WORKS_LIMIT = 12;
-
-type ProvisionRow = ProvisionReference & {
-  anchor: string;
-  jurisdiction: string;
-  /** Where in the decision the reference stands; two can share an anchor. */
-  spanStart: number;
-  /** Opening date of the consolidation the reference was made against. */
-  versionValidFrom: string | null;
-  workCollection: string;
-  workEli: string | null;
-  workIdentifier: string;
-};
-
-type WorkGroup = {
-  key: string;
-  rows: ProvisionRow[];
-  title: string;
-} & Pick<ProvisionRow, "jurisdiction" | "workEli">;
-
-const groupByWork = (rows: readonly ProvisionRow[]): WorkGroup[] => {
-  const groups = new Map<string, WorkGroup>();
-
-  for (const row of rows) {
-    const key = `${row.jurisdiction}/${row.workIdentifier}`;
-    const group = groups.get(key);
-
-    if (group === undefined) {
-      groups.set(key, {
-        jurisdiction: row.jurisdiction,
-        key,
-        rows: [row],
-        title: `${row.workIdentifier} ${row.workCollection}`.trim(),
-        workEli: row.workEli,
-      });
-      continue;
-    }
-
-    group.rows.push(row);
-  }
-
-  return [...groups.values()];
-};
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -109,7 +71,7 @@ export const ProvisionsCited = ({
     refetch,
   } = useInfiniteQuery(decisionProvisionsInfiniteOptions(decisionId));
 
-  const groups = groupByWork(
+  const groups = groupProvisionsByWork(
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
 
@@ -196,8 +158,8 @@ const WorkReferences = ({
   renderPart: RenderProvisionPart;
 }) => {
   const asOf =
-    group.rows.find((row) => row.versionValidFrom !== null)?.versionValidFrom ??
-    decisionDateToIso(decisionDate);
+    group.provisions.find((provision) => provision.versionValidFrom !== null)
+      ?.versionValidFrom ?? decisionDateToIso(decisionDate);
   const { data: statute } = useQuery({
     ...statuteByEliOptions({
       // The query is disabled when neither source supplied a legal date.
@@ -213,7 +175,7 @@ const WorkReferences = ({
     enabled:
       statute !== undefined &&
       statute !== null &&
-      referencesOutsideVersion(statute, group.rows),
+      referencesOutsideVersion(statute, group.provisions),
   });
 
   /**
@@ -226,62 +188,118 @@ const WorkReferences = ({
    * the corpus does not hold that version — the reference reads as text
    * rather than linking somewhere it does not belong.
    */
-  const documentFor = (row: ProvisionRow) => {
+  const documentFor = (provision: ProvisionGroup) => {
     if (statute === undefined || statute === null) {
       return null;
     }
 
-    if (row.versionValidFrom === null) {
+    if (provision.versionValidFrom === null) {
       return statute;
     }
 
     // The wording in force is itself the cited version for most references,
     // which is why the versions read is not started for them.
-    if (versionCoversDate(statute, row.versionValidFrom)) {
+    if (versionCoversDate(statute, provision.versionValidFrom)) {
       return statute;
     }
 
-    return pickVersionAt(optionalArray(versions), row.versionValidFrom);
+    return pickVersionAt(optionalArray(versions), provision.versionValidFrom);
   };
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-muted-foreground text-[0.7rem] tracking-wide uppercase">
-        {group.title}
+      <p className="text-muted-foreground text-[0.7rem] tracking-wide">
+        <BidiText as="span">{group.title}</BidiText>
       </p>
       <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
-        {group.rows.map((row) => {
-          const label = formatProvisionReference(row, renderPart);
-          const key = `${row.anchor}-${row.spanStart}`;
-          const document = documentFor(row);
-
-          if (document === null) {
-            return (
-              <li className="text-foreground-strong-muted text-xs" key={key}>
-                {label}
-              </li>
-            );
-          }
+        {group.provisions.map((provision) => {
+          const document = documentFor(provision);
 
           return (
-            <li key={key}>
-              <Link
-                className="text-primary text-xs hover:underline"
-                hash={row.anchor}
-                {...createStatuteLinkTarget({
-                  country: document.country,
-                  documentId: document.id,
-                  eli: document.eli,
-                  slug: document.slug,
-                  versionValidFrom: document.versionValidFrom,
-                })}
-              >
-                {label}
-              </Link>
-            </li>
+            <ProvisionRowItem
+              key={provision.key}
+              linkTarget={
+                document === null
+                  ? null
+                  : createStatuteLinkTarget({
+                      country: document.country,
+                      documentId: document.id,
+                      eli: document.eli,
+                      slug: document.slug,
+                      versionValidFrom: document.versionValidFrom,
+                    })
+              }
+              provision={provision}
+              renderPart={renderPart}
+            />
           );
         })}
       </ul>
     </div>
+  );
+};
+
+/**
+ * One provision the decision applies, and — when it applies it more than
+ * once — how many times, with the passages behind that count.
+ */
+const ProvisionRowItem = ({
+  linkTarget,
+  provision,
+  renderPart,
+}: {
+  linkTarget: StatuteLinkTarget | null;
+  provision: ProvisionGroup;
+  renderPart: RenderProvisionPart;
+}) => {
+  const t = useTranslations();
+  const [showPassages, setShowPassages] = useState(false);
+  const label = formatProvisionReference(provision, renderPart);
+  const count = provision.occurrences.length;
+
+  return (
+    <li className="flex flex-col">
+      <span className="flex flex-wrap items-baseline gap-1.5">
+        {linkTarget === null ? (
+          <span className="text-foreground-strong-muted text-xs">{label}</span>
+        ) : (
+          <Link
+            className="text-primary text-xs hover:underline"
+            hash={provision.anchor}
+            {...linkTarget}
+          >
+            {label}
+          </Link>
+        )}
+        {count > 1 && (
+          <button
+            aria-expanded={showPassages}
+            aria-label={t("caseLaw.viewer.provisionMentionsLabel", {
+              count,
+            })}
+            // Coarse pointers get the same 44px box the shared button
+            // primitive draws, without the chrome a button would put in a
+            // dense list of references.
+            className="text-muted-foreground hover:text-foreground relative text-[0.7rem] tabular-nums pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11"
+            onClick={() => setShowPassages(!showPassages)}
+            type="button"
+          >
+            {t("caseLaw.viewer.provisionMentions", { count })}
+          </button>
+        )}
+      </span>
+      {showPassages && (
+        <ul className="border-border/60 m-0 flex list-none flex-col gap-1 border-s ps-2 pt-1 pb-1">
+          {provision.occurrences.map((occurrence) => (
+            <li
+              className="text-muted-foreground text-[0.7rem] leading-snug"
+              key={occurrence.spanStart}
+            >
+              <BidiText as="span">{occurrence.sentenceText}</BidiText>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 };

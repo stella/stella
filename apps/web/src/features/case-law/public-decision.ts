@@ -17,6 +17,10 @@ export type PublicCaseLawDecision = {
   decisionDate: Date | string | null;
   decisionType: string | null;
   documentAst: unknown;
+  /** Why the text is absent when it is; see `decision-body-state.logic`. */
+  documentPending: boolean;
+  documentReadFailed: boolean;
+  documentUnavailable: boolean;
   ecli: string | null;
   fulltext: string | null;
   id: string;

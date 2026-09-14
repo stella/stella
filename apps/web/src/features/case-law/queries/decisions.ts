@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { Query, QueryKey } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -31,8 +32,11 @@ export type DecisionListFilters = {
   sort?: SearchSort;
 };
 
+/** Root segment every cached read of a public decision shares. */
+const DECISION_KEY_ROOT = "case-law-decisions";
+
 const caseLawDecisionKeys = {
-  all: ["case-law-decisions"],
+  all: [DECISION_KEY_ROOT],
   facets: (country: string | undefined) => [
     ...caseLawDecisionKeys.all,
     "facets",
@@ -295,6 +299,32 @@ export const decisionOptions = (decisionId: string) =>
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+/**
+ * A cache filter matching every read that holds one decision, whichever key
+ * brought it in.
+ *
+ * The id route and the canonical slug route read the same decision under
+ * different keys, and the slug key carries the URL's language segment rather
+ * than the decision's own, so a read is recognised by the decision it holds
+ * instead of by rebuilding a key that may not match.
+ */
+export const publicDecisionReadFilter = (decisionId: string) => ({
+  predicate: (query: Query): boolean =>
+    isPublicDecisionReadKey(query.queryKey) &&
+    holdsDecision(query.state.data, decisionId),
+});
+
+/** Whether a cached key was cut by one of the reads above. */
+const isPublicDecisionReadKey = (queryKey: QueryKey): boolean =>
+  queryKey.at(0) === DECISION_KEY_ROOT;
+
+/** Whether a cached read resolved to the decision asked about. */
+const holdsDecision = (data: unknown, decisionId: string): boolean =>
+  typeof data === "object" &&
+  data !== null &&
+  "id" in data &&
+  data.id === decisionId;
 
 export const decisionBySlugOptions = ({
   country,

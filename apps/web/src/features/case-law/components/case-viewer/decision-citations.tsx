@@ -18,6 +18,7 @@ import {
 import type {
   CitationTreatment,
   CitationTreatmentCounts,
+  CitedDecision,
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
 import {
@@ -40,6 +41,8 @@ export const DIRECTION_TITLE = {
 } as const satisfies Record<CitationDirection, TranslationKey>;
 
 type DecisionCitationsProps = {
+  /** The decision being read, as a citation names it. */
+  decision: CitedDecision;
   decisionId: SafeId<"caseLawDecision">;
 };
 
@@ -50,7 +53,10 @@ type DecisionCitationsProps = {
  * Incoming first, because "is this still good law" is the question a reader
  * brings; negative treatment leads every list for the same reason.
  */
-export const DecisionCitations = ({ decisionId }: DecisionCitationsProps) => {
+export const DecisionCitations = ({
+  decision,
+  decisionId,
+}: DecisionCitationsProps) => {
   const t = useTranslations();
   const {
     data: summary,
@@ -100,6 +106,7 @@ export const DecisionCitations = ({ decisionId }: DecisionCitationsProps) => {
       {incomingTotal > 0 && (
         <CitationDirectionSection
           counts={summary.incoming}
+          decision={decision}
           decisionId={decisionId}
           direction="incoming"
         />
@@ -107,6 +114,7 @@ export const DecisionCitations = ({ decisionId }: DecisionCitationsProps) => {
       {outgoingTotal > 0 && (
         <CitationDirectionSection
           counts={summary.outgoing}
+          decision={decision}
           decisionId={decisionId}
           direction="outgoing"
         />
@@ -117,11 +125,11 @@ export const DecisionCitations = ({ decisionId }: DecisionCitationsProps) => {
 
 const CitationDirectionSection = ({
   counts,
+  decision,
   decisionId,
   direction,
-}: {
+}: DecisionCitationsProps & {
   counts: CitationTreatmentCounts;
-  decisionId: SafeId<"caseLawDecision">;
   direction: CitationDirection;
 }) => {
   const t = useTranslations();
@@ -146,7 +154,13 @@ const CitationDirectionSection = ({
         </span>
       </button>
       <TreatmentRollup counts={counts} />
-      {open && <CitationList decisionId={decisionId} direction={direction} />}
+      {open && (
+        <CitationList
+          decision={decision}
+          decisionId={decisionId}
+          direction={direction}
+        />
+      )}
     </section>
   );
 };
@@ -210,12 +224,10 @@ const groupByTreatment = (
 };
 
 export const CitationList = ({
+  decision,
   decisionId,
   direction,
-}: {
-  decisionId: SafeId<"caseLawDecision">;
-  direction: CitationDirection;
-}) => {
+}: DecisionCitationsProps & { direction: CitationDirection }) => {
   const t = useTranslations();
   const {
     data,
@@ -263,7 +275,12 @@ export const CitationList = ({
           </p>
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
             {group.items.map((item) => (
-              <CitationRow item={item} key={item.id} />
+              <CitationRow
+                decision={decision}
+                direction={direction}
+                item={item}
+                key={item.id}
+              />
             ))}
           </ul>
         </div>
@@ -285,7 +302,15 @@ export const CitationList = ({
   );
 };
 
-const CitationRow = ({ item }: { item: DecisionCitation }) => {
+const CitationRow = ({
+  decision,
+  direction,
+  item,
+}: {
+  decision: CitedDecision;
+  direction: CitationDirection;
+  item: DecisionCitation;
+}) => {
   const t = useTranslations();
   const format = useFormatter();
 
@@ -301,10 +326,28 @@ const CitationRow = ({ item }: { item: DecisionCitation }) => {
   }
 
   const decided = formatDecisionDate(item.decision.decisionDate, format);
+  // Incoming: the far decision's text names this one. Outgoing: this
+  // decision's text names the far one. The passage is quoted from whichever
+  // text does the naming, and names whichever decision is cited there.
+  const cited = direction === "incoming" ? decision : item.decision;
+  const textDecisionId =
+    direction === "incoming" ? item.decision.id : decision.id;
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
-      <CitedDecisionLink decision={item.decision}>
+      <CitedDecisionLink
+        decision={item.decision}
+        passage={{
+          citation: {
+            citationText: item.citationText,
+            decision: cited,
+            id: item.id,
+            sectionIndex: item.sectionIndex,
+          },
+          textDecisionId,
+        }}
+        treatment={item.treatment}
+      >
         <BidiText as="span">{citedDecisionLabel(item.decision)}</BidiText>
       </CitedDecisionLink>
       <span className="text-muted-foreground text-[0.7rem]">

@@ -577,6 +577,7 @@
       "lastNegative": "dernière citation négative en {year}",
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "openAtCitation": "Ouvrir à la citation",
+      "openDecision": "Ouvrir la décision",
       "passageNotFound": "Le passage citant n'a pas été trouvé dans le texte",
       "positiveCount": "{count, plural, one {# positive} many {# positives} other {# positives}}",
       "showAll": "{count, plural, one {Afficher la décision} many {Afficher les # décisions} other {Afficher les # décisions}}",
@@ -702,12 +703,17 @@
       "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
       "popularName": "Nom courant",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
       "provisionsCited": "Dispositions citées",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
       },
-      "statutes": "Textes applicables"
+      "statutes": "Textes applicables",
+      "textPending": "Le texte de la décision est en cours de récupération",
+      "textReadFailed": "Le texte de la décision n'a pas pu être chargé",
+      "textUnavailable": "Aucun texte n'est disponible pour cette décision"
     }
   },
   "catalogue": {

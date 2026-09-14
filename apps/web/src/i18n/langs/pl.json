@@ -577,6 +577,7 @@
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
       "openAtCitation": "Otwórz w miejscu cytowania",
+      "openDecision": "Otwórz orzeczenie",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
       "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
       "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
@@ -702,12 +703,17 @@
       "legalArea": "Dziedzina prawa",
       "legalSentence": "Teza orzeczenia",
       "popularName": "Nazwa potoczna",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
       "provisionsCited": "Powołane przepisy",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"
       },
-      "statutes": "Powołane przepisy"
+      "statutes": "Powołane przepisy",
+      "textPending": "Tekst orzeczenia jest wciąż pobierany",
+      "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
+      "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
     }
   },
   "catalogue": {

@@ -175,7 +175,20 @@ export const CaseDecisionInspectorView = ({
                 source={decision.source}
                 sourceUrl={decision.sourceUrl}
               />
-              <DecisionCitations decisionId={decisionId} />
+              <DecisionCitations
+                decision={{
+                  caseNumber: decision.caseNumber,
+                  country: decision.country,
+                  court: decision.court,
+                  decisionDate: decision.decisionDate,
+                  decisionType: decision.decisionType,
+                  ecli: decision.ecli,
+                  id: decision.id,
+                  language: decision.language,
+                  slug: decision.slug,
+                }}
+                decisionId={decisionId}
+              />
               <ProvisionsCited
                 decisionDate={decision.decisionDate}
                 decisionId={decisionId}

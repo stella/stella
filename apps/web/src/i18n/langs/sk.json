@@ -577,6 +577,7 @@
       "lastNegative": "posledná negatívna citácia v roku {year}",
       "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnych} other {# negatívnych}}",
       "openAtCitation": "Otvoriť na mieste citácie",
+      "openDecision": "Otvoriť rozhodnutie",
       "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
       "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnych} other {# pozitívnych}}",
       "showAll": "{count, plural, one {Zobraziť # rozhodnutie} few {Zobraziť všetky # rozhodnutia} many {Zobraziť všetkých # rozhodnutí} other {Zobraziť všetkých # rozhodnutí}}",
@@ -702,12 +703,17 @@
       "legalArea": "Oblasť práva",
       "legalSentence": "Právna veta",
       "popularName": "Populárny názov",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok}}",
       "provisionsCited": "Dotknuté ustanovenia",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"
       },
-      "statutes": "Aplikované predpisy"
+      "statutes": "Aplikované predpisy",
+      "textPending": "Text rozhodnutia sa stále načítava",
+      "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
+      "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
     }
   },
   "catalogue": {

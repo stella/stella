@@ -40,6 +40,7 @@ import {
   getCategoryVar,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
+import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
@@ -51,7 +52,7 @@ import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
 
-type DecisionWorkspaceDecision = {
+type DecisionWorkspaceDecision = DecisionDocumentState & {
   analysis?: unknown;
   caseNumber: string;
   country: string;
@@ -61,6 +62,7 @@ type DecisionWorkspaceDecision = {
   documentAst: unknown;
   ecli?: string | null;
   fulltext: string | null;
+  id: string;
   language: string;
   metadata: Record<string, unknown>;
   sourceAttributionUrl: string | null;
