@@ -20,19 +20,23 @@
 
 import { validateIco as validateAresIco } from "@stll/business-registries/ares";
 import {
+  ARES_COURT_GENITIVE_TOKEN,
   ARES_COURT_INSTRUMENTAL_TOKEN,
+  getAresCourtNameGenitive,
   getAresCourtNameInstrumental,
 } from "@stll/business-registries/ares/court-names";
 import {
   ARES_DEFAULT_FORMAT_PARTS,
   ARES_FILE_REFERENCE_TOKEN,
+  ARES_IDENTIFIER_SPACED_TOKEN,
+  formatAresIdentifierSpaced,
   isAresCommercialCompany,
 } from "@stll/business-registries/ares/default-format";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
 import {
-  BUSINESS_REGISTRY_FORMAT_CAPABILITIES,
+  isBuiltInRegistryFormat,
   parseRegistryFormatMarkdown,
   type RegistryFormatSlug,
 } from "@stll/business-registries/default-formats";
@@ -419,6 +423,11 @@ const lookupTemplateTokens = (
     "postal code": hit.address?.postalCode ?? null,
     country: hit.address?.country ?? null,
   };
+  // Derived from the hit itself, not from `details`: the built-in ARES default
+  // uses this token and must still render for a hit carrying no particulars.
+  if (hit.registry === "ares") {
+    tokens[ARES_IDENTIFIER_SPACED_TOKEN] = formatAresIdentifierSpaced(hit.id);
+  }
   const details = hit.details;
   if (details === undefined) {
     return tokens;
@@ -433,6 +442,9 @@ const lookupTemplateTokens = (
       tokens["court file"] = formatCourtFile(company.courtFile);
       tokens[ARES_COURT_INSTRUMENTAL_TOKEN] = company.courtFile
         ? getAresCourtNameInstrumental(company.courtFile.court)
+        : null;
+      tokens[ARES_COURT_GENITIVE_TOKEN] = company.courtFile
+        ? getAresCourtNameGenitive(company.courtFile.court)
         : null;
       tokens[ARES_FILE_REFERENCE_TOKEN] =
         company.courtFile?.section.trim() && company.courtFile.insert.trim()
@@ -583,10 +595,9 @@ export const renderLookupOutput = (
     return renderLookupHit(hit);
   }
   const template = format.trim();
-  if (
-    template ===
-    BUSINESS_REGISTRY_FORMAT_CAPABILITIES[hit.registry].defaultFormat
-  ) {
+  // A saved copy of the built-in (current, or one shipped earlier) is not
+  // authored text, so it keeps the particulars-aware built-in rendering.
+  if (isBuiltInRegistryFormat(hit.registry, template)) {
     return renderLookupHit(hit);
   }
   if (template === "") {

@@ -681,6 +681,20 @@ test("keyboard navigation mounts and focuses virtualized cards", async ({
   await expect(targetCard).toHaveAttribute("aria-current", "true");
 });
 
+test("the selected group tints the whole clipboard window", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+  const clipboardWindow = page.locator('[role="application"]');
+  await expect(clipboardWindow).not.toHaveAttribute("data-active-group");
+
+  await page.locator('[data-clipboard-group-id="work"]').click();
+  await expect(clipboardWindow).toHaveAttribute("data-active-group", "");
+
+  await page.locator('[data-clipboard-group-id="__no_group__"]').click();
+  await expect(clipboardWindow).not.toHaveAttribute("data-active-group");
+});
+
 test("restores footer arrow navigation after changing a menu setting", async ({
   browserName,
   page,

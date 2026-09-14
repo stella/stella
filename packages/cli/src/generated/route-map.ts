@@ -39020,6 +39020,101 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "lookup-formats-my-default-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "lookup-formats-my-default-update",
+                ],
+                capabilityId: "templates.lookup-formats.my-default.update",
+                description:
+                  "Choose or clear your own default company specification format for a business registry, overriding the organization's default for you alone.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: [
+                      "ares",
+                      "brreg",
+                      "companies-house",
+                      "denue",
+                      "edgar",
+                      "gcis",
+                      "krs",
+                      "orsr",
+                      "prh",
+                      "recherche-entreprises",
+                      "vies",
+                    ],
+                    repeatable: false,
+                    flag: "--registry",
+                    prop: "registry",
+                    required: true,
+                    part: "body",
+                    partPath: "registry",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--format-id",
+                    prop: "formatId",
+                    required: true,
+                    part: "body",
+                    partPath: "formatId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["registry", "formatId"],
+                      properties: {
+                        registry: {
+                          default: "ares",
+                          type: "string",
+                          enum: [
+                            "ares",
+                            "brreg",
+                            "companies-house",
+                            "denue",
+                            "edgar",
+                            "gcis",
+                            "krs",
+                            "orsr",
+                            "prh",
+                            "recherche-entreprises",
+                            "vies",
+                          ],
+                        },
+                        formatId: {
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "lookup-preview": {
               kind: "capability-leaf",
               spec: {

@@ -1,14 +1,24 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { templateLookupFormats } from "@/api/db/schema";
+import {
+  templateLookupFormatUserDefaults,
+  templateLookupFormats,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import createLookupFormat from "@/api/handlers/templates/lookup-formats/create";
 import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/default/update";
 import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
 import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
+import setMyDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/my-default/update";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  LOOKUP_FORMAT_DEFAULT_SOURCE,
+  resolveLookupFormatDefault,
+} from "@/api/lib/templates/lookup-formats/resolve-default";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -227,5 +237,223 @@ describe("organization company format isolation", () => {
       .from(templateLookupFormats)
       .where(eq(templateLookupFormats.id, formatB));
     expect(unchanged).toEqual([{ name: "Shared format B" }]);
+  });
+});
+
+describe("personal company format defaults", () => {
+  const scopedFor = (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+  ) => asTestRaw<ScopedDb>(createScopedDb(testDb, [], organizationId, userId));
+  const contextFor = (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+  ) => {
+    const scopedDb = scopedFor(organizationId, userId);
+    return {
+      scopedDb,
+      safeDb: toSafeDbMock(scopedDb),
+      session: { activeOrganizationId: organizationId },
+      user: { id: userId },
+    };
+  };
+  const resolveFor = async (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+    registry: "ares" | "krs" = "ares",
+  ) => {
+    const resolved = await resolveLookupFormatDefault({
+      safeDb: contextFor(organizationId, userId).safeDb,
+      organizationId,
+      userId,
+      registry,
+    });
+    if (Result.isError(resolved)) {
+      throw resolved.error;
+    }
+    return resolved.value;
+  };
+  const setMyDefault = async (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+    formatId: string | null,
+    registry: "ares" | "krs" = "ares",
+  ) =>
+    await setMyDefaultLookupFormat.handler(
+      createTestHandlerContext<
+        Parameters<typeof setMyDefaultLookupFormat.handler>[0]
+      >({
+        ...contextFor(organizationId, userId),
+        body: { registry, formatId: asTestRaw(formatId) },
+      }),
+    );
+  const listFor = async (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+  ) =>
+    await listLookupFormats.handler(
+      createTestHandlerContext<Parameters<typeof listLookupFormats.handler>[0]>(
+        {
+          ...contextFor(organizationId, userId),
+          query: { registry: "ares", limit: 10 },
+        },
+      ),
+    );
+
+  test("a member's own default overrides the organization's, for that member alone", async () => {
+    const setOrgDefault = async (formatId: typeof formatA | null) =>
+      await setDefaultLookupFormat.handler(
+        createTestHandlerContext<
+          Parameters<typeof setDefaultLookupFormat.handler>[0]
+        >({
+          ...contextFor(ids.orgA, ids.userA1),
+          body: { registry: "ares", formatId },
+        }),
+      );
+    const created = await createLookupFormat.handler(
+      createTestHandlerContext<
+        Parameters<typeof createLookupFormat.handler>[0]
+      >({
+        ...contextFor(ids.orgA, ids.userA1),
+        body: {
+          registry: "ares",
+          name: "Personal pick",
+          format: "[company name] ([registry number])",
+        },
+        recordAuditEvent: async () => {
+          await Promise.resolve();
+        },
+      }),
+    );
+    if (!("id" in created)) {
+      throw new Error("Expected saved format");
+    }
+
+    expect(await setOrgDefault(formatA)).toEqual({ success: true });
+    expect(await resolveFor(ids.orgA, ids.userA1)).toMatchObject({
+      id: formatA,
+      source: LOOKUP_FORMAT_DEFAULT_SOURCE.ORGANIZATION,
+    });
+
+    expect(await setMyDefault(ids.orgA, ids.userA1, created.id)).toEqual({
+      success: true,
+    });
+    expect(await resolveFor(ids.orgA, ids.userA1)).toMatchObject({
+      id: created.id,
+      format: "[company name] ([registry number])",
+      source: LOOKUP_FORMAT_DEFAULT_SOURCE.USER,
+    });
+    // The colleague's answer is untouched: a personal choice is not shared.
+    expect(await resolveFor(ids.orgA, ids.userA2)).toMatchObject({
+      id: formatA,
+      source: LOOKUP_FORMAT_DEFAULT_SOURCE.ORGANIZATION,
+    });
+    expect(await listFor(ids.orgA, ids.userA1)).toMatchObject({
+      defaultFormat: { id: formatA },
+      userDefaultFormat: {
+        id: created.id,
+        format: "[company name] ([registry number])",
+      },
+    });
+    expect(await listFor(ids.orgA, ids.userA2)).toMatchObject({
+      defaultFormat: { id: formatA },
+      userDefaultFormat: null,
+    });
+
+    // Re-saving is a converging upsert, not a duplicate row.
+    expect(await setMyDefault(ids.orgA, ids.userA1, formatA)).toEqual({
+      success: true,
+    });
+    expect(await listFor(ids.orgA, ids.userA1)).toMatchObject({
+      userDefaultFormat: { id: formatA },
+    });
+    expect(await setMyDefault(ids.orgA, ids.userA1, created.id)).toEqual({
+      success: true,
+    });
+
+    // Deleting the chosen format clears the preference by cascade rather than
+    // leaving it pointing at a format that is gone.
+    await deleteLookupFormat.handler(
+      createTestHandlerContext<
+        Parameters<typeof deleteLookupFormat.handler>[0]
+      >({
+        ...contextFor(ids.orgA, ids.userA1),
+        params: { formatId: created.id },
+        recordAuditEvent: async () => {
+          await Promise.resolve();
+        },
+      }),
+    );
+    expect(await listFor(ids.orgA, ids.userA1)).toMatchObject({
+      userDefaultFormat: null,
+    });
+    expect(await resolveFor(ids.orgA, ids.userA1)).toMatchObject({
+      id: formatA,
+      source: LOOKUP_FORMAT_DEFAULT_SOURCE.ORGANIZATION,
+    });
+
+    // Clearing both leaves the built-in format as the only answer.
+    expect(await setMyDefault(ids.orgA, ids.userA1, null)).toEqual({
+      success: true,
+    });
+    expect(await setOrgDefault(null)).toEqual({ success: true });
+    expect(await resolveFor(ids.orgA, ids.userA1)).toBeNull();
+    expect(await resolveFor(ids.orgA, ids.userA1, "krs")).toBeNull();
+  });
+
+  test("a format from another organization or registry cannot become a personal default", async () => {
+    expect(await setMyDefault(ids.orgA, ids.userA1, formatB)).toMatchObject({
+      code: 404,
+    });
+    expect(
+      await setMyDefault(ids.orgA, ids.userA1, formatA, "krs"),
+    ).toMatchObject({ code: 404 });
+    expect(await listFor(ids.orgA, ids.userA1)).toMatchObject({
+      userDefaultFormat: null,
+    });
+  });
+
+  test("one member's preference is invisible and immutable to everyone else", async () => {
+    expect(await setMyDefault(ids.orgA, ids.userA1, formatA)).toEqual({
+      success: true,
+    });
+    for (const [organizationId, userId] of [
+      [ids.orgA, ids.userA2],
+      [ids.orgB, ids.userB1],
+    ] as const) {
+      const rows = await createScopedDb(
+        testDb,
+        [],
+        organizationId,
+        userId,
+      )((tx) =>
+        tx
+          .select({ formatId: templateLookupFormatUserDefaults.formatId })
+          .from(templateLookupFormatUserDefaults),
+      );
+      expect(rows).toEqual([]);
+    }
+    const colleague = createScopedDb(testDb, [], ids.orgA, ids.userA2);
+    const updated = await colleague((tx) =>
+      tx
+        .update(templateLookupFormatUserDefaults)
+        .set({ formatId: formatA })
+        .where(eq(templateLookupFormatUserDefaults.userId, ids.userA1))
+        .returning({ userId: templateLookupFormatUserDefaults.userId }),
+    );
+    const deleted = await colleague((tx) =>
+      tx
+        .delete(templateLookupFormatUserDefaults)
+        .where(eq(templateLookupFormatUserDefaults.userId, ids.userA1))
+        .returning({ userId: templateLookupFormatUserDefaults.userId }),
+    );
+    expect(updated).toEqual([]);
+    expect(deleted).toEqual([]);
+    expect(await listFor(ids.orgA, ids.userA1)).toMatchObject({
+      userDefaultFormat: { id: formatA },
+    });
+    expect(await setMyDefault(ids.orgA, ids.userA1, null)).toEqual({
+      success: true,
+    });
   });
 });

@@ -157,3 +157,37 @@ export const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<
     resultShape: "full-record",
   },
 };
+
+/**
+ * Built-in strings a registry shipped before its current default. A saved copy
+ * of one of these is an untouched built-in row, not authored text, so it keeps
+ * behaving as the built-in: it renders through the built-in path and is
+ * reseeded when the registry changes. The literals are spelled out rather than
+ * derived, because a shipped string has to keep meaning what it meant when it
+ * shipped. Only the registries listed here ever changed their default; the key
+ * union stays `Extract`ed from the slugs so a renamed slug breaks the build.
+ */
+export const PREVIOUS_DEFAULT_FORMATS: Readonly<
+  Record<
+    Extract<RegistryFormatSlug, "ares" | "krs">,
+    readonly [string, ...string[]]
+  >
+> = {
+  ares: [
+    "společnost **[company name]**, se sídlem [address], IČO: [registry number], zapsaná v obchodním rejstříku vedeném [court instrumental] pod sp. zn. [file reference]",
+  ],
+  krs: [
+    "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
+  ],
+};
+
+/** True when the text is the registry's current built-in output or one it
+ *  shipped earlier: either way the author never edited it. */
+export const isBuiltInRegistryFormat = (
+  registry: RegistryFormatSlug,
+  format: string,
+): boolean =>
+  format === BUSINESS_REGISTRY_FORMAT_CAPABILITIES[registry].defaultFormat ||
+  Object.entries(PREVIOUS_DEFAULT_FORMATS).some(
+    ([slug, previous]) => slug === registry && previous.includes(format),
+  );

@@ -8,6 +8,7 @@ macro_rules! with_stella_commands {
       registry::registry_get_state => "registry_get_state",
       registry::registry_search => "registry_search",
       registry::registry_format => "registry_format",
+      registry::registry_set_default_format => "registry_set_default_format",
       registry::registry_open_company_format => "registry_open_company_format",
       commands::open_stella_account => "open_stella_account",
       commands::update_notification_preferences => "update_notification_preferences",

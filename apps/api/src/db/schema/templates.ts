@@ -24,6 +24,7 @@ import {
   stella,
   tsvector,
   user,
+  userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
   timestamptz,
@@ -90,6 +91,71 @@ export const templateLookupFormats = p.pgTable(
       sql`length(btrim(${table.format})) > 0`,
     ),
     ...orgPolicies(),
+  ],
+);
+
+/**
+ * One member's own choice among the organization's saved company
+ * specification formats, per registry.
+ *
+ * The organization default (`template_lookup_formats.preference = 'default'`)
+ * stays the firm's answer for everyone who has not chosen; this row is the
+ * member's answer for themselves, so the effective format resolves user ->
+ * organization -> built-in (`resolveLookupFormatDefault`).
+ *
+ * It points at a saved format rather than copying its text: an edit to the
+ * format reaches everyone who picked it, and deleting the format clears the
+ * preference by cascade instead of leaving a dangling choice.
+ *
+ * The three columns that identify the preference are its primary key, so a
+ * member has at most one choice per registry per organization and a repeated
+ * save converges on the same row instead of racing a read-before-insert.
+ */
+export const templateLookupFormatUserDefaults = p.pgTable(
+  "template_lookup_format_user_defaults",
+  {
+    userId: p.text("user_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    registry: p.text({ enum: LOOKUP_REGISTRIES }).notNull(),
+    formatId: safeUuid<"templateLookupFormat">("format_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    // Named, not derived: drizzle's default names for this table's primary and
+    // foreign keys run past PostgreSQL's 63-character identifier limit.
+    p.primaryKey({
+      name: "template_lookup_format_user_defaults_pkey",
+      columns: [table.userId, table.organizationId, table.registry],
+    }),
+    p
+      .foreignKey({
+        name: "template_lookup_format_user_defaults_user_id_fk",
+        columns: [table.userId],
+        foreignColumns: [user.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "template_lookup_format_user_defaults_org_id_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    // Deleting a saved format clears every member's choice of it rather than
+    // leaving a preference pointing at a format that no longer exists.
+    p
+      .foreignKey({
+        name: "template_lookup_format_user_defaults_format_id_fk",
+        columns: [table.formatId],
+        foreignColumns: [templateLookupFormats.id],
+      })
+      .onDelete("cascade"),
+    // That cascade has to find the rows pointing at the deleted format.
+    p
+      .index("template_lookup_format_user_defaults_format_idx")
+      .on(table.formatId),
+    ...userOrganizationPolicies(),
   ],
 );
 

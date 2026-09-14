@@ -990,6 +990,10 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/templates/lookup-formats/list"),
   },
+  "templates.lookup-formats.my-default.update": {
+    load: async () =>
+      await import("@/api/handlers/templates/lookup-formats/my-default/update"),
+  },
   "templates.lookup-preview": {
     load: async () => await import("@/api/handlers/templates/lookup-preview"),
   },

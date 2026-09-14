@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 import type {
   DesktopRegistryConfig,
+  DesktopRegistryDefaultFormat,
   DesktopRegistrySearchResponse,
 } from "@stll/api-contract/desktop-registry";
 import type {
@@ -16,6 +17,7 @@ import {
   formatDesktopRegistry,
   getDesktopRegistryConfig,
   searchDesktopRegistry,
+  setDesktopRegistryDefaultFormat,
 } from "@/api/handlers/desktop-registry/service";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
@@ -48,6 +50,14 @@ const config = {
       },
       { additionalProperties: false },
     ),
+    t.Object(
+      {
+        type: t.Literal("setDefaultFormat"),
+        registry,
+        formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
+      },
+      { additionalProperties: false },
+    ),
   ]),
 } as const;
 
@@ -59,7 +69,8 @@ type RegistryReply =
       identity: DesktopAccountIdentity;
     })
   | DesktopRegistrySearchResponse
-  | { text: string }
+  | { text: string; rendered: string }
+  | DesktopRegistryDefaultFormat
   | { revoked: boolean };
 
 export default createSafePublicHandler(
@@ -146,6 +157,10 @@ export default createSafePublicHandler(
       case "format":
         return Result.ok(
           yield* Result.await(formatDesktopRegistry(context, body)),
+        );
+      case "setDefaultFormat":
+        return Result.ok(
+          yield* Result.await(setDesktopRegistryDefaultFormat(context, body)),
         );
       default:
         body satisfies never;

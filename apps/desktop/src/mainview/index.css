@@ -78,6 +78,32 @@ body:has(.clipboard-editor-window) .font-sans {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
+/* Filtering to a group tints the whole window, so the rail chip is not the
+ * only thing carrying the selection. Over the macOS material the wash is the
+ * tint itself; the painted surface tints its own background instead, so it
+ * stays near-opaque. */
+.clipboard-window[data-active-group] {
+  background-color: color-mix(
+    in oklab,
+    var(--clipboard-group-accent) 7%,
+    transparent
+  );
+}
+
+.clipboard-window-painted[data-active-group] {
+  background-color: color-mix(
+    in srgb,
+    color-mix(in oklab, var(--clipboard-group-accent) 7%, var(--background)) 94%,
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .clipboard-window {
+    transition: background-color 200ms ease-out;
+  }
+}
+
 .clipboard-groups-rail {
   background: transparent;
   box-shadow: none;
@@ -107,8 +133,7 @@ body:has(.clipboard-editor-window) .font-sans {
     color-mix(in srgb, var(--clipboard-group-accent) 22%, transparent);
 }
 
-.clipboard-group-chip[data-group-chip]:hover,
-.clipboard-group-chip[data-group-chip][aria-pressed="true"] {
+.clipboard-group-chip[data-group-chip]:hover {
   background-color: color-mix(
     in oklab,
     var(--clipboard-group-accent) 24%,
@@ -118,10 +143,29 @@ body:has(.clipboard-editor-window) .font-sans {
     color-mix(in srgb, var(--clipboard-group-accent) 40%, transparent);
 }
 
+/* Selection has to outrank hover, so it lands after the hover rule and adds
+ * weight on top of the stronger fill and ring. */
+.clipboard-group-chip[data-group-chip][aria-pressed="true"] {
+  background-color: color-mix(
+    in oklab,
+    var(--clipboard-group-accent) 38%,
+    transparent
+  );
+  box-shadow: inset 0 0 0 1.5px
+    color-mix(in srgb, var(--clipboard-group-accent) 70%, transparent);
+  font-weight: 600;
+}
+
 .clipboard-group-chip-dot {
   background-color: var(--clipboard-group-accent);
   box-shadow: 0 0 0 2px
     color-mix(in srgb, var(--clipboard-group-accent) 16%, transparent);
+}
+
+.clipboard-group-chip[data-group-chip][aria-pressed="true"]
+  .clipboard-group-chip-dot {
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--clipboard-group-accent) 28%, transparent);
 }
 
 .clipboard-groups-rail [data-drop-target] {

@@ -25,6 +25,7 @@ import {
   Select,
   SelectItem,
   SelectPopup,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
@@ -43,8 +44,16 @@ import {
   clipboardSourceTitle,
   hasClipboardPrimaryModifier,
 } from "./clipboard-logic";
-import { isClipboardEditorContext } from "./clipboard-types";
+import {
+  isClipboardEditorContext,
+  isClipboardSnapshot,
+} from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
+import {
+  ClipboardGroupFields,
+  nextClipboardGroupColor,
+} from "./ClipboardGroupFields";
+import type { ClipboardGroupDraft } from "./ClipboardGroupFields";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 
@@ -52,6 +61,14 @@ type SaveState =
   | { type: "idle" }
   | { type: "saving" }
   | { message: string; type: "error" };
+
+/** The inline "New group…" panel: closed, or holding the group being created. */
+type GroupDraftState =
+  | { type: "closed" }
+  | (ClipboardGroupDraft & { type: "open" });
+
+/** Picking it in the group select opens the draft instead of choosing a group. */
+const NEW_GROUP_OPTION_VALUE = "new-group";
 
 const EDITOR_HEADER_PADDING_CLASS = navigator.userAgent.includes("Macintosh")
   ? "ps-24"
@@ -62,6 +79,7 @@ type EditorState =
   | { message: string; type: "error" }
   | {
       context: ClipboardEditorContext;
+      groupDraft: GroupDraftState;
       groupId: string | null;
       save: SaveState;
       type: "ready";
@@ -545,6 +563,7 @@ const ClipboardEditor = () => {
         }
         return {
           context: current.context,
+          groupDraft: current.groupDraft,
           groupId: current.groupId,
           save: { message: t("errorUpdateHistory"), type: "error" },
           type: "ready",
@@ -574,6 +593,7 @@ const ClipboardEditor = () => {
             if (current.type !== "ready") {
               return {
                 context: value,
+                groupDraft: { type: "closed" },
                 groupId: value.item.groupId,
                 save: { type: "idle" },
                 type: "ready",
@@ -641,6 +661,7 @@ const ClipboardEditor = () => {
     if (item.type === "image") {
       setState({
         context: state.context,
+        groupDraft: state.groupDraft,
         groupId: state.groupId,
         save: { type: "saving" },
         type: "ready",
@@ -659,6 +680,7 @@ const ClipboardEditor = () => {
           });
           setState({
             context: state.context,
+            groupDraft: state.groupDraft,
             groupId: state.groupId,
             save: { message: t("errorUpdateHistory"), type: "error" },
             type: "ready",
@@ -682,6 +704,7 @@ const ClipboardEditor = () => {
     }
     setState({
       context: state.context,
+      groupDraft: state.groupDraft,
       groupId: state.groupId,
       save: { type: "saving" },
       type: "ready",
@@ -702,6 +725,7 @@ const ClipboardEditor = () => {
         });
         setState({
           context: state.context,
+          groupDraft: state.groupDraft,
           groupId: state.groupId,
           save: { message: t("errorUpdateHistory"), type: "error" },
           type: "ready",
@@ -709,12 +733,114 @@ const ClipboardEditor = () => {
       });
   };
 
+  const setGroupDraft = (groupDraft: GroupDraftState) => {
+    // A command in flight owns the state. Clearing `saving` here would re-enable
+    // the buttons it guards, and a second create would make a second group.
+    if (state.type !== "ready" || state.save.type === "saving") {
+      return;
+    }
+    setState({
+      context: state.context,
+      groupDraft,
+      groupId: state.groupId,
+      save: { type: "idle" },
+      type: "ready",
+    });
+  };
+
+  const createGroup = () => {
+    if (
+      state.type !== "ready" ||
+      state.groupDraft.type !== "open" ||
+      state.save.type === "saving"
+    ) {
+      return;
+    }
+    const { color, name } = state.groupDraft;
+    const groupName = name.trim();
+    if (!groupName) {
+      return;
+    }
+    const { context, groupId } = state;
+    const knownGroupIds = new Set(context.groups.map((group) => group.id));
+    setState({
+      context,
+      groupDraft: state.groupDraft,
+      groupId,
+      save: { type: "saving" },
+      type: "ready",
+    });
+    // The draft stays whatever the user has since made of it: a failure must
+    // not restore a name they kept editing, nor reopen a panel they closed.
+    const failed = () => {
+      setState((current) => {
+        if (current.type !== "ready") {
+          return current;
+        }
+        return {
+          ...current,
+          save: { message: t("errorUpdateHistory"), type: "error" },
+        };
+      });
+    };
+    void invoke<unknown>("clipboard_create_group", {
+      color,
+      itemId: context.item.id,
+      name: groupName,
+    })
+      .then((value) => {
+        // The command answers with the snapshot the timeline renders; the one
+        // group the editor has not seen before is the one just created.
+        const groups = isClipboardSnapshot(value) ? value.groups : null;
+        const created = groups?.find((group) => !knownGroupIds.has(group.id));
+        if (!groups || !created) {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+          });
+          failed();
+          return undefined;
+        }
+        // `itemId` moved the clip into the new group natively, so the select
+        // only has to follow; the text being edited stays as it is.
+        setState((current) => {
+          if (current.type !== "ready") {
+            return current;
+          }
+          return {
+            context: { ...current.context, groups },
+            groupDraft: { type: "closed" },
+            groupId: created.id,
+            save: { type: "idle" },
+            type: "ready",
+          };
+        });
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          detail: describeError(error),
+          operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+        });
+        failed();
+      });
+  };
+
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.isComposing) {
       return;
     }
+    const groupDraftOpen =
+      state.type === "ready" && state.groupDraft.type === "open";
     if (event.key === "Escape") {
       event.preventDefault();
+      if (groupDraftOpen) {
+        setGroupDraft({ type: "closed" });
+        return;
+      }
       requestClose();
       return;
     }
@@ -726,6 +852,10 @@ const ClipboardEditor = () => {
     });
     if (primaryModifier && event.key === "Enter") {
       event.preventDefault();
+      if (groupDraftOpen) {
+        createGroup();
+        return;
+      }
       save();
     }
   });
@@ -748,6 +878,10 @@ const ClipboardEditor = () => {
   }
 
   const { item } = state.context;
+  // While the group is being created the clip is already moving into it: the
+  // choice is settled, so nothing that could change or abandon it stays live.
+  const groupCreationPending =
+    state.groupDraft.type === "open" && state.save.type === "saving";
   const sourceName = item.sourceApp
     ? clipboardSourceLabel(item.sourceApp)
     : null;
@@ -890,10 +1024,20 @@ const ClipboardEditor = () => {
               {t("group")}
             </span>
             <Select
-              onValueChange={(groupId) => {
+              disabled={groupCreationPending}
+              onValueChange={(value) => {
+                if (value === NEW_GROUP_OPTION_VALUE) {
+                  setGroupDraft({
+                    color: nextClipboardGroupColor(state.context.groups),
+                    name: "",
+                    type: "open",
+                  });
+                  return;
+                }
                 setState({
                   context: state.context,
-                  groupId: groupId || null,
+                  groupDraft: { type: "closed" },
+                  groupId: value || null,
                   save: { type: "idle" },
                   type: "ready",
                 });
@@ -922,10 +1066,24 @@ const ClipboardEditor = () => {
                     <span dir="auto">{group.name}</span>
                   </SelectItem>
                 ))}
+                <SelectSeparator />
+                <SelectItem
+                  disabled={
+                    state.context.groups.length >= state.context.groupLimit
+                  }
+                  value={NEW_GROUP_OPTION_VALUE}
+                >
+                  {t("newGroupOption")}
+                </SelectItem>
               </SelectPopup>
             </Select>
           </label>
-          <Button onClick={requestClose} type="button" variant="ghost">
+          <Button
+            disabled={groupCreationPending}
+            onClick={requestClose}
+            type="button"
+            variant="ghost"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -936,6 +1094,39 @@ const ClipboardEditor = () => {
             {t("save")}
           </Button>
         </div>
+        {state.groupDraft.type === "open" ? (
+          <fieldset
+            aria-label={t("createGroup")}
+            className="border-border shrink-0 rounded-2xl border p-4"
+            disabled={groupCreationPending}
+          >
+            <ClipboardGroupFields
+              autoFocus
+              color={state.groupDraft.color}
+              name={state.groupDraft.name}
+              onChange={({ color, name }) => {
+                setGroupDraft({ color, name, type: "open" });
+              }}
+            />
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                disabled={groupCreationPending}
+                onClick={() => setGroupDraft({ type: "closed" })}
+                type="button"
+                variant="ghost"
+              >
+                {t("cancel")}
+              </Button>
+              <Button
+                disabled={!state.groupDraft.name.trim() || groupCreationPending}
+                onClick={createGroup}
+                type="button"
+              >
+                {t("create")}
+              </Button>
+            </div>
+          </fieldset>
+        ) : null}
         {state.save.type === "error" ? (
           <p className="text-destructive text-xs" role="alert">
             {state.save.message}

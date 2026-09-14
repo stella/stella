@@ -190,6 +190,7 @@
       "dependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "catalog:",
         "@stll/api-contract": "workspace:*",
+        "@stll/business-registries": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",

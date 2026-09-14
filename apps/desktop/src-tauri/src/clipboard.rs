@@ -1642,6 +1642,11 @@ impl ClipboardManager {
     &self.groups
   }
 
+  /// How many groups may exist, the same ceiling `create_group` enforces.
+  pub const fn group_limit() -> usize {
+    MAX_GROUPS
+  }
+
   pub fn source_app_visual(
     &self,
     item: &ClipboardItem,
@@ -3741,6 +3746,7 @@ impl ClipboardManager {
                   url.as_str().as_bytes().to_vec(),
                 ),
               ],
+              ClipboardWriteOrigin::History,
             )
           });
         }
@@ -3754,7 +3760,7 @@ impl ClipboardManager {
     if let Some(rtf) = item.rtf() {
       contents.push(ClipboardContent::Rtf(rtf.to_string()));
     }
-    set_clipboard_contents(&clipboard, contents)?;
+    set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::History)?;
     #[cfg(target_os = "macos")]
     if let Err(error) = self.reconcile_image_exports() {
       tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
@@ -3800,14 +3806,43 @@ fn current_clipboard_export_file() -> Result<Option<PathBuf>, String> {
   Ok(path)
 }
 
+/// Whether a write carries the internal marker that makes the watcher skip it.
+/// Only content history already holds may be marked; anything else would be
+/// copied without ever reaching history.
+enum ClipboardWriteOrigin {
+  History,
+  New,
+}
+
+/// Publishes one pasteboard item holding both representations, so rich targets
+/// keep the emphasis while plain-text targets receive the unmarked string.
+pub(crate) fn write_text_and_html(
+  plain_text: String,
+  html: String,
+) -> Result<(), String> {
+  let clipboard = ClipboardContext::new()
+    .map_err(|error| format!("clipboard is unavailable: {error}"))?;
+  set_clipboard_contents(
+    &clipboard,
+    vec![
+      ClipboardContent::Text(plain_text),
+      ClipboardContent::Html(html),
+    ],
+    ClipboardWriteOrigin::New,
+  )
+}
+
 fn set_clipboard_contents(
   clipboard: &ClipboardContext,
   mut contents: Vec<ClipboardContent>,
+  origin: ClipboardWriteOrigin,
 ) -> Result<(), String> {
-  contents.push(ClipboardContent::Other(
-    INTERNAL_CLIPBOARD_FORMAT.to_string(),
-    Vec::new(),
-  ));
+  if matches!(origin, ClipboardWriteOrigin::History) {
+    contents.push(ClipboardContent::Other(
+      INTERNAL_CLIPBOARD_FORMAT.to_string(),
+      Vec::new(),
+    ));
+  }
   clipboard
     .set(contents)
     .map_err(|error| format!("clipboard write failed: {error}"))

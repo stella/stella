@@ -29,10 +29,12 @@ const SHELL_INVOKE_SOURCES = [
 const WINDOW_MODULES = {
   "src-tauri/capabilities/clipboard-editor.json": [
     "src/clipboard/ClipboardEditor.tsx",
+    "src/clipboard/ClipboardGroupFields.tsx",
     "src/clipboard/ClipboardImagePreview.tsx",
   ],
   "src-tauri/capabilities/clipboard.json": [
     "src/clipboard/ClipboardApp.tsx",
+    "src/clipboard/ClipboardGroupFields.tsx",
     "src/clipboard/ClipboardImagePreview.tsx",
     "src/registry/RegistrySearch.tsx",
   ],

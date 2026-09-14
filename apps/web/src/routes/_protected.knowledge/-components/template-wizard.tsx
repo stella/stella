@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isBuiltInRegistryFormat } from "@stll/business-registries/default-formats";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -29,7 +30,6 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import {
-  isRegistryReseedableFormat,
   REGISTRY_DEFAULT_FORMAT,
   REGISTRY_FIELD_EXAMPLES,
   REGISTRY_RETURN_FIELDS,
@@ -401,8 +401,7 @@ const CompanyLookupConfig = ({
     const first = formats.at(0);
     const firstTemplate = first?.template.trim() ?? "";
     const isUntouched =
-      firstTemplate === "" ||
-      isRegistryReseedableFormat(registry, firstTemplate);
+      firstTemplate === "" || isBuiltInRegistryFormat(registry, firstTemplate);
     if (first === undefined || !isUntouched) {
       setLookup({ registry: next });
       return;

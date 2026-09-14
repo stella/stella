@@ -249,52 +249,64 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
     trace.begin(requested, created_kind);
   }
 
+  // Created at its docked frame: resizing the webview while the window is
+  // hidden leaves WebKit's scrolling layers at the old size until a later
+  // layout, which clips the rail on the first open.
+  let initial_frame = window_placement::target_work_area(app).map(docked_frame);
   let builder = tauri::WebviewWindowBuilder::new(
     app,
     CLIPBOARD_WINDOW_LABEL,
     tauri::WebviewUrl::App("index.html".into()),
   )
   .title("stella clipboard")
-  .inner_size(1440.0, CLIPBOARD_WINDOW_HEIGHT)
-  .always_on_top(true)
-  .content_protected(content_protected(app))
-  .decorations(false)
-  // Tauri's native drag-drop handler consumes every drop on macOS and
-  // Windows, so HTML5 drops (a card onto a group chip) never reach the
-  // webview. The window accepts no OS file drops.
-  .disable_drag_drop_handler()
-  .resizable(false)
-  .shadow(false)
-  .skip_taskbar(true)
-  .transparent(true)
-  .visible(false)
-  .visible_on_all_workspaces(true)
-  .on_page_load(|window, payload| {
-    if payload.event() != PageLoadEvent::Finished {
-      return;
-    }
-    let app = window.app_handle();
-    position_window(app, &window);
-    if present(&window).is_err() {
-      capture_window_error(
-        app,
-        DesktopTelemetryOperation::ClipboardWindowOpen,
-        DesktopTelemetryWindow::Clipboard,
-      );
-      return;
-    }
-    if let Some((elapsed, open_kind)) = app
-      .try_state::<ClipboardStartupTrace>()
-      .and_then(|trace| trace.elapsed())
-    {
-      capture_window_timing(
-        app,
-        DesktopTelemetrySpan::ClipboardPageLoad,
-        elapsed,
-        open_kind,
-      );
-    }
-  });
+  .inner_size(
+    initial_frame.map_or(1440.0, |frame| frame.width),
+    initial_frame.map_or(CLIPBOARD_WINDOW_HEIGHT, |frame| frame.height),
+  );
+  let builder = match initial_frame {
+    Some(frame) => builder.position(frame.x, frame.y),
+    None => builder,
+  };
+  let builder = builder
+    .always_on_top(true)
+    .content_protected(content_protected(app))
+    .decorations(false)
+    // Tauri's native drag-drop handler consumes every drop on macOS and
+    // Windows, so HTML5 drops (a card onto a group chip) never reach the
+    // webview. The window accepts no OS file drops.
+    .disable_drag_drop_handler()
+    .resizable(false)
+    .shadow(false)
+    .skip_taskbar(true)
+    .transparent(true)
+    .visible(false)
+    .visible_on_all_workspaces(true)
+    .on_page_load(|window, payload| {
+      if payload.event() != PageLoadEvent::Finished {
+        return;
+      }
+      let app = window.app_handle();
+      position_window(app, &window);
+      if present(&window).is_err() {
+        capture_window_error(
+          app,
+          DesktopTelemetryOperation::ClipboardWindowOpen,
+          DesktopTelemetryWindow::Clipboard,
+        );
+        return;
+      }
+      if let Some((elapsed, open_kind)) = app
+        .try_state::<ClipboardStartupTrace>()
+        .and_then(|trace| trace.elapsed())
+      {
+        capture_window_timing(
+          app,
+          DesktopTelemetrySpan::ClipboardPageLoad,
+          elapsed,
+          open_kind,
+        );
+      }
+    });
 
   // Menu is the most translucent appearance-adaptive material: the desktop and
   // windows underneath read through it in light mode too, where Popover is

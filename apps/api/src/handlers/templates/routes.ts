@@ -29,6 +29,7 @@ import createLookupFormat from "@/api/handlers/templates/lookup-formats/create";
 import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/default/update";
 import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
 import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
+import setMyDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/my-default/update";
 import lookupPreview from "@/api/handlers/templates/lookup-preview";
 import prefillTemplate from "@/api/handlers/templates/prefill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
@@ -71,6 +72,10 @@ export const templatesRoute = new Elysia({
   .post("/lookup-formats/default", setDefaultLookupFormat.handler, {
     body: setDefaultLookupFormat.config.body,
     permissions: setDefaultLookupFormat.config.permissions,
+  })
+  .post("/lookup-formats/my-default", setMyDefaultLookupFormat.handler, {
+    body: setMyDefaultLookupFormat.config.body,
+    permissions: setMyDefaultLookupFormat.config.permissions,
   })
   .post("/discover", discoverTemplate.handler, {
     body: discoverTemplate.config.body,
