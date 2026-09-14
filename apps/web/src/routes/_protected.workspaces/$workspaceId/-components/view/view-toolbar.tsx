@@ -1185,7 +1185,7 @@ const METADATA_COLUMNS = [
   },
   {
     id: getInternalPropertyId("updated-at"),
-    labelKey: "workspaces.filesystem.lastUpdated",
+    labelKey: "common.lastUpdated",
     icon: ClockIcon,
   },
   {
@@ -1257,7 +1257,7 @@ const INTERNAL_DATE_OPTIONS = [
   },
   {
     id: "_updated-at",
-    labelKey: "workspaces.views.calendar.updatedAt",
+    labelKey: "common.lastUpdated",
   },
 ] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
 

@@ -1301,6 +1301,7 @@
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "date": "التاريخ",
+    "decisions": "الأحكام",
     "decline": "رفض",
     "delete": "حذف",
     "deleteCategory": "حذف الفئة",
@@ -1406,6 +1407,7 @@
       "ZH-HANS": "الصينية (المبسطة)",
       "ZH-HANT": "الصينية (التقليدية)"
     },
+    "lastUpdated": "آخر تحديث",
     "legalDatabase": "قاعدة البيانات القانونية",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
@@ -3216,7 +3218,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} سجلًا · حُدّثت {date}",
     "databaseUpToDate": "محدّثة",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
@@ -4894,7 +4895,6 @@
       "collapseAll": "طي جميع المجلدات",
       "expandAll": "توسيع جميع المجلدات",
       "fileCount": "{count, plural, zero {لا ملفات} one {ملف واحد} two {ملفان} few {# ملفات} many {# ملفًا} other {# ملف}}",
-      "lastUpdated": "آخر تحديث",
       "matchingFileCount": "{count, plural, zero {لا ملفات مطابقة} one {ملف واحد مطابق} two {ملفان مطابقان} few {# ملفات مطابقة} many {# ملفًا مطابقًا} other {# ملف مطابق}}",
       "moveToRoot": "أفلِت هنا للنقل إلى المستوى الجذر",
       "newSubfolder": "مجلد فرعي جديد",
@@ -5422,7 +5422,6 @@
         "noDates": "لم يتم تحديد خاصية تاريخ",
         "showAdditionalDates": "تواريخ إضافية",
         "showBy": "العرض حسب",
-        "updatedAt": "آخر تحديث",
         "week": "الأسبوع",
         "year": "السنة"
       },

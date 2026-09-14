@@ -1301,6 +1301,7 @@
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
     "date": "Data",
+    "decisions": "Sprendimai",
     "decline": "Atmesti",
     "delete": "Ištrinti",
     "deleteCategory": "Ištrinti kategoriją",
@@ -1406,6 +1407,7 @@
       "ZH-HANS": "Kinų (supaprastinta)",
       "ZH-HANT": "Kinų (tradicinė)"
     },
+    "lastUpdated": "Paskutinis atnaujinimas",
     "legalDatabase": "Teisinė duomenų bazė",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
@@ -3216,7 +3218,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} įrašų · atnaujinta {date}",
     "databaseUpToDate": "Atnaujinta",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
@@ -4894,7 +4895,6 @@
       "collapseAll": "Sutraukti visus aplankus",
       "expandAll": "Išskleisti visus aplankus",
       "fileCount": "{count, plural, one {# failas} few {# failai} other {# failų}}",
-      "lastUpdated": "Paskutinis atnaujinimas",
       "matchingFileCount": "{count, plural, one {# atitinkantis failas} few {# atitinkantys failai} other {# atitinkančių failų}}",
       "moveToRoot": "Numeskite čia, kad perkeltumėte į šakninį lygį",
       "newSubfolder": "Naujas poaplankis",
@@ -5422,7 +5422,6 @@
         "noDates": "Nepasirinkta datos savybė",
         "showAdditionalDates": "Papildomos datos",
         "showBy": "Rodyti pagal",
-        "updatedAt": "Paskutinį kartą atnaujinta",
         "week": "Savaitė",
         "year": "Metai"
       },

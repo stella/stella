@@ -1301,6 +1301,7 @@
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
     "date": "Dátum",
+    "decisions": "Határozatok",
     "decline": "Elutasítás",
     "delete": "Törlés",
     "deleteCategory": "Kategória törlése",
@@ -1406,6 +1407,7 @@
       "ZH-HANS": "Kínai (egyszerűsített)",
       "ZH-HANT": "kínai (hagyományos)"
     },
+    "lastUpdated": "Utoljára frissítve",
     "legalDatabase": "Jogi adatbázis",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
@@ -3216,7 +3218,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} bejegyzés · frissítve {date}",
     "databaseUpToDate": "Naprakész",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
@@ -4894,7 +4895,6 @@
       "collapseAll": "Összes mappa összecsukása",
       "expandAll": "Összes mappa kinyitása",
       "fileCount": "{count, plural, one {# fájl} other {# fájl}}",
-      "lastUpdated": "Utoljára frissítve",
       "matchingFileCount": "{count, plural, one {# egyező fájl} other {# egyező fájl}}",
       "moveToRoot": "Húzza ide a gyökérszintre helyezéshez",
       "newSubfolder": "Új almappa",
@@ -5422,7 +5422,6 @@
         "noDates": "Nincs kiválasztott dátum tulajdonság",
         "showAdditionalDates": "További dátumok",
         "showBy": "Megjelenítés",
-        "updatedAt": "Utoljára frissítve",
         "week": "Hét",
         "year": "Év"
       },
