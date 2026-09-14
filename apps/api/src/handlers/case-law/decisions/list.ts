@@ -11,9 +11,9 @@ import { isUuid } from "@stll/uuid-codec";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceFor,
@@ -167,22 +167,7 @@ export const listDecisionsHandler = async (
 
   const decisions = await caseLawDb((tx) =>
     tx
-      .select({
-        id: caseLawDecisions.id,
-        caseNumber: caseLawDecisions.caseNumber,
-        slug: caseLawDecisions.slug,
-        ecli: caseLawDecisions.ecli,
-        court: caseLawDecisions.court,
-        country: caseLawDecisions.country,
-        language: caseLawDecisions.language,
-        languageGroupKey: caseLawDecisions.languageGroupKey,
-        decisionDate: caseLawDecisions.decisionDate,
-        decisionType: caseLawDecisions.decisionType,
-        sourceUrl: caseLawDecisions.sourceUrl,
-        headnote: publisherSummaryMetadataSql(caseLawDecisions.metadata),
-        citationCount: caseLawDecisions.citationCount,
-        createdAt: caseLawDecisions.createdAt,
-      })
+      .select(publicDecisionRowColumns())
       .from(caseLawDecisions)
       .innerJoin(
         caseLawSources,
@@ -258,7 +243,10 @@ export const listDecisionsHandler = async (
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       sourceUrl: decision.sourceUrl,
-      headnote: readDecisionHeadnote(decision.headnote),
+      headnote: readDecisionHeadnote({
+        headnote: decision.headnote,
+        keywords: decision.keywords,
+      }),
       citationCount: decision.citationCount,
       createdAt: decision.createdAt,
     })),

@@ -9,7 +9,7 @@
  * matter, and neither table can drift from the other.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
@@ -39,6 +39,20 @@ import { queryHighlightTokens } from "@/features/case-law/headnote-highlight.log
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
+
+const NO_EXPANDED_HEADNOTES: ReadonlySet<string> = new Set();
+
+/** The same set with one row's headnote flipped between preview and whole. */
+const withHeadnoteToggled = (
+  current: ReadonlySet<string>,
+  decisionId: string,
+): ReadonlySet<string> => {
+  const next = new Set(current);
+  if (!next.delete(decisionId)) {
+    next.add(decisionId);
+  }
+  return next;
+};
 
 type DecisionTableProps = {
   decisions: readonly Decision[];
@@ -160,12 +174,25 @@ export const DecisionTable = ({
       : {},
   );
 
+  // Which rows are showing their whole headnote is about this screenful of
+  // results and nothing else: it is not worth a URL, and a new search leaves
+  // the ids behind with the rows they belonged to.
+  const [expandedHeadnoteIds, setExpandedHeadnoteIds] = useState<
+    ReadonlySet<string>
+  >(NO_EXPANDED_HEADNOTES);
+
   const renderScope = useMemo(
     () => ({
       contentMode: layout.contentMode,
+      expandedHeadnoteIds,
+      onToggleHeadnote: (decisionId: string) => {
+        setExpandedHeadnoteIds((current) =>
+          withHeadnoteToggled(current, decisionId),
+        );
+      },
       queryTokens: queryHighlightTokens(query),
     }),
-    [layout.contentMode, query],
+    [expandedHeadnoteIds, layout.contentMode, query],
   );
 
   return (

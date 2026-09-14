@@ -3,6 +3,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import {
+  DECISION_HEADNOTE_KEYWORDS,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
   type DecisionHeadnotePreview,
@@ -35,11 +36,24 @@ const DECISION_HEADNOTE_SCHEMAS = {
     },
     { additionalProperties: false },
   ),
+  [DECISION_HEADNOTE_KEYWORDS]: t.Object(
+    {
+      type: t.Literal(DECISION_HEADNOTE_KEYWORDS),
+      // The terms share the prose budget: a row is one row either way.
+      items: t.Array(
+        t.String({ minLength: 1, maxLength: LIMITS.caseLawHeadnoteMaxChars }),
+        { minItems: 1, maxItems: LIMITS.caseLawHeadnoteKeywords },
+      ),
+      omitted: t.Integer({ minimum: 0 }),
+    },
+    { additionalProperties: false },
+  ),
 } as const satisfies DecisionHeadnoteSchemaByType;
 
 const decisionHeadnoteRuntimeSchema = t.Union([
   DECISION_HEADNOTE_SCHEMAS.absent,
   DECISION_HEADNOTE_SCHEMAS.present,
+  DECISION_HEADNOTE_SCHEMAS.keywords,
 ]);
 
 // SAFETY: the runtime branches are closed and exhaustively keyed by the shared

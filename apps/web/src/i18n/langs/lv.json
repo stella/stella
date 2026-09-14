@@ -680,6 +680,7 @@
     "searchAskPrompt": "{query} (judikatūra, {country})",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
+    "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
       "relevance": "Atbilstošākie"

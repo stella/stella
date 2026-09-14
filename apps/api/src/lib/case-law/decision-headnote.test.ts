@@ -5,6 +5,7 @@ import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-t
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  collapseDecisionHeadnote,
   normalizeDecisionHeadnote,
   truncateDecisionHeadnote,
 } from "@/api/lib/case-law/decision-headnote";
@@ -55,6 +56,33 @@ describe("headnote text fits one row", () => {
     expect(headnote?.text).toMatch(/slovo\d+…$/u);
     expect(headnote?.text.length).toBeLessThanOrEqual(
       LIMITS.caseLawHeadnoteMaxChars,
+    );
+  });
+
+  test("the preview is the whole line's own opening", () => {
+    fc.assert(
+      fc.property(headnoteTextArbitrary, (raw) => {
+        const whole = collapseDecisionHeadnote(raw);
+        const preview = normalizeDecisionHeadnote(raw);
+        if (whole === null) {
+          expect(preview).toBeNull();
+          return;
+        }
+        expect(preview).not.toBeNull();
+        if (preview === null || !preview.truncated) {
+          expect(preview?.text).toBe(whole);
+          return;
+        }
+        // The row that shows the rest continues this text; it does not
+        // replace it with a second reading of the same field.
+        expect(
+          whole.startsWith(
+            preview.text.slice(0, -DECISION_HEADNOTE_TRUNCATION_MARK.length),
+          ),
+        ).toBe(true);
+        expect(whole.length).toBeGreaterThan(preview.text.length);
+      }),
+      propertyConfig(),
     );
   });
 

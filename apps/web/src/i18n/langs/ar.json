@@ -680,6 +680,7 @@
     "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
+    "showWholeHeadnote": "عرض خلاصة الحكم كاملة",
     "sort": {
       "newest": "الأحدث",
       "relevance": "الأكثر صلة"

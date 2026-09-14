@@ -680,6 +680,7 @@
     "searchAskPrompt": "{query} (joggyakorlat, {country})",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
+    "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",
       "relevance": "Legrelevánsabb"

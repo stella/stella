@@ -683,6 +683,7 @@ type Messages = {
     "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
+    "showWholeHeadnote": "Show whole headnote";
     "sort": {
       "newest": "Newest";
       "relevance": "Most relevant";

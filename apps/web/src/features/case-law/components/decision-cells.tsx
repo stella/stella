@@ -1,13 +1,17 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Fragment } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  DECISION_HEADNOTE_KEYWORDS,
+  decisionHeadnoteLine,
   TEXT_FIELD_TYPE,
   type DecisionHeadnotePreview,
+  type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -19,6 +23,7 @@ import { languageLabel } from "@/features/case-law/components/decision-language-
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
 import type {
+  DecisionColumnId,
   DecisionContentMode,
   DecisionIdentityLineField,
 } from "@/features/case-law/decision-columns.logic";
@@ -28,20 +33,25 @@ import {
   hasHighlight,
   highlightSegments,
 } from "@/features/case-law/headnote-highlight.logic";
-import type { HighlightSegment } from "@/features/case-law/headnote-highlight.logic";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public-decision";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import {
   type CaseLawDecisionRouteParams,
   createCaseLawDecisionRouteParams,
   normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
+import { detached } from "@/lib/detached";
 
 export { decisionYear } from "@/features/case-law/citation-format";
 
 /** What a cell draws for a value the decision does not carry. */
 const EMPTY_VALUE = "—";
+
+/** A cell no search reached: only the reader's find marks its text. */
+const NO_QUERY_TOKENS: readonly string[] = [];
 
 /** One decision as the public list, search and research tables show it. */
 export type Decision = {
@@ -84,6 +94,10 @@ export type DecisionRenderContext = {
   queryTokens: readonly string[];
   /** Whether a prose cell is clamped to two lines or shown whole. */
   contentMode: DecisionContentMode;
+  /** The rows whose cut headnote the reader asked to see whole. */
+  expandedHeadnoteIds: ReadonlySet<string>;
+  /** Ask for the rest of this row's headnote, or go back to the preview. */
+  onToggleHeadnote: (decisionId: string) => void;
 };
 
 /**
@@ -191,44 +205,28 @@ export const SummaryCell = ({
   decision: Decision;
 }) => {
   const openDecision = useOpenDecisionTab();
-  const headnoteSegments = headnotePreviewSegments(
-    decision.headnote,
-    context.queryTokens,
-  );
   const { headline } = decision;
-  // With nothing to look for, a headnote is still the better hook; a browse
-  // listing and a saved research table both arrive here with no tokens.
-  const headnoteAnswers =
-    headnoteSegments !== null &&
-    (context.queryTokens.length === 0 ||
-      hasHighlight(headnoteSegments) ||
-      !headline);
+  // Both kinds are judged as one line, because the question here is whether
+  // what the publisher supplied is about the search at all.
+  const summaryLine = decisionHeadnoteLine(decision.headnote);
 
-  if (headnoteAnswers) {
-    return (
-      <BidiText
-        as="p"
-        className={cn(
-          SUMMARY_TEXT_CLASS_NAME,
-          decisionClampClassName(context.contentMode),
-        )}
-      >
-        {/* Two highlighters over one string: the search's words, already
-            split into segments, and the reader's find inside the runs the
-            search did not claim. */}
-        {headnoteSegments.map((segment) =>
-          segment.match ? (
-            <mark className={MARK_CLASS_NAME} key={segment.start}>
-              {segment.text}
-            </mark>
-          ) : (
-            <Fragment key={segment.start}>
-              <HighlightedText columnId="summary" text={segment.text} />
-            </Fragment>
-          ),
-        )}
-      </BidiText>
-    );
+  if (summaryLine.length > 0) {
+    // With nothing to look for, a headnote is still the better hook; a browse
+    // listing and a saved research table both arrive here with no tokens.
+    const answersTheQuery =
+      context.queryTokens.length === 0 ||
+      hasHighlight(highlightSegments(summaryLine, context.queryTokens)) ||
+      !headline;
+    if (answersTheQuery) {
+      return (
+        <HeadnotePreviewCell
+          columnId="summary"
+          context={context}
+          decision={decision}
+          queryTokens={context.queryTokens}
+        />
+      );
+    }
   }
 
   if (!headline) {
@@ -266,20 +264,314 @@ const SUMMARY_TEXT_CLASS_NAME = "text-foreground text-sm";
 const MARK_CLASS_NAME =
   "text-foreground bg-warning/30 font-medium dark:bg-warning/20";
 
-/** The headnote split on the query's words, or null when there is no headnote. */
-const headnotePreviewSegments = (
-  headnote: DecisionHeadnotePreview,
-  queryTokens: readonly string[],
-): readonly HighlightSegment[] | null => {
+/** The bounded text a row carries, where the source published one. */
+type PresentHeadnote = Extract<
+  DecisionHeadnotePreview,
+  { type: typeof TEXT_FIELD_TYPE.PRESENT }
+>;
+
+type HeadnotePreviewCellProps = {
+  columnId: DecisionColumnId;
+  context: DecisionRenderContext;
+  decision: Decision;
+  /** The search's words, marked inside whatever the publisher supplied. */
+  queryTokens: readonly string[];
+};
+
+/**
+ * What the publisher supplied, drawn as the kind it is: their sentence as
+ * prose, their filing terms as tags. One switch, so a third kind cannot reach
+ * a cell without a decision about how it looks.
+ */
+const HeadnotePreviewCell = ({
+  columnId,
+  context,
+  decision,
+  queryTokens,
+}: HeadnotePreviewCellProps) => {
+  const { headnote } = decision;
   switch (headnote.type) {
-    case TEXT_FIELD_TYPE.PRESENT:
-      return highlightSegments(headnote.text, queryTokens);
     case TEXT_FIELD_TYPE.ABSENT:
-      return null;
+      return EMPTY_VALUE;
+    case DECISION_HEADNOTE_KEYWORDS:
+      return (
+        <DecisionKeywords
+          columnId={columnId}
+          items={headnote.items}
+          omitted={headnote.omitted}
+          queryTokens={queryTokens}
+        />
+      );
+    case TEXT_FIELD_TYPE.PRESENT:
+      return (
+        <DecisionHeadnote
+          columnId={columnId}
+          context={context}
+          decision={decision}
+          headnote={headnote}
+          queryTokens={queryTokens}
+        />
+      );
     default:
       headnote satisfies never;
-      return panic(`Unhandled decision text field: ${String(headnote)}`);
+      return panic(`Unhandled decision headnote: ${String(headnote)}`);
   }
+};
+
+/**
+ * The terms a publisher filed the decision under, as terms. A classification
+ * set as prose reads like an argument the court never made, so it is drawn the
+ * way the rest of the table draws a value from a fixed set: one tag each.
+ */
+export const DecisionKeywords = ({
+  columnId,
+  items,
+  omitted,
+  queryTokens,
+}: {
+  columnId: DecisionColumnId;
+  items: readonly string[];
+  /** Terms the row's budget dropped, so a part filing does not read whole. */
+  omitted: number;
+  queryTokens: readonly string[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    // Wrapped rather than cut: the row's height is a floor, and a tag sliced
+    // at the edge of the cell says less than the term it was.
+    <ul className="flex flex-wrap items-center gap-1">
+      {items.map((item) => (
+        <li
+          // A tag stands in for the headnote, so it reads as loudly as one:
+          // same class, so a change to how the hook is set moves both.
+          className={cn(
+            SUMMARY_TEXT_CLASS_NAME,
+            "bg-muted shrink-0 rounded px-1.5 py-0.5",
+          )}
+          key={item}
+        >
+          <BidiText as="span">
+            <HighlightedProse
+              columnId={columnId}
+              queryTokens={queryTokens}
+              text={item}
+            />
+          </BidiText>
+        </li>
+      ))}
+      {omitted > 0 && (
+        <li className="text-muted-foreground shrink-0 text-xs">
+          {t("workspaces.views.calendar.more", {
+            count: format.number(omitted),
+          })}
+        </li>
+      )}
+    </ul>
+  );
+};
+
+/**
+ * Two highlighters over one string: the search's words, and the reader's find
+ * inside the runs the search did not claim.
+ */
+const HighlightedProse = ({
+  columnId,
+  queryTokens,
+  text,
+}: {
+  columnId: DecisionColumnId;
+  queryTokens: readonly string[];
+  text: string;
+}) => (
+  <>
+    {highlightSegments(text, queryTokens).map((segment) =>
+      segment.match ? (
+        <mark className={MARK_CLASS_NAME} key={segment.start}>
+          {segment.text}
+        </mark>
+      ) : (
+        <Fragment key={segment.start}>
+          <HighlightedText columnId={columnId} text={segment.text} />
+        </Fragment>
+      ),
+    )}
+  </>
+);
+
+/** How much of a decision's headnote a row is showing, and why that much. */
+export const HEADNOTE_VIEW = {
+  COLLAPSED: "collapsed",
+  FAILED: "failed",
+  LOADING: "loading",
+  WHOLE: "whole",
+} as const;
+
+export type HeadnoteView =
+  | { type: typeof HEADNOTE_VIEW.COLLAPSED }
+  | { type: typeof HEADNOTE_VIEW.FAILED }
+  | { type: typeof HEADNOTE_VIEW.LOADING }
+  | { type: typeof HEADNOTE_VIEW.WHOLE; text: string };
+
+/** What the control offers next, in each state the cell can be in. */
+const HEADNOTE_CONTROL_LABEL_KEYS = {
+  [HEADNOTE_VIEW.COLLAPSED]: "caseLaw.showWholeHeadnote",
+  [HEADNOTE_VIEW.FAILED]: "common.retry",
+  [HEADNOTE_VIEW.LOADING]: "common.loading",
+  [HEADNOTE_VIEW.WHOLE]: "common.showLess",
+} as const satisfies Record<HeadnoteView["type"], TranslationKey>;
+
+type HeadnoteViewOptions = {
+  expanded: boolean;
+  /** Whether the read for the rest of the line failed. */
+  failed: boolean;
+  /** The whole line once the read carries it; undefined while it does not. */
+  whole: string | undefined;
+};
+
+const headnoteView = ({
+  expanded,
+  failed,
+  whole,
+}: HeadnoteViewOptions): HeadnoteView => {
+  if (!expanded) {
+    return { type: HEADNOTE_VIEW.COLLAPSED };
+  }
+  if (whole !== undefined) {
+    return { type: HEADNOTE_VIEW.WHOLE, text: whole };
+  }
+  return failed
+    ? { type: HEADNOTE_VIEW.FAILED }
+    : { type: HEADNOTE_VIEW.LOADING };
+};
+
+/**
+ * The whole line the decision read carries. A re-ingest between the two reads
+ * can leave the decision with no publisher summary at all, and the preview is
+ * then the whole of what there is to show.
+ */
+const wholeHeadnoteText = (field: TextField, preview: string): string =>
+  field.type === TEXT_FIELD_TYPE.PRESENT ? field.text : preview;
+
+/**
+ * The publisher's own sentence in a row.
+ *
+ * The list caps a headnote at the row budget, so the long ones arrive cut. The
+ * rest is one read away — the same read the inspector opens the decision with,
+ * so a reader who expands a row and then opens it pays for one — and asking
+ * for it is a control at the end of the cell rather than a bare ellipsis
+ * nothing can be done with.
+ */
+const DecisionHeadnote = ({
+  columnId,
+  context,
+  decision,
+  headnote,
+  queryTokens,
+}: {
+  columnId: DecisionColumnId;
+  context: DecisionRenderContext;
+  decision: Decision;
+  headnote: PresentHeadnote;
+  queryTokens: readonly string[];
+}) => {
+  const expanded = context.expandedHeadnoteIds.has(decision.id);
+  // The decision read, and only the one line of it this cell shows: the
+  // inspector fills the same cache entry, so a reader who expands a row and
+  // then opens it pays for one read rather than two.
+  const whole = useQuery({
+    ...decisionOptions(decision.id),
+    select: (read) => read.headnote,
+    enabled: expanded,
+  });
+  const view = headnoteView({
+    expanded,
+    failed: whole.isError,
+    whole:
+      whole.data === undefined
+        ? undefined
+        : wholeHeadnoteText(whole.data, headnote.text),
+  });
+
+  return (
+    <HeadnoteProse
+      columnId={columnId}
+      contentMode={context.contentMode}
+      onActivate={() => {
+        if (view.type === HEADNOTE_VIEW.FAILED) {
+          detached(whole.refetch(), "case-law.headnote-retry");
+          return;
+        }
+        context.onToggleHeadnote(decision.id);
+      }}
+      preview={headnote}
+      queryTokens={queryTokens}
+      view={view}
+    />
+  );
+};
+
+type HeadnoteProseProps = {
+  /** The column the reader's find marks these runs under. */
+  columnId: DecisionColumnId;
+  contentMode: DecisionContentMode;
+  onActivate: () => void;
+  preview: PresentHeadnote;
+  /** The search's words, marked inside the publisher's own sentence. */
+  queryTokens: readonly string[];
+  view: HeadnoteView;
+};
+
+/** The cell itself: the text it is showing, and the way to the rest of it. */
+export const HeadnoteProse = ({
+  columnId,
+  contentMode,
+  onActivate,
+  preview,
+  queryTokens,
+  view,
+}: HeadnoteProseProps) => {
+  const t = useTranslations();
+  const showingWhole = view.type === HEADNOTE_VIEW.WHOLE;
+
+  return (
+    <div>
+      <BidiText
+        as="p"
+        className={cn(
+          SUMMARY_TEXT_CLASS_NAME,
+          // A row the reader opened is read, not scanned: the density control
+          // still governs every other row on the page.
+          showingWhole ? "" : decisionClampClassName(contentMode),
+        )}
+      >
+        <HighlightedProse
+          columnId={columnId}
+          queryTokens={queryTokens}
+          text={showingWhole ? view.text : preview.text}
+        />
+      </BidiText>
+      {preview.truncated && (
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+          {view.type === HEADNOTE_VIEW.FAILED && (
+            <span className="text-muted-foreground">
+              {t("errors.actionFailed")}
+            </span>
+          )}
+          <button
+            aria-expanded={showingWhole}
+            // The vertical padding extends the hit area without growing the row.
+            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2 transition-colors"
+            onClick={onActivate}
+            type="button"
+          >
+            {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -455,36 +747,21 @@ export const DecisionDateCell = ({ decision }: { decision: Decision }) => {
  * opened. Empty when the source supplies none.
  */
 export const HeadnoteCell = ({
-  contentMode,
+  context,
   decision,
 }: {
-  contentMode: DecisionContentMode;
+  context: DecisionRenderContext;
   decision: Decision;
-}) => {
-  switch (decision.headnote.type) {
-    case TEXT_FIELD_TYPE.ABSENT:
-      return EMPTY_VALUE;
-    case TEXT_FIELD_TYPE.PRESENT: {
-      return (
-        <BidiText
-          as="p"
-          className={cn(
-            SUMMARY_TEXT_CLASS_NAME,
-            decisionClampClassName(contentMode),
-          )}
-        >
-          <HighlightedText columnId="headnote" text={decision.headnote.text} />
-        </BidiText>
-      );
-    }
-    default: {
-      decision.headnote satisfies never;
-      return panic(
-        `Unhandled decision text field: ${String(decision.headnote)}`,
-      );
-    }
-  }
-};
+}) => (
+  <HeadnotePreviewCell
+    columnId="headnote"
+    context={context}
+    decision={decision}
+    // This column is what the publisher supplied, not the row's match: only
+    // the reader's find marks it, the way every metadata column is marked.
+    queryTokens={NO_QUERY_TOKENS}
+  />
+);
 
 export const CitedByCell = ({ decision }: { decision: Decision }) => {
   const format = useFormatter();

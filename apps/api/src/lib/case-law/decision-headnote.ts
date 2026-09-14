@@ -31,18 +31,68 @@ export const truncateDecisionHeadnote = (text: string) => {
 };
 
 /**
- * A decision's publisher summary as one bounded line: whitespace runs are
- * collapsed, then the text is fitted to the row budget. Null means the row
- * has nothing to show. `publisher-summary.ts` owns which source field wins;
- * this helper owns only the public preview.
+ * A decision's publisher summary as one line, whole: whitespace runs
+ * collapsed, nothing cut. Null means the row has nothing to show.
+ * `publisher-summary.ts` owns which source field wins; this helper owns only
+ * how that text reads on one line.
  */
-export const normalizeDecisionHeadnote = (raw: unknown) => {
+export const collapseDecisionHeadnote = (raw: unknown): string | null => {
   if (typeof raw !== "string") {
     return null;
   }
   const collapsed = raw.replace(/\s+/gu, " ").trim();
-  if (collapsed.length === 0) {
+  return collapsed.length === 0 ? null : collapsed;
+};
+
+/**
+ * The same line, fitted to the row budget. The preview is cut from the whole
+ * reading above rather than from a second one, so a row that shows the rest
+ * continues the text it was showing instead of replacing it.
+ */
+export const normalizeDecisionHeadnote = (raw: unknown) => {
+  const collapsed = collapseDecisionHeadnote(raw);
+  return collapsed === null ? null : truncateDecisionHeadnote(collapsed);
+};
+
+/**
+ * A publisher's classification as the terms a row draws, fitted to the same
+ * row the prose preview gets: at most `caseLawHeadnoteKeywords` terms, and no
+ * more of them than the character budget holds. Null means the publisher filed
+ * the decision under nothing.
+ */
+export const normalizeDecisionKeywords = (raw: unknown) => {
+  if (!Array.isArray(raw)) {
     return null;
   }
-  return truncateDecisionHeadnote(collapsed);
+  const terms: string[] = [];
+  for (const value of raw) {
+    const term = collapseDecisionHeadnote(value);
+    // A repeated term is a publisher's bookkeeping, not a second tag.
+    if (term !== null && !terms.includes(term)) {
+      terms.push(term);
+    }
+  }
+  if (terms.length === 0) {
+    return null;
+  }
+
+  const items: string[] = [];
+  let budget = LIMITS.caseLawHeadnoteMaxChars;
+  for (const term of terms) {
+    // A term is a term: the row drops the ones past its budget rather than
+    // drawing a tag cut in half.
+    if (
+      term.length > budget ||
+      items.length >= LIMITS.caseLawHeadnoteKeywords
+    ) {
+      break;
+    }
+    budget -= term.length;
+    items.push(term);
+  }
+  if (items.length === 0) {
+    // A single term over the whole budget is still the only hook the row has.
+    items.push(truncateDecisionHeadnote(terms[0] ?? "").text);
+  }
+  return { items, omitted: terms.length - items.length };
 };

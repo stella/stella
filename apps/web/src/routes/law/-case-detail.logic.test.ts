@@ -38,6 +38,7 @@ const UNPUBLISHED_DECISION = {
   documentUrl: null,
   ecli: null,
   fulltext: null,
+  headnote: ABSENT_TEXT_FIELD,
   id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000001"),
   identifiers: [
     {

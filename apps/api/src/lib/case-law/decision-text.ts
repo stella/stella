@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
@@ -15,7 +16,11 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 
-import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
+import {
+  collapseDecisionHeadnote,
+  normalizeDecisionHeadnote,
+  normalizeDecisionKeywords,
+} from "@/api/lib/case-law/decision-headnote";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
@@ -179,13 +184,35 @@ export const readTextField = (value: unknown): TextField => {
   return presentTextField(value);
 };
 
-export const readDecisionHeadnote = (
-  value: unknown,
-): DecisionHeadnotePreview => {
-  const field = readTextField(value);
+type ReadDecisionHeadnoteOptions = {
+  /** The publisher's sentence, as the row's SQL read it. */
+  headnote: unknown;
+  /** The terms they filed the decision under, where they wrote no sentence. */
+  keywords: unknown;
+};
+
+/**
+ * What a row shows above everything else: the publisher's sentence, or — where
+ * they wrote none — the terms they filed the decision under, as terms. The two
+ * stay apart all the way to the cell, because a row that draws a
+ * classification as prose reads a filing card as an argument.
+ */
+export const readDecisionHeadnote = ({
+  headnote,
+  keywords,
+}: ReadDecisionHeadnoteOptions): DecisionHeadnotePreview => {
+  const field = readTextField(headnote);
   switch (field.type) {
-    case TEXT_FIELD_TYPE.ABSENT:
-      return field;
+    case TEXT_FIELD_TYPE.ABSENT: {
+      const classification = normalizeDecisionKeywords(keywords);
+      return classification === null
+        ? field
+        : {
+            type: DECISION_HEADNOTE_KEYWORDS,
+            items: classification.items,
+            omitted: classification.omitted,
+          };
+    }
     case TEXT_FIELD_TYPE.PRESENT: {
       const preview = normalizeDecisionHeadnote(field.text);
       return preview === null
@@ -195,6 +222,29 @@ export const readDecisionHeadnote = (
             text: preview.text,
             truncated: preview.truncated,
           };
+    }
+    default: {
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+    }
+  }
+};
+
+/**
+ * The same publisher summary, whole: what a reader asks for when the row's
+ * preview stops mid-sentence. Read from the same value the preview is cut
+ * from, so the two can never be two different texts.
+ */
+export const readWholeDecisionHeadnote = (value: unknown): TextField => {
+  const field = readTextField(value);
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return field;
+    case TEXT_FIELD_TYPE.PRESENT: {
+      const text = collapseDecisionHeadnote(field.text);
+      return text === null
+        ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
+        : { type: TEXT_FIELD_TYPE.PRESENT, text };
     }
     default: {
       field satisfies never;

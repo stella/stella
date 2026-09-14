@@ -14,7 +14,10 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
+import {
+  publisherHeadnoteMetadataSql,
+  publisherKeywordsMetadataSql,
+} from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -52,7 +55,10 @@ export const listMatterLinksHandler = async ({
         // hit does: a source that withholds redistribution contributes the
         // row's own facts and no borrowed prose.
         headnote: sql<string | null>`CASE WHEN ${redistributableCaseLawSource}
-          THEN ${publisherSummaryMetadataSql(caseLawDecisions.metadata)}
+          THEN ${publisherHeadnoteMetadataSql(caseLawDecisions.metadata)}
+        END`,
+        keywords: sql<string[] | null>`CASE WHEN ${redistributableCaseLawSource}
+          THEN ${publisherKeywordsMetadataSql(caseLawDecisions.metadata)}
         END`,
       })
       .from(caseLawMatterLinks)
@@ -108,7 +114,10 @@ export const listMatterLinksHandler = async ({
         citationCount: row.citationCount,
         // The same preview the search hit renders, so a linked decision reads
         // identically in the matter and in the results table.
-        headnote: readDecisionHeadnote(row.headnote),
+        headnote: readDecisionHeadnote({
+          headnote: row.headnote,
+          keywords: row.keywords,
+        }),
       },
     })),
   };

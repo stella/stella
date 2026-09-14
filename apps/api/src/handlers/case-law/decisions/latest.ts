@@ -20,7 +20,10 @@ import {
   readPublicDecisionLanguageAlternatesByGroup,
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
-import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
+import {
+  publisherHeadnoteMetadataSql,
+  publisherKeywordsMetadataSql,
+} from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -143,7 +146,8 @@ export const readLatestDecisionsByCourt = async ({
           d.decision_date,
           d.decision_type,
           d.citation_count,
-          ${publisherSummaryMetadataSql(sql.raw("d.metadata"))} AS headnote
+          ${publisherHeadnoteMetadataSql(sql.raw("d.metadata"))} AS headnote,
+          ${publisherKeywordsMetadataSql(sql.raw("d.metadata"))} AS keywords
         FROM jsonb_array_elements_text(${JSON.stringify(courts.map((shelf) => shelf.court))}::text::jsonb)
           WITH ORDINALITY AS shelf(court, ordinality)
         CROSS JOIN LATERAL (
@@ -228,7 +232,10 @@ export const readLatestDecisionsByCourt = async ({
       ),
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
-      headnote: readDecisionHeadnote(row["headnote"]),
+      headnote: readDecisionHeadnote({
+        headnote: row["headnote"],
+        keywords: row["keywords"],
+      }),
       citationCount: Number(row["citation_count"]) || 0,
     });
   }

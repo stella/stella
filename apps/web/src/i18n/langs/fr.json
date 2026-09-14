@@ -680,6 +680,7 @@
     "searchAskPrompt": "{query} (jurisprudence, {country})",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
+    "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
       "relevance": "Les plus pertinentes"
