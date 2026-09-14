@@ -28,6 +28,7 @@ export const STATUS_TO_KEY: Readonly<
   429: STATUS_ERROR_KEYS.rateLimited,
   500: STATUS_ERROR_KEYS.server,
   502: STATUS_ERROR_KEYS.serviceUnavailable,
+  503: STATUS_ERROR_KEYS.serviceUnavailable,
 };
 
 export const translateError = (key: TranslationKey): string =>
