@@ -1,4 +1,5 @@
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
@@ -15,7 +16,10 @@ import { refreshS3 } from "@/api/lib/s3";
 const IDLE_CHECK_INTERVAL_MS = 60_000;
 
 await refreshS3();
-const documentProcessingWorker = initDocumentProcessingWorker();
+const documentProcessingWorkers = createBullMqWorkerHost(
+  "document-processing-worker",
+  [initDocumentProcessingWorker],
+);
 
 let shuttingDown = false;
 let stopIdleSampling: (() => void) | null = null;
@@ -26,13 +30,7 @@ const shutdown = async (signal: string): Promise<void> => {
   shuttingDown = true;
   stopIdleSampling?.();
   logger.info("document_processing.shutdown_started", { signal });
-  try {
-    await documentProcessingWorker.close();
-  } catch (error) {
-    logger.error("document_processing.shutdown_failed", {
-      "error.type": errorTag(error),
-    });
-  }
+  await documentProcessingWorkers.close();
   process.exit(0);
 };
 

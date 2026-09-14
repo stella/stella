@@ -165,6 +165,7 @@ export const initReportExportWorker = () => {
   });
 
   return {
+    queues: [REPORT_EXPORT_QUEUE_NAME] as const,
     close: async () => {
       await closeNotificationReconcile();
       await worker.close();

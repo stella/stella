@@ -1193,6 +1193,9 @@ export const initWorkflowWorkers = () => {
   reconcileTimer.unref();
 
   return {
+    queues: WORKFLOW_WORKER_SPECS.map(
+      (spec) => WORKFLOW_QUEUE_NAMES[spec.queueClass],
+    ),
     close: async (): Promise<void> => {
       clearInterval(reconcileTimer);
       const closeResults = await Promise.allSettled(

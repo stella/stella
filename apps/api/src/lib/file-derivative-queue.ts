@@ -358,7 +358,12 @@ export const initFileDerivativeWorker = () => {
     concurrency: String(WORKER_CONCURRENCY),
   });
 
-  return worker;
+  return {
+    queues: [QUEUE_NAME] as const,
+    close: async () => {
+      await worker.close();
+    },
+  };
 };
 
 const processPdfDerivativeJob = async ({

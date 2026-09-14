@@ -342,5 +342,10 @@ export const initStyleSetPackageCleanupWorker = () => {
     createQueueWorkerErrorLogger("style_set_package_cleanup.worker_error"),
   );
 
-  return worker;
+  return {
+    queues: [QUEUE_NAME] as const,
+    close: async () => {
+      await worker.close();
+    },
+  };
 };
