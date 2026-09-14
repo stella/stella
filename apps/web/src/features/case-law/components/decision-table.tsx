@@ -206,7 +206,11 @@ export const DecisionTable = ({
       <div
         aria-busy={isRefreshing}
         className={cn(
-          "border-border/45 bg-background/60 flex min-h-64 flex-col overflow-hidden rounded-md border transition-opacity duration-200",
+          // The table owns its scroll: it claims the height the page gives it
+          // rather than growing to its rows. Without a bounded box the
+          // virtualizer's scroll element never scrolls, so every row is drawn
+          // and the frozen header has nothing to freeze against.
+          "border-border/45 bg-background/60 flex min-h-64 flex-1 flex-col overflow-hidden rounded-md border transition-opacity duration-200",
           isRefreshing && "opacity-56",
         )}
       >

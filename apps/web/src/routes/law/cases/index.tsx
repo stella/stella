@@ -895,7 +895,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     : null;
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
       {/*
         The breadcrumb already names the screen, so the heading is for the
         document outline and for a screen reader, not for the eye.
@@ -910,7 +910,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         query={queryInput}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
         <DecisionResultsToolbar
           filters={
             <DecisionFilterPopover

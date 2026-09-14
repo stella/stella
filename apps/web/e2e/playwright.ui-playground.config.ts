@@ -16,7 +16,10 @@ const sharedUse = {
 
 export default defineConfig({
   testDir: "./ui-playground",
-  testMatch: "**/*.visual.spec.ts",
+  // `*.visual.spec.ts` compares screenshots; `*.geometry.spec.ts` compares
+  // measured boxes, which a screenshot cannot assert on and a unit test cannot
+  // reach. Both run against the same playground routes, in the same projects.
+  testMatch: "**/*.@(visual|geometry).spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
