@@ -6,6 +6,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { isUuid } from "@stll/uuid-codec";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -18,7 +19,6 @@ import {
   redistributableCaseLawSourceFor,
 } from "@/api/lib/case-law/redistribution";
 import {
-  isUuid,
   tPaginationCursor,
   tPaginationLimit,
   tSafeId,

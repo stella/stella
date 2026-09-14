@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   isPublicCaseLawCountry,
@@ -11,6 +11,7 @@ import type {
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { UiLocale } from "@stll/locales";
 import { stripDiacriticsForSlug } from "@stll/text-normalize";
+import { decodeCompactUuid, encodeCompactUuid, isUuid } from "@stll/uuid-codec";
 
 const DEFAULT_COUNTRY_BY_LOCALE = {
   ar: null,
@@ -52,12 +53,6 @@ export const resolveCaseLawRouteCountry = ({
     ? defaultCaseLawCountryForLocale(locale)
     : publicCaseLawCountry(country);
 
-const UUID_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
-const COMPACT_UUID_REGEX = /^[A-Za-z0-9_-]{22}$/u;
-const BASE64URL_ALPHABET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
 export type CaseLawDecisionSearchHit = {
   caseNumber: string;
   country: string;
@@ -78,108 +73,23 @@ export type CaseLawDecisionRouteParams = {
 };
 
 export const isCaseLawDecisionId = (value: string): boolean =>
-  UUID_REGEX.test(value.trim());
+  isUuid(value.trim());
 
-const uuidToBytes = (uuid: string): number[] | null => {
-  const hex = uuid.replace(/-/gu, "").toLowerCase();
-  if (!/^[0-9a-f]{32}$/u.test(hex)) {
-    return null;
-  }
-
-  const bytes: number[] = [];
-  for (let index = 0; index < hex.length; index += 2) {
-    bytes.push(Number.parseInt(hex.slice(index, index + 2), 16));
-  }
-
-  return bytes;
-};
-
-const bytesToUuid = (bytes: readonly number[]): string | null => {
-  if (bytes.length !== 16) {
-    return null;
-  }
-
-  const hex = bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20),
-  ].join("-");
-};
-
-const encodeBase64Url = (bytes: readonly number[]): string => {
-  let encoded = "";
-
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index] ?? 0;
-    const second = bytes[index + 1] ?? 0;
-    const third = bytes[index + 2] ?? 0;
-    const remaining = bytes.length - index;
-    const triplet = first * 65_536 + second * 256 + third;
-
-    encoded += BASE64URL_ALPHABET[Math.floor(triplet / 262_144) % 64] ?? "";
-    encoded += BASE64URL_ALPHABET[Math.floor(triplet / 4096) % 64] ?? "";
-    if (remaining > 1) {
-      encoded += BASE64URL_ALPHABET[Math.floor(triplet / 64) % 64] ?? "";
-    }
-    if (remaining > 2) {
-      encoded += BASE64URL_ALPHABET[triplet % 64] ?? "";
-    }
-  }
-
-  return encoded;
-};
-
-const decodeBase64Url = (value: string): number[] | null => {
-  if (!COMPACT_UUID_REGEX.test(value)) {
-    return null;
-  }
-
-  const bytes: number[] = [];
-  let buffer = 0;
-  let bitCount = 0;
-
-  for (const char of value) {
-    const sixBits = BASE64URL_ALPHABET.indexOf(char);
-    if (sixBits === -1) {
-      return null;
-    }
-
-    buffer = buffer * 64 + sixBits;
-    bitCount += 6;
-
-    while (bitCount >= 8) {
-      bitCount -= 8;
-      const divisor = 2 ** bitCount;
-      bytes.push(Math.floor(buffer / divisor) % 256);
-      buffer %= divisor;
-    }
-  }
-
-  return bytes.length === 16 ? bytes : null;
-};
-
+/** The id compacted, or the value untouched when it is not an id at all: a
+ *  route param the caller assembled from a search hit is never dropped. */
 export const encodeCaseLawDecisionIdForRoute = (decisionId: string): string => {
-  const bytes = uuidToBytes(decisionId.trim());
-  return bytes ? encodeBase64Url(bytes) : decisionId;
+  const encoded = encodeCompactUuid(decisionId.trim());
+  return Result.isError(encoded) ? decisionId : encoded.value;
 };
 
+/** The id a route param's tail carries, or the tail untouched when it carries
+ *  none — the caller then resolves it as a slug. */
 export const decodeCaseLawDecisionIdFromRoute = (
   decisionId: string,
 ): string => {
   const trimmed = decisionId.trim();
-  if (UUID_REGEX.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-
-  const bytes = decodeBase64Url(trimmed);
-  if (!bytes) {
-    return trimmed;
-  }
-  return bytesToUuid(bytes) ?? trimmed;
+  const decoded = decodeCompactUuid(trimmed);
+  return Result.isError(decoded) ? trimmed : decoded.value;
 };
 
 const trimSlugHyphens = (value: string): string => {

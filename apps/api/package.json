@@ -115,6 +115,7 @@
     "@stll/time": "workspace:*",
     "@stll/transactional": "workspace:*",
     "@stll/user-agent": "workspace:*",
+    "@stll/uuid-codec": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-anthropic": "catalog:",

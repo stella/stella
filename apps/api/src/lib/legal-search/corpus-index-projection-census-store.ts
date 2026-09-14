@@ -1,13 +1,14 @@
 import { panic } from "better-result";
 import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   lockRegisteredCorpusProjectionManifestForMutation,

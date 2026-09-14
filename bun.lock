@@ -109,6 +109,7 @@
         "@stll/time": "workspace:*",
         "@stll/transactional": "workspace:*",
         "@stll/user-agent": "workspace:*",
+        "@stll/uuid-codec": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-anthropic": "catalog:",
@@ -362,6 +363,7 @@
         "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "@stll/user-agent": "workspace:*",
+        "@stll/uuid-codec": "workspace:*",
         "@stll/workspace-ui": "workspace:*",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/math": "^1.0.2",
@@ -1029,6 +1031,19 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+      },
+    },
+    "packages/uuid-codec": {
+      "name": "@stll/uuid-codec",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/workspace-model": {
@@ -2690,6 +2705,8 @@
     "@stll/ui": ["@stll/ui@workspace:packages/ui"],
 
     "@stll/user-agent": ["@stll/user-agent@workspace:packages/user-agent"],
+
+    "@stll/uuid-codec": ["@stll/uuid-codec@workspace:packages/uuid-codec"],
 
     "@stll/web": ["@stll/web@workspace:apps/web"],
 

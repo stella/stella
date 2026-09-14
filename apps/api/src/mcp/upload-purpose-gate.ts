@@ -1,11 +1,11 @@
 import { and, eq } from "drizzle-orm";
 
 import type { PermissionInput } from "@stll/permissions";
+import { isUuid } from "@stll/uuid-codec";
 
 import { pendingUploads } from "@/api/db/schema";
 import { UPLOAD_PURPOSE_PERMISSION } from "@/api/handlers/uploads/permissions";
 import type { UploadPurpose } from "@/api/handlers/uploads/permissions";
-import { isUuid } from "@/api/lib/custom-schema";
 import { brandPersistedPendingUploadId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import type { McpOAuthScope } from "@/api/mcp/constants";

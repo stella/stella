@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, gt, inArray } from "drizzle-orm";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import { rootDb } from "@/api/db/root";
 import {
   entities,
@@ -13,7 +15,6 @@ import {
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   brandPersistedEntityId,

@@ -16,6 +16,7 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
+import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
@@ -80,7 +81,6 @@ import {
   bodyPreviewJoin,
   redistributableSourceJoin,
 } from "@/api/lib/case-law/search-sql";
-import { isUuid } from "@/api/lib/custom-schema";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";

@@ -26,6 +26,7 @@ import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { parseUserAgent } from "@stll/user-agent";
+import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
@@ -59,7 +60,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { desktopRegistryKeyConfig } from "@/api/lib/business-registries/desktop/config";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
-import { isUuid, tUuid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";

@@ -5,6 +5,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -17,7 +18,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  isUuid,
   tPaginationCursor,
   tPaginationLimit,
   tSafeId,

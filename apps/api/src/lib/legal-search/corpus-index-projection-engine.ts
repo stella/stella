@@ -1,9 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { isUuid } from "@stll/uuid-codec";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
-import { isUuid } from "@/api/lib/custom-schema";
 import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   CorpusIndexError,
