@@ -147,6 +147,14 @@ pub fn present_key_panel<R: Runtime>(window: &WebviewWindow<R>) -> bool {
     app.unhideWithoutActivation();
   }
   ns_window.makeKeyAndOrderFront(None);
+  // Frames WebKit rendered while the window was parked never reach the
+  // screen, and presenting alone commits nothing new, so the page shows its
+  // pre-park frame until the next input. A visibility cycle on the content
+  // view is a real view-state change for WebKit and resumes the commits.
+  if let Some(content) = ns_window.contentView() {
+    content.setHidden(true);
+    content.setHidden(false);
+  }
   true
 }
 
