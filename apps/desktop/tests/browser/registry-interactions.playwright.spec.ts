@@ -819,75 +819,6 @@ test("applies saved formatting and copies only the selected registry output", as
   });
 });
 
-test("makes the selected format the member's default and hands the choice back", async ({
-  page,
-}) => {
-  await openClipboard(page);
-  await activateRegistry(page);
-  const formatMenu = page.getByRole("button", { name: "Format", exact: true });
-  await expect(formatMenu).toHaveText(/Saved compact/u);
-  await formatMenu.click();
-  await page.getByRole("menuitemradio", { name: "Saved detailed" }).click();
-  await expect(formatMenu).toHaveText(/Saved detailed/u);
-
-  await formatMenu.click();
-  await page
-    .getByRole("menuitem", {
-      name: enMessages.clipboard.registryUseAsDefaultFormat,
-    })
-    .click();
-  await expect
-    .poll(async () => await readInvocations(page))
-    .toContainEqual({
-      command: "registry_set_default_format",
-      args: {
-        formatId: "22222222-2222-4222-8222-222222222222",
-        registry: "ares",
-      },
-    });
-
-  // The card now renders the default, so there is nothing left to pin; the
-  // built-in format offers the clear instead, because the default is theirs.
-  await formatMenu.click();
-  await expect(
-    page.getByRole("menuitem", {
-      name: enMessages.clipboard.registryUseAsDefaultFormat,
-    }),
-  ).toBeHidden();
-  await page
-    .getByRole("menuitemradio", {
-      name: enMessages.clipboard.registryDefaultFormat,
-      exact: true,
-    })
-    .click();
-  await formatMenu.click();
-  await page
-    .getByRole("menuitem", {
-      name: enMessages.clipboard.registryClearDefaultFormat,
-    })
-    .click();
-  await expect
-    .poll(async () => await readInvocations(page))
-    .toContainEqual({
-      command: "registry_set_default_format",
-      args: { formatId: null, registry: "ares" },
-    });
-
-  // The firm's default took over, and a firm default is not the member's to
-  // clear: on the built-in format the menu now offers neither action.
-  await formatMenu.click();
-  await expect(
-    page.getByRole("menuitem", {
-      name: enMessages.clipboard.registryClearDefaultFormat,
-    }),
-  ).toBeHidden();
-  await expect(
-    page.getByRole("menuitem", {
-      name: enMessages.clipboard.registryUseAsDefaultFormat,
-    }),
-  ).toBeHidden();
-});
-
 test("opens the selected company's specification formats from the format menu", async ({
   page,
 }) => {
@@ -951,6 +882,96 @@ test("labels non-company directory templates as registry results", async ({
 for (const language of ["en", "ar"] as const) {
   test.describe(`${language} unified search`, () => {
     test.use({ locale: language });
+    test("pins the organization default for the member and hands the choice back", async ({
+      page,
+    }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
+      await openClipboard(page);
+      await activateRegistry(page);
+      const formatMenu = page.getByRole("button", {
+        name: messages.clipboard.registryFormat,
+        exact: true,
+      });
+      await expect(formatMenu).toHaveText(/Saved compact/u);
+
+      // The effective default belongs to the organization, so the member can
+      // pin the same format and keep it if the organization changes its own.
+      await formatMenu.click();
+      await page
+        .getByRole("menuitem", {
+          name: messages.clipboard.registryUseAsDefaultFormat,
+        })
+        .click();
+      await expect
+        .poll(async () => await readInvocations(page))
+        .toContainEqual({
+          command: "registry_set_default_format",
+          args: {
+            formatId: "11111111-1111-4111-8111-111111111111",
+            registry: "ares",
+          },
+        });
+
+      // Once it is the member's own default, the same row cannot be pinned
+      // again. A different saved format remains available as a new choice.
+      await formatMenu.click();
+      await expect(
+        page.getByRole("menuitem", {
+          name: messages.clipboard.registryUseAsDefaultFormat,
+        }),
+      ).toBeHidden();
+      await page.getByRole("menuitemradio", { name: "Saved detailed" }).click();
+      await formatMenu.click();
+      await page
+        .getByRole("menuitem", {
+          name: messages.clipboard.registryUseAsDefaultFormat,
+        })
+        .click();
+      await expect
+        .poll(async () => await readInvocations(page))
+        .toContainEqual({
+          command: "registry_set_default_format",
+          args: {
+            formatId: "22222222-2222-4222-8222-222222222222",
+            registry: "ares",
+          },
+        });
+
+      await formatMenu.click();
+      await page
+        .getByRole("menuitemradio", {
+          name: messages.clipboard.registryDefaultFormat,
+          exact: true,
+        })
+        .click();
+      await formatMenu.click();
+      await page
+        .getByRole("menuitem", {
+          name: messages.clipboard.registryClearDefaultFormat,
+        })
+        .click();
+      await expect
+        .poll(async () => await readInvocations(page))
+        .toContainEqual({
+          command: "registry_set_default_format",
+          args: { formatId: null, registry: "ares" },
+        });
+
+      // The organization's default took over again, and the built-in entry
+      // has no personal choice left to clear or pin.
+      await formatMenu.click();
+      await expect(
+        page.getByRole("menuitem", {
+          name: messages.clipboard.registryClearDefaultFormat,
+        }),
+      ).toBeHidden();
+      await expect(
+        page.getByRole("menuitem", {
+          name: messages.clipboard.registryUseAsDefaultFormat,
+        }),
+      ).toBeHidden();
+    });
+
     test("uses one bottom control frame and gives the top of the panel to results", async ({
       browserName,
       page,

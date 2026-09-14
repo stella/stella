@@ -775,8 +775,8 @@ type DefaultFormatItemProps = DesktopRegistryDefaultFormat & {
 /**
  * Pin the card's format as the member's default, or, on the built-in format,
  * give the choice back to the organization's default. Nothing is offered for a
- * selection that already is the default, nor a clear with no personal choice
- * to clear.
+ * selection that already is the member's default, nor a clear with no personal
+ * choice to clear.
  */
 const DefaultFormatItem = ({
   defaultFormatId,
@@ -786,7 +786,10 @@ const DefaultFormatItem = ({
   onSelect,
 }: DefaultFormatItemProps) => {
   const t = useTranslations("clipboard");
-  if (formatId === defaultFormatId) {
+  if (
+    formatId === defaultFormatId &&
+    defaultFormatSource === DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE.user
+  ) {
     return null;
   }
   if (formatId === null) {
