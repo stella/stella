@@ -10,6 +10,10 @@ import { BRREG_IDENTIFIER_SPACED_TOKEN } from "@stll/business-registries/brreg/i
 import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries/default-formats";
 import { EIN_DASHED_TOKEN } from "@stll/business-registries/edgar/identifier-format";
 import { ORSR_COURT_GENITIVE_TOKEN } from "@stll/business-registries/orsr/court-names";
+import {
+  ORSR_INSERT_TOKEN,
+  ORSR_SECTION_TOKEN,
+} from "@stll/business-registries/orsr/default-format";
 import { ORSR_IDENTIFIER_SPACED_TOKEN } from "@stll/business-registries/orsr/identifier-format";
 import {
   SIREN_SPACED_TOKEN,
@@ -50,6 +54,8 @@ export const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> =
       "share capital",
       "share capital paid",
       "court file",
+      ORSR_SECTION_TOKEN,
+      ORSR_INSERT_TOKEN,
       ORSR_COURT_GENITIVE_TOKEN,
       "registered on",
       "acting clause",

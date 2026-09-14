@@ -1,4 +1,29 @@
 import { ARES_DEFAULT_FORMAT } from "./ares/default-format.js";
+import {
+  BRREG_DEFAULT_FORMAT,
+  BRREG_DEFAULT_FORMAT_CLAUSES,
+} from "./brreg/default-format.js";
+import {
+  COMPANIES_HOUSE_DEFAULT_FORMAT,
+  COMPANIES_HOUSE_DEFAULT_FORMAT_CLAUSES,
+} from "./companies-house/default-format.js";
+import type { RegistryFormatClause } from "./format-clauses.js";
+import {
+  KRS_DEFAULT_FORMAT,
+  KRS_DEFAULT_FORMAT_CLAUSES,
+} from "./krs/default-format.js";
+import {
+  ORSR_DEFAULT_FORMAT,
+  ORSR_DEFAULT_FORMAT_CLAUSES,
+} from "./orsr/default-format.js";
+import {
+  PRH_DEFAULT_FORMAT,
+  PRH_DEFAULT_FORMAT_CLAUSES,
+} from "./prh/default-format.js";
+import {
+  RECHERCHE_ENTREPRISES_DEFAULT_FORMAT,
+  RECHERCHE_ENTREPRISES_DEFAULT_FORMAT_CLAUSES,
+} from "./recherche-entreprises/default-format.js";
 
 export type RegistryFormatCapability =
   | {
@@ -99,14 +124,12 @@ export const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<
   },
   brreg: {
     type: "company-specification",
-    defaultFormat:
-      "**[company name]**, [legal form], organisasjonsnummer [registry number], forretningsadresse [address]",
+    defaultFormat: BRREG_DEFAULT_FORMAT,
     resultShape: "full-record",
   },
   "companies-house": {
     type: "company-specification",
-    defaultFormat:
-      "**[company name]**, a [legal form] registered in [jurisdiction] under company number [registry number], whose registered office is at [address]",
+    defaultFormat: COMPANIES_HOUSE_DEFAULT_FORMAT,
     resultShape: "full-record",
   },
   denue: {
@@ -129,26 +152,22 @@ export const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<
   },
   krs: {
     type: "registry-reference",
-    defaultFormat:
-      "**[company name]**, siedziba: [seat], adres: [address], KRS: [registry number], NIP: [NIP], REGON: [REGON], kapitał zakładowy: [share capital]",
+    defaultFormat: KRS_DEFAULT_FORMAT,
     resultShape: "full-record",
   },
   orsr: {
     type: "company-specification",
-    defaultFormat:
-      "**[company name]**, sídlo: [address], IČO: [registry number], zápis v obchodnom registri: [court file]",
+    defaultFormat: ORSR_DEFAULT_FORMAT,
     resultShape: "full-record",
   },
   prh: {
     type: "registry-reference",
-    defaultFormat:
-      "**[company name]**, Y-tunnus [registry number], osoite [address]",
+    defaultFormat: PRH_DEFAULT_FORMAT,
     resultShape: "search-result",
   },
   "recherche-entreprises": {
     type: "registry-reference",
-    defaultFormat:
-      "**[company name]**, SIREN [SIREN], siège social : [head office address], SIRET [SIRET]",
+    defaultFormat: RECHERCHE_ENTREPRISES_DEFAULT_FORMAT,
     resultShape: "full-record",
   },
   vies: {
@@ -157,6 +176,65 @@ export const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<
     resultShape: "full-record",
   },
 };
+
+/**
+ * Registries whose built-in output is assembled from a clause list, and those
+ * that render some other way: ARES assembles its own parts (its opening clause
+ * depends on the legal form), and the registry-reference sources render a
+ * fixed reference rather than a party clause.
+ *
+ * The two lists partition the slugs — asserted below — so adding a registry
+ * fails to compile until it picks a side, rather than silently inheriting one.
+ */
+export const CLAUSE_DRIVEN_REGISTRY_SLUGS = [
+  "brreg",
+  "companies-house",
+  "krs",
+  "orsr",
+  "prh",
+  "recherche-entreprises",
+] as const;
+
+const NON_CLAUSE_DRIVEN_REGISTRY_SLUGS = [
+  "ares",
+  "denue",
+  "edgar",
+  "gcis",
+  "vies",
+] as const;
+
+export type ClauseDrivenRegistrySlug =
+  (typeof CLAUSE_DRIVEN_REGISTRY_SLUGS)[number];
+
+true satisfies [
+  Exclude<
+    RegistryFormatSlug,
+    ClauseDrivenRegistrySlug | (typeof NON_CLAUSE_DRIVEN_REGISTRY_SLUGS)[number]
+  >,
+  Extract<
+    ClauseDrivenRegistrySlug,
+    (typeof NON_CLAUSE_DRIVEN_REGISTRY_SLUGS)[number]
+  >,
+] extends [never, never]
+  ? true
+  : never;
+
+/** The clause list behind each clause-driven registry's built-in default. */
+export const REGISTRY_DEFAULT_FORMAT_CLAUSES: Readonly<
+  Record<ClauseDrivenRegistrySlug, readonly RegistryFormatClause[]>
+> = {
+  brreg: BRREG_DEFAULT_FORMAT_CLAUSES,
+  "companies-house": COMPANIES_HOUSE_DEFAULT_FORMAT_CLAUSES,
+  krs: KRS_DEFAULT_FORMAT_CLAUSES,
+  orsr: ORSR_DEFAULT_FORMAT_CLAUSES,
+  prh: PRH_DEFAULT_FORMAT_CLAUSES,
+  "recherche-entreprises": RECHERCHE_ENTREPRISES_DEFAULT_FORMAT_CLAUSES,
+};
+
+export const isClauseDrivenRegistry = (
+  registry: RegistryFormatSlug,
+): registry is ClauseDrivenRegistrySlug =>
+  Object.hasOwn(REGISTRY_DEFAULT_FORMAT_CLAUSES, registry);
 
 /**
  * Built-in strings a registry shipped before its current default. A saved copy
@@ -169,15 +247,38 @@ export const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<
  */
 export const PREVIOUS_DEFAULT_FORMATS: Readonly<
   Record<
-    Extract<RegistryFormatSlug, "ares" | "krs">,
+    Extract<
+      RegistryFormatSlug,
+      | "ares"
+      | "brreg"
+      | "companies-house"
+      | "krs"
+      | "orsr"
+      | "prh"
+      | "recherche-entreprises"
+    >,
     readonly [string, ...string[]]
   >
 > = {
   ares: [
     "společnost **[company name]**, se sídlem [address], IČO: [registry number], zapsaná v obchodním rejstříku vedeném [court instrumental] pod sp. zn. [file reference]",
   ],
+  brreg: [
+    "**[company name]**, [legal form], organisasjonsnummer [registry number], forretningsadresse [address]",
+  ],
+  "companies-house": [
+    "**[company name]**, a [legal form] registered in [jurisdiction] under company number [registry number], whose registered office is at [address]",
+  ],
   krs: [
     "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
+    "**[company name]**, siedziba: [seat], adres: [address], KRS: [registry number], NIP: [NIP], REGON: [REGON], kapitał zakładowy: [share capital]",
+  ],
+  orsr: [
+    "**[company name]**, sídlo: [address], IČO: [registry number], zápis v obchodnom registri: [court file]",
+  ],
+  prh: ["**[company name]**, Y-tunnus [registry number], osoite [address]"],
+  "recherche-entreprises": [
+    "**[company name]**, SIREN [SIREN], siège social : [head office address], SIRET [SIRET]",
   ],
 };
 

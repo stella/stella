@@ -41,7 +41,9 @@ import {
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
 import {
   isBuiltInRegistryFormat,
+  isClauseDrivenRegistry,
   parseRegistryFormatMarkdown,
+  REGISTRY_DEFAULT_FORMAT_CLAUSES,
   type RegistryFormatSlug,
 } from "@stll/business-registries/default-formats";
 import { validateEstablishmentId } from "@stll/business-registries/denue";
@@ -50,13 +52,22 @@ import {
   EIN_DASHED_TOKEN,
   formatEinDashed,
 } from "@stll/business-registries/edgar/identifier-format";
+import { templateForTokens } from "@stll/business-registries/format-clauses";
 import { validateTaxId } from "@stll/business-registries/gcis";
 import { validateKrsNumber } from "@stll/business-registries/krs";
 import { validateIco as validateOrsrIco } from "@stll/business-registries/orsr";
 import {
+  formatOrsrCourtFile,
+  formatOrsrInsert,
+} from "@stll/business-registries/orsr/court-file";
+import {
   getOrsrCourtNameGenitive,
   ORSR_COURT_GENITIVE_TOKEN,
 } from "@stll/business-registries/orsr/court-names";
+import {
+  ORSR_INSERT_TOKEN,
+  ORSR_SECTION_TOKEN,
+} from "@stll/business-registries/orsr/default-format";
 import {
   formatOrsrIdentifierSpaced,
   ORSR_IDENTIFIER_SPACED_TOKEN,
@@ -239,34 +250,6 @@ const renderLabelledParts = (
 ): string =>
   [`**${name}**`, ...parts.filter((part) => part !== null)].join(", ");
 
-const renderBrregLookupHit = (hit: BusinessRegistryHit): string =>
-  renderLabelledParts(hit.name, [
-    hit.legalForm,
-    `organisasjonsnummer ${hit.id}`,
-    addressText(hit) === null ? null : `forretningsadresse ${addressText(hit)}`,
-  ]);
-
-const renderCompaniesHouseLookupHit = (hit: BusinessRegistryHit): string => {
-  const jurisdiction = companiesHouseJurisdictionName(
-    hit.details?.registry === "companies-house"
-      ? hit.details.company.jurisdiction
-      : null,
-  );
-  const registration = [
-    `a ${companiesHouseLegalFormName(hit.legalForm)}`,
-    jurisdiction === null ? null : `registered in ${jurisdiction}`,
-    `under company number ${hit.id}`,
-  ]
-    .filter((part) => part !== null)
-    .join(" ");
-  return renderLabelledParts(hit.name, [
-    registration,
-    addressText(hit) === null
-      ? null
-      : `whose registered office is at ${addressText(hit)}`,
-  ]);
-};
-
 const renderDenueLookupHit = (hit: BusinessRegistryHit): string =>
   renderLabelledParts(hit.name, [
     `DENUE establishment ${hit.id}`,
@@ -298,67 +281,6 @@ const renderGcisLookupHit = (hit: BusinessRegistryHit): string => {
     .join("，");
 };
 
-const renderKrsLookupHit = (hit: BusinessRegistryHit): string => {
-  const entity = hit.details?.registry === "krs" ? hit.details.entity : null;
-  return renderLabelledParts(hit.name, [
-    entity?.registeredSeat?.locality
-      ? `siedziba: ${entity.registeredSeat.locality}`
-      : null,
-    addressText(hit) === null ? null : `adres: ${addressText(hit)}`,
-    `KRS: ${hit.id}`,
-    entity?.identifiers.nip ? `NIP: ${entity.identifiers.nip}` : null,
-    entity?.identifiers.regon ? `REGON: ${entity.identifiers.regon}` : null,
-    entity?.shareCapital
-      ? `kapitał zakładowy: ${entity.shareCapital.amount} ${entity.shareCapital.currency}`
-      : null,
-  ]);
-};
-
-const renderOrsrLookupHit = (hit: BusinessRegistryHit): string => {
-  const company = hit.details?.registry === "orsr" ? hit.details.company : null;
-  const courtFile = company?.courtFile
-    ? formatCourtFile({
-        court: company.courtFile.court,
-        section: company.courtFile.section,
-        insert: company.courtFile.insertNumber,
-      })
-    : null;
-  return renderLabelledParts(hit.name, [
-    addressText(hit) === null ? null : `sídlo: ${addressText(hit)}`,
-    `IČO: ${hit.id}`,
-    courtFile === null ? null : `zápis v obchodnom registri: ${courtFile}`,
-  ]);
-};
-
-const renderPrhLookupHit = (hit: BusinessRegistryHit): string =>
-  renderLabelledParts(hit.name, [
-    `Y-tunnus ${hit.id}`,
-    addressText(hit) === null ? null : `osoite ${addressText(hit)}`,
-  ]);
-
-const renderRechercheEntreprisesLookupHit = (
-  hit: BusinessRegistryHit,
-): string => {
-  const company =
-    hit.details?.registry === "recherche-entreprises"
-      ? hit.details.company
-      : null;
-  const headOfficeAddress = company?.headOffice?.address?.textAddress;
-  let addressPart: string | null = null;
-  if (headOfficeAddress) {
-    addressPart = `siège social : ${headOfficeAddress}`;
-  } else if (addressText(hit) !== null) {
-    addressPart = `adresse : ${addressText(hit)}`;
-  }
-  return renderLabelledParts(hit.name, [
-    `SIREN ${company?.siren ?? hit.id}`,
-    addressPart,
-    company?.matchedEstablishment
-      ? `SIRET ${company.matchedEstablishment.siret}`
-      : null,
-  ]);
-};
-
 const renderViesLookupHit = (hit: BusinessRegistryHit): string =>
   renderLabelledParts(hit.name, [`VAT number ${hit.id}`, addressText(hit)]);
 
@@ -384,25 +306,25 @@ export const renderLookupHit = (hit: BusinessRegistryHit): string => {
     }
     return renderLookupTemplate(parts.join(", "), hit);
   }
+  if (isClauseDrivenRegistry(hit.registry)) {
+    // The author-facing default string and this rendering are both derived
+    // from the one clause list, so the starting template an author edits and
+    // the built-in output cannot drift apart.
+    return renderLookupTemplate(
+      templateForTokens(
+        REGISTRY_DEFAULT_FORMAT_CLAUSES[hit.registry],
+        lookupTemplateTokens(hit),
+      ),
+      hit,
+    );
+  }
   switch (hit.registry) {
-    case "brreg":
-      return renderBrregLookupHit(hit);
-    case "companies-house":
-      return renderCompaniesHouseLookupHit(hit);
     case "denue":
       return renderDenueLookupHit(hit);
     case "edgar":
       return renderEdgarLookupHit(hit);
     case "gcis":
       return renderGcisLookupHit(hit);
-    case "krs":
-      return renderKrsLookupHit(hit);
-    case "orsr":
-      return renderOrsrLookupHit(hit);
-    case "prh":
-      return renderPrhLookupHit(hit);
-    case "recherche-entreprises":
-      return renderRechercheEntreprisesLookupHit(hit);
     case "vies":
       return renderViesLookupHit(hit);
     default: {
@@ -506,12 +428,14 @@ const lookupTemplateTokens = (
       const { company } = details;
       tokens["share capital"] = company.shareCapital;
       tokens["share capital paid"] = company.shareCapitalPaid;
+      // Slovak citation order: the court letter belongs to the insert number
+      // ("Sro 3586/B"), not in front of the reference.
       tokens["court file"] = company.courtFile
-        ? formatCourtFile({
-            court: company.courtFile.court,
-            section: company.courtFile.section,
-            insert: company.courtFile.insertNumber,
-          })
+        ? formatOrsrCourtFile(company.courtFile)
+        : null;
+      tokens[ORSR_SECTION_TOKEN] = company.courtFile?.section ?? null;
+      tokens[ORSR_INSERT_TOKEN] = company.courtFile
+        ? formatOrsrInsert(company.courtFile)
         : null;
       // The extract endpoint supplies the full court name; a file reference
       // parsed from a leaner payload carries only the insert letter. Both

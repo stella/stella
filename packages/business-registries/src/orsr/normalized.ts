@@ -10,6 +10,7 @@ import type {
   NormalizedRegistryKeyPerson,
   NormalizedRegistrySearchResult,
 } from "../shared/normalized.js";
+import { formatOrsrCourtFile } from "./court-file.js";
 import type { OrsrAddress, OrsrCompany, OrsrSearchResult } from "./types.js";
 import { validateIco } from "./validation.js";
 
@@ -103,7 +104,7 @@ export const toNormalizedEntity = (
           courtName: company.courtFile.courtName,
           section: company.courtFile.section,
           idNumber: company.courtFile.insertNumber,
-          reference: `${company.courtFile.section} ${company.courtFile.insertNumber}/${company.courtFile.court}`,
+          reference: formatOrsrCourtFile(company.courtFile),
         }
       : null,
   ),
