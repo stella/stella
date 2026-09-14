@@ -120,7 +120,7 @@ const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
 
   return (
     <footer
-      className="text-muted-foreground border-border/50 mt-10 border-t pt-3 font-sans text-[0.6875rem] leading-snug"
+      className="reader-chrome text-muted-foreground border-border/50 mt-10 border-t pt-3 text-[0.6875rem] leading-snug"
       data-reader-chrome=""
     >
       {t.rich("caseLaw.reader.sourceAttribution", {
@@ -149,7 +149,7 @@ const DecisionReference = ({
   ranges: SearchMatchRange[];
   text: string;
 }) => (
-  <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
+  <p className="reader-chrome text-muted-foreground mb-4 text-end text-xs italic">
     <HighlightedText
       activeMatchIndex={activeMatchIndex}
       pieceId={DECISION_REFERENCE_ID}
@@ -309,7 +309,7 @@ const EditorialSupplement = ({
   }
 
   return (
-    <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4 font-sans text-[0.88rem] leading-relaxed">
+    <div className="reader-chrome bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4 text-[0.88rem] leading-relaxed">
       {legalSentence && (
         <section>
           <h4
@@ -905,10 +905,12 @@ export const DecisionText = ({
     );
   })();
 
+  // `reader-case-law` caps the measure: the decision and the attribution line
+  // under it are read at a line length, not at the width of the pane.
   return (
-    <>
+    <div className="reader-case-law">
       {body}
       <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
-    </>
+    </div>
   );
 };

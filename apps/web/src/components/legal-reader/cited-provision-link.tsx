@@ -91,7 +91,7 @@ const CitedProvisionPreview = ({
         </BidiText>
       )}
       <span
-        className="text-foreground flex max-h-64 flex-col gap-2 overflow-y-auto font-serif text-sm leading-relaxed text-pretty"
+        className="reader-body text-foreground flex max-h-64 flex-col gap-2 overflow-y-auto text-sm leading-relaxed text-pretty"
         lang={wording.language}
       >
         {wording.blocks.map((block) => (
@@ -146,7 +146,7 @@ export const CitedProvisionLink = ({
       >
         {children}
       </PreviewCardTrigger>
-      <PreviewCardPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-0.5 p-3 font-sans">
+      <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-0.5 p-3">
         <BidiText as="span" className="text-foreground text-sm font-medium">
           {provision.payload.provisionLabel}
         </BidiText>

@@ -107,7 +107,7 @@ export const CitationHeader = ({
   return (
     <div
       aria-label={summaryText}
-      className="text-muted-foreground mb-3 flex items-center justify-end gap-3 font-sans text-xs print:hidden"
+      className="reader-chrome text-muted-foreground mb-3 flex items-center justify-end gap-3 text-xs print:hidden"
       role="group"
     >
       <CitationYearStrip

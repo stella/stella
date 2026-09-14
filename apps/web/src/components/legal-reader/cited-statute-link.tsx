@@ -51,7 +51,7 @@ export const CitedStatuteLink = ({
     >
       {children}
     </PreviewCardTrigger>
-    <PreviewCardPopup className="w-auto max-w-80 p-3 font-sans">
+    <PreviewCardPopup className="reader-chrome w-auto max-w-80 p-3">
       <BidiText as="span" className="text-foreground text-sm font-medium">
         {target.statuteTitle}
       </BidiText>

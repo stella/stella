@@ -125,7 +125,7 @@ export const ProvisionsCited = ({
   }
 
   return (
-    <section className="border-border/60 mb-6 rounded-lg border font-sans print:hidden">
+    <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
       <button
         aria-expanded={open}
         className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"

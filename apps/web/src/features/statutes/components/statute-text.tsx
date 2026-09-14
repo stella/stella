@@ -61,24 +61,22 @@ const NO_ACTIVE_MATCH = -1;
  */
 const StatuteMasthead = ({ masthead }: { masthead: StatuteMastheadData }) => (
   <header
-    className="group relative mx-auto mb-12 max-w-5xl scroll-mt-[var(--reader-anchor-offset)] text-center"
+    className="group relative mb-12 scroll-mt-[var(--reader-anchor-offset)] text-center"
     id={masthead.anchorId}
   >
-    <p className="mb-4 font-sans text-[1.55rem] leading-tight font-bold">
+    <p className="mb-4 text-[1.55rem] leading-tight font-bold">
       {masthead.citation}
     </p>
-    <p className="font-sans text-[1.35rem] leading-tight font-bold tracking-wide">
+    <p className="text-[1.35rem] leading-tight font-bold tracking-wide">
       {masthead.instrument}
     </p>
     {masthead.issuer !== null && (
-      <p className="mt-2 font-sans text-[1.25rem] leading-snug font-semibold">
+      <p className="mt-2 text-[1.25rem] leading-snug font-semibold">
         {masthead.issuer}
       </p>
     )}
     {masthead.date !== null && (
-      <p className="mt-3 font-sans text-[1.05rem] leading-relaxed">
-        {masthead.date}
-      </p>
+      <p className="mt-3 text-[1.05rem] leading-relaxed">{masthead.date}</p>
     )}
     <h1 className="mt-2 text-[1.15rem] leading-relaxed font-semibold text-balance">
       {masthead.title}
@@ -178,7 +176,7 @@ export const StatuteText = ({
         lang={language}
         style={READER_STYLE}
       >
-        <h1 className="mb-10 text-center font-sans text-xl font-semibold text-balance">
+        <h1 className="mb-10 text-center text-xl font-semibold text-balance">
           {statuteTitle}
         </h1>
         <FulltextFallback
@@ -221,7 +219,7 @@ const ProvisionDetailsAction = ({
   return (
     <button
       aria-label={t("statutes.provisionDetailsFor", { provision })}
-      className="border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 font-sans text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
+      className="reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal transition-colors focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden"
       onClick={onOpen}
       type="button"
     >

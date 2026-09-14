@@ -122,7 +122,7 @@ export const CurrentSection = ({
         )}
       >
         <button
-          className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2 text-start font-sans text-xs"
+          className="reader-chrome text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2 text-start text-xs"
           disabled={current === null}
           onClick={jumpBack}
           style={{

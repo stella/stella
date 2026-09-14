@@ -5,9 +5,13 @@
 
 :root {
   --reader-body-font: "Source Serif 4 Variable", serif;
-  --reader-body-size: 15px;
+  --reader-body-size: 16px;
   --reader-body-line-height: 1.65;
-  --reader-paragraph-gap: 0.65em;
+  /* Measure: the line length the running text is read at, independent of how
+     wide the pane happens to be. A decision opened in a wide inspector ran to
+     ~100 characters a line; ~70 is the length prose is read at. */
+  --reader-measure: 70ch;
+  --reader-paragraph-gap: 1em;
   --reader-section-gap-top: 2.5em;
   --reader-section-gap-bottom: 0.8em;
   --reader-anchor-offset: 88px;
@@ -52,14 +56,25 @@
   border-radius: 0.25rem;
 }
 
-/* Justified body on desktop only. No hyphenation:
-   the court's text must not be visually altered.
-   text-align-last: left prevents short/single-line
-   paragraphs from being stretched. */
+/* Hyphenation at every width, justification on desktop — how a law report is
+   set. Hyphenation is line breaking: it alters no character of the text, and
+   it is what keeps a justified column from opening rivers of white space. The
+   dictionary comes from the document's own language, which each reader puts
+   on its <article> as `lang`, so Czech, Slovak and Polish break at their own
+   points. The limits keep short words whole and leave at least three letters
+   on each side of a break.
+   text-align-last: start prevents short/single-line paragraphs from being
+   stretched. */
+.reader-justify {
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  hyphenate-limit-chars: 7 3 3;
+}
+
 @media (min-width: 1024px) {
   .reader-justify {
     text-align: justify;
-    text-align-last: left;
+    text-align-last: start;
   }
 }
 
@@ -92,6 +107,17 @@
   [data-slot="reader-document-column"] {
     padding-inline: 0.75rem;
   }
+}
+
+/* The measure belongs to the inspector pane, where the reader is a column
+   beside the work and a line would otherwise run the width of a resized rail.
+   A full page keeps the canvas above: there the wide column is the point —
+   statutory text fills the screen instead of leaving it empty. Both readers,
+   so a line in the pane is the same length whichever document is open.
+   The pane slot comes from packages/ui/src/inspector/dock.tsx. */
+[data-slot="inspector-dock-pane"] :is(.reader-case-law, .reader-statute) {
+  max-width: var(--reader-measure);
+  margin-inline: auto;
 }
 
 /* Collapse gap between consecutive h3 sub-headings
@@ -166,6 +192,24 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   padding-top: 0;
 }
 
+/* The two faces a reader surface may name. Reader content never names one:
+   it inherits the serif from the reader root, and `no-font-utility-in-reader`
+   keeps a Tailwind font utility out of these modules. These classes are for
+   what cannot inherit — chrome drawn inside the text, and document text
+   quoted inside chrome, which a preview card portals out of the reader. */
+.reader-body {
+  font-family: var(--reader-body-font);
+}
+
+.reader-chrome,
+.reader-note-label,
+.reader-note-ref,
+.reader-page-marker,
+.reader-note-back,
+.reader-apparatus-summary {
+  font-family: var(--font-sans, sans-serif);
+}
+
 /* The reader's own footnote number, shown only when the source text does
    not already open with it. A button: clicking it returns to the sentence
    that cites the footnote. */
@@ -174,7 +218,6 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   border: 0;
   padding: 0;
   background: none;
-  font-family: var(--font-sans, sans-serif);
   font-size: 0.78em;
   font-weight: 600;
   vertical-align: super;
@@ -190,7 +233,6 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 /* In-text note reference: superscript mark, no underline; the anchor jump
    plus the :target flash is the interaction. */
 .reader-note-ref {
-  font-family: var(--font-sans, sans-serif);
   font-size: 0.72em;
   vertical-align: super;
   text-decoration: none;
@@ -212,7 +254,6 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   margin-inline-end: 1.1rem;
   padding-top: 0.15em;
   border-top: 1px solid var(--color-border);
-  font-family: var(--font-sans, sans-serif);
   font-size: 0.68rem;
   line-height: 1.2;
   color: var(--color-muted-foreground);
@@ -251,7 +292,6 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   border: 0;
   padding: 0;
   background: none;
-  font-family: var(--font-sans, sans-serif);
   font-size: 0.9em;
   color: var(--color-primary);
   cursor: pointer;
@@ -270,7 +310,6 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 
 .reader-apparatus-summary {
   cursor: pointer;
-  font-family: var(--font-sans, sans-serif);
   font-size: 0.78rem;
   color: var(--color-muted-foreground);
   user-select: none;
