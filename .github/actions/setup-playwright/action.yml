@@ -1,7 +1,11 @@
-name: Setup Playwright Chromium
-description: Restore the pinned browser and verify its host dependencies
+name: Setup Playwright browsers
+description: Restore the pinned browsers and verify their host dependencies
 
 inputs:
+  browsers:
+    description: Space-separated Playwright browsers to install (chromium, firefox, webkit)
+    required: false
+    default: chromium
   dependency-mode:
     description: Use full for deterministic screenshot fonts; otherwise verify launch compatibility
     required: false
@@ -35,7 +39,9 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+        # The browser set joins the key: an entry restored for a narrower set
+        # would leave the extra browsers missing while reporting a cache hit.
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}-${{ inputs.browsers }}
 
     # Playwright installs pinned browsers; the runner's Chrome channel is unrelated.
     - name: Disable runner Chrome apt source
@@ -46,40 +52,54 @@ runs:
           sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
         fi
 
-    - name: Install Chromium on cache miss
+    - name: Install browsers on cache miss
       if: steps.browser-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: cd apps/web && bunx playwright install --with-deps chromium
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: |
+        cd apps/web
+        read -r -a browsers <<<"$BROWSERS"
+        bunx playwright install --with-deps "${browsers[@]}"
 
     - name: Install deterministic screenshot dependencies
       if: steps.browser-cache.outputs.cache-hit == 'true' && inputs.dependency-mode == 'full'
       shell: bash
-      run: cd apps/web && bunx playwright install-deps chromium
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: |
+        cd apps/web
+        read -r -a browsers <<<"$BROWSERS"
+        bunx playwright install-deps "${browsers[@]}"
 
-    - name: Verify Chromium host dependencies
+    - name: Verify browser host dependencies
       shell: bash
       env:
+        BROWSERS: ${{ inputs.browsers }}
         DEPENDENCY_MODE: ${{ inputs.dependency-mode }}
         PLAYWRIGHT_CACHE_HIT: ${{ steps.browser-cache.outputs.cache-hit }}
       run: |
         cd apps/web
-        verify_chromium() {
+        verify_browsers() {
           bun -e '
-            import { chromium } from "@playwright/test";
-            const browser = await chromium.launch();
-            await browser.close();
+            import * as playwright from "@playwright/test";
+            for (const name of (process.env["BROWSERS"] ?? "").split(" ").filter(Boolean)) {
+              const browser = await playwright[name].launch();
+              await browser.close();
+            }
           '
         }
 
-        if verify_chromium; then
+        if verify_browsers; then
           exit 0
         fi
 
         if [[ "$PLAYWRIGHT_CACHE_HIT" != "true" || "$DEPENDENCY_MODE" == "full" ]]; then
-          echo "::error::Chromium failed to launch after installing its declared dependencies"
+          echo "::error::Playwright browsers ($BROWSERS) failed to launch after installing their declared dependencies"
           exit 1
         fi
 
-        echo "::warning::Cached Chromium needs additional host dependencies; installing them now"
-        bunx playwright install-deps chromium
-        verify_chromium
+        echo "::warning::Cached browsers need additional host dependencies; installing them now"
+        read -r -a browsers <<<"$BROWSERS"
+        bunx playwright install-deps "${browsers[@]}"
+        verify_browsers

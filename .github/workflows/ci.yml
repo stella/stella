@@ -493,23 +493,17 @@ jobs:
           docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
 
+  # The repository guards. The suites this job used to run serially after them
+  # are ci-tests and ci-browser: the runners are two-core, so the way to
+  # shorten the critical path is more jobs, not more threads. The three share
+  # nothing but the checkout and the install.
   ci-checks:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 25m, matching code-quality/typecheck-baseline: this job's own "Test" step
-    # duration scales with however many packages `turbo --affected` marks
-    # (any PR touching multiple large packages' test suites at once runs
-    # them with --concurrency=2 on a standard runner, not in isolation).
-    # Bumped from 20m after a PR whose diff was affected-flagged across
-    # apps/api, apps/web, packages/transactional and packages/ui
-    # simultaneously hit the old 20m ceiling with the Test step still in
-    # progress; a same-day comparable run (apps/api affected alone) needed
-    # only ~8m for the whole job, and re-running each affected package's
-    # suite locally finished in well under 5m with zero failures — so this
-    # is legitimate multi-package work outgrowing the budget, not a hang.
+    # 25m, matching code-quality/typecheck-baseline.
     timeout-minutes: 25
     permissions:
       contents: read
@@ -658,39 +652,6 @@ jobs:
             echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
           fi
 
-      - name: Check UI browser test scope
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        id: ui-browser-tests
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
-            .github/actions/setup-playwright/action.yml \
-            .github/workflows/ci.yml \
-            apps/desktop \
-            apps/web/e2e/playwright.ui-playground.config.ts \
-            apps/web/e2e/ui-playground \
-            apps/web/package.json \
-            apps/web/public/prepaint-init.js \
-            apps/web/src/app-providers.tsx \
-            apps/web/src/components/theme-provider.tsx \
-            apps/web/src/fonts.css \
-            apps/web/src/i18n \
-            apps/web/src/routes/__root.tsx \
-            apps/web/src/routes/dev.tsx \
-            apps/web/src/routes/dev \
-            apps/web/src/styles/app.css \
-            apps/web/vite.config.ts \
-            bun.lock \
-            package.json \
-            packages/locales \
-            packages/ui; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "required=false" >> "$GITHUB_OUTPUT"
-
       - name: Check i18n sync
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run i18n:check
@@ -814,6 +775,16 @@ jobs:
         run: |
           bun test scripts/check-test-input-coverage.test.ts
           bun run check:test-input-coverage
+
+      - name: Test shard partition
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # ci-tests runs the `test` task as a matrix of shards, and
+        # scripts/test-shards.ts is the only place that names what a shard
+        # owns: the workflow reads its filters and the matrix ids are checked
+        # against it here, together with the property that the shards still
+        # partition every workspace package with a `test` script. A package
+        # that joined no shard would leave CI silently.
+        run: bun test scripts/test-shards.test.ts
 
       - name: Module ownership
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1028,56 +999,6 @@ jobs:
         # many/large resource files), so a broken pin cannot ship green.
         run: bun run --filter @stll/catalogue check-pinned
 
-      - name: Test
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
-        # Not --affected: a suite that reads files outside its own package also
-        # needs the packages its turbo.json test inputs name, and
-        # `--affected --filter=X` intersects instead of widening.
-        # scripts/test-scope.ts prints the affected set and those packages as
-        # explicit filters, which union. A workflow_dispatch run still tests
-        # everything, exactly as the empty affected flag did.
-        run: |
-          bun --cwd .claude/mcp test
-          args=()
-          if [[ -n "$AFFECTED_FLAG" ]]; then
-            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
-            read -r -a args <<<"$scope"
-          fi
-          bun run test -- --concurrency=2 "${args[@]}"
-
-      - name: Install UI browser test runtime
-        if: steps.ui-browser-tests.outputs.required == 'true'
-        uses: ./.github/actions/setup-playwright
-        with:
-          dependency-mode: full
-
-      - name: Test UI browser interactions
-        if: steps.ui-browser-tests.outputs.required == 'true'
-        run: bun --filter @stll/ui test:browser
-
-      - name: Test desktop browser interactions
-        if: steps.ui-browser-tests.outputs.required == 'true'
-        run: |
-          cd apps/desktop
-          bunx playwright install --with-deps webkit
-          bun run test:browser
-
-      - name: Upload desktop browser failures
-        if: failure() && steps.ui-browser-tests.outputs.required == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: desktop-browser-failures
-          path: apps/desktop/test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Test UI playground visuals
-        if: steps.ui-browser-tests.outputs.required == 'true'
-        run: bun --filter @stll/web test:e2e:ui-playground
-
       - name: Property-test convention guard
         run: |
           bun test packages/property-testing/src/convention.test.ts
@@ -1287,6 +1208,247 @@ jobs:
       - name: Bridge-version guard
         if: github.event_name == 'pull_request'
         run: bash scripts/check-bridge-version.sh
+
+  # The `test` task, split into shards that run in parallel. Each shard filters
+  # the same scope the serial run computed (scripts/test-scope.ts) down to the
+  # packages it owns; scripts/test-shards.ts owns the mapping.
+  ci-tests:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 25m per shard, the budget the serial job carried for the whole suite. It
+    # was bumped from 20m after a PR affected-flagged across apps/api,
+    # apps/web, packages/transactional and packages/ui at once hit the ceiling
+    # with the Test step still in progress — legitimate multi-package work
+    # outgrowing the budget, not a hang. Sharding is what actually splits that
+    # work up; the headroom stays until the shards prove they need less.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      # Every shard's verdict, not just the first failure's: a cancelled shard
+      # reports no result of its own, and one failing suite should not hide
+      # another.
+      fail-fast: false
+      matrix:
+        shard: [api, rest, web]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      # Deliberately do not restore the global Bun install cache here. Safe
+      # Chain's Bun integration scans registry downloads through a proxy, so
+      # cached tarballs would bypass this job's full dependency scan.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install Safe Chain
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: ./.github/actions/safe-chain
+
+      - name: Turbo remote cache
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Compute affected flag
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: affected
+        # Empty marks the workflow_dispatch full run. The test run scopes
+        # itself through scripts/test-scope.ts, which has to widen the
+        # affected set.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--affected" >> "$GITHUB_OUTPUT"
+            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          fi
+
+      - name: Test .claude/mcp
+        # Outside the workspace, so no shard filter selects it: one shard owns
+        # it outright.
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && matrix.shard == 'rest'
+        run: bun --cwd .claude/mcp test
+
+      - name: Test
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          SHARD: ${{ matrix.shard }}
+        # Not --affected: a suite that reads files outside its own package also
+        # needs the packages its turbo.json test inputs name, and
+        # `--affected --filter=X` intersects instead of widening.
+        # scripts/test-scope.ts prints the affected set and those packages as
+        # explicit filters, which union. A workflow_dispatch run still tests
+        # everything, exactly as the empty affected flag did.
+        #
+        # The shard filters are exclusions, which subtract from that union, so
+        # sharding narrows the scoped set instead of widening it.
+        run: |
+          args=()
+          if [[ -n "$AFFECTED_FLAG" ]]; then
+            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
+            read -r -a args <<<"$scope"
+          fi
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}"
+
+  # The browser-backed suites. They share one Playwright install, so they stay
+  # in a single job rather than one per suite.
+  ci-browser:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      # Deliberately do not restore the global Bun install cache here. Safe
+      # Chain's Bun integration scans registry downloads through a proxy, so
+      # cached tarballs would bypass this job's full dependency scan.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install Safe Chain
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: ./.github/actions/safe-chain
+
+      - name: Turbo remote cache
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example would dirty the
+        # working tree in apps/api and apps/web. .env is gitignored.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Check UI browser test scope
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: ui-browser-tests
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
+            .github/actions/setup-playwright/action.yml \
+            .github/workflows/ci.yml \
+            apps/desktop \
+            apps/web/e2e/playwright.ui-playground.config.ts \
+            apps/web/e2e/ui-playground \
+            apps/web/package.json \
+            apps/web/public/prepaint-init.js \
+            apps/web/src/app-providers.tsx \
+            apps/web/src/components/theme-provider.tsx \
+            apps/web/src/fonts.css \
+            apps/web/src/i18n \
+            apps/web/src/routes/__root.tsx \
+            apps/web/src/routes/dev.tsx \
+            apps/web/src/routes/dev \
+            apps/web/src/styles/app.css \
+            apps/web/vite.config.ts \
+            bun.lock \
+            package.json \
+            packages/locales \
+            packages/ui; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "required=false" >> "$GITHUB_OUTPUT"
+
+      - name: Install UI browser test runtime
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        uses: ./.github/actions/setup-playwright
+        with:
+          # The desktop suite runs both engines; installing WebKit here keeps
+          # it in the same version-keyed cache as Chromium instead of
+          # redownloading it per run.
+          browsers: chromium webkit
+          dependency-mode: full
+
+      - name: Test UI browser interactions
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/ui test:browser
+
+      - name: Test desktop browser interactions
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: |
+          cd apps/desktop
+          bun run test:browser
+
+      - name: Upload desktop browser failures
+        if: failure() && steps.ui-browser-tests.outputs.required == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-browser-failures
+          path: apps/desktop/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Test UI playground visuals
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/web test:e2e:ui-playground
 
   code-quality:
     needs: ci-plan
@@ -2752,6 +2914,8 @@ jobs:
         changeset,
         agent-sandbox-docker,
         ci-checks,
+        ci-browser,
+        ci-tests,
         collab-redis,
         code-quality,
         postgres-suites,
@@ -2783,6 +2947,8 @@ jobs:
           AGENT_SANDBOX_DOCKER_RESULT: ${{ needs.agent-sandbox-docker.result }}
           CHANGESET_RESULT: ${{ needs.changeset.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
+          CI_BROWSER_RESULT: ${{ needs.ci-browser.result }}
+          CI_TESTS_RESULT: ${{ needs.ci-tests.result }}
           COLLAB_REDIS_RESULT: ${{ needs.collab-redis.result }}
           DESKTOP_CLIPPY_RESULT: ${{ needs.desktop-clippy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
@@ -2822,6 +2988,8 @@ jobs:
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
+                  || "$CI_BROWSER_RESULT" == "failure" || "$CI_BROWSER_RESULT" == "cancelled" \
+                  || "$CI_TESTS_RESULT" == "failure" || "$CI_TESTS_RESULT" == "cancelled" \
                   || "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" \
                   || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
                   || "$POSTGRES_SUITES_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "cancelled" \
@@ -2865,12 +3033,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$MIGRATION_REHEARSAL_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CI_BROWSER_RESULT" == "cancelled" || "$CI_TESTS_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$MIGRATION_REHEARSAL_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MIGRATION_REHEARSAL_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CI_BROWSER_RESULT" == "failure" || "$CI_TESTS_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MIGRATION_REHEARSAL_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

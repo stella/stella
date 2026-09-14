@@ -314,6 +314,7 @@ run_step "Oxlint override union guard" bun test \
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Result boundary enrolment" run_result_boundary_enrolment_guard
 run_step "Test input coverage" run_test_input_coverage_guard
+run_step "Test shard partition" bun test scripts/test-shards.test.ts
 run_step "Module ownership" bun run check:module-ownership
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
