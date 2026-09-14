@@ -104,6 +104,8 @@ import {
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -643,6 +645,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     ...decisionFacetsOptions(scope),
     placeholderData: keepPreviousData,
   });
+  const decisionsOptions = decisionsInfiniteOptions(filters, pageSize);
   const {
     data,
     error,
@@ -653,7 +656,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     isPlaceholderData,
     refetch,
   } = useInfiniteQuery({
-    ...decisionsInfiniteOptions(filters, pageSize),
+    ...decisionsOptions,
     // The chain the reader has walked stays loaded while the filters change,
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
@@ -692,9 +695,32 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // One page of the chain is on screen, never the chain itself: the pages
   // behind the reader are cursors kept for the links, not rows to draw.
   const walkedPageCount = data?.pages.length ?? 0;
+  const wantedPage = decisionPageNumber(search.page);
+
+  // The router walked the default length's chain, because the length the
+  // reader chose lives in their browser and `beforeLoad` cannot read it. A
+  // reader who chose another length therefore arrives on a chain holding one
+  // page while the URL names a deeper one, and the pager would clamp to what
+  // the chain reaches. The length changes neither which decisions match nor
+  // the order they match in, so page N of this chain is page N of the one the
+  // router walked: the same pages exist here and are walked once, on arrival.
+  const walkToWantedPage = useLatestCallback(
+    async () =>
+      await ensureRouteInfiniteQueryData(queryClient, {
+        ...decisionsOptions,
+        pages: decisionPagesToWalk(wantedPage, walkedPageCount),
+      }),
+  );
+  useExternalSyncEffect(() => {
+    if (wantedPage <= walkedPageCount) {
+      return;
+    }
+    detached(walkToWantedPage(), "cases.walk-chosen-excerpt");
+  }, [walkToWantedPage, walkedPageCount, wantedPage]);
+
   const pager = decisionPagerModel({
     hasNextPage,
-    page: decisionPageNumber(search.page),
+    page: wantedPage,
     walkedPageCount,
   });
   const decisions: readonly Decision[] =
