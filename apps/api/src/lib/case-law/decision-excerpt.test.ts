@@ -193,6 +193,53 @@ describe("the excerpt a corpus hit shows", () => {
     expect(widened).toContain("<mark>");
   });
 
+  // A word boundary is not a bound. A block of OCR can arrive as one enormous
+  // malformed token, and the passage highlighter keeps a whole word even when
+  // that overruns the budget, so without a hard cut this public endpoint would
+  // return the whole block per hit.
+  test.each(SEARCH_EXCERPTS.filter((length) => length !== "short"))(
+    "%s never returns more than its window, whatever the passage holds",
+    (excerpt) => {
+      const oneHugeToken = "a".repeat(50_000);
+      const widened =
+        corpusExcerpt({
+          engineSnippet: null,
+          excerpt,
+          language: null,
+          passage: oneHugeToken,
+          tokens,
+        }) ?? "";
+
+      expect(widened.length).toBeLessThanOrEqual(
+        DECISION_EXCERPT_WINDOWS[excerpt].maxChars,
+      );
+    },
+  );
+
+  test("the cap never cuts a letter in half", () => {
+    // Astral letters are two UTF-16 units each, so a budget that lands mid-pair
+    // would otherwise return a lone surrogate.
+    const astral = "\u{10348}".repeat(5000);
+    const widened =
+      corpusExcerpt({
+        engineSnippet: null,
+        excerpt: "medium",
+        language: null,
+        passage: astral,
+        tokens,
+      }) ?? "";
+
+    expect(widened.length).toBeLessThanOrEqual(
+      DECISION_EXCERPT_WINDOWS.medium.maxChars,
+    );
+    expect(widened).toBe(stripSearchHighlightMarkup(widened).normalize("NFC"));
+    expect(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(
+        widened,
+      ),
+    ).toBe(false);
+  });
+
   // A reader who asked for more text is answered with the text there was,
   // never with an empty cell.
   test.each([

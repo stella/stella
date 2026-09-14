@@ -234,6 +234,27 @@ type CorpusExcerptOptions = {
  * where that finds nothing the engine's own marks are placed back at the
  * snippet's position, so the column always says why the row is there.
  */
+/**
+ * `text` cut to at most `maxChars`, never mid-character.
+ *
+ * A hard bound, applied after a window is chosen and before it is marked. The
+ * passage highlighter deliberately keeps a whole word even when that overruns
+ * the budget, and corpus chunking allows a single block of OCR to arrive as
+ * one enormous malformed token, so a word-boundary cut is not a bound at all
+ * on a public endpoint. Cutting the plain text rather than the marked HTML is
+ * what keeps the cut from landing inside a tag or an entity.
+ */
+const capToChars = (text: string, maxChars: number): string => {
+  if (text.length <= maxChars) {
+    return text;
+  }
+  // Never between a surrogate pair: half a letter is not a character.
+  const lastKept = text.codePointAt(maxChars - 1);
+  const cut =
+    lastKept !== undefined && lastKept > 0xff_ff ? maxChars - 1 : maxChars;
+  return text.slice(0, cut);
+};
+
 export const corpusExcerpt = ({
   engineSnippet,
   excerpt,
@@ -253,23 +274,25 @@ export const corpusExcerpt = ({
     engineSnippet === null
       ? null
       : locateSnippet(passage, stripSearchHighlightMarkup(engineSnippet));
+  const window =
+    anchor === null ? null : growAroundSnippet(passage, anchor, maxChars);
 
-  if (anchor === null) {
-    // Nothing to anchor on: fall back to the window the query's own words
-    // find, which is unmarked when they are not in the passage either.
-    const { html } = highlightCorpusPassage({
-      passage,
-      tokens,
-      language,
-      maxChars,
-    });
-    return html.length === 0 ? engineSnippet : html;
+  // One window as plain text, however it was chosen, so the cap and the
+  // marking below both apply whichever way this went.
+  const chosen =
+    window === null
+      ? // Nothing to anchor on: the window the query's own words find, which
+        // is the passage's opening when they are not in it either.
+        highlightCorpusPassage({ passage, tokens, language, maxChars }).text
+      : passage.slice(window.start, window.end);
+
+  const text = capToChars(chosen, maxChars);
+  if (text.length === 0) {
+    return engineSnippet;
   }
 
-  const window = growAroundSnippet(passage, anchor, maxChars);
-  const text = passage.slice(window.start, window.end);
   const marked = markCorpusFragment({ text, tokens, language });
-  if (marked.includes("<mark>")) {
+  if (window === null || marked.includes("<mark>")) {
     return marked;
   }
 
@@ -277,7 +300,7 @@ export const corpusExcerpt = ({
   // an expansion it does not reproduce. Its own marks are the answer.
   return markAtSnippet({
     engineSnippet: engineSnippet ?? "",
-    snippetStart: anchor.start - window.start,
+    snippetStart: (anchor?.start ?? 0) - window.start,
     text,
   });
 };
