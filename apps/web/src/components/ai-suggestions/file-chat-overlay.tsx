@@ -105,7 +105,7 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   isApprovalPart,
-  selectUnresolvedFolioAgentDocToolCallParts,
+  selectIdleFolioAgentDocToolCallParts,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -1460,6 +1460,7 @@ const FileChatOverlayInner = ({
   ]);
 
   const {
+    clientStatus,
     error,
     messages,
     olderCursor,
@@ -1957,16 +1958,13 @@ const FileChatOverlayInner = ({
       }
     },
   );
-  // Only once the stream is idle: a client-executed call is unresolved for
-  // good after the server finished the turn without answering it, whereas
-  // the server-executed `suggest_changes` apply variant sits in
-  // `input-complete` for a moment before its approval request arrives.
-  // Acting on that transient state would queue an approval-gated batch into
-  // the review panel and answer a call the server owns.
+  // Only once the HTTP response stream is idle: a client-executed call is
+  // unresolved for good after the server finished the response, whereas the
+  // server-executed `suggest_changes` apply variant sits in `input-complete`
+  // briefly before its approval request arrives. Do not gate on the wider
+  // `isGenerating` state here: the unresolved client tool itself keeps that
+  // true until this watcher answers it.
   useExternalSyncEffect(() => {
-    if (isGenerating) {
-      return;
-    }
     const message = messages.at(-1);
     if (!message || message.role !== "assistant") {
       return;
@@ -1977,10 +1975,11 @@ const FileChatOverlayInner = ({
       return;
     }
 
-    const partsToRun = selectUnresolvedFolioAgentDocToolCallParts(
-      message.parts,
+    const partsToRun = selectIdleFolioAgentDocToolCallParts({
+      clientStatus,
       executedIds,
-    );
+      messageParts: message.parts,
+    });
     for (const part of partsToRun) {
       executedIds.add(part.id);
       detached(
@@ -1988,7 +1987,7 @@ const FileChatOverlayInner = ({
         "file-chat-overlay.run-folio-agent-doc-tool-call",
       );
     }
-  }, [isGenerating, messages, runFolioAgentDocToolCall]);
+  }, [clientStatus, messages, runFolioAgentDocToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;

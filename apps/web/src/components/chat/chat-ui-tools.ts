@@ -905,6 +905,31 @@ export const isChatClientRequestActive = (status: ChatClientState): boolean => {
   }
 };
 
+type SelectIdleFolioAgentDocToolCallPartsOptions = {
+  clientStatus: ChatClientState;
+  executedIds: ReadonlySet<string>;
+  messageParts: readonly ChatPart[];
+};
+
+/**
+ * Select client-owned document tools once the HTTP response stream is idle.
+ *
+ * An unresolved client tool deliberately keeps the wider chat turn in flight,
+ * so gating this selector on `isGenerating` would make the tool wait on its own
+ * result forever. The network request state is the narrower boundary: it lets
+ * the browser answer `find_text` and other document reads while preserving the
+ * file overlay's protection against the transient server-owned
+ * `suggest_changes` input state.
+ */
+export const selectIdleFolioAgentDocToolCallParts = ({
+  clientStatus,
+  executedIds,
+  messageParts,
+}: SelectIdleFolioAgentDocToolCallPartsOptions): UnresolvedFolioAgentDocToolCallPart[] =>
+  isChatClientRequestActive(clientStatus)
+    ? []
+    : selectUnresolvedFolioAgentDocToolCallParts(messageParts, executedIds);
+
 type ServerChatTurnOutcome = NonNullable<
   NonNullable<ChatMessage["metadata"]>["turnOutcome"]
 >;

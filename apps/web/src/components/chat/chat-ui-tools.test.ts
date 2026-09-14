@@ -22,6 +22,7 @@ import {
   projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
+  selectIdleFolioAgentDocToolCallParts,
   selectUnresolvedFolioAgentDocToolCallParts,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -853,6 +854,38 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     );
 
     expect(result.map((part) => part.id)).toEqual(["tool-call-find"]);
+  });
+
+  test("dispatches an unresolved client tool after the response stream ends", () => {
+    expect(
+      hasRunningToolCallInLatestAssistantMessage({
+        messages: [
+          {
+            id: "assistant-1",
+            parts: [findTextPart],
+            role: "assistant",
+          },
+        ],
+      }),
+    ).toBe(true);
+
+    const result = selectIdleFolioAgentDocToolCallParts({
+      clientStatus: "ready",
+      executedIds: new Set(),
+      messageParts: [findTextPart],
+    });
+
+    expect(result.map((part) => part.id)).toEqual(["tool-call-find"]);
+  });
+
+  test("waits while the response stream can still claim the tool", () => {
+    const result = selectIdleFolioAgentDocToolCallParts({
+      clientStatus: "streaming",
+      executedIds: new Set(),
+      messageParts: [findTextPart],
+    });
+
+    expect(result).toEqual([]);
   });
 
   test("skips other tools and non-input-complete states", () => {

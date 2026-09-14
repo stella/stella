@@ -1411,6 +1411,7 @@ export const useChatSession = ({
   }, [conversationId, mcpConnectorIdentities, organizationId]);
 
   return {
+    clientStatus: status,
     error,
     messages,
     loadOlder,
