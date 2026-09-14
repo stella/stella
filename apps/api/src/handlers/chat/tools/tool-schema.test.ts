@@ -24,6 +24,12 @@ import {
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
+import { parseSuggestChangesInput } from "@stll/folio-agents";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -167,6 +173,28 @@ const requireArray = (value: unknown, description: string): unknown[] => {
     throw new TypeError(`Expected ${description} to be an array.`);
   }
   return value;
+};
+
+const findEmptyEnumPaths = (value: unknown, path = "schema"): string[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((child, index) =>
+      findEmptyEnumPaths(child, `${path}[${String(index)}]`),
+    );
+  }
+  if (!isSchemaObject(value)) {
+    return [];
+  }
+
+  const paths: string[] = [];
+  if (Array.isArray(value["enum"]) && value["enum"].includes("")) {
+    paths.push(`${path}.enum`);
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (!(key === "enum" && Array.isArray(child))) {
+      paths.push(...findEmptyEnumPaths(child, `${path}.${key}`));
+    }
+  }
+  return paths;
 };
 
 /** The per-surface `type` enum a registered `suggest_changes` tool exposes. */
@@ -1246,6 +1274,71 @@ describe("chat tool schemas", () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  test("keeps DOCX deletion inputs valid while omitting empty provider enums", () => {
+    const suggestChanges =
+      buildFullCoverageChatTools()[SUGGEST_CHANGES_TOOL_NAME];
+    if (!suggestChanges?.inputSchema) {
+      throw new TypeError(
+        "Expected the DOCX suggest_changes tool to be registered",
+      );
+    }
+    const localInputSchema = convertSchemaToJsonSchema(
+      suggestChanges.inputSchema,
+    );
+
+    // The local contract must continue to admit both deletion forms. The
+    // provider projection only changes what is advertised to Google-like
+    // providers; execution still uses the original Folio parser.
+    const options =
+      DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE[
+        DOCX_SUGGESTION_SURFACE.fileOverlay
+      ];
+    expect(
+      parseSuggestChangesInput(
+        {
+          operations: [
+            {
+              type: "deleteBlock",
+              blockId: "block-1",
+              severity: "high",
+              area: "privacy",
+            },
+          ],
+        },
+        options,
+      ).ok,
+    ).toBe(true);
+    expect(
+      parseSuggestChangesInput(
+        {
+          operations: [
+            {
+              type: "replaceBlock",
+              blockId: "block-1",
+              text: "",
+              severity: "high",
+              area: "privacy",
+            },
+          ],
+        },
+        options,
+      ).ok,
+    ).toBe(true);
+
+    const localEmptyEnums = findEmptyEnumPaths(localInputSchema);
+    expect(
+      localEmptyEnums.some((path) => path.endsWith(".properties.text.enum")),
+    ).toBe(true);
+
+    for (const provider of ["google", "openrouter"] as const) {
+      const projectedInputSchema = projectSchemaInputJsonSchema(
+        localInputSchema,
+        providerSafeJsonSchemaOptionsForTanStackProvider(provider, "tool"),
+      );
+      expect(findEmptyEnumPaths(projectedInputSchema)).toEqual([]);
+    }
   });
 
   for (const probe of providerRequestProbes) {

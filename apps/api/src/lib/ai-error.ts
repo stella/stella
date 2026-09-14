@@ -56,6 +56,13 @@ const httpStatusFromString = (value: unknown): number | null => {
   return isHttpStatus(status) ? status : null;
 };
 
+const httpStatusFromValue = (value: unknown): number | null => {
+  if (isHttpStatus(value)) {
+    return value;
+  }
+  return httpStatusFromString(value);
+};
+
 /**
  * The provider HTTP status one link of an error chain carries, or `null` when
  * that link carries none of its own.
@@ -93,11 +100,11 @@ export const providerStatusCode = (error: unknown): number | null => {
     }
   }
 
-  // TanStack's RUN_ERROR contract carries `code` as a string. Its adapters
-  // normalize a provider's numeric HTTP status to this field before the
-  // exception crosses the stream boundary. Accept exactly a three-digit HTTP
-  // code here; symbolic provider codes still need an explicit classification.
-  const codeStatus = httpStatusFromString(error["code"]);
+  // TanStack's RUN_ERROR contract carries `code` as a string, while raw
+  // provider events can carry the same HTTP status as a number. Accept either
+  // representation here; symbolic provider codes still need an explicit
+  // classification.
+  const codeStatus = httpStatusFromValue(error["code"]);
   if (codeStatus !== null) {
     return codeStatus;
   }
@@ -113,8 +120,8 @@ export const providerStatusCode = (error: unknown): number | null => {
     if (isHttpStatus(bodyStatus)) {
       return bodyStatus;
     }
-    const bodyCode = body["code"];
-    if (isHttpStatus(bodyCode)) {
+    const bodyCode = httpStatusFromValue(body["code"]);
+    if (bodyCode !== null) {
       return bodyCode;
     }
   }

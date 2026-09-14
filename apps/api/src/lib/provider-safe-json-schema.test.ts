@@ -398,6 +398,69 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(droppedKeywords).toEqual(["enum[0]"]);
   });
 
+  test("property: empty string enums remain admissible for Google-compatible providers", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.string({ minLength: 1, maxLength: 12 }), { maxLength: 4 }),
+        fc.constantFrom("google", "openrouter"),
+        fc.constantFrom("tool", "structured-output" as const),
+        (otherValues, provider, purpose) => {
+          const options = providerSafeJsonSchemaOptionsForTanStackProvider(
+            provider,
+            purpose,
+          );
+          for (const literal of [
+            { const: "" },
+            { enum: ["", ...otherValues] },
+          ]) {
+            const input = { type: "string", ...literal };
+            const projected = projectToProviderSafeJsonSchema(input, options);
+            expect(projected.schema).toEqual({ type: "string" });
+            expect(projected.droppedKeywords).toContain("enum");
+            expect(
+              projectToProviderSafeJsonSchema(projected.schema, options),
+            ).toEqual({
+              schema: projected.schema,
+              droppedKeywords: [],
+            });
+            expect(projectToProviderSafeJsonSchema(input).schema).toEqual({
+              type: "string",
+              enum: "enum" in literal ? literal.enum : [""],
+            });
+          }
+        },
+      ),
+      propertyConfig({ numRuns: 100 }),
+    );
+  });
+
+  test.each(["google", "openrouter"])(
+    "%s keeps empty-literal validation local",
+    async (provider) => {
+      const source = toTanStackToolSchema(
+        v.strictObject({ text: v.literal("") }),
+      );
+      const projected = projectSchemaInputJsonSchema(
+        source,
+        providerSafeJsonSchemaOptionsForTanStackProvider(provider, "tool"),
+      );
+      expect(convertSchemaToJsonSchema(projected)).toHaveProperty(
+        "properties.text",
+        { type: "string" },
+      );
+      expect(projected).toHaveProperty(
+        "~standard.validate",
+        source["~standard"].validate,
+      );
+      const validResult = await source["~standard"].validate({ text: "" });
+      expect(validResult.issues).toBeUndefined();
+      expect(validResult).toMatchObject({ value: { text: "" } });
+      expect(
+        (await source["~standard"].validate({ text: "replacement" })).issues,
+      ).toBeDefined();
+    },
+  );
+
   test("lowers oneOf to anyOf and recurses into branches", () => {
     const { schema } = projectToProviderSafeJsonSchema({
       oneOf: [
@@ -993,7 +1056,9 @@ describe("projectToProviderSafeJsonSchema", () => {
             (value): value is string => typeof value === "string",
           );
           expect(schema["enum"]).toEqual(
-            stringValues.length === 0 ? undefined : stringValues,
+            stringValues.length === 0 || stringValues.includes("")
+              ? undefined
+              : stringValues,
           );
         },
       ),

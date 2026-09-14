@@ -333,6 +333,16 @@ const filterEnumValues = ({
     context.dropped.push(`${joinPath(path, "enum")}[${index}]`);
   }
 
+  // Google's OpenAPI tool schema rejects an enum containing "", including
+  // through OpenRouter. Removing just that member would exclude valid inputs
+  // (notably DOCX deletions). Widen the provider schema instead; the original
+  // tool/Standard Schema still validates the value at execution.
+  if (providerSafeValues.includes("")) {
+    delete next["enum"];
+    context.dropped.push(joinPath(path, "enum"));
+    return;
+  }
+
   if (providerSafeValues.length === 0) {
     delete next["enum"];
     return;
