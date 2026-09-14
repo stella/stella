@@ -10,6 +10,7 @@ import {
   stripStamp,
 } from "@/api/lib/docx-stamp";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
+import { LIMITS } from "@/api/lib/limits";
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ const makeDocx = async (opts?: {
   appXml?: string;
   coreXml?: string;
   documentXml?: string;
+  additionalFiles?: Readonly<Record<string, string>>;
   footerXml?: string;
   footerRels?: string;
   customXml?: string;
@@ -75,6 +77,9 @@ const makeDocx = async (opts?: {
   }
   if (opts?.appXml) {
     zip.file("docProps/app.xml", opts.appXml);
+  }
+  for (const [path, contents] of Object.entries(opts?.additionalFiles ?? {})) {
+    zip.file(path, contents);
   }
 
   return zip.generateAsync({ type: "arraybuffer" });
@@ -221,6 +226,124 @@ describe("injectStamp", () => {
     expect(footer).toContain("Existing footer");
     expect(footer).toContain("stella_dms_ref");
     expect(footer).toContain(stamp);
+  });
+
+  test("stamps every footer variant referenced across document sections once", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const footerXml = (label: string): string =>
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        `<w:p><w:r><w:t>${label}</w:t></w:r></w:p>`,
+        "</w:ftr>",
+      ].join("\n");
+    const documentXml = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+      "<w:body>",
+      "<w:p><w:r><w:t>Section one</w:t></w:r><w:pPr><w:sectPr>",
+      '  <w:footerReference w:type="first" r:id="rIdFirst"/>',
+      '  <w:footerReference w:type="default" r:id="rIdShared"/>',
+      "  <w:titlePg/>",
+      "</w:sectPr></w:pPr></w:p>",
+      "<w:p><w:r><w:t>Section two</w:t></w:r></w:p>",
+      "<w:sectPr>",
+      '  <w:footerReference w:type="even" r:id="rIdEven"/>',
+      '  <w:footerReference w:type="default" r:id="rIdSharedAgain"/>',
+      '  <w:footerReference w:type="first" r:id="rIdSecondFirst"/>',
+      "  <w:titlePg/>",
+      "</w:sectPr>",
+      "</w:body>",
+      "</w:document>",
+    ].join("\n");
+    const docRels = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<Relationships xmlns="${relNs}">`,
+      `  <Relationship Id="rIdFirst" Type="${footerRelType}" Target="footer1.xml"/>`,
+      `  <Relationship Id="rIdShared" Type="${footerRelType}" Target="footer2.xml"/>`,
+      `  <Relationship Id="rIdEven" Type="${footerRelType}" Target="footer3.xml"/>`,
+      `  <Relationship Id="rIdSharedAgain" Type="${footerRelType}" Target="footer2.xml"/>`,
+      `  <Relationship Id="rIdSecondFirst" Type="${footerRelType}" Target="footer4.xml"/>`,
+      "</Relationships>",
+    ].join("\n");
+    const docx = await makeDocx({
+      documentXml,
+      docRels,
+      additionalFiles: {
+        "word/footer1.xml": footerXml("First page footer"),
+        "word/footer2.xml": footerXml("Shared default footer"),
+        "word/footer3.xml": footerXml("Even page footer"),
+        "word/footer4.xml": footerXml("Second first page footer"),
+      },
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const bookmarkIds = new Set<string>();
+    const bookmarkNames = new Set<string>();
+
+    for (const footerNumber of [1, 2, 3, 4]) {
+      const footer = await readZipFile(
+        stamped,
+        `word/footer${footerNumber}.xml`,
+      );
+      expect(footer).toContain(stamp);
+      expect(footer).toContain(`stl:${code}`);
+      expect(footer?.match(/stella_dms_ref/gu)).toHaveLength(1);
+      const bookmarkId = /<w:bookmarkStart\b[^>]*w:id="(?<id>\d+)"/u.exec(
+        footer ?? "",
+      )?.groups?.["id"];
+      const bookmarkName =
+        /<w:bookmarkStart\b[^>]*w:name="(?<name>stella_dms_ref_\d+)"/u.exec(
+          footer ?? "",
+        )?.groups?.["name"];
+      expect(bookmarkId).toBeDefined();
+      expect(bookmarkName).toBeDefined();
+      if (bookmarkId !== undefined) {
+        bookmarkIds.add(bookmarkId);
+      }
+      if (bookmarkName !== undefined) {
+        bookmarkNames.add(bookmarkName);
+      }
+    }
+    expect(bookmarkIds).toHaveLength(4);
+    expect(bookmarkNames).toHaveLength(4);
+  });
+
+  test("rejects an unbounded number of referenced footer parts", async () => {
+    const footerCount = LIMITS.docxStampFooterPartsMax + 1;
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const footerReferences = Array.from(
+      { length: footerCount },
+      (_, index) =>
+        `<w:footerReference w:type="default" r:id="rId${String(index)}"/>`,
+    );
+    const relationships = Array.from(
+      { length: footerCount },
+      (_, index) =>
+        `<Relationship Id="rId${String(index)}" Type="${footerRelType}" Target="footer${String(index)}.xml"/>`,
+    );
+    const docx = await makeDocx({
+      documentXml: [
+        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        "<w:body><w:sectPr>",
+        ...footerReferences,
+        "</w:sectPr></w:body></w:document>",
+      ].join("\n"),
+      docRels: [
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        ...relationships,
+        "</Relationships>",
+      ].join("\n"),
+    });
+
+    expect(injectStamp(docx, stamp, code, baseUrl)).rejects.toMatchObject({
+      _tag: "DocxStampError",
+      reason: "too-many-footer-parts",
+    });
   });
 
   test("idempotent: updates existing stella stamp", async () => {

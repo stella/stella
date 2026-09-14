@@ -11,7 +11,7 @@
  * never claim a spelling inside those braces: the footer and the custom
  * properties are the only things it writes.
  */
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import {
   VERIFICATION_CODE_ALPHABET,
@@ -24,7 +24,7 @@ import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
-const STAMP_BOOKMARK_MARKER = `w:name="${STAMP_BOOKMARK}"`;
+const STAMP_BOOKMARK_NAME_SOURCE = `${STAMP_BOOKMARK}(?:_\\d+)?`;
 const STAMP_HYPERLINK_REL_ID = "rId_stella_vcode";
 const STAMP_PROPERTY_NAMES = ["stella-ref", "stella-code"] as const;
 const CUSTOM_PROPS_PATH = "docProps/custom.xml";
@@ -73,6 +73,14 @@ const FMTID = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
 const PID_RE = /pid="(?<pid>\d+)"/gu;
 const WID_RE = /w:id="(?<id>\d+)"/gu;
 const WID_VALUE_RE = /w:id="(?<id>\d+)"/u;
+const STAMP_BOOKMARK_MARKER_RE = new RegExp(
+  `w:name="${STAMP_BOOKMARK_NAME_SOURCE}"`,
+  "u",
+);
+const STAMP_BOOKMARK_MARKERS_RE = new RegExp(
+  `w:name="${STAMP_BOOKMARK_NAME_SOURCE}"`,
+  "gu",
+);
 const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/u;
 const WT_TEXT_RE = /<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu;
 const VCODE_CLASS = `[${VERIFICATION_CODE_ALPHABET}]`;
@@ -87,8 +95,8 @@ const CLOSING_FTR_RE = /<\/w:ftr>/u;
 const STRIP_PATH_RE = /^.*\//u;
 const FOOTER_REL_RE =
   /Id="(?<id>[^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="(?<target>[^"]+)"/gu;
-const DEFAULT_FOOTER_REF_RE =
-  /w:footerReference[^>]*w:type="default"[^>]*r:id="(?<rid>[^"]+)"/u;
+const FOOTER_REF_RE =
+  /<w:footerReference\b[^>]*\br:id="(?<rid>[^"]+)"[^>]*\/?>/gu;
 const PARAGRAPH_OPEN_RE = /<w:p(?:\s[^>]*)?>/gu;
 const ANY_PROPERTY_RE = /<property[\s>]/u;
 const ANY_PARAGRAPH_RE = /<w:p[\s/>]/u;
@@ -100,6 +108,11 @@ const ANY_PARAGRAPH_RE = /<w:p[\s/>]/u;
  * words rather than ours.
  */
 const STAMP_TEXT_RE = new RegExp(`^\\S(?:.*\\S)? {2}stl:${VCODE_SOURCE}$`, "u");
+
+class DocxStampError extends TaggedError("DocxStampError")<{
+  message: string;
+  reason: "too-many-footer-parts";
+}> {}
 
 // ── Public API ──────────────────────────────────────────
 
@@ -289,7 +302,15 @@ export const injectStamp = async (
   }
 
   await injectCustomProperties(archive, stamp, verificationCode);
-  await injectFooter(archive, stamp, verificationCode, frontendUrl);
+  const footerResult = await injectFooter(
+    archive,
+    stamp,
+    verificationCode,
+    frontendUrl,
+  );
+  if (Result.isError(footerResult)) {
+    return await Promise.reject(footerResult.error);
+  }
 
   return archive.zip.generateAsync({
     type: "arraybuffer",
@@ -636,16 +657,14 @@ const unwrapStampHyperlinks = (paragraphXml: string): string => {
 /** Remove stella's named bookmarks without disturbing any others. */
 const stripStampBookmarks = (paragraphXml: string): string => {
   const bookmarkIds = new Set<string>();
-  let searchFrom = 0;
-  while (true) {
-    const markerIndex = paragraphXml.indexOf(STAMP_BOOKMARK_MARKER, searchFrom);
-    if (markerIndex === -1) {
-      break;
-    }
+  const bookmarkMarkers = new Set<string>();
+  for (const match of paragraphXml.matchAll(STAMP_BOOKMARK_MARKERS_RE)) {
+    const marker = match[0];
+    const markerIndex = match.index;
+    bookmarkMarkers.add(marker);
     const start = paragraphXml.lastIndexOf("<w:bookmarkStart", markerIndex);
     const end = start === -1 ? -1 : paragraphXml.indexOf(">", start);
     if (start === -1 || end < markerIndex) {
-      searchFrom = markerIndex + STAMP_BOOKMARK_MARKER.length;
       continue;
     }
     const bookmarkId = WID_VALUE_RE.exec(paragraphXml.slice(start, end + 1))
@@ -653,14 +672,12 @@ const stripStampBookmarks = (paragraphXml: string): string => {
     if (bookmarkId !== undefined) {
       bookmarkIds.add(bookmarkId);
     }
-    searchFrom = end + 1;
   }
 
-  let stripped = removeSelfClosingElements(
-    paragraphXml,
-    "w:bookmarkStart",
-    STAMP_BOOKMARK_MARKER,
-  );
+  let stripped = paragraphXml;
+  for (const marker of bookmarkMarkers) {
+    stripped = removeSelfClosingElements(stripped, "w:bookmarkStart", marker);
+  }
   for (const bookmarkId of bookmarkIds) {
     stripped = removeSelfClosingElements(
       stripped,
@@ -691,7 +708,7 @@ const stripStampParagraphsFromFooter = (footerXml: string): string => {
     }
     const end = closeIndex + PARAGRAPH_CLOSE.length;
     const paragraphXml = footerXml.slice(start, end);
-    if (!paragraphXml.includes(STAMP_BOOKMARK_MARKER)) {
+    if (!STAMP_BOOKMARK_MARKER_RE.test(paragraphXml)) {
       continue;
     }
 
@@ -907,7 +924,7 @@ const buildStampParagraph = (
     "<w:p>",
     '  <w:pPr><w:jc w:val="right"/></w:pPr>',
     `  <w:bookmarkStart w:id="${bookmarkId}"`,
-    `    w:name="${STAMP_BOOKMARK}"/>`,
+    `    w:name="${STAMP_BOOKMARK}_${bookmarkId}"/>`,
     "  <w:r>",
     "    <w:rPr>",
     '      <w:color w:val="999999"/>',
@@ -935,38 +952,70 @@ const injectFooter = async (
   stamp: string,
   verificationCode: string,
   frontendUrl: string,
-): Promise<void> => {
+): Promise<Result<void, DocxStampError>> => {
   const docXml = await archive.readEntryString("word/document.xml");
   if (!docXml) {
-    return;
+    return Result.ok();
   }
 
   const docRelsPath = "word/_rels/document.xml.rels";
   const docRels = (await archive.readEntryString(docRelsPath)) ?? "";
 
   const verifyUrl = `${frontendUrl}/verify/${verificationCode}`;
-  const footerMatch = findExistingFooter(docXml, docRels);
+  const footerMatches = findExistingFooters(docXml, docRels);
 
-  if (footerMatch) {
-    await updateExistingFooter(
-      archive,
-      footerMatch.path,
-      footerMatch.relsPath,
-      stamp,
-      verificationCode,
-      verifyUrl,
-    );
-  } else {
-    await createNewFooter(
-      archive,
-      docXml,
-      docRelsPath,
-      docRels,
-      stamp,
-      verificationCode,
-      verifyUrl,
-    );
+  if (footerMatches.length > 0) {
+    if (footerMatches.length > LIMITS.docxStampFooterPartsMax) {
+      return Result.err(
+        new DocxStampError({
+          message:
+            `DOCX references ${String(footerMatches.length)} distinct footer parts ` +
+            `(max ${String(LIMITS.docxStampFooterPartsMax)})`,
+          reason: "too-many-footer-parts",
+        }),
+      );
+    }
+
+    const footerParts: LoadedFooterMatch[] = [];
+    for (const match of footerMatches) {
+      const xml = await archive.readEntryString(match.path);
+      if (xml !== null) {
+        footerParts.push({ ...match, xml });
+      }
+    }
+
+    if (footerParts.length > 0) {
+      let bookmarkId = findNextBookmarkId([
+        docXml,
+        ...footerParts.map(({ xml }) => xml),
+      ]);
+      for (const { path, relsPath, xml } of footerParts) {
+        await updateExistingFooter(
+          archive,
+          path,
+          relsPath,
+          xml,
+          stamp,
+          verificationCode,
+          verifyUrl,
+          String(bookmarkId),
+        );
+        bookmarkId += 1;
+      }
+      return Result.ok();
+    }
   }
+
+  await createNewFooter(
+    archive,
+    docXml,
+    docRelsPath,
+    docRels,
+    stamp,
+    verificationCode,
+    verifyUrl,
+  );
+  return Result.ok();
 };
 
 type FooterMatch = {
@@ -974,15 +1023,20 @@ type FooterMatch = {
   relsPath: string;
 };
 
+type LoadedFooterMatch = FooterMatch & {
+  xml: string;
+};
+
 /**
- * Find the existing default footer in the document.
- * Prefers the footer referenced by `w:type="default"` in
- * document.xml; falls back to the first footer relationship.
+ * Find every footer part a section references, deduplicating parts shared by
+ * multiple sections or page variants. A relationship without a reference is
+ * used only as a fallback for the malformed packages the previous behavior
+ * tolerated.
  */
-const findExistingFooter = (
+const findExistingFooters = (
   docXml: string,
   docRels: string,
-): FooterMatch | null => {
+): FooterMatch[] => {
   // Build a map of relationship ID → target path
   const relMap = new Map<string, string>();
   for (const m of docRels.matchAll(FOOTER_REL_RE)) {
@@ -994,34 +1048,40 @@ const findExistingFooter = (
   }
 
   if (relMap.size === 0) {
-    return null;
+    return [];
   }
 
-  // Prefer the default footer reference from document.xml
-  const defaultRef = DEFAULT_FOOTER_REF_RE.exec(docXml);
-  const rId = defaultRef?.groups?.["rid"];
-  const target = (rId ? relMap.get(rId) : null) ?? relMap.values().next().value;
-
-  if (!target) {
-    return null;
+  const targets = new Set<string>();
+  for (const match of docXml.matchAll(FOOTER_REF_RE)) {
+    const rId = match.groups?.["rid"];
+    const target = rId === undefined ? undefined : relMap.get(rId);
+    if (target !== undefined) {
+      targets.add(target);
+    }
+  }
+  if (targets.size === 0) {
+    const fallback = relMap.values().next().value;
+    if (fallback !== undefined) {
+      targets.add(fallback);
+    }
   }
 
-  const path = target.startsWith("word/") ? target : `word/${target}`;
-  const fileName = target.replace(STRIP_PATH_RE, "");
-  const relsPath = `word/_rels/${fileName}.rels`;
-
-  return { path, relsPath };
+  return [...targets].map((target) => {
+    const path = target.startsWith("word/") ? target : `word/${target}`;
+    return { path, relsPath: footerRelsPathFor(path) };
+  });
 };
 
 const updateExistingFooter = async (
   archive: DocxArchive,
   footerPath: string,
   footerRelsPath: string,
+  footerXml: string,
   stamp: string,
   verificationCode: string,
   verifyUrl: string,
+  bookmarkId: string,
 ): Promise<void> => {
-  const footerXml = (await archive.readEntryString(footerPath)) ?? "";
   const footerRels = (await archive.readEntryString(footerRelsPath)) ?? "";
 
   const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
@@ -1036,11 +1096,16 @@ const updateExistingFooter = async (
     // Replace existing stamp paragraph
     archive.zip.file(
       footerPath,
-      replaceStampParagraph(footerXml, stamp, verificationCode, hyperlinkRId),
+      replaceStampParagraph(
+        footerXml,
+        stamp,
+        verificationCode,
+        hyperlinkRId,
+        bookmarkId,
+      ),
     );
   } else {
     // Append stamp paragraph before </w:ftr>
-    const bookmarkId = findNextBookmarkId(footerXml);
     const stampPara = buildStampParagraph(
       stamp,
       verificationCode,
@@ -1071,7 +1136,7 @@ const createNewFooter = async (
 
   // Derive bookmark ID from the document body to avoid
   // collisions with existing w:id values across the package
-  const bookmarkId = findNextBookmarkId(docXml);
+  const bookmarkId = String(findNextBookmarkId([docXml]));
   const body = buildStampParagraph(
     stamp,
     verificationCode,
@@ -1143,12 +1208,14 @@ const findAvailableFooterName = (archive: DocxArchive): string => {
   return `footer${n}.xml`;
 };
 
-const findNextBookmarkId = (xml: string): string => {
-  const ids = [...xml.matchAll(WID_RE)].map((m) =>
-    Number.parseInt(m.groups?.["id"] ?? "0", 10),
-  );
-  const max = ids.length > 0 ? Math.max(...ids) : -1;
-  return String(max + 1);
+const findNextBookmarkId = (xmlParts: Iterable<string>): number => {
+  let max = -1;
+  for (const xml of xmlParts) {
+    for (const match of xml.matchAll(WID_RE)) {
+      max = Math.max(max, Number.parseInt(match.groups?.["id"] ?? "0", 10));
+    }
+  }
+  return max + 1;
 };
 
 const replaceStampParagraph = (
@@ -1156,8 +1223,8 @@ const replaceStampParagraph = (
   stamp: string,
   verificationCode: string,
   hyperlinkRId: string,
+  bookmarkId: string,
 ): string => {
-  const bookmarkId = findNextBookmarkId(footerXml);
   const newPara = buildStampParagraph(
     stamp,
     verificationCode,
@@ -1167,7 +1234,7 @@ const replaceStampParagraph = (
 
   // Match the entire paragraph containing the bookmark
   const re = new RegExp(
-    `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK}"[\\s\\S]*?</w:p>`,
+    `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK_NAME_SOURCE}"[\\s\\S]*?</w:p>`,
     "u",
   );
 
@@ -1293,7 +1360,7 @@ const extractBookmarkText = (
   stamp: string | null;
 } | null => {
   const re = new RegExp(
-    `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK}"` +
+    `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK_NAME_SOURCE}"` +
       "[\\s\\S]*?<w:bookmarkEnd[^>]*/>",
     "u",
   );
