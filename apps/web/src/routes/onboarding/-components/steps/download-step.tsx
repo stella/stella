@@ -162,7 +162,8 @@ const TargetCard = ({
     )}
   >
     <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex shrink-0 items-center">{icon}</span>
+      {/* Fixed to the widest icon (the assistant pair) so titles align. */}
+      <span className="mt-0.5 flex w-7 shrink-0 items-center">{icon}</span>
       <div className="min-w-0 flex-1">
         <h2 className="text-foreground text-sm font-medium">{title}</h2>
         <p className="text-muted-foreground mt-1 text-sm">{description}</p>
