@@ -577,6 +577,7 @@
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
       "openAtCitation": "Atvērt citāta vietā",
+      "openDecision": "Atvērt nolēmumu",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",
       "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
       "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
@@ -702,12 +703,17 @@
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
       "popularName": "Populārais nosaukums",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, zero {# pieminējumu} one {# pieminējums} other {# pieminējumi}}",
       "provisionsCited": "Citētās normas",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
       },
-      "statutes": "Piemērojamie tiesību akti"
+      "statutes": "Piemērojamie tiesību akti",
+      "textPending": "Nolēmuma teksts vēl tiek saņemts",
+      "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
+      "textUnavailable": "Šim nolēmumam teksts nav pieejams"
     }
   },
   "catalogue": {

@@ -46,6 +46,9 @@ import {
   locateCitationAnchors,
 } from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
+import { missingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
+import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
@@ -62,9 +65,10 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
-type Decision = {
+type Decision = DecisionDocumentState & {
   caseNumber: string;
   court: string;
+  id: string;
   language: string;
   fulltext: string | null;
   documentAst?: unknown;
@@ -714,25 +718,23 @@ export const DecisionText = ({
   );
   const displayRef = caseNumberBlock?.plainText ?? decision.caseNumber;
 
-  const searchPieces: SearchPiece[] = (() => {
-    // If the render falls through to the empty-state message
-    // (no visible blocks AND no fulltext) nothing gets drawn on
-    // the page, so indexing the reference + supplement would
-    // surface matches with no scroll target. Keep pieces aligned
-    // with what actually renders.
-    const hasRenderableBody =
-      visibleBlocks.length > 0 ||
-      (decision.fulltext !== null && decision.fulltext !== "");
-    if (!hasRenderableBody) {
-      return [];
-    }
+  const hasRenderableBody =
+    visibleBlocks.length > 0 ||
+    (decision.fulltext !== null && decision.fulltext !== "");
 
-    const pieces: SearchPiece[] = [
-      {
-        id: DECISION_REFERENCE_ID,
-        text: `${decision.court}, ${displayRef}`,
-      },
-    ];
+  const searchPieces: SearchPiece[] = (() => {
+    // A match needs something on screen to scroll to, so each piece is
+    // indexed exactly where its own element renders. The reference line
+    // belongs to the body; the supplement is published separately from the
+    // text and stands even where the text did not resolve.
+    const pieces: SearchPiece[] = hasRenderableBody
+      ? [
+          {
+            id: DECISION_REFERENCE_ID,
+            text: `${decision.court}, ${displayRef}`,
+          },
+        ]
+      : [];
 
     const legalSentence = supplementText(
       decision.textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
@@ -947,12 +949,26 @@ export const DecisionText = ({
       );
     }
 
+    // Never a bare empty pane: the read says whether the text failed, is
+    // still coming, or was never offered, and the reader is told which. The
+    // abstract and the legal sentence come from the decision record rather
+    // than the document, so they survive a failed read and are what a lawyer
+    // can still work from.
     return (
-      <div className="flex items-center justify-center py-16">
-        <p className="text-muted-foreground text-sm">
-          {t("caseLaw.emptyState")}
-        </p>
-      </div>
+      <>
+        <EditorialSupplement
+          activeMatchIndex={shownMatchIndex}
+          annotationAnchors={
+            hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
+          }
+          rangesByPieceId={searchResults.rangesByPieceId}
+          textFields={decision.textFields}
+        />
+        <DecisionBodyUnavailable
+          decisionId={decision.id}
+          reason={missingBodyReason(decision)}
+        />
+      </>
     );
   })();
 

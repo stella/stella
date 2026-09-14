@@ -577,6 +577,7 @@
       "lastNegative": "paskutinė neigiama citata {year} m.",
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
       "openAtCitation": "Atverti citatos vietoje",
+      "openDecision": "Atverti sprendimą",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
@@ -702,12 +703,17 @@
       "legalArea": "Teisės sritis",
       "legalSentence": "Teisinė tezė",
       "popularName": "Populiarus pavadinimas",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# paminėjimas} few {# paminėjimai} many {# paminėjimo} other {# paminėjimų}}",
       "provisionsCited": "Cituojamos nuostatos",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
         "publishedOnWeb": "Paskelbta internete"
       },
-      "statutes": "Taikomi teisės aktai"
+      "statutes": "Taikomi teisės aktai",
+      "textPending": "Sprendimo tekstas dar gaunamas",
+      "textReadFailed": "Nepavyko įkelti sprendimo teksto",
+      "textUnavailable": "Šiam sprendimui teksto nėra"
     }
   },
   "catalogue": {

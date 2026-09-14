@@ -577,6 +577,7 @@
       "lastNegative": "zuletzt ablehnend zitiert {year}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
       "openAtCitation": "An der Zitatstelle öffnen",
+      "openDecision": "Entscheidung öffnen",
       "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",
       "positiveCount": "{count, plural, one {# zustimmend} other {# zustimmend}}",
       "showAll": "{count, plural, one {Alle # Entscheidung anzeigen} other {Alle # Entscheidungen anzeigen}}",
@@ -702,12 +703,17 @@
       "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
       "popularName": "Populärer Name",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# Erwähnung} other {# Erwähnungen}}",
       "provisionsCited": "Angeführte Vorschriften",
       "sourceFields": {
         "decisionCategory": "Entscheidungskategorie",
         "publishedOnWeb": "Im Web veröffentlicht"
       },
-      "statutes": "Anwendbare Vorschriften"
+      "statutes": "Anwendbare Vorschriften",
+      "textPending": "Der Entscheidungstext wird noch abgerufen",
+      "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
+      "textUnavailable": "Für diese Entscheidung liegt kein Text vor"
     }
   },
   "catalogue": {

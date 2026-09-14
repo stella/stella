@@ -577,6 +577,7 @@
       "lastNegative": "آخر استشهاد سلبي في {year}",
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
       "openAtCitation": "فتح عند موضع الاستشهاد",
+      "openDecision": "فتح الحكم",
       "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
       "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
       "showAll": "{count, plural, zero {عرض كل الأحكام} one {عرض الحكم} two {عرض الحكمين} few {عرض كل # أحكام} many {عرض كل # حكمًا} other {عرض كل # حكم}}",
@@ -702,12 +703,17 @@
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
       "popularName": "الاسم الشائع",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, zero {لا إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",
       "provisionsCited": "الأحكام المستشهد بها",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
       },
-      "statutes": "النصوص التشريعية المطبَّقة"
+      "statutes": "النصوص التشريعية المطبَّقة",
+      "textPending": "لا يزال جارٍ جلب نص الحكم",
+      "textReadFailed": "تعذّر تحميل نص الحكم",
+      "textUnavailable": "لا يتوفر نص لهذا الحكم"
     }
   },
   "catalogue": {

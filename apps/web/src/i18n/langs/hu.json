@@ -577,6 +577,7 @@
       "lastNegative": "utolsó elutasító hivatkozás: {year}",
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
       "openAtCitation": "Megnyitás a hivatkozásnál",
+      "openDecision": "Határozat megnyitása",
       "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
       "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
       "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
@@ -702,12 +703,17 @@
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
       "popularName": "Népszerű név",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# említés} other {# említés}}",
       "provisionsCited": "Hivatkozott rendelkezések",
       "sourceFields": {
         "decisionCategory": "Döntés kategóriája",
         "publishedOnWeb": "Weben közzétéve"
       },
-      "statutes": "Alkalmazandó jogszabályok"
+      "statutes": "Alkalmazandó jogszabályok",
+      "textPending": "A határozat szövege még betöltés alatt áll",
+      "textReadFailed": "A határozat szövegét nem sikerült betölteni",
+      "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg"
     }
   },
   "catalogue": {

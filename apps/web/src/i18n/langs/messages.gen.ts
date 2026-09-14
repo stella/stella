@@ -580,6 +580,7 @@ type Messages = {
       "lastNegative": "last negative treatment in {year}";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
       "openAtCitation": "Open at the citation";
+      "openDecision": "Open decision";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
@@ -705,12 +706,17 @@ type Messages = {
       "legalArea": "Legal area";
       "legalSentence": "Legal sentence";
       "popularName": "Popular name";
+      "provisionMentions": "{count, number}×";
+      "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}";
       "provisionsCited": "Provisions cited";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
       };
       "statutes": "Applicable statutes";
+      "textPending": "The decision text is still being retrieved";
+      "textReadFailed": "The decision text could not be loaded";
+      "textUnavailable": "No text is available for this decision";
     };
   };
   "catalogue": {

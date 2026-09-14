@@ -577,6 +577,7 @@
       "lastNegative": "última cita negativa en {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "openAtCitation": "Abrir en la cita",
+      "openDecision": "Abrir la resolución",
       "passageNotFound": "No se encontró el pasaje citante en el texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
       "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
@@ -702,12 +703,17 @@
       "legalArea": "Área jurídica",
       "legalSentence": "Fundamento jurídico",
       "popularName": "Nombre popular",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# mención} other {# menciones}}",
       "provisionsCited": "Disposiciones citadas",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
         "publishedOnWeb": "Publicado en la web"
       },
-      "statutes": "Normas aplicables"
+      "statutes": "Normas aplicables",
+      "textPending": "El texto de la resolución aún se está obteniendo",
+      "textReadFailed": "No se ha podido cargar el texto de la resolución",
+      "textUnavailable": "No hay texto disponible para esta resolución"
     }
   },
   "catalogue": {
