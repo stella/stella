@@ -932,6 +932,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     ? decisionSortOrder(search.sort)
     : null;
 
+  // The pane below claims the page's height, so on a normal viewport nothing
+  // overflows here and the table owns the only scroll. The page scroller stays
+  // as the fallback for a viewport too short to hold the table's own minimum:
+  // without it the stack would be clipped and the pager unreachable.
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       {/*
@@ -948,7 +952,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         query={queryInput}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
         <DecisionResultsToolbar
           // A browse listing draws each decision's own headnote, not a matched
           // passage, so there is no excerpt to widen and the control is not

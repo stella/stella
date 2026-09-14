@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 const DEV_VISUAL = {
   controlSizes: "control-sizes",
+  workspaceTable: "workspace-table",
 } as const;
 
 const UiPlayground = import.meta.env.DEV
@@ -24,8 +25,19 @@ const ControlSizesPlayground = import.meta.env.DEV
     })
   : null;
 
+const WorkspaceTablePlayground = import.meta.env.DEV
+  ? React.lazy(async () => {
+      const module =
+        await import("@/routes/dev/-components/workspace-table-playground");
+
+      return { default: module.WorkspaceTablePlayground };
+    })
+  : null;
+
 const searchSchema = v.object({
-  visual: v.optional(v.literal(DEV_VISUAL.controlSizes)),
+  visual: v.optional(
+    v.picklist([DEV_VISUAL.controlSizes, DEV_VISUAL.workspaceTable]),
+  ),
 });
 
 export const Route = createFileRoute("/dev")({
@@ -54,6 +66,23 @@ function DevRouteComponent() {
               <ControlSizesPlayground />
             </div>
           </div>
+        </main>
+      </React.Suspense>
+    );
+  }
+
+  if (visual === DEV_VISUAL.workspaceTable) {
+    if (WorkspaceTablePlayground === null) {
+      return null;
+    }
+
+    // The results page's chrome, so the bench measures the table in the shape
+    // the product gives it: a bounded column, and a page scroller that only
+    // engages when the viewport is too short to hold the table's minimum.
+    return (
+      <React.Suspense fallback={null}>
+        <main className="bg-background flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+          <WorkspaceTablePlayground />
         </main>
       </React.Suspense>
     );

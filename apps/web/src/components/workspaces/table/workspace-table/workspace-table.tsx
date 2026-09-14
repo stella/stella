@@ -553,6 +553,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         className={cn(
           inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto",
         )}
+        data-slot="workspace-table-scroll"
         ref={tableWrapperRef}
       >
         <div
