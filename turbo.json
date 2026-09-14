@@ -148,6 +148,60 @@
       "dependsOn": [],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    // A package's tests are selected, and cached, on that package's own files.
+    // The entries below declare the files each suite reads from outside its
+    // workspace: scripts/test-scope.ts adds the package to the test filter when
+    // one of them changed, and Turbo counts it in the cache key so a cached
+    // pass cannot replay over it. scripts/check-test-input-coverage.ts holds
+    // these lists and the tests in sync in both directions.
+    "@stll/agent-engine#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/agent-sandbox-canary.yml",
+        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
+      ]
+    },
+    "@stll/api#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/oxlint.config.ts"
+      ]
+    },
+    "@stll/web#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
+        "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
+        "$TURBO_ROOT$/oxlint.config.ts"
+      ]
+    },
+    // Repository-wide tooling guards: these suites walk apps/*, packages/* and
+    // the workflows themselves, so any of those files can break them.
+    "@stll/property-testing#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**"
+      ]
+    },
+    "@stll/scripts#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/scripts/**"
+      ]
+    },
     "test:property": {
       "dependsOn": [],
       "inputs": ["$TURBO_DEFAULT$"],

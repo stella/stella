@@ -2,23 +2,22 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-const REPO_ROOT = nodePath.join(import.meta.dirname, "../../../../..");
+// The browser half of this invariant (EventSource carries no credentials in the
+// URL) lives in apps/web/src/sse-auth-invariants.test.ts: Turbo selects a test
+// suite by package, so a guard over web source only runs when apps/web is what
+// changed.
+const HANDLERS = nodePath.join(import.meta.dirname, "../../handlers");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
 
-const listSourceFiles = (relativeDir: string): string[] => {
-  const root = nodePath.join(REPO_ROOT, relativeDir);
+const listSourceFiles = (directory: string): string[] => {
   const files: string[] = [];
 
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = nodePath.join(root, entry.name);
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = nodePath.join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      for (const nested of listSourceFiles(
-        nodePath.relative(REPO_ROOT, path),
-      )) {
-        files.push(nested);
-      }
+      files.push(...listSourceFiles(path));
       continue;
     }
 
@@ -43,25 +42,9 @@ const QUERY_SCHEMA_PATTERN =
 const TOKEN_KEY_PATTERN = /token/iu;
 
 describe("SSE auth invariants", () => {
-  test("browser EventSource connections do not carry bearer credentials in URLs", () => {
-    const eventSourceFiles = listSourceFiles("apps/web/src").filter((path) =>
-      readSource(path).includes("new EventSource"),
-    );
-
-    expect(eventSourceFiles.length).toBeGreaterThan(0);
-
-    for (const path of eventSourceFiles) {
-      const source = readSource(path);
-
-      expect(source).not.toMatch(/[?&](?:token|auth|authorization)=/iu);
-      expect(source).not.toMatch(/\b(?:authToken|sessionToken)\b/u);
-      expect(source).toContain("withCredentials: true");
-    }
-  });
-
   test("SSE handlers do not authenticate with query string tokens", () => {
-    const sseHandlerFiles = listSourceFiles("apps/api/src/handlers").filter(
-      (path) => readSource(path).includes("text/event-stream"),
+    const sseHandlerFiles = listSourceFiles(HANDLERS).filter((path) =>
+      readSource(path).includes("text/event-stream"),
     );
 
     expect(sseHandlerFiles.length).toBeGreaterThan(0);

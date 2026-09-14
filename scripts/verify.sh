@@ -132,6 +132,17 @@ run_result_boundary_enrolment_guard() {
   bun run check:result-boundary-enrolment
 }
 
+run_test_input_coverage_guard() {
+  # Turbo selects and caches a package's tests on that package's own files, so
+  # a suite that reads another package's source is invisible to a change in
+  # what it asserts on. turbo.json declares those reads as $TURBO_ROOT$ inputs
+  # of the package's test task; an undeclared read fails, and so does a
+  # declared input no test reads any more. The fixture tests run first so a
+  # broken guard cannot pass silently.
+  bun test scripts/check-test-input-coverage.test.ts || return 1
+  bun run check:test-input-coverage
+}
+
 run_module_mock_ledger_guard() {
   # The grandfathered module-mock ledger may only lose members: every line
   # must already exist on the base branch, so a new mock cannot be listed in
@@ -249,11 +260,17 @@ run_quarantine_exclude_guard() {
 }
 
 run_test() {
+  # Not --affected: a suite that reads files outside its own package also needs
+  # the packages its turbo.json test inputs name, and `--affected --filter=X`
+  # intersects instead of widening. scripts/test-scope.ts prints the union as
+  # explicit filters.
+  local -a scope=()
+  local printed
   if [[ -n "$affected_flag" ]]; then
-    bun run test -- --concurrency=2 "$affected_flag"
-  else
-    bun run test -- --concurrency=2
+    printed=$(bun scripts/test-scope.ts --base "$base_ref") || return 1
+    read -r -a scope <<<"$printed"
   fi
+  bun run test -- --concurrency=2 "${scope[@]}"
 }
 
 run_step "AI skill sync wrapper self-test" bash scripts/check-ai-skill-sync.test.sh
@@ -296,6 +313,7 @@ run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Result boundary enrolment" run_result_boundary_enrolment_guard
+run_step "Test input coverage" run_test_input_coverage_guard
 run_step "Module ownership" bun run check:module-ownership
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
