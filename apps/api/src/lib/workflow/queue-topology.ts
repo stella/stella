@@ -1,4 +1,5 @@
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
+import type { BullMqQueueName } from "@/api/lib/bullmq-queue";
 import { LIMITS } from "@/api/lib/limits";
 
 export const WORKFLOW_QUEUE_CLASS = {
@@ -12,7 +13,7 @@ export type WorkflowQueueClass =
 export const WORKFLOW_QUEUE_NAMES = {
   [WORKFLOW_QUEUE_CLASS.standard]: "workflow",
   [WORKFLOW_QUEUE_CLASS.flex]: "workflow-flex",
-} as const satisfies Record<WorkflowQueueClass, string>;
+} as const satisfies Record<WorkflowQueueClass, BullMqQueueName>;
 
 export const WORKFLOW_QUEUE_CLASSES = Object.values(WORKFLOW_QUEUE_CLASS);
 

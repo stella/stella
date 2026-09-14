@@ -47,6 +47,7 @@ export const initDocumentDeadlineScoutWorker = () => {
   });
 
   return {
+    queues: [DEADLINE_SCOUT_QUEUE_NAME] as const,
     close: async (): Promise<void> => {
       await worker.close();
     },

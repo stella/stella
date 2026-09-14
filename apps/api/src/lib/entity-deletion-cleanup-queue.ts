@@ -327,6 +327,7 @@ export const initEntityDeletionCleanupWorker = () => {
   });
 
   return {
+    queues: [QUEUE_NAME] as const,
     close: async () => {
       clearInterval(reconcileInterval);
       await worker.close();

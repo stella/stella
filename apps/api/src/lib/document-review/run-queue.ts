@@ -438,6 +438,7 @@ export const initDocumentReviewRunWorker = () => {
   });
 
   return {
+    queues: [QUEUE_NAME] as const,
     close: async () => {
       await closeReconcile();
       await worker.close();

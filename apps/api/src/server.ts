@@ -4,6 +4,7 @@ import type { Context } from "elysia";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
+import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
 import {
   agentAuthConfirmRoute,
@@ -73,7 +74,6 @@ import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
-import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
@@ -104,7 +104,6 @@ import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
-import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import {
@@ -112,7 +111,6 @@ import {
   resolveUserRealtimeAuthorization,
   resolveWorkspaceRealtimeAudience,
 } from "@/api/lib/auth";
-import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
   resolveClientIp,
@@ -126,15 +124,9 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
-import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-scout-worker";
-import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
-import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
-import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { elysiaErrorAnswer } from "@/api/lib/errors/elysia-error";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
-import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
-import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
@@ -168,10 +160,8 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
-import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
-import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
 const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
 const DEFAULT_API_PORT = 3001;
@@ -799,38 +789,7 @@ const startServer = async (): Promise<void> => {
   // REPORT_SPECS_S3_PREFIX read uses resolved credentials.
   await initBuiltinReportTemplates();
 
-  // BullMQ worker for asynchronous file derivatives.
-  const fileDerivativeWorker = initFileDerivativeWorker();
-
-  // BullMQ workflow worker for AI extraction.
-  const workflowWorkers = initWorkflowWorkers();
-
-  // BullMQ worker for the Workflows (flow run) engine.
-  const flowRunWorker = initFlowRunWorker();
-
-  // BullMQ worker for durable account-deletion storage cleanup.
-  const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
-
-  // BullMQ worker for durable storage cleanup after entity deletion commits.
-  const entityDeletionCleanupWorker = initEntityDeletionCleanupWorker();
-
-  // BullMQ worker for style set packages retained past download URL expiry.
-  const styleSetPackageCleanupWorker = initStyleSetPackageCleanupWorker();
-
-  // BullMQ worker for queued view→report exports.
-  const reportExportWorker = initReportExportWorker();
-
-  // BullMQ worker for durable document review runs.
-  const documentReviewRunWorker = initDocumentReviewRunWorker();
-
-  // BullMQ worker for unified document translation runs.
-  const documentTranslationRunWorker = initDocumentTranslationRunWorker();
-
-  // BullMQ worker for durable post-processing deadline scouts.
-  const documentDeadlineScoutWorker = initDocumentDeadlineScoutWorker();
-
-  // BullMQ worker for durable bilingual translation runs.
-  const bilingualRunWorker = initBilingualRunWorker();
+  const backgroundWorkers = initApiBackgroundWorkers();
 
   scopeRequestAsyncStores();
 
@@ -878,20 +837,7 @@ const startServer = async (): Promise<void> => {
     // the signal beat registration; there is nothing claimed to drain.
     scheduler.loop?.stop();
     await Promise.race([
-      Promise.allSettled([
-        scheduler.loop?.drained,
-        workflowWorkers.close(),
-        flowRunWorker.close(),
-        fileDerivativeWorker.close(),
-        accountDeletionCleanupWorker.close(),
-        entityDeletionCleanupWorker.close(),
-        styleSetPackageCleanupWorker.close(),
-        reportExportWorker.close(),
-        documentReviewRunWorker.close(),
-        documentTranslationRunWorker.close(),
-        documentDeadlineScoutWorker.close(),
-        bilingualRunWorker.close(),
-      ]),
+      Promise.allSettled([scheduler.loop?.drained, backgroundWorkers.close()]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
     logger.info("api.shutdown_complete", { signal });

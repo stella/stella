@@ -47,7 +47,7 @@ const ORPHAN_SCAN_BATCH_SIZE = 1000;
  * (mirrors `initWorkflowWorker`). The worker owns a dedicated blocking Redis
  * connection.
  */
-export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
+export const initFlowRunWorker = () => {
   const workerConnection = createBullMqConnection();
 
   const worker = new Worker<FlowStepJobData>(
@@ -128,7 +128,12 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
     logger.error("flow.reconcile_failed", errorSystemFields(error));
   });
 
-  return worker;
+  return {
+    queues: [FLOW_RUN_QUEUE_NAME] as const,
+    close: async () => {
+      await worker.close();
+    },
+  };
 };
 
 type ReconcileOrphanedFlowRunsOptions = {

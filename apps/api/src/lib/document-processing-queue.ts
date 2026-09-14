@@ -2970,6 +2970,7 @@ export const initDocumentProcessingWorker = () => {
   });
 
   return {
+    queues: [DOCUMENT_PROCESSING_QUEUE_NAME] as const,
     close: async (): Promise<void> => {
       closing = true;
       clearInterval(reconcileInterval);
