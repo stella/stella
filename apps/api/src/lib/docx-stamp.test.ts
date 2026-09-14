@@ -9,6 +9,7 @@ import {
   isStampableDocx,
   stripStamp,
 } from "@/api/lib/docx-stamp";
+import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ const CONTENT_TYPES_XML = [
 ].join("\n");
 
 const makeDocx = async (opts?: {
+  appXml?: string;
+  coreXml?: string;
   documentXml?: string;
   footerXml?: string;
   footerRels?: string;
@@ -67,12 +70,18 @@ const makeDocx = async (opts?: {
   if (opts?.customXml) {
     zip.file("docProps/custom.xml", opts.customXml);
   }
+  if (opts?.coreXml) {
+    zip.file("docProps/core.xml", opts.coreXml);
+  }
+  if (opts?.appXml) {
+    zip.file("docProps/app.xml", opts.appXml);
+  }
 
   return zip.generateAsync({ type: "arraybuffer" });
 };
 
 const readZipFile = async (
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array,
   path: string,
 ): Promise<string | null> => {
   const zip = await JSZip.loadAsync(buffer);
@@ -114,6 +123,38 @@ describe("injectStamp", () => {
     expect(customXml).toContain(stamp);
     expect(customXml).toContain("stella-code");
     expect(customXml).toContain(code);
+  });
+
+  test("keeps the stella reference when ordinary metadata is removed", async () => {
+    const docx = await makeDocx({
+      appXml:
+        '<?xml version="1.0"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Company>Secret Company</Company><TotalTime>12</TotalTime></Properties>',
+      coreXml:
+        '<?xml version="1.0"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:creator>Secret Author</dc:creator></cp:coreProperties>',
+      customXml:
+        '<?xml version="1.0"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="client"><vt:lpwstr>Secret Client</vt:lpwstr></property></Properties>',
+    });
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const scrubbed = await scrubDocumentProperties({
+      bytes: stamped,
+      mimeType: DOCX_MIME,
+    });
+
+    if (scrubbed.status !== "scrubbed") {
+      throw new Error(`Expected scrubbed DOCX, got ${scrubbed.status}`);
+    }
+
+    const appXml = await readZipFile(scrubbed.bytes, "docProps/app.xml");
+    const coreXml = await readZipFile(scrubbed.bytes, "docProps/core.xml");
+    const customXml = await readZipFile(scrubbed.bytes, "docProps/custom.xml");
+    const footer = await readZipFile(scrubbed.bytes, "word/footer1.xml");
+    expect(appXml).not.toContain("Secret Company");
+    expect(coreXml).not.toContain("Secret Author");
+    expect(customXml).toContain(stamp);
+    expect(customXml).toContain(code);
+    expect(customXml).not.toContain("Secret Client");
+    expect(footer).toContain(stamp);
+    expect(footer).toContain(`stl:${code}`);
   });
 
   test("injects footer into DOCX without existing footer", async () => {

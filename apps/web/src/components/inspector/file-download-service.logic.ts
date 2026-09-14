@@ -16,7 +16,25 @@ const DOWNLOAD_RENDITIONS = ["reference", "pdf", "scrubbed"] as const;
 export type DownloadRendition = (typeof DOWNLOAD_RENDITIONS)[number];
 
 /** What a download hands over: the uploaded bytes, or one rendition of them. */
-export type DownloadVariant = "original" | DownloadRendition;
+export type DownloadVariant =
+  | "original"
+  | DownloadRendition
+  | "reference-scrubbed";
+
+export type DownloadOptions = {
+  metadata: "keep" | "strip";
+  reference: "include" | "omit";
+};
+
+export const getDownloadVariant = ({
+  metadata,
+  reference,
+}: DownloadOptions): DownloadVariant => {
+  if (reference === "include") {
+    return metadata === "strip" ? "reference-scrubbed" : "reference";
+  }
+  return metadata === "strip" ? "scrubbed" : "original";
+};
 
 type DownloadRenditionsInput = {
   /** Whether the API can strip this file's embedded metadata. */

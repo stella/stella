@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { status } from "elysia";
 
+import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -9,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   emailToPreview,
@@ -109,7 +112,11 @@ type StampedDownloadHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
+  metadata: StampedDownloadMetadata;
 };
+
+export const STAMPED_DOWNLOAD_METADATA = ["keep", "strip"] as const;
+type StampedDownloadMetadata = (typeof STAMPED_DOWNLOAD_METADATA)[number];
 
 type PrintPdfHandlerProps = {
   scopedDb: ScopedDb;
@@ -286,6 +293,7 @@ export const stampedDownloadHandler = async ({
   organizationId,
   workspaceId,
   recordAuditEvent,
+  metadata,
 }: StampedDownloadHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -304,7 +312,8 @@ export const stampedDownloadHandler = async ({
     !row.versionStamp ||
     !row.verificationCode ||
     !isStampableDocx(content.mimeType, content.sizeBytes) ||
-    content.encrypted
+    content.encrypted ||
+    (metadata === "strip" && content.sizeBytes > DOCUMENT_PROPERTIES_MAX_BYTES)
   ) {
     return status(400);
   }
@@ -334,23 +343,43 @@ export const stampedDownloadHandler = async ({
     row.verificationCode,
     env.FRONTEND_URL,
   );
+  const scrubbed =
+    metadata === "strip"
+      ? await scrubDocumentProperties({
+          bytes: stamped,
+          mimeType: content.mimeType,
+        })
+      : null;
 
-  // Record the access only once the stamped bytes exist, matching the
-  // presigned-download path's DOWNLOAD audit row. A failed S3 fetch or stamp
-  // injection must not leave a spurious download record.
+  if (scrubbed !== null && scrubbed.status !== "scrubbed") {
+    return status(422);
+  }
+  const renditionBytes =
+    scrubbed === null ? new Uint8Array(stamped) : scrubbed.bytes;
+
+  // Record the access only once the requested rendition exists, matching the
+  // presigned-download path's DOWNLOAD audit row. A failed read or transform
+  // must not leave a spurious download record.
   await scopedDb(
     async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DOWNLOAD,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: row.entityId,
-        metadata: { format: "docx", stamped: true },
+        metadata: {
+          format: "docx",
+          metadataRemoved: metadata === "strip",
+          stamped: true,
+        },
       }),
   );
 
+  const body = new ArrayBuffer(renditionBytes.byteLength);
+  new Uint8Array(body).set(renditionBytes);
+
   return secureDocumentResponse({
-    body: stamped,
-    contentLength: stamped.byteLength,
+    body,
+    contentLength: body.byteLength,
     contentType: content.mimeType,
     disposition: "attachment",
     fileName: sanitizeFilename(content.fileName),

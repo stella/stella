@@ -5,6 +5,7 @@ import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
 import {
   canDownloadScrubbed,
   getDownloadRenditions,
+  getDownloadVariant,
   getPdfDownloadFileName,
 } from "@/components/inspector/file-download-service.logic";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
@@ -16,8 +17,20 @@ const NOTHING_AVAILABLE = {
   hasPdfConversion: false,
   mimeType: DOCX_MIME,
 };
+const METADATA_OPTIONS = ["keep", "strip"] as const;
+const REFERENCE_OPTIONS = ["omit", "include"] as const;
 
 describe("download renditions", () => {
+  test("maps independent options to every downloadable copy", () => {
+    expect(
+      METADATA_OPTIONS.flatMap((metadata) =>
+        REFERENCE_OPTIONS.map((reference) =>
+          getDownloadVariant({ metadata, reference }),
+        ),
+      ),
+    ).toEqual(["original", "reference", "scrubbed", "reference-scrubbed"]);
+  });
+
   test("offers the reference copy of a readable DOCX whose version is referenced", () => {
     expect(
       getDownloadRenditions({
