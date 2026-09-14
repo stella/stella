@@ -121,18 +121,16 @@ export const SavedSearches = ({
     enabled: isOpen,
   });
 
-  const mutationCallbacks = {
-    onSuccess: async () => {
-      setDialog({ type: "closed" });
-      await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
-    },
-    onError: (error: Error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
-    },
+  const onMutationSuccess = async () => {
+    setDialog({ type: "closed" });
+    await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
+  };
+  const onMutationError = (error: Error) => {
+    analytics.captureError(error);
+    stellaToast.add({
+      title: t("common.somethingWentWrong"),
+      type: "error",
+    });
   };
 
   const createMutation = useMutation({
@@ -152,7 +150,8 @@ export const SavedSearches = ({
         }),
       );
     },
-    ...mutationCallbacks,
+    onSuccess: onMutationSuccess,
+    onError: onMutationError,
   });
 
   const renameMutation = useMutation({
@@ -166,23 +165,24 @@ export const SavedSearches = ({
       unwrapEden(
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
-    ...mutationCallbacks,
+    onSuccess: onMutationSuccess,
+    onError: onMutationError,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
       unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
-    ...mutationCallbacks,
+    onSuccess: onMutationSuccess,
+    onError: onMutationError,
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
     (page) => page.items,
   );
-  const hasSavedSearches = (savedSearches?.length ?? 0) > 0;
   const shouldShowList =
     showList &&
     shouldShowSavedSearchList({
-      itemCount: hasSavedSearches ? (savedSearches?.length ?? 0) : 0,
+      itemCount: savedSearches?.length ?? 0,
       status: savedSearchesQuery.status,
     });
   const savedSearchesError = savedSearchesQuery.error;
