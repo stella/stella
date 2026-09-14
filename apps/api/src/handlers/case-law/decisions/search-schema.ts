@@ -14,6 +14,7 @@ import {
 import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
+import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   tPaginationCursor,
@@ -40,6 +41,10 @@ export const searchDecisionsBodySchema = t.Object({
   // A literal union, not `UnionEnum`: Elysia coerces an absent optional
   // `UnionEnum` to its first member, and the handler owns the default.
   sort: t.Optional(searchSortSchema),
+  // How much of the matched passage each hit carries. A name rather than a
+  // character count: the window is the search's to choose, and a caller that
+  // could ask for arbitrary characters could ask for the whole decision.
+  excerpt: t.Optional(searchExcerptSchema),
 });
 
 const nullableStringSchema = t.Union([t.String(), t.Null()]);

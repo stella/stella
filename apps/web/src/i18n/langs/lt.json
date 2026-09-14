@@ -681,6 +681,14 @@
       "title": "Tyrimo lentelės",
       "updated": "Paskutinį kartą redaguota {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Ištrauka",
+        "long": "Ilga",
+        "medium": "Vidutinė",
+        "short": "Trumpa"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",

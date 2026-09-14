@@ -681,6 +681,14 @@
       "title": "Tableaux de recherche",
       "updated": "Dernière modification le {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Extrait",
+        "long": "Long",
+        "medium": "Moyen",
+        "short": "Court"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchAskPrompt": "{query} (jurisprudence, {country})",
     "searchLabel": "Rechercher dans la jurisprudence",

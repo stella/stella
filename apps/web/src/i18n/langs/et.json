@@ -681,6 +681,14 @@
       "title": "Uurimistabelid",
       "updated": "Viimati muudetud {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Väljavõte",
+        "long": "Pikk",
+        "medium": "Keskmine",
+        "short": "Lühike"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
     "searchAskPrompt": "{query} (kohtupraktika, {country})",
     "searchLabel": "Otsi kohtupraktikast",

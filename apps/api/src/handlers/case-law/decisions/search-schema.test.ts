@@ -6,7 +6,11 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
-import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import {
+  SEARCH_EXCERPTS,
+  SEARCH_TOTAL_NOT_COUNTED,
+  type SearchExcerpt,
+} from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
@@ -15,6 +19,7 @@ import {
   searchDecisionsSuccessResponseSchema,
 } from "@/api/handlers/case-law/decisions/search-schema";
 import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
+import type { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import type { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   SEARCH_SORTS,
@@ -103,6 +108,32 @@ describe("case-law search request schema", () => {
     (sort) => {
       expect(
         Value.Check(searchDecisionsBodySchema, { ...validBody, sort }),
+      ).toBe(false);
+    },
+  );
+
+  test("names every declared excerpt, spelled out so Eden keeps the union", () => {
+    expectTypeOf<
+      Static<typeof searchExcerptSchema>
+    >().toEqualTypeOf<SearchExcerpt>();
+  });
+
+  test("accepts every declared excerpt and no excerpt at all", () => {
+    expect(Value.Check(searchDecisionsBodySchema, validBody)).toBe(true);
+    for (const excerpt of SEARCH_EXCERPTS) {
+      expect(
+        Value.Check(searchDecisionsBodySchema, { ...validBody, excerpt }),
+      ).toBe(true);
+    }
+  });
+
+  // The length is a name the search maps to a window, never a size the caller
+  // states: a number on the wire is a caller asking for the whole decision.
+  test.each(["huge", "", "SHORT", 400, null])(
+    "rejects the undeclared excerpt %p",
+    (excerpt) => {
+      expect(
+        Value.Check(searchDecisionsBodySchema, { ...validBody, excerpt }),
       ).toBe(false);
     },
   );

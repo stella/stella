@@ -44,9 +44,30 @@ describe("what a stored arrangement means", () => {
       pinned: ["summary"],
       sizing: { summary: 420 },
       contentMode: "fit-content" as const,
+      excerpt: "long" as const,
     };
 
     expect(layoutOf({ cz: layout })).toEqual(layout);
+  });
+
+  /**
+   * The whole migration: a browser carrying an arrangement written before a
+   * preference existed reads it back at that preference's default, rather than
+   * as undefined. The schema is an object, so an unlisted key is also stripped
+   * on the way in: forgetting either half loses the value silently.
+   */
+  test("an arrangement written before the excerpt length reads back at its default", () => {
+    expect(
+      layoutOf({
+        cz: {
+          hidden: ["country"],
+          order: ["summary"],
+          pinned: [],
+          sizing: {},
+          contentMode: "fit-content" as const,
+        },
+      }).excerpt,
+    ).toBe(DEFAULT_DECISION_TABLE_LAYOUT.excerpt);
   });
 
   /**
@@ -81,6 +102,7 @@ describe("what a stored arrangement means", () => {
     for (const raw of [
       { cz: { hidden: "summary" } },
       { cz: { contentMode: "huge" } },
+      { cz: { excerpt: "huge" } },
     ]) {
       expect(v.safeParse(StoredDecisionLayoutSchema, raw).success).toBe(false);
     }

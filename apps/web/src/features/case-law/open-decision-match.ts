@@ -8,6 +8,7 @@ import {
   exactDecisionMatches,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
+import type { SearchExcerpt } from "@stll/api-contract/search";
 
 import {
   decisionDateRange,
@@ -70,17 +71,19 @@ const searchTextOfIntent = (
   }
 };
 
-export const createDecisionFiltersFromSearch = ({
-  country,
-  court,
-  from,
-  lang,
-  q,
-  sort,
-  to,
-  type,
-  year,
-}: CaseLawSearchScope): DecisionListFilters => {
+type DecisionFiltersOptions = {
+  /**
+   * How much of the matched passage the results carry. A stored view
+   * preference rather than URL state, so it arrives from the reader's browser
+   * instead of from the search the URL spells.
+   */
+  readonly excerpt: SearchExcerpt;
+};
+
+export const createDecisionFiltersFromSearch = (
+  { country, court, from, lang, q, sort, to, type, year }: CaseLawSearchScope,
+  { excerpt }: DecisionFiltersOptions,
+): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
   if (scope === undefined) {
     return panic("Case-law search requires a country.");
@@ -92,6 +95,7 @@ export const createDecisionFiltersFromSearch = ({
 
   return {
     country: scope,
+    excerpt,
     ...(court ? { court } : {}),
     ...(range.from === undefined ? {} : { dateFrom: range.from }),
     ...(range.to === undefined ? {} : { dateTo: range.to }),
@@ -104,6 +108,12 @@ export const createDecisionFiltersFromSearch = ({
 };
 
 type OpenDecisionMatchOptions = {
+  /**
+   * The reader's stored length, not a length of this probe's own: the result
+   * set it reads is the one the list falls back to, so a different length here
+   * would fetch the same hits a second time.
+   */
+  excerpt: SearchExcerpt;
   navigate: ReturnType<typeof useNavigate>;
   queryClient: QueryClient;
   search: CaseLawSearchScope;
@@ -118,6 +128,7 @@ type OpenDecisionMatchOptions = {
  * happened.
  */
 export const openDecisionMatch = async ({
+  excerpt,
   navigate,
   queryClient,
   search,
@@ -133,7 +144,10 @@ export const openDecisionMatch = async ({
   const pages = await ensureRouteInfiniteQueryData(
     queryClient,
     decisionsInfiniteOptions(
-      createDecisionFiltersFromSearch({ ...search, q: intent.value }),
+      createDecisionFiltersFromSearch(
+        { ...search, q: intent.value },
+        { excerpt },
+      ),
     ),
   );
   // Only a result set the page has seen whole can prove the match is the only

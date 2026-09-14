@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   SEARCH_TOTAL_NOT_COUNTED,
+  type SearchExcerpt,
   type SearchSort,
 } from "@stll/api-contract/search";
 
@@ -25,6 +26,12 @@ export type DecisionListFilters = {
   dateFrom?: string;
   dateTo?: string;
   decisionType?: string;
+  /**
+   * How much of the matched passage a hit carries. Required rather than
+   * defaulted here, so a caller that forgets it cannot silently pin the
+   * results to one length; a browse listing carries no passage and ignores it.
+   */
+  excerpt: SearchExcerpt;
   language?: string;
   search?: string;
   /** How a search orders its hits; absent while there is nothing to rank. */
@@ -57,6 +64,7 @@ const caseLawDecisionKeys = {
       dateFrom: key.dateFrom,
       dateTo: key.dateTo,
       decisionType: key.decisionType,
+      excerpt: key.excerpt,
       language: key.language,
       pageSize: key.pageSize,
       search: key.search,
@@ -199,6 +207,7 @@ export const decisionsInfiniteOptions = (
             ...(listFilters.language !== undefined && {
               language: listFilters.language,
             }),
+            excerpt: listFilters.excerpt,
             ...(listFilters.sort !== undefined && { sort: listFilters.sort }),
           },
           { fetch: { signal } },

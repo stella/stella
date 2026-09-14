@@ -23,6 +23,7 @@ import {
   exactDecisionMatches,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  DEFAULT_SEARCH_EXCERPT,
   SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
@@ -379,10 +380,13 @@ export const Route = createFileRoute("/law/cases/")({
     // chain to the page it names, and only a page the results themselves do
     // not reach falls back to the deepest one that does. One redirect for
     // both, so the reader is corrected once.
-    const filters = createDecisionFiltersFromSearch({
-      ...search,
-      country: countryParam,
-    });
+    const filters = createDecisionFiltersFromSearch(
+      { ...search, country: countryParam },
+      // The excerpt length lives in the reader's browser, which the router
+      // cannot reach here. Priming the default keeps this walk on the entry
+      // the reader's first page will read when they never changed it.
+      { excerpt: DEFAULT_SEARCH_EXCERPT },
+    );
     const decisionsOptions = decisionsInfiniteOptions(
       filters,
       decisionPageSize(search.pageSize),
@@ -425,7 +429,12 @@ export const Route = createFileRoute("/law/cases/")({
       publicCaseLawCountryFromParam(deps.country) ??
       panic("The case-law route loaded without a launch-ready country.");
     const decisionsOptions = decisionsInfiniteOptions(
-      createDecisionFiltersFromSearch(deps),
+      // The default again: a loader has no browser storage to read the
+      // reader's length from, and a reader who never changed it lands on the
+      // entry this primes.
+      createDecisionFiltersFromSearch(deps, {
+        excerpt: DEFAULT_SEARCH_EXCERPT,
+      }),
       decisionPageSize(deps.pageSize),
     );
     const mode = decisionsLoadMode({
@@ -586,7 +595,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
-  const filters = createDecisionFiltersFromSearch(search);
+  const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
+  const filters = createDecisionFiltersFromSearch(search, {
+    excerpt: layout.excerpt,
+  });
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
   // What the field last asked the URL to hold. A navigation that lands on
@@ -619,7 +631,6 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     }
   }
 
-  const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
   // The results column — toolbar, chips and grid: what a Cmd/Ctrl+F inside
   // belongs to, so a press with a cell focused opens this table's find.
   const paneRef = useRef<HTMLDivElement>(null);
@@ -876,6 +887,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     writeQuery.flush();
     detached(
       openDecisionMatch({
+        excerpt: layout.excerpt,
         navigate: routerNavigate,
         queryClient,
         search: { ...search, q: entry },
@@ -912,6 +924,11 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
 
       <div className="flex min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
         <DecisionResultsToolbar
+          // A browse listing draws each decision's own headnote, not a matched
+          // passage, so there is no excerpt to widen and the control is not
+          // offered. `filters.search` is what the search endpoint was actually
+          // given, so it answers that exactly.
+          excerpt={filters.search === undefined ? null : layout.excerpt}
           filters={
             <DecisionFilterPopover
               activeFilterCount={activeCaseLawFilterCount(search)}

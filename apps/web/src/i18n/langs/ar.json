@@ -681,6 +681,14 @@
       "title": "جداول البحث",
       "updated": "آخر تعديل {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "المقتطف",
+        "long": "طويل",
+        "medium": "متوسط",
+        "short": "قصير"
+      }
+    },
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
     "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",

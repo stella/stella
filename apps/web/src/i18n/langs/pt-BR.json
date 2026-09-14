@@ -681,6 +681,14 @@
       "title": "Tabelas de pesquisa",
       "updated": "Última edição em {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Trecho",
+        "long": "Longo",
+        "medium": "Médio",
+        "short": "Curto"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchAskPrompt": "{query} (jurisprudência de {country})",
     "searchLabel": "Pesquisar jurisprudência",

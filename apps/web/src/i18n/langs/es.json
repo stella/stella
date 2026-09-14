@@ -681,6 +681,14 @@
       "title": "Tablas de investigación",
       "updated": "Última edición {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Extracto",
+        "long": "Largo",
+        "medium": "Medio",
+        "short": "Corto"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchAskPrompt": "{query} (jurisprudencia de {country})",
     "searchLabel": "Buscar jurisprudencia",

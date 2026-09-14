@@ -1,6 +1,12 @@
 import * as v from "valibot";
 
 import {
+  DEFAULT_SEARCH_EXCERPT,
+  SEARCH_EXCERPTS,
+} from "@stll/api-contract/search";
+import type { SearchExcerpt } from "@stll/api-contract/search";
+
+import {
   DECISION_CONTENT_MODES,
   DEFAULT_HIDDEN_DECISION_COLUMN_IDS,
 } from "@/features/case-law/decision-columns.logic";
@@ -8,8 +14,9 @@ import type { DecisionContentMode } from "@/features/case-law/decision-columns.l
 
 /**
  * How this browser draws the results table in one jurisdiction: which columns
- * it hides, in what order it puts them, which it keeps in front, and how much
- * of a prose cell it shows.
+ * it hides, in what order it puts them, which it keeps in front, how much of a
+ * prose cell it shows, and how much of the matched passage it asks the search
+ * for.
  *
  * Rules, not storage: the hook next door owns the `Storage` and this module
  * owns what a stored value means, so every rule here is testable without a
@@ -24,6 +31,8 @@ export type DecisionTableLayout = {
   /** Widths the reader dragged, by column id; the schema's own otherwise. */
   sizing: Readonly<Record<string, number>>;
   contentMode: DecisionContentMode;
+  /** How much of the matched passage a result carries, as the search cuts it. */
+  excerpt: SearchExcerpt;
 };
 
 /** One empty sizing map, so an untouched layout keeps one identity. */
@@ -35,6 +44,7 @@ export const DEFAULT_DECISION_TABLE_LAYOUT: DecisionTableLayout = {
   pinned: [],
   sizing: NO_COLUMN_SIZING,
   contentMode: "tight",
+  excerpt: DEFAULT_SEARCH_EXCERPT,
 };
 
 const columnIdList = v.array(v.string());
@@ -57,6 +67,7 @@ export const StoredDecisionLayoutSchema = v.record(
       pinned: v.optional(columnIdList),
       sizing: v.optional(v.record(v.string(), v.number())),
       contentMode: v.optional(v.picklist(DECISION_CONTENT_MODES)),
+      excerpt: v.optional(v.picklist(SEARCH_EXCERPTS)),
     }),
   ]),
 );
@@ -113,6 +124,7 @@ const decisionTableLayout = (
     sizing: stored.sizing ?? DEFAULT_DECISION_TABLE_LAYOUT.sizing,
     contentMode:
       stored.contentMode ?? DEFAULT_DECISION_TABLE_LAYOUT.contentMode,
+    excerpt: stored.excerpt ?? DEFAULT_DECISION_TABLE_LAYOUT.excerpt,
   };
 };
 

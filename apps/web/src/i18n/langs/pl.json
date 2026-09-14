@@ -681,6 +681,14 @@
       "title": "Tabele badawcze",
       "updated": "Ostatnia edycja {date}"
     },
+    "results": {
+      "excerpt": {
+        "label": "Fragment",
+        "long": "Długi",
+        "medium": "Średni",
+        "short": "Krótki"
+      }
+    },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
     "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
