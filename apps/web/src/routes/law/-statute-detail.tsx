@@ -8,16 +8,18 @@ import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
-import { OutlineRail } from "@stll/ui/outline-rail";
+import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
-  filterOutlineItems,
-  findProvisionAnchorId,
+  clampSelectedIndex,
+  outlineMatchItems,
+  rankOutlineMatches,
+} from "@/components/legal-reader/outline-jump-field.logic";
+import {
   jumpToAnchor,
-  parseOutlineJump,
   resolveAnchorPct,
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
@@ -38,6 +40,13 @@ import {
   type StatuteRouteParams,
 } from "@/lib/statute-route";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
+
+type OutlineJumpState = {
+  /** What the reader typed; empty is the outline as the act states it. */
+  query: string;
+  /** Which of the ranked matches the field's selection is on. */
+  selectedIndex: number;
+};
 
 type PublicStatuteViewerProps = PublicStatuteRouteData & {
   /** The day the reader asked about, while it is still being resolved. */
@@ -135,7 +144,12 @@ export const PublicStatuteViewer = ({
     [goTo, header.country, work.eli, work.id, work.slug],
   );
 
-  const [jumpValue, setJumpValue] = useState(requestedJump ?? "");
+  // The query and its selection move together: typing puts the selection
+  // back on the best match, which is what Enter is expected to go to.
+  const [jump, setJump] = useState<OutlineJumpState>({
+    query: requestedJump ?? "",
+    selectedIndex: 0,
+  });
   // An unparseable or absent AST is a real state: the reader then renders
   // the plain fulltext instead of blocks.
   const ast = statute ? parseDocumentAst(statute.documentAst) : null;
@@ -145,24 +159,38 @@ export const PublicStatuteViewer = ({
   });
   const blocks = preparedReader.blocks;
   const outline = statuteOutlineFromHeadings(blocks);
-  const jump = parseOutlineJump(jumpValue);
-  const visibleOutline = filterOutlineItems(outline, jump);
-  const jumpAnchorId = findProvisionAnchorId(outline, jump);
+  const outlineMatches = rankOutlineMatches(outline, jump.query);
+  // Clamped where it is read, not where it is set: the list changes under the
+  // selection whenever the reader edits the query or moves to another
+  // consolidation with the field still filled.
+  const selectedIndex = clampSelectedIndex({
+    count: outlineMatches.matches.length,
+    index: jump.selectedIndex,
+  });
+  const selectedMatch = outlineMatches.matches.at(selectedIndex) ?? null;
+  // A query turns the panel into a ranked result list; an empty field leaves
+  // the act's own structure, folded to its top tier.
+  const isSearching = jump.query.trim().length > 0;
+  const visibleOutline = isSearching
+    ? outlineMatchItems(outlineMatches)
+    : outline;
 
   // A jump named in the URL is honoured once, when the reader mounts with
-  // the text already loaded; after that the field is the reader's own.
+  // the text already loaded; after that the field is the reader's own. Only a
+  // designation the act actually holds moves the reader: a URL naming
+  // something else leaves the page where it opened.
   useMountEffect(() => {
     const container = readerRef.current;
 
     if (
       requestedJump === undefined ||
-      jumpAnchorId === null ||
+      outlineMatches.exactId === null ||
       container === null
     ) {
       return;
     }
 
-    jumpToAnchor(jumpAnchorId, container);
+    jumpToAnchor(outlineMatches.exactId, container);
   });
 
   // Citation extractors state the local provision id (`cl_7`), while a
@@ -236,30 +264,58 @@ export const PublicStatuteViewer = ({
       {/* The rail hides itself when a document has no outline to show. */}
       <OutlineRail
         ariaLabel={t("statutes.outline")}
-        // A narrowed outline opens whole: the entries a reader searched for
-        // are the point, and folding them away again hides the answer.
-        {...(jump.type === "empty"
-          ? { collapsedFromLevel: STATUTE_OUTLINE_COLLAPSE_LEVEL }
-          : {})}
+        // While the field has a query, the panel points at the selected match
+        // rather than at the scroll position, and the ranked list it shows is
+        // flat, so there is nothing left to fold.
+        {...(isSearching
+          ? { activeId: selectedMatch?.item.id ?? null }
+          : { collapsedFromLevel: STATUTE_OUTLINE_COLLAPSE_LEVEL })}
         header={
           outline.length < 2 ? undefined : (
             <OutlineJumpField
+              matchCount={outlineMatches.matches.length}
               onJump={() => {
                 const container = readerRef.current;
 
-                if (jumpAnchorId === null || container === null) {
+                if (selectedMatch === null || container === null) {
                   return;
                 }
 
-                jumpToAnchor(jumpAnchorId, container);
+                jumpToAnchor(selectedMatch.item.id, container);
               }}
-              onValueChange={setJumpValue}
-              value={jumpValue}
+              onSelectedIndexChange={(nextIndex) =>
+                setJump((previous) => ({
+                  ...previous,
+                  selectedIndex: nextIndex,
+                }))
+              }
+              onValueChange={(query) => setJump({ query, selectedIndex: 0 })}
+              selectedIndex={selectedIndex}
+              selectedText={
+                selectedMatch === null
+                  ? undefined
+                  : outlineEntryText(selectedMatch.item)
+              }
+              value={jump.query}
             />
           )
         }
         items={visibleOutline}
-        onJump={jumpToAnchor}
+        onJump={(anchorId, container) => {
+          // A result clicked in the panel becomes the selection: while the
+          // field has a query the highlight is controlled from here, so
+          // without this the clicked row scrolls the reader while the old one
+          // stays marked and Enter goes back to it.
+          const clicked = outlineMatches.matches.findIndex(
+            (match) => match.item.id === anchorId,
+          );
+
+          if (clicked !== -1) {
+            setJump((previous) => ({ ...previous, selectedIndex: clicked }));
+          }
+
+          jumpToAnchor(anchorId, container);
+        }}
         resolvePct={resolveAnchorPct}
         scrollContainerRef={readerRef}
       />

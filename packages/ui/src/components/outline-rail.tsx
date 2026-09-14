@@ -26,10 +26,25 @@ import {
   useState,
 } from "react";
 
+import { ChevronRight } from "lucide-react";
 import { Temporal } from "temporal-polyfill/full";
 
 import { cn } from "../lib/utils";
+import { DirectionalIcon } from "./directional-icon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+
+/**
+ * How prominently an entry reads next to the entries around it. A caller
+ * that ranks its entries (a list of search results) steps the near-misses
+ * back to `secondary`, so the answer it put first is the row the eye lands on.
+ */
+export const OUTLINE_EMPHASIS = {
+  primary: "primary",
+  secondary: "secondary",
+} as const;
+
+export type OutlineEmphasis =
+  (typeof OUTLINE_EMPHASIS)[keyof typeof OUTLINE_EMPHASIS];
 
 export type OutlineItem = {
   id: string;
@@ -45,6 +60,8 @@ export type OutlineItem = {
   /** Optional CSS custom-property name colouring this entry's tick + chip
    *  (e.g. "--option-blue"). Defaults to the neutral foreground. */
   color?: string;
+  /** How prominently the row reads. Defaults to `primary`. */
+  emphasis?: OutlineEmphasis;
 };
 
 export type OutlineRailProps = {
@@ -84,9 +101,17 @@ const TICK_LEVEL_STEP = 2;
 const TICK_MAX_LEVEL = 5;
 // Cap visible ticks by pruning deeper levels; the popover still lists everything.
 const RAIL_MAX_TICKS = 40;
+// Sub-pixel slack when asking whether the panel can still scroll: a
+// fractional scrollHeight would otherwise leave a wheel stuck at an edge that
+// reads as one pixel short of its own end.
+const WHEEL_EDGE_TOLERANCE = 1;
+// Marks the active row for the reveal below: the rows are rendered by a
+// recursive walk, so the one to scroll to is found in the committed DOM
+// rather than held in a ref the walk would have to thread through.
+const ACTIVE_ROW_ATTRIBUTE = "data-outline-active";
 
 /** The entry as one line of text: label, then its title when it has one. */
-const entryText = (item: OutlineItem): string =>
+export const outlineEntryText = (item: OutlineItem): string =>
   item.title === undefined ? item.label : `${item.label} ${item.title}`;
 
 const tickWidth = (level: number): number => {
@@ -137,32 +162,30 @@ const tickBackground = (
   return "var(--color-foreground)";
 };
 
-const rowTextClass = (isActive: boolean, hasChildren: boolean): string => {
-  if (isActive) {
-    return "text-foreground font-medium";
-  }
-  if (hasChildren) {
-    return "text-foreground-muted";
-  }
-  return "text-muted-foreground";
-};
+const EMPHASIS_TEXT_CLASS = {
+  primary: "text-foreground",
+  secondary: "text-muted-foreground",
+} as const satisfies Record<OutlineEmphasis, string>;
 
+/**
+ * Rows read in the regular foreground: an outline is text to be read, and a
+ * greyed hierarchy is harder to scan than the document it maps. Weight, the
+ * active row's fill and the muted trailing range carry the state instead.
+ */
+const rowTextClass = (isActive: boolean, emphasis: OutlineEmphasis): string =>
+  isActive ? "text-foreground font-medium" : EMPHASIS_TEXT_CLASS[emphasis];
+
+// Mirrored under RTL only while collapsed: the open state already rotates the
+// chevron down, and mirroring that would tip it the wrong way.
 const Chevron = ({ open }: { open: boolean }) => (
-  <svg
-    aria-hidden
+  <DirectionalIcon
     className={cn(
       "size-3 shrink-0 transition-transform duration-150",
       open ? "rotate-90" : "rotate-0",
     )}
-    fill="none"
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    strokeWidth="2"
-    viewBox="0 0 24 24"
-  >
-    <path d="m9 18 6-6-6-6" />
-  </svg>
+    flip={!open}
+    icon={ChevronRight}
+  />
 );
 
 export const OutlineRail = ({
@@ -404,6 +427,27 @@ export const OutlineRail = ({
     [],
   );
 
+  // Where the controlled active entry sits in the list, and -1 for every state
+  // with no row to reveal: no `activeId` (the derived path), a null one, or an
+  // id the current `items` no longer hold. Keying the reveal on the position
+  // rather than the id also catches the row moving under an unchanged id, which
+  // is what a re-ranked result list does.
+  const activeIndex = items.findIndex((item) => item.id === activeId);
+
+  // A controlled active entry is one the caller chose — a search selection the
+  // reader is moving with the arrow keys, a position an editor measured — so
+  // keep it where it can be seen. `nearest` moves the panel only when the row
+  // is actually out of view, and the derived (scroll-tracked) active row is
+  // left alone: following the reader's own scrolling would fight them.
+  useLayoutEffect(() => {
+    if (activeIndex === -1 || !panelOpen) {
+      return;
+    }
+    panelRef.current
+      ?.querySelector(`[${ACTIVE_ROW_ATTRIBUTE}]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, panelOpen]);
+
   const openPanel = useCallback(() => {
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
@@ -462,6 +506,7 @@ export const OutlineRail = ({
             // Leaf rows highlight over the panel's own bg (no occlusion needed).
             !hasChildren && highlighted && "bg-accent",
           )}
+          {...(isActive ? { [ACTIVE_ROW_ATTRIBUTE]: "" } : {})}
           onMouseEnter={() => setHoveredId(node.item.id)}
           onMouseLeave={() => setHoveredId(null)}
           style={
@@ -511,9 +556,13 @@ export const OutlineRail = ({
             <TooltipTrigger
               render={
                 <button
+                  aria-current={isActive ? "true" : undefined}
                   className={cn(
                     "flex min-w-0 flex-1 items-baseline gap-1.5 py-1.5 text-start text-[13px] leading-snug",
-                    rowTextClass(isActive, hasChildren),
+                    rowTextClass(
+                      isActive,
+                      node.item.emphasis ?? OUTLINE_EMPHASIS.primary,
+                    ),
                   )}
                   onClick={() => jumpTo(node.item.id)}
                   type="button"
@@ -533,7 +582,7 @@ export const OutlineRail = ({
                 </>
               )}
             </TooltipTrigger>
-            <TooltipPopup>{entryText(node.item)}</TooltipPopup>
+            <TooltipPopup>{outlineEntryText(node.item)}</TooltipPopup>
           </Tooltip>
           {node.item.meta !== undefined && (
             <span className="text-foreground-placeholder shrink-0 ps-2 text-[11px] tabular-nums">
@@ -701,6 +750,26 @@ export const OutlineRail = ({
         }}
         onMouseEnter={openPanel}
         onMouseLeave={scheduleClose}
+        onWheel={(event) => {
+          // The panel is a lens over the document, not a modal: a wheel it
+          // cannot use must still scroll the text behind it. A short outline
+          // has no overflow to consume at all, and a long one stops consuming
+          // at its own ends — and the document's scroller is a sibling, not an
+          // ancestor, so the browser's own scroll chaining never reaches it.
+          const panel = event.currentTarget;
+          const room = panel.scrollHeight - panel.clientHeight;
+          const consumes =
+            room > WHEEL_EDGE_TOLERANCE &&
+            (event.deltaY < 0
+              ? panel.scrollTop > WHEEL_EDGE_TOLERANCE
+              : panel.scrollTop < room - WHEEL_EDGE_TOLERANCE);
+
+          if (consumes) {
+            return;
+          }
+
+          scrollContainerRef.current?.scrollBy(0, event.deltaY);
+        }}
         ref={panelRef}
         style={{
           top: 0,
