@@ -55,7 +55,9 @@ export type NetworkCapture = {
   // Intervals for finite API responses only. Streams remain in `requests` so
   // request coverage sees them, but they do not represent a route-load round:
   // the page does not wait for an EventSource to finish before it can settle.
-  intervals: { start: number; end: number }[];
+  // `key` is the same method + normalized path `requests` is keyed by, so a
+  // depth reading can name the chain that produced it.
+  intervals: { start: number; end: number; key: string }[];
 };
 
 export type NetworkCollector = {
@@ -315,10 +317,14 @@ export const createNetworkCollector = (
         ),
         intervals: records
           .filter(countsTowardsWaterfall)
-          .map(
-            ({ browserInterval, start, end }) =>
-              browserInterval ?? { start, end: end ?? now },
-          ),
+          .map(({ browserInterval, start, end, method, pathname }) => {
+            const interval = browserInterval ?? { start, end: end ?? now };
+            return {
+              start: interval.start,
+              end: interval.end,
+              key: requestKey({ method, pathname }),
+            };
+          }),
       };
     },
   };
@@ -360,6 +366,14 @@ export const requestKey = ({
 // guard whose baselines are only ever compared upward.
 const REQUEST_SEQUENCE_GAP_MS = 500;
 
+export type WaterfallInterval = {
+  start: number;
+  end: number;
+  // Request key (method + normalized path). Optional so a caller measuring bare
+  // timings still gets a depth; such intervals contribute no key to their level.
+  key?: string;
+};
+
 // Depth = the most consecutive busy blocks inside any one observation sequence,
 // where a busy block is a maximal run of requests whose intervals overlap. Two
 // requests that were in flight at the same instant are never counted as two
@@ -387,34 +401,66 @@ const REQUEST_SEQUENCE_GAP_MS = 500;
 // that reset on a gap measured from the END of the previous round, so a response
 // that grew under load could close that gap, skip the reset, and carry the count
 // forward into a deeper reading with no change to the route at all.
-export const waterfallDepth = (
-  intervals: { start: number; end: number }[],
-): number => {
+//
+// Returns the busy blocks of the deepest sequence in launch order, one entry per
+// level, each holding every request key that shared that level's block. Depth is
+// its length, so the number and the chain behind it can never disagree.
+export const deepestWaterfallSequence = (
+  intervals: WaterfallInterval[],
+): string[][] => {
   const sorted = intervals.toSorted((a, b) => a.start - b.start);
   const first = sorted.at(0);
   if (first === undefined) {
-    return 0;
+    return [];
   }
 
-  let best = 1;
-  let blocksInSequence = 1;
+  const keysOf = ({ key }: WaterfallInterval): string[] =>
+    key === undefined ? [] : [key];
+
+  // A sequence split rebinds `blocks` instead of clearing it, so `best` keeps
+  // pointing at the winning sequence while that sequence is still growing;
+  // `bestDepth` then trims it to the prefix that actually counted. Ties keep
+  // the earliest sequence: the first chain to reach the depth is the one the
+  // route loaded through.
+  let currentBlock = keysOf(first);
+  let blocks = [currentBlock];
+  let best = blocks;
+  let bestDepth = 1;
   let previousStart = first.start;
   let busyUntil = first.end;
+  const launched: WaterfallInterval[] = [first];
 
   for (const interval of sorted.slice(1)) {
     const launchGap = interval.start - previousStart;
     previousStart = interval.start;
 
     if (launchGap > REQUEST_SEQUENCE_GAP_MS) {
-      blocksInSequence = 1;
+      // `busyUntil` carries a still-open request across the gap, and that
+      // request is what keeps the new sequence's first block busy; name it, or
+      // the chain would show its followers as parallel with nothing to wait on.
+      currentBlock = launched
+        .filter(({ end }) => end > interval.start)
+        .flatMap(keysOf)
+        .concat(keysOf(interval));
+      blocks = [currentBlock];
     } else if (interval.start >= busyUntil) {
-      blocksInSequence += 1;
-      best = Math.max(best, blocksInSequence);
+      currentBlock = keysOf(interval);
+      blocks.push(currentBlock);
+      if (blocks.length > bestDepth) {
+        best = blocks;
+        bestDepth = blocks.length;
+      }
+    } else {
+      currentBlock.push(...keysOf(interval));
     }
     busyUntil = Math.max(busyUntil, interval.end);
+    launched.push(interval);
   }
-  return best;
+  return best.slice(0, bestDepth);
 };
+
+export const waterfallDepth = (intervals: WaterfallInterval[]): number =>
+  deepestWaterfallSequence(intervals).length;
 
 // --- baseline machinery ----------------------------------------------------
 
@@ -425,6 +471,9 @@ export type RouteNetworkMetrics = {
   requestCounts: Record<string, number>;
   // Depth over ALL observed intervals, including duplicate keys.
   depth: number;
+  // The request keys behind `depth`, one entry per level in launch order (see
+  // deepestWaterfallSequence). Diagnostic only: never written to the baseline.
+  depthChain: string[][];
   // Per request key, the max `x-db-queries` observed this run. Keys whose
   // responses carried no header (auth-mounted endpoints, dropped responses)
   // are absent.
@@ -460,6 +509,7 @@ export const summarizeCapture = (
   const responseSizes: Record<string, number> = {};
   const missingResponseSizeCounts: Record<string, number> = {};
   const requestCounts: Record<string, number> = {};
+  const depthChain = deepestWaterfallSequence(capture.intervals);
   for (const request of capture.requests) {
     const key = requestKey(request);
     requestCounts[key] = (requestCounts[key] ?? 0) + 1;
@@ -488,7 +538,8 @@ export const summarizeCapture = (
     requestCounts: Object.fromEntries(
       Object.entries(requestCounts).sort(([a], [b]) => a.localeCompare(b)),
     ),
-    depth: waterfallDepth(capture.intervals),
+    depth: depthChain.length,
+    depthChain,
     dbQueries,
     missingDbQueryCounts: Object.fromEntries(
       Object.entries(missingDbQueryCounts).sort(([a], [b]) =>
@@ -541,6 +592,17 @@ const pushNewRequestProblems = ({
   );
 };
 
+// One line per level of the deepest sequence. Several keys on a level means
+// those requests overlapped, so they cost one round between them, not several.
+const formatDepthChain = (depthChain: string[][]): string => {
+  if (!depthChain.some((keys) => keys.length > 0)) {
+    return "";
+  }
+  return `${depthChain
+    .map((keys, index) => `  level ${index + 1}: ${keys.join(", ")}`)
+    .join("\n")}\n`;
+};
+
 const pushWaterfallDepthProblems = ({
   route,
   entry,
@@ -556,7 +618,7 @@ const pushWaterfallDepthProblems = ({
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n${formatDepthChain(metrics.depthChain)}` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +
@@ -843,21 +905,27 @@ const maxPerKey = (
 export const mergeResampledMetrics = (
   current: RouteNetworkMetrics,
   candidate: RouteNetworkMetrics,
-): RouteNetworkMetrics => ({
-  requests: [...new Set([...current.requests, ...candidate.requests])].sort(),
-  requestCounts: maxPerKey(current.requestCounts, candidate.requestCounts),
-  depth: Math.min(current.depth, candidate.depth),
-  dbQueries: maxPerKey(current.dbQueries, candidate.dbQueries),
-  missingDbQueryCounts: maxPerKey(
-    current.missingDbQueryCounts,
-    candidate.missingDbQueryCounts,
-  ),
-  responseSizes: maxPerKey(current.responseSizes, candidate.responseSizes),
-  missingResponseSizeCounts: maxPerKey(
-    current.missingResponseSizeCounts,
-    candidate.missingResponseSizeCounts,
-  ),
-});
+): RouteNetworkMetrics => {
+  // The chain travels with the depth it explains; a chain from the discarded
+  // sample would name levels the merged reading does not claim.
+  const shallowest = candidate.depth < current.depth ? candidate : current;
+  return {
+    requests: [...new Set([...current.requests, ...candidate.requests])].sort(),
+    requestCounts: maxPerKey(current.requestCounts, candidate.requestCounts),
+    depth: shallowest.depth,
+    depthChain: shallowest.depthChain,
+    dbQueries: maxPerKey(current.dbQueries, candidate.dbQueries),
+    missingDbQueryCounts: maxPerKey(
+      current.missingDbQueryCounts,
+      candidate.missingDbQueryCounts,
+    ),
+    responseSizes: maxPerKey(current.responseSizes, candidate.responseSizes),
+    missingResponseSizeCounts: maxPerKey(
+      current.missingResponseSizeCounts,
+      candidate.missingResponseSizeCounts,
+    ),
+  };
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
