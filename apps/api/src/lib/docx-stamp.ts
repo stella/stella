@@ -949,15 +949,16 @@ const injectFooter = async (
 
   if (footerMatches.length > 0) {
     await Promise.all(
-      footerMatches.map(({ path, relsPath }) =>
-        updateExistingFooter(
-          archive,
-          path,
-          relsPath,
-          stamp,
-          verificationCode,
-          verifyUrl,
-        ),
+      footerMatches.map(
+        async ({ path, relsPath }) =>
+          await updateExistingFooter(
+            archive,
+            path,
+            relsPath,
+            stamp,
+            verificationCode,
+            verifyUrl,
+          ),
       ),
     );
     return;
