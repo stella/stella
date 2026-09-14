@@ -270,35 +270,40 @@ export const setDesktopRegistryDefaultFormat = async (
     await Result.tryPromise({
       try: async () =>
         await scopedDb(async (tx) => {
-          await setLookupFormatUserDefault({
+          const saved = await setLookupFormatUserDefault({
             tx,
             organizationId,
             userId,
             registry,
             formatId,
           });
-          return (
-            await resolveLookupFormatDefault({
-              tx,
-              organizationId,
-              registry,
-              userId,
-            })
-          ).unwrap("A resolver given an open transaction fails by throwing");
+          if (saved.isErr()) {
+            return saved;
+          }
+          return Result.ok(
+            (
+              await resolveLookupFormatDefault({
+                tx,
+                organizationId,
+                registry,
+                userId,
+              })
+            ).unwrap("A resolver given an open transaction fails by throwing"),
+          );
         }),
       catch: (cause) =>
-        HandlerError.is(cause)
-          ? cause
-          : new HandlerError({
-              status: 503,
-              message: "Could not save the default format",
-              cause,
-            }),
+        new HandlerError({
+          status: 503,
+          message: "Could not save the default format",
+          cause,
+        }),
     })
-  ).map((resolved) => ({
-    defaultFormatId: resolved?.id ?? null,
-    defaultFormatSource: resolved?.source ?? null,
-  }));
+  )
+    .andThen((saved) => saved)
+    .map((resolved) => ({
+      defaultFormatId: resolved?.id ?? null,
+      defaultFormatSource: resolved?.source ?? null,
+    }));
 
 type DesktopRegistryFormat = {
   registry: BusinessRegistrySlug;

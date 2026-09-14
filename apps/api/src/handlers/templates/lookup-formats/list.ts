@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, getTableColumns, isNotNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, getColumns, isNotNull, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -88,7 +88,7 @@ const listLookupFormats = createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
-            ...getTableColumns(templateLookupFormats),
+            ...getColumns(templateLookupFormats),
             // Non-null exactly on the row the caller chose for themselves.
             chosenBy: templateLookupFormatUserDefaults.userId,
           })

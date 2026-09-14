@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { abortableTx } from "@/api/db/safe-db";
 import { setLookupFormatUserDefault } from "@/api/handlers/templates/lookup-formats/set-user-default";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -30,16 +29,17 @@ const config = {
 const setMyDefaultLookupFormat = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body }) {
-    yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
-        await setLookupFormatUserDefault({
-          tx,
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-          registry: body.registry,
-          formatId: body.formatId,
-        });
-      }),
+    yield* yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await setLookupFormatUserDefault({
+            tx,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            registry: body.registry,
+            formatId: body.formatId,
+          }),
+      ),
     );
     return Result.ok({ success: true });
   },

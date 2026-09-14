@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -25,8 +26,9 @@ type SetLookupFormatUserDefaultArgs = {
  * preference, so the upsert, the ownership check, and the clear live here
  * rather than once per entry point.
  *
- * Throws `HandlerError` to abort the caller's transaction when the format is
- * not one of this organization's formats for this registry.
+ * Answers `HandlerError` (404) before writing anything when the format is not
+ * one of this organization's formats for this registry, so the caller's
+ * transaction has nothing to roll back.
  */
 export const setLookupFormatUserDefault = async ({
   formatId,
@@ -34,7 +36,7 @@ export const setLookupFormatUserDefault = async ({
   registry,
   tx,
   userId,
-}: SetLookupFormatUserDefaultArgs): Promise<void> => {
+}: SetLookupFormatUserDefaultArgs): Promise<Result<void, HandlerError>> => {
   // audit: skip — a personal display preference no colleague can observe;
   // the organization-wide default next door is the audited decision.
   if (formatId === null) {
@@ -47,7 +49,7 @@ export const setLookupFormatUserDefault = async ({
           eq(templateLookupFormatUserDefaults.registry, registry),
         ),
       );
-    return;
+    return Result.ok();
   }
   // No lock: a format's organization and registry never change, so this is a
   // decision about immutable columns rather than a read-decide-write race. A
@@ -65,7 +67,9 @@ export const setLookupFormatUserDefault = async ({
     )
     .limit(1);
   if (target.length === 0) {
-    throw new HandlerError({ status: 404, message: "Saved format not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Saved format not found" }),
+    );
   }
   await tx
     .insert(templateLookupFormatUserDefaults)
@@ -78,4 +82,5 @@ export const setLookupFormatUserDefault = async ({
       ],
       set: { formatId, updatedAt: new Date() },
     });
+  return Result.ok();
 };

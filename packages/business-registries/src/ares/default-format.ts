@@ -23,7 +23,7 @@ export const ARES_DEFAULT_FORMAT_PARTS: Record<
   "name" | "address" | "identifier" | "registration",
   string
 > = {
-  name: "společnost **[company name]**",
+  name: "**[company name]**",
   address: "se sídlem [address]",
   identifier: `IČO: [${ARES_IDENTIFIER_SPACED_TOKEN}]`,
   registration: `zapsaná v obchodním rejstříku vedeném [${ARES_COURT_INSTRUMENTAL_TOKEN}] pod sp. zn. [${ARES_FILE_REFERENCE_TOKEN}]`,
