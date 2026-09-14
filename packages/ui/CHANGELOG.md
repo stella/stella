@@ -1,5 +1,13 @@
 # @stll/ui
 
+## 0.27.2
+
+### Patch Changes
+
+- [#3352](https://github.com/stella/stella/pull/3352) [`b6b1677`](https://github.com/stella/stella/commit/b6b167764508d6a6956e014659a1a123769468a8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CourtBadge`, a monospace chip for a court's abbreviation. It is weighted rather than coloured — solid ink, tinted, outlined, dashed — so the chip reads the same to a monochrome or colour-blind reader, and it is drawn beside the court's name rather than instead of it.
+
+- [#3366](https://github.com/stella/stella/pull/3366) [`da29d32`](https://github.com/stella/stella/commit/da29d326346708632bfcf35afdae7c821e9e0655) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let the control wrapper own an `Input`'s height. The element no longer states a height of its own at any size: it fills the control and keeps its line box as a `min-h-*` floor, so a height passed in `className` reaches the text and the caret instead of leaving them at the top of a taller box while the search icon centres on it.
+
 ## 0.27.1
 
 ### Patch Changes
