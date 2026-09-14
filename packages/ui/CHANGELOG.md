@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.26.5
+
+### Patch Changes
+
+- [#3309](https://github.com/stella/stella/pull/3309) [`cd800f5`](https://github.com/stella/stella/commit/cd800f5d45775061e030356c7938519657a35c53) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let `InspectorDock` say where it is mounted, so a dock that a page hangs inside the content column paints above the shell's sticky top bar instead of behind it. Clamp a dragged pane width to the pane's own bounds before it is kept, so a drag past either bound is remembered as that bound rather than reset to the default on the next load.
+
 ## 0.26.4
 
 ### Patch Changes
